@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.docker.SiteVolumes;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -32,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * A docker site's PERSISTENT storage across the release engine, against a real daemon:
@@ -96,9 +96,10 @@ class SiteVolumeLiveTest {
      */
     @Test
     void tenantStateInANamedVolumeSurvivesAGatedReleaseAndARollback() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
+        LiveLane.requireImage(docker, "alpine:latest");
 
         String repoA = "hohenheim-vol-a-" + System.nanoTime();
         String repoB = "hohenheim-vol-b-" + System.nanoTime();
@@ -205,14 +206,15 @@ class SiteVolumeLiveTest {
      */
     @Test
     void aLegacyInstanceKeyedVolumeIsAdoptedWithItsDataAndTheRowIsHealed() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
+        LiveLane.requireImage(docker, "alpine:latest");
         // The adoption copies through the declared detector image; a cold cache would
         // otherwise make this test pass by never adopting anything.
         String detector = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Builds.DETECTOR_IMAGE);
-        assumeTrue(imagePresent(docker, detector), detector + " not present locally");
+        LiveLane.requireImage(docker, detector);
 
         String repo = "hohenheim-vol-legacy-" + System.nanoTime();
         String digest = TestImages.loadHttpServer(docker, repo + ":latest", "legacy-release");
@@ -463,15 +465,6 @@ class SiteVolumeLiveTest {
             docker.removeImage(image, true);
         } catch (IOException ignored) {
             // best-effort teardown
-        }
-    }
-
-    private static boolean imagePresent(DockerClient docker, String image) {
-        try {
-            docker.inspectImage(image);
-            return true;
-        } catch (IOException absent) {
-            return false;
         }
     }
 }

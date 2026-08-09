@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.test.host.LiveRemoteHost;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -20,7 +21,6 @@ import be.elevenways.zenit.server.orm.crypto.KeyringGuard;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -65,7 +65,7 @@ class LiveControlPlaneOffHostBackupTest {
     @BeforeAll
     static void setUp() throws Exception {
         remote = LiveRemoteHost.configured();
-        Assumptions.assumeTrue(remote != null,
+        LiveLane.require(LiveLane.Need.REMOTE_HOST, remote != null,
             "no live remote host enrolled at " + LiveRemoteHost.CONFIG);
 
         workspace = Files.createTempDirectory("hh-offhost-control-plane");

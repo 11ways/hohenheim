@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.docker.DockerStreamTransport;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.ProcessDockerTransport;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -25,7 +26,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The streaming transport contract. The wire-parsing half (chunked decoding, hijacked
@@ -294,9 +294,10 @@ class DockerStreamingTest {
 
     @Test
     void followLogsDeliversOutputWhileTheContainerIsStillRunning() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         String name = "hohenheim-streamtest-" + System.nanoTime();
         String id = docker.createContainer(name, Map.of(
@@ -350,9 +351,10 @@ class DockerStreamingTest {
 
     @Test
     void attachCarriesStdinBothWaysAndEndsWhenTheContainerExits() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         String name = "hohenheim-attachtest-" + System.nanoTime();
         String id = docker.createContainer(name, Map.of(
@@ -452,19 +454,5 @@ class DockerStreamingTest {
             .filter(handle -> handle.info().command().map(cmd -> cmd.endsWith("/cat")
                 || cmd.equals("cat")).orElse(false))
             .count();
-    }
-
-    private static boolean imagePresent(DockerClient docker, String reference) {
-        try {
-            for (Object image : docker.listImages()) {
-                Object tags = ((Map<?, ?>) image).get("RepoTags");
-                if (tags instanceof List<?> list && list.contains(reference)) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (IOException e) {
-            return false;
-        }
     }
 }

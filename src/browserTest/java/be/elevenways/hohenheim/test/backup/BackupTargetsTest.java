@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.backup;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -37,7 +38,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The target seam's contracts against real destinations: the filesystem target on a
@@ -157,7 +157,8 @@ class BackupTargetsTest {
      */
     @Test
     void sshTargetInheritsItsHostRecordsPinnedIdentity() throws IOException {
-        assumeTrue(sshd != null, "no OpenSSH binaries: the ssh target lane is not exercised here");
+        LiveLane.require(LiveLane.Need.SSH_TOOLS, sshd != null,
+            "no OpenSSH binaries: the ssh target lane is not exercised here");
         Path remoteBase = tmp.resolve("remote");
         Path file = payload("ssh-artifact");
 

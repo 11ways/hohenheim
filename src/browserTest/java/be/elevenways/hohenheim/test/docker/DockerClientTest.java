@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.docker;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ProcessDockerTransport;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -12,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Integration test for {@link DockerClient} against a real Docker daemon.
@@ -25,13 +25,15 @@ class DockerClientTest {
 
     @Test
     void pingReturnsTrueWhenDaemonReachable() {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         assertThat(new DockerClient().ping()).isTrue();
     }
 
     @Test
     void versionReportsApiVersion() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         Map<String, Object> version = new DockerClient().version();
         assertThat(version).containsKey("ApiVersion");
         assertThat((String) version.get("Version")).isNotBlank();
@@ -39,7 +41,8 @@ class DockerClientTest {
 
     @Test
     void infoReportsHostResources() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         Map<String, Object> info = new DockerClient().info();
         assertThat(info).containsKey("NCPU");
         assertThat(info).containsKey("MemTotal");
@@ -47,7 +50,8 @@ class DockerClientTest {
 
     @Test
     void listContainersParsesIntoMaps() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         List<Object> containers = new DockerClient().listContainers(true);
         assertThat(containers).isNotNull();
         for (Object container : containers) {
@@ -57,7 +61,8 @@ class DockerClientTest {
 
     @Test
     void listImagesParsesIntoMaps() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         List<Object> images = new DockerClient().listImages();
         assertThat(images).isNotNull();
         for (Object image : images) {
@@ -71,7 +76,8 @@ class DockerClientTest {
      */
     @Test
     void loadsAnImageTarAndResolvesItsDigest() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
 
         String tag = "hohenheim-loadtest-" + System.nanoTime() + ":latest";
@@ -94,9 +100,10 @@ class DockerClientTest {
     @Test
     @SuppressWarnings("unchecked")
     void containerLifecycle() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         String name = "hohenheim-dockerclient-test-" + System.nanoTime();
         String id = docker.createContainer(name, Map.of(
@@ -130,9 +137,10 @@ class DockerClientTest {
     @Test
     @SuppressWarnings("unchecked")
     void containerLogsDemuxesStdoutAndStderr() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         String name = "hohenheim-logs-test-" + System.nanoTime();
         String id = docker.createContainer(name, Map.of(
@@ -171,9 +179,10 @@ class DockerClientTest {
 
     @Test
     void execCapturesOutputAndExitCode() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         String name = "hohenheim-exec-test-" + System.nanoTime();
         String id = docker.createContainer(name, Map.of(
@@ -198,7 +207,8 @@ class DockerClientTest {
 
     @Test
     void worksOverProcessTransportViaDialStdio() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         // `docker system dial-stdio` bridges stdio to the local daemon -- the same mechanism the
         // SSH transport uses against a remote host, exercised here without needing SSH.
         DockerClient docker = new DockerClient(
@@ -212,9 +222,10 @@ class DockerClientTest {
     @Test
     @SuppressWarnings("unchecked")
     void networkLifecycleWithLabelsSubnetAndAliases() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         String networkName = "hohenheim-nettest-" + System.nanoTime();
         String containerId = null;
@@ -281,7 +292,8 @@ class DockerClientTest {
     @Test
     @SuppressWarnings("unchecked")
     void volumeLifecycleWithLabels() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
 
         String volumeName = "hohenheim-voltest-" + System.nanoTime();
@@ -323,9 +335,10 @@ class DockerClientTest {
     @Test
     @SuppressWarnings("unchecked")
     void fixedHostPortPublicationIncludingUdp() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         // High ports chosen to avoid collisions; loopback-bound so nothing is exposed.
         int tcpPort = 42000 + (int) (System.nanoTime() % 1000);
@@ -363,9 +376,10 @@ class DockerClientTest {
 
     @Test
     void restartContainerKeepsItRunning() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         String id = docker.createContainer("hohenheim-restarttest-" + System.nanoTime(), Map.of(
             "Image", TEST_IMAGE,
@@ -394,9 +408,10 @@ class DockerClientTest {
 
     @Test
     void ensureImageRecognizesDigestPinnedReferences() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         // Find the locally-present alpine's digest and ensure it: must be a no-op
         // (no network), proving digest refs are matched against RepoDigests.
@@ -411,7 +426,8 @@ class DockerClientTest {
                 break;
             }
         }
-        assumeTrue(digestRef != null, "local alpine has no RepoDigest");
+        LiveLane.require(LiveLane.Need.DOCKER_IMAGE, digestRef != null,
+            "local alpine has no RepoDigest");
         docker.ensureImage(digestRef, null);   // throws if it tried (and failed) to re-pull
 
         // Presence is decided by digest AND hub-normalized repo: compose-style

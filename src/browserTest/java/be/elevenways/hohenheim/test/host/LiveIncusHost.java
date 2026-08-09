@@ -6,9 +6,9 @@ import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import org.junit.jupiter.api.Assumptions;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -279,7 +279,7 @@ public final class LiveIncusHost {
                     + ": " + check.name() + " -- " + check.detail());
             }
         }
-        Assumptions.assumeTrue(report.passed(),
+        LiveLane.require(LiveLane.Need.INCUS_HOST, report.passed(),
             "incus preflight did not pass: " + report.checks());
         Row ready = Models.get(ServerModel.class).findByName(hostName);
         HostAdmission.requireAdmittable(ready);
@@ -324,9 +324,9 @@ public final class LiveIncusHost {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        Assumptions.assumeTrue(scan.fingerprint().equals(reported),
+        LiveLane.require(LiveLane.Need.INCUS_HOST, scan.fingerprint().equals(reported),
             "the scanned ssh host key (" + scan.fingerprint() + ") is not what "
-                + this.trustTarget + " reports for itself (" + reported + ")");
+            + this.trustTarget + " reports for itself (" + reported + ")");
         HostKeys.confirm(model.findByName(hostName));
         return reported;
     }

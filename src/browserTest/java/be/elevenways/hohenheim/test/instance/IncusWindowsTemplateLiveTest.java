@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.runtime.InstallSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -51,7 +52,6 @@ import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The PREPARED-TEMPLATE origin end to end against a real Windows Server 2025 guest on a
@@ -95,10 +95,11 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
     @BeforeAll
     static void setUp() {
         remote = LiveIncusHost.configured();
-        assumeTrue(remote != null, "no live incus host enrolled at " + LiveIncusHost.CONFIG);
-        assumeTrue(preparedImagePublished(),
+        LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
+            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+        LiveLane.require(LiveLane.Need.INCUS_HOST, preparedImagePublished(),
             "prepared image '" + PREPARED_ALIAS + "' is not published on the live host;"
-                + " build it with docs/prepare-windows-template.md");
+            + " build it with docs/prepare-windows-template.md");
 
         // AIDEV-NOTE: shared-server classes share ONE database per JVM fork, so ids
         // restart at 1 only per FORK, not per class -- but a PARALLEL fork's own fresh

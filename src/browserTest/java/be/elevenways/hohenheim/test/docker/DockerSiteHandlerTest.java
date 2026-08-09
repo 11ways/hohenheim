@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -33,7 +34,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The Docker-site tier against a real daemon, THROUGH the canonical runtime-resource
@@ -79,9 +79,10 @@ class DockerSiteHandlerTest {
     @Test
     @SuppressWarnings("unchecked")
     void startsContainerPublishesPortAndReportsHealth() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         int siteId = 999_001;
         // A long-lived command keeps the container running; the port need not be
@@ -211,9 +212,10 @@ class DockerSiteHandlerTest {
     @Test
     @SuppressWarnings("unchecked")
     void volumesAndResourceLimitsReachTheContainer() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         int siteId = 999_003;
         DockerSiteRequestHandler handler = new DockerSiteRequestHandler(siteId, Map.of(
@@ -257,9 +259,10 @@ class DockerSiteHandlerTest {
      */
     @Test
     void refusesToReplaceOrReuseAForeignSameNamedContainer() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         int siteId = 999_004;
         Map<String, Object> settings = Map.of(
@@ -327,10 +330,12 @@ class DockerSiteHandlerTest {
      */
     @Test
     void buildsImageFromContextPinsTheIdAndRollsOnChange() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " (build base) not present");
-        assumeTrue(netns != null, "no private netns: the build sandbox refuses to run unprotected");
+        LiveLane.requireImage(docker, TEST_IMAGE);
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
+            "no private netns: the build sandbox refuses to run unprotected");
 
         int siteId = 999_002;
         String builtImage = ControllerScope.handle(ControllerScope.KIND_SITE, siteId) + ":latest";

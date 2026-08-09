@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -36,7 +37,6 @@ import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The Docker-site half of database attachments, against a REAL daemon and REAL
@@ -102,11 +102,12 @@ class SiteDatabaseLinkLiveTest {
 
     @Test
     void dockerSiteReachesExactlyItsAttachedDatabases() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
-        assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
-        assumeTrue(netns != null,
+        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, REDIS_IMAGE);
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: PRIVATE workloads refuse to deploy without enforcement");
 
         DatabaseService service = new DatabaseService();
@@ -418,16 +419,6 @@ class SiteDatabaseLinkLiveTest {
         } catch (IOException gone) {
             return false;
         }
-    }
-
-    private static boolean imagePresent(DockerClient docker, String image) throws IOException {
-        for (Object entry : docker.listImages()) {
-            if (entry instanceof Map<?, ?> map && map.get("RepoTags") instanceof List<?> tags
-                    && tags.contains(image)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static void await(String what, long timeoutMs, BooleanSupplier condition)

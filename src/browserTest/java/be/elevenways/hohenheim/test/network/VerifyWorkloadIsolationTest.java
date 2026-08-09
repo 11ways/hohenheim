@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -48,7 +49,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The reboot-window sweep against a REAL daemon and a REAL kernel: every Docker tier's
@@ -107,10 +107,11 @@ class VerifyWorkloadIsolationTest {
     }
 
     private void requireFixture() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        assumeTrue(netns != null,
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns available: the sweep cannot be proven against a real kernel");
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
     }
 
     @Test
@@ -556,16 +557,6 @@ class VerifyWorkloadIsolationTest {
         long address = base + offset;
         return ((address >> 24) & 0xff) + "." + ((address >> 16) & 0xff) + "."
             + ((address >> 8) & 0xff) + "." + (address & 0xff);
-    }
-
-    private static boolean imagePresent(DockerClient docker, String image) throws IOException {
-        for (Object entry : docker.listImages()) {
-            if (entry instanceof Map<?, ?> map && map.get("RepoTags") instanceof List<?> tags
-                    && tags.contains(image)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** Checked-exception plumbing: Db.run takes a Runnable, the daemon throws IOException. */

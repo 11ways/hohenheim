@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -39,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * THE preview gate against a REAL daemon and a REAL proxy: a preview is created from a
@@ -196,8 +196,10 @@ class PreviewDeploymentLiveTest {
 
     @Test
     void aPreviewIsCreatedServesIsolatedAndIsFullyReclaimedOnExpiry() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        assumeTrue(netns != null, "no private netns: the sandbox refuses to build unprotected");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
+            "no private netns: the sandbox refuses to build unprotected");
         DockerClient docker = new DockerClient();
 
         // AIDEV-NOTE: the git handler kicks off an ASYNC initial deploy of the fixture

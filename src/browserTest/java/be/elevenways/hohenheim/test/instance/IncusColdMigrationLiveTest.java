@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -31,7 +32,6 @@ import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The Phase 8 cross-host gate clauses, live on TWO real Incus hosts (daystrom +
@@ -62,9 +62,10 @@ class IncusColdMigrationLiveTest {
     @BeforeAll
     static void setUp() throws Exception {
         remoteA = LiveIncusHost.configured();
-        assumeTrue(remoteA != null, "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+        LiveLane.require(LiveLane.Need.INCUS_HOST, remoteA != null,
+            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
         remoteB = LiveIncusHost.configuredSecondary();
-        assumeTrue(remoteB != null,
+        LiveLane.require(LiveLane.Need.INCUS_HOST, remoteB != null,
             "no SECOND live incus host (url_b) enrolled at " + LiveIncusHost.CONFIG);
 
         File db = File.createTempFile("hohenheim-incus-migration-live", ".db");

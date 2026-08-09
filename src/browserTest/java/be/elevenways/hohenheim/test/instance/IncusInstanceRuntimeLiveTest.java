@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -39,7 +40,6 @@ import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Driver #2 against the REAL remote Incus daemon: the full product funnel (enrollment,
@@ -62,7 +62,8 @@ class IncusInstanceRuntimeLiveTest {
     @BeforeAll
     static void setUp() throws Exception {
         remote = LiveIncusHost.configured();
-        assumeTrue(remote != null, "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+        LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
+            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
 
         File db = File.createTempFile("hohenheim-incus-instance-live", ".db");
         db.delete();

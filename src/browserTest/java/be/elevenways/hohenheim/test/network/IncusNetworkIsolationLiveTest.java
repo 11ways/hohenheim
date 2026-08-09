@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -26,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The Incus tier's isolation, proven NEGATIVELY against the real remote daemon: two
@@ -56,7 +56,8 @@ class IncusNetworkIsolationLiveTest {
     @BeforeAll
     static void setUp() throws Exception {
         remote = LiveIncusHost.configured();
-        assumeTrue(remote != null, "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+        LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
+            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
 
         File db = File.createTempFile("hohenheim-incus-net-live", ".db");
         db.delete();

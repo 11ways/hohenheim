@@ -7,11 +7,11 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -60,7 +60,8 @@ class ManagedNodeSocketTest {
     @Test
     @Timeout(40)
     void nodeSiteWithUsePortsFalseServesOverUnixSocket() throws Exception {
-        Assumptions.assumeTrue(nodeAvailable, "node is not installed");
+        LiveLane.require(LiveLane.Need.NODE, nodeAvailable,
+            "node is not installed");
 
         // A tiny HTTP server that binds the unix socket given in PATH_TO_SOCKET.
         String nodeScript =

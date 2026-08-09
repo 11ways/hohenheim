@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -31,7 +32,6 @@ import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -120,10 +120,10 @@ class InstanceSnapshotBackupLiveTest {
     }
 
     private static void assumeLiveDaemon(DockerClient docker) throws IOException {
-        Assumptions.assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        Assumptions.assumeTrue(imagePresent(docker, "alpine:latest"),
-            "alpine:latest not present locally");
-        Assumptions.assumeTrue(netns != null,
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
     }
 
@@ -523,16 +523,6 @@ class InstanceSnapshotBackupLiveTest {
                 // already gone
             }
         }
-    }
-
-    private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains(tag)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static void deleteRecursively(Path root) {

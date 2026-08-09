@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -41,7 +42,6 @@ import java.util.Map;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The health-gated zero-downtime release engine against a REAL daemon and (for the
@@ -109,9 +109,10 @@ class SiteReleaseLiveTest {
      */
     @Test
     void healthySwapDropsNoRequestRetainsRollsBackAndReclaims() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
+        LiveLane.requireImage(docker, "alpine:latest");
 
         String repoA = "hohenheim-rel-a-" + System.nanoTime();
         String repoB = "hohenheim-rel-b-" + System.nanoTime();
@@ -267,9 +268,10 @@ class SiteReleaseLiveTest {
      */
     @Test
     void failedCandidateNeverReceivesProductionTraffic() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
+        LiveLane.requireImage(docker, "alpine:latest");
 
         String repoGood = "hohenheim-rel-good-" + System.nanoTime();
         String repoEvil = "hohenheim-rel-evil-" + System.nanoTime();
@@ -360,9 +362,10 @@ class SiteReleaseLiveTest {
      */
     @Test
     void rollbackNeedsNoSourceAndSurvivesAMovedAndDeletedTag() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
+        LiveLane.requireImage(docker, "alpine:latest");
 
         int siteId = 955_101;
         String repo = "hohenheim-rel-mv-" + System.nanoTime();
@@ -444,9 +447,10 @@ class SiteReleaseLiveTest {
      */
     @Test
     void interruptedOperationsAreSettledByRecovery() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
+        LiveLane.requireImage(docker, "alpine:latest");
 
         int siteId = 955_201;
         String repo1 = "hohenheim-rel-rc1-" + System.nanoTime();

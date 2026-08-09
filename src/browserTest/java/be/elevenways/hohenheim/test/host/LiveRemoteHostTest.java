@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -30,7 +31,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The remote-host mechanisms against a GENUINELY REMOTE machine (see
@@ -59,11 +59,13 @@ class LiveRemoteHostTest {
     @BeforeAll
     static void setUp() throws Exception {
         remote = LiveRemoteHost.configured();
-        assumeTrue(remote != null,
+        LiveLane.require(LiveLane.Need.REMOTE_HOST, remote != null,
             "no live remote host enrolled at " + LiveRemoteHost.CONFIG);
-        assumeTrue(Files.isExecutable(Path.of("/usr/bin/ssh"))
-            && Files.isExecutable(Path.of("/usr/bin/ssh-keygen"))
-            && Files.isExecutable(Path.of("/usr/bin/ssh-keyscan")), "no OpenSSH client tools");
+        LiveLane.require(LiveLane.Need.SSH_TOOLS,
+            Files.isExecutable(Path.of("/usr/bin/ssh"))
+                && Files.isExecutable(Path.of("/usr/bin/ssh-keygen"))
+                && Files.isExecutable(Path.of("/usr/bin/ssh-keyscan")),
+            "no OpenSSH client tools");
 
         File db = File.createTempFile("hohenheim-live-remote-test", ".db");
         db.delete();

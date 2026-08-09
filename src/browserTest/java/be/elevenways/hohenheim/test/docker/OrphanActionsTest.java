@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
@@ -30,7 +31,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The EXPLICIT orphan authority against a real daemon: removal re-verifies live truth,
@@ -60,9 +60,10 @@ class OrphanActionsTest {
 
     @Test
     void theOrphanAuthorityRemovesReVerifiedOrphansAndRefusesEverythingElse() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker), "alpine:latest not present locally");
+        LiveLane.requireImage(docker, "alpine:latest");
 
         Db.run(datasource, () -> {
             ServerModel.localServerId();
@@ -194,15 +195,5 @@ class OrphanActionsTest {
         } catch (IOException ignored) {
             // already gone
         }
-    }
-
-    private static boolean imagePresent(DockerClient docker) throws IOException {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains("alpine:latest")) {
-                return true;
-            }
-        }
-        return false;
     }
 }

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -25,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The managed-database tier's answer when the ENGINE is OOM-killed inside a container
@@ -50,7 +50,7 @@ class DatabaseWorkloadLivenessLiveTest {
     @BeforeAll
     static void enforcePolicy() throws IOException {
         netns = PrivateNetns.installEnforcing();
-        assumeTrue(netns != null,
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: record-backed provisioning refuses without an enforceable policy");
     }
 
@@ -62,9 +62,10 @@ class DatabaseWorkloadLivenessLiveTest {
 
     @Test
     void anOomKilledEngineStopsBeingReportedHealthy() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, REDIS_IMAGE);
 
         DatabaseService service = new DatabaseService(freshDatasource());
         String name = "livenessdb" + System.nanoTime();
@@ -151,15 +152,5 @@ class DatabaseWorkloadLivenessLiveTest {
         Datasources.register(Datasources.DEFAULT, ds);
         HohenheimTestRuntime.ensureBooted();
         return ds;
-    }
-
-    private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains(tag)) {
-                return true;
-            }
-        }
-        return false;
     }
 }

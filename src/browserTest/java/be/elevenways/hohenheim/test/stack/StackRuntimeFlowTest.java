@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.stack;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -39,7 +40,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The full record flow: stack records -> deploy -> encrypted deployment snapshot ->
@@ -103,18 +103,11 @@ class StackRuntimeFlowTest {
     }
 
     private void requireDocker() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        assumeTrue(netns != null,
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: a stack refuses to deploy where its policy cannot be enforced");
-        boolean present = false;
-        for (Object image : docker.listImages()) {
-            Object tags = ((Map<?, ?>) image).get("RepoTags");
-            if (tags instanceof List<?> list && list.contains(TEST_IMAGE)) {
-                present = true;
-                break;
-            }
-        }
-        assumeTrue(present, TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
     }
 
     private int createStackRecords(String stackName, String roleValue) {

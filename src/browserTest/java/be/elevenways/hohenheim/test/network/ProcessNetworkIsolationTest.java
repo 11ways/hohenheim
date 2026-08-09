@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeAll;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.ProcessNetworkPolicy;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -16,7 +17,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The managed-process tier's isolation against REAL nftables, REAL uids and REAL packets:
@@ -63,12 +63,12 @@ class ProcessNetworkIsolationTest {
     @Test
     void aSiteProcessLosesTheMetadataServiceAndTheHostButKeepsDnsAndTheInternet()
             throws IOException {
-        assumeTrue(UidMappedNetns.available(),
+        LiveLane.require(LiveLane.Need.NETNS, UidMappedNetns.available(),
             "no /etc/subuid range or missing unshare/nsenter/nft/ip/python3/setpriv/newuidmap:"
-                + " cannot build a uid-mapped netns");
+            + " cannot build a uid-mapped netns");
 
         try (UidMappedNetns netns = new UidMappedNetns()) {
-            assumeTrue(netns.highestMappedUid() >= CONTROL_UID,
+            LiveLane.require(LiveLane.Need.NETNS, netns.highestMappedUid() >= CONTROL_UID,
                 "the /etc/subuid range is too small to map the control uid");
             wire(netns);
             Path resolvConf = writeResolvConf("nameserver " + RESOLVER + "\n");
@@ -175,10 +175,11 @@ class ProcessNetworkIsolationTest {
     @Test
     void theSweepRepairsAProcessChainAndContainsTheSiteWhenItCannotBeRepaired()
             throws IOException {
-        assumeTrue(UidMappedNetns.available(), "cannot build a uid-mapped netns");
+        LiveLane.require(LiveLane.Need.NETNS, UidMappedNetns.available(),
+            "cannot build a uid-mapped netns");
 
         try (UidMappedNetns netns = new UidMappedNetns()) {
-            assumeTrue(netns.highestMappedUid() >= CONTROL_UID,
+            LiveLane.require(LiveLane.Need.NETNS, netns.highestMappedUid() >= CONTROL_UID,
                 "the /etc/subuid range is too small to map the second uid");
             wire(netns);
             Path resolvConf = writeResolvConf("nameserver " + RESOLVER + "\n");
@@ -268,7 +269,8 @@ class ProcessNetworkIsolationTest {
     @Test
     void aHostWithoutKernelEnforcementRefusesToIsolateAndThereforeRefusesTheSite()
             throws IOException {
-        assumeTrue(UidMappedNetns.available(), "cannot build a uid-mapped netns");
+        LiveLane.require(LiveLane.Need.NETNS, UidMappedNetns.available(),
+            "cannot build a uid-mapped netns");
 
         try (UidMappedNetns netns = new UidMappedNetns()) {
             Path resolvConf = writeResolvConf("nameserver " + RESOLVER + "\n");

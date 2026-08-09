@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.task.ObserveInstanceDisk;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -30,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The OBSERVED-disk signal against a REAL Incus daemon: a workload with an ENFORCED root
@@ -62,7 +62,8 @@ class IncusDiskSignalLiveTest {
     @BeforeAll
     static void setUp() throws Exception {
         remote = LiveIncusHost.configured();
-        assumeTrue(remote != null, "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+        LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
+            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
 
         File db = File.createTempFile("hohenheim-incus-disk-live", ".db");
         db.delete();

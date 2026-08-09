@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -21,7 +22,6 @@ import java.nio.file.Path;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The preflight battery against the REAL local daemon, with the nft half pointed at
@@ -57,10 +57,12 @@ class HostPreflightTest {
      */
     @Test
     void preflightReadsKernelTruthFromAProbeContainer() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker), "alpine:latest not present locally");
-        assumeTrue(PrivateNetns.available(), "no private netns for the nft half");
+        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
+            "no private netns for the nft half");
 
         Integer originalPids = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Security.CONTAINER_PIDS_LIMIT);
@@ -157,8 +159,9 @@ class HostPreflightTest {
      */
     @Test
     void theStoredReportIsHonestAboutAnUnverifiableHost() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        assumeTrue(imagePresent(new DockerClient()), "alpine:latest not present locally");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.requireImage(new DockerClient(), "alpine:latest");
 
         Db.run(datasource, () -> {
             ServerModel.localServerId();
@@ -192,15 +195,5 @@ class HostPreflightTest {
                     .isFalse();
             }
         });
-    }
-
-    private static boolean imagePresent(DockerClient docker) throws Exception {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof java.util.List<?> tags && tags.contains("alpine:latest")) {
-                return true;
-            }
-        }
-        return false;
     }
 }

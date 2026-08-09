@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.docker.DockerReconciler.Bucket;
 import be.elevenways.hohenheim.server.docker.DockerReconciler.Finding;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -28,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * THE regression test for the hazard the whole namespace exists for: TWO controllers
@@ -56,9 +56,10 @@ class TwoControllerCollisionLiveTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         docker = new DockerClient();
-        assumeTrue(imagePresent(), IMAGE + " not present locally");
+        LiveLane.requireImage(new DockerClient(), IMAGE);
 
         controllerA = freshController("a");
         controllerB = freshController("b");
@@ -243,15 +244,6 @@ class TwoControllerCollisionLiveTest {
     private static boolean exists(String handle) {
         try {
             docker.inspectContainer(handle);
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    private static boolean imagePresent() {
-        try {
-            docker.inspectImage(IMAGE);
             return true;
         } catch (IOException e) {
             return false;

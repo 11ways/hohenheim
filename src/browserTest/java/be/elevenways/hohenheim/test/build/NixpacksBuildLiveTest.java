@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.build;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -34,7 +35,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The buildpack (nixpacks) lane against a REAL daemon: detection asserted on what the
@@ -108,8 +108,10 @@ class NixpacksBuildLiveTest {
      */
     @Test
     void aNodeRepositoryBuildsRunsAndRebuildsToTheSameDigest() {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        assumeTrue(netns != null, "no private netns: the sandbox refuses to build unprotected");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
+            "no private netns: the sandbox refuses to build unprotected");
         DockerClient docker = new DockerClient();
         String nonce = "n" + System.nanoTime();
         Path context = createNodeContext("journey", nonce);
@@ -240,8 +242,10 @@ class NixpacksBuildLiveTest {
      */
     @Test
     void anUndetectableRepositoryIsRefusedByName() {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        assumeTrue(netns != null, "no private netns: the sandbox refuses to build unprotected");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
+            "no private netns: the sandbox refuses to build unprotected");
         DockerClient docker = new DockerClient();
         Path context = createContextWith("refused", Map.of(
             "README.txt", "nothing buildable lives here\n"));

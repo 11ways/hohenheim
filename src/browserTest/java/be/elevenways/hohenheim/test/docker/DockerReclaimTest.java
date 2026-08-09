@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.docker;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -17,7 +18,6 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Disk reclaim: the decision matrix as pure logic, then the same rules driving a
@@ -121,9 +121,10 @@ class DockerReclaimTest {
      */
     @Test
     void reclaimsSupersededImagesOnARealDaemon() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, BASE_IMAGE), BASE_IMAGE + " (build base) not present");
+        LiveLane.requireImage(docker, BASE_IMAGE);
 
         String repository = "hohenheim-reclaim-test-" + System.nanoTime();
         String supersededTag = repository + ":one";
@@ -205,15 +206,6 @@ class DockerReclaimTest {
             ids.add(String.valueOf(((Map<?, ?>) entry).get("Id")));
         }
         return ids;
-    }
-
-    private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
-        for (Object image : docker.listImages()) {
-            if (((Map<?, ?>) image).get("RepoTags") instanceof List<?> tags && tags.contains(tag)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** Best-effort cleanup: a failed teardown must not mask the assertion that ran. */

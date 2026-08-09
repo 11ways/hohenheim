@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -47,7 +48,6 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The reconciler: the pure classification matrix (runs WITHOUT a daemon, so the
@@ -638,9 +638,10 @@ class DockerReconcilerTest {
 
     @Test
     void liveSweepFindsAPlantedOrphanAndRemovesNothing() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
+        LiveLane.requireImage(docker, "alpine:latest");
 
         // 1. Plant a container claiming a site record that does not exist.
         String name = "hohenheim-reconciler-orphan-" + Long.toHexString(System.nanoTime());
@@ -700,15 +701,5 @@ class DockerReconcilerTest {
 
     private static Map<String, String> mapOf(Map<String, String> owner) {
         return new LinkedHashMap<>(owner);
-    }
-
-    private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains(tag)) {
-                return true;
-            }
-        }
-        return false;
     }
 }

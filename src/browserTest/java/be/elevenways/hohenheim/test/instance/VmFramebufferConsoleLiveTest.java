@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -35,7 +36,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The framebuffer rescue console end to end against a REAL VM on daystrom, over the REAL
@@ -53,7 +53,8 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
     @Test
     void framebufferConsoleAgainstARealVmAndRevocationClosesIt1008() throws Exception {
         LiveIncusHost remote = LiveIncusHost.configured();
-        assumeTrue(remote != null, "no live incus host enrolled at " + LiveIncusHost.CONFIG);
+        LiveLane.require(LiveLane.Need.INCUS_HOST, remote != null,
+            "no live incus host enrolled at " + LiveIncusHost.CONFIG);
 
         String enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-fb");
         Row host = Models.get(ServerModel.class).findByName(HOST);

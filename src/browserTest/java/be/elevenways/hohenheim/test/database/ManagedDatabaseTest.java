@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -36,7 +37,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The managed-database tier ON the canonical runtime-resource contract, against a real
@@ -72,10 +72,11 @@ class ManagedDatabaseTest {
     private static final String REDIS_IMAGE = "redis:7-alpine";
 
     private void requireFixture(DockerClient docker, String image) throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        assumeTrue(netns != null,
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: a record-backed database refuses without an enforceable policy");
-        assumeTrue(imagePresent(docker, image), image + " not present locally");
+        LiveLane.requireImage(docker, image);
     }
 
     /**
@@ -266,7 +267,7 @@ class ManagedDatabaseTest {
     void provisionRefusesToReplaceAForeignSameNamedContainer() throws IOException {
         DockerClient docker = new DockerClient();
         requireFixture(docker, PG_IMAGE);
-        assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
+        LiveLane.requireImage(docker, "alpine:latest");
 
         DatabaseService service = new DatabaseService(datasource);
         String name = "foreign" + System.nanoTime();
@@ -460,15 +461,5 @@ class ManagedDatabaseTest {
         Datasources.register(Datasources.DEFAULT, ds);
         HohenheimTestRuntime.ensureBooted();
         return ds;
-    }
-
-    private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains(tag)) {
-                return true;
-            }
-        }
-        return false;
     }
 }
