@@ -70,6 +70,31 @@ public class InstanceModel extends Model {
      */
     public static final String STATUS_MIGRATING = "migrating";
 
+    /**
+     * The statuses under which a workload may be ON THE BRIDGE, and therefore the ones an
+     * isolation sweep must verify.
+     *
+     * AIDEV-NOTE: ONE list, because the two isolation sweeps disagreed about it and the
+     * disagreement was an oversight rather than a decision. {@code VerifyIncusIsolation}
+     * filtered {@code running} alone while its Docker twin filtered running OR starting, so
+     * an Incus workload was never kernel-verified while it sat in {@code starting} -- which
+     * deploy stamps for every template carrying a readiness line. {@code error} was missing
+     * from BOTH, and it is the status most likely to name a live-but-unwatched guest: a
+     * readiness timeout stamps error and stops NOTHING (InstanceConsoles.arm), so the guest
+     * keeps running with its record claiming failure. The status column's own words are
+     * "the last runtime operation failed; the daemon may disagree".
+     *
+     * DELIBERATELY EXCLUDED: {@code capturing}, {@code restoring} and {@code migrating}.
+     * Those guests can be live too, but they are the protected in-flight statuses whose
+     * declared contract refuses stop and deploy, and an isolation sweep's terminal action IS
+     * a stop -- letting a firewall sweep abort a backup or a migration would trade one
+     * silent failure for a louder one. Their exposure is bounded by the operation's own
+     * lifetime and by the next sweep after it settles. {@code created} and {@code stopped}
+     * name no guest at all.
+     */
+    public static final List<String> LIVE_GUEST_STATUSES =
+        List.of(STATUS_RUNNING, STATUS_STARTING, STATUS_ERROR);
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     // User data, NOT localized (the plan's explicit call: names are the user's own words).
