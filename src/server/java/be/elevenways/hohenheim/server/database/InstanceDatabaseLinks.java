@@ -4,25 +4,98 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
+import be.elevenways.zenit.common.orm.query.QueryContext;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The RECORD half of instance-database attachments: which live workloads depend on a
  * database, and the explicit cleanup a soft delete does not do for us.
  *
- * AIDEV-NOTE: attaching does NO daemon work on purpose. The credentials only enter a
+ * AIDEV-NOTE: ATTACHING does NO daemon work on purpose. The credentials only enter a
  * workload's environment when {@code InstanceService.resolve} derives them, which happens
  * at the next deploy -- so joining the link network at attach time would open reachability
  * for an environment that does not yet name the database. Row first, converge on deploy, in
- * both tiers.
+ * both tiers. DETACHING is NOT the mirror of that and never was: see {@link #install}.
  */
 public final class InstanceDatabaseLinks {
 
+    private static final String DETACHED_INSTANCES = "hohenheim.instance-db-links.detached";
+
+    private static boolean installed;
+
     private InstanceDatabaseLinks() {
+    }
+
+    /**
+     * Install the DETACH sweep: dropping an attachment row revokes the workload's
+     * reachability at the daemon immediately, on every delete path (admin form, API,
+     * criteria delete), not at some later deploy.
+     *
+     * AIDEV-NOTE: the site lane sweeps in {@code SiteReleases.completeDrain} instead,
+     * because a site detach changes the release FINGERPRINT and therefore mints a new
+     * release seconds later -- "the next converge" is immediate there. An instance detach
+     * triggers no converge at all, so the same deferral would leave a running container
+     * dialling a database whose authorization row is gone, indefinitely. Attaching stays
+     * deferred (fail-CLOSED: no credential is in the environment yet); detaching cannot
+     * be, because deferring it fails OPEN. That asymmetry, not symmetry with attach, is
+     * why this is a write hook.
+     *
+     * AIDEV-NOTE: a sweep that fails is LOGGED, not thrown -- the site lane's precedent
+     * (it records a WARNING step and completes the release). The leftover is not lost:
+     * with its attachment row gone the link network classifies as ORPHANED, so the
+     * reconciler surfaces it and OrphanActions removes it. That safety net only became
+     * true when the reconciler learned the instance_database branch; the two fixes are
+     * one batch for that reason.
+     */
+    public static synchronized void install() {
+        if (installed) {
+            return;
+        }
+        installed = true;
+        // Captured BEFORE the delete because the sweep runs AFTER it: the sweep reads
+        // the surviving rows to decide what stays, and the doomed row must be gone by
+        // then or it would vote to keep its own network.
+        InstanceDatabaseModel.SCHEMA.addBeforeRemoveHook(context -> {
+            Model model = context.getModel();
+            if (model == null) {
+                return;
+            }
+            QueryContext query = context.getQueryContext();
+            Criteria criteria = query != null ? query.getCriteria() : null;
+            QueryBuilder<Row> builder = model.find();
+            if (criteria != null) {
+                builder.where(criteria);
+            }
+            Set<Integer> doomed = new LinkedHashSet<>();
+            for (Row row : builder.all()) {
+                Integer instanceId = row.get(InstanceDatabaseModel.INSTANCE_ID);
+                if (instanceId != null) {
+                    doomed.add(instanceId);
+                }
+            }
+            if (!doomed.isEmpty()) {
+                context.setAttribute(DETACHED_INSTANCES, doomed);
+            }
+        });
+        InstanceDatabaseModel.SCHEMA.addAfterRemoveHook(context -> {
+            if (!(context.getAttribute(DETACHED_INSTANCES) instanceof Set<?> doomed)) {
+                return;
+            }
+            for (Object instanceId : doomed) {
+                if (instanceId instanceof Integer id) {
+                    InstanceDatabaseNetworks.sweepFor(id, false);
+                }
+            }
+        });
     }
 
     /**
@@ -56,9 +129,10 @@ public final class InstanceDatabaseLinks {
      */
     public static void deleteForInstance(int instanceId) {
         InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
-        if (links.findByInstanceId(instanceId).isEmpty()) {
-            return;
-        }
+        // AIDEV-NOTE: NO "no rows, nothing to do" shortcut. An instance whose links were
+        // detached earlier still owns their link NETWORKS at the daemon if any detach
+        // sweep ever failed, and skipping the sweep here was the last moment in the
+        // record's life anything would have reclaimed them.
         links.find().where(InstanceDatabaseModel.INSTANCE_ID.eq(instanceId)).delete();
         // Rows gone first, then the daemon: the sweep reads the rows to decide what
         // survives, and the container is already destroyed by the time this runs.
