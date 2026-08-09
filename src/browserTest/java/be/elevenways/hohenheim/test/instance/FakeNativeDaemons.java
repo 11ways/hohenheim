@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.runtime.ImageIdentity;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport.WorkloadClaim;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
@@ -445,9 +446,17 @@ final class FakeNativeDaemons {
         @Override
         public @NonNull InstanceSpec specFor(int instanceId,
                                              @NonNull Map<String, Object> settings) {
+            // A `container_port` setting declares a PUBLIC publication, exactly as the
+            // real port-carrying kinds do. This is the only way a MIGRATABLE (native
+            // export/import) spec can carry one: both Incus kinds are structurally
+            // publication-free, so the migration refusal would be untestable without it.
+            Object port = settings.get("container_port");
+            PortPublication publication = port instanceof Number number
+                ? new PortPublication(number.intValue(), PortPublication.TCP, true, null, null)
+                : null;
             return new InstanceSpec("fake-instance-" + instanceId,
                 String.valueOf(settings.getOrDefault("image", "fake/image")), null,
-                Map.of(), Map.of(), null, ResourceLimits.none(),
+                Map.of(), Map.of(), publication, ResourceLimits.none(),
                 new ContainerHardening.Profile("fake", List.of()),
                 OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
         }
