@@ -210,16 +210,14 @@ public class StackResource extends RowResource {
     }
 
     /**
-     * AIDEV-NOTE: NAMED GAP, 2026-08-08 -- none of these actions is ActivityLog-recorded,
-     * and neither is StackRuntime. Unlike the instance and site tiers (whose panel/API
-     * asymmetry was closed by recording inside InstanceService and SiteReleases), the
-     * stack tier is silent on EVERY surface, so there is no asymmetry to mislead an
-     * operator -- but deploy, stop, rollback and the data-destroying volume purge are
-     * all unanswerable. The fix is not a record call in these handlers: every one of
-     * them is *Async, and Accountability is a ThreadLocal, so the row would be written
-     * by the worker as system work with no actor unless the entry point snapshots the
-     * attribution and the job re-enters it with Accountability.runAs. Tracked as an OPEN
-     * item in docs/coolify-use-inventory.md.
+     * AIDEV-NOTE: deliberately NO ActivityLog call here. Deploy, stop, rollback and the
+     * volume purge are recorded by {@link StackRuntime} when they SETTLE, which is what
+     * makes this panel and every other caller (adoption, boot recovery, any future API)
+     * audited by the same write -- and what keeps a queued action that never settles out
+     * of the trail. The thread hop that used to make that impossible is solved in the
+     * runtime: it snapshots the dispatcher's Accountability and re-enters it on the
+     * stack's worker. Refresh-status is a read and reclaim-images is per DAEMON, not per
+     * stack; neither is a stack operation to record.
      */
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {

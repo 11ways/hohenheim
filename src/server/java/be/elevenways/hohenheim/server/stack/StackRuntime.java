@@ -14,10 +14,12 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.Accountability;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -44,8 +46,36 @@ import java.util.function.Supplier;
  * save-triggered), one worker per stack so operations on the same stack serialize
  * while different stacks proceed in parallel, and status refresh with alerting on
  * health transitions.
+ *
+ * AIDEV-NOTE: stack accountability lives HERE, in the one funnel, for the reason
+ * {@link be.elevenways.hohenheim.server.instance.InstanceService} states for instance
+ * power: the surfaces would each need their own copy, and the status write is a
+ * set-based {@code updateAll} that fires no model hooks, so {@code
+ * ActivityLog.withAction} has nothing to rename and would record literally nothing.
+ * What made the stack tier the LAST silent tier is the thread hop: every operation runs
+ * on the stack's own worker and {@code Accountability} is a ThreadLocal, so a row
+ * written there is unattributed system work unless the dispatching thread's attribution
+ * is snapshotted and re-entered -- which {@link #onWorker} and {@link #submitAsync} now
+ * do for every hop, sync and async. WHICH surface acted stays answerable through the
+ * activity row's own {@code origin} column: {@code web} for a panel action, {@code
+ * system} for the adoption and boot-recovery callers.
  */
 public class StackRuntime {
+
+    /** The activity action a SETTLED stack deploy is recorded under. */
+    public static final String ACTIVITY_DEPLOY_ACTION = "deployed";
+
+    /** The activity action a SETTLED redeploy of an older snapshot is recorded under. */
+    public static final String ACTIVITY_ROLLBACK_ACTION = "rolled_back";
+
+    /** The activity action a SETTLED stop is recorded under. */
+    public static final String ACTIVITY_STOP_ACTION = "stopped";
+
+    /** The activity action a SETTLED volume purge is recorded under. */
+    public static final String ACTIVITY_PURGE_ACTION = "volumes_purged";
+
+    /** {@link #runDeploy}'s reason for a rollback (the deployment record's own word). */
+    private static final String REASON_ROLLBACK = "rollback";
 
     private static final StackRuntime INSTANCE = new StackRuntime();
 
@@ -93,7 +123,7 @@ public class StackRuntime {
                 refreshStatus(stackId);
                 return;
             }
-            runDeploy(stackId, "rollback", snapshot);
+            runDeploy(stackId, REASON_ROLLBACK, snapshot);
         });
     }
 
@@ -101,12 +131,7 @@ public class StackRuntime {
     public void stopAsync(int stackId) {
         submitAsync(stackId, () -> {
             try {
-                StackSpec spec = scoped(() -> teardownSpec(stackId));
-                if (spec == null) {
-                    return;
-                }
-                stopServices(spec);
-                setStatus(stackId, StackModel.STATUS_STOPPED);
+                runStop(stackId);
             } catch (Exception e) {
                 Blast.log("STACK: stop failed for stack", stackId, "-", e.getMessage());
                 refreshStatus(stackId);
@@ -133,7 +158,7 @@ public class StackRuntime {
         if (snapshot == null) {
             throw new IOException("No successful deployment to roll back to");
         }
-        IOException failure = onWorker(stackId, () -> runDeploy(stackId, "rollback", snapshot));
+        IOException failure = onWorker(stackId, () -> runDeploy(stackId, REASON_ROLLBACK, snapshot));
         if (failure != null) {
             throw failure;
         }
@@ -142,14 +167,27 @@ public class StackRuntime {
     /** Stop synchronously; throws on failure. */
     public void stop(int stackId) throws IOException {
         onWorker(stackId, () -> {
-            StackSpec spec = scoped(() -> teardownSpec(stackId));
-            if (spec == null) {
+            if (!runStop(stackId)) {
                 throw new IOException("Stack " + stackId + " does not exist");
             }
-            stopServices(spec);
-            setStatus(stackId, StackModel.STATUS_STOPPED);
             return null;
         });
+    }
+
+    /**
+     * The stop ITSELF, shared by both surfaces so neither can be the audited one.
+     *
+     * @return false when the stack does not exist (the async caller's silent no-op)
+     */
+    private boolean runStop(int stackId) throws IOException {
+        StackSpec spec = scoped(() -> teardownSpec(stackId));
+        if (spec == null) {
+            return false;
+        }
+        stopServices(spec);
+        setStatus(stackId, StackModel.STATUS_STOPPED);
+        recordSettled(stackId, ACTIVITY_STOP_ACTION, spec.name());
+        return true;
     }
 
     /**
@@ -208,11 +246,12 @@ public class StackRuntime {
                 throw new IOException(String.valueOf(other), other);
             }
         }
+        Accountability caller = Accountability.current();
         try {
             return workerFor(stackId).submit(() -> {
                 CURRENT_STACK.set(stackId);
                 try {
-                    return body.call();
+                    return asCaller(caller, body);
                 } finally {
                     CURRENT_STACK.remove();
                 }
@@ -357,6 +396,7 @@ public class StackRuntime {
             }
             destroyServices(spec, true);
             setStatus(stackId, StackModel.STATUS_INACTIVE);
+            recordSettled(stackId, ACTIVITY_PURGE_ACTION, spec.name());
             return null;
         });
     }
@@ -499,6 +539,11 @@ public class StackRuntime {
                 return null;
             });
             setStatus(stackId, StackModel.STATUS_ACTIVE);
+            // The SETTLED operation, never the queued intent: a deploy that failed is
+            // answered by its failed status and its deployment record, not by an
+            // activity row claiming it happened (the instance tier's rule).
+            recordSettled(stackId, REASON_ROLLBACK.equals(reason)
+                ? ACTIVITY_ROLLBACK_ACTION : ACTIVITY_DEPLOY_ACTION, reason);
             return null;
         } catch (Throwable e) {
             // Throwable, not Exception: an Error thrown on the worker would otherwise
@@ -815,13 +860,51 @@ public class StackRuntime {
 
     /** Queue fire-and-forget work on the stack's lane, stamped for re-entrant onWorker calls. */
     private void submitAsync(int stackId, @NonNull Runnable body) {
+        Accountability caller = Accountability.current();
         workerFor(stackId).submit(() -> {
             CURRENT_STACK.set(stackId);
             try {
-                body.run();
+                Accountability.runAs(caller, body);
             } finally {
                 CURRENT_STACK.remove();
             }
+        });
+    }
+
+    /**
+     * Run worker work under the DISPATCHING thread's attribution.
+     *
+     * AIDEV-NOTE: the snapshot is taken on the caller's thread and re-entered here
+     * because {@code Accountability} resolves through a ThreadLocal and a request-scoped
+     * resolver, neither of which exists on a stack worker. Without it every stack
+     * activity row -- and every deployment-history row the worker saves through the
+     * model hooks -- is unattributed {@code system} work, which is exactly what an
+     * accountability-shaped no-op looks like.
+     */
+    private static <T> T asCaller(@NonNull Accountability caller,
+                                  @NonNull Callable<T> body) throws Exception {
+        Object[] result = new Object[1];
+        Exception[] failure = new Exception[1];
+        Accountability.runAs(caller, () -> {
+            try {
+                result[0] = body.call();
+            } catch (Exception thrown) {
+                failure[0] = thrown;
+            }
+        });
+        if (failure[0] != null) {
+            throw failure[0];
+        }
+        @SuppressWarnings("unchecked")
+        T typed = (T) result[0];
+        return typed;
+    }
+
+    /** Record a SETTLED stack operation on the stack record, on the worker's datasource. */
+    private void recordSettled(int stackId, @NonNull String action, @Nullable String detail) {
+        scoped(() -> {
+            ActivityLog.record(Models.get(StackModel.class), stackId, action, detail);
+            return null;
         });
     }
 

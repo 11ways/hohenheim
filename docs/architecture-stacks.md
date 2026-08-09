@@ -75,6 +75,16 @@ deployment (netbird-server + dashboard + netbird-proxy).
   cascades exist on those tables, and deployment snapshots carry secrets).
 - Deploy replaces every service's container (create new after removing old);
   named volumes persist across replacements.
+- Accountability lives in `StackRuntime`, not on the surfaces: a SETTLED
+  deploy, rollback, stop or volume purge writes one activity row on the stack
+  record (`deployed` / `rolled_back` / `stopped` / `volumes_purged`), so panel,
+  adoption and any future API are audited by the same write and `origin` says
+  which acted. A failed deploy is answered by its status and its deployment
+  record instead. Every operation runs on the stack's worker and
+  `Accountability` is a ThreadLocal, so `onWorker` and `submitAsync` snapshot
+  the dispatcher's attribution and re-enter it there -- without that carry the
+  rows (and the deployment-history rows the worker saves) are unattributed
+  system work. Deleting a stack is recorded by the ordinary delete hook.
 - Renaming a stack is refused while it still OWNS containers: the name is
   embedded in every container, network and volume name plus the ownership
   label, so a rename would orphan them all. The gate is a live owned-container

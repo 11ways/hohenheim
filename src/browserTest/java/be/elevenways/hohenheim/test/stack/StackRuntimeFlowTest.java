@@ -15,10 +15,12 @@ import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
@@ -266,13 +268,34 @@ class StackRuntimeFlowTest {
         assertThat(volumeExists(volume)).as("step 1: the owned volume exists").isTrue();
 
         // 2. Purge: container and volume both go, the stack reads inactive.
-        runtime.purgeVolumes(stackId);
+        //    This is the one stack operation that destroys DATA, so it is also the one
+        //    that must be answerable: it records who purged, on the stack record.
+        Accountability.runAs(new Accountability("purger", "The purger", null, "junit",
+                Accountability.ORIGIN_WEB), () -> {
+            try {
+                runtime.purgeVolumes(stackId);
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+        });
         assertThat(volumeExists(volume)).as("step 2: the owned volume is destroyed").isFalse();
         Db.run(datasource, () -> {
             Row stack = Models.get(StackModel.class).findById(stackId);
             assertThat(stack.get(StackModel.STATUS))
                 .as("step 2: nothing of the stack remains")
                 .isEqualTo(StackModel.STATUS_INACTIVE);
+            List<Row> purged = Models.get(ActivityModel.class).find()
+                .where(ActivityModel.MODEL.eq(StackModel.MODEL_ID.toString()))
+                .where(ActivityModel.RECORD_ID.eq(String.valueOf(stackId)))
+                .where(ActivityModel.ACTION.eq(StackRuntime.ACTIVITY_PURGE_ACTION))
+                .all();
+            assertThat(purged)
+                .withFailMessage("step 2: the volume purge must name who destroyed the"
+                    + " data; found %s activity rows", purged.size())
+                .hasSize(1);
+            assertThat((String) purged.get(0).get(ActivityModel.ACTOR))
+                .as("step 2: attributed to the operator, not to the system")
+                .isEqualTo("purger");
         });
 
         // 3. The next deploy rebuilds from the records, with an EMPTY volume.
