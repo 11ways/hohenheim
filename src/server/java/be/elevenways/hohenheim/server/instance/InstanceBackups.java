@@ -392,6 +392,17 @@ public final class InstanceBackups {
         }
         HohenheimAccess.requireOperationCapability(
             backup.get(InstanceBackupModel.INSTANCE_ID), HohenheimAccess.BACKUPS);
+        deleteAuthorized(backup);
+    }
+
+    /**
+     * The delete the retention sweep runs: the BACKUPS capability was proven for the
+     * instance when the operation was entered, and re-asking per row only made the
+     * sweep's {@code catch (Violations)} unable to tell a refusal from an unreachable
+     * target. Same reasoning as {@code InstanceSnapshots.deleteAuthorized}.
+     */
+    private void deleteAuthorized(@NonNull Row backup) {
+        int backupId = backup.get(InstanceBackupModel.ID);
         String key = backup.get(InstanceBackupModel.REMOTE_KEY);
         if (key != null && !key.isBlank()) {
             try {
@@ -425,11 +436,17 @@ public final class InstanceBackups {
             .orderBy(InstanceBackupModel.CREATED_AT, SortOrder.DESC)
             .all();
         for (int i = retention; i < complete.size(); i++) {
+            Object id = complete.get(i).get(InstanceBackupModel.ID);
             try {
-                delete(complete.get(i).get(InstanceBackupModel.ID));
+                deleteAuthorized(complete.get(i));
             } catch (Violations pruneFailed) {
-                Blast.log("BACKUP: retention could not remove backup",
-                    complete.get(i).get(InstanceBackupModel.ID), "- kept for a later sweep");
+                Blast.log("BACKUP: retention could not remove backup", id,
+                    "- kept for a later sweep");
+            } catch (RuntimeException unexpected) {
+                // The backup this sweep follows already succeeded; see the same guard in
+                // InstanceSnapshots.pruneForRetention.
+                Blast.log("BACKUP: retention hit an unexpected failure on backup", id,
+                    "- kept for a later sweep:", InstanceSnapshots.describe(unexpected));
             }
         }
     }
