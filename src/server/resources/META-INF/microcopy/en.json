@@ -7461,5 +7461,25 @@
   "database_quota_reached": {
     "text": "Database quota reached: {$used} of {$limit} in use",
     "scope": "violations"
+  },
+  "host_quarantined_status": {
+    "text": "QUARANTINED - {$admission}",
+    "scope": "server"
+  },
+  "host_contact_lapsed_status": {
+    "text": "{$docker} - silent for {$minutes} min - {$admission}",
+    "scope": "server"
+  },
+  "host_local_socket": {
+    "text": " This record addresses the CONTROLLER's own daemon over {$socket}, so every verdict above is about the machine hohenheim runs on, whatever this host is named.",
+    "scope": "server"
+  },
+  "kernel_isolation_proven_at": {
+    "text": "Verified in the kernel: a preflight transacted on this host's own nftables at {$when}.",
+    "scope": "server"
+  },
+  "host_contact_lapsed": {
+    "text": "Host '{$name}' last answered {$minutes} minutes ago, past the host contact bound; no new workload is placed there until it answers again",
+    "scope": "violations"
   }
 }
