@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.notification.Alerts;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -121,18 +123,30 @@ public final class HostProbe {
      * Persist a typed probe failure on the host record; {@code last_seen_at} keeps its
      * value. A {@link FailureKind#HOST_KEY_CHANGED} additionally QUARANTINES the host --
      * see {@link #quarantine}.
+     *
+     * AIDEV-NOTE: the ALERT fires on the TRANSITION only -- the sweeps run every 15 minutes
+     * and hourly, so alerting on every failure would turn one dead host into a channel full
+     * of identical messages an operator learns to ignore. Before this, a host that stopped
+     * answering raised nothing at all: the failure landed in a column
+     * ({@code last_error_kind}) whose only reader was an admin list nobody had open.
      */
     public static void recordFailure(@NonNull String serverName, @NonNull Outcome outcome) {
         Row server = Models.get(ServerModel.class).findByName(serverName);
         if (server == null || outcome.kind() == null) {
             return;
         }
+        String previous = server.get(ServerModel.LAST_ERROR_KIND);
         server.set(ServerModel.LAST_ERROR_KIND, outcome.kind().token);
         server.set(ServerModel.LAST_ERROR, outcome.detail());
         if (outcome.kind() == FailureKind.HOST_KEY_CHANGED) {
             quarantine(server, outcome.detail());
         }
         Models.get(ServerModel.class).save(server);
+        if (previous == null || previous.isBlank()) {
+            Alerts.send(NotificationEvents.HOST_UNREACHABLE,
+                "Host '" + serverName + "' stopped answering (" + outcome.kind().token + ")",
+                outcome.detail());
+        }
     }
 
     /**

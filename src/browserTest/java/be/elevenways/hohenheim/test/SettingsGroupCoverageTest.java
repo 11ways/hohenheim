@@ -41,7 +41,16 @@ class SettingsGroupCoverageTest {
         "capacity",
         // Incus daemon/controller knobs. Drifted out of this pin the same way as
         // "stacks", "files", "builds" and "releases" before it; caught 2026-08-07.
-        "incus");
+        "incus",
+        // Host HEALTH (2026-08-09), and deliberately its own group rather than a knob
+        // folded into "capacity". The two answer different questions -- capacity rations a
+        // measured resource, this judges whether the machine is still answering at all --
+        // and a host that has gone silent needs no memory reading to be refused. Filing it
+        // under a group labelled "Host capacity" would have contradicted the AIDEV-NOTE
+        // sitting on InstanceCapacity.readingIsFresh, which argues at length that neither
+        // bound subsumes the other, and would have set the precedent that every host knob
+        // lands wherever its first consumer happened to read it.
+        "hosts");
 
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {

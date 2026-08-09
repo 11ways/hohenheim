@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
@@ -8,6 +9,9 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.time.Duration;
+import java.time.Instant;
 
 /**
  * The placement gate the host record exists for: NEW tenant-authored workloads
@@ -24,8 +28,8 @@ public final class HostAdmission {
      * Refuse instance placement on a host that is not admitted or whose posture does
      * not accept a hostile container workload.
      *
-     * @throws Violations {@code host_not_admitted}, {@code host_posture_refuses} or one of
-     *         {@link #requireKernelTruth}'s refusals
+     * @throws Violations {@code host_not_admitted}, {@code host_posture_refuses},
+     *         {@code host_contact_lapsed} or one of {@link #requireKernelTruth}'s refusals
      */
     public static void requireInstancePlacement(int serverId) {
         Row server = Models.get(ServerModel.class).findById(serverId);
@@ -44,6 +48,50 @@ public final class HostAdmission {
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         requireKernelTruth(server);
+        requireRecentContact(server);
+    }
+
+    /**
+     * A host that has not ANSWERED inside the declared bound takes no new workload.
+     *
+     * AIDEV-NOTE: the heartbeat had no reader with an age bound at all. Every sweep that
+     * reaches a daemon stamps {@code last_seen_at} ({@code ReapIncusControllers} every 15
+     * minutes, {@code DockerReconciler} hourly, plus preflight and the live overview) and
+     * nothing anywhere compared it to a clock -- so a host that stopped answering stayed
+     * {@code admitted} and kept receiving placements, with a status string no code read as
+     * its only trace.
+     *
+     * REFUSE rather than deprioritise, and the reason it is not the outage it looks like:
+     * this refuses ONE host, and {@link be.elevenways.hohenheim.server.instance.InstancePlacement}
+     * walks every host, so a lapsed host moves the placement instead of failing it. The
+     * deploy onto a silent daemon was going to fail anyway -- after a record existed and
+     * capacity was booked -- and a named refusal at the chooser is strictly better than a
+     * broken deploy. Deprioritising cannot deliver that: a soft score still lands the
+     * workload there when it is the only host of its runtime, which is exactly the case
+     * this exists for. The remaining risk -- a stopped sweeper lapsing every host at once
+     * -- is bounded by a default three times the slowest write cadence and by 0 meaning
+     * "no bound".
+     *
+     * A host that has NEVER been contacted is not lapsed: {@code last_seen_at} is null
+     * there, and admission answers for it already ({@code admit_needs_preflight} cannot
+     * pass without a preflight, and a passing preflight stamps the column).
+     *
+     * @throws Violations {@code host_contact_lapsed}
+     */
+    public static void requireRecentContact(@NonNull Row server) {
+        Integer minutes = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES);
+        if (minutes == null || minutes <= 0) {
+            return;
+        }
+        Instant lastSeen = server.get(ServerModel.LAST_SEEN_AT);
+        if (lastSeen == null
+                || lastSeen.isAfter(Instant.now().minus(Duration.ofMinutes(minutes)))) {
+            return;
+        }
+        throw Violations.ofForm(violation("host_contact_lapsed")
+            .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)))
+            .withArg("minutes", Duration.between(lastSeen, Instant.now()).toMinutes()));
     }
 
     /**

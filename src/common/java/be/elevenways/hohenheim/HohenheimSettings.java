@@ -850,6 +850,30 @@ public class HohenheimSettings {
             .build();
     }
 
+    // --- Host health: what the stored heartbeat is allowed to be worth ---
+    public abstract class Hosts {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("hosts")
+            .label("Host health")
+            .describe("How long a host may go without answering before the control plane "
+                + "stops treating its stored state as current")
+            .icon("heart-pulse");
+
+        public static final SettingDefinition<Integer> CONTACT_MAX_AGE_MINUTES = GROUP
+            .buildSetting("contact_max_age_minutes", Integer.class)
+            .defaultValue(180)
+            .label("Host contact maximum age (minutes)")
+            .description("How long ago a host's daemon may last have ANSWERED before new "
+                + "workloads stop being placed on it. Every sweep that reaches a daemon "
+                + "refreshes this: the Incus presence sweep every 15 minutes, the Docker "
+                + "reconcile hourly, plus every preflight and live overview. Past the "
+                + "bound placement refuses the host BY NAME and picks another; workloads "
+                + "already on it are untouched and every stop, destroy and cleanup path "
+                + "stays open. Keep it well above an hour so one missed sweep is not a "
+                + "refusal. 0 or less removes the bound -- an explicit choice to place "
+                + "onto a host nobody has heard from")
+            .build();
+    }
+
     // --- Incus daemons shared with other controllers ---
     public abstract class Incus {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("incus")
