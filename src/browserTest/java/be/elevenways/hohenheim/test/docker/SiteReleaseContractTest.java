@@ -454,6 +454,101 @@ class SiteReleaseContractTest {
         });
     }
 
+    /**
+     * The drain's stop-failure branch: a superseded release the daemon REFUSES to stop
+     * must not take the release that just took traffic down with it. The branch is a
+     * catch rather than a throw for exactly that reason, and until now nothing executed
+     * it -- every {@code completeDrain} call site was exercised on the success path only.
+     *
+     * AIDEV-NOTE: this journey is why {@code FakeDockerDaemon.refuseStopOf} exists. What
+     * it pins: the new release keeps serving, the failure is on the DURABLE record an
+     * operator reads (never only in the log), the superseded workload is left visibly
+     * behind rather than forgotten, and the drain RUNS ON past the catch to finish the
+     * operation SUCCEEDED -- a release that switched traffic is not a failed release.
+     */
+    @Test
+    void aSupersededReleaseWhoseStopFailsNeverTakesTheNewReleaseDownWithIt() {
+        Db.run(datasource, () -> {
+            int siteId = site("stop-fails-site");
+            String supersededHandle = null;
+            try {
+                // 1. A serving v1 release, and the daemon then wedges ITS handle: every
+                //    stop of that container is refused from here on.
+                SiteInstances.ensureRunning(siteId, "stop-fails-site", settingsFor("v1"));
+                int supersededId = servingOf(siteId).get(InstanceModel.ID);
+                supersededHandle = FakeDockerDaemon.handleOf(supersededId);
+                daemon.refuseStopOf(supersededHandle);
+                assertThat(daemon.isRunning(supersededHandle))
+                    .as("step 1: the release to be superseded is running").isTrue();
+
+                // 2. Release v2 over it. The switch happens, then the drain tries -- and
+                //    fails -- to stop the superseded workload.
+                SiteInstances.ensureRunning(siteId, "stop-fails-site", settingsFor("v2"));
+                int servingId = servingOf(siteId).get(InstanceModel.ID);
+                assertThat(servingId)
+                    .as("step 2: a NEW release took traffic").isNotEqualTo(supersededId);
+                await("step 2: the operation settles after the drain window",
+                    () -> reload(latestOp(siteId)).get(ReleaseOperationModel.FINISHED_AT)
+                        != null);
+
+                // 3. The POSITIVE anchor: the new release is up and serving. A drain that
+                //    tore everything down would satisfy "the old one is still there" for
+                //    free.
+                assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(servingId)))
+                    .as("step 3: the new release is running at the daemon, untouched by"
+                        + " the failed stop of the one it replaced").isTrue();
+                assertThat((String) Models.get(InstanceModel.class).findById(servingId)
+                        .get(InstanceModel.STATUS))
+                    .as("step 3: and it is recorded running").isEqualTo(
+                        InstanceModel.STATUS_RUNNING);
+
+                // 4. The failure is WHERE AN OPERATOR SEES IT -- the durable step log of
+                //    the operation, not a line in a log file nobody reads. And the
+                //    operation is SUCCEEDED: traffic switched, so this release worked.
+                Row op = reload(latestOp(siteId));
+                assertThat(Map.of(
+                        "status", String.valueOf((Object) op.get(ReleaseOperationModel.STATUS)),
+                        "reason", String.valueOf(
+                            (Object) op.get(ReleaseOperationModel.FAILURE_REASON))))
+                    .as("step 4: a release whose traffic switch landed is SUCCEEDED, and"
+                        + " carries no failure reason -- the stop is not the release")
+                    .isEqualTo(Map.of("status", ReleaseOperationModel.STATUS_SUCCEEDED,
+                        "reason", "null"));
+                assertThat((String) op.get(ReleaseOperationModel.STEP_LOG))
+                    .as("step 4: the stop failure is recorded verbatim on the record")
+                    .contains("WARNING: superseded release stop failed");
+                assertThat((String) op.get(ReleaseOperationModel.STEP_LOG))
+                    .as("step 4: and the drain RAN ON past the catch to finish the"
+                        + " operation -- the branch is a catch, never an early return")
+                    .contains("release complete");
+
+                // 5. The leftover is REAL and visible: the workload is still running at
+                //    the daemon (nothing pretended otherwise) and its record says ERROR,
+                //    which is what the reconciler and the operator both key on.
+                assertThat(daemon.callsFor(supersededHandle))
+                    .as("step 5: the daemon really refused the stop it was asked for")
+                    .contains("stop-refused:" + supersededHandle);
+                assertThat(daemon.isRunning(supersededHandle))
+                    .as("step 5: so the superseded workload is still up -- a leftover the"
+                        + " instance tier surfaces, never a silent shrug").isTrue();
+                assertThat((String) Models.get(InstanceModel.class).findById(supersededId)
+                        .get(InstanceModel.STATUS))
+                    .as("step 5: and its record carries the error, not a false 'stopped'")
+                    .isEqualTo(InstanceModel.STATUS_ERROR);
+                assertThat((Object) Models.get(InstanceModel.class).findById(supersededId)
+                        .get(InstanceModel.RUNTIME_ROLE))
+                    .as("step 5: it is still the retained rollback target")
+                    .isEqualTo(InstanceModel.ROLE_RETIRED);
+            } finally {
+                if (supersededHandle != null) {
+                    daemon.allowStopOf(supersededHandle);
+                }
+                HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
+                SiteInstances.destroyFor(siteId);
+            }
+        });
+    }
+
     // -- fixture plumbing -----------------------------------------------------
 
     /** The site record the engine's fingerprint, activity and ownership all resolve to. */

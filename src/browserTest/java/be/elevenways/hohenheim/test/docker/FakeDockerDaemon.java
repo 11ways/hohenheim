@@ -53,10 +53,14 @@ import java.util.Set;
  * EVERY FAKE MUST BE ABLE TO SAY NO. The failures this can produce, each one a real
  * product path: an unhealthy candidate ({@link #answerWithForNextWorkload}), a container
  * the daemon reports RUNNING while its workload is dead ({@link #reportWorkloadDead},
- * which is the daemon's {@code OOMKilled} the reuse lane refuses to reuse), and a create
- * that refuses a foreign workload under our handle. It deliberately has no "stop fails"
- * knob: nothing asserts the drain's stop-failure branch yet, and a knob no test uses is
- * scaffolding.
+ * which is the daemon's {@code OOMKilled} the reuse lane refuses to reuse), a create
+ * that refuses a foreign workload under our handle, and a stop the daemon will not
+ * settle ({@link #refuseStopOf}, the drain's stop-failure branch).
+ *
+ * AIDEV-NOTE: the stop-failure knob was DECLINED when this fake was written -- "a knob no
+ * test uses is scaffolding" -- and it arrives now WITH the journey that consumes it
+ * ({@code aSupersededReleaseWhoseStopFailsNeverTakesTheNewReleaseDownWithIt}). The rule
+ * did not change: a fake capability and its first consumer land together or not at all.
  *
  * What it deliberately does NOT model, so nothing reads its green as total coverage: a
  * running container's real port binding is a real {@link HttpServer} on loopback (so the
@@ -99,6 +103,9 @@ final class FakeDockerDaemon implements DockerTransport {
     /** handles whose container reports RUNNING while the workload inside it is dead. */
     private final Set<String> workloadDead = new LinkedHashSet<>();
 
+    /** Handles whose stop the daemon refuses; see {@link #refuseStopOf}. */
+    private final Set<String> stopFails = new LinkedHashSet<>();
+
     /** Consumed by the next create: the status that workload's responder will answer. */
     private @Nullable Integer nextHealth;
 
@@ -128,6 +135,21 @@ final class FakeDockerDaemon implements DockerTransport {
     /** Report this workload as RUNNING with a dead process inside (the OOM-kill shape). */
     void reportWorkloadDead(@NonNull String handle) {
         this.workloadDead.add(handle);
+    }
+
+    /**
+     * Refuse every stop of this handle, on BOTH faces: the workload keeps running and the
+     * caller gets the daemon's refusal. The real shape is a container the engine cannot
+     * settle (a wedged runtime, a busy device); the release that just took traffic must
+     * survive it.
+     */
+    void refuseStopOf(@NonNull String handle) {
+        this.stopFails.add(handle);
+    }
+
+    /** Let this handle be stopped again; the refusal is per-daemon and must not leak. */
+    void allowStopOf(@NonNull String handle) {
+        this.stopFails.remove(handle);
     }
 
     /** Every recorded act against ONE handle, in order: the workload's whole life. */
@@ -231,6 +253,10 @@ final class FakeDockerDaemon implements DockerTransport {
         @Override
         public void stop(@NonNull String handle, int graceSeconds) throws IOException {
             Workload workload = require(handle);
+            if (FakeDockerDaemon.this.stopFails.contains(handle)) {
+                FakeDockerDaemon.this.calls.add("stop-refused:" + handle);
+                throw new IOException("REFUSED: the daemon will not stop " + handle);
+            }
             unbind(workload);
             workload.running = false;
             FakeDockerDaemon.this.calls.add("stop:" + handle);
@@ -485,6 +511,13 @@ final class FakeDockerDaemon implements DockerTransport {
             Workload workload = this.workloads.get(handle);
             if (workload == null) {
                 return json(404, Map.of("message", "No such container: " + handle));
+            }
+            // The two faces must AGREE: a refused stop is refused here too, as the
+            // daemon's own 500, never a 204 that leaves the caller believing it settled.
+            if (this.stopFails.contains(handle)) {
+                this.calls.add("stop-refused:" + handle);
+                return json(500, Map.of("message",
+                    "REFUSED: the daemon will not stop " + handle));
             }
             unbind(workload);
             workload.running = false;
