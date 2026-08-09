@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
@@ -365,6 +366,19 @@ public final class DockerReconciler {
             if (SiteDatabaseModel.MODEL_ID.equals(model)) {
                 return Models.get(SiteDatabaseModel.class).find()
                     .where(SiteDatabaseModel.ID.eq(key)).first() != null;
+            }
+            // AIDEV-NOTE: the INSTANCE-database link answers exactly as the site link
+            // above does, and the answer is deliberate: liveness is the ATTACHMENT ROW's
+            // existence, NOT "the row exists and both endpoints are live". The endpoints
+            // have their own branches and answer for their own resources; folding them in
+            // here would bucket a live link network as an orphan the moment its instance
+            // was soft-deleted -- and the operator action over that bucket REMOVES the
+            // network, which is the severing this branch exists to prevent. Missing this
+            // branch entirely (until 2026-08-09) fell through to the `return false` below
+            // and did precisely that to every healthy idblink network.
+            if (InstanceDatabaseModel.MODEL_ID.equals(model)) {
+                return Models.get(InstanceDatabaseModel.class).find()
+                    .where(InstanceDatabaseModel.ID.eq(key)).first() != null;
             }
             return false;   // a model we cannot resolve is an alarm, not an assumption
         }
