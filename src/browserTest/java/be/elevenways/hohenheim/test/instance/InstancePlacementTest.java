@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
+import be.elevenways.hohenheim.server.process.ProcessCapacity;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -331,6 +332,83 @@ class InstancePlacementTest {
                 .as("step 9: every host here is a docker host, so an incus workload"
                     + " refuses by name rather than landing on the wrong daemon")
                 .isEqualTo("no_placement_available");
+        });
+    }
+
+    /**
+     * The chooser and the write judge against ONE denominator, so a host running managed
+     * child processes cannot be chosen for a workload its own write then refuses.
+     *
+     * AIDEV-NOTE: these were two expressions that happened to agree while no host ran
+     * managed processes -- InstanceCapacity.reserve subtracted ProcessCapacity's bookings
+     * from the budget, chooseForBucket compared against the bare budget. Both now call
+     * InstanceCapacity.bookableMbOn; a step that fails here means someone re-spelled the
+     * subtraction at one of the two call sites.
+     */
+    @Test
+    void theChooserSubtractsManagedProcessBookingsExactlyLikeTheWriteDoes() {
+        Db.run(datasource, () -> {
+            // 1. One eligible host, 1024 MB measured, and 768 MB of it already held by
+            //    managed child processes -- a booking the instance tier does not own but
+            //    must respect (charge == cgroup cap on both tiers).
+            int only = host("proc", ServerModel.ADMISSION_ADMITTED,
+                ServerModel.POSTURE_SHARED_CONTAINER, 1024L);
+            ProcessCapacity.reserve(only, 768);
+            try {
+                assertThat(InstanceCapacity.bookableMbOn(only, 1024L))
+                    .as("step 1: only 256 MB of the host's budget is left to instances")
+                    .isEqualTo(256);
+
+                // 2. A 512 MB workload does NOT fit, and the chooser must say so rather
+                //    than pick this host and let the deploy refuse by name afterwards.
+                //
+                //    AIDEV-NOTE: the description rides the not-null assertion, because a
+                //    chooser that stops refusing hands keyOf a null and "expecting actual
+                //    not to be null" names neither the gate nor what it failed to stop.
+                Throwable refusedChoice = catchThrowable(() ->
+                    InstancePlacement.chooseForBucket(BUCKET, workload(512), null));
+                assertThat(refusedChoice)
+                    .as("step 2: the chooser CHOSE a host with 256 MB of headroom for a"
+                        + " 512 MB workload -- the write there refuses by name, so this is"
+                        + " the chooser sending the operator into a wall")
+                    .isNotNull();
+                assertThat(keyOf(refusedChoice))
+                    .as("step 2: and the refusal is the capacity one")
+                    .isEqualTo("no_placement_capacity");
+
+                // 3. And the write really would have refused it -- this is the exact
+                //    'chooser picks a host the deploy refuses by name' pairing.
+                Throwable refusedWrite = catchThrowable(() -> {
+                    Row row = Models.get(InstanceModel.class).createEmptyRow();
+                    row.set(InstanceModel.NAME, PREFIX + "proc-victim");
+                    row.set(InstanceModel.KIND, DOCKER_KIND);
+                    row.set(InstanceModel.SETTINGS,
+                        Map.of("image", "fake/image", "memory_limit_mb", 512));
+                    row.set(InstanceModel.SERVER_ID, only);
+                    Models.get(InstanceModel.class).save(row);
+                });
+                assertThat(refusedWrite)
+                    .as("step 3: the WRITE side must refuse the very workload step 2 was"
+                        + " asked about -- if it does not, the two sides disagree and this"
+                        + " test proves nothing")
+                    .isNotNull();
+                assertThat(keyOf(refusedWrite))
+                    .as("step 3: the two sides agree on the SAME denominator")
+                    .isEqualTo("host_capacity_reached");
+
+                // 4. POSITIVE ANCHOR: the host is not disqualified, only sized. Exactly
+                //    the 256 MB the processes left over still lands here.
+                assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), null))
+                    .as("step 4: what fits in the remaining headroom is still placeable")
+                    .isEqualTo(only);
+                int landed = liveInstanceOn(only, BUCKET, 256);
+                assertThat(InstanceCapacity.bookedMbOn(only))
+                    .as("step 4: and the write took it, so both tiers total the budget")
+                    .isEqualTo(256);
+                assertThat(landed).isPositive();
+            } finally {
+                ProcessCapacity.release(only, 768);
+            }
         });
     }
 
