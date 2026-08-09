@@ -218,11 +218,20 @@ final class InstanceOperationGuard {
      * pointer and stamps {@code status} under the source host's fence (the rollback
      * half of a settle).
      *
+     * The DESTINATION's capacity booking (taken when the window opened) is handed back
+     * here, because the record is staying where it is -- see
+     * {@link InstanceCapacity#openMigrationWindow} for why the release rides the settle
+     * rather than the failure.
+     *
+     * @param reservedTargetServerId the host the window booked, or null when none was
      * @throws Violations {@code instance_fenced_out}
      */
     static void clearMigration(@NonNull HostLeases leases, int instanceId, int serverId,
-                               long fence, @NonNull String status,
+                               long fence, @Nullable Integer reservedTargetServerId,
+                               @NonNull String status,
                                @NonNull Object instanceName) {
+        long booked = reservedTargetServerId == null
+            ? 0 : InstanceCapacity.bookedOfInstance(instanceId);
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
@@ -241,6 +250,9 @@ final class InstanceOperationGuard {
                 .withArg("name", String.valueOf(instanceName))
                 .withArg("server", ServerModel.nameOf(serverId)));
         }
+        if (reservedTargetServerId != null) {
+            InstanceCapacity.release(reservedTargetServerId, booked);
+        }
     }
 
     /**
@@ -251,11 +263,25 @@ final class InstanceOperationGuard {
      * already owns; from the moment it matches, every further write must come from
      * the destination host's lease.
      *
+     * The SOURCE's capacity booking is handed back once the statement has MATCHED, never
+     * before: a handoff that loses the fence changed nothing, so it must move no charge
+     * either -- the rival that owns the record answers for its ledger. The destination was
+     * already booked when the window opened ({@link InstanceCapacity#openMigrationWindow}),
+     * which is where the ordering argument lives.
+     *
+     * AIDEV-NOTE: this is a set-based updateAll and fires NO write hooks, so
+     * InstanceCapacity's rebook hook never sees a migration. Anything else this statement
+     * should keep in step (an owner-side ledger, a derived counter) must likewise be
+     * spelled out HERE -- reaching for save() to get hooks would trade away the fence,
+     * which is the only thing stopping a stale controller from handing off a record a
+     * rival already owns.
+     *
      * @throws Violations {@code instance_fenced_out}
      */
     static void handoff(@NonNull HostLeases leases, int instanceId, int sourceServerId,
                         long sourceFence, int targetServerId, long targetFence,
                         @NonNull String status, @NonNull Object instanceName) {
+        long booked = InstanceCapacity.bookedOfInstance(instanceId);
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
@@ -275,6 +301,7 @@ final class InstanceOperationGuard {
                 .withArg("name", String.valueOf(instanceName))
                 .withArg("server", ServerModel.nameOf(sourceServerId)));
         }
+        InstanceCapacity.release(sourceServerId, booked);
     }
 
     /**

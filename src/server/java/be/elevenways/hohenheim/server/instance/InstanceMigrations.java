@@ -211,8 +211,21 @@ public final class InstanceMigrations {
             throw refusal("instance_migrate_failed", resolved.row(), unreachable);
         }
 
-        InstanceOperationGuard.stampMigrating(this.instances.leases(), instanceId,
-            resolved.serverId(), sourceFence, targetServerId, nameOf(resolved.row()));
+        // The destination's MEMORY headroom, and the last refusal before anything moves:
+        // migrateTo names its own host, so nothing else on this lane asks whether the
+        // workload fits there (the chooser does it for the drain lane, RestoreCapacity
+        // answers for DISK only). The booking is held for the whole window and settled by
+        // the fenced write that ends it -- see InstanceCapacity.openMigrationWindow.
+        InstanceCapacity.openMigrationWindow(instanceId, targetServerId);
+        try {
+            InstanceOperationGuard.stampMigrating(this.instances.leases(), instanceId,
+                resolved.serverId(), sourceFence, targetServerId, nameOf(resolved.row()));
+        } catch (RuntimeException notOurs) {
+            // The window never opened, so no settle will ever close it.
+            InstanceCapacity.release(targetServerId,
+                InstanceCapacity.bookedOfInstance(instanceId));
+            throw notOurs;
+        }
         Path staging = stagingRoot().resolve("migrate-" + instanceId + "-"
             + STAMP.format(Instant.now()));
         try {
@@ -442,7 +455,8 @@ public final class InstanceMigrations {
                 }
             }
             InstanceOperationGuard.clearMigration(this.instances.leases(), instanceId,
-                resolved.serverId(), sourceFence, InstanceModel.STATUS_STOPPED, nameOf(row));
+                resolved.serverId(), sourceFence, targetId,
+                InstanceModel.STATUS_STOPPED, nameOf(row));
             Blast.log("MIGRATE: rolled back interrupted migration of", handle,
                 "- source host keeps it");
             return true;
@@ -458,9 +472,11 @@ public final class InstanceMigrations {
                 "onto", targetName);
             return true;
         }
-        // Neither daemon holds an attributable copy: loud, never silent.
+        // Neither daemon holds an attributable copy: loud, never silent. The record stays
+        // where it is, so the window's destination booking goes back like a rollback's.
         InstanceOperationGuard.clearMigration(this.instances.leases(), instanceId,
-            resolved.serverId(), sourceFence, InstanceModel.STATUS_ERROR, nameOf(row));
+            resolved.serverId(), sourceFence, targetId,
+            InstanceModel.STATUS_ERROR, nameOf(row));
         Blast.log("MIGRATE: interrupted migration of", handle, "found NO copy on either"
             + " host; the record is stamped error for the operator");
         return true;

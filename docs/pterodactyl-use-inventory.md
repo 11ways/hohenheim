@@ -564,6 +564,13 @@ A kind whose handler class is gone prices at 0 and books nothing, which is the
   that the record names the destination. `:287` proves a killed controller
   settles both crash windows without split ownership; `:367` proves a drain
   refuses without a cordon and then reports moved/refused honestly. **[test]**
+- The HOST CAPACITY LEDGER follows the record, since 2026-08-09: the handoff is a
+  fenced `updateAll` and fires no write hooks, so the charge used to stay on the
+  source forever (a drained host read as fully booked and was then refused
+  `no_placement_capacity` -- draining removed it from the pool permanently). The
+  destination is now booked when the migration window opens, which is also the only
+  memory gate on an operator-named `migrateTo`, and the fenced write that ends the
+  window releases the other side. `InstanceMigrationTest:496`. **[test]**
 - The Incus DRIVER path is proven only by `IncusColdMigrationLiveTest`
   (`assumeTrue` at `:65`, `:67`). So the orchestration is hermetic and the real
   export/import is **[live]**.

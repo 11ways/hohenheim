@@ -698,14 +698,32 @@ daemon call, so the common create path pays nothing.
 
 **3. The reservation is the CORE LEDGER, transactional and adjacent to the
 write**: `InstanceCapacity` over zenit `Quotas`, bucket `hohenheim:host_mem_mb:<id>`,
-installed beside `InstanceQuota` on the same beforeWrite hook. It is MOBILE --
-a `server_id` change releases the source bucket and books the destination in the
-same write, so a drain does not drift the budget -- and the booked amount is
+installed beside `InstanceQuota` on the same beforeWrite hook. The booked amount is
 STAMPED on the row (`instances.capacity_mb`, M080) so a release hands back
 exactly what was taken even after the settings change. Every terminating path was
 audited: create, soft delete (the only lane `InstanceService.destroy` takes, and
 the one the remove hooks never fire on), restore, host change, footprint change,
 hard delete.
+
+CORRECTED 2026-08-09. This section claimed the charge was MOBILE because "a
+`server_id` change releases the source bucket and books the destination in the same
+write". It is mobile only on the SAVE path (an admin repointing the host through the
+CMS form). A migration and a drain hand the record over with
+`InstanceOperationGuard.handoff`, a fenced `updateAll` that by the ORM's own contract
+fires NO write hooks -- so the source kept its charge forever (a fully drained host
+read as fully booked and the chooser then refused it `no_placement_capacity`:
+draining a host removed it from the pool permanently), the destination booked
+nothing, and destroying a migrated workload released against the DESTINATION bucket,
+which `Quotas.release` clamps to zero -- wiping every other live workload's booking
+on that host. The migration lane now moves the charge EXPLICITLY: the destination is
+booked when the window opens (`InstanceCapacity.openMigrationWindow`, which is also
+the only memory gate on an operator-named `migrateTo` and refuses
+`host_capacity_reached` before anything is stopped or exported), and the fenced write
+that ends the window performs exactly one release -- `handoff` the source, forward;
+`clearMigration` the destination, on rollback and on the loud both-hosts-empty
+settle. For the whole window the workload is charged on both hosts, deliberately:
+its data exists on both, and booked-twice refuses one placement too many while
+booked-nowhere hands the same megabytes out twice.
 
 **4. The input, and its freshness.** The budget is the STORED preflight fact
 `mem_total`, minus `capacity.host_memory_reserve_mb`, times
@@ -763,9 +781,14 @@ decision an operator makes, not a wave.
 **[test]** `InstancePlacementTest` (3 journeys, RAN 2026-08-07) -- the eligible
 set as HostAdmission's own, the booked-memory score with a positive anchor, the
 capacity-versus-availability refusal split, the unmeasured host, the dedicated
-posture. `InstanceCapacityTest` (2 journeys, RAN 2026-08-07) -- every terminating
-and moving path, six racing creates against one host's last megabyte, both
-refusal identities, the freshness bound and its opt-out.
+posture, and (2026-08-09) the chooser subtracting managed-process bookings from the
+same denominator the write uses. `InstanceCapacityTest` (2 journeys, RAN 2026-08-07)
+-- every terminating path, the CMS host repoint, six racing creates against one
+host's last megabyte, both refusal identities, the freshness bound and its opt-out.
+`InstanceMigrationTest.aMigrationMovesTheHostMemoryChargeOnEverySettleAndRefusesAFullDestination`
+(RAN 2026-08-09) owns the migration ledger over the REAL `InstanceMigrations`: the
+completed move, both crash-window settles, a neighbour's booking surviving the
+migrated workload's destroy, and the full-destination refusal.
 
 **Known limitations, stated:**
 
