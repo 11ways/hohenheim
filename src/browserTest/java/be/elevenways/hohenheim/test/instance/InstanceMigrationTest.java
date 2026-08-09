@@ -268,15 +268,50 @@ class InstanceMigrationTest {
                 .isEqualTo("untouchable");
             daemonOf(betaId).remove(handle);
 
-            // 5. While MIGRATING, deploy and stop refuse (the protected-status gate).
+            // 5. A PORT PUBLICATION is a host-scoped reservation (DNS may point at it):
+            //    refused by name, before anything is exported, imported or stopped. The
+            //    port is added to the STORED settings after the deploy, because the
+            //    refusal is about the spec the migration resolves, not about deploying.
+            Row published = Models.get(InstanceModel.class).findById(id);
+            published.set(InstanceModel.SETTINGS,
+                Map.of("image", "fake/image", "container_port", 25577));
+            Models.get(InstanceModel.class).save(published);
+            FakeNativeDaemons.FakeWorkload before = daemonOf(alphaId).get(handle);
+            before.data.put("marker", "still-here");
+            before.snapshots.add("nightly-1");
+            assertRefusal(() -> migrations.migrateTo(id, betaId), "migrate_publication_present",
+                "step 5: a workload holding a host port is unmovable, by name");
+            assertThat(daemonOf(alphaId).get(handle).running)
+                .as("step 5: nothing was STOPPED -- the source workload still runs")
+                .isTrue();
+            assertThat(daemonOf(alphaId).get(handle).data)
+                .as("step 5: and nothing was EXPORTED out from under it")
+                .containsEntry("marker", "still-here");
+            assertThat(daemonOf(alphaId).get(handle).snapshots)
+                .as("step 5: snapshots included")
+                .containsExactly("nightly-1");
+            assertThat(daemonOf(betaId).containsKey(handle))
+                .as("step 5: nothing was IMPORTED on the destination")
+                .isFalse();
+            Row afterRefusal = Models.get(InstanceModel.class).findById(id);
+            assertThat((Object) afterRefusal.get(InstanceModel.MIGRATE_TARGET_ID))
+                .as("step 5: the migration window never opened")
+                .isNull();
+            assertThat((Object) afterRefusal.get(InstanceModel.SERVER_ID))
+                .as("step 5: and the record still names the SOURCE host")
+                .isEqualTo(alphaId);
+            afterRefusal.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
+            Models.get(InstanceModel.class).save(afterRefusal);
+
+            // 6. While MIGRATING, deploy and stop refuse (the protected-status gate).
             Row row = Models.get(InstanceModel.class).findById(id);
             row.set(InstanceModel.STATUS, InstanceModel.STATUS_MIGRATING);
             row.set(InstanceModel.MIGRATE_TARGET_ID, betaId);
             Models.get(InstanceModel.class).save(row);
             assertRefusal(() -> service.deploy(id), "instance_busy",
-                "step 5: deploy refuses mid-migration");
+                "step 6: deploy refuses mid-migration");
             assertRefusal(() -> service.stop(id), "instance_busy",
-                "step 5: stop refuses mid-migration");
+                "step 6: stop refuses mid-migration");
             row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
             row.set(InstanceModel.MIGRATE_TARGET_ID, null);
             Models.get(InstanceModel.class).save(row);

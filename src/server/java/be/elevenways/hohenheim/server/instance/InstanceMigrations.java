@@ -180,9 +180,13 @@ public final class InstanceMigrations {
                 .withArg("name", nameOf(resolved.row()))
                 .withArg("count", devices));
         }
-        // A port publication is a host-scoped reservation (DNS may point at it);
-        // no migratable kind carries one today, and moving one silently would strand
-        // the claim -- refused by name until a consumer needs it.
+        // A port publication is a host-scoped reservation (DNS may point at it); moving
+        // one silently would strand the claim -- refused by name until a consumer needs it.
+        // AIDEV-NOTE: still no migratable kind carries one (re-verified 2026-08-09).
+        // Migratable == NativeSnapshotSupport == IncusInstanceRuntime only, and both Incus
+        // kinds declare their publication-free spec structurally. The Velocity game proxy
+        // does publish a port, but it is a KIND_DOCKER template, so it is refused one gate
+        // earlier by migrate_unsupported and never reaches this line.
         if (resolved.spec().publication() != null) {
             throw Violations.ofForm(violationText("migrate_publication_present")
                 .withArg("name", nameOf(resolved.row())));
