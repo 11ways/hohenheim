@@ -223,6 +223,7 @@ class ProjectAdoptionTest extends HohenheimTestBase {
             .as("step 1: X never reached Y's instance").isFalse();
 
         long operatorUsedBefore = InstanceQuota.usedBy("");
+        long operatorMemoryBefore = InstanceQuota.memoryUsedBy("");
         // The operator bucket is SHARED across every class in this fork's database, and
         // the heal is deliberately global: it also adopts any live user-granted instance
         // a sibling class left behind, releasing THAT slot from the same bucket. The
@@ -325,6 +326,23 @@ class ProjectAdoptionTest extends HohenheimTestBase {
                 + " operator-charged adoptee (x1, x2, y1, z1, plus any fork residue)")
             .isEqualTo(operatorUsedBefore - operatorAdoptees);
 
+        // 7b. An owner charge has TWO dimensions, and the heal moves BOTH. Moving only the
+        //     slot left the old owner charged for workloads it no longer holds and the new
+        //     owner charged nothing -- and the eventual release then landed on the NEW
+        //     bucket, which is the over-release that clamps a bucket to zero and wipes
+        //     every other workload booked in it.
+        assertThat(InstanceQuota.memoryUsedBy(packX))
+            .as("step 7b: X's project carries the WORKLOAD MEMORY of its two instances,"
+                + " not just their slots")
+            .isEqualTo(2 * 512);
+        assertThat(InstanceQuota.memoryUsedBy(packY))
+            .as("step 7b: and Y's project carries its one instance's memory")
+            .isEqualTo(512);
+        assertThat(InstanceQuota.memoryUsedBy(""))
+            .as("step 7b: while the operator bucket handed back at least this class's four"
+                + " adopted footprints -- a charge left behind is charged forever")
+            .isLessThanOrEqualTo(operatorMemoryBefore - 4 * 512);
+
         // 8. The per-owner override row follows, so the CAP survives the move.
         Row cap = Models.get(InstanceQuotaModel.class).findById(quotaOverrideId);
         assertThat((String) cap.get(InstanceQuotaModel.SUBJECTS))
@@ -345,6 +363,9 @@ class ProjectAdoptionTest extends HohenheimTestBase {
     @Test
     @Order(2)
     void adoptionIsIdempotent() {
+        Row projectX = Projects.projectOf(InstanceModel.MODEL_ID, instanceX1);
+        String packX = HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(projectX));
+        long memoryBefore = InstanceQuota.memoryUsedBy(packX);
         ProjectAdoption.Result second = ProjectAdoption.run();
         assertThat(second.projectsCreated())
             .as("step 1: a second run creates no projects").isZero();
@@ -352,5 +373,9 @@ class ProjectAdoptionTest extends HohenheimTestBase {
             .as("step 1: and adopts no records").isZero();
         assertThat(second.bucketsMoved())
             .as("step 1: and moves no reservations").isZero();
+        assertThat(InstanceQuota.memoryUsedBy(packX))
+            .as("step 1: the memory charge is not re-reserved either -- a heal that ran"
+                + " twice would double-charge the project")
+            .isEqualTo(memoryBefore);
     }
 }

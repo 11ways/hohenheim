@@ -15,7 +15,6 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.quota.Quotas;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
@@ -32,8 +31,9 @@ import java.util.Set;
  * could see a record iff its subject was in the set, and it is a member of the new
  * project iff its subject was in the set. Everything KEYED on the old owner packing
  * follows in the same pass: per-owner quota override rows, each live instance's
- * charged quota bucket (ledger release + re-reserve, uncapped -- a heal must never
- * refuse), and the released-claim quarantine ledger's former-owner column.
+ * charged quota buckets (BOTH dimensions -- the slot and the workload memory --
+ * released and re-reserved uncapped, because a heal must never refuse), and the
+ * released-claim quarantine ledger's former-owner column.
  *
  * Operator-owned records (EMPTY subject set) are deliberately untouched: wrapping
  * the operator in a project would flip the empty-set-equality that admin wildcard/
@@ -161,29 +161,28 @@ public final class ProjectAdoption {
         return saved;
     }
 
-    /** Release the old charged bucket, reserve (uncapped) in the project's, restamp. */
+    /**
+     * Move the instance's owner charges into the project's buckets and restamp.
+     *
+     * AIDEV-NOTE: the ledger move itself belongs to InstanceQuota, because an owner charge
+     * has TWO dimensions (the slot and the M088 workload memory) and a copy here only ever
+     * moved the slot -- leaving the old owner charged for a workload it no longer holds and
+     * the new owner charged nothing. Never re-spell a bucket move at a call site.
+     */
     private static int moveChargedBucket(@NonNull Object instanceId, @NonNull String newPack) {
         Model instances = Models.get(InstanceModel.class);
         Row row = instances.findById(instanceId);
         if (row == null || row.get(InstanceModel.DELETED_AT) != null) {
             return 0;
         }
-        String newBucket = InstanceQuota.bucketKeyOf(newPack);
-        String oldBucket = row.get(InstanceModel.QUOTA_BUCKET);
-        if (newBucket.equals(oldBucket)) {
+        int moved = InstanceQuota.moveOwnerCharges(row, newPack);
+        if (moved == 0) {
             return 0;
         }
-        if (oldBucket != null && !oldBucket.isBlank()) {
-            Quotas.release(oldBucket, 1);
-        } else {
-            // Pre-quota rows were charged to the operator bucket by convention.
-            Quotas.release(InstanceQuota.bucketKeyOf(""), 1);
-        }
-        Quotas.reserve(newBucket, 1, Long.MAX_VALUE);
         // Set-based on purpose: the quota hook must not re-run on a bookkeeping restamp.
         instances.find().where(InstanceModel.ID.eq(row.get(InstanceModel.ID)))
-            .assign(InstanceModel.QUOTA_BUCKET, newBucket).updateAll();
-        return 1;
+            .assign(InstanceModel.QUOTA_BUCKET, InstanceQuota.bucketKeyOf(newPack)).updateAll();
+        return moved;
     }
 
     private static int rewriteQuotaOverride(@NonNull String oldPack, @NonNull String newPack) {

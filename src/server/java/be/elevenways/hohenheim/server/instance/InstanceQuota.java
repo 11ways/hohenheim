@@ -156,6 +156,36 @@ public final class InstanceQuota {
         return Quotas.usedOf(memoryBucketOf(packedSubjects));
     }
 
+    /**
+     * Move one live row's OWNER charges -- the instance slot AND the workload memory --
+     * from the bucket it is charged to into {@code newPack}'s, uncapped.
+     *
+     * AIDEV-NOTE: both dimensions, through ONE call, because the count lane moved alone
+     * for a while: ProjectAdoption released and re-reserved the slot and never touched the
+     * M088 owner-memory bucket, so the old owner stayed charged for a workload it no longer
+     * held and the new owner was charged nothing -- and the eventual release then landed on
+     * the NEW bucket, which is the over-release that can clamp a bucket to zero and wipe
+     * every other workload's booking in it. A heal never REFUSES (uncapped, the
+     * MAX_INSTANCES_PER_OWNER stance): it is bookkeeping about records that already exist.
+     *
+     * @return 1 when the charges moved, 0 when the row is already in that bucket
+     */
+    public static int moveOwnerCharges(@NonNull Row stored, @NonNull String newPack) {
+        String newBucket = bucketKeyOf(newPack);
+        String oldBucket = chargedBucketOf(stored);
+        if (newBucket.equals(oldBucket)) {
+            return 0;
+        }
+        long memory = bookedMemoryOf(stored);
+        Quotas.release(oldBucket, 1);
+        Quotas.reserve(newBucket, 1, Long.MAX_VALUE);
+        if (memory > 0) {
+            Quotas.release(memoryBucketOfChargedBucket(oldBucket), memory);
+            Quotas.reserve(memoryBucketOf(newPack), memory, Long.MAX_VALUE);
+        }
+        return 1;
+    }
+
     /** Install the reserve/release hooks on the instance write funnel (MODULES stage). */
     public static synchronized void install() {
         if (installed) {
