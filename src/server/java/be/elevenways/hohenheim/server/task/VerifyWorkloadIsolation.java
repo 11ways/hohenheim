@@ -343,10 +343,15 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
     // -- inventory ----------------------------------------------------------------
 
     /**
-     * Docker-kind instance rows whose record claims a live workload (running OR
-     * starting), site release containers and managed-database engines included. The
-     * declared egress comes from the KIND's own driver, so a database engine's
-     * {@link Egress#NONE} is enforced here with no per-tier collector.
+     * Docker-kind instance rows whose record claims a live workload, site release
+     * containers and managed-database engines included. The declared egress comes from the
+     * KIND's own driver, so a database engine's {@link Egress#NONE} is enforced here with
+     * no per-tier collector.
+     *
+     * AIDEV-NOTE: the filter is {@link InstanceModel#LIVE_GUEST_STATUSES}, shared with
+     * {@link VerifyIncusIsolation}. It gained {@code error} with that move: a readiness
+     * timeout stamps error and stops nothing, so an errored record routinely names a
+     * container that is still up and was never swept.
      */
     private static void collectInstances(@NonNull Map<Integer, List<Expected>> inventory,
                                          @NonNull Map<Integer, List<String>> errors) {
@@ -358,8 +363,7 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         }
         for (Row row : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.DELETED_AT.isNull())
-                .where(InstanceModel.STATUS.in(
-                    InstanceModel.STATUS_RUNNING, InstanceModel.STATUS_STARTING))
+                .where(InstanceModel.STATUS.in(InstanceModel.LIVE_GUEST_STATUSES))
                 .all()) {
             Integer id = row.get(InstanceModel.ID);
             // An owned instance answers to the role of the tier that OWNS it: a site

@@ -99,12 +99,21 @@ public class VerifyIncusIsolation extends ScheduledTask {
         }
     }
 
-    /** Sweep every Incus host that carries running instances; the executor only reports. */
+    /**
+     * Sweep every Incus host that carries a live workload; the executor only reports.
+     *
+     * AIDEV-NOTE: the status filter is {@link InstanceModel#LIVE_GUEST_STATUSES}, shared
+     * with {@link VerifyWorkloadIsolation}, and it must stay shared. This sweep used to
+     * filter {@code running} alone, so an Incus workload sitting in {@code starting} -- the
+     * status deploy stamps for every template with a readiness line -- was on the bridge and
+     * never kernel-verified. Two sweeps of the same design answering the same question
+     * differently is how one of them ends up wrong without anyone noticing.
+     */
     public static @NonNull List<HostOutcome> sweep() {
         Map<Integer, List<Row>> byServer = new LinkedHashMap<>();
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.DELETED_AT.isNull())
-                .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_RUNNING))
+                .where(InstanceModel.STATUS.in(InstanceModel.LIVE_GUEST_STATUSES))
                 .all()) {
             Object raw = instance.get(InstanceModel.SERVER_ID);
             if (raw instanceof Number serverId) {
