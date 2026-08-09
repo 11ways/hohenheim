@@ -78,11 +78,13 @@ import java.util.Map;
  *
  * AIDEV-NOTE: every terminating path must release, and InstanceService.destroy soft-
  * deletes through save() so the remove hooks NEVER fire there. The transitions handled
- * below are therefore the whole contract: create, soft-delete, restore, HOST CHANGE (the
- * migration/drain handoff -- a charge that did not move would drift the budget on every
- * drain), footprint change, and hard delete. A create refused AFTER this hook spent the
- * reservation unwinds with it, because the ledger rides the caller's transaction and
- * because every later refusal in the create funnel throws before save() returns.
+ * below are therefore the whole contract: create, soft-delete, restore, HOST CHANGE (an
+ * admin repointing InstanceModel.SERVER_ID through the CMS form -- NOT the migration
+ * handoff, which is a fenced updateAll that fires no hooks at all and moves its charge
+ * explicitly through openMigrationWindow), footprint change, and hard delete. A create
+ * refused AFTER this hook spent the reservation unwinds with it, because the ledger rides
+ * the caller's transaction and because every later refusal in the create funnel throws
+ * before save() returns.
  */
 public final class InstanceCapacity {
 
@@ -105,6 +107,22 @@ public final class InstanceCapacity {
     /** How much workload memory (MB) is currently booked on a host. */
     public static long bookedMbOn(int serverId) {
         return Quotas.usedOf(bucketOf(serverId));
+    }
+
+    /**
+     * THE ceiling the instance tier is judged against on one host: its budget less what
+     * the managed-process tier already holds there.
+     *
+     * AIDEV-NOTE: one derivation, on purpose, and it is the fix for a chooser and a write
+     * that disagreed. {@link #reserve} judged against {@code budget - process bookings}
+     * while {@link InstancePlacement#chooseForBucket} compared against the bare budget, so
+     * on any host running managed children placement could CHOOSE a host whose write then
+     * refused {@code host_capacity_reached} -- the "chooser picks a host the deploy refuses
+     * by name" class the whole placement seam exists to kill. Both sides now call THIS;
+     * never re-spell the subtraction at a call site.
+     */
+    public static long bookableMbOn(int serverId, long budgetMb) {
+        return Math.max(0, budgetMb - ProcessCapacity.bookedMbOn(serverId));
     }
 
     // -- the budget -----------------------------------------------------------
@@ -214,8 +232,8 @@ public final class InstanceCapacity {
             // The host budget is shared with the managed-process tier, whose children book
             // their own declared caps in a separate bucket -- see ProcessCapacity for why
             // it is separate and what the cross-subtraction costs.
-            Quotas.reserve(bucketOf(serverId), amountMb, budget == null ? Long.MAX_VALUE
-                : Math.max(0, budget - ProcessCapacity.bookedMbOn(serverId)));
+            Quotas.reserve(bucketOf(serverId), amountMb,
+                budget == null ? Long.MAX_VALUE : bookableMbOn(serverId, budget));
         } catch (QuotaExceeded full) {
             throw Violations.ofForm(violation("host_capacity_reached")
                 .withArg("name", hostLabel(serverId))
@@ -229,6 +247,50 @@ public final class InstanceCapacity {
         if (amountMb > 0) {
             Quotas.release(bucketOf(serverId), amountMb);
         }
+    }
+
+    // -- the migration window -------------------------------------------------
+
+    /**
+     * THE migration ledger contract, and the reason it is a pair of explicit calls rather
+     * than a hook: {@link InstanceOperationGuard#handoff} repoints the host with a FENCED
+     * {@code updateAll}, which by the ORM's own contract fires no write hooks -- so
+     * {@link #rebook} never ran on a migration or a drain. The source kept its charge
+     * forever (a fully drained host read as fully booked and {@code chooseForBucket} then
+     * refused it {@code no_placement_capacity} -- draining a host removed it from the pool
+     * permanently), the destination booked nothing, and a later {@code save()} could not
+     * heal it because rebook returns early when host and amount both match.
+     *
+     * ORDERING, which is the real question, since the ledger move and the fenced write can
+     * never be one statement: the destination is booked when the migration WINDOW OPENS
+     * (here), and the source is released only when the fenced handoff has MATCHED. For the
+     * whole window the workload is charged on BOTH hosts, which is exactly right -- its
+     * data really does exist on both -- and over-conservative is the only acceptable
+     * direction: booked on both refuses one placement too many, booked on NEITHER hands
+     * the same megabytes out twice.
+     *
+     * That also makes the crash windows settle honestly, because the ledger is a table and
+     * survives the controller: a killed controller leaves the destination booking behind,
+     * and the boot settle performs exactly ONE of the two releases -- forward
+     * ({@code handoff}) releases the source, rollback ({@code clearMigration}) releases the
+     * destination. Neither ever re-reserves, so a crash cannot double-book. The one
+     * remaining gap is deliberate and is why this runs BEFORE {@code stampMigrating}: a
+     * kill between the two statements leaks a destination booking no settle will find,
+     * because the record never became recoverable. Booked-too-much is survivable
+     * (a preflight-driven number an operator can see); the reverse order would have a
+     * settle release a booking that was never taken, and an over-release is the shape that
+     * ZEROES a bucket and wipes every other live workload's charge on that host.
+     *
+     * @throws Violations {@code host_capacity_reached} when the destination has no room
+     */
+    static void openMigrationWindow(int instanceId, int targetServerId) {
+        reserve(targetServerId, bookedOfInstance(instanceId));
+    }
+
+    /** What one instance record holds against a host bucket; 0 for an absent record. */
+    static long bookedOfInstance(int instanceId) {
+        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        return row == null ? 0 : bookedOf(row);
     }
 
     /** The host's name, or a bare id spelling -- the refusal path may never itself fail. */

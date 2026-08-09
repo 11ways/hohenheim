@@ -9,6 +9,8 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
@@ -474,6 +476,171 @@ class InstanceMigrationTest {
             for (int id : ids) {
                 new InstanceService().destroy(id);
             }
+        });
+    }
+
+    /**
+     * The HOST MEMORY LEDGER across a real migration: the charge follows the record on
+     * every settle, a destination with no room refuses before anything moves, and a
+     * neighbour's booking is never collateral damage.
+     *
+     * AIDEV-NOTE: this journey exists because the capacity ledger's own test asserted the
+     * migration case by SAVING a new server_id -- a shape no production migration takes.
+     * The handoff is a fenced updateAll and fires no write hooks, so the hook-based
+     * coverage reported a capability nothing implemented: the source kept its charge
+     * forever (a drained host read as fully booked and placement then refused it
+     * no_placement_capacity, i.e. draining removed a host from the pool permanently) and
+     * the destination booked nothing. Drive InstanceMigrations here, never a save().
+     */
+    @Test
+    void aMigrationMovesTheHostMemoryChargeOnEverySettleAndRefusesAFullDestination() {
+        Db.run(datasource, () -> {
+            // Its OWN pair of hosts: a neighbouring test's live instance would move the
+            // very numbers this journey asserts.
+            int src = incusHost("cap-src");
+            int dst = incusHost("cap-dst");
+            InstanceService service = new InstanceService();
+            InstanceMigrations migrations = migrations();
+
+            // 1. A neighbour already lives on the destination, and the workload to move
+            //    is booked on the source. Both are the fake kind's 128 MB footprint.
+            int neighbour = instanceRecord("cap-neighbour", dst,
+                FakeNativeDaemons.FakeNativeKind.ID.toString());
+            int mover = instanceRecord("cap-mover", src,
+                FakeNativeDaemons.FakeNativeKind.ID.toString());
+            assertThat(InstanceCapacity.bookedMbOn(src))
+                .as("step 1: the source carries the workload it holds").isEqualTo(128);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 1: the destination carries only its neighbour").isEqualTo(128);
+
+            // 2. The completed migration moves the CHARGE with the record. A source that
+            //    kept it would read as fully booked forever.
+            service.deploy(mover);
+            migrations.migrateTo(mover, dst);
+            assertThat((Object) Models.get(InstanceModel.class).findById(mover)
+                    .get(InstanceModel.SERVER_ID))
+                .as("step 2: the record moved").isEqualTo(dst);
+            assertThat(InstanceCapacity.bookedMbOn(src))
+                .as("step 2: the SOURCE got its 128 MB back -- a drained host that keeps"
+                    + " its charge is refused no_placement_capacity forever")
+                .isEqualTo(0);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 2: and the destination now carries both workloads")
+                .isEqualTo(256);
+
+            // 3. The moved charge is REAL, not a number: destroying the migrated workload
+            //    releases exactly its own booking. Releasing against a bucket that never
+            //    booked it is what clamps the bucket to zero and wipes every other live
+            //    workload's charge on the host -- the neighbour proves it did not.
+            service.destroy(mover);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 3: the neighbour's booking survived the migrated workload's"
+                    + " destroy, and exactly 128 MB came back")
+                .isEqualTo(128);
+
+            // 4. The crash windows settle the ledger too, and while a window is OPEN the
+            //    workload is charged on BOTH hosts -- deliberate: its data exists on both,
+            //    and booked-twice refuses one placement too many while booked-nowhere
+            //    hands the same megabytes out twice.
+            int crasher = instanceRecord("cap-crasher", src,
+                FakeNativeDaemons.FakeNativeKind.ID.toString());
+            service.deploy(crasher);
+            assertThat(catchThrowable(
+                    () -> migrationsCrashingAt("imported").migrateTo(crasher, dst)))
+                .as("step 4: the simulated kill leaves the record mid-migration")
+                .isInstanceOf(IllegalStateException.class);
+            assertThat(InstanceCapacity.bookedMbOn(src))
+                .as("step 4: the source still holds its charge inside the window")
+                .isEqualTo(128);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 4: and the destination is booked for the whole window")
+                .isEqualTo(256);
+
+            // 5. This settle ROLLS BACK (the source still holds the data), so the window's
+            //    destination booking goes back and the source keeps its own.
+            InstanceMigrations.recoverInterrupted();
+            assertThat((Object) Models.get(InstanceModel.class).findById(crasher)
+                    .get(InstanceModel.SERVER_ID))
+                .as("step 5: the rollback kept the record on the source").isEqualTo(src);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 5: so the destination's window booking was handed back")
+                .isEqualTo(128);
+            assertThat(InstanceCapacity.bookedMbOn(src))
+                .as("step 5: and the source never lost the charge it still holds")
+                .isEqualTo(128);
+
+            // 6. The other window settles FORWARD (only the destination holds the data),
+            //    and the ledger follows the record there instead.
+            assertThat(catchThrowable(
+                    () -> migrationsCrashingAt("source_removed").migrateTo(crasher, dst)))
+                .as("step 6: killed after the source copy was removed")
+                .isInstanceOf(IllegalStateException.class);
+            InstanceMigrations.recoverInterrupted();
+            assertThat((Object) Models.get(InstanceModel.class).findById(crasher)
+                    .get(InstanceModel.SERVER_ID))
+                .as("step 6: the handoff completed onto the destination").isEqualTo(dst);
+            assertThat(InstanceCapacity.bookedMbOn(src))
+                .as("step 6: the source released on the completed handoff").isEqualTo(0);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 6: and the destination carries it").isEqualTo(256);
+            service.destroy(crasher);
+
+            // 7. A destination with no room REFUSES BY NAME, before a single daemon call:
+            //    migrateTo names its own host, so this reservation is the only thing
+            //    between an operator's typo and an overbooked machine.
+            Integer previousReserve = HohenheimSettings.VALUES.getValue(
+                HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB);
+            Double previousRatio = HohenheimSettings.VALUES.getValue(
+                HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO);
+            int last = instanceRecord("cap-last", src,
+                FakeNativeDaemons.FakeNativeKind.ID.toString());
+            service.deploy(last);
+            try {
+                HohenheimSettings.VALUES.setValue(
+                    HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, 0);
+                HohenheimSettings.VALUES.setValue(
+                    HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, 1.0);
+                // 200 MB of budget, 128 of it already spent by the neighbour.
+                HostPreflight.store(ServerModel.nameOf(dst), new HostPreflight.Report(
+                    List.of(new HostPreflight.Check("daemon",
+                            HostPreflight.STATUS_PASS, true, "fake daemon"),
+                        new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
+                            HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
+                    Map.of("mem_total", 200L * 1024 * 1024), true, Instant.now(), null));
+                assertThat(InstanceCapacity.budgetMbOf(
+                        Models.get(ServerModel.class).findById(dst)))
+                    .as("step 7: the destination's budget is the shrunken reading")
+                    .isEqualTo(200L);
+                assertRefusal(() -> migrations.migrateTo(last, dst), "host_capacity_reached",
+                    "step 7: a migration onto a host without the memory refuses BY NAME,"
+                        + " not with a 500 and not silently");
+                assertThat((Object) Models.get(InstanceModel.class).findById(last)
+                        .get(InstanceModel.SERVER_ID))
+                    .as("step 7: and the workload never left the source").isEqualTo(src);
+                assertThat((String) Models.get(InstanceModel.class).findById(last)
+                        .get(InstanceModel.STATUS))
+                    .as("step 7: the migration window never even opened")
+                    .isNotEqualTo(InstanceModel.STATUS_MIGRATING);
+                assertThat(daemonOf(dst).containsKey(handleOf(last)))
+                    .as("step 7: nothing was stopped, exported or imported")
+                    .isFalse();
+                assertThat(InstanceCapacity.bookedMbOn(dst))
+                    .as("step 7: and the refused reservation spent nothing")
+                    .isEqualTo(128);
+            } finally {
+                HohenheimSettings.VALUES.setValue(
+                    HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, previousReserve);
+                HohenheimSettings.VALUES.setValue(
+                    HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, previousRatio);
+            }
+
+            service.destroy(last);
+            service.destroy(neighbour);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 7: every booking this journey took was handed back")
+                .isEqualTo(0);
+            assertThat(InstanceCapacity.bookedMbOn(src))
+                .as("step 7: on both hosts").isEqualTo(0);
         });
     }
 

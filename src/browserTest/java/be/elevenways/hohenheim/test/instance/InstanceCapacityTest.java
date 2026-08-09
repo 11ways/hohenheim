@@ -39,8 +39,10 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * InstanceService.destroy soft-deletes through save(), so the remove hooks never fire
  * there -- a release that only rode the remove hooks would leak on every destroy and
  * progressively lock the host out. The soft-delete transition, the restore transition, the
- * HOST CHANGE (a migration moves the charge between host buckets; a charge that stayed put
- * would drift the budget on every drain) and the hard delete are each walked below.
+ * HOST CHANGE an admin makes through the CMS form, and the hard delete are each walked
+ * below. The MIGRATION lane is deliberately NOT here: it never touches this hook (a fenced
+ * updateAll fires none), so it is asserted against the real InstanceMigrations in
+ * InstanceMigrationTest.
  *
  * No daemon is contacted: every decision here is over stored record state.
  */
@@ -177,16 +179,21 @@ class InstanceCapacityTest {
             assertThat(InstanceCapacity.bookedMbOn(alpha))
                 .as("step 3: shrinking 512 -> 256 released the delta").isEqualTo(768);
 
-            // 4. A MIGRATION moves the charge: the source is credited and the destination
-            //    is debited in the same write. A charge that stayed on the source would
-            //    drift the budget on every drain.
+            // 4. An admin REPOINTING the host through the CMS form (the only host change
+            //    that reaches this hook) moves the charge in the same write.
+            //
+            //    AIDEV-NOTE: this step used to claim it covered a MIGRATION. It never did:
+            //    a production migration hands the record over with a fenced updateAll,
+            //    which fires no write hooks at all, so this shape reported a capability
+            //    nothing implemented. The real lane is asserted against the real
+            //    InstanceMigrations in InstanceMigrationTest -- never re-title this step.
             Row moved = Models.get(InstanceModel.class).findById(id);
             moved.set(InstanceModel.SERVER_ID, beta);
             Models.get(InstanceModel.class).save(moved);
             assertThat(InstanceCapacity.bookedMbOn(alpha))
-                .as("step 4: the source host got its 256 MB back").isEqualTo(512);
+                .as("step 4: the host it left got its 256 MB back").isEqualTo(512);
             assertThat(InstanceCapacity.bookedMbOn(beta))
-                .as("step 4: and the destination carries it now").isEqualTo(256);
+                .as("step 4: and the new host carries it now").isEqualTo(256);
 
             // 5. The SOFT delete -- the only lane InstanceService.destroy takes, and the
             //    one the remove hooks never see -- releases against the host the row was
