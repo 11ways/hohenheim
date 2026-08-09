@@ -16,6 +16,8 @@ import be.elevenways.protoblast.guard.SourceRule;
 import be.elevenways.protoblast.guard.SourceRuleScanner;
 import be.elevenways.protoblast.guard.Suppression;
 import be.elevenways.protoblast.guard.Violation;
+import be.elevenways.zenit.common.setting.ContentLocales;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -111,6 +113,50 @@ class DisplayNameLocalizationTest {
         assertThat(broken)
             .as("every type label resolves to real copy in en AND nl")
             .isEmpty();
+    }
+
+    /**
+     * The half neither the scanner nor a direct resolve() can see: a label travels as a
+     * message ARGUMENT, and the readers that matter most for a refusal (a caught
+     * Violations, a log line, a test report) never render the surrounding message. If the
+     * argument is not rendered there, getLabel() buys nothing over the English literal it
+     * replaced -- it just swaps one wrong string for a debug toString.
+     *
+     * AIDEV-NOTE: registry-driven on purpose. The two live call sites (OwnedInstances
+     * instance_kind_owner_managed, SiteDatabaseResource site_type_no_injection) are one
+     * instance each of the class; walking the registries means the next refusal that
+     * embeds a label is covered without anyone remembering to extend this.
+     */
+    @Test
+    void everyTypeLabelSurvivesBeingReadBackOutOfARefusal() {
+        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        LocaleChain described = LocaleChain.of(ContentLocales.getDefault());
+        List<String> broken = new ArrayList<>();
+
+        for (InstanceKindInfo handler : InstanceKindRegistry.REGISTRY) {
+            checkRefusal(handler.getLabel(), "instance kind " + handler.typeId(),
+                catalogs, described, broken);
+        }
+        for (SiteTypeInfo type : SiteTypeRegistry.REGISTRY) {
+            checkRefusal(type.getLabel(), "site type " + type.typeId(),
+                catalogs, described, broken);
+        }
+
+        assertThat(broken)
+            .as("every label embedded in a refusal is read back as TEXT")
+            .isEmpty();
+    }
+
+    private static void checkRefusal(Microcopy label, String what, DefaultCatalogLoader catalogs,
+                                     LocaleChain described, List<String> broken) {
+        String message = Violations.ofField("kind", "unused",
+            Microcopy.of("instance_kind_owner_managed").withFilter("scope", "violations")
+                .withArg("kind", label)).getMessage();
+        if (message.contains("Microcopy{")) {
+            broken.add(what + " -> reached the reader as a debug toString: " + message);
+        } else if (!message.contains(label.resolve(described, catalogs))) {
+            broken.add(what + " -> its text is missing from the refusal: " + message);
+        }
     }
 
     private static void check(Microcopy label, String what, DefaultCatalogLoader catalogs,
