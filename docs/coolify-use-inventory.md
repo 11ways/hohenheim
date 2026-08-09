@@ -737,9 +737,9 @@ deliberately does not carry. **[code]**
 Caveat 1: `PaasApiTest:395` proves deploy and rollback only through their
 REFUSAL paths. No test drives a successful deploy or rollback over `/api/v1`.
 
-Caveat 2: `tools/hoh.test.js` is a standalone node script and **no Gradle task
-invokes it**, so the CLI's own tests never run in CI. That is a one-line build
-wiring gap and it is an OPEN item.
+Caveat 2 (CLOSED 2026-08-09): `tools/hoh.test.js` used to be a standalone node
+script no Gradle task invoked, so the CLI's own tests never ran. `HohCliTest`
+(browserTest) now runs it in the verification lane and fails on its exit code.
 
 Not on the API at all: certificate issuance, managed-database CRUD, and quota
 administration. Those are admin-resource-only, deliberately.
@@ -857,8 +857,8 @@ Value against effort, with prerequisites, for the PaaS claim specifically.
    -- it removes the "re-enter every service by hand" migration cost. Effort:
    medium-high, and it must REFUSE what it cannot model rather than approximate
    it. Prerequisite: agreement that refusing is acceptable UX.
-8. **Wire `tools/hoh.test.js` into the build** (item 13). Value: low-medium --
-   the CLI has tests that never run. Effort: one Gradle task. Prerequisite: none.
+8. ~~**Wire `tools/hoh.test.js` into the build** (item 13).~~ DONE 2026-08-09:
+   `HohCliTest` runs it in the browserTest lane; the suite was green on first run.
 9. **Per-branch or manual preview creation** (item 5). Value: low-medium -- today a
    preview exists only for an open pull/merge request. Effort: low. Prerequisite:
    a decision about quota, since branch previews multiply.
