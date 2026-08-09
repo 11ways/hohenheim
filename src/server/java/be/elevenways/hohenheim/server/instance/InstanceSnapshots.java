@@ -93,14 +93,22 @@ public final class InstanceSnapshots {
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
             fence, InstanceModel.STATUS_CAPTURING, resolved.row().get(InstanceModel.NAME));
 
-        String stamp = STAMP.format(Instant.now());
-        Path directory = snapshotRoot().resolve("instance-" + instanceId).resolve(stamp);
         Row snapshot = Models.get(InstanceSnapshotModel.class).createEmptyRow();
         snapshot.set(InstanceSnapshotModel.INSTANCE_ID, instanceId);
         snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED);
         snapshot.set(InstanceSnapshotModel.NOTE, note);
-        snapshot.set(InstanceSnapshotModel.DIRECTORY, directory.toString());
         Models.get(InstanceSnapshotModel.class).save(snapshot);
+        // AIDEV-NOTE: the row id is part of the directory name for the reason createNative
+        // spells out for the native name -- the stamp resolves to the SECOND, so two
+        // captures of one instance inside the same second used to resolve to the SAME
+        // directory, and then retention deleting one row's payload took the other row's
+        // tars with it. Same hazard, same fix, both lanes.
+        String stamp = STAMP.format(Instant.now());
+        Path directory = snapshotRoot().resolve("instance-" + instanceId)
+            .resolve(stamp + "-" + snapshot.get(InstanceSnapshotModel.ID));
+        RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
+            .set(InstanceSnapshotModel.DIRECTORY, directory.toString())
+            .write();
 
         try {
             Files.createDirectories(directory);
@@ -377,11 +385,13 @@ public final class InstanceSnapshots {
      * and the same rule as {@code InstanceBackups.pruneForRetention}, deliberately, so
      * there is ONE retention discipline rather than a second sweeper.
      *
-     * AIDEV-NOTE: a prune that cannot reach the daemon must not delete the row -- that is
-     * exactly what {@link #delete} refuses to do, and its Violations is caught here so a
-     * single unreachable payload cannot fail the CAPTURE that just succeeded. The row
-     * stays and the next completed capture tries again. FAILED rows are never counted and
-     * never pruned: they hold no payload and they are the evidence of what went wrong.
+     * AIDEV-NOTE: a prune that cannot reach the payload must not delete the row -- true of
+     * BOTH lanes now (the daemon-side snapshot AND the controller-side tars), and the
+     * refusal is caught here so a single stuck payload cannot fail the CAPTURE that just
+     * succeeded. The row stays and the next completed capture tries again. The sweep runs
+     * the UNCHECKED delete on purpose: re-asking for the capability per row made a refusal
+     * indistinguishable from a stuck payload in this very catch. FAILED rows are never
+     * counted and never pruned: they hold no payload and they are the evidence.
      *
      * AIDEV-NOTE: ordered by ID, not by created_at as the backup lane is. A native
      * snapshot's name is stamped to the SECOND, so two captures inside one second carry
@@ -402,25 +412,45 @@ public final class InstanceSnapshots {
         for (int i = retention; i < complete.size(); i++) {
             Object id = complete.get(i).get(InstanceSnapshotModel.ID);
             try {
-                delete((Integer) id);
+                deleteAuthorized((Integer) id);
             } catch (Violations pruneFailed) {
                 Blast.log("SNAPSHOT: retention could not remove snapshot", id,
                     "- kept for a later sweep");
+            } catch (RuntimeException unexpected) {
+                // The capture this sweep follows ALREADY SUCCEEDED. Letting anything the
+                // retention hits escape would report that capture as failed while its
+                // snapshot sits complete on the daemon -- a lie in the opposite direction.
+                Blast.log("SNAPSHOT: retention hit an unexpected failure on snapshot", id,
+                    "- kept for a later sweep:", describe(unexpected));
             }
         }
     }
 
     /** Remove a snapshot's payload (controller files or the daemon-side snapshot) and its row. */
     public void delete(int snapshotId) {
+        HohenheimAccess.requireOperationCapability(
+            instanceOf(snapshotId), HohenheimAccess.SNAPSHOTS);
+        deleteAuthorized(snapshotId);
+    }
+
+    /**
+     * The delete the retention sweep runs: the capability was already proven for the
+     * INSTANCE by whoever entered the operation, and re-asking per snapshot only made the
+     * sweep's {@code catch (Violations)} unable to tell a refusal from an unreachable
+     * payload. The gate stays on every public entry point; it just is not asked twice.
+     */
+    private void deleteAuthorized(int snapshotId) {
         Row snapshot = Models.get(InstanceSnapshotModel.class).findById(snapshotId);
         if (snapshot == null) {
             return;
         }
         int instanceId = snapshot.get(InstanceSnapshotModel.INSTANCE_ID);
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
         String directory = snapshot.get(InstanceSnapshotModel.DIRECTORY);
         if (directory != null && !directory.isBlank()) {
-            deleteRecursively(Path.of(directory));
+            // The VOLUME lane's payload, and it refuses exactly as the native lane does:
+            // this used to swallow every IO error and delete the row anyway, which left
+            // the tars on disk with nothing left to point at them.
+            requireRemoved(Path.of(directory), directory);
         }
         String nativeName = snapshot.get(InstanceSnapshotModel.NATIVE_NAME);
         if (nativeName != null && !nativeName.isBlank()) {
@@ -429,6 +459,31 @@ public final class InstanceSnapshots {
         Models.get(InstanceSnapshotModel.class).find()
             .where(InstanceSnapshotModel.ID.eq(snapshotId))
             .delete();
+    }
+
+    /** @throws Violations {@code snapshot_not_restorable} for a snapshot that is gone */
+    private static int instanceOf(int snapshotId) {
+        Row snapshot = Models.get(InstanceSnapshotModel.class).findById(snapshotId);
+        if (snapshot == null) {
+            throw Violations.ofForm(violationText("snapshot_not_restorable")
+                .withArg("id", snapshotId));
+        }
+        return snapshot.get(InstanceSnapshotModel.INSTANCE_ID);
+    }
+
+    /**
+     * Remove a controller-side payload directory or REFUSE, so the row outlives a payload
+     * that is still on disk.
+     *
+     * @throws Violations {@code snapshot_delete_failed} naming the IO error
+     */
+    private static void requireRemoved(@NonNull Path root, @NonNull String label) {
+        IOException failure = deleteRecursivelyReporting(root);
+        if (failure != null) {
+            throw Violations.ofForm(violationText("snapshot_delete_failed")
+                .withArg("snapshot", label)
+                .withArg("reason", describe(failure)));
+        }
     }
 
     /**
@@ -516,21 +571,43 @@ public final class InstanceSnapshots {
         return error.getMessage() != null ? error.getMessage() : error.toString();
     }
 
+    /**
+     * Best effort, for the cleanup paths where a failure must not mask the failure being
+     * cleaned up after (a failed capture's half-written directory, a staging area).
+     * Anything that DELETES A ROW must use {@link #deleteRecursivelyReporting} instead.
+     */
     static void deleteRecursively(@NonNull Path root) {
+        deleteRecursivelyReporting(root);
+    }
+
+    /**
+     * The same walk, but it ANSWERS: the first IO error, or null when the tree is gone.
+     *
+     * AIDEV-NOTE: this exists because the two lanes of one mechanism had opposite failure
+     * semantics. deleteNativePayload turned an unreachable daemon into Violations BEFORE
+     * the row delete, while the volume lane swallowed every IO error and deleted the row
+     * anyway -- so an unremovable tar became an orphaned payload with nothing pointing at
+     * it, reported as a successful prune.
+     */
+    static @Nullable IOException deleteRecursivelyReporting(@NonNull Path root) {
         if (!Files.exists(root)) {
-            return;
+            return null;
         }
+        IOException[] first = new IOException[1];
         try (Stream<Path> paths = Files.walk(root)) {
             paths.sorted(Comparator.reverseOrder()).forEach(path -> {
                 try {
                     Files.deleteIfExists(path);
-                } catch (IOException ignored) {
-                    // best effort
+                } catch (IOException failed) {
+                    if (first[0] == null) {
+                        first[0] = failed;
+                    }
                 }
             });
-        } catch (IOException ignored) {
-            // best effort
+        } catch (IOException walkFailed) {
+            return walkFailed;
         }
+        return first[0];
     }
 
     private static Path snapshotRoot() {

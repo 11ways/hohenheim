@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -20,6 +21,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,6 +57,12 @@ class InstanceSnapshotRetentionTest {
         new MigrationRunner(datasource).migrate().requireSuccess();
         Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
+        // The volume lane writes REAL payloads, so the snapshot root has to be a place
+        // this test owns rather than the developer's configured one.
+        Path root = Files.createTempDirectory("hohenheim-snapshot-retention-root");
+        root.toFile().deleteOnExit();
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.SNAPSHOT_PATH,
+            root.toAbsolutePath().toString());
         FakeNativeDaemons.register();
         Db.run(datasource, () -> hostId = incusHost("snap-retention-host"));
     }
@@ -182,6 +193,135 @@ class InstanceSnapshotRetentionTest {
                 HohenheimSettings.Backup.SNAPSHOT_RETENTION, 7);
             service.destroy(instanceId);
         });
+    }
+
+    /**
+     * The VOLUME lane's retention, and the failure it used to swallow. Both lanes of one
+     * mechanism must agree: a payload that could not be removed KEEPS its row, because a
+     * row deleted while its tars are still on disk is a prune that reports success for
+     * work it did not do.
+     *
+     * AIDEV-NOTE: the daemon-free retention journey above runs the NATIVE lane only, so
+     * the volume lane's prune had never executed in CI at all -- which is how the two
+     * lanes drifted into opposite failure semantics unnoticed.
+     */
+    @Test
+    void theVolumeLaneKeepsTheRowOfAPayloadItCouldNotRemove() throws IOException {
+        // A denied directory is the only honest way to make a real filesystem refuse, and
+        // root is denied nothing -- so this is a DECLARED host need, reported when unmet
+        // rather than skipped in silence.
+        Path probe = Files.createTempDirectory("hohenheim-snapshot-perm-probe");
+        Files.writeString(probe.resolve("child"), "x");
+        Files.setPosixFilePermissions(probe, PosixFilePermissions.fromString("r-xr-xr-x"));
+        boolean canBeRefused;
+        try {
+            Files.delete(probe.resolve("child"));
+            canBeRefused = false;
+        } catch (IOException refused) {
+            canBeRefused = true;
+        }
+        Files.setPosixFilePermissions(probe, PosixFilePermissions.fromString("rwxr-xr-x"));
+        Files.deleteIfExists(probe.resolve("child"));
+        Files.deleteIfExists(probe);
+        LiveLane.require(LiveLane.Need.UNPRIVILEGED_FS, canBeRefused,
+            "this process can delete anything (running as root): a refused payload removal"
+                + " cannot be produced here");
+
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceSnapshots snapshots = new InstanceSnapshots();
+            int instanceId = volumeInstanceRecord("snap-volume-retention", hostId);
+            service.deploy(instanceId);
+
+            // 1. Retention of 1 over the VOLUME lane: the capture writes real tars under
+            //    the snapshot root, and the older capture's row AND payload both go.
+            HohenheimSettings.VALUES.setValue(
+                HohenheimSettings.Backup.SNAPSHOT_RETENTION, 1);
+            int first = snapshots.create(instanceId, "volume capture 1");
+            Path firstDir = Path.of((String) Models.get(InstanceSnapshotModel.class)
+                .findById(first).get(InstanceSnapshotModel.DIRECTORY));
+            assertThat(Files.exists(firstDir.resolve("data.tar")))
+                .as("step 1: the volume lane really wrote a payload to disk").isTrue();
+            snapshots.create(instanceId, "volume capture 2");
+            assertThat(Map.of(
+                    "row", String.valueOf(Models.get(InstanceSnapshotModel.class)
+                        .findById(first) != null),
+                    "payload", String.valueOf(Files.exists(firstDir))))
+                .as("step 1: the pruned capture lost BOTH its row and its payload")
+                .isEqualTo(Map.of("row", "false", "payload", "false"));
+
+            // 2. Now a payload the controller cannot remove: its parent directory refuses
+            //    the unlink. The capture that follows still SUCCEEDS -- a stuck payload
+            //    from an earlier snapshot may never fail the one being taken.
+            int stuck = snapshots.create(instanceId, "volume capture 3");
+            Path stuckDir = Path.of((String) Models.get(InstanceSnapshotModel.class)
+                .findById(stuck).get(InstanceSnapshotModel.DIRECTORY));
+            // Deny writes on the SNAPSHOT's own directory: its tar cannot be unlinked
+            // and the directory cannot be removed while it still holds one, but sibling
+            // captures can still be created beside it.
+            denyWrites(stuckDir);
+            int after = snapshots.create(instanceId, "volume capture 4");
+            assertThat((String) Models.get(InstanceSnapshotModel.class).findById(after)
+                    .get(InstanceSnapshotModel.STATUS))
+                .as("step 2: the new capture completed despite the stuck older payload")
+                .isEqualTo(InstanceSnapshotModel.STATUS_COMPLETE);
+
+            // 3. THE POINT: the row survives, because its payload does. Deleting the row
+            //    here would orphan the tars with nothing left pointing at them.
+            assertThat(Map.of(
+                    "row", String.valueOf(Models.get(InstanceSnapshotModel.class)
+                        .findById(stuck) != null),
+                    "payload", String.valueOf(Files.exists(stuckDir.resolve("data.tar")))))
+                .as("step 3: a payload that could not be removed KEEPS its row, so a later"
+                    + " sweep still knows what to clean up")
+                .isEqualTo(Map.of("row", "true", "payload", "true"));
+
+            // 4. Once the filesystem lets go, the very next capture prunes it for real --
+            //    the row was kept for a retry, not kept forever.
+            allowWrites(stuckDir);
+            snapshots.create(instanceId, "volume capture 5");
+            assertThat(Map.of(
+                    "row", String.valueOf(Models.get(InstanceSnapshotModel.class)
+                        .findById(stuck) != null),
+                    "payload", String.valueOf(Files.exists(stuckDir))))
+                .as("step 4: the retry sweep removed both")
+                .isEqualTo(Map.of("row", "false", "payload", "false"));
+
+            HohenheimSettings.VALUES.setValue(
+                HohenheimSettings.Backup.SNAPSHOT_RETENTION, 7);
+            service.destroy(instanceId);
+        });
+    }
+
+    private static void denyWrites(Path directory) {
+        try {
+            Files.setPosixFilePermissions(directory,
+                PosixFilePermissions.fromString("r-xr-xr-x"));
+        } catch (IOException failed) {
+            throw new IllegalStateException(failed);
+        }
+    }
+
+    private static void allowWrites(Path directory) {
+        try {
+            Files.setPosixFilePermissions(directory,
+                PosixFilePermissions.fromString("rwxr-xr-x"));
+        } catch (IOException failed) {
+            throw new IllegalStateException(failed);
+        }
+    }
+
+    /** An instance of the VOLUME-snapshot fake kind, with one logical volume declared. */
+    private static int volumeInstanceRecord(String name, int serverId) {
+        Row row = Models.get(InstanceModel.class).createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND,
+            FakeNativeDaemons.FakeVolumeSnapshotKind.ID.toString());
+        row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image",
+            "volumes", Map.of("data", "/var/data")));
+        row.set(InstanceModel.SERVER_ID, serverId);
+        Models.get(InstanceModel.class).save(row);
+        return row.get(InstanceModel.ID);
     }
 
     private static int incusHost(String name) {

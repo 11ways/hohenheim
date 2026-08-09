@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport.WorkloadClaim;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
+import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -32,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,11 +45,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * The shared in-memory "daemons" every daemon-free instance journey runs against: two
+ * The shared in-memory "daemons" every daemon-free instance journey runs against: three
  * fake instance kinds over ONE workload store -- native snapshots + install steps
- * ({@link FakeNativeKind}) and a driver that supports NEITHER ({@link FakeVolumeKind},
- * the "refused by name" lane) -- whose workloads live in a per-host-name map this class
- * owns.
+ * ({@link FakeNativeKind}), controller-side volume snapshots
+ * ({@link FakeVolumeSnapshotKind}), and a driver that supports NEITHER
+ * ({@link FakeVolumeKind}, the "refused by name" lane) -- whose workloads live in a
+ * per-host-name map this class owns.
  *
  * AIDEV-NOTE: shared rather than copied. Kinds register into the ONE global InstanceKinds
  * registry, so two test classes each declaring their own `hohenheim:fake_native` would
@@ -461,6 +464,7 @@ final class FakeNativeDaemons {
                 registered = true;
                 InstanceKinds.register(new FakeNativeKind());
                 InstanceKinds.register(new FakeVolumeKind());
+                InstanceKinds.register(new FakeVolumeSnapshotKind());
             }
         }
 
@@ -517,6 +521,139 @@ final class FakeNativeDaemons {
         @Override
         public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
             return 128;
+        }
+    }
+
+    /**
+     * The VOLUME snapshot lane's kind: {@link VolumeSnapshotSupport} and deliberately NOT
+     * {@link NativeSnapshotSupport}, so {@code InstanceSnapshots} takes its controller-side
+     * branch -- real tar files under the snapshot root, which is the only lane where a
+     * prune has a filesystem payload to fail on.
+     */
+    static final class FakeVolumeSnapshotKind implements InstanceKindHandler {
+
+        static final Identifier ID = Identifier.of("hohenheim", "fake_volume_snapshot");
+
+        @Override
+        public @NonNull Identifier typeId() { return ID; }
+
+        @Override
+        public @NonNull String getDisplayName() { return "Fake volume snapshot"; }
+
+        @Override
+        public @NonNull Microcopy getLabel() {
+            return Microcopy.of("fake_volume_snapshot").withFilter("scope", "instance_kind");
+        }
+
+        @Override
+        public String getDescription() { return "in-memory volume-snapshot test kind"; }
+
+        @Override
+        public Icon getIcon() { return Icon.of("flask"); }
+
+        @Override
+        public String getColor() { return "gray"; }
+
+        @Override
+        public Schema getSchema() { return FakeNativeKind.SETTINGS_SCHEMA; }
+
+        @Override
+        public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
+
+        @Override
+        public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
+            return new FakeVolumeSnapshotRuntime(serverName);
+        }
+
+        @Override
+        public @NonNull InstanceSpec specFor(int instanceId,
+                                             @NonNull Map<String, Object> settings) {
+            return new InstanceSpec("fake-instance-" + instanceId,
+                String.valueOf(settings.getOrDefault("image", "fake/image")), null,
+                Map.of(), Map.of(), null, ResourceLimits.none(),
+                new ContainerHardening.Profile("fake", List.of()),
+                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+        }
+
+        /** Test kinds declare a footprint like any other: the interface has no default. */
+        @Override
+        public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
+            return 128;
+        }
+    }
+
+    /**
+     * The volume lane's runtime: the same in-memory daemon, with the capture/restore half
+     * of the driver seam writing REAL files, because the payload the prune must remove is
+     * a real directory on the controller.
+     */
+    static final class FakeVolumeSnapshotRuntime
+            implements InstanceRuntime, VolumeSnapshotSupport {
+
+        private final FakeNativeRuntime inner;
+
+        FakeVolumeSnapshotRuntime(String serverName) {
+            this.inner = new FakeNativeRuntime(serverName);
+        }
+
+        @Override
+        public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
+            return this.inner.create(spec);
+        }
+
+        @Override
+        public void start(@NonNull String handle) throws IOException {
+            this.inner.start(handle);
+        }
+
+        @Override
+        public void stop(@NonNull String handle, int graceSeconds) throws IOException {
+            this.inner.stop(handle, graceSeconds);
+        }
+
+        @Override
+        public void destroy(@NonNull String handle) throws IOException {
+            this.inner.destroy(handle);
+        }
+
+        @Override
+        public @NonNull InstanceStatus status(@NonNull String handle) {
+            return this.inner.status(handle);
+        }
+
+        @Override
+        public @NonNull List<CapturedVolume> captureVolumes(
+                @NonNull InstanceSpec spec, @NonNull Map<String, String> logicalVolumes,
+                @NonNull Path directory, long maxBytesPerVolume) throws IOException {
+            FakeWorkload workload = this.inner.require(spec.handle());
+            List<CapturedVolume> captured = new ArrayList<>();
+            for (Map.Entry<String, String> volume : logicalVolumes.entrySet()) {
+                Path file = directory.resolve(volume.getKey() + ".tar");
+                Files.writeString(file, String.valueOf(workload.data));
+                captured.add(new CapturedVolume(volume.getKey(), volume.getValue(),
+                    file, Files.size(file)));
+            }
+            return captured;
+        }
+
+        @Override
+        public void restoreVolumes(@NonNull InstanceSpec spec,
+                                   @NonNull Map<String, String> logicalVolumes,
+                                   @NonNull Map<String, Path> tars) throws IOException {
+            this.inner.require(spec.handle()).data.put("restored", String.valueOf(tars.keySet()));
+        }
+
+        @Override
+        public void removeVolumesForRestore(@NonNull InstanceSpec spec,
+                                            @NonNull Map<String, String> logicalVolumes,
+                                            @NonNull Collection<String> names)
+                throws IOException {
+            this.inner.require(spec.handle()).data.keySet().removeAll(names);
+        }
+
+        @Override
+        public @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec) {
+            return new ImageIdentity(spec.image(), "fake-fingerprint");
         }
     }
 
