@@ -173,6 +173,24 @@ class InstancePlacementTest {
             true, Instant.now(), null));
     }
 
+    /**
+     * Make a host UNMEASURED, the way a freshly enrolled one is: no stored memory reading
+     * on the record at all.
+     *
+     * AIDEV-NOTE: it clears the RECORD rather than storing a report with no facts, because
+     * {@link HostPreflight#store} merges -- a run that measured nothing no longer erases
+     * what an earlier run measured, which is exactly the point of that merge (a preflight
+     * that could not reach the daemon used to cordon a healthy host by wiping mem_total).
+     * "Never measured" is a property of the record, not of one report.
+     */
+    private static void unmeasure(String name) {
+        ServerModel model = Models.get(ServerModel.class);
+        Row row = model.findByName(name);
+        row.set(ServerModel.CAPABILITIES, null);
+        model.save(row);
+        storeReport(name, null, null);
+    }
+
     /** A workload of the docker kind, sized by an explicit memory limit. */
     private static InstancePlacement.Workload workload(int memoryMb) {
         return InstancePlacement.Workload.of(InstanceKinds.getHandler(DOCKER_KIND),
@@ -305,7 +323,7 @@ class InstancePlacementTest {
             // 8. A host whose memory was never measured is not a host with infinite room:
             //    the CHOOSER will not pick a machine whose size nobody knows, and the
             //    survivor is chosen instead.
-            storeReport(PREFIX + "beta", null, null);
+            unmeasure(PREFIX + "beta");
             assertThat(InstanceCapacity.budgetMbOf(
                     Models.get(ServerModel.class).findById(beta)))
                 .as("step 8: an unmeasured host has NO budget, not an unlimited one")
@@ -317,7 +335,7 @@ class InstancePlacementTest {
             // 8b. And when NOTHING is measured, the refusal names the host to preflight
             //     rather than saying "nothing accepts this" -- the two states have
             //     different fixes and must not share a message.
-            storeReport(PREFIX + "alpha", null, null);
+            unmeasure(PREFIX + "alpha");
             assertThat(keyOf(catchThrowable(() -> InstancePlacement.chooseForBucket(
                     BUCKET, workload(256), null))))
                 .as("step 8b: eligible-but-unmeasured is its own named refusal")

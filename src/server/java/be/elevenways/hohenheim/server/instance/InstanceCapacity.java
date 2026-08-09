@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.process.ProcessCapacity;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -70,11 +71,16 @@ import java.util.Map;
  * is a measurement, and measurements go stale. An unreadable or too-old reading yields NO
  * budget -- never an unlimited one -- and a host with no budget is one
  * {@link InstancePlacement} refuses to CHOOSE, by its own name
- * ({@code host_capacity_unproven}, telling the operator which host to preflight). That is
- * also the reason a freshness bound ({@code capacity.facts_max_age_hours}) exists here
- * while the admission gate still has none: admission's staleness is an availability
- * decision about hosts already carrying production work, capacity's staleness would let a
- * placement reason about a machine whose RAM nobody has looked at in a year.
+ * ({@code host_capacity_unproven}, telling the operator which host to preflight). The
+ * freshness bound is {@code capacity.facts_max_age_hours}, and it answers a different
+ * question from {@code hosts.contact_max_age_minutes}: this one asks how old a MEASUREMENT
+ * may be before it stops being a budget, that one asks how long a host may go without
+ * ANSWERING before it stops receiving work. A host can fail either independently -- a
+ * chatty daemon nobody has preflighted in a year, or a freshly preflighted host that went
+ * silent an hour later -- so neither bound subsumes the other. The kernel-truth gate
+ * deliberately still has no bound at all, for the reason recorded on
+ * {@code HostAdmission.requireKernelTruth}: it pairs its stored evidence with a LIVE read
+ * of whether the record still declares the lane.
  *
  * AIDEV-NOTE: every terminating path must release, and InstanceService.destroy soft-
  * deletes through save() so the remove hooks NEVER fire there. The transitions handled
@@ -151,23 +157,37 @@ public final class InstanceCapacity {
     /** The host's measured total memory in MB, from the stored preflight facts. */
     private static @Nullable Long measuredMemoryMbOf(@NonNull Row server) {
         if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
-                || !(capabilities.get("mem_total") instanceof Number bytes)) {
+                || !(capabilities.get(HostPreflight.MEM_TOTAL_FACT) instanceof Number bytes)) {
             return null;
         }
         long mb = bytes.longValue() / (1024L * 1024L);
         return mb > 0 ? mb : null;
     }
 
-    /** Whether the stored reading is inside the declared freshness bound. */
+    /**
+     * Whether the stored reading is inside the declared freshness bound.
+     *
+     * AIDEV-NOTE: the age is the MEASUREMENT's own, never {@code probed_at}. Since
+     * {@link be.elevenways.hohenheim.server.host.HostPreflight#store} merges rather than
+     * replaces, a preflight that could not reach the daemon stamps {@code probed_at} while
+     * re-measuring nothing -- reading that column here would refresh the apparent age of a
+     * number the run never looked at, which is the same lie the wholesale replace told in
+     * the other direction. The fallback exists only for records stored before per-fact
+     * provenance, whose reading really is as old as their last probe.
+     */
     private static boolean readingIsFresh(@NonNull Row server) {
         Integer hours = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS);
         if (hours == null || hours <= 0) {
             return true;
         }
-        Instant probedAt = server.get(ServerModel.PROBED_AT);
-        return probedAt != null
-            && probedAt.isAfter(Instant.now().minus(Duration.ofHours(hours)));
+        Instant measuredAt = HostPreflight.factMeasuredAt(server,
+            HostPreflight.MEM_TOTAL_FACT);
+        if (measuredAt == null) {
+            measuredAt = server.get(ServerModel.PROBED_AT);
+        }
+        return measuredAt != null
+            && measuredAt.isAfter(Instant.now().minus(Duration.ofHours(hours)));
     }
 
     // -- the footprint --------------------------------------------------------

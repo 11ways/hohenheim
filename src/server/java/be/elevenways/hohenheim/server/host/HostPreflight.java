@@ -13,6 +13,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,6 +37,12 @@ public final class HostPreflight {
     public static final String STATUS_PASS = "pass";
     public static final String STATUS_WARN = "warn";
     public static final String STATUS_FAIL = "fail";
+
+    /**
+     * The stored fact carrying a host's total memory in BYTES, written by both batteries
+     * and read as the denominator of every placement decision on that host.
+     */
+    public static final String MEM_TOTAL_FACT = "mem_total";
 
     /** Oldest daemon API we accept: 1.41 = Docker 20.10, the floor our request shapes assume. */
     static final double MIN_API_VERSION = 1.41;
@@ -152,7 +159,7 @@ public final class HostPreflight {
             facts.put("os_type", stringOf(info.get("OSType")));
             facts.put("architecture", stringOf(info.get("Architecture")));
             facts.put("ncpu", numberOf(info.get("NCPU")));
-            facts.put("mem_total", numberOf(info.get("MemTotal")));
+            facts.put(MEM_TOTAL_FACT, numberOf(info.get("MemTotal")));
             facts.put("cgroup_version", stringOf(info.get("CgroupVersion")));
             facts.put("cgroup_driver", stringOf(info.get("CgroupDriver")));
             facts.put("containers", numberOf(info.get("Containers")));
@@ -402,6 +409,12 @@ public final class HostPreflight {
         }
     }
 
+    /** The stored key holding the per-check map; every entry carries its own {@code at}. */
+    static final String CHECKS_KEY = "checks";
+
+    /** The stored key holding per-FACT provenance: fact name to ISO instant. */
+    static final String FACTS_AT_KEY = "facts_at";
+
     /**
      * The status one named check carried in the host's LAST STORED report, or null when
      * the host has never been probed or that check never ran.
@@ -415,13 +428,62 @@ public final class HostPreflight {
      */
     public static @Nullable String storedCheckStatus(@NonNull Row server,
                                                      @NonNull String checkName) {
+        Object status = storedCheckField(server, checkName, "status");
+        return status != null ? String.valueOf(status) : null;
+    }
+
+    /**
+     * When the stored verdict of one named check was actually PRODUCED.
+     *
+     * <p>Since {@link #store} merges rather than replaces, a stored verdict can be older
+     * than {@code probed_at}: the last run may never have asked that question. The stamp is
+     * what makes that difference visible instead of silently reading as current.
+     *
+     * @return null for a record written before per-check stamps existed
+     */
+    public static @Nullable Instant storedCheckAt(@NonNull Row server,
+                                                  @NonNull String checkName) {
+        return parseInstant(storedCheckField(server, checkName, "at"));
+    }
+
+    private static @Nullable Object storedCheckField(@NonNull Row server,
+                                                     @NonNull String checkName,
+                                                     @NonNull String field) {
         if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
-                || !(capabilities.get("checks") instanceof Map<?, ?> checks)
+                || !(capabilities.get(CHECKS_KEY) instanceof Map<?, ?> checks)
                 || !(checks.get(checkName) instanceof Map<?, ?> check)) {
             return null;
         }
-        Object status = check.get("status");
-        return status != null ? String.valueOf(status) : null;
+        return check.get(field);
+    }
+
+    /**
+     * When one named stored FACT was last measured.
+     *
+     * @return null for a record written before per-fact stamps existed, or a fact no
+     *         stored report ever produced
+     */
+    public static @Nullable Instant factMeasuredAt(@NonNull Row server,
+                                                   @NonNull String factName) {
+        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
+                || !(capabilities.get(FACTS_AT_KEY) instanceof Map<?, ?> stamps)) {
+            return null;
+        }
+        return parseInstant(stamps.get(factName));
+    }
+
+    private static @Nullable Instant parseInstant(@Nullable Object raw) {
+        if (raw instanceof Instant instant) {
+            return instant;
+        }
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return Instant.parse(String.valueOf(raw));
+        } catch (DateTimeParseException unreadable) {
+            return null;
+        }
     }
 
     // -- persistence ----------------------------------------------------------
@@ -432,22 +494,47 @@ public final class HostPreflight {
      * AIDEV-NOTE: public because it is THE funnel -- both batteries persist through it,
      * and a fixture that needs a host to carry a realistic stored verdict must go through
      * it too rather than hand-writing the capabilities shape somewhere else.
+     *
+     * AIDEV-NOTE: it MERGES, and that is the fix for a diagnostic action that cordoned a
+     * healthy host. It used to replace {@code capabilities} wholesale, so a preflight that
+     * could not reach the daemon -- a network blip, a paused daemon, a bad ssh moment --
+     * erased every fact the previous run had measured, {@code mem_total} included. The host
+     * stayed admitted while {@link be.elevenways.hohenheim.server.instance.InstancePlacement}
+     * skipped it as UNMEASURED, so running preflight to diagnose a host removed it from the
+     * pool. A check that could not run is not a check that failed, and a fact nobody
+     * re-measured is not a fact that changed.
+     *
+     * The fail-closed direction is untouched: {@code preflight_ok} still follows THIS run's
+     * required checks, and a check this run DID produce -- including the deliberate
+     * {@code unanswered} FAILs the Incus battery writes when its probe instance never
+     * answered -- overwrites whatever was stored. Only questions this run never asked keep
+     * their previous answer, and every retained answer carries the stamp of when it was
+     * produced ({@link #storedCheckAt}, {@link #factMeasuredAt}) so its age is readable
+     * rather than inherited from {@code probed_at}.
      */
     public static void store(@NonNull String serverName, @NonNull Report report) {
         Row server = Models.get(ServerModel.class).findByName(serverName);
         if (server == null) {
             return;
         }
-        Map<String, Object> capabilities = new LinkedHashMap<>(report.facts());
-        Map<String, Object> checkMap = new LinkedHashMap<>();
+        Map<String, Object> capabilities = new LinkedHashMap<>(storedMap(server, null));
+        Map<String, Object> checkMap = new LinkedHashMap<>(storedMap(server, CHECKS_KEY));
+        Map<String, Object> factsAt = new LinkedHashMap<>(storedMap(server, FACTS_AT_KEY));
+        String at = report.at().toString();
+        for (Map.Entry<String, Object> fact : report.facts().entrySet()) {
+            capabilities.put(fact.getKey(), fact.getValue());
+            factsAt.put(fact.getKey(), at);
+        }
         for (Check check : report.checks()) {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("status", check.status());
             entry.put("required", check.required());
             entry.put("detail", check.detail());
+            entry.put("at", at);
             checkMap.put(check.name(), entry);
         }
-        capabilities.put("checks", checkMap);
+        capabilities.put(CHECKS_KEY, checkMap);
+        capabilities.put(FACTS_AT_KEY, factsAt);
         server.set(ServerModel.CAPABILITIES, capabilities);
         server.set(ServerModel.PROBED_AT, report.at());
         server.set(ServerModel.PREFLIGHT_OK, report.passed());
@@ -465,6 +552,30 @@ public final class HostPreflight {
             "server", serverName,
             "passed", report.passed(),
             "checks", checkMap.size()));
+    }
+
+    /**
+     * One stored map off the host's capabilities: the whole block when {@code key} is null,
+     * else the named sub-map. Always a copyable {@code Map<String, Object>} view, empty
+     * when the record carries nothing there.
+     */
+    private static @NonNull Map<String, Object> storedMap(@NonNull Row server,
+                                                          @Nullable String key) {
+        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)) {
+            return Map.of();
+        }
+        Map<?, ?> source = capabilities;
+        if (key != null) {
+            if (!(capabilities.get(key) instanceof Map<?, ?> nested)) {
+                return Map.of();
+            }
+            source = nested;
+        }
+        Map<String, Object> copy = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            copy.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
+        return copy;
     }
 
     /** This controller build's version string; "dev" when running from classes. */
