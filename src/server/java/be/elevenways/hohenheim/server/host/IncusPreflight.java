@@ -352,7 +352,7 @@ public final class IncusPreflight {
             }
             if (resources.get("memory") instanceof Map<?, ?> memory
                     && memory.get("total") instanceof Number total) {
-                facts.put("mem_total", total.longValue());
+                facts.put(HostPreflight.MEM_TOTAL_FACT, total.longValue());
             }
         } catch (IOException | RuntimeException unreadable) {
             checks.add(new HostPreflight.Check("resources", HostPreflight.STATUS_FAIL, true,
@@ -360,12 +360,12 @@ public final class IncusPreflight {
                     + " memory budget to place against: " + unreadable.getMessage()));
             return;
         }
-        boolean measured = facts.get("mem_total") instanceof Number bytes
+        boolean measured = facts.get(HostPreflight.MEM_TOTAL_FACT) instanceof Number bytes
             && bytes.longValue() > 0;
         checks.add(new HostPreflight.Check("resources",
             measured ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, true,
             measured ? "host reports " + facts.get("ncpu") + " CPUs and "
-                    + facts.get("mem_total") + " bytes of memory"
+                    + facts.get(HostPreflight.MEM_TOTAL_FACT) + " bytes of memory"
                 : "the daemon reported no total memory, so this host has no memory budget"
                     + " to place against"));
     }
