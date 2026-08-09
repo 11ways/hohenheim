@@ -42,6 +42,25 @@ Use `zenit-dev` for all build/test/run cycles. Do not invoke `./gradlew` directl
 - verdict PASSED_BUT_STALE means sources changed mid-run: the result proves the
   tree the run STARTED from. Finish edits, then run once.
 
+### The live lane (a skip is not a pass)
+
+Most of this suite needs a real host: a Docker socket, a private netns, an
+enrolled Incus or ssh host. Those tests gate themselves, and a gate that
+silently aborts used to make a run of nothing look green.
+
+- Ask through `test/live/LiveLane` -- `require(Need.X, condition, reason)` or
+  `requireImage(docker, ref)` -- NEVER a bare `assumeTrue`. The need is what
+  makes the skip visible; a prose-only abort is invisible to the report by
+  construction (it lands under `unclassified`).
+- Every forked JVM prints a LIVE LANE REPORT naming what it skipped and why,
+  and `zd_test` reports the skip COUNT as data. Read both.
+- `requireImage` PULLS a missing image rather than skipping: a cold image cache
+  on a working daemon is one command away from running the test.
+- A host that can satisfy a need DECLARES it:
+  `zenit-dev test ... -Dhohenheim.live.require=docker-socket,netns` turns a skip
+  for those needs into a FAILURE. Unset means report-only, which is the default
+  because whether a skip is a defect is a property of the HOST, not the test.
+
 ## Architecture notes
 
 - The admin UI is a zenit-cms panel served at `/admin` (`server/cms/HohenheimPanel`):

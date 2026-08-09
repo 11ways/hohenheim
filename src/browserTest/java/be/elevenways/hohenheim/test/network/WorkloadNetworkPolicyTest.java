@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.WorkloadNetwork;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -14,7 +15,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The workload network policy against REAL nftables and REAL packets: a routed topology
@@ -62,7 +62,7 @@ class WorkloadNetworkPolicyTest {
     @Test
     void aTenantLosesTheHostTheMetadataServiceAndItsNeighboursButKeepsTheInternet()
             throws IOException {
-        assumeTrue(PrivateNetns.available(),
+        LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
             "unshare/nsenter/nft/ip/python3 unavailable: cannot build a private netns");
 
         try (PrivateNetns netns = new PrivateNetns()) {
@@ -157,7 +157,7 @@ class WorkloadNetworkPolicyTest {
      */
     @Test
     void aDeclaredClosedEgressBlocksTheInternetWhileRepliesKeepFlowing() throws IOException {
-        assumeTrue(PrivateNetns.available(),
+        LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
             "unshare/nsenter/nft/ip/python3 unavailable: cannot build a private netns");
 
         try (PrivateNetns netns = new PrivateNetns()) {
@@ -208,7 +208,7 @@ class WorkloadNetworkPolicyTest {
      */
     @Test
     void theApplierRefusesWhenDisabledAndDisbelievesALyingNft() throws IOException {
-        assumeTrue(PrivateNetns.available(),
+        LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
             "unshare/nsenter/nft/ip/python3 unavailable: cannot build a private netns");
 
         try (PrivateNetns netns = new PrivateNetns()) {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -76,11 +77,10 @@ class InstanceConsoleLiveTest {
     }
 
     private static void assumeLiveDaemon() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(Files.exists(SOCKET),
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
             "Docker socket not present");
-        org.junit.jupiter.api.Assumptions.assumeTrue(alpinePresent(),
-            "alpine:latest not present locally");
-        org.junit.jupiter.api.Assumptions.assumeTrue(netns != null,
+        LiveLane.requireImage(new DockerClient(), "alpine:latest");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
     }
 
@@ -305,20 +305,6 @@ class InstanceConsoleLiveTest {
             docker.removeNetwork(WorkloadNetworks.networkName(handle));
         } catch (IOException ignored) {
             // already gone
-        }
-    }
-
-    private static boolean alpinePresent() {
-        try {
-            for (Object image : new DockerClient().listImages()) {
-                Object tags = ((Map<?, ?>) image).get("RepoTags");
-                if (tags instanceof List<?> list && list.contains("alpine:latest")) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (IOException e) {
-            return false;
         }
     }
 }

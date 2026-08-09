@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -26,7 +27,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The pin, proven against a REAL OpenSSH server whose host key really changes:
@@ -52,7 +52,7 @@ class HostKeyPinningTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        assumeTrue(Sshd.available(),
+        LiveLane.require(LiveLane.Need.SSH_TOOLS, Sshd.available(),
             "no OpenSSH binaries: the real host-key lane cannot be exercised here");
 
         File db = File.createTempFile("hohenheim-host-key-test", ".db");

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.game;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -47,7 +48,6 @@ import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.orm.seed.Seeds;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -129,15 +129,13 @@ class GameDomainLiveTest {
 
     @Test
     void velocityFrontsABackendThroughAMappingAndNothingDangles() throws Exception {
-        Assumptions.assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        Assumptions.assumeTrue(imagePresent(docker, VELOCITY_IMAGE),
-            VELOCITY_IMAGE + " not present locally");
-        Assumptions.assumeTrue(imagePresent(docker, BACKEND_IMAGE),
-            BACKEND_IMAGE + " not present locally");
-        Assumptions.assumeTrue(imagePresent(docker, "alpine:latest"),
-            "alpine:latest not present locally");
-        Assumptions.assumeTrue(netns != null,
+        LiveLane.requireImage(docker, VELOCITY_IMAGE);
+        LiveLane.requireImage(docker, BACKEND_IMAGE);
+        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
         Db.run(datasource, () -> {
@@ -519,20 +517,6 @@ class GameDomainLiveTest {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    private static boolean imagePresent(DockerClient docker, String tag) {
-        try {
-            for (Object image : docker.listImages()) {
-                Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-                if (repoTags instanceof List<?> tags && tags.contains(tag)) {
-                    return true;
-                }
-            }
-        } catch (IOException e) {
-            return false;
-        }
-        return false;
     }
 
     /**

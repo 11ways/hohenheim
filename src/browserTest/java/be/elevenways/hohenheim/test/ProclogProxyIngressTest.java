@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.sitetype.SiteHandlers;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.CmsSettings;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -146,7 +147,8 @@ class ProclogProxyIngressTest extends HohenheimTestBase {
 
     @Test
     void anonymousProxyRequestPlantsXssThatRendersInertInTheAdminViewer() throws Exception {
-        org.junit.jupiter.api.Assumptions.assumeTrue(nodeAvailable(), "node is required for the upstream child");
+        LiveLane.require(LiveLane.Need.NODE, nodeAvailable(),
+            "node is required for the upstream child");
 
         Path script = writeUpstreamScript();
         int siteId = setupUpstreamSite(script.toString());

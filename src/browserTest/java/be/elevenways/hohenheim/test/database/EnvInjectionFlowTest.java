@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessMonitor;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
@@ -29,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * End-to-end env injection: a REAL ephemeral Postgres provisioned through the
@@ -50,17 +50,10 @@ class EnvInjectionFlowTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        boolean imagePresent = false;
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains(PG_IMAGE)) {
-                imagePresent = true;
-                break;
-            }
-        }
-        assumeTrue(imagePresent, PG_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, PG_IMAGE);
 
         SiteTypes.boot();
         HohenheimEndpoints.init();
@@ -72,7 +65,7 @@ class EnvInjectionFlowTest {
         service = new DatabaseService();
 
         netns = PrivateNetns.installEnforcing();
-        assumeTrue(netns != null,
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: record-backed provisioning refuses without an enforceable policy");
     }
 

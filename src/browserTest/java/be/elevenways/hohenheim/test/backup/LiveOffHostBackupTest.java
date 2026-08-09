@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.backup;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -28,7 +29,6 @@ import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -79,7 +79,7 @@ class LiveOffHostBackupTest {
     @BeforeAll
     static void setUp() throws Exception {
         remote = LiveRemoteHost.configured();
-        Assumptions.assumeTrue(remote != null,
+        LiveLane.require(LiveLane.Need.REMOTE_HOST, remote != null,
             "no live remote host enrolled at " + LiveRemoteHost.CONFIG);
 
         File db = File.createTempFile("hohenheim-offhost-backup-test", ".db");
@@ -165,9 +165,10 @@ class LiveOffHostBackupTest {
     @Test
     void anInstanceBacksUpToAnotherMachineAndRestoresFromIt() throws IOException {
         DockerClient docker = new DockerClient();
-        Assumptions.assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        Assumptions.assumeTrue(imagePresent(docker), "alpine:latest not present locally");
-        Assumptions.assumeTrue(netns != null,
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
         Db.run(datasource, () -> {
@@ -428,16 +429,6 @@ class LiveOffHostBackupTest {
             .as("exec '" + command + "' succeeds (stderr: " + result.stderr() + ")")
             .isEqualTo(0);
         return result.stdout().trim();
-    }
-
-    private static boolean imagePresent(DockerClient docker) throws IOException {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains("alpine:latest")) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private interface ThrowingSupplier<T> {

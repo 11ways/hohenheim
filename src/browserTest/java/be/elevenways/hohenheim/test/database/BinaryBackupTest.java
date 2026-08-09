@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
@@ -28,7 +29,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Binary-backup integration tests: Redis (RDB snapshot) and Mongo (mongodump archive) produce
@@ -41,7 +41,7 @@ class BinaryBackupTest {
     @BeforeAll
     static void enforcePolicy() throws IOException {
         netns = PrivateNetns.installEnforcing();
-        assumeTrue(netns != null,
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: record-backed provisioning refuses without an enforceable policy");
     }
 
@@ -60,9 +60,10 @@ class BinaryBackupTest {
 
     @Test
     void redisBackupProducesRdbSnapshot() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, REDIS_IMAGE);
 
         DatabaseService service = new DatabaseService(freshDatasource());
         String name = "redis" + System.nanoTime();
@@ -90,9 +91,10 @@ class BinaryBackupTest {
 
     @Test
     void mongoBackupRestoreRoundTrips() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, MONGO_IMAGE), MONGO_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, MONGO_IMAGE);
 
         DatabaseService service = new DatabaseService(freshDatasource());
         String name = "mongo" + System.nanoTime();
@@ -123,9 +125,10 @@ class BinaryBackupTest {
 
     @Test
     void redisBackupRestoreRoundTrips() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, REDIS_IMAGE);
 
         DatabaseService service = new DatabaseService(freshDatasource());
         String name = "redisrt" + System.nanoTime();
@@ -153,9 +156,10 @@ class BinaryBackupTest {
     void redisRestoreRejectsEphemeralData() throws IOException {
         // The restore restarts the container, and a tmpfs data dir is wiped by that restart --
         // so an ephemeral redis must reject the restore up-front.
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, REDIS_IMAGE);
 
         DatabaseService service = new DatabaseService(freshDatasource());
         String name = "redisep" + System.nanoTime();
@@ -248,15 +252,5 @@ class BinaryBackupTest {
         Datasources.register(Datasources.DEFAULT, ds);
         HohenheimTestRuntime.ensureBooted();
         return ds;
-    }
-
-    private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains(tag)) {
-                return true;
-            }
-        }
-        return false;
     }
 }

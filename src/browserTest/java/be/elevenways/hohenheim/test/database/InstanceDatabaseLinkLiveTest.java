@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -44,7 +45,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The INSTANCE half of database attachments, against a REAL daemon and REAL packets --
@@ -104,11 +104,12 @@ class InstanceDatabaseLinkLiveTest {
     @Test
     void anInstanceReachesExactlyItsAttachedDatabasesAndADetachRevokesThatNow()
             throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, "alpine:latest"), "alpine:latest not present locally");
-        assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
-        assumeTrue(netns != null,
+        LiveLane.requireImage(docker, "alpine:latest");
+        LiveLane.requireImage(docker, REDIS_IMAGE);
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
         Db.run(datasource, () -> {
@@ -485,16 +486,6 @@ class InstanceDatabaseLinkLiveTest {
                 && map.get("Name") instanceof String name && name.startsWith(prefix))
             .map(entry -> String.valueOf(((Map<?, ?>) entry).get("Name")))
             .toList();
-    }
-
-    private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains(tag)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private interface IoCall<T> {

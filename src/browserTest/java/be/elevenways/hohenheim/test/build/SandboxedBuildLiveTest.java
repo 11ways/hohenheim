@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.build;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -38,7 +39,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The sandbox against a REAL daemon: every isolation and quota claim of the builders
@@ -97,8 +97,10 @@ class SandboxedBuildLiveTest {
      */
     @Test
     void aBuildCannotReachTheDaemon() {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        assumeTrue(netns != null, "no private netns: the sandbox refuses to build unprotected");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
+            "no private netns: the sandbox refuses to build unprotected");
         DockerClient docker = new DockerClient();
 
         Db.run(datasource, () -> {
@@ -187,8 +189,10 @@ class SandboxedBuildLiveTest {
      */
     @Test
     void aBuildThatOutgrowsItsQuotaIsKilledAndPromotesNothing() {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        assumeTrue(netns != null, "no private netns: the sandbox refuses to build unprotected");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
+            "no private netns: the sandbox refuses to build unprotected");
         DockerClient docker = new DockerClient();
 
         Db.run(datasource, () -> {
@@ -253,8 +257,10 @@ class SandboxedBuildLiveTest {
      */
     @Test
     void aSiteRunsWhatItBuiltAndTheBuildNeverSawItsSecrets() {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
-        assumeTrue(netns != null, "no private netns: the sandbox refuses to build unprotected");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
+            "no private netns: the sandbox refuses to build unprotected");
         DockerClient docker = new DockerClient();
         String secret = "TENANT-RUNTIME-SECRET-" + System.nanoTime();
         // AIDEV-NOTE: both ARGs are DECLARED, which is the point. A build container's own

@@ -174,6 +174,9 @@ dependencies {
     testImplementation 'org.checkerframework:checker-qual:4.2.0'
     browserTestImplementation platform('org.junit:junit-bom:5.10.0')
     browserTestImplementation 'org.junit.jupiter:junit-jupiter'
+    // The live-lane report is a TestExecutionListener, so the launcher API has to be on
+    // the COMPILE path here, not merely on the runtime one Gradle supplies.
+    browserTestImplementation 'org.junit.platform:junit-platform-launcher'
     browserTestImplementation 'com.microsoft.playwright:playwright:1.48.0'
     browserTestImplementation 'org.assertj:assertj-core:3.25.3'
     browserTestImplementation sourceSets.server.output
@@ -322,6 +325,11 @@ task browserTest(type: Test) {
     timeout = java.time.Duration.ofMinutes(30)
 
     systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
+    // The live lane's host policy. Unset means "report every skip, fail on none"; a host
+    // that declares what it can satisfy (e.g. -Dhohenheim.live.require=docker-socket,netns)
+    // turns a skip for those needs into a FAILURE. See test/live/LiveLane.
+    systemProperty 'hohenheim.live.require', System.getProperty('hohenheim.live.require', '')
+    systemProperty 'hohenheim.live.pull', System.getProperty('hohenheim.live.pull', 'true')
 
     testLogging {
         showStandardStreams = true
@@ -351,6 +359,11 @@ task browserTestIsolated(type: Test) {
     timeout = java.time.Duration.ofMinutes(30)
 
     systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
+    // The live lane's host policy. Unset means "report every skip, fail on none"; a host
+    // that declares what it can satisfy (e.g. -Dhohenheim.live.require=docker-socket,netns)
+    // turns a skip for those needs into a FAILURE. See test/live/LiveLane.
+    systemProperty 'hohenheim.live.require', System.getProperty('hohenheim.live.require', '')
+    systemProperty 'hohenheim.live.pull', System.getProperty('hohenheim.live.pull', 'true')
 
     testLogging {
         showStandardStreams = true

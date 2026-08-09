@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.process.ProcessMonitor;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The host-process tier's resource cap: a DECLARED memory limit is a real cgroup the
@@ -78,9 +78,9 @@ class ProcessConfinementTest {
      */
     @Test
     void aDeclaredMemoryLimitIsEnforcedByTheKernel() throws Exception {
-        assumeTrue(ProcessConfinement.availability().enforceable(),
+        LiveLane.require(LiveLane.Need.CONFINEMENT, ProcessConfinement.availability().enforceable(),
             "SKIPPED: this host cannot create a systemd scope ("
-                + ProcessConfinement.availability().reason() + ")");
+            + ProcessConfinement.availability().reason() + ")");
 
         // 1. The cap the operator declared is the cap the kernel carries.
         Ran capped = run(32, "echo MAX=$(cat $CG/memory.max); echo ALIVE");
@@ -124,9 +124,9 @@ class ProcessConfinementTest {
     /** The pids cap rides the same scope, so a fork bomb hits its own budget. */
     @Test
     void theScopeAlsoCarriesTheProcessCap() throws Exception {
-        assumeTrue(ProcessConfinement.availability().enforceable(),
+        LiveLane.require(LiveLane.Need.CONFINEMENT, ProcessConfinement.availability().enforceable(),
             "SKIPPED: this host cannot create a systemd scope ("
-                + ProcessConfinement.availability().reason() + ")");
+            + ProcessConfinement.availability().reason() + ")");
 
         Ran output = run(32, "echo TASKS=$(cat $CG/pids.max)");
         assertThat(output.output())

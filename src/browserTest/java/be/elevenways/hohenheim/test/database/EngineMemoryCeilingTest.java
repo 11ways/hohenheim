@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -21,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Every engine's DECLARED memory footprint, end to end on a real daemon: a database
@@ -71,7 +71,7 @@ class EngineMemoryCeilingTest {
     @BeforeAll
     static void enforcePolicy() throws IOException {
         netns = PrivateNetns.installEnforcing();
-        assumeTrue(netns != null,
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: record-backed provisioning refuses without an enforceable policy");
     }
 
@@ -132,9 +132,10 @@ class EngineMemoryCeilingTest {
      */
     private void journey(ManagedDatabase.Engine engine, String image, String expectedValue,
                          ServeCheck serve) throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, image), image + " not present locally");
+        LiveLane.requireImage(docker, image);
 
         DatabaseService service = new DatabaseService(freshDatasource());
         String name = engine.token() + "mem" + System.nanoTime();
@@ -248,15 +249,5 @@ class EngineMemoryCeilingTest {
         Datasources.register(Datasources.DEFAULT, ds);
         HohenheimTestRuntime.ensureBooted();
         return ds;
-    }
-
-    private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains(tag)) {
-                return true;
-            }
-        }
-        return false;
     }
 }

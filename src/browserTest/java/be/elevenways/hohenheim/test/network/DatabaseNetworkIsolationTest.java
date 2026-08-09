@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.network;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -24,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The managed-database tier's isolation, against a REAL daemon and REAL packets: two
@@ -65,10 +65,11 @@ class DatabaseNetworkIsolationTest {
 
     @Test
     void twoDatabasesGetPrivateNetworksAndCannotReachEachOther() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
-        assumeTrue(netns != null,
+        LiveLane.requireImage(docker, REDIS_IMAGE);
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: a record-backed database refuses to provision unprotected");
 
         String a = "dbnet-a-" + System.nanoTime();
@@ -163,16 +164,6 @@ class DatabaseNetworkIsolationTest {
             "printf 'PING\\r\\nQUIT\\r\\n' | nc -w 2 " + address + " " + port)));
         String reply = result.stdout() + result.stderr();
         return reply.contains("PONG") || reply.contains("NOAUTH");
-    }
-
-    private static boolean imagePresent(DockerClient docker, String image) throws IOException {
-        for (Object entry : docker.listImages()) {
-            if (entry instanceof Map<?, ?> map && map.get("RepoTags") instanceof List<?> tags
-                    && tags.contains(image)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static void cleanup(DockerClient docker, String handle) {

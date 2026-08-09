@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -23,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * End-to-end test for the admin-UI restore upload: a multipart POST to
@@ -53,15 +53,16 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
     @Test
     @Order(2)
     void uploadedDumpRestoresIntoTheLiveDatabase() throws Exception {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, POSTGRES_IMAGE), POSTGRES_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, POSTGRES_IMAGE);
 
         String name = "restoreui" + System.nanoTime();
         DatabaseService databases = new DatabaseService();
         DatabaseModel model = Models.get(DatabaseModel.class);
         PrivateNetns netns = PrivateNetns.installEnforcing();
-        assumeTrue(netns != null,
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: a record-backed database refuses without an enforceable policy");
         try {
             // The record AND its owned engine instance in one call; the restore handler
@@ -129,15 +130,5 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
         return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains(tag)) {
-                return true;
-            }
-        }
-        return false;
     }
 }

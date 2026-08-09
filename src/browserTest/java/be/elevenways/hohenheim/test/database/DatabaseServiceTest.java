@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -32,7 +33,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Integration test for {@link DatabaseService}: create persists + provisions, backup resolves
@@ -46,7 +46,7 @@ class DatabaseServiceTest {
     @BeforeAll
     static void enforcePolicy() throws IOException {
         netns = PrivateNetns.installEnforcing();
-        assumeTrue(netns != null,
+        LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: record-backed provisioning refuses without an enforceable policy");
     }
 
@@ -62,9 +62,10 @@ class DatabaseServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void createPersistsProvisionsBackupByNameAndDestroyRemovesRecord() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, PG_IMAGE);
 
         SqliteDatasource datasource = freshDatasource();
         DatabaseService service = new DatabaseService(datasource);
@@ -124,9 +125,10 @@ class DatabaseServiceTest {
 
     @Test
     void createAsyncRecordsProvisioningThenActive() throws IOException, InterruptedException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, PG_IMAGE);
 
         DatabaseService service = new DatabaseService(freshDatasource());
         String name = "async" + System.nanoTime();
@@ -159,9 +161,10 @@ class DatabaseServiceTest {
      */
     @Test
     void theProvisionedPortIsClaimedInTheLedgerAndFreedOnDestroy() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, PG_IMAGE);
 
         SqliteDatasource datasource = freshDatasource();
         DatabaseService service = new DatabaseService(datasource);
@@ -217,9 +220,10 @@ class DatabaseServiceTest {
      */
     @Test
     void destroyRefusesToLieWhenTheHostCannotBeAddressed() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, PG_IMAGE), PG_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, PG_IMAGE);
 
         SqliteDatasource datasource = freshDatasource();
         DatabaseService service = new DatabaseService(datasource);
@@ -345,15 +349,5 @@ class DatabaseServiceTest {
         Datasources.register(Datasources.DEFAULT, ds);
         HohenheimTestRuntime.ensureBooted();
         return ds;
-    }
-
-    private static boolean imagePresent(DockerClient docker, String tag) throws IOException {
-        for (Object image : docker.listImages()) {
-            Object repoTags = ((Map<?, ?>) image).get("RepoTags");
-            if (repoTags instanceof List<?> tags && tags.contains(tag)) {
-                return true;
-            }
-        }
-        return false;
     }
 }

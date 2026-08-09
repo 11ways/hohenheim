@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -43,7 +44,6 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The container hardening baseline against a REAL daemon, asserted from the KERNEL side
@@ -121,11 +121,13 @@ class ContainerHardeningTest {
      */
     @Test
     void everyContainerAuthorityShipsTheHardeningBaselineOnTheRunningContainer() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
-        assumeTrue(imagePresent(docker, REDIS_IMAGE), REDIS_IMAGE + " not present locally");
-        assumeTrue(PrivateNetns.available(), "no private netns: the instance tier refuses to"
+        LiveLane.requireImage(docker, TEST_IMAGE);
+        LiveLane.requireImage(docker, REDIS_IMAGE);
+        LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
+            "no private netns: the instance tier refuses to"
             + " deploy where its network policy cannot be enforced");
         int pids = ContainerHardening.pidsLimit();
 
@@ -264,10 +266,12 @@ class ContainerHardeningTest {
      */
     @Test
     void instanceTierRunsAChownThenDropPrivilegesImage() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, POSTGRES_IMAGE), POSTGRES_IMAGE + " not present locally");
-        assumeTrue(PrivateNetns.available(), "no private netns: the instance tier refuses to"
+        LiveLane.requireImage(docker, POSTGRES_IMAGE);
+        LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
+            "no private netns: the instance tier refuses to"
             + " deploy where its network policy cannot be enforced");
 
         int instanceId = 999_104;
@@ -333,9 +337,10 @@ class ContainerHardeningTest {
      */
     @Test
     void theInstanceProfileStillRefusesEveryStructuralEscape() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         ContainerHardening.Profile profile = DockerContainerKind.HARDENING;
         assertThat(profile.capabilities()).as("step 0: the instance tier declares SERVICE")
@@ -417,10 +422,12 @@ class ContainerHardeningTest {
      */
     @Test
     void aStackServiceDeclaresOneCapabilityAndNeverAnEscape() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
-        assumeTrue(PrivateNetns.available(), "no private netns: a stack refuses to deploy"
+        LiveLane.requireImage(docker, TEST_IMAGE);
+        LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
+            "no private netns: a stack refuses to deploy"
             + " where its network policy cannot be enforced");
         int pids = ContainerHardening.pidsLimit();
 
@@ -511,9 +518,10 @@ class ContainerHardeningTest {
      */
     @Test
     void pidsLimitStopsAForkStormInsideTheContainer() throws IOException {
-        assumeTrue(Files.exists(SOCKET), "Docker socket not present");
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
         DockerClient docker = new DockerClient();
-        assumeTrue(imagePresent(docker, TEST_IMAGE), TEST_IMAGE + " not present locally");
+        LiveLane.requireImage(docker, TEST_IMAGE);
 
         Integer original = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Security.CONTAINER_PIDS_LIMIT);
@@ -700,15 +708,5 @@ class ContainerHardeningTest {
             }
         }
         throw new AssertionError("container " + container + " never exited");
-    }
-
-    private static boolean imagePresent(DockerClient docker, String image) throws IOException {
-        for (Object entry : docker.listImages()) {
-            Object tags = ((Map<?, ?>) entry).get("RepoTags");
-            if (tags instanceof List<?> list && list.contains(image)) {
-                return true;
-            }
-        }
-        return false;
     }
 }

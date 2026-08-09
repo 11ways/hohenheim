@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.process.ProcessMonitor;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -30,7 +31,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Host-memory booking for managed child processes: the unit booked is the CHILD, the
@@ -82,9 +82,9 @@ class ProcessCapacityTest {
      */
     @Test
     void everyChildIsBookedAtItsCapAndReleasedOnExit() throws Exception {
-        assumeTrue(ProcessConfinement.availability().enforceable(),
+        LiveLane.require(LiveLane.Need.CONFINEMENT, ProcessConfinement.availability().enforceable(),
             "SKIPPED: a declared cap needs an enforceable host ("
-                + ProcessConfinement.availability().reason() + ")");
+            + ProcessConfinement.availability().reason() + ")");
 
         long baseline = ProcessCapacity.bookedMbOn(localServerId);
         ManagedProcessSiteHandler handler = handler(4901, 64);
@@ -139,9 +139,9 @@ class ProcessCapacityTest {
      */
     @Test
     void aFullHostRefusesTheNextChild() throws Exception {
-        assumeTrue(ProcessConfinement.availability().enforceable(),
+        LiveLane.require(LiveLane.Need.CONFINEMENT, ProcessConfinement.availability().enforceable(),
             "SKIPPED: a declared cap needs an enforceable host ("
-                + ProcessConfinement.availability().reason() + ")");
+            + ProcessConfinement.availability().reason() + ")");
 
         // 1. Positive anchor first: with room, the child starts. The budget is 200 MB
         //    and each child declares 128, so exactly one fits -- deliberately not a
