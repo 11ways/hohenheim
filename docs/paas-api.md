@@ -18,7 +18,7 @@ Scopes narrow a key below its owner's authority:
 - capability scopes, exact-match: `cap:hohenheim:site#manage`,
   `cap:hohenheim:instance#manage`, `cap:hohenheim:instance#snapshots`, ...
 - permission scopes, wildcards allowed: `hohenheim.instances.create`,
-  `hohenheim.admin.access`.
+  `hohenheim.databases.create`, `hohenheim.admin.access`.
 
 Sites and instances are visible exactly where the key's owner holds the
 `manage` record capability AND the key's scopes cover that vocabulary. Project
@@ -118,4 +118,5 @@ hoh vars env 5 set KEY value          # environment (deploy baseline) values
 
 `--json` prints the raw API response of any read. Tests: `node tools/hoh.test.js`
 (stub server; proves paths, the key header, the rollback interlock and secret
-masking). Server-side coverage: `PaasApiTest` (browserTest).
+masking), driven in the verification lane by `HohCliTest`. Server-side coverage:
+`PaasApiTest` (browserTest).

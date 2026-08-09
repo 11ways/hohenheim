@@ -2203,10 +2203,16 @@
     "text": "Infrastructure",
     "scope": "nav"
   },
-  "proxy": {
-    "text": "Proxy",
-    "scope": "nav"
-  },
+  "proxy": [
+    {
+      "text": "Proxy",
+      "scope": "nav"
+    },
+    {
+      "text": "Proxy",
+      "scope": "site_type"
+    }
+  ],
   "test": [
     {
       "text": "Send test",
@@ -4133,6 +4139,10 @@
     {
       "text": "Overrides the image's default command; one argument per row.",
       "scope": "help"
+    },
+    {
+      "text": "Command",
+      "scope": "site_type"
     }
   ],
   "registry_server": [
@@ -6208,6 +6218,42 @@
     "text": "Create instances from approved templates",
     "scope": "permission"
   },
+  "tls_passthrough": {
+    "text": "TLS passthrough",
+    "scope": "site_type"
+  },
+  "alchemy": {
+    "text": "Alchemy",
+    "scope": "site_type"
+  },
+  "dev_namespace": {
+    "text": "Dev namespace",
+    "scope": "site_type"
+  },
+  "dead": {
+    "text": "Dead",
+    "scope": "site_type"
+  },
+  "static": {
+    "text": "Static",
+    "scope": "site_type"
+  },
+  "java": {
+    "text": "Java / Zenit",
+    "scope": "site_type"
+  },
+  "redirect": {
+    "text": "Redirect",
+    "scope": "site_type"
+  },
+  "node": {
+    "text": "Node.js",
+    "scope": "site_type"
+  },
+  "hohenheim_databases_create": {
+    "text": "Create managed databases",
+    "scope": "permission"
+  },
   "files_read": {
     "text": "Read files",
     "scope": "capability"
@@ -6708,10 +6754,16 @@
       "scope": "preview_deployment"
     }
   ],
-  "docker": {
-    "text": "Docker",
-    "scope": "host_runtime"
-  },
+  "docker": [
+    {
+      "text": "Docker",
+      "scope": "host_runtime"
+    },
+    {
+      "text": "Docker",
+      "scope": "site_type"
+    }
+  ],
   "incus": {
     "text": "Incus",
     "scope": "host_runtime"

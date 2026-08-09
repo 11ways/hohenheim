@@ -61,10 +61,14 @@ public final class OwnedInstances {
             String kind = row.get(InstanceModel.KIND);
             InstanceKindHandler handler = kind == null ? null : InstanceKinds.getHandler(kind);
             if (handler != null && handler.generatedOnly()) {
+                // getLabel(), never getDisplayName(): the display name is an English
+                // literal and this sentence is translated, so the raw name would render
+                // a half-Dutch refusal. A Microcopy ARGUMENT resolves in the reader's
+                // locale (protoblast MessageEvaluator).
                 throw Violations.ofField(InstanceModel.KIND.getName(), kind,
                     Microcopy.of("instance_kind_owner_managed")
                         .withFilter("scope", "violations")
-                        .withArg("kind", handler.getDisplayName()));
+                        .withArg("kind", handler.getLabel()));
             }
         });
     }

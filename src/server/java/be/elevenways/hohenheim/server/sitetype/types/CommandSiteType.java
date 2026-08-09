@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimPaths;
@@ -21,6 +22,7 @@ import java.util.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.PathKind;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Runs an arbitrary command as a managed process.
@@ -97,6 +99,11 @@ public class CommandSiteType implements SiteTypeHandler {
 
     @Override
     public String getDisplayName() { return "Command"; }
+
+    @Override
+    public @NonNull Microcopy getLabel() {
+        return Microcopy.of("command").withFilter("scope", "site_type");
+    }
 
     @Override
     public String getDescription() { return "Run an arbitrary command as a managed process"; }

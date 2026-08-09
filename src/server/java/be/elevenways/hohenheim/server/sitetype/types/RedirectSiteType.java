@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
@@ -11,6 +12,7 @@ import io.undertow.util.Headers;
 
 import java.util.Map;
 import be.elevenways.zenit.common.ui.Icon;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Sends an HTTP redirect to a target URL.
@@ -48,6 +50,11 @@ public class RedirectSiteType implements SiteTypeHandler {
 
     @Override
     public String getDisplayName() { return "Redirect"; }
+
+    @Override
+    public @NonNull Microcopy getLabel() {
+        return Microcopy.of("redirect").withFilter("scope", "site_type");
+    }
 
     @Override
     public String getDescription() { return "Redirect requests to another URL"; }

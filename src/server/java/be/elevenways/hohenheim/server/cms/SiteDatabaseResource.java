@@ -121,7 +121,9 @@ public final class SiteDatabaseResource extends RowResource {
         if (typeInfo == null || !typeInfo.supportsEnvInjection()) {
             throw Violations.ofField("site_id", siteId,
                 CmsSupport.violationText("site_type_no_injection")
-                    .withArg("type", typeInfo != null ? typeInfo.getDisplayName() : siteType));
+                    // getLabel(), never getDisplayName(): see OwnedInstances. The stored
+                    // key is the honest fallback when the type is gone entirely.
+                    .withArg("type", typeInfo != null ? typeInfo.getLabel() : siteType));
         }
 
         Integer databaseId = intOf(coerced.get("database_id"),

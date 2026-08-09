@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -9,6 +10,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import java.util.List;
 import java.util.Map;
 import be.elevenways.zenit.common.ui.Icon;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Manages Alchemy (Node.js framework) child processes.
@@ -22,6 +24,11 @@ public class AlchemySiteType extends NodeSiteType {
 
     @Override
     public String getDisplayName() { return "Alchemy"; }
+
+    @Override
+    public @NonNull Microcopy getLabel() {
+        return Microcopy.of("alchemy").withFilter("scope", "site_type");
+    }
 
     @Override
     public String getDescription() { return "Manage Alchemy framework applications"; }

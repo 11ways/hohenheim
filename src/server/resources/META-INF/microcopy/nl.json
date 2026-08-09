@@ -2203,10 +2203,16 @@
     "text": "Infrastructuur",
     "scope": "nav"
   },
-  "proxy": {
-    "text": "Proxy",
-    "scope": "nav"
-  },
+  "proxy": [
+    {
+      "text": "Proxy",
+      "scope": "nav"
+    },
+    {
+      "text": "Proxy",
+      "scope": "site_type"
+    }
+  ],
   "test": [
     {
       "text": "Test versturen",
@@ -4133,6 +4139,10 @@
     {
       "text": "Overschrijft het standaardcommando van de image; een argument per rij.",
       "scope": "help"
+    },
+    {
+      "text": "Commando",
+      "scope": "site_type"
     }
   ],
   "registry_server": [
@@ -6208,6 +6218,42 @@
     "text": "Instanties aanmaken op basis van goedgekeurde sjablonen",
     "scope": "permission"
   },
+  "tls_passthrough": {
+    "text": "TLS-doorvoer",
+    "scope": "site_type"
+  },
+  "alchemy": {
+    "text": "Alchemy",
+    "scope": "site_type"
+  },
+  "dev_namespace": {
+    "text": "Dev-namespace",
+    "scope": "site_type"
+  },
+  "dead": {
+    "text": "Dood",
+    "scope": "site_type"
+  },
+  "static": {
+    "text": "Statisch",
+    "scope": "site_type"
+  },
+  "java": {
+    "text": "Java / Zenit",
+    "scope": "site_type"
+  },
+  "redirect": {
+    "text": "Doorverwijzing",
+    "scope": "site_type"
+  },
+  "node": {
+    "text": "Node.js",
+    "scope": "site_type"
+  },
+  "hohenheim_databases_create": {
+    "text": "Beheerde databanken aanmaken",
+    "scope": "permission"
+  },
   "files_read": {
     "text": "Bestanden lezen",
     "scope": "capability"
@@ -6708,10 +6754,16 @@
       "scope": "preview_deployment"
     }
   ],
-  "docker": {
-    "text": "Docker",
-    "scope": "host_runtime"
-  },
+  "docker": [
+    {
+      "text": "Docker",
+      "scope": "host_runtime"
+    },
+    {
+      "text": "Docker",
+      "scope": "site_type"
+    }
+  ],
   "incus": {
     "text": "Incus",
     "scope": "host_runtime"
