@@ -24,8 +24,9 @@ import java.util.Map;
  * {@link DockerClient} for each. The implicit {@code local} host is ensured to exist; remote hosts
  * are reached over SSH.
  *
- * AIDEV-NOTE: the admin LIST reads STORED host state ({@link #storedStates}) -- it
- * never probes a daemon, because the old per-render serial probe (8s ceiling PER
+ * AIDEV-NOTE: the admin LIST reads STORED host state -- it renders the host ROWS through
+ * {@code ServerResource.storedStatus} and never probes a daemon, because the old
+ * per-render serial probe (8s ceiling PER
  * host) hung the page on one down remote and its exception-to-null swallowing made
  * host-down, bad-key, host-key-changed, docker-absent and DNS failure one
  * indistinguishable state with ZEROED capacity -- worse than unknown, because an
@@ -69,7 +70,19 @@ public class ServerService extends DatasourceScoped {
                           String osType, String architecture,
                           @Nullable String errorKind, @Nullable String errorDetail) {}
 
-    /** One host's STORED state: what the list and any allocator read, no daemon involved. */
+    /**
+     * One host's STORED state, projected off the record with no daemon involved.
+     *
+     * AIDEV-NOTE: it claimed to be "what the list and any allocator read" and was neither.
+     * The admin list renders rows through {@code ServerResource.storedStatus}, placement
+     * reads {@code Row}s through {@code HostAdmission} and {@code InstanceCapacity}, and
+     * {@link #storedStates} has exactly one caller in the repo: {@code HostRecordTest},
+     * which uses it as the regression guard that a daemon-free projection of every host
+     * really does construct no {@code DockerClient}. That guard is the only reason this
+     * stays; a docblock naming readers it does not have is the same defect shape as a step
+     * reporting success it did not earn. Give it real callers or delete it -- do not
+     * restore the claim.
+     */
     public record HostState(String name, String mode, String sshTarget,
                             String admission, String posture, boolean preflightOk,
                             @Nullable Instant probedAt, @Nullable Instant lastSeenAt,

@@ -17,14 +17,16 @@ public final class NotificationEvents {
     // StackRuntime raises this on active -> degraded|failed; without it here a channel
     // with a subscription list could never route it (plan Phase 3 "fix in passing").
     public static final String STACK_HEALTH = "stack_health";
+    /** HostProbe raises this the first time a host stops answering, never on every retry. */
+    public static final String HOST_UNREACHABLE = "host_unreachable";
     public static final String AUTO_BAN_BUDGET_EXHAUSTED = "auto_ban_budget_exhausted";
     public static final String SPAMSERVICE_OUTAGE = "spamservice_outage";
     public static final String SPAMSERVICE_RECOVERED = "spamservice_recovered";
 
     public static final List<String> ALL = List.of(
         CERT_RENEWAL_FAILED, CERT_EXPIRING, DEPLOY_FAILED, BACKUP_FAILED, PROCESS_CRASH_LOOP,
-        INSTANCE_CRASH_LOOP, STACK_HEALTH, AUTO_BAN_BUDGET_EXHAUSTED, SPAMSERVICE_OUTAGE,
-        SPAMSERVICE_RECOVERED);
+        INSTANCE_CRASH_LOOP, STACK_HEALTH, HOST_UNREACHABLE, AUTO_BAN_BUDGET_EXHAUSTED,
+        SPAMSERVICE_OUTAGE, SPAMSERVICE_RECOVERED);
 
     private NotificationEvents() {}
 
