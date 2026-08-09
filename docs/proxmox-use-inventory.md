@@ -774,6 +774,21 @@ gate's staleness is deliberately NOT bounded in the same move: that would
 silently cordon hosts already carrying production work, which is an availability
 decision an operator makes, not a wave.
 
+UPDATE 2026-08-09 -- the HEARTBEAT is now bounded too, and it is a different
+question from either of the above. `hosts.contact_max_age_minutes` (default 180)
+is how long a host may go without ANSWERING before `requireInstancePlacement`
+refuses it by name (`host_contact_lapsed`); `capacity.facts_max_age_hours` is how
+old a MEASUREMENT may be before it stops being a budget; the kernel-truth gate
+still has no bound at all because it pairs stored evidence with a live read of the
+declared lane. The heartbeat write had been sound since the Incus presence sweep
+landed and NOTHING read it against a clock, so a host that stopped answering kept
+receiving placements with a status string no code consulted. It refuses rather
+than deprioritises because the chooser walks every host -- a lapsed host moves the
+placement instead of failing it -- and it still cordons nothing, rewrites no
+admission column and blocks no stop, destroy or cleanup path. `HostProbe` also
+raises `host_unreachable` on the TRANSITION into failure, so the first silence is
+an alert rather than a column.
+
 **[code]** `server/instance/InstanceCapacity.java`,
 `server/instance/InstancePlacement.java`, `common/HohenheimSettings.java`
 (`Capacity` group), `server/migration/M080_InstanceCapacity.java`,

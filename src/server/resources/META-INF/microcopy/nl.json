@@ -7461,5 +7461,25 @@
   "database_quota_reached": {
     "text": "Databankquotum bereikt: {$used} van {$limit} in gebruik",
     "scope": "violations"
+  },
+  "host_quarantined_status": {
+    "text": "IN QUARANTAINE - {$admission}",
+    "scope": "server"
+  },
+  "host_contact_lapsed_status": {
+    "text": "{$docker} - {$minutes} min stil - {$admission}",
+    "scope": "server"
+  },
+  "host_local_socket": {
+    "text": " Dit record spreekt de EIGEN daemon van de controller aan via {$socket}, dus elk oordeel hierboven gaat over de machine waarop hohenheim draait, hoe deze host ook heet.",
+    "scope": "server"
+  },
+  "kernel_isolation_proven_at": {
+    "text": "Geverifieerd in de kernel: een preflight heeft om {$when} een transactie op de eigen nftables van deze host uitgevoerd.",
+    "scope": "server"
+  },
+  "host_contact_lapsed": {
+    "text": "Host '{$name}' heeft {$minutes} minuten geleden voor het laatst geantwoord, voorbij de contactgrens; er wordt geen nieuwe workload geplaatst tot hij weer antwoordt",
+    "scope": "violations"
   }
 }

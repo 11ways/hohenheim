@@ -48,6 +48,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -258,11 +259,24 @@ public final class ServerResource extends RowResource {
         return super.listRows(applied, accessContext);
     }
 
-    /** STORED state per host: health columns and the last preflight, never a live probe. */
+    /**
+     * STORED state per host: health columns and the last preflight, never a live probe.
+     *
+     * AIDEV-NOTE: QUARANTINE is asked FIRST and off its own column, because it was
+     * invisible here. This branched on {@code last_error_kind} alone, and since M078 moved
+     * the quarantine verdict to {@code quarantined_at}, a successful probe CLEARS the error
+     * kind -- so a quarantined-but-reachable host rendered in the list with no quarantine
+     * word anywhere, visible only to an operator who opened the form and read
+     * {@code pinState}. A security state a later success hides is worse than no state.
+     */
     private @NonNull String storedStatus(@NonNull Row row) {
         String admission = String.valueOf((Object) row.get(ServerModel.ADMISSION));
         String errorKind = row.get(ServerModel.LAST_ERROR_KIND);
         Instant lastSeen = row.get(ServerModel.LAST_SEEN_AT);
+        if (row.get(ServerModel.QUARANTINED_AT) != null) {
+            return hostCopy(Microcopy.of("host_quarantined_status")
+                .withArg("admission", admission));
+        }
         if (errorKind != null && !errorKind.isBlank()) {
             return hostCopy(Microcopy.of("host_error_state")
                 .withArg("kind", errorKind)
@@ -277,9 +291,28 @@ public final class ServerResource extends RowResource {
         String daemon = capabilities instanceof Map<?, ?> map
             && map.get(versionKey) instanceof String version && !version.isBlank()
             ? label + " " + version : label;
+        // A host whose last contact is older than the placement bound looks identical to a
+        // healthy one here otherwise: same version, same admission, no error kind. The
+        // refusal an operator would otherwise only meet at deploy is stated where they read.
+        if (lapsed(row)) {
+            return hostCopy(Microcopy.of("host_contact_lapsed_status")
+                .withArg("docker", daemon)
+                .withArg("minutes", Duration.between(lastSeen, Instant.now()).toMinutes())
+                .withArg("admission", admission));
+        }
         return hostCopy(Microcopy.of("host_stored_state")
             .withArg("docker", daemon)
             .withArg("admission", admission));
+    }
+
+    /** Whether this host is past the declared contact bound, asked through the GATE itself. */
+    private static boolean lapsed(@NonNull Row row) {
+        try {
+            HostAdmission.requireRecentContact(row);
+            return false;
+        } catch (Violations refused) {
+            return true;
+        }
     }
 
     /**
@@ -304,22 +337,45 @@ public final class ServerResource extends RowResource {
      * Whether kernel-truth isolation verification is possible here, PROVEN, or simply not
      * required -- so an operator never has to infer a placement refusal from a preflight
      * check buried in the stored capabilities.
+     *
+     * AIDEV-NOTE: it names the MACHINE the verdict is about, which is the answer to a
+     * record that can green-light every gate about the wrong host. A blank
+     * {@code incus_url} means the controller's OWN unix socket
+     * ({@link IncusEndpoint#parse}), the shipping native-deploy shape -- but the row still
+     * carries whatever name the operator typed, so a record named after a remote machine
+     * needs no pin, is stamped alive by the reaper, has its capacity measured and passes
+     * kernel truth through the local sudo runner, all about the controller. Refusing on a
+     * name mismatch would be guessing (the record is USUALLY named after the machine it
+     * runs on); saying which endpoint the verdict came from is not.
+     *
+     * AIDEV-NOTE: it also states WHEN the evidence was produced, because
+     * {@link HostPreflight#store} now merges: a stored verdict can outlive the run that
+     * stamped {@code probed_at}, and evidence whose age cannot be read is evidence that
+     * silently reads as current.
      */
     private @NonNull String kernelIsolationState(@NonNull String name) {
         Row row = Models.get(ServerModel.class).findByName(name);
         if (row == null || !ServerModel.isIncus(row)) {
             return "";
         }
+        String endpoint = ServerModel.isIncusHttps(row) ? ""
+            : hostCopy(Microcopy.of("host_local_socket")
+                .withArg("socket", IncusEndpoint.of(row).describe()));
         if (!ServerModel.acceptsTenantWorkloads(row)) {
-            return hostCopy(Microcopy.of("kernel_isolation_optional"));
+            return hostCopy(Microcopy.of("kernel_isolation_optional")) + endpoint;
         }
         if (!IncusKernelIsolation.laneAvailable(row)) {
-            return hostCopy(Microcopy.of("kernel_isolation_missing"));
+            return hostCopy(Microcopy.of("kernel_isolation_missing")) + endpoint;
         }
         boolean proven = HostPreflight.STATUS_PASS.equals(
             HostPreflight.storedCheckStatus(row, IncusPreflight.KERNEL_LANE_CHECK));
-        return hostCopy(Microcopy.of(proven
-            ? "kernel_isolation_proven" : "kernel_isolation_unproven"));
+        Instant provenAt = HostPreflight.storedCheckAt(row, IncusPreflight.KERNEL_LANE_CHECK);
+        String verdict = proven && provenAt != null
+            ? hostCopy(Microcopy.of("kernel_isolation_proven_at")
+                .withArg("when", provenAt.toString()))
+            : hostCopy(Microcopy.of(proven
+                ? "kernel_isolation_proven" : "kernel_isolation_unproven"));
+        return verdict + endpoint;
     }
 
     /** The Incus daemon's pinned server certificate, read the same way. */
