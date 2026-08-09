@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -38,6 +39,15 @@ import java.util.Map;
  * and the typed confirmation is a property of the CALLER
  * ({@code InstanceResource#reinstallAction}), not of this class -- nothing here checks
  * for one, which is why every future caller must supply its own interlock.
+ *
+ * AIDEV-NOTE: 2026-08-09 -- the AUTHORIZATION was missing entirely until now. Every other
+ * capability-sensitive instance act asks {@code requireOperationCapability} on the SERVICE
+ * (power, destroy, snapshots, backups, exec, files, devices, even the non-destructive app
+ * update), for the reason HohenheimAccess spells out: a gate that lives on the surface
+ * instead of the service is one new caller away from a wider door. Install and reinstall
+ * had none, so the one lane that WIPES a tenant's volumes was the least gated of them.
+ * install/reinstall now require CONFIG, and a {@code clear} reinstall additionally
+ * requires DESTROY before it touches anything.
  */
 public final class InstanceInstalls {
 
@@ -67,6 +77,7 @@ public final class InstanceInstalls {
      * @throws Violations naming every refusal or failure; the record survives all of them
      */
     public void install(int instanceId) {
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         Row template = requireTemplate(resolved.row());
@@ -90,6 +101,7 @@ public final class InstanceInstalls {
      * human.
      */
     public void reinstall(int instanceId) {
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         Row template = requireTemplate(resolved.row());
@@ -108,6 +120,11 @@ public final class InstanceInstalls {
 
         if (InstanceTemplateModel.REINSTALL_CLEAR
                 .equals(template.get(InstanceTemplateModel.REINSTALL_POLICY))) {
+            // The WIPE needs the wipe authority, and it is asked for BEFORE anything is
+            // destroyed: a clear reinstall is irreversible for the tenant's own data,
+            // which is exactly what DESTROY answers for. CONFIG alone (asked at the top,
+            // as for every other "author what the instance is" act) does not buy it.
+            HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.DESTROY);
             // A driver with named volumes must be able to wipe them owner-verified; a
             // rootfs-stateful driver (incus) has none -- destroying the workload IS the
             // wipe there, and the install re-creates the rootfs from the image.

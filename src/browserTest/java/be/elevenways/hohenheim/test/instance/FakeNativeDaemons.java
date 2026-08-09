@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.ImageIdentity;
+import be.elevenways.hohenheim.server.runtime.InstallSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
@@ -43,8 +44,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The shared in-memory "daemons" every daemon-free instance journey runs against: two
- * fake instance kinds (one WITH NativeSnapshotSupport, one deliberately without) whose
- * workloads live in a per-host-name map this class owns.
+ * fake instance kinds over ONE workload store -- native snapshots + install steps
+ * ({@link FakeNativeKind}) and a driver that supports NEITHER ({@link FakeVolumeKind},
+ * the "refused by name" lane) -- whose workloads live in a per-host-name map this class
+ * owns.
  *
  * AIDEV-NOTE: shared rather than copied. Kinds register into the ONE global InstanceKinds
  * registry, so two test classes each declaring their own `hohenheim:fake_native` would
@@ -114,6 +117,28 @@ final class FakeNativeDaemons {
      * the admin form for all of it.
      */
     static final AtomicReference<Runnable> DURING_SNAPSHOT = new AtomicReference<>();
+
+    // -- the install lane -----------------------------------------------------
+
+    /**
+     * handle -> every install script this daemon ran there, in order. The install
+     * workload is a SIBLING of the instance's own: it runs whether or not the workload
+     * itself still exists, which is precisely what a clear reinstall depends on.
+     */
+    static final Map<String, List<String>> INSTALL_RUNS = new ConcurrentHashMap<>();
+
+    /** handle -> the environment the last install run received (the instance variables). */
+    static final Map<String, Map<String, String>> INSTALL_ENV = new ConcurrentHashMap<>();
+
+    /** Handles whose install script must EXIT NON-ZERO: a failing install step. */
+    static final Set<String> INSTALL_FAILS = ConcurrentHashMap.newKeySet();
+
+    /** Forget every recorded install run; call between journeys. */
+    static void resetInstalls() {
+        INSTALL_RUNS.clear();
+        INSTALL_ENV.clear();
+        INSTALL_FAILS.clear();
+    }
 
     /** Forget every scripted stream and failure; call between journeys. */
     static void resetStreams() {
@@ -199,7 +224,7 @@ final class FakeNativeDaemons {
 
     static final class FakeNativeRuntime
             implements InstanceRuntime, NativeSnapshotSupport, StatsStreamSupport,
-                       ConsoleStreamSupport {
+                       ConsoleStreamSupport, InstallSupport {
 
         private final Map<String, FakeWorkload> daemon;
 
@@ -346,6 +371,33 @@ final class FakeNativeDaemons {
         @Override
         public @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec) {
             return new ImageIdentity(spec.image(), "fake-fingerprint");
+        }
+
+        // -- InstallSupport ---------------------------------------------------
+
+        /**
+         * Run the template's install script in a sibling that shares the instance's
+         * volumes. The write into {@code data} IS the script's effect on those volumes,
+         * which is what makes "the clear policy wiped them" observable: a destroyed
+         * workload took its data with it, so the re-run starts from nothing.
+         */
+        @Override
+        public @NonNull InstallOutcome runInstall(@NonNull InstanceSpec spec,
+                                                  @NonNull String installImage,
+                                                  @NonNull String script,
+                                                  @NonNull Map<String, String> env,
+                                                  long timeoutMs) {
+            String handle = spec.handle();
+            INSTALL_RUNS.computeIfAbsent(handle, key -> new ArrayList<>()).add(script);
+            INSTALL_ENV.put(handle, new LinkedHashMap<>(env));
+            if (INSTALL_FAILS.contains(handle)) {
+                return new InstallOutcome(1, "install script failed");
+            }
+            FakeWorkload workload = this.daemon.get(handle);
+            if (workload != null) {
+                workload.data.put("installed", script);
+            }
+            return new InstallOutcome(0, "install script ok");
         }
 
         // -- StatsStreamSupport -----------------------------------------------
