@@ -128,8 +128,23 @@ class SiteAccessControlTest extends HohenheimTestBase {
         assertThat(limitedPost("/sites/" + siteAId + "/processes/start").statusCode()).isEqualTo(403);
         // Installation-scoped sensitive endpoints are admin-only.
         assertThat(limitedGet("/certificates/1/download").statusCode()).isEqualTo(403);
-        assertThat(limitedGet("/databases/somedb/backup").statusCode()).isEqualTo(403);
         assertThat(limitedPost("/admin/certificates-request").statusCode()).isEqualTo(403);
+
+        // AIDEV-NOTE: the managed-database dump is deliberately NOT admin-only any more
+        // (ccd1bd5): it is requiresLogin and answers to the per-database capability, and
+        // its URL is keyed by NAME, so absence and refusal are ONE answer -- a 403 here
+        // would confirm which database names exist to any logged-in caller. What this
+        // journey pins is that identity plus the state: refused, and no dump on the wire.
+        HttpResponse<String> dump = limitedGet("/databases/somedb/backup");
+        assertThat(dump.statusCode())
+            .as("a database the caller holds no capability on is MISSING, never forbidden")
+            .isEqualTo(404);
+        assertThat(dump.headers().firstValue("Content-Disposition"))
+            .as("and no dump crossed the wire")
+            .isEmpty();
+        assertThat(dump.body())
+            .as("and the refusal never echoes the requested name back")
+            .doesNotContain("somedb");
 
         RecordGrants.grant("user", limitedUserId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
