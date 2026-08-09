@@ -1,0 +1,125 @@
+package be.elevenways.hohenheim.test;
+
+import be.elevenways.hohenheim.instance.InstanceKindRegistry;
+import be.elevenways.hohenheim.instance.InstanceKindInfo;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.sitetype.SiteTypeInfo;
+import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.guard.CommentMode;
+import be.elevenways.protoblast.guard.NamedPattern;
+import be.elevenways.protoblast.guard.ScanResult;
+import be.elevenways.protoblast.guard.ScanRoot;
+import be.elevenways.protoblast.guard.SourceRule;
+import be.elevenways.protoblast.guard.SourceRuleScanner;
+import be.elevenways.protoblast.guard.Suppression;
+import be.elevenways.protoblast.guard.Violation;
+import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * {@code TypeDefinition.getDisplayName()} is an English literal by contract, so nothing
+ * server-side may CALL it -- {@code getLabel()} is the only reading a user ever sees.
+ *
+ * AIDEV-NOTE: this exists because two refusals embedded a display name as an argument of
+ * a LOCALIZED violation (OwnedInstances instance_kind_owner_managed, SiteDatabaseResource
+ * site_type_no_injection, 2026-08-09): a Dutch reader got a Dutch sentence with "Site
+ * container" inside it. The guard is deliberately wider than that one shape -- it bans
+ * the CALL, not just the withArg spelling -- because a display name is equally wrong in a
+ * page title, a toast or a flash, and a rule that named only withArg would have to be
+ * re-widened at every new call shape. Zero legitimate call sites exist; a genuinely
+ * non-user-facing one declares itself with the same-line marker.
+ */
+class DisplayNameLocalizationTest {
+
+    /** A CALL of getDisplayName; the declaration carries no dot and never matches. */
+    private static final Pattern CALL = Pattern.compile("\\.getDisplayName\\(\\)");
+
+    @BeforeAll
+    static void boot() {
+        HohenheimTestRuntime.ensureBooted();
+    }
+
+    @Test
+    void noServerCodeRendersATypeDefinitionsEnglishDisplayName() throws IOException {
+        Path server = Path.of("src/server/java/be/elevenways/hohenheim");
+        Path common = Path.of("src/common/java/be/elevenways/hohenheim");
+        assertThat(Files.isDirectory(server) && Files.isDirectory(common))
+            .as("the scan needs the hohenheim project dir as its working directory")
+            .isTrue();
+
+        SourceRule rule = SourceRule.builder("display-name-localization")
+            .consequence("getDisplayName() is an English literal: reading it into anything"
+                + " a user sees renders half-translated copy. Use getLabel(), which is a"
+                + " Microcopy and resolves in the reader's locale even as a message argument")
+            .root(ScanRoot.of(server, "server"))
+            .root(ScanRoot.of(common, "common"))
+            .extensions("java")
+            .commentMode(CommentMode.STRIP_BLOCK_AWARE)
+            .suppression(Suppression.sameLine("display-name-ok"))
+            .pattern(NamedPattern.of("display-name-call", CALL, "server"))
+            .pattern(NamedPattern.of("display-name-call", CALL, "common"))
+            .build();
+
+        ScanResult result = SourceRuleScanner.scan(rule);
+        assertThat(result.scannedFiles())
+            .as("the scan actually walked the source tree (a zero count is vacuous)")
+            .isGreaterThan(20);
+        assertThat(result.violations())
+            .as(() -> "English display names read into user-facing text:\n"
+                + String.join("\n", result.violations().stream().map(Violation::format).toList()))
+            .isEmpty();
+    }
+
+    /**
+     * The half the scanner cannot see: every registered kind and site type actually HAS
+     * copy behind its label, in en and nl. A getLabel() override pointing at a key that
+     * was never written renders the raw key, which is worse than the English it replaced.
+     */
+    @Test
+    void everyRegisteredTypeLabelResolvesInBothLocales() {
+        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        List<String> broken = new ArrayList<>();
+
+        // Touch the registration hooks so BlastAutoLoadInit has populated both registries.
+        assertThat(InstanceKinds.getHandler("hohenheim:docker_container"))
+            .as("the instance-kind registry is populated (an empty walk is vacuous)")
+            .isNotNull();
+        assertThat(SiteTypes.getHandler("hohenheim:docker"))
+            .as("the site-type registry is populated (an empty walk is vacuous)")
+            .isNotNull();
+
+        for (InstanceKindInfo handler : InstanceKindRegistry.REGISTRY) {
+            check(handler.getLabel(), "instance kind " + handler.typeId(), catalogs, broken);
+        }
+        for (SiteTypeInfo type : SiteTypeRegistry.REGISTRY) {
+            check(type.getLabel(), "site type " + type.typeId(), catalogs, broken);
+        }
+
+        assertThat(broken)
+            .as("every type label resolves to real copy in en AND nl")
+            .isEmpty();
+    }
+
+    private static void check(Microcopy label, String what, DefaultCatalogLoader catalogs,
+                              List<String> broken) {
+        for (String tag : List.of("en", "nl")) {
+            String resolved = label.resolve(LocaleChain.ofTags(tag), catalogs);
+            if (resolved.equals(label.key()) && !label.isLiteral()) {
+                broken.add(tag + " " + what + " -> '" + resolved + "'");
+            }
+        }
+    }
+}

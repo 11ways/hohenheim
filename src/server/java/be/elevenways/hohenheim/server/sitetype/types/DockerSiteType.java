@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
@@ -14,6 +15,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 
 import java.util.Map;
 import be.elevenways.zenit.common.ui.Icon;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Runs a container image as a managed site, reverse-proxied via a published port.
@@ -110,6 +112,11 @@ public class DockerSiteType implements SiteTypeHandler {
 
     @Override
     public String getDisplayName() { return "Docker"; }
+
+    @Override
+    public @NonNull Microcopy getLabel() {
+        return Microcopy.of("docker").withFilter("scope", "site_type");
+    }
 
     @Override
     public String getDescription() { return "Run a container image as a managed site"; }

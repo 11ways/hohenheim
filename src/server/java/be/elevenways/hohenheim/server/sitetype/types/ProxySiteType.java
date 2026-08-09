@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
@@ -24,6 +25,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.PathKind;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Forwards requests to an upstream HTTP/HTTPS server.
@@ -92,6 +94,11 @@ public class ProxySiteType implements SiteTypeHandler {
 
     @Override
     public String getDisplayName() { return "Proxy"; }
+
+    @Override
+    public @NonNull Microcopy getLabel() {
+        return Microcopy.of("proxy").withFilter("scope", "site_type");
+    }
 
     @Override
     public String getDescription() { return "Forward requests to an upstream server"; }

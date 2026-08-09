@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughTarget;
@@ -13,6 +14,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.validator.Range;
 
 import java.util.Map;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /** Passes the original TLS stream to a backend selected by the domain's SNI pattern. */
 public final class TlsPassthroughSiteType implements TlsPassthroughProvider {
@@ -48,6 +50,10 @@ public final class TlsPassthroughSiteType implements TlsPassthroughProvider {
 
     @Override public Identifier typeId() { return ID; }
     @Override public String getDisplayName() { return "TLS passthrough"; }
+
+    @Override public @NonNull Microcopy getLabel() {
+        return Microcopy.of("tls_passthrough").withFilter("scope", "site_type");
+    }
     @Override public String getDescription() { return "Forward untouched TLS streams selected by SNI"; }
     @Override public Icon getIcon() { return Icon.of("shuffle"); }
     @Override public String getColor() { return "cyan"; }

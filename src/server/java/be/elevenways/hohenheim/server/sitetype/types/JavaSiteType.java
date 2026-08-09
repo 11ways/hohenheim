@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimPaths;
@@ -21,6 +22,7 @@ import be.elevenways.zenit.common.validation.PathKind;
 import java.io.File;
 import java.util.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Runs a JVM application (a fat/shadow jar) as a managed process; a Zenit app
@@ -106,6 +108,11 @@ public class JavaSiteType implements SiteTypeHandler {
 
     @Override
     public String getDisplayName() { return "Java / Zenit"; }
+
+    @Override
+    public @NonNull Microcopy getLabel() {
+        return Microcopy.of("java").withFilter("scope", "site_type");
+    }
 
     @Override
     public String getDescription() { return "Run a JVM application (fat jar); Zenit apps get their port injected"; }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -13,6 +14,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.PathKind;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Serves static files from a directory.
@@ -54,6 +56,11 @@ public class StaticSiteType implements SiteTypeHandler {
 
     @Override
     public String getDisplayName() { return "Static"; }
+
+    @Override
+    public @NonNull Microcopy getLabel() {
+        return Microcopy.of("static").withFilter("scope", "site_type");
+    }
 
     @Override
     public String getDescription() { return "Serve static files from a directory"; }

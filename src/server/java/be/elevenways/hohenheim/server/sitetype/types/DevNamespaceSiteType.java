@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.net.Hostnames;
@@ -20,6 +21,7 @@ import io.undertow.util.Headers;
 
 import java.util.Locale;
 import java.util.Map;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * A dev namespace: one wildcard domain (e.g. *.dev.example.com) whose
@@ -45,6 +47,11 @@ public class DevNamespaceSiteType implements SiteTypeHandler {
 
     @Override
     public String getDisplayName() { return "Dev namespace"; }
+
+    @Override
+    public @NonNull Microcopy getLabel() {
+        return Microcopy.of("dev_namespace").withFilter("scope", "site_type");
+    }
 
     @Override
     public String getDescription() { return "Serve registered remote dev servers on wildcard subdomains"; }

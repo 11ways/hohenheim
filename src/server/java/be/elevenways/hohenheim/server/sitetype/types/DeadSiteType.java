@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype.types;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -9,6 +10,7 @@ import io.undertow.util.Headers;
 
 import java.util.Map;
 import be.elevenways.zenit.common.ui.Icon;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Returns a 404 response for all requests. Useful for parking domains.
@@ -29,6 +31,11 @@ public class DeadSiteType implements SiteTypeHandler {
 
     @Override
     public String getDisplayName() { return "Dead"; }
+
+    @Override
+    public @NonNull Microcopy getLabel() {
+        return Microcopy.of("dead").withFilter("scope", "site_type");
+    }
 
     @Override
     public String getDescription() { return "Return 404 for all requests (park domain)"; }

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
+import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -423,7 +424,14 @@ public class ServerMain {
             // an operator's iron, and the per-owner quota is what bounds how many.
             KnownPermission.of(
                 HohenheimAccess.INSTANCES_CREATE.value(),
-                Microcopy.of("hohenheim_instances_create").withFilter("scope", "permission")));
+                Microcopy.of("hohenheim_instances_create").withFilter("scope", "permission")),
+            // The managed-database sibling of INSTANCES_CREATE, and registered for the
+            // same reason: this block IS the grants editor's autocomplete corpus
+            // (KnownPermissions.all()), so an enforced permission missing from it is a
+            // permission no admin can find. PermissionVocabularyTest is the guard.
+            KnownPermission.of(
+                TenantDatabases.DATABASES_CREATE.value(),
+                Microcopy.of("hohenheim_databases_create").withFilter("scope", "permission")));
         ProteusRealmSuggestions.register();
     }
 
