@@ -191,10 +191,16 @@ public final class InstancePlacement {
                 unmeasured = serverId;
                 continue;
             }
+            // The SAME ceiling the write is judged against, never a second expression that
+            // happens to agree: this used to compare against the bare budget while
+            // InstanceCapacity.reserve subtracted the managed-process tier's bookings, so
+            // on any host running child processes placement could choose a host whose
+            // write then refused host_capacity_reached by name.
+            long bookable = InstanceCapacity.bookableMbOn(serverId, budget);
             long booked = InstanceCapacity.bookedMbOn(serverId);
-            if (booked + footprint > budget) {
+            if (booked + footprint > bookable) {
                 somethingWasFull = true;
-                largestFreeMb = Math.max(largestFreeMb, budget - booked);
+                largestFreeMb = Math.max(largestFreeMb, bookable - booked);
                 continue;
             }
             if (booked < chosenLoad) {
