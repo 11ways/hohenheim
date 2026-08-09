@@ -4072,7 +4072,10 @@ network, quota, ownership, secret and durable-operation mechanisms.
   (`hohenheim.project-adoption`): one project per distinct non-empty owner
   set over live sites+instances, members = exactly those subjects (reach
   preserved by construction, walk-verified in ProjectAdoptionTest), direct
-  grants revoked, quota override rows + charged buckets + released-claim
+  grants revoked, quota override rows + charged buckets (BOTH owner dimensions
+  since 2026-08-09 -- the slot AND the M088 workload memory; moving only the
+  slot left the old owner charged forever and the new owner charged nothing,
+  and the eventual release then landed on the wrong bucket) + released-claim
   former-owner packs rewritten in the same pass; operator-owned (empty-set)
   records deliberately untouched -- wrapping the operator in a project would
   break the empty-set equality the admin wildcard/carve-out routing rests on.
