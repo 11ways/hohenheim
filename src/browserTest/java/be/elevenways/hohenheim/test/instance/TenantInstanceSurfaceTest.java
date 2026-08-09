@@ -257,11 +257,27 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             .as("step 3: and neither carries the other tenant's instance name")
             .doesNotContain(PREFIX + "bravo");
 
-        // 4. The subpages carry the same scope; a tab is not a side door.
+        // 4. The subpages carry the same scope; a tab is not a side door. The CONTENT is
+        //    the assertion here, exactly as it is for the record itself: the answer must
+        //    be the SAME one an id nobody owns gets, so a tab can never become the
+        //    existence oracle the detail page is not. (The name check below is only a
+        //    backstop -- today's refusal is a generic envelope that structurally carries
+        //    no record data, and a bare doesNotContain against it would prove nothing.)
         for (String tab : new String[] {"console", "provisioning", "schedules"}) {
-            assertThat(tenantGet("/manage/instances/" + instanceBId + "/page/" + tab).statusCode())
+            HttpResponse<String> foreignTab =
+                tenantGet("/manage/instances/" + instanceBId + "/page/" + tab);
+            HttpResponse<String> absentTab =
+                tenantGet("/manage/instances/" + absentId + "/page/" + tab);
+            assertThat(foreignTab.statusCode())
                 .as("step 4: the " + tab + " tab of a foreign instance is missing too")
                 .isEqualTo(404);
+            assertThat(foreignTab.body())
+                .as("step 4: and the " + tab + " tab answers BYTE-IDENTICALLY to a tab of"
+                    + " an id nobody owns -- no per-record detail reaches the refusal")
+                .isEqualTo(absentTab.body());
+            assertThat(foreignTab.body())
+                .as("step 4: which in particular never carries tenant B's name")
+                .doesNotContain(PREFIX + "bravo");
         }
     }
 
@@ -382,6 +398,9 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             + theirs.get(RecordScheduleModel.ID));
         assertThat(foreign.statusCode())
             .as("step 2: opening it directly reads as missing").isEqualTo(404);
+        assertThat(foreign.body())
+            .as("step 2: and the refusal body never names tenant B's instance")
+            .doesNotContain(PREFIX + "theirs");
 
         schedules.delete(theirs.get(RecordScheduleModel.ID));
         schedules.delete(mine.get(RecordScheduleModel.ID));

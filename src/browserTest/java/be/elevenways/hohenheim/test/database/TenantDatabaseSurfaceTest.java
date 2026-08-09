@@ -416,6 +416,11 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         assertThat(stolen.statusCode())
             .as("step 1: another tenant's dump is MISSING, not forbidden")
             .isEqualTo(404);
+        // The BODY is the assertion too: a 404 that still echoes the requested name
+        // confirms it exists, which is the oracle this refusal exists to close.
+        assertThat(stolen.body())
+            .as("step 1: and the refusal never echoes the database name back")
+            .doesNotContain(databaseAName);
 
         // 2. And a name that does not exist answers identically, so the URL is not an
         //    oracle over other tenants' database names.
