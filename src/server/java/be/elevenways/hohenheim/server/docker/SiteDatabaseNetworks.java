@@ -283,6 +283,7 @@ public final class SiteDatabaseNetworks {
                     }
                 }
                 return false;
-            });
+            },
+            null);   // the release container is stopped or replaced: no live port to correct
     }
 }

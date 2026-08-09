@@ -44,23 +44,35 @@ final class DatabaseLinkNetworks {
     }
 
     /**
+     * The CONSUMER side of a sweep whose own container is still RUNNING, so its own
+     * published port moved with the disconnect exactly as the database's did.
+     *
+     * AIDEV-NOTE: the site lane passes null and must keep doing so -- it only ever sweeps
+     * once its release container is stopped or replaced, so there is no live port to
+     * correct. The instance lane sweeps on DETACH, against a container that keeps running,
+     * which is the whole reason this parameter exists.
+     */
+    record Consumer(int instanceId, @NonNull String handle) {}
+
+    /**
      * Remove every link network under {@code handlePrefix} on one server whose owner
      * relationship no longer exists, and correct the published port of every database
      * whose membership the removal changed.
      *
-     * Runs only when the members it disconnects are already stopped or replaced --
-     * disconnecting a RUNNING container moves its published port under whoever dials it.
-     *
      * @param stillLive answers, for the database id parsed out of a handle, whether the
      *        owning relationship survives; ignored when {@code everything} is true
+     * @param consumer the still-running owner whose own published port the disconnect
+     *        moved, or null when its container is already stopped or replaced
      * @throws IOException when the daemon cannot be reached or a removal fails
      */
     static void sweepOnServer(@NonNull String handlePrefix, @NonNull String serverName,
                               int serverId, boolean everything,
-                              @NonNull IntPredicate stillLive) throws IOException {
+                              @NonNull IntPredicate stillLive,
+                              @Nullable Consumer consumer) throws IOException {
         DockerClient docker = new ServerService().clientFor(serverName);
         DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker,
             WorkloadNetworkPolicy.forServer(serverName));
+        boolean removedAny = false;
         for (String network : linkNetworksOf(docker, handlePrefix)) {
             String handle = network.substring(0,
                 network.length() - WorkloadNetworks.SUFFIX.length());
@@ -69,11 +81,16 @@ final class DatabaseLinkNetworks {
                 continue;
             }
             runtime.removeLinkNetwork(handle);
+            removedAny = true;
             Blast.log("DB-LINK: removed stale link network", network);
             // The disconnect re-allocated the database's published port; re-observe it.
             if (databaseId != null && DatabaseInstances.handleOf(databaseId) instanceof String h) {
                 refreshDatabasePort(runtime::status, serverId, databaseId, h);
             }
+        }
+        if (removedAny && consumer != null) {
+            refreshInstancePort(runtime::status, serverId, consumer.instanceId(),
+                consumer.handle());
         }
     }
 
@@ -121,8 +138,17 @@ final class DatabaseLinkNetworks {
         if (instance == null) {
             return;
         }
-        Integer instanceId = instance.get(InstanceModel.ID);
-        InstanceStatus status = statuses.status(databaseHandle);
+        refreshInstancePort(statuses, serverId, instance.get(InstanceModel.ID), databaseHandle);
+    }
+
+    /**
+     * {@link #refreshDatabasePort} for any workload: re-observe the published loopback
+     * port of one instance's container and refresh its ledger claim when it moved. A
+     * container that is not running, or publishes nothing, has nothing to correct.
+     */
+    static void refreshInstancePort(@NonNull StatusOf statuses, int serverId,
+                                    @Nullable Integer instanceId, @NonNull String handle) {
+        InstanceStatus status = statuses.status(handle);
         Integer fresh = status.publishedPort();
         if (!status.running() || fresh == null || instanceId == null) {
             return;

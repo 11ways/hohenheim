@@ -212,8 +212,12 @@ public final class InstanceDatabaseNetworks {
 
     /**
      * Remove every link network of the instance whose attachment row no longer exists.
-     * Callers run it once the instance's container is already stopped or replaced --
-     * disconnecting a RUNNING container re-allocates the database's published port.
+     *
+     * Unlike the site lane this DOES run against a still-running container -- a detach
+     * has no release switch to ride, and deferring the disconnect would leave the
+     * workload dialling a database whose authorization row is already gone. Both
+     * ephemeral published ports the disconnect moves (the database's and the instance's
+     * own) are re-observed by the shared sweep.
      *
      * @param everything when true, remove ALL of the instance's link networks regardless
      *        of surviving rows (the instance-destroy shape)
@@ -236,7 +240,9 @@ public final class InstanceDatabaseNetworks {
                         }
                     }
                     return false;
-                });
+                },
+                new DatabaseLinkNetworks.Consumer(instanceId,
+                    ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId)));
         } catch (Exception e) {
             Blast.log("DB-LINK: link-network sweep failed for instance", instanceId,
                 "on server", serverId, "-", e.getMessage());

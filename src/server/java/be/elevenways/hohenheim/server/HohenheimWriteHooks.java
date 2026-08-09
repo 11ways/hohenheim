@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.cms.SiteTerminalCsp;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
+import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
@@ -121,5 +122,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // container spends; databases have no deleted_at, so the remove pairing is the one
         // release lane (TenantDatabases.abandon's compensating delete included).
         DatabaseQuota.install();
+        // Detaching a database from an INSTANCE revokes the workload's reachability at
+        // the daemon in the same breath as the row delete; the instance tier has no
+        // release switch to defer the sweep to, so deferring it would fail open.
+        InstanceDatabaseLinks.install();
     }
 }
