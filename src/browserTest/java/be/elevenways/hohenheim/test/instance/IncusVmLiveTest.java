@@ -56,7 +56,12 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class IncusVmLiveTest {
 
-    private static final String HOST = "live-incus";
+    // AIDEV-NOTE: the record name must be UNIQUE across live classes: the product's
+    // authorized_keys comment is hohenheim-<name> (HostKeys.rotateIdentity), and
+    // LiveIncusHost.authorizeKey sweeps by that comment -- a sibling fork enrolling
+    // the same name deletes this fork's live key (observed 2026-08-10: this class
+    // and IncusInstanceRuntimeLiveTest both used "live-incus").
+    private static final String HOST = "live-incus-vm";
 
     /** Small cloud-variant VM image (cloud-init + incus agent); RAM rules out fatter ones. */
     private static final String VM_IMAGE = "alpine/3.22/cloud";
