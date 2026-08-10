@@ -340,6 +340,16 @@ public final class LiveIncusHost {
      * 2026-08-05, two stale {@code hohenheim-live-incus-kernel} keys on daystrom from
      * runs killed mid-journey. Sweeping by comment makes the install self-healing instead
      * of accumulating root access on a real machine.
+     *
+     * AIDEV-NOTE: the append AND the sweep both run under {@code flock} on
+     * {@code ~/.ssh/authorized_keys.lock}. Twelve Incus live classes each install and
+     * sweep a key and browserTestIsolated runs up to 4 parallel forks against the SAME
+     * host, so an unlocked sweep (grep to .tmp, mv back) that read the file before a
+     * sibling's append silently discarded that append at the mv. The product lane runs
+     * IdentitiesOnly with the per-host key, so a lost line surfaces as exactly
+     * "Permission denied (publickey)" -- the failure recorded for IncusVmLiveTest and
+     * IncusWindowsTemplateLiveTest as "environmental, cause unknown". The same race could
+     * drop the OPERATOR key line and lock the fixture out of the host entirely.
      */
     public void authorizeKey(String publicKey) throws IOException {
         String line = publicKey.trim().replace("'", "");
@@ -347,7 +357,8 @@ public final class LiveIncusHost {
         deauthorizeComment(commentOf(line));
         ssh(List.of("sh", "-c", "'mkdir -p ~/.ssh && chmod 700 ~/.ssh &&"
             + " touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys &&"
-            + " echo \"" + line + "\" >> ~/.ssh/authorized_keys'"));
+            + " flock ~/.ssh/authorized_keys.lock sh -c"
+            + " \"echo \\\"" + line + "\\\" >> ~/.ssh/authorized_keys\"'"));
     }
 
     /**
@@ -382,11 +393,14 @@ public final class LiveIncusHost {
             return "no comment to sweep";
         }
         try {
-            // No && between the two: grep exits 1 when it filters everything out, and a
-            // cleanup that silently skips its own mv is how the stale keys accumulated.
-            ssh(List.of("sh", "-c", "'grep -v \" " + comment + "$\" ~/.ssh/authorized_keys"
+            // No && between grep and mv: grep exits 1 when it filters everything out, and
+            // a cleanup that silently skips its own mv is how the stale keys accumulated.
+            // The whole read-filter-replace runs under the same flock authorizeKey's
+            // append takes, so a concurrent fork's install can never be discarded here.
+            ssh(List.of("sh", "-c", "'flock ~/.ssh/authorized_keys.lock sh -c"
+                + " \"grep -v \\\" " + comment + "\\$\\\" ~/.ssh/authorized_keys"
                 + " > ~/.ssh/authorized_keys.tmp; mv ~/.ssh/authorized_keys.tmp"
-                + " ~/.ssh/authorized_keys'"));
+                + " ~/.ssh/authorized_keys\"'"));
             String remaining = ssh(List.of("sh", "-c", "'grep -c \" " + comment
                 + "$\" ~/.ssh/authorized_keys || true'")).trim();
             return "0".equals(remaining) ? "removed"
