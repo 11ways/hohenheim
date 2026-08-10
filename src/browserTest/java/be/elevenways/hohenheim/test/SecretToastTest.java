@@ -83,7 +83,7 @@ class SecretToastTest {
 
         // 4. The raw auth_sessions.data row (captured BEFORE the render) carries the
         //    flash as a handle, never the plaintext.
-        String rawBefore = rawSessionData(session.id());
+        String rawBefore = rawSessionData(session.id().value());
         String decodedFlash = decodedFlashPayload(rawBefore);
         assertThat(decodedFlash)
             .as("4. the durable flash payload must carry a single-use handle")
@@ -116,7 +116,7 @@ class SecretToastTest {
         assertThat(CmsPageContext.readFlashToast(conduit))
             .as("7. a second render must not re-disclose the key")
             .isNull();
-        assertThat(rawSessionData(session.id()))
+        assertThat(rawSessionData(session.id().value()))
             .as("7. the popped bucket leaves no disclosure reference in the row")
             .doesNotContain(SecretDisclosures.HANDLE_PREFIX)
             .doesNotContain(disclosed);

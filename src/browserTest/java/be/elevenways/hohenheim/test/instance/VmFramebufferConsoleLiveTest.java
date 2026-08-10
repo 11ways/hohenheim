@@ -159,7 +159,7 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
         Session session = Zenit.getSessionStore().create();
         session.set(AuthKeys.USER_ID, (long) userId);
         Zenit.getSessionStore().save(session);
-        return session.id();
+        return session.token().secret();
     }
 
     /** Records the first binary frame and the close code. */

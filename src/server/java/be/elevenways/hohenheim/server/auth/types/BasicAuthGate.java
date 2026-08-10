@@ -77,7 +77,7 @@ public class BasicAuthGate implements SiteAuthGate {
         session.set(ProxyAuthKeys.PROVIDER_SLUG, providerSlug);
         session.set(ProxyAuthKeys.SUBJECT, username);
         store.save(session);
-        ProxySessionSupport.writeSessionCookie(exchange, session.id());
+        ProxySessionSupport.writeSessionCookie(exchange, session);
         return null;
     }
 }

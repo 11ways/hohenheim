@@ -169,7 +169,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         lastCsrf = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, lastCsrf);
         Zenit.getSessionStore().save(session);
-        return session.id();
+        return session.token().secret();
     }
 
     private static int site(String name) {

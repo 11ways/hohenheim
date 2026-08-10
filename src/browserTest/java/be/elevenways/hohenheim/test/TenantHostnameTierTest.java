@@ -103,7 +103,7 @@ class TenantHostnameTierTest extends HohenheimTestBase {
         tenantCsrf = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, tenantCsrf);
         Zenit.getSessionStore().save(session);
-        tenantSession = session.id();
+        tenantSession = session.token().secret();
 
         RecordGrants.grant("user", tenantId, SiteModel.MODEL_ID, ownSiteId,
             HohenheimAccess.MANAGE, true);

@@ -87,7 +87,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         session.set(be.elevenways.zenit.auth.AuthKeys.USER_ID, (long) consoleUserId);
         session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
         Zenit.getSessionStore().save(session);
-        consoleSession = session.id();
+        consoleSession = session.token().secret();
 
         instanceId = instance(PREFIX + "alpha");
 

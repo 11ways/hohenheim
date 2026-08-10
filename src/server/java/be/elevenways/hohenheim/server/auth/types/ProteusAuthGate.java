@@ -9,6 +9,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusPermissions;
 import be.elevenways.zenit.common.session.Session;
+import be.elevenways.zenit.common.session.SessionToken;
 import be.elevenways.zenit.common.session.SessionStore;
 import be.elevenways.hohenheim.server.proxy.ProxyScheme;
 import io.undertow.server.HttpServerExchange;
@@ -98,8 +99,9 @@ public class ProteusAuthGate implements SiteAuthGate {
 
     private SiteAuthDecision handleVerify(HttpServerExchange exchange)
             throws java.io.IOException, InterruptedException {
-        String sessionId = ProxySessionSupport.readSessionCookie(exchange);
-        Session session = sessionId != null ? store.get(sessionId) : null;
+        String presented = ProxySessionSupport.readSessionCookie(exchange);
+        Session session = (presented == null || presented.isEmpty())
+            ? null : store.get(SessionToken.of(presented));
         String rlid = session != null ? session.get(ProxyAuthKeys.PENDING_RLID) : null;
 
         if (session == null || rlid == null) {
@@ -148,7 +150,7 @@ public class ProteusAuthGate implements SiteAuthGate {
         }
         session.set(ProxyAuthKeys.AFTER_LOGIN, afterLogin);
         store.save(session);
-        ProxySessionSupport.writeSessionCookie(exchange, session.id());
+        ProxySessionSupport.writeSessionCookie(exchange, session);
 
         return SiteAuthDecision.redirect(ls.loginUrl());
     }
@@ -159,7 +161,7 @@ public class ProteusAuthGate implements SiteAuthGate {
         session.set(ProxyAuthKeys.PROVIDER_SLUG, providerSlug);
         session.set(ProxyAuthKeys.SUBJECT, subject);
         store.save(session);
-        ProxySessionSupport.writeSessionCookie(exchange, session.id());
+        ProxySessionSupport.writeSessionCookie(exchange, session);
     }
 
     /** Auto-register a persistent remember-me cookie. Best-effort: a failure never fails the login. */

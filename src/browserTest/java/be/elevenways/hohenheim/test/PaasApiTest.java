@@ -132,7 +132,7 @@ class PaasApiTest extends HohenheimTestBase {
         session.set(AuthKeys.USER_ID, tenantAId.longValue());
         session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
         Zenit.getSessionStore().save(session);
-        sessionA = session.id();
+        sessionA = session.token().secret();
     }
 
     @AfterAll

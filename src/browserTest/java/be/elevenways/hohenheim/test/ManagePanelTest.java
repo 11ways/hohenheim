@@ -106,7 +106,7 @@ class ManagePanelTest extends HohenheimTestBase {
         operatorCsrf = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, operatorCsrf);
         Zenit.getSessionStore().save(session);
-        operatorSession = session.id();
+        operatorSession = session.token().secret();
     }
 
     private String baseUrl() {
@@ -455,7 +455,7 @@ class ManagePanelTest extends HohenheimTestBase {
         String csrf = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, csrf);
         Zenit.getSessionStore().save(session);
-        String outsiderSession = session.id();
+        String outsiderSession = session.token().secret();
 
         String query = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
         String buckets = Zenit.DRY.stringify(
@@ -548,7 +548,7 @@ class ManagePanelTest extends HohenheimTestBase {
                 .addBeforeFindHook(ignored -> finds.incrementAndGet());
 
             finds.set(0);
-            assertThat(get("/manage/sites", session.id()).statusCode()).isEqualTo(200);
+            assertThat(get("/manage/sites", session.token().secret()).statusCode()).isEqualTo(200);
             int perRequest = finds.get();
 
             // Memoized: each distinct set's enumeration (1 candidate fetch + 1
