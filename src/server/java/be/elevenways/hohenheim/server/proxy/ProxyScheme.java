@@ -8,6 +8,8 @@ import io.undertow.util.HttpString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -87,7 +89,21 @@ public final class ProxyScheme {
      */
     public static boolean isTrustedRemoteProxy(@NonNull HttpServerExchange exchange) {
         String key = exchange.getRequestHeaders().getFirst(X_HOHENHEIM_KEY);
-        return key != null && trustedProxyKeys().contains(key);
+        if (key == null) {
+            return false;
+        }
+        // AIDEV-NOTE: constant-time compare against every configured key, matching the rest of
+        // the codebase's secret handling -- a HashSet.contains (String.equals) leaks a prefix
+        // match through timing. Every candidate is checked with no early-out so the loop's
+        // duration does not reveal WHICH key matched either.
+        byte[] presented = key.getBytes(StandardCharsets.UTF_8);
+        boolean match = false;
+        for (String candidate : trustedProxyKeys()) {
+            if (MessageDigest.isEqual(presented, candidate.getBytes(StandardCharsets.UTF_8))) {
+                match = true;
+            }
+        }
+        return match;
     }
 
     /**
