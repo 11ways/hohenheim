@@ -3043,6 +3043,14 @@
     "text": "Alleen een beheerder kan een domein aan een padprefix binden",
     "scope": "violations"
   },
+  "tenant_proxy_upstream_private": {
+    "text": "Een gedelegeerde proxysite kan niet doorsturen naar een loopback- of prive-adres",
+    "scope": "violations"
+  },
+  "proxy_upstream_invalid": {
+    "text": "De upstream-host moet een gewoon http(s)-adres zonder inloggegevens zijn",
+    "scope": "violations"
+  },
   "tenant_field_frozen": {
     "text": "Alleen een beheerder kan deze instelling wijzigen",
     "scope": "violations"

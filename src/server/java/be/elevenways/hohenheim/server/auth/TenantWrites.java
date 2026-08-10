@@ -8,9 +8,11 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
+import be.elevenways.hohenheim.server.sitetype.types.ProxySiteType;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -21,11 +23,13 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.UrlPolicy;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -174,6 +178,12 @@ public final class TenantWrites {
             Row row = context.getRow();
             if (row != null && isTenantOriginated()) {
                 checkRecordWrite(row);
+            }
+        });
+        SiteModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null) {
+                checkProxyUpstream(row, isTenantOriginated());
             }
         });
         InstanceModel.SCHEMA.addBeforeValidateHook(context -> {
@@ -379,6 +389,87 @@ public final class TenantWrites {
                     CmsSupport.violationText("tenant_field_frozen"));
             }
         }
+    }
+
+    // --- Proxy upstream (SSRF) -------------------------------------------------------
+
+    /**
+     * Every writer's baseline: the upstream must be an http(s) host with no embedded
+     * credentials. It deliberately does NOT block loopback/private -- proxying to a LAN
+     * box or a loopback backend is THE reverse-proxy use case an operator ships.
+     */
+    private static final UrlPolicy PROXY_UPSTREAM_BASE = UrlPolicy.builder()
+        .schemes("http", "https").build();
+
+    /**
+     * The delegated-tenant tier additionally refuses loopback, RFC-1918/ULA and link-local
+     * literals -- {@code 169.254.169.254} (cloud metadata) and a loopback admin port are the
+     * SSRF a tenant with {@code manage} on a proxy site would otherwise reach. An operator
+     * pointing a site at a LAN address stays legitimate (the DNS/self-hosted-GitLab stance).
+     */
+    private static final UrlPolicy PROXY_UPSTREAM_TENANT = UrlPolicy.builder()
+        .schemes("http", "https").blockLoopbackHosts().blockPrivateHosts().build();
+
+    /**
+     * Refuse a proxy site whose {@code forward_host} the writer may not aim there.
+     *
+     * AIDEV-NOTE: lives on the model write pipeline, not on a form or handler, for the reason
+     * the class docblock states -- the revision-restore endpoint, the peer API and any direct
+     * {@code model.save} reach the datasource past every form. The tenant tier reuses the
+     * SAME {@link UrlPolicy} mechanism GitProviders applies one tier over; textual host
+     * blocking is all it can do here (a DNS name resolving to a private address is caught at
+     * fetch time, which is out of scope for a stored setting).
+     *
+     * @throws Violations {@code proxy_upstream_invalid} (any writer) or
+     *         {@code tenant_proxy_upstream_private} (a tenant aiming at a blocked host)
+     */
+    private static void checkProxyUpstream(@NonNull Row row, boolean tenant) {
+        if (!row.has(SiteModel.SETTINGS.getName())) {
+            return;
+        }
+        if (!ProxySiteType.ID.toString().equals(String.valueOf(effectiveSiteType(row)))) {
+            return;
+        }
+        Object settingsValue = row.get(SiteModel.SETTINGS);
+        if (!(settingsValue instanceof Map<?, ?> settings)) {
+            return;
+        }
+        Object hostValue = settings.get(ProxySiteType.FORWARD_HOST.getName());
+        if (hostValue == null || String.valueOf(hostValue).isBlank()) {
+            return;
+        }
+        String host = String.valueOf(hostValue).trim();
+        Object schemeValue = settings.get(ProxySiteType.FORWARD_SCHEME.getName());
+        String scheme = schemeValue != null && !String.valueOf(schemeValue).isBlank()
+            ? String.valueOf(schemeValue) : "http";
+        String url = scheme + "://" + host;
+
+        if (tenant) {
+            if (PROXY_UPSTREAM_TENANT.problemOf(url) != null) {
+                throw Violations.ofField(
+                    SiteModel.SETTINGS.getName() + "." + ProxySiteType.FORWARD_HOST.getName(),
+                    host, CmsSupport.violationText("tenant_proxy_upstream_private"));
+            }
+            return;
+        }
+        if (PROXY_UPSTREAM_BASE.problemOf(url) != null) {
+            throw Violations.ofField(
+                SiteModel.SETTINGS.getName() + "." + ProxySiteType.FORWARD_HOST.getName(),
+                host, CmsSupport.violationText("proxy_upstream_invalid"));
+        }
+    }
+
+    /** The site type the write ends up with, reading the stored row on a partial update. */
+    private static @Nullable Object effectiveSiteType(@NonNull Row row) {
+        if (row.has(SiteModel.SITE_TYPE.getName())) {
+            return row.get(SiteModel.SITE_TYPE);
+        }
+        Object id = row.has(SiteModel.ID.getName()) ? row.get(SiteModel.ID) : null;
+        if (id == null) {
+            return null;
+        }
+        Row stored = Models.get(SiteModel.class).findById(id);
+        return stored != null ? stored.get(SiteModel.SITE_TYPE) : null;
     }
 
     // --- Instances -------------------------------------------------------------------
