@@ -110,6 +110,18 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat(cname.body()).contains("CNAME");
         assertThat(Models.get(DnsRecordModel.class).findByZoneId(zoneId)).hasSize(1);
 
+        // A CNAME at the zone apex is refused: the SOA (and NS/DNSKEY) live there and are
+        // SYNTHESIZED in the serving snapshot, not stored rows, so the sibling scan never
+        // sees the conflict -- the exclusivity check has to refuse "@" by name.
+        var apexCname = postForm("/admin/dns-records/new",
+            "zone_id=" + zoneId + "&name=@&type=CNAME&value=other.admin-zone.example");
+        assertThat(apexCname.statusCode()).isEqualTo(200);
+        assertThat(apexCname.body()).contains("CNAME");
+        assertThat(Models.get(DnsRecordModel.class).find()
+            .where(DnsRecordModel.ZONE_ID.eq(zoneId))
+            .where(DnsRecordModel.TYPE.eq(DnsRecordModel.TYPE_CNAME)).first())
+            .as("no apex CNAME row was stored").isNull();
+
         // The zone list carries the sidebar entry and the row link into the records tab.
         navigateToApp("/admin/dns-zones");
         waitForHydration();
