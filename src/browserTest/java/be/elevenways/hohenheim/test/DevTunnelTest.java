@@ -70,6 +70,9 @@ class DevTunnelTest {
         .identifier(Identifier.of("hohenheimtest", "tunnel_echo"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("tunnel-echo").build())
+        // A test echo target reached THROUGH the dev tunnel: deliberately open, declared so
+        // now that the framework refuses an auth-less WebSocket endpoint by omission.
+        .publiclyAccessible()
         .handler(session -> new EchoHandler(session))
         .build();
 

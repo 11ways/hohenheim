@@ -951,6 +951,12 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("ws").addDelimiter().addStatic("dev-tunnel").build())
         .revalidateEvery(DEV_TUNNEL_REVALIDATION_INTERVAL_MS)
+        // The handshake is anonymous BY DECISION: this connection authenticates IN BAND
+        // (the register frame's token, DevTunnelServerHandler.handleRegister), so the open
+        // handshake is declared deliberately rather than left as an omission. The framework
+        // now REFUSES a WebSocket endpoint that declares no auth stance at all; the in-band
+        // credential is re-checked on the revalidate() hook the interval above reaches.
+        .publiclyAccessible()
         .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
         .build();
 
