@@ -5181,6 +5181,14 @@
     "text": "Er is geen back-updoel ingesteld voor deze instantie",
     "scope": "violations"
   },
+  "backup_target_in_use": {
+    "text": "Back-updoel {$name} bevat nog {$backups} back-up(s) en dient als doel voor {$instances} instantie(s); verwijder eerst die back-ups en wijs de instanties elders toe",
+    "scope": "violations"
+  },
+  "backup_target_control_plane": {
+    "text": "Back-updoel {$name} is het back-updoel van het control plane; wijs de instelling database.control_plane_backup_target eerst elders toe",
+    "scope": "violations"
+  },
   "backup_target_kind_unknown": {
     "text": "Onbekend back-updoeltype '{$kind}'",
     "scope": "violations"

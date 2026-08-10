@@ -5181,6 +5181,14 @@
     "text": "No backup target is configured for this instance",
     "scope": "violations"
   },
+  "backup_target_in_use": {
+    "text": "Backup target {$name} still holds {$backups} backup(s) and backs {$instances} instance(s); delete those backups and repoint the instances first",
+    "scope": "violations"
+  },
+  "backup_target_control_plane": {
+    "text": "Backup target {$name} is the control-plane backup destination; point the database.control_plane_backup_target setting elsewhere first",
+    "scope": "violations"
+  },
   "backup_target_kind_unknown": {
     "text": "Unknown backup target kind '{$kind}'",
     "scope": "violations"
