@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.docker.SiteReleases;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
+import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.process.PortAllocator;
@@ -269,6 +270,14 @@ public class ServerMain {
             // Virtual threads: both do target/daemon I/O.
             JobRunner.startVirtualThread(InstanceBackups::recoverInterrupted);
             JobRunner.startVirtualThread(() -> new InstanceSnapshots().recoverInterrupted());
+            // A controller killed mid-capture or mid-restore leaves the INSTANCE ROW
+            // stamped capturing/restoring, and only the in-process outcome paths clear
+            // those -- so the record refused deploy, stop, backup and snapshot forever
+            // (destroy was the only escape). Same process-start fence as the two settles
+            // above; the capture lane settles from daemon truth, an interrupted restore
+            // settles to error because the payload may be half-written. Virtual thread:
+            // it asks the daemon per record.
+            JobRunner.startVirtualThread(InstanceService::recoverInterrupted);
         } else {
             roleSkip(HohenheimRoles.Role.INSTANCES,
                 "interrupted-migration settle skipped, no instances run here");
