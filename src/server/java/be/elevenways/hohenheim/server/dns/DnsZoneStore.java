@@ -195,7 +195,17 @@ public final class DnsZoneStore {
                     row.get(DnsRecordModel.PORT));
                 addRecord(nodes, record.getName(), record, origin);
             }
-            catch (DnsValueException e) {
+            catch (Exception e) {
+                // AIDEV-NOTE: deliberately Exception, not just DnsValueException, as
+                // defense-in-depth: this loop turns a per-record failure into a one-row
+                // skip, but an uncaught throwable escaping it aborts buildSnapshot, which
+                // reload() answers by SKIPPING THE WHOLE ZONE -- one bad row would take
+                // every other name dark. The codec today wraps its TextParseExceptions into
+                // DnsValueException (DnsRecordCodec.ownerName), so no non-DnsValueException
+                // is reachable through it right now; this widening guards the day a codec
+                // path or a dnsjava record constructor throws an unchecked one. One bad row
+                // loses one row, never a zone. (Zone-level parse failures -- the SOA NS and
+                // contact -- stay outside this loop and legitimately skip the zone.)
                 Blast.log("DNS: skipping record", row.get(DnsRecordModel.ID), "in zone", originString,
                     "-", e.getMessage());
             }

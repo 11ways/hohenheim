@@ -88,9 +88,19 @@ public final class DnsRecordEdits {
         return zoneId;
     }
 
-    /** A CNAME owner can hold nothing else, and nothing else can join a CNAME owner. */
+    /**
+     * A CNAME owner can hold nothing else, and nothing else can join a CNAME owner.
+     *
+     * AIDEV-NOTE: the apex refusal must NOT rely on the sibling scan below -- the apex SOA
+     * (and DNSSEC apparatus) are SYNTHESIZED in DnsZoneStore.buildSnapshot and are not
+     * rows, so a CNAME at "@" has no stored sibling to conflict with and used to pass
+     * straight through while producing a zone whose apex answers both SOA and CNAME.
+     */
     private static void checkCnameExclusivity(@NonNull Model model, int zoneId, @NonNull String owner,
                                               @NonNull String type, @Nullable Integer selfId) {
+        if (DnsRecordModel.TYPE_CNAME.equals(type) && DnsNames.APEX.equals(owner)) {
+            throw Violations.ofField("type", type, CmsSupport.violationText("dns_cname_exclusive"));
+        }
         List<Row> siblings = model.find()
             .where(DnsRecordModel.ZONE_ID.eq(zoneId))
             .where(DnsRecordModel.NAME.eq(owner))
