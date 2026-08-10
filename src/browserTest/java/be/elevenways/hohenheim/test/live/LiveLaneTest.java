@@ -148,6 +148,50 @@ class LiveLaneTest {
     }
 
     /**
+     * The truncation half: a JVM torn down with tests unaccounted for names them, split
+     * into killed-in-flight and never-started, and a settled run renders NOTHING -- the
+     * banner only means something if a completed run can never print it.
+     */
+    @Test
+    void aTruncatedRunNamesItsUnfinishedTestsAndACompletedRunStaysSilent() {
+        // 1. Nothing tracked, nothing rendered -- the positive anchor.
+        LiveLaneReport report = new LiveLaneReport();
+        assertThat(report.renderTruncation())
+            .as("step 1: an empty tracker renders no truncation").isEmpty();
+
+        // 2. A plan of three tests: one finishes, one is killed mid-flight, one never
+        //    starts. Exactly the shape a Gradle task timeout produces.
+        report.trackPlanned("[test:done]", "FinishedTest.ok");
+        report.trackPlanned("[test:killed]", "RestoreCapacityLiveTest.theRealPool");
+        report.trackPlanned("[test:unstarted]", "NeverStartedTest.later");
+        report.trackStarted("[test:done]", "FinishedTest.ok");
+        report.trackFinished("[test:done]");
+        report.trackStarted("[test:killed]", "RestoreCapacityLiveTest.theRealPool");
+        String text = report.renderTruncation();
+        assertThat(text)
+            .as("step 2: the killed test is named as IN FLIGHT, never as a mere skip")
+            .contains("KILLED IN FLIGHT")
+            .contains("- RestoreCapacityLiveTest.theRealPool");
+        assertThat(text)
+            .as("step 2: the never-started test is named separately")
+            .contains("never started in this jvm")
+            .contains("- NeverStartedTest.later");
+        assertThat(text)
+            .as("step 2: the settled test does not appear as truncated")
+            .doesNotContain("FinishedTest.ok");
+        assertThat(text)
+            .as("step 2: and the banner says what a reader must conclude")
+            .contains("NO verdict").contains("finally blocks");
+
+        // 3. Settling the remaining tests silences the banner completely: only a run
+        //    that actually died mid-flight can ever produce it.
+        report.trackFinished("[test:killed]");
+        report.trackFinished("[test:unstarted]");
+        assertThat(report.renderTruncation())
+            .as("step 3: a fully settled run renders no truncation").isEmpty();
+    }
+
+    /**
      * A minimal Docker daemon over the raw transport: it answers image inspects present or
      * absent and records every path, which is all the image gate reads.
      */
