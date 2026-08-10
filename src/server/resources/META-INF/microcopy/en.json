@@ -7533,5 +7533,15 @@
   "host_contact_lapsed": {
     "text": "Host '{$name}' last answered {$minutes} minutes ago, past the host contact bound; no new workload is placed there until it answers again",
     "scope": "violations"
-  }
+  },
+  "preview_branches": [
+    {
+      "text": "Preview branches",
+      "scope": "field"
+    },
+    {
+      "text": "Branch patterns (exact or with *) whose pushes create per-branch previews. Empty means pull-request previews only; the production branch never gets one.",
+      "scope": "help"
+    }
+  ]
 }

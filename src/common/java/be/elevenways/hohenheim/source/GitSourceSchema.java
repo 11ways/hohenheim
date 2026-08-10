@@ -85,6 +85,17 @@ public class GitSourceSchema {
             .label(HohenheimFormCopy.label("previews_enabled"))
             .help(HohenheimFormCopy.help("previews_enabled")).build());
 
+    // Per-BRANCH previews are opt-in PER PATTERN, never on by default: a default that
+    // mints a preview per pushed branch is a build + container + hostname the site's
+    // owner never asked for, charged against the same per-owner cap the pull-request
+    // lane uses -- three stale branches would silently lock out the PR previews the
+    // owner DID opt into. Empty list = pull-request previews only.
+    public static final ListField<String> PREVIEW_BRANCHES = SCHEMA.addField(
+        ListField.builder(StringField.builder().name("pattern").build())
+            .name("preview_branches")
+            .label(HohenheimFormCopy.label("preview_branches"))
+            .help(HohenheimFormCopy.help("preview_branches")).build());
+
     // The ONLY runtime environment a preview receives. Previews deliberately inherit
     // NOTHING from the production runtime: not environment_variables, not injected
     // database credentials, not volumes -- a preview builds arbitrary branch code and

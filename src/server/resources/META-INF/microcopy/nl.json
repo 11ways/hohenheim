@@ -7533,5 +7533,15 @@
   "host_contact_lapsed": {
     "text": "Host '{$name}' heeft {$minutes} minuten geleden voor het laatst geantwoord, voorbij de contactgrens; er wordt geen nieuwe workload geplaatst tot hij weer antwoordt",
     "scope": "violations"
-  }
+  },
+  "preview_branches": [
+    {
+      "text": "Preview-branches",
+      "scope": "field"
+    },
+    {
+      "text": "Branch-patronen (exact of met *) waarvan pushes per-branch previews aanmaken. Leeg betekent enkel pull-request-previews; de productiebranch krijgt er nooit een.",
+      "scope": "help"
+    }
+  ]
 }

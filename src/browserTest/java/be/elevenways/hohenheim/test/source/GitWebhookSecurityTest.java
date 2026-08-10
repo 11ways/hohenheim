@@ -450,6 +450,137 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     }
 
     /**
+     * The per-BRANCH preview lane: a push to a branch matching a declared
+     * {@code preview_branches} pattern creates/refreshes a preview instead of being
+     * filed as off-branch noise, a branch DELETE tears its preview down, and a delete
+     * of the PRODUCTION branch never queues a production deploy (before this lane the
+     * ref comparison matched a delete push of main and deployed a branch that no
+     * longer exists).
+     */
+    @Test
+    @org.junit.jupiter.api.Order(10)
+    void aPushToADeclaredPreviewBranchDrivesThePreviewLifecycleNotProduction()
+            throws Exception {
+        setPreviewBranches(siteCId, List.of("feature/*"));
+
+        // 1. A push to a MATCHING branch reaches the preview lane. Before the lane
+        //    existed this delivery stamped ignored_branch and no preview ever appeared.
+        String matchUuid = UUID.randomUUID().toString();
+        String match = pushPayload("acme/repo-c", "refs/heads/feature/login", "feed1111");
+        String matchResponse = post("/api/webhooks/git/hook-c", match,
+            "X-GitHub-Event: push", "X-GitHub-Delivery: " + matchUuid,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, match));
+        assertThat(matchResponse).as("step 1: the matching push is acknowledged as a preview")
+            .startsWith("HTTP/1.1 200").contains("preview_queued");
+        assertThat(stampedAction("gh:" + matchUuid))
+            .as("step 1: a push to a declared preview branch queues a preview")
+            .isEqualTo("preview_queued");
+
+        // 2. Opt-in is per PATTERN: a branch outside the declared set stays ignored,
+        //    so the lane cannot mint a preview per pushed branch.
+        String missUuid = UUID.randomUUID().toString();
+        String miss = pushPayload("acme/repo-c", "refs/heads/chore-cleanup", "feed2222");
+        post("/api/webhooks/git/hook-c", miss,
+            "X-GitHub-Event: push", "X-GitHub-Delivery: " + missUuid,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, miss));
+        assertThat(stampedAction("gh:" + missUuid))
+            .as("step 2: an undeclared branch is still ignored")
+            .isEqualTo("ignored_branch");
+
+        // 3. Deleting a branch that HOLDS a live preview tears it down: the source is
+        //    gone, so the environment must not outlive it until expiry.
+        Row preview = seedPreviewRow(siteCId, "feature/login");
+        int previewId = preview.get(be.elevenways.hohenheim.model.PreviewDeploymentModel.ID);
+        String deleteUuid = UUID.randomUUID().toString();
+        String delete = deletedPushPayload("acme/repo-c", "refs/heads/feature/login");
+        post("/api/webhooks/git/hook-c", delete,
+            "X-GitHub-Event: push", "X-GitHub-Delivery: " + deleteUuid,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, delete));
+        assertThat(stampedAction("gh:" + deleteUuid))
+            .as("step 3: deleting a previewed branch queues its teardown")
+            .isEqualTo("preview_teardown_queued");
+        await("step 3: the branch preview is reclaimed", () -> {
+            Row row = Models.get(be.elevenways.hohenheim.model.PreviewDeploymentModel.class)
+                .findById(previewId);
+            return row != null && row.get(
+                be.elevenways.hohenheim.model.PreviewDeploymentModel.DELETED_AT) != null;
+        });
+
+        // 4. Deleting a branch with NO preview does nothing, loudly and distinguishably.
+        String emptyUuid = UUID.randomUUID().toString();
+        String empty = deletedPushPayload("acme/repo-c", "refs/heads/feature/gone");
+        post("/api/webhooks/git/hook-c", empty,
+            "X-GitHub-Event: push", "X-GitHub-Delivery: " + emptyUuid,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, empty));
+        assertThat(stampedAction("gh:" + emptyUuid))
+            .as("step 4: a deleted branch without a preview is filed as such")
+            .isEqualTo("ignored_deleted_ref");
+
+        // 5. THE production counterfactual: a DELETE push of the bound branch matches
+        //    the ref comparison byte for byte, and used to queue a production deploy of
+        //    a branch that no longer exists. It must deploy NOTHING.
+        int before = deploymentsOf(siteCId, "webhook").size();
+        String prodDeleteUuid = UUID.randomUUID().toString();
+        String prodDelete = deletedPushPayload("acme/repo-c", "refs/heads/main");
+        post("/api/webhooks/git/hook-c", prodDelete,
+            "X-GitHub-Event: push", "X-GitHub-Delivery: " + prodDeleteUuid,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, prodDelete));
+        assertThat(stampedAction("gh:" + prodDeleteUuid))
+            .as("step 5: a production branch delete is never a deploy")
+            .isEqualTo("ignored_deleted_ref");
+        Thread.sleep(500);
+        assertThat(deploymentsOf(siteCId, "webhook"))
+            .as("step 5: and it deployed nothing").hasSize(before);
+
+        // 6. Anchor: an ordinary push to the bound branch still deploys, so steps 1-5
+        //    narrowed the lane without closing it.
+        String anchorUuid = UUID.randomUUID().toString();
+        String anchor = pushPayload("acme/repo-c", "refs/heads/main", "feed3333");
+        post("/api/webhooks/git/hook-c", anchor,
+            "X-GitHub-Event: push", "X-GitHub-Delivery: " + anchorUuid,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, anchor));
+        assertThat(stampedAction("gh:" + anchorUuid))
+            .as("step 6: the production lane still deploys")
+            .isEqualTo("deploy_queued");
+        await("step 6: the anchor deploy is recorded",
+            () -> deploymentsOf(siteCId, "webhook").size() == before + 1);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void setPreviewBranches(Integer siteId, List<String> patterns) {
+        var siteModel = Models.get(SiteModel.class);
+        Row site = siteModel.findById(siteId);
+        Map<String, Object> settings = new LinkedHashMap<>(
+            (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS));
+        settings.put("preview_branches", patterns);
+        site.set(SiteModel.SOURCE_SETTINGS, settings);
+        siteModel.save(site);
+    }
+
+    /** A live preview row as the deploy lane would leave one, without building anything. */
+    private static Row seedPreviewRow(Integer siteId, String ref) {
+        var model = Models.get(be.elevenways.hohenheim.model.PreviewDeploymentModel.class);
+        Row preview = model.createEmptyRow();
+        preview.set(be.elevenways.hohenheim.model.PreviewDeploymentModel.SITE_ID, siteId);
+        preview.set(be.elevenways.hohenheim.model.PreviewDeploymentModel.REF, ref);
+        preview.set(be.elevenways.hohenheim.model.PreviewDeploymentModel.HOSTNAME,
+            "hook-c--feature-login.preview.test");
+        preview.set(be.elevenways.hohenheim.model.PreviewDeploymentModel.STATUS,
+            be.elevenways.hohenheim.model.PreviewDeploymentModel.STATUS_RUNNING);
+        preview.set(be.elevenways.hohenheim.model.PreviewDeploymentModel.EXPIRES_AT,
+            java.time.Instant.now().plusSeconds(3600));
+        model.save(preview);
+        return preview;
+    }
+
+    /** A push payload as providers send it when the ref was deleted. */
+    private static String deletedPushPayload(String repository, String ref) {
+        return "{\"ref\":\"" + ref + "\",\"deleted\":true,"
+            + "\"after\":\"0000000000000000000000000000000000000000\","
+            + "\"repository\":{\"full_name\":\"" + repository + "\"}}";
+    }
+
+    /**
      * Deliver one Gitea pull_request event under Gitea's own headers (vendor delivery id,
      * raw-hex signature) and report what the handler stamped.
      */

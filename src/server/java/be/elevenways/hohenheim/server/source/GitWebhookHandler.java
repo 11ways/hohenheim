@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.preview.PreviewBranches;
+import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.Blast;
@@ -188,7 +191,51 @@ public class GitWebhookHandler {
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"not a push\"}");
             return;
         }
-        if (!pushedRef.equals("refs/heads/" + configuredBranch)) {
+
+        // AIDEV-NOTE: the DELETED discrimination comes BEFORE the branch comparison on
+        // purpose. A branch-delete push carries the exact same ref as a commit push
+        // (GitHub/Gitea say `"deleted": true`, all three providers zero out `after`),
+        // so a delete of the PRODUCTION branch used to pass the equality check below
+        // and queue a production deploy of a branch that no longer exists. A deleted
+        // ref either tears down its preview or is ignored; it never deploys anything.
+        boolean deleted = isDeletedPush(payload);
+        String branch = pushedRef.startsWith("refs/heads/")
+            ? pushedRef.substring("refs/heads/".length()) : "";
+        boolean production = pushedRef.equals("refs/heads/" + configuredBranch);
+        if (deleted) {
+            if (!production && !branch.isEmpty() && hasLivePreview(siteId, branch)) {
+                queuePreviewTeardown(siteId, branch, "branch_deleted");
+                WebhookDeliveries.stampAction(claimed, "preview_teardown_queued");
+                sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
+                return;
+            }
+            WebhookDeliveries.stampAction(claimed, "ignored_deleted_ref");
+            sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"deleted ref\"}");
+            return;
+        }
+
+        // Per-BRANCH previews: an opt-in pattern set beside previews_enabled. The
+        // PRODUCTION branch never gets one (its environment IS production), so a
+        // pattern covering it changes nothing -- decided with the lane, 2026-08-10.
+        if (!production && !branch.isEmpty()
+                && Boolean.TRUE.equals(sourceSettings.get("previews_enabled"))
+                && PreviewBranches.matches(
+                    PreviewBranches.patternsOf(
+                        sourceSettings.get("preview_branches")), branch)) {
+            String pushedSha = payload instanceof Map<?, ?> map ? str(map.get("after")) : "";
+            Datasource datasource = Db.current();
+            JobRunner.startVirtualThread(() -> withScope(datasource, () ->
+                PreviewDeployments
+                    .deployQuietly(siteId, branch,
+                        pushedSha.isEmpty() ? null : pushedSha, null)));
+            ActivityLog.record(Models.get(SiteModel.class), siteId,
+                "preview_triggered", "webhook:" + branch);
+            WebhookDeliveries.stampAction(claimed, "preview_queued");
+            sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
+            return;
+        }
+
+        if (!production) {
             WebhookDeliveries.stampAction(claimed, "ignored_branch");
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"branch\"}");
             return;
@@ -227,6 +274,34 @@ public class GitWebhookHandler {
         }
     }
 
+    /** All three providers zero out {@code after} on a ref delete; GitHub/Gitea also flag it. */
+    private static boolean isDeletedPush(@Nullable Object payload) {
+        if (!(payload instanceof Map<?, ?> map)) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(map.get("deleted"))) {
+            return true;
+        }
+        String after = str(map.get("after"));
+        return !after.isEmpty() && after.chars().allMatch(c -> c == '0');
+    }
+
+    private static boolean hasLivePreview(int siteId, @NonNull String ref) {
+        return Models.get(PreviewDeploymentModel.class).find()
+            .where(PreviewDeploymentModel.SITE_ID.eq(siteId))
+            .where(PreviewDeploymentModel.REF.eq(ref))
+            .where(PreviewDeploymentModel.DELETED_AT.isNull())
+            .first() != null;
+    }
+
+    private static void queuePreviewTeardown(int siteId, @NonNull String ref,
+                                             @NonNull String reason) {
+        Datasource datasource = Db.current();
+        JobRunner.startVirtualThread(() -> withScope(datasource, () ->
+            PreviewDeployments
+                .destroyForRefQuietly(siteId, ref, reason)));
+    }
+
     // -- pull request -> preview ----------------------------------------------
 
     private static void handlePullRequest(HttpServerExchange exchange, Row claimed, Row site,
@@ -251,7 +326,7 @@ public class GitWebhookHandler {
             case DEPLOY -> {
                 // The build takes minutes; the provider expects an answer in seconds.
                 JobRunner.startVirtualThread(() -> withScope(datasource, () ->
-                    be.elevenways.hohenheim.server.preview.PreviewDeployments
+                    PreviewDeployments
                         .deployQuietly(siteId, ref, previewEvent.sha(), previewEvent.number())));
                 WebhookDeliveries.stampAction(claimed, "preview_queued");
                 ActivityLog.record(Models.get(SiteModel.class), siteId,
@@ -260,7 +335,7 @@ public class GitWebhookHandler {
             }
             case TEARDOWN -> {
                 JobRunner.startVirtualThread(() -> withScope(datasource, () ->
-                    be.elevenways.hohenheim.server.preview.PreviewDeployments
+                    PreviewDeployments
                         .destroyForRefQuietly(siteId, ref, "pr_closed")));
                 WebhookDeliveries.stampAction(claimed, "preview_teardown_queued");
                 sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
