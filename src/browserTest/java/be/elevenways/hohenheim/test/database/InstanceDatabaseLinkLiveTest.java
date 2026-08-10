@@ -415,18 +415,33 @@ class InstanceDatabaseLinkLiveTest {
         throw new IllegalStateException(handle + " has no address on " + network);
     }
 
+    /** Any address of a container, retried briefly: only the observation is tolerant. */
     private static String anyAddress(DockerClient docker, String handle) throws IOException {
-        Object settings = docker.inspectContainer(handle).get("NetworkSettings");
-        Object networks = settings instanceof Map<?, ?> map ? map.get("Networks") : null;
-        if (networks instanceof Map<?, ?> map) {
-            for (Object endpoint : map.values()) {
-                if (endpoint instanceof Map<?, ?> e
-                        && e.get("IPAddress") instanceof String ip && !ip.isBlank()) {
-                    return ip;
+        long deadline = System.currentTimeMillis() + 5_000;
+        Object lastSeen = null;
+        while (true) {
+            Object settings = docker.inspectContainer(handle).get("NetworkSettings");
+            Object networks = settings instanceof Map<?, ?> map ? map.get("Networks") : null;
+            if (networks instanceof Map<?, ?> map) {
+                for (Object endpoint : map.values()) {
+                    if (endpoint instanceof Map<?, ?> e
+                            && e.get("IPAddress") instanceof String ip && !ip.isBlank()) {
+                        return ip;
+                    }
                 }
             }
+            lastSeen = networks;
+            if (System.currentTimeMillis() >= deadline) {
+                throw new IllegalStateException(handle + " has no address after 5s;"
+                    + " last NetworkSettings.Networks: " + lastSeen);
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(handle + " address wait interrupted");
+            }
         }
-        throw new IllegalStateException(handle + " has no address");
     }
 
     /**
