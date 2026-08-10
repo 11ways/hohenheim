@@ -154,6 +154,15 @@ class StackNetworkIsolationTest {
                     .as("step 2: stack services still reach each other by alias: %s%s",
                         alias.stdout(), alias.stderr())
                     .isEqualTo(0);
+                // The reply text, not only the exit code: this is the test's one
+                // docker-layer positive anchor, and a ping that exits 0 while printing
+                // a refusal would let every kernel assertion below stand on nothing.
+                assertThat(alias.stdout())
+                    .withFailMessage("step 2: ping exited 0 but printed no clean reply"
+                        + " for the alias: stdout=%s stderr=%s",
+                        alias.stdout(), alias.stderr())
+                    .contains("bytes from")
+                    .contains(" 0% packet loss");
 
                 // 3. The enforcing kernel carries the full deny vocabulary for the REAL
                 //    subnet -- read out of nft list ruleset, not out of our intent.
