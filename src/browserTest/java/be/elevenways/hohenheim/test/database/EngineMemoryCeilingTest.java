@@ -103,7 +103,16 @@ class EngineMemoryCeilingTest {
     void redisRunsUnderItsOwnEngineFootprintWithHeadroomToSpare() throws IOException {
         journey(ManagedDatabase.Engine.REDIS, "redis:7-alpine", "42", (docker, container) -> {
             List<String> auth = List.of("REDISCLI_AUTH=" + PASSWORD);
-            value(docker, container, List.of("redis-cli", "-p", "6379", "set", "ceiling", "42"), auth);
+            // The engine's own reply, never the exit code: redis-cli exits 0 while
+            // printing "NOAUTH Authentication required." -- the trap this repo has hit
+            // twice -- so a discarded set result would swallow exactly that refusal.
+            String stored = value(docker, container,
+                List.of("redis-cli", "-p", "6379", "set", "ceiling", "42"), auth);
+            assertThat(stored)
+                .withFailMessage("redis-cli set exited 0 but replied '%s', not OK --"
+                    + " redis-cli exits 0 even when printing a NOAUTH-style refusal",
+                    stored)
+                .isEqualTo("OK");
             return value(docker, container, List.of("redis-cli", "-p", "6379", "get", "ceiling"), auth);
         });
     }

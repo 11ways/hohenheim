@@ -296,6 +296,13 @@ class StackInstancesTest {
             .withFailMessage("step 6: the compose service alias did not resolve: %s%s",
                 resolve.stdout(), resolve.stderr())
             .isEqualTo(0);
+        // The engine's own reply text, not only the exit code: ping variants have exited
+        // 0 while printing a refusal, and "resolved" must mean a reply actually came back.
+        assertThat(resolve.stdout())
+            .withFailMessage("step 6: ping exited 0 but printed no clean reply for the"
+                + " alias: stdout=%s stderr=%s", resolve.stdout(), resolve.stderr())
+            .contains("bytes from")
+            .contains(" 0% packet loss");
 
         // 7. Config files rode the INSTANCE file-staging lane, mode included.
         DockerClient.ExecResult content = docker.exec(baseContainer,

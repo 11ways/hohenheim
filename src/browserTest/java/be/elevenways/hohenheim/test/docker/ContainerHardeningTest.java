@@ -598,7 +598,10 @@ class ContainerHardeningTest {
             throws IOException {
         DockerClient.ExecResult result = docker.exec(container, List.of("sh", "-c",
             "grep -E '^(Uid|CapBnd|NoNewPrivs):' /proc/1/status; cat /sys/fs/cgroup/pids.max"));
-        assertThat(result.exitCode()).as("the kernel probe ran inside " + container).isEqualTo(0);
+        assertThat(result.exitCode())
+            .withFailMessage("the kernel probe failed inside %s: exit=%d stdout=%s stderr=%s",
+                container, result.exitCode(), result.stdout(), result.stderr())
+            .isEqualTo(0);
         Map<String, String> kernel = new LinkedHashMap<>();
         for (String line : result.output().split("\\R")) {
             String trimmed = line.trim();
@@ -612,6 +615,13 @@ class ContainerHardeningTest {
                 kernel.put(PIDS_MAX, trimmed);   // the cgroup file's single value line
             }
         }
+        // The probe is `grep ...; cat ...`, so the exit code above is only cat's: a
+        // /proc/1/status missing the grepped fields would still exit 0 and the caller
+        // would then die on a NumberFormatException instead of a named failure.
+        assertThat(kernel)
+            .withFailMessage("the kernel probe inside %s answered incompletely:"
+                + " stdout=%s stderr=%s", container, result.stdout(), result.stderr())
+            .containsKeys("CapBnd", "NoNewPrivs", PIDS_MAX);
         return kernel;
     }
 
