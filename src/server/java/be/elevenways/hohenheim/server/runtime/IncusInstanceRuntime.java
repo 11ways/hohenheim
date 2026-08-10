@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.runtime;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
@@ -116,6 +117,30 @@ public final class IncusInstanceRuntime
         this.serverName = serverName;
     }
 
+    /**
+     * Best-effort presence refresh beside every shared-object write.
+     *
+     * AIDEV-NOTE: this is what makes a controller ATTRIBUTABLE the moment it mints its
+     * first shared object. The scheduled sweep was the only stamper before, so every
+     * short-lived controller (each live test fork mints a fresh identity) left its
+     * isolation ACL and hhx bridge UNSTAMPED -- and the reaper never removes unstamped
+     * objects, by design. Measured on daystrom 2026-08-10: 78 controller tokens, only 13
+     * presence markers, 91 ACLs accumulated. Best-effort on purpose: a failed stamp only
+     * degrades to today's unstamped state (never reaped), and a deploy must not die for
+     * a liveness marker. {@code ControllerPresence.stamp} no-ops while fresh, so this
+     * costs one GET per deploy.
+     */
+    private void stampPresence() {
+        try {
+            ControllerPresence.stamp(this.incus);
+        } catch (Exception unstamped) {
+            Blast.log("INCUS PRESENCE: could not stamp controller presence on",
+                this.serverName == null ? "the local daemon" : this.serverName, "-",
+                unstamped.getMessage(),
+                "- this controller's shared objects here stay UNSTAMPED (never reaped)");
+        }
+    }
+
     @Override
     public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
         OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
@@ -143,6 +168,7 @@ public final class IncusInstanceRuntime
         // on it -- an Incus host whose ACL support does not really enforce refuses here,
         // never at the point where a tenant container is already running unisolated.
         this.policy.ensureIsolationAcl();
+        stampPresence();
         Map<String, Object> nic = this.policy.nicDevice(managedNetworkName(), this.egress);
 
         // AIDEV-NOTE: converge, never replace. A system container's persistent state
@@ -932,6 +958,7 @@ public final class IncusInstanceRuntime
         // its NIC gets the verified ACL override, so a backup made before isolation
         // existed cannot land an unisolated container.
         this.policy.ensureIsolationAcl();
+        stampPresence();
         replaceDefinition(spec.handle(), existing, config,
             this.policy.nicDevice(managedNetworkName(), this.egress));
         verifyIsolated(spec.handle());
@@ -1041,6 +1068,7 @@ public final class IncusInstanceRuntime
         // the extra bridge verified managed-with-subnet, BEFORE the device lands.
         this.policy.ensureIsolationAcl();
         this.policy.ensureExtraNetwork();
+        stampPresence();
         Map<String, Object> instance = this.incus.instance(spec.handle());
         putDevice(spec.handle(), instance, deviceName, this.policy.extraNicDevice(this.egress));
         verifyIsolated(spec.handle());

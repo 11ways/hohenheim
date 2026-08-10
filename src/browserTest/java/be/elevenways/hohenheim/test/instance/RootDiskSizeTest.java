@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
@@ -113,6 +114,15 @@ class RootDiskSizeTest extends HohenheimTestBase {
                 assertThat(root.get("size"))
                     .as("step 4: carrying the declared size").isEqualTo("20GiB");
             });
+
+        // 4b. The deploy left this controller ATTRIBUTABLE on the shared daemon: the
+        //     presence marker rides the same deploy that mints the isolation ACL, so an
+        //     ephemeral controller's shared leftovers can later be judged departed
+        //     instead of staying UNSTAMPED (never reaped) forever -- the daystrom
+        //     91-ACL accumulation.
+        assertThat(daemon.aclStore)
+            .as("step 4b: a deploy stamps the controller presence marker beside the ACL")
+            .containsKey(ControllerPresence.aclName());
 
         // 5. POSITIVE ANCHOR for step 6: an UNDECLARED root disk leaves the daemon's
         //    devices alone entirely, so step 6 cannot be passing because the driver

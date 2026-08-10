@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusTransport;
 import be.elevenways.hohenheim.server.incus.IncusWebSocket;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
@@ -12,6 +11,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -55,20 +55,25 @@ final class FakeIncusTransport implements IncusTransport {
             devices.put("root", root);
             return sync(Map.of("devices", devices));
         }
-        if ("GET".equals(method)
-                && path.equals("/1.0/network-acls/" + IncusNetworkPolicy.aclName())) {
-            Object stored = this.aclStore.get(IncusNetworkPolicy.aclName());
+        // ACL routes take ANY name: the driver now writes the controller presence
+        // marker beside the isolation ACL, and both ride the same echo store. The
+        // fake adds the empty used_by a real daemon reports, because
+        // ControllerPresence.usedBy reads a MISSING field as "referenced" on purpose.
+        if ("GET".equals(method) && path.startsWith("/1.0/network-acls/")) {
+            Object stored = this.aclStore.get(
+                path.substring("/1.0/network-acls/".length()));
             return stored == null ? notFound("Network ACL not found") : sync(stored);
         }
         if ("POST".equals(method) && path.equals("/1.0/network-acls")) {
-            Map<String, Object> body = parse(jsonBody);
+            Map<String, Object> body = new LinkedHashMap<>(parse(jsonBody));
+            body.putIfAbsent("used_by", List.of());
             this.aclStore.put(String.valueOf(body.get("name")), body);
             return sync(body);
         }
-        if ("PUT".equals(method)
-                && path.equals("/1.0/network-acls/" + IncusNetworkPolicy.aclName())) {
-            Map<String, Object> body = parse(jsonBody);
-            this.aclStore.put(IncusNetworkPolicy.aclName(), body);
+        if ("PUT".equals(method) && path.startsWith("/1.0/network-acls/")) {
+            Map<String, Object> body = new LinkedHashMap<>(parse(jsonBody));
+            body.putIfAbsent("used_by", List.of());
+            this.aclStore.put(path.substring("/1.0/network-acls/".length()), body);
             return sync(body);
         }
         if ("GET".equals(method) && path.startsWith("/1.0/images/aliases/")) {
