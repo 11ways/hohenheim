@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.dns.DnsClaimReleases;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.GeneratedInstanceFiles;
@@ -61,6 +62,10 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // A DNS record a system authored carries derived attribution, and no caller can
         // hand-write that attribution onto a row of its own.
         GeneratedDnsRecords.install();
+        // A released hostname's authoritative records stop being served and its dyndns
+        // credential and record grants die with the claim (site soft delete, domain row
+        // delete or rename) -- the DNS half of the release quarantine.
+        DnsClaimReleases.install();
         // The same derived-attribution discipline for instance config files a system
         // authored (the game-domains Velocity forced-hosts materialization).
         GeneratedInstanceFiles.install();

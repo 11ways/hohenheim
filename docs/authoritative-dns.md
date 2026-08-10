@@ -31,6 +31,24 @@ rounds out the abuse mitigations; verdicts key on the computed response, with
 NXDOMAIN bucketed per zone and referrals per delegation point so
 random-subdomain floods cannot dodge the limit. The DNS story is feature-complete.
 
+STATUS (2026-08-10): the 2026-07-17 "feature-complete" claim above was wrong on
+one axis, now fixed: released hostnames had no DNS consequence. A departed
+tenant's authoritative records kept being served indefinitely, and a dyndns
+token minted under a claim kept rewriting the record after the claim was
+released -- the DNS tier lacked the counterpart of the certificate tier's
+orphan sweeper. `DnsClaimReleases` now disables a released name's non-generated
+records, clears their dyndns credentials and revokes their record grants in the
+same transaction as the release (site soft delete, domain row delete or
+rename); a name still covered by another live domain row, or belonging to a
+merely DISABLED site, is untouched. Additionally: the dyndns columns are now
+grant-gated on the model write pipeline (hostname authority alone can no longer
+arm a token), a CNAME at the zone apex is refused (the synthesized SOA is not a
+row, so the sibling scan never saw the conflict), and one malformed record no
+longer takes its whole zone out of the serving snapshot. Note also that the
+"attention items" list under Hohenheim integration below is a DESIGN wishlist:
+no attention-item surface for lame delegation / stale secondaries / failed ACME
+publishes exists yet.
+
 Hohenheim can become the authoritative DNS service for zones it manages. This
 removes the runtime dependency on a hosted DNS control panel and gives ACME
 DNS-01 a first-party TXT publisher, but it does not replace the domain

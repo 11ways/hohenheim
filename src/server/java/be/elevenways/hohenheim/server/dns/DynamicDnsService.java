@@ -23,6 +23,15 @@ import java.net.InetAddress;
  * record's address by presenting the token. The record row is the single
  * source of truth, so an update flows through the normal serial bump ->
  * re-sign -> NOTIFY path and reaches secondaries within seconds.
+ *
+ * AIDEV-NOTE: {@code update} deliberately asks NO hostname-liveness question. A
+ * per-update "the FQDN must be covered by a live site" predicate would break the
+ * feature's primary use -- operator dyndns names (a home router) are not sites and
+ * are covered by nothing. The token-outlives-the-claim problem is closed one tier
+ * over instead: {@link DnsClaimReleases} clears {@code dynamic}/{@code dyndns_token}
+ * (and disables the record) the moment a hostname's last covering domain row is
+ * released, so a released name's token answers badauth here without this method
+ * ever asking whose name it is.
  */
 public final class DynamicDnsService {
 
