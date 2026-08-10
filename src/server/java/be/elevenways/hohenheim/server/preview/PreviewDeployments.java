@@ -37,6 +37,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -675,16 +676,24 @@ public final class PreviewDeployments {
     /**
      * Deterministic generated hostname: {@code <site-slug>--<ref-slug>.<base>}. The
      * double hyphen cannot appear in either slug (single hyphens only), so two
-     * different (site, ref) pairs can never collide onto one hostname.
+     * different (site, ref) pairs compose to distinct labels -- but a DNS label caps at
+     * 63 chars, and plain truncation made every pair sharing a 63-char prefix collide
+     * (and a 63+-char site slug truncated the ref away entirely): a cross-tenant denial
+     * of preview creation, since refuseRouteConflicts refuses the second row. An
+     * over-long label therefore keeps a truncated prefix plus a digest of the FULL
+     * composed label, so distinctness survives truncation and the derivation stays a
+     * pure function.
      */
     public static @NonNull String hostnameFor(@NonNull String siteSlug, @NonNull String ref,
                                               @NonNull String baseDomain) {
         String label = labelOf(siteSlug) + "--" + labelOf(ref);
         if (label.length() > 63) {
-            label = label.substring(0, 63);
-            while (label.endsWith("-")) {
-                label = label.substring(0, label.length() - 1);
+            String digest = SecureTokens.sha256Hex(label).substring(0, 8);
+            String prefix = label.substring(0, 63 - 1 - digest.length());
+            while (prefix.endsWith("-")) {
+                prefix = prefix.substring(0, prefix.length() - 1);
             }
+            label = prefix + "-" + digest;
         }
         return label + "." + baseDomain.toLowerCase(Locale.ROOT);
     }

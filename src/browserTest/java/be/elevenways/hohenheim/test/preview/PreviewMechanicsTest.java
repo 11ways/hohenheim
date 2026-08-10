@@ -80,6 +80,19 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         String label = hostile.substring(0, hostile.indexOf('.'));
         assertThat(label).matches("[a-z0-9]([a-z0-9-]*[a-z0-9])?");
         assertThat(label.length()).isLessThanOrEqualTo(63);
+
+        // 4. Truncation must NOT reintroduce collision: two pairs sharing a 63-char
+        //    prefix (and a ref truncated away entirely by an over-long site slug) used
+        //    to compose to the SAME label, a cross-tenant denial of preview creation
+        //    because refuseRouteConflicts refuses the second row. A digest of the FULL
+        //    composed label keeps them distinct across truncation.
+        String shared = "s".repeat(70);
+        assertThat(PreviewDeployments.hostnameFor(shared, "alpha", "preview.test"))
+            .as("step 4: distinct refs under a truncating prefix stay distinct")
+            .isNotEqualTo(PreviewDeployments.hostnameFor(shared, "beta", "preview.test"));
+        assertThat(PreviewDeployments.hostnameFor("shop", "a".repeat(70), "preview.test"))
+            .as("step 4: distinct over-long refs on one site stay distinct")
+            .isNotEqualTo(PreviewDeployments.hostnameFor("shop", "b".repeat(70), "preview.test"));
     }
 
     @Test
