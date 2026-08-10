@@ -188,3 +188,59 @@ What is still shared, by design, and what it means:
   "pre-namespace" detail, and clearing it is an explicit operator removal.
   Both daystrom and nightstrom were verified to hold zero such resources when
   the namespace landed.
+
+## Reclaiming per-controller leftovers on a shared daemon
+
+Every controller that ever touched a shared Incus daemon leaves at most three
+shared objects there: `hohenheim-<token>-isolation`, `hhx-<token>` and
+`hohenheim-<token>-presence`. With ephemeral controllers (every live test fork
+mints a fresh identity) these accumulate; measured on daystrom 2026-08-10
+before the presence-on-deploy fix: 93 ACLs across 80 distinct tokens, only 13
+of them stamped.
+
+How they are reclaimed, in order of preference:
+
+1. AUTOMATICALLY. The `ReapIncusControllers` sweep (every 15 minutes on any
+   controller with the INSTANCES role and the host enrolled) removes a foreign
+   controller's shared objects only when three facts agree: the object carries
+   another controller's token, its `used_by` is empty on a re-read at delete
+   time, and its controller's presence stamp expired past
+   `hohenheim.incus.controller_presence_grace_hours` (default 168h). Since the
+   presence-on-deploy fix, every deploy stamps the presence marker, so ANY
+   controller that ever deployed becomes reapable this way after the grace.
+   The live test lane additionally runs this sweep at every host enrollment
+   and hands its own shared objects back at teardown, so a cleanly finished
+   test fork leaves nothing and a killed one is reaped after the grace.
+
+2. BY OPERATOR ACTION, for objects with NO presence stamp (controllers older
+   than the presence mechanism, or forks killed before their first deploy).
+   The admin panel's server row action "Reap controller objects" runs
+   `ReapIncusControllers.reapIncludingUnstamped` on ONE named host: same
+   classification, but unstamped objects go too, still re-verifying `used_by`
+   per object at the daemon. NEVER run it while live test suites are running
+   against that daemon -- a concurrent fork's freshly minted, not-yet-stamped
+   ACL is indistinguishable from legacy garbage in that window.
+
+3. NEVER by hand-deleting at the daemon while any hohenheim controller might
+   be mid-deploy against it.
+
+Docker daemons have no cross-controller presence mechanism (a known gap:
+labels are immutable, so a heartbeat needs its own design). A dead ephemeral
+controller's record-scoped Docker leftovers (`hohenheim-<token>-...` networks,
+volumes, containers) are reported by the reconciler as foreign and must be
+reclaimed manually, e.g. after confirming no live fork owns the token:
+
+    docker network ls --format '{{.Name}}' | grep '^hohenheim-<token>-' | xargs -r docker network rm
+    docker volume ls -q | grep '^hohenheim-<token>-' | xargs -r docker volume rm
+
+## Host script: incus-docker-forward.sh
+
+Both Incus hosts run `/usr/local/sbin/incus-docker-forward.sh` from a oneshot
+systemd unit (`incus-docker-forward.service`) because Docker sets the IPv4
+FORWARD policy to DROP, which silently blackholes forwarded IPv4 for Incus
+bridges while IPv6 keeps working -- the classic half-masked failure. The
+canonical script lives in this repo at `docs/host-scripts/incus-docker-forward.sh`.
+It matches bridges by iptables interface WILDCARD (`incusbr+`, `hhx-+`,
+`hohenheim-extra`), never by a hand list: `hhx-<token>` bridges are created and
+deleted at runtime, so any boot-time enumeration goes stale the moment a new
+controller deploys an extra NIC.
