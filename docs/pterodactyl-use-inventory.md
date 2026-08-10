@@ -49,7 +49,7 @@ twenty-third row:
 | REJECTED | 8 | 15, 16, 17, 18, 19, 20, 21, 22 |
 | OPEN | 0 | (was 1: the localization clause, CLOSED 2026-08-08) |
 | | | Ranked-open #4, instance-to-database linkage, CLOSED 2026-08-08 (item 10) |
-| CLAIMED | 0 as a row | but three sub-verdicts are CLAIMED inside PARTIAL rows: `InstanceBackups.restoreToNew` (item 9), the durability contract of install (item 3), the file-capability enforcement matrix (item 5) |
+| CLAIMED | 0 as a row | but three sub-verdicts are CLAIMED inside PARTIAL rows: `InstanceBackups.restoreToNew`'s create-story docblock (item 9; NARROWED 2026-08-10 -- backupNow, retention and both refusals are hermetic now, only the restore create-story stays live-only), the durability contract of install (item 3), the file-capability enforcement matrix (item 5) |
 
 Of the 7 IMPLEMENTED rows, all 7 rest on hermetic state-asserting tests. Of the
 7 PARTIAL rows, five are partial specifically because the working half is proven
@@ -323,8 +323,10 @@ stops a stored chain.
 
 ## 9. Backups and restore
 
-**PARTIAL.** The archive and the off-host target layers are proven hermetically;
-the instance backup-to-off-host-and-restore JOURNEY is proven only `[live]`.
+**PARTIAL.** The archive and the off-host target layers are proven hermetically,
+and since 2026-08-10 so are the BACKUP half of the lane (`InstanceBackupsTest`:
+key discipline, retention, boot settle, both refusals); the restore-to-new
+JOURNEY is still proven only `[live]`.
 
 Works, with hermetic proof:
 
@@ -337,6 +339,12 @@ Works, with hermetic proof:
   `src/browserTest/java/be/elevenways/hohenheim/test/backup/BackupTargetsTest.java:122`
   asserts the RETRIEVED BYTES equal what was stored, plus a traversal refusal. **[test]**
 - Restore capacity gate: `src/browserTest/java/be/elevenways/hohenheim/test/instance/RestoreCapacityTest.java:79`, `:123`. **[test]**
+- Backup lane honesty (2026-08-10): same-second captures get DISTINCT remote keys
+  and retention never removes the surviving row's artifact; the prune keeps the
+  row of an artifact the target refuses to release; interrupted uploads are
+  settled FAILED at boot with their artifact removed; the BACKUPS gate fires
+  before the target resolves; tenants cannot restore.
+  `src/browserTest/java/be/elevenways/hohenheim/test/instance/InstanceBackupsTest.java`. **[test]**
 
 Not proven without a daemon:
 
@@ -345,13 +353,23 @@ Not proven without a daemon:
 - The real journey: `LiveOffHostBackupTest.java:166` (4 assumption gates),
   `LiveControlPlaneOffHostBackupTest.java:116`, `InstanceSnapshotBackupLiveTest.java:170`,
   `IncusSnapshotBackupLiveTest`. **[live]**
-- `InstanceBackups.java:57` (`backupNow` :79, `restoreToNew` :251,
-  `pruneForRetention` :409) has NO hermetic state-asserting test. Its docblock
-  describes host admission, network policy, hardening and a fenced deploy on the
-  restore path; the code is there, but treat the docblock as **CLAIMED**.
+- `InstanceBackups.java:60` (`backupNow` :82, `restoreToNew` :276,
+  `pruneForRetention` :459). **SUPERSEDED 2026-08-10** (this bullet read "has NO
+  hermetic state-asserting test" until then, and that gap was not garnish: the
+  same-second remote-key collision both snapshot lanes had already fixed sat
+  unfixed in this lane precisely because nothing hermetic could catch it --
+  retention deleting the older of two same-second rows destroyed the artifact
+  the surviving COMPLETE row pointed at). `InstanceBackupsTest` now covers
+  backupNow's key discipline under retention, prune keeping the row of an
+  undeletable artifact, the boot settle of interrupted uploads, the
+  gate-before-target-resolution refusal and the tenant restore refusal, all
+  daemon-free. **[test]** The restore path's docblock claims (host admission,
+  network policy, hardening, fenced deploy on restore-to-new) are still proven
+  only `[live]`; treat THAT half as **CLAIMED** still.
 
 Stated limitation, not a bug: `restoreToNew` refuses non-operators outright
-(`backup_restore_operator_only`, `InstanceBackups.java:274`). A tenant with the
+(`backup_restore_operator_only`, `InstanceBackups.java:299`; hermetic since
+2026-08-10, `InstanceBackupsTest`). A tenant with the
 `backups` capability can TAKE a backup and cannot RESTORE one. Pterodactyl
 allows a subuser to restore. This is a deliberate difference (a restore mints a
 new instance and therefore spends quota and placement), and it is a real

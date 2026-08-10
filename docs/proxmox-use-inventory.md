@@ -251,10 +251,14 @@ quota and migration semantics for a choice we do not make in practice.
 
 Capacity is consulted in ONE direction: `RestoreCapacity.require` reads the pool's
 `space.total - space.used` with a 1.2x headroom factor and refuses
-`restore_capacity` / `restore_capacity_unknown`. It gates backup restore,
-snapshot restore and cold migration. **[code]** `server/instance/RestoreCapacity.java:43-96`,
-call sites `InstanceBackups.java:309`, `InstanceSnapshots.java:247`,
-`InstanceMigrations.java:223`.
+`restore_capacity` / `restore_capacity_unknown`. It gates backup restore, the
+VOLUME-lane snapshot restore and cold migration. The NATIVE-lane snapshot restore
+deliberately carries NO capacity check (`InstanceSnapshots.restoreNative`'s own
+AIDEV-NOTE: a pool-resident rollback moves no bytes onto the host, and the
+daemon's operation is the authority that fails loudly). **[code]**
+`server/instance/RestoreCapacity.java:43-96`, call sites
+`InstanceBackups.java:339`, `InstanceSnapshots.java:278`,
+`InstanceMigrations.java:93` (via the `CapacityCheck` seam).
 
 **TESTED 2026-08-06** (this row read "GAP, named: RestoreCapacity has NO test"
 until then -- no test class referenced it, neither named refusal was asserted
@@ -442,15 +446,37 @@ operator-confirmed, unquarantined -- deliberately not the compute ADMISSION gate
 so a storage-only host never needs a runtime or an admit. Archives are encrypted
 and manifest-checksummed. `restoreToNew` takes a destination host spelling.
 **[code]** `server/backup/*`, `server/host/HostAdmission.java:112-121`,
-`server/instance/InstanceBackups.java:246-309`.
+`server/instance/InstanceBackups.java:276-403`.
 
 - CI: `BackupArchiveTest` (4, including a flipped-ciphertext refusal and a
-  foreign-keyring refusal), `BackupTargetsTest`, `ControlPlaneBackupTest` (3).
+  foreign-keyring refusal), `BackupTargetsTest`, `ControlPlaneBackupTest` (3),
+  `InstanceBackupsTest` (5 daemon-free journeys over the fake native daemons +
+  a filesystem target: same-second key uniqueness under retention, gate-before-
+  target-resolution, prune keeping the row of an undeletable artifact, the boot
+  settle of interrupted uploads, the tenant restore refusal).
 - Live: `LiveOffHostBackupTest` (backup to another machine and restore from it),
   `InstanceSnapshotBackupLiveTest`, `IncusSnapshotBackupLiveTest`.
 - **Restore to a NEW host proven live 2026-08-06** in `IncusColdMigrationLiveTest`:
   refused by name onto a still-cordoned daystrom, then landing there after
   uncordon with the BACKED-UP state (v1, not the migrated v2). **[live]**
+
+**Defect found by the 2026-08-10 audit and fixed:** the backup lane had the SAME
+same-second collision the two snapshot lanes had already fixed -- the object key
+was `token/instance-N/<stamp to the second>.hib` with the row saved AFTER the key
+existed, so two backups of one instance inside one second wrote ONE object, and
+retention deleting the older row destroyed the artifact the surviving COMPLETE
+row still pointed at. The row is now saved first and its id is part of the key
+(`InstanceBackups.java:180-196`), retention orders by row id like the snapshot
+lanes, and `InstanceBackupsTest` holds the counterfactual. In the same slice:
+rows left `uploading` by a killed controller are settled FAILED at boot with
+their possibly-committed artifact removed (`recoverInterrupted`, process-start
+fenced), FAILED snapshot rows whose payload survived a mid-capture kill are
+reclaimed the same way (`InstanceSnapshots.recoverInterrupted`), the dashboard
+gained a backup FRESHNESS projection (`backup.stale_after_days`,
+`AttentionCollector.staleInstanceBackups`) plus a per-declared-type task
+projection replacing the recent-200-row window, and the 1-arg `backupNow` asks
+the BACKUPS capability BEFORE resolving the target so a view-only tenant gets
+the uniform refusal instead of the target's configuration.
 
 Control-plane backup (the DB plus the encryption keyring, which together hold
 every fleet credential) is a scheduled task with its own retention and an
