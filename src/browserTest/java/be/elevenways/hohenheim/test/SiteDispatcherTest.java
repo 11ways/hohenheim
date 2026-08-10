@@ -78,6 +78,122 @@ class SiteDispatcherTest {
         return upstream.getAddress().getPort();
     }
 
+    /** Start an upstream that copies the FULL inbound request header map for assertions. */
+    private int startHeaderCapturingUpstream(
+            AtomicReference<com.sun.net.httpserver.Headers> captured) throws Exception {
+        upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        upstream.createContext("/", ex -> {
+            com.sun.net.httpserver.Headers copy = new com.sun.net.httpserver.Headers();
+            copy.putAll(ex.getRequestHeaders());
+            captured.set(copy);
+            byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
+        upstream.start();
+        return upstream.getAddress().getPort();
+    }
+
+    /**
+     * Finding 1: the forwarding trust boundary is wider than the four canonicalized names. An
+     * anonymous client's RFC 7239 Forwarded / X-Forwarded-* aliases / CDN client-IP headers /
+     * IIS URL-rewrite pair must NOT survive to the upstream, or a tenant framework trusts a
+     * forged origin. Asserts ABSENCE at the upstream, not the presence of the four we keep.
+     */
+    @Test
+    void forwardedHeaderAliasFamilyIsStrippedAtUpstream() throws Exception {
+        resetDatabase();
+        AtomicReference<com.sun.net.httpserver.Headers> captured = new AtomicReference<>();
+        int upstreamPort = startHeaderCapturingUpstream(captured);
+        setupSiteWithDomain("hohenheim:proxy", "alias.test", "exact",
+            Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
+        proxy = startProxy();
+
+        // Each alias carries a DISTINCTIVE forged value; the security property is that no forged
+        // value survives to the upstream -- whether the header is stripped outright or (for the
+        // ones Undertow's own X-Forwarded support regenerates, e.g. -Port/-Server) overwritten
+        // with the true connection value. Asserting forged-value absence is robust to which of
+        // the two happens per header.
+        Map<String, String> forged = new java.util.LinkedHashMap<>();
+        forged.put("Forwarded", "for=1.2.3.4;proto=https;host=evil.test");
+        forged.put("X-Forwarded-Port", "8443");
+        forged.put("X-Forwarded-Prefix", "/admin");
+        forged.put("X-Forwarded-Server", "evil.test");
+        forged.put("X-Forwarded-Scheme", "https");
+        forged.put("X-Forwarded-Ssl", "on");
+        forged.put("True-Client-IP", "1.2.3.4");
+        forged.put("CF-Connecting-IP", "1.2.3.4");
+        forged.put("X-Client-IP", "1.2.3.4");
+        forged.put("X-Original-URL", "/admin/secret");
+        forged.put("X-Rewrite-URL", "/admin/secret");
+
+        List<String> headerLines = new ArrayList<>();
+        forged.forEach((name, value) -> headerLines.add(name + ": " + value));
+        String response = rawRequest(httpPort(proxy), "alias.test", "/",
+            headerLines.toArray(new String[0]));
+
+        assertThat(response).contains("200");
+        com.sun.net.httpserver.Headers h = captured.get();
+        assertThat(h).as("upstream was reached").isNotNull();
+        forged.forEach((name, value) ->
+            assertThat(h.getFirst(name)).as("forged forwarding value survived to upstream: " + name)
+                .isNotEqualTo(value));
+        // The forged host must not have leaked into the host hohenheim regenerates either.
+        assertThat(h.getFirst("X-Forwarded-Host")).isEqualTo("alias.test");
+        assertThat(h.getFirst("X-Forwarded-Proto")).isEqualTo("http");
+    }
+
+    /**
+     * Finding 2: hop-by-hop request headers (RFC 7230 6.1) must not reach an upstream, and a
+     * Connection: <token> must drop the client-named header. Asserts each is absent upstream.
+     */
+    @Test
+    void hopByHopHeadersAreNotForwardedToUpstream() throws Exception {
+        resetDatabase();
+        AtomicReference<com.sun.net.httpserver.Headers> captured = new AtomicReference<>();
+        int upstreamPort = startHeaderCapturingUpstream(captured);
+        setupSiteWithDomain("hohenheim:proxy", "hop.test", "exact",
+            Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
+        proxy = startProxy();
+
+        String response = rawRequest(httpPort(proxy), "hop.test", "/",
+            "Connection: X-Secret-Hop",
+            "X-Secret-Hop: leak-me",
+            "Proxy-Authorization: Basic c3B5Cg==",
+            "TE: trailers",
+            "Keep-Alive: timeout=5");
+
+        assertThat(response).contains("200");
+        com.sun.net.httpserver.Headers h = captured.get();
+        assertThat(h).as("upstream was reached").isNotNull();
+        assertThat(h.getFirst("X-Secret-Hop")).as("Connection-named header dropped").isNull();
+        assertThat(h.getFirst("Proxy-Authorization")).isNull();
+        assertThat(h.getFirst("TE")).isNull();
+        assertThat(h.getFirst("Keep-Alive")).isNull();
+    }
+
+    /**
+     * Finding 4: with websocket_upgrade=false the gate must refuse ANY upgrade attempt, not just
+     * the exact "Upgrade: websocket" spelling. A comma-list whose first value is not "websocket"
+     * slipped past the old exact-match check and let the upstream's 101 tunnel anyway.
+     */
+    @Test
+    void websocketDisabledRefusesAnyUpgradeSpelling() throws Exception {
+        resetDatabase();
+        int markerPort = startMarkerUpstream("forwarded-anyway");
+        setupSiteWithDomain("hohenheim:proxy", "nows.test", "exact",
+            Map.of("forward_host", "127.0.0.1", "forward_port", markerPort,
+                "websocket_upgrade", false));
+        proxy = startProxy();
+
+        String response = rawRequest(httpPort(proxy), "nows.test", "/",
+            "Connection: Upgrade",
+            "Upgrade: h2c, websocket");
+
+        assertThat(response).contains("403").doesNotContain("forwarded-anyway");
+    }
+
     @Test
     void trustedKeyPropagatesTheRealClientIp() throws Exception {
         resetDatabase();
