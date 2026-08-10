@@ -7543,5 +7543,17 @@
       "text": "Branch patterns (exact or with *) whose pushes create per-branch previews. Empty means pull-request previews only; the production branch never gets one.",
       "scope": "help"
     }
-  ]
+  ],
+  "preview_ref_required": {
+    "text": "A branch or ref is required",
+    "scope": "violations"
+  },
+  "preview_queue_failed": {
+    "text": "The preview could not be queued: {$reason}",
+    "scope": "violations"
+  },
+  "destroy_confirm": {
+    "text": "This destroys the preview's running environment and releases its hostname.",
+    "scope": "preview_deployment"
+  }
 }

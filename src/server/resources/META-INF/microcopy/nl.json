@@ -7543,5 +7543,17 @@
       "text": "Branch-patronen (exact of met *) waarvan pushes per-branch previews aanmaken. Leeg betekent enkel pull-request-previews; de productiebranch krijgt er nooit een.",
       "scope": "help"
     }
-  ]
+  ],
+  "preview_ref_required": {
+    "text": "Een branch of ref is vereist",
+    "scope": "violations"
+  },
+  "preview_queue_failed": {
+    "text": "De preview kon niet worden ingepland: {$reason}",
+    "scope": "violations"
+  },
+  "destroy_confirm": {
+    "text": "Dit vernietigt de draaiende previewomgeving en geeft de hostnaam vrij.",
+    "scope": "preview_deployment"
+  }
 }
