@@ -615,6 +615,24 @@ public final class HohenheimAccess {
      * also the same refusal a caller gets for an instance they cannot see at all, which
      * is what the API's uniform 404 is built on.
      *
+     * AIDEV-NOTE (default-allow, deferred inversion -- 2026-08-10): the opening
+     * {@code !isTenantOriginated()} ALLOWS whenever no tenant identity is in flight, and
+     * "no conduit" conflates a boot task, a sweeper, a WebSocket handler and a LEAKED
+     * JobRunner continuation into one verdict -- only some of which are provably safe. A
+     * dedicated recon established, and this was confirmed, that this is STRUCTURAL, NOT LIVE:
+     * no off-thread path reaches this gate today (the file-manager caller set is fully
+     * synchronous; the two request-continuations that DO reach a gate -- the template-install
+     * runner and SiteReleases.scheduleDrain -> InstanceService.stop -- gain no authority
+     * because the entry point already authorized the same target). The durable fix is to
+     * demand a POSITIVE system/operator marker ({@code TenantWrites.asSystem(...)}) rather
+     * than infer one from an empty ThreadLocal, plus narrowing {@code GeneratedRows} from a
+     * whole-thread off-switch to "attribution plus the writes it wraps". That inversion is
+     * deferred DELIBERATELY: fail-closed-by-default requires enumerating and wrapping EVERY
+     * system entry point (boot stages, TaskService sweepers, seeds, the ACME publisher, CLI
+     * tools, the WebSocket authenticators, the migration/lease runners) -- miss one and
+     * legitimate system work refuses itself, which is worse than a gap with no live exploit.
+     * It warrants its own wave with a full enumeration; do not close it with a blind marker.
+     *
      * @throws Violations {@code instance_not_permitted}
      */
     public static void requireOperationCapability(int instanceId, @NonNull String capability) {
@@ -622,7 +640,10 @@ public final class HohenheimAccess {
             return;
         }
         AccessContext ctx = TenantWrites.acting();
-        if (ctx == null || !hasInstanceCapability(ctx, instanceId, capability)) {
+        // ctx.isAnonymous() aligns this with requireDatabaseCapability. The walk already
+        // returns false for an anonymous principal before any lookup, so this is an explicit
+        // fail-closed spelling for readability, not a behaviour change.
+        if (ctx == null || ctx.isAnonymous() || !hasInstanceCapability(ctx, instanceId, capability)) {
             throw Violations.ofForm(Microcopy.of("instance_not_permitted")
                 .withFilter("scope", "violations"));
         }
