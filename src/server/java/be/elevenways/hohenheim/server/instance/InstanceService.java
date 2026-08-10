@@ -26,11 +26,13 @@ import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -489,6 +491,101 @@ public final class InstanceService {
                            @NonNull InstanceRuntime runtime,
                            @NonNull InstanceSpec spec, int serverId,
                            @NonNull Map<String, String> variables) {}
+
+    // -- interrupted capture/restore recovery ---------------------------------------
+
+    /** The activity action an interrupted-status settle is recorded under. */
+    public static final String ACTIVITY_SETTLE_ACTION = "settled_interrupted";
+
+    /**
+     * Boot recovery: settle every instance a killed controller left {@code capturing} or
+     * {@code restoring} -- statuses only the in-process outcome paths ever clear, so a
+     * controller kill used to leave the record refusing deploy, stop, backup, snapshot
+     * and restore FOREVER, with destroy as the only escape.
+     *
+     * The discriminator is the process-start fence InstanceBackups/InstanceSnapshots
+     * already settle by: captures and restores are synchronous and in-process, so a
+     * status written before this process existed belongs to a dead controller and one
+     * this process wrote is a live operation and untouchable
+     * ({@code InstanceOperationGuard.stamp} assigns UPDATED_AT for exactly this read).
+     */
+    public static void recoverInterrupted() {
+        Instant processStart = Instant.ofEpochMilli(
+            ManagementFactory.getRuntimeMXBean().getStartTime());
+        List<Row> stuck = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.DELETED_AT.isNull())
+            .where(Criteria.or(
+                InstanceModel.STATUS.eq(InstanceModel.STATUS_CAPTURING),
+                InstanceModel.STATUS.eq(InstanceModel.STATUS_RESTORING)))
+            .all();
+        if (stuck.isEmpty()) {
+            return;
+        }
+        InstanceService service = new InstanceService();
+        for (Row row : stuck) {
+            Instant written = row.get(InstanceModel.UPDATED_AT);
+            if (written == null) {
+                written = row.get(InstanceModel.CREATED_AT);
+            }
+            if (written != null && !written.isBefore(processStart)) {
+                continue;   // written by THIS process: a live operation, not a corpse
+            }
+            int id = row.get(InstanceModel.ID);
+            try {
+                if (!service.settleInterrupted(id)) {
+                    Blast.log("INSTANCE: could not settle interrupted",
+                        row.get(InstanceModel.STATUS), "state of", id,
+                        "- the daemon did not answer; retried at the next boot");
+                }
+            } catch (RuntimeException error) {
+                Blast.log("INSTANCE: settling interrupted state of", id,
+                    "failed:", error.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Settle one dead-controller {@code capturing}/{@code restoring} record.
+     *
+     * A capture never changes the payload it reads, so the settle takes DAEMON truth
+     * (a killed native-lane capture leaves the workload running, a killed cold-lane one
+     * leaves it stopped). An interrupted RESTORE may have half-written the volume, so it
+     * settles to {@code error} without asking the daemon -- the workload's presence says
+     * nothing about the payload's integrity, and an operator must decide.
+     *
+     * @return true when the record was settled, false when the daemon did not answer
+     */
+    boolean settleInterrupted(int instanceId) {
+        Resolved resolved = resolve(instanceId);
+        Row row = resolved.row();
+        String status = row.get(InstanceModel.STATUS);
+        boolean capturing = InstanceModel.STATUS_CAPTURING.equals(status);
+        if (!capturing && !InstanceModel.STATUS_RESTORING.equals(status)) {
+            return true;   // settled by someone else meanwhile
+        }
+        String settled;
+        if (capturing) {
+            InstanceStatus live;
+            try {
+                live = resolved.runtime().status(resolved.spec().handle());
+            } catch (RuntimeException unreachable) {
+                return false;   // refusing to answer is not evidence; defer
+            }
+            settled = live.running()
+                ? InstanceModel.STATUS_RUNNING : InstanceModel.STATUS_STOPPED;
+        } else {
+            settled = InstanceModel.STATUS_ERROR;
+        }
+        long fence = this.leases.requireFence(resolved.serverId());
+        InstanceOperationGuard.stamp(this.leases, instanceId, resolved.serverId(), fence,
+            settled, row.get(InstanceModel.NAME));
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId,
+            ACTIVITY_SETTLE_ACTION, status + " -> " + settled
+                + " (interrupted by a controller restart)");
+        Blast.log("INSTANCE: settled interrupted", status, "state of",
+            row.get(InstanceModel.NAME), "->", settled);
+        return true;
+    }
 
     /**
      * Load the record and resolve its kind handler, host, variables and spec (variables

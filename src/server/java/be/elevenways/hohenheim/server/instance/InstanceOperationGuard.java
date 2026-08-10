@@ -11,6 +11,8 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
+
 /**
  * The settle-then-refuse discipline shared by every instance operation: ONE fenced
  * status write (the guarded updateAll every runtime outcome rides) and ONE protected-
@@ -173,6 +175,12 @@ final class InstanceOperationGuard {
      */
     static void stamp(@NonNull HostLeases leases, int instanceId, int serverId, long fence,
                       @NonNull String status, @NonNull Object instanceName) {
+        // AIDEV-NOTE: UPDATED_AT is assigned HERE because this is a set-based updateAll
+        // that fires no write hooks -- without it a CAPTURING/RESTORING stamp leaves the
+        // row's timestamp at whatever save() last wrote, and the boot settle
+        // (InstanceService.recoverInterrupted) could not tell a status this process just
+        // stamped from one a dead controller left behind. The process-start fence rides
+        // this column.
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
@@ -181,6 +189,7 @@ final class InstanceOperationGuard {
                 InstanceModel.CLAIM_FENCE.isNull(),
                 InstanceModel.CLAIM_FENCE.lte(fence)))
             .assign(InstanceModel.STATUS, status)
+            .assign(InstanceModel.UPDATED_AT, Instant.now())
             .assign(InstanceModel.CLAIM_FENCE, fence)
             .updateAll();
         if (matched == 0) {
