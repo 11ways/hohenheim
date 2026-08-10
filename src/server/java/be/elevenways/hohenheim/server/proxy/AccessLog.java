@@ -42,12 +42,15 @@ public final class AccessLog {
                 String ua = ex.getRequestHeaders().getFirst(Headers.USER_AGENT);
                 long size = ex.getResponseBytesSent();
 
-                // Combined log format
+                // Combined log format. Quoted fields carry client-controlled text (Host, User-Agent),
+                // so escape backslash and double-quote or a crafted value would break every
+                // combined-format parser reading the file. (Undertow already terminates header
+                // values at CR/LF, so newline injection is not reachable here.)
                 String line = clientIp + " - - [" + Instant.now() + "] \""
                     + method + " " + path + (query != null && !query.isEmpty() ? "?" + query : "")
                     + " " + ex.getProtocol() + "\" " + status + " " + size
-                    + " \"" + (hostname != null ? hostname : "-") + "\""
-                    + " \"" + (ua != null ? ua : "-") + "\"";
+                    + " \"" + quote(hostname) + "\""
+                    + " \"" + quote(ua) + "\"";
 
                 appendToLogFile(logPath, line);
             } catch (Exception ignored) {
@@ -57,15 +60,31 @@ public final class AccessLog {
         });
     }
 
+    /** Escape a combined-format quoted field: backslash and double-quote only; null becomes "-". */
+    private static String quote(String value) {
+        if (value == null || value.isEmpty()) {
+            return "-";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    // AIDEV-NOTE: serialize appends so concurrent request completions cannot interleave partial
+    // lines in the file. This still opens/closes a FileWriter per line -- a known perf limitation,
+    // acceptable because the access log is opt-in (Logging.ACCESS_TO_FILE) and off by default; a
+    // persistent writer would need lifecycle ownership tied to ProxyServer shutdown.
+    private static final Object WRITE_LOCK = new Object();
+
     private static void appendToLogFile(String logPath, String line) {
         try {
             File logFile = new File(logPath);
             File parent = logFile.getParentFile();
             if (parent != null && !parent.exists()) parent.mkdirs();
 
-            try (Writer writer = new BufferedWriter(new FileWriter(logFile, true))) {
-                writer.write(line);
-                writer.write('\n');
+            synchronized (WRITE_LOCK) {
+                try (Writer writer = new BufferedWriter(new FileWriter(logFile, true))) {
+                    writer.write(line);
+                    writer.write('\n');
+                }
             }
         } catch (IOException ignored) {
             // Don't let log writing failures break request handling
