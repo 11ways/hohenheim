@@ -47,8 +47,6 @@ public final class HohenheimWriteHooks implements ZenitModule {
     public void init() {
         // No plaintext site api key reaches the datasource, on ANY write path.
         SiteApiKeys.install();
-        // No plaintext dyndns token reaches the datasource, on ANY write path.
-        DynamicDnsService.installTokenHashing();
         // No reserved control variable (HOHENHEIM_*, PORT, the security-report
         // pair) can be persisted as an operator environment variable.
         ReservedEnv.install();
@@ -75,6 +73,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // A delegated tenant may set only the delegated domain columns, and may author only
         // the allow-listed DNS record types -- on every writer, not just the /manage forms.
         TenantWrites.install();
+        // A dyndns credential dies with its record, on every delete lane -- AFTER
+        // TenantWrites so an unauthorized record delete refuses first.
+        DynamicDnsService.installCredentialCascade();
         // The pl-terminal page gets the wasm concessions; no other admin page does.
         SiteTerminalCsp.install();
         // A tenant-originated instance write may only run an APPROVED template's image;

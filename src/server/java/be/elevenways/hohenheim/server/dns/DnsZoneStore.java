@@ -190,9 +190,9 @@ public final class DnsZoneStore {
                 long ttl = DnsRecordCodec.resolveTtl(row.get(DnsRecordModel.TTL), defaultTtl);
                 Record record = DnsRecordCodec.toRecord(origin, owner, type, ttl,
                     valueOr(row.get(DnsRecordModel.VALUE), ""),
-                    row.get(DnsRecordModel.PRIORITY),
-                    row.get(DnsRecordModel.WEIGHT),
-                    row.get(DnsRecordModel.PORT));
+                    DnsRecordModel.priorityOf(row),
+                    DnsRecordModel.weightOf(row),
+                    DnsRecordModel.portOf(row));
                 addRecord(nodes, record.getName(), record, origin);
             }
             catch (Exception e) {

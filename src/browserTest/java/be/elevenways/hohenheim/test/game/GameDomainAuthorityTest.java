@@ -262,7 +262,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         assertThat((String) srv.get(DnsRecordModel.NAME))
             .as("step 2: the owner name is the minecraft SRV of the mapped host")
             .isEqualTo("_minecraft._tcp.play");
-        assertThat((Integer) srv.get(DnsRecordModel.PORT))
+        assertThat(DnsRecordModel.portOf(srv))
             .as("step 2: the SRV port is the proxy's PUBLIC pre-allocated port")
             .isEqualTo(25599);
         assertThat((String) srv.get(DnsRecordModel.VALUE)).isEqualTo(HOST);
@@ -300,7 +300,8 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
             .as("step 4: deleting the generated config row is refused")
             .isInstanceOf(Violations.class);
         Row srvEdit = generatedSrvRow();
-        srvEdit.set(DnsRecordModel.PORT, 1);
+        srvEdit.set(DnsRecordModel.DATA,
+            DnsRecordModel.dataFor(DnsRecordModel.TYPE_SRV, 0, 5, 1));
         Throwable srvRefused = catchThrowable(
             () -> Models.get(DnsRecordModel.class).save(srvEdit));
         assertThat(srvRefused)
@@ -526,9 +527,8 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         foreign.set(DnsRecordModel.ZONE_ID, zoneId);
         foreign.set(DnsRecordModel.NAME, "_minecraft._tcp.manual");
         foreign.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_SRV);
-        foreign.set(DnsRecordModel.PRIORITY, 0);
-        foreign.set(DnsRecordModel.WEIGHT, 0);
-        foreign.set(DnsRecordModel.PORT, 25565);
+        foreign.set(DnsRecordModel.DATA,
+            DnsRecordModel.dataFor(DnsRecordModel.TYPE_SRV, 0, 0, 25565));
         foreign.set(DnsRecordModel.VALUE, "manual." + ZONE);
         foreign.set(DnsRecordModel.ENABLED, true);
         records.save(foreign);

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -7,8 +8,6 @@ import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService.Status;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.validation.Violation;
-import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
@@ -19,13 +18,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
- * Dynamic DNS (dyndns2): token minting, the update state machine (good / nochg
- * / badauth / nohost / family / secondary), and the public /nic/update route
- * over real HTTP with the token in HTTP Basic auth.
+ * Dynamic DNS (dyndns2): credential minting/revocation, the update state machine
+ * (good / nochg / badauth / nohost / family / secondary), and the public
+ * /nic/update route over real HTTP with the token in HTTP Basic auth.
  */
 class DynamicDnsTest extends HohenheimTestBase {
 
@@ -57,124 +54,61 @@ class DynamicDnsTest extends HohenheimTestBase {
         assertThat(result.ip()).isEqualTo("198.51.100.42");
     }
 
+    /** Journey: mint stores only the digest, a re-mint rotates, and revoke kills the token. */
     @Test
-    void tokenIsStoredHashedNotInPlaintext() {
-        // The token is a bearer credential, so only its digest is at rest: a DB read
-        // cannot recover a working token. The client still presents the plaintext,
-        // which hashes to the stored digest, so authentication is unaffected.
+    void credentialLifecycleStoresDigestsRotatesAndRevokes() {
         String token = seedDynamicRecord("dyn-store.example", "home", DnsRecordModel.TYPE_A, "192.0.2.1");
-        int zoneId = Models.get(DnsZoneModel.class).findByOrigin("dyn-store.example").get(DnsZoneModel.ID);
-        Row record = Models.get(DnsRecordModel.class).find()
-            .where(DnsRecordModel.ZONE_ID.eq(zoneId)).first();
-        String stored = record.get(DnsRecordModel.DYNDNS_TOKEN);
-        assertThat(token).as("the minted token is a plaintext hdyn_ token").startsWith("hdyn_");
+        int recordId = recordId("dyn-store.example", "home");
+
+        // 1. The token is a bearer credential, so only its digest is at rest: a DB read
+        //    cannot recover a working token. The client still presents the plaintext,
+        //    which hashes to the stored digest, so authentication is unaffected.
+        Row credential = DynamicDnsService.credentialFor(recordId);
+        assertThat(credential).as("1. minting created the credential row").isNotNull();
+        String stored = credential.get(DnsDyndnsCredentialModel.TOKEN_DIGEST);
+        assertThat(token).as("1. the minted token is a plaintext hdyn_ token").startsWith("hdyn_");
         assertThat(stored)
-            .as("the stored value is a digest, never the recoverable plaintext")
+            .as("1. the stored value is a digest, never the recoverable plaintext")
             .startsWith("sha256:")
             .isEqualTo(DynamicDnsService.digest(token))
             .doesNotContain(token);
-        // The digest still admits the plaintext its holder presents.
-        assertThat(service.update(token, null, "203.0.113.8", null).status()).isEqualTo(Status.GOOD);
-    }
+        assertThat(service.update(token, null, "203.0.113.8", null).status())
+            .as("1. the digest still admits the plaintext its holder presents")
+            .isEqualTo(Status.GOOD);
 
-    @Test
-    void existingPlaintextTokenSurvivesTheHashingSweep() {
-        // A record configured BEFORE hashing holds its token in plaintext -- the shape
-        // every existing install has on disk. bypassBehaviours skips the write hook,
-        // the only way to reproduce it now.
-        String token = seedDynamicRecord("dyn-sweep.example", "home", DnsRecordModel.TYPE_A, "192.0.2.1");
-        int zoneId = Models.get(DnsZoneModel.class).findByOrigin("dyn-sweep.example").get(DnsZoneModel.ID);
-        int recordId = Models.get(DnsRecordModel.class).find()
-            .where(DnsRecordModel.ZONE_ID.eq(zoneId)).first().get(DnsRecordModel.ID);
-        Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ID.eq(recordId))
-            .assign(DnsRecordModel.DYNDNS_TOKEN, token).bypassBehaviours().updateAll();
-        assertThat(Models.get(DnsRecordModel.class).findById(recordId).get(DnsRecordModel.DYNDNS_TOKEN))
-            .as("the pre-migration datasource holds the token in plaintext").isEqualTo(token);
-
-        // The sweep rewrites the plaintext to its digest, in place, and is a no-op on rerun.
-        assertThat(DynamicDnsService.hashStoredTokens())
-            .as("the sweep rewrites exactly the one record holding plaintext").isGreaterThanOrEqualTo(1);
-        String stored = Models.get(DnsRecordModel.class).findById(recordId).get(DnsRecordModel.DYNDNS_TOKEN);
-        assertThat(stored).as("the sweep replaces the plaintext with its digest")
-            .isEqualTo(DynamicDnsService.digest(token)).doesNotContain(token);
-
-        // The configured client keeps working: the same plaintext still authenticates.
+        // 2. A re-mint ROTATES: one credential row per record, the old token dies.
+        String rotated = DynamicDnsService.mintFor(recordId);
+        assertThat(Models.get(DnsDyndnsCredentialModel.class).find()
+            .where(DnsDyndnsCredentialModel.RECORD_ID.eq(recordId)).all())
+            .as("2. re-minting keeps ONE credential row").hasSize(1);
         assertThat(service.update(token, null, "203.0.113.9", null).status())
-            .as("an existing token still authenticates after the sweep").isEqualTo(Status.GOOD);
-        // A wrong token is refused.
-        assertThat(service.update("hdyn_wrongtoken00.nope", null, "203.0.113.9", null).status())
-            .isEqualTo(Status.BADAUTH);
+            .as("2. the previous token no longer authenticates").isEqualTo(Status.BADAUTH);
+        assertThat(service.update(rotated, null, "203.0.113.9", null).status())
+            .as("2. the rotated token does").isEqualTo(Status.GOOD);
+
+        // 3. Revoke deletes the row; the token dies with it.
+        assertThat(DynamicDnsService.revokeFor(recordId))
+            .as("3. revoke reports the credential it deleted").isTrue();
+        assertThat(DynamicDnsService.credentialFor(recordId))
+            .as("3. the credential row is gone").isNull();
+        assertThat(service.update(rotated, null, "203.0.113.10", null).status())
+            .as("3. a revoked token answers badauth").isEqualTo(Status.BADAUTH);
     }
 
+    /** The credential dies with its RECORD too, whatever deletes the record. */
     @Test
-    void operatorTypedTokensMustBeMintedShapeAndStrong() {
-        seedDynamicRecord("dyn-adopt.example", "home", DnsRecordModel.TYPE_A, "192.0.2.1");
+    void credentialDiesWithItsRecord() {
+        String token = seedDynamicRecord("dyn-cascade.example", "home", DnsRecordModel.TYPE_A, "192.0.2.1");
+        int recordId = recordId("dyn-cascade.example", "home");
+        assertThat(DynamicDnsService.credentialFor(recordId)).isNotNull();
+
         DnsRecordModel records = Models.get(DnsRecordModel.class);
-        int zoneId = Models.get(DnsZoneModel.class).findByOrigin("dyn-adopt.example").get(DnsZoneModel.ID);
-        Row record = records.find().where(DnsRecordModel.ZONE_ID.eq(zoneId)).first();
-        String storedDigest = record.get(DnsRecordModel.DYNDNS_TOKEN);
+        records.delete(records.findById(recordId));
 
-        // 1. A weak operator-typed value is refused with the specific violation:
-        //    its fast digest would be dictionary-recoverable from a copied DB.
-        record.set(DnsRecordModel.DYNDNS_TOKEN, "my-router-password");
-        Violations weak = catchThrowableOfType(() -> records.save(record), Violations.class);
-        assertThat((Object) weak)
-            .as("1. adopting a weak dyndns token must throw Violations").isNotNull();
-        Violation violation = weak.all().get(0);
-        assertThat(violation.fieldName())
-            .as("1. the violation targets the dyndns_token field")
-            .isEqualTo("dyndns_token");
-        assertThat(violation.message().key())
-            .as("1. the violation carries the weak_dyndns_token message")
-            .isEqualTo("weak_dyndns_token");
-        assertThat(violation.value())
-            .as("1. the violation must never echo the credential")
-            .isEqualTo("");
-
-        // 2. A strong value WITHOUT the hdyn_ marker is refused too: authenticate()
-        //    requires the marker, so storing it would be silently dead weight.
-        record.set(DnsRecordModel.DYNDNS_TOKEN, "markerless-0123456789abcdefghijklmnopqrs");
-        assertThatThrownBy(() -> records.save(record))
-            .as("2. a markerless token can never authenticate and must be refused")
-            .isInstanceOf(Violations.class)
-            .hasMessageContaining("weak_dyndns_token");
-
-        // 3. A marker-shaped strong value is adopted (hashed) and the stored value
-        //    it replaced is untouched by the refused attempts.
-        assertThat(Models.get(DnsRecordModel.class).findById(record.get(DnsRecordModel.ID))
-            .get(DnsRecordModel.DYNDNS_TOKEN))
-            .as("3. the refused saves must leave the stored digest untouched")
-            .isEqualTo(storedDigest);
-        String adopted = "hdyn_operator-0123456789abcdefghijklmn";
-        Row fresh = Models.get(DnsRecordModel.class).findById(record.get(DnsRecordModel.ID));
-        fresh.set(DnsRecordModel.DYNDNS_TOKEN, adopted);
-        records.save(fresh);
-        assertThat(Models.get(DnsRecordModel.class).findById(record.get(DnsRecordModel.ID))
-            .get(DnsRecordModel.DYNDNS_TOKEN))
-            .as("3. a strong hdyn_ token must be adopted as its digest")
-            .isEqualTo(DynamicDnsService.digest(adopted));
-    }
-
-    @Test
-    void sha256PrefixedLegacyPlaintextIsSweptNotMisclassified() {
-        // A legacy plaintext token that happens to start with "sha256:" must be
-        // hashed by the sweep like any other plaintext, never treated as already
-        // migrated because of its prefix.
-        seedDynamicRecord("dyn-tricky.example", "home", DnsRecordModel.TYPE_A, "192.0.2.1");
-        int zoneId = Models.get(DnsZoneModel.class).findByOrigin("dyn-tricky.example").get(DnsZoneModel.ID);
-        int recordId = Models.get(DnsRecordModel.class).find()
-            .where(DnsRecordModel.ZONE_ID.eq(zoneId)).first().get(DnsRecordModel.ID);
-        String tricky = "sha256:legacy-router-token";
-        Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ID.eq(recordId))
-            .assign(DnsRecordModel.DYNDNS_TOKEN, tricky).bypassBehaviours().updateAll();
-
-        assertThat(DynamicDnsService.hashStoredTokens())
-            .as("the sweep must rewrite the sha256:-prefixed plaintext token")
-            .isGreaterThanOrEqualTo(1);
-        assertThat(Models.get(DnsRecordModel.class).findById(recordId).get(DnsRecordModel.DYNDNS_TOKEN))
-            .as("the stored value must become the full digest of the tricky plaintext")
-            .isEqualTo(DynamicDnsService.digest(tricky))
-            .doesNotContain("legacy-router-token");
+        assertThat(DynamicDnsService.credentialFor(recordId))
+            .as("deleting the record cascades onto its credential").isNull();
+        assertThat(service.update(token, null, "203.0.113.11", null).status())
+            .as("the orphaned token answers badauth").isEqualTo(Status.BADAUTH);
     }
 
     @Test
@@ -277,7 +211,6 @@ class DynamicDnsTest extends HohenheimTestBase {
         zone.set(DnsZoneModel.ENABLED, true);
         zones.save(zone);
 
-        String token = DynamicDnsService.mintToken();
         DnsRecordModel records = Models.get(DnsRecordModel.class);
         Row record = records.createEmptyRow();
         record.set(DnsRecordModel.ZONE_ID, zone.get(DnsZoneModel.ID));
@@ -285,11 +218,18 @@ class DynamicDnsTest extends HohenheimTestBase {
         record.set(DnsRecordModel.TYPE, type);
         record.set(DnsRecordModel.VALUE, value);
         record.set(DnsRecordModel.ENABLED, true);
-        record.set(DnsRecordModel.DYNAMIC, true);
-        record.set(DnsRecordModel.DYNDNS_TOKEN, token);
         records.save(record);
+        String token = DynamicDnsService.mintFor(record.get(DnsRecordModel.ID));
         DnsZoneStore.INSTANCE.reload();
         return token;
+    }
+
+    private static int recordId(String origin, String name) {
+        int zoneId = Models.get(DnsZoneModel.class).findByOrigin(origin).get(DnsZoneModel.ID);
+        return Models.get(DnsRecordModel.class).find()
+            .where(DnsRecordModel.ZONE_ID.eq(zoneId))
+            .where(DnsRecordModel.NAME.eq(name))
+            .first().get(DnsRecordModel.ID);
     }
 
     private static long serialOf(String origin) {

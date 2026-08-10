@@ -6,12 +6,24 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * One authoritative DNS resource record; rows sharing zone+name+type form one RRset.
  * Owner names are stored relative to the zone origin ("@" = apex, "*" = wildcard).
+ *
+ * AIDEV-NOTE: which fields a record carries FOLLOWS FROM ITS TYPE, declared once on
+ * the {@link #TYPE} enum values: MX and SRV attach a per-type sub-schema that lives in
+ * the {@link #DATA} column ({@code schemaFrom}), every other type carries none. There
+ * are deliberately NO flat priority/weight/port columns (M091 dropped them) -- a new
+ * type-specific field goes into that type's sub-schema, never into a column every
+ * other type must carry. Dynamic-DNS state lives in its own table
+ * ({@link DnsDyndnsCredentialModel}), not on this row.
  */
 public class DnsRecordModel extends Model {
 
@@ -33,6 +45,28 @@ public class DnsRecordModel extends Model {
     public static final java.util.List<String> ALL_TYPES = java.util.List.of(
         TYPE_A, TYPE_AAAA, TYPE_CNAME, TYPE_NS, TYPE_MX, TYPE_TXT, TYPE_CAA, TYPE_SRV);
 
+    // --- Per-type sub-schemas (the ONLY home for type-specific fields) ---
+
+    public static final Schema MX_DATA_SCHEMA = new Schema();
+    public static final IntegerField MX_PRIORITY = MX_DATA_SCHEMA.addField(
+        IntegerField.builder().name("priority")
+            .label(HohenheimFormCopy.label("record_priority"))
+            .help(HohenheimFormCopy.help("record_priority")).build());
+
+    public static final Schema SRV_DATA_SCHEMA = new Schema();
+    public static final IntegerField SRV_PRIORITY = SRV_DATA_SCHEMA.addField(
+        IntegerField.builder().name("priority")
+            .label(HohenheimFormCopy.label("record_priority"))
+            .help(HohenheimFormCopy.help("record_priority")).build());
+    public static final IntegerField SRV_WEIGHT = SRV_DATA_SCHEMA.addField(
+        IntegerField.builder().name("weight")
+            .label(HohenheimFormCopy.label("record_weight"))
+            .help(HohenheimFormCopy.help("record_weight")).build());
+    public static final IntegerField SRV_PORT = SRV_DATA_SCHEMA.addField(
+        IntegerField.builder().name("port")
+            .label(HohenheimFormCopy.label("record_port"))
+            .help(HohenheimFormCopy.help("record_port")).build());
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField ZONE_ID = SCHEMA.addField(IntegerField.builder().name("zone_id")
         .label(HohenheimFormCopy.label("record_zone")).help(HohenheimFormCopy.help("record_zone")).build());
@@ -44,21 +78,21 @@ public class DnsRecordModel extends Model {
         .value(TYPE_AAAA, v -> v.displayName("AAAA").icon("location-dot").color("indigo"))
         .value(TYPE_CNAME, v -> v.displayName("CNAME").icon("link").color("purple"))
         .value(TYPE_NS, v -> v.displayName("NS").icon("server").color("orange"))
-        .value(TYPE_MX, v -> v.displayName("MX").icon("envelope").color("green"))
+        .value(TYPE_MX, v -> v.displayName("MX").icon("envelope").color("green").schema(MX_DATA_SCHEMA))
         .value(TYPE_TXT, v -> v.displayName("TXT").icon("quote-left").color("gray"))
         .value(TYPE_CAA, v -> v.displayName("CAA").icon("certificate").color("teal"))
-        .value(TYPE_SRV, v -> v.displayName("SRV").icon("network-wired").color("pink"))
+        .value(TYPE_SRV, v -> v.displayName("SRV").icon("network-wired").color("pink").schema(SRV_DATA_SCHEMA))
         .build());
     public static final IntegerField TTL = SCHEMA.addField(IntegerField.builder().name("ttl")
         .suffix("s").label(HohenheimFormCopy.label("record_ttl")).help(HohenheimFormCopy.help("record_ttl")).build());
     public static final StringField VALUE = SCHEMA.addField(StringField.builder().name("value")
         .label(HohenheimFormCopy.label("record_value")).help(HohenheimFormCopy.help("record_value")).build());
-    public static final IntegerField PRIORITY = SCHEMA.addField(IntegerField.builder().name("priority")
-        .label(HohenheimFormCopy.label("record_priority")).help(HohenheimFormCopy.help("record_priority")).build());
-    public static final IntegerField WEIGHT = SCHEMA.addField(IntegerField.builder().name("weight")
-        .label(HohenheimFormCopy.label("record_weight")).help(HohenheimFormCopy.help("record_weight")).build());
-    public static final IntegerField PORT = SCHEMA.addField(IntegerField.builder().name("port")
-        .label(HohenheimFormCopy.label("record_port")).help(HohenheimFormCopy.help("record_port")).build());
+
+    /** Type-specific RDATA extras, shaped by the sub-schema the record's TYPE declares. */
+    public static final SchemaField DATA = SCHEMA.addField(SchemaField.builder("data")
+        .schemaFrom("type")
+        .label(HohenheimFormCopy.label("record_data")).build());
+
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true)
         .label(HohenheimFormCopy.label("record_enabled")).help(HohenheimFormCopy.help("record_enabled")).build());
     public static final StringField MANAGED_BY = SCHEMA.addField(StringField.builder().name("managed_by")
@@ -88,25 +122,81 @@ public class DnsRecordModel extends Model {
     public static final DateTimeField GENERATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("generated_at").build());
 
-    // --- Dynamic DNS (dyndns2 update protocol; only A/AAAA records) ---
-    public static final BooleanField DYNAMIC = SCHEMA.addField(BooleanField.builder("dynamic").defaultValue(false)
-        .label(HohenheimFormCopy.label("record_dynamic")).help(HohenheimFormCopy.help("record_dynamic")).build());
-    /**
-     * The HTTP Basic password a dyndns client presents; a live bearer credential.
-     * It is {@code secret()} (never echoed into the form, revisions, activity deltas
-     * or diff rendering; a blank submit keeps the stored value) AND stored HASHED --
-     * only the {@code sha256:} digest is at rest, so a DB read (backup, another
-     * process, revision history) cannot recover a working token. {@code DynamicDnsService}
-     * hashes the presented token and looks the record up by digest; the mint row
-     * action discloses the plaintext ONCE in its toast. {@code DynamicDnsService.installTokenHashing}
-     * normalizes any write, and {@code DyndnsTokenSeeder} hashes pre-existing tokens
-     * in place (which keeps configured clients working, since they present the same plaintext).
-     */
-    public static final StringField DYNDNS_TOKEN = SCHEMA.addField(StringField.builder().name("dyndns_token")
-        .label(HohenheimFormCopy.label("record_dyndns_token")).help(HohenheimFormCopy.help("record_dyndns_token"))
-        .secret().build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
+
+    /** @return true when the type is an address record (the only types dynamic DNS applies to) */
+    public static boolean isAddressType(@Nullable String type) {
+        return TYPE_A.equals(type) || TYPE_AAAA.equals(type);
+    }
+
+    /** @return the MX/SRV priority carried in {@link #DATA}, or null */
+    public static @Nullable Integer priorityOf(@NonNull Row row) {
+        return dataInt(row.get(DATA), "priority");
+    }
+
+    /** @return the SRV weight carried in {@link #DATA}, or null */
+    public static @Nullable Integer weightOf(@NonNull Row row) {
+        return dataInt(row.get(DATA), "weight");
+    }
+
+    /** @return the SRV port carried in {@link #DATA}, or null */
+    public static @Nullable Integer portOf(@NonNull Row row) {
+        return dataInt(row.get(DATA), "port");
+    }
+
+    /** @return the integer under {@code key} when {@code data} is a map carrying one, else null */
+    public static @Nullable Integer dataInt(@Nullable Object data, @NonNull String key) {
+        if (!(data instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Object value = map.get(key);
+        if (value instanceof Integer number) {
+            return number;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Integer.parseInt(text.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Shape the {@link #DATA} value for a type: exactly the keys that type's sub-schema
+     * declares, or null for types that carry none.
+     */
+    public static @Nullable Map<String, Object> dataFor(@Nullable String type,
+                                                        @Nullable Integer priority,
+                                                        @Nullable Integer weight,
+                                                        @Nullable Integer port) {
+        if (TYPE_MX.equals(type)) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            if (priority != null) {
+                data.put("priority", priority);
+            }
+            return data.isEmpty() ? null : data;
+        }
+        if (TYPE_SRV.equals(type)) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            if (priority != null) {
+                data.put("priority", priority);
+            }
+            if (weight != null) {
+                data.put("weight", weight);
+            }
+            if (port != null) {
+                data.put("port", port);
+            }
+            return data.isEmpty() ? null : data;
+        }
+        return null;
+    }
 
     public List<Row> findByZoneId(int zoneId) {
         return find().where(ZONE_ID.eq(zoneId)).all();

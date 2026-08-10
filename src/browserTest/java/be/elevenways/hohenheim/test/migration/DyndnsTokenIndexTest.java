@@ -1,13 +1,7 @@
 package be.elevenways.hohenheim.test.migration;
 
 import be.elevenways.zenit.common.orm.datasource.Datasources;
-import be.elevenways.hohenheim.migration.M046_DyndnsTokenIndex;
-import be.elevenways.zenit.common.orm.OrmConstants;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.migration.Migration;
-import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
-import be.elevenways.zenit.common.orm.migration.operation.AddIndexOperation;
-import be.elevenways.zenit.common.orm.migration.operation.MigrationOperation;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.Test;
@@ -19,47 +13,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The dyndns token lookup is an AUTHENTICATION path that runs on every router poll, so
- * the digest column must be indexed rather than fully scanned. This journey pins the
- * declared index name (up() and down() must be able to name the same object), the index
- * the backend actually stores, and -- the point of the whole thing -- that SQLite's
- * planner really uses it instead of scanning the table.
+ * the digest column must be indexed rather than fully scanned. Since M091 the digest
+ * lives in its own {@code dns_dyndns_credentials} table: this journey pins that the
+ * migrated schema stores an index over its {@code token_digest} column, that SQLite's
+ * planner really uses it, and that M046's now-pointless index on the dropped
+ * {@code dns_records.dyndns_token} column is gone.
  *
  * @author Jelle De Loecker
  */
 class DyndnsTokenIndexTest {
 
-    /** The name M046 declares. A drift here breaks the migration's own down(). */
-    private static final String INDEX_NAME = "dns_records_dyndns_token_index";
+    /** The name M046 declared and M091 drops alongside the column it covered. */
+    private static final String OLD_INDEX_NAME = "dns_records_dyndns_token_index";
 
     @Test
     void theDyndnsTokenLookupRidesADeclaredIndex() throws Exception {
         SqliteDatasource datasource = emptyDatabase("dyndns-index");
 
-        // 1. The migration DECLARES the index under an explicit name, on the digest
-        //    column, with no database involved. An explicit name (not a derived one) is
-        //    what keeps it inside zenit's 63-character index-name guard.
-        MigrationBuilder recorded = new MigrationBuilder();
-        Migration migration = new M046_DyndnsTokenIndex();
-        migration.up(recorded);
-        AddIndexOperation declared = null;
-        for (MigrationOperation operation : recorded.getOperations()) {
-            if (operation instanceof AddIndexOperation index) {
-                declared = index;
-            }
-        }
-        assertThat(declared).as("step 1: M046 must record an AddIndex operation").isNotNull();
-        assertThat(declared.getIndexName())
-            .as("step 1: the index must carry the name down() drops")
-            .isEqualTo(INDEX_NAME);
-        assertThat(declared.getColumnNames())
-            .as("step 1: the index must cover the digest column the lookup filters on")
-            .isEqualTo(List.of("dyndns_token"));
-        assertThat(INDEX_NAME.length())
-            .as("step 1: the name must fit the backend index-name limit")
-            .isLessThanOrEqualTo(OrmConstants.MAX_INDEX_NAME_LENGTH);
-
-        // 2. A normal full migrate really stores an index under that literal name. Before
-        //    M046 existed the whole column was unindexed and this row was absent.
+        // 1. A normal full migrate stores an index over dns_dyndns_credentials.token_digest.
         new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
@@ -67,26 +38,33 @@ class DyndnsTokenIndexTest {
         // thread-hopping work a different controller's token than the records came from.
         Datasources.register(Datasources.DEFAULT, datasource);
         List<Row> stored = datasource.rawQuery(
-            "SELECT sql AS def FROM sqlite_master WHERE type = ? AND name = ?", "index", INDEX_NAME);
+            "SELECT name AS n, sql AS def FROM sqlite_master"
+            + " WHERE type = ? AND tbl_name = ? AND sql LIKE ?",
+            "index", "dns_dyndns_credentials", "%token_digest%");
         assertThat(stored)
-            .as("step 2: sqlite_master must carry an index named " + INDEX_NAME)
-            .hasSize(1);
-        assertThat(String.valueOf(stored.get(0).get("def")))
-            .as("step 2: the stored index must cover dns_records.dyndns_token")
-            .contains("dns_records")
-            .contains("dyndns_token");
+            .as("step 1: the credential table must carry an index over token_digest")
+            .isNotEmpty();
 
-        // 3. The planner USES it: the query the auth path runs must resolve through the
-        //    index, not "SCAN dns_records". This is the assertion that would have failed
-        //    before the fix even if an index had merely been declared somewhere.
+        // 2. The planner USES it: the query the auth path runs must resolve through the
+        //    index, not "SCAN dns_dyndns_credentials".
         String plan = queryPlan(datasource,
-            "SELECT id FROM dns_records WHERE dyndns_token = ?", "sha256:whatever");
+            "SELECT record_id FROM dns_dyndns_credentials WHERE token_digest = ?",
+            "sha256:whatever");
         assertThat(plan)
-            .as("step 3: the token lookup must use the index, plan was: " + plan)
-            .contains(INDEX_NAME);
+            .as("step 2: the token lookup must not scan the table, plan was: " + plan)
+            .doesNotContain("SCAN dns_dyndns_credentials");
         assertThat(plan)
-            .as("step 3: the token lookup must not scan the table, plan was: " + plan)
-            .doesNotContain("SCAN dns_records");
+            .as("step 2: the token lookup must ride an index, plan was: " + plan)
+            .contains("USING INDEX");
+
+        // 3. The doomed column's index died with it: M091 dropped M046's index BEFORE
+        //    dropping dyndns_token (SQLite refuses dropping an indexed column).
+        List<Row> old = datasource.rawQuery(
+            "SELECT name AS n FROM sqlite_master WHERE type = ? AND name = ?",
+            "index", OLD_INDEX_NAME);
+        assertThat(old)
+            .as("step 3: the M046 index on the dropped column must be gone")
+            .isEmpty();
     }
 
     /** SQLite's own plan text for a statement, joined into one line. */

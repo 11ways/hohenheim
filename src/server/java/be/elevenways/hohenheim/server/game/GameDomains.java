@@ -631,11 +631,10 @@ public final class GameDomains {
                     target.set(DnsRecordModel.ZONE_ID, zoneId);
                     target.set(DnsRecordModel.NAME, want.owner());
                     target.set(DnsRecordModel.TYPE, want.type());
-                    target.set(DnsRecordModel.PRIORITY,
-                        DnsRecordModel.TYPE_SRV.equals(want.type()) ? 0 : null);
-                    target.set(DnsRecordModel.WEIGHT,
-                        DnsRecordModel.TYPE_SRV.equals(want.type()) ? 5 : null);
-                    target.set(DnsRecordModel.PORT, want.port());
+                    target.set(DnsRecordModel.DATA,
+                        DnsRecordModel.TYPE_SRV.equals(want.type())
+                            ? DnsRecordModel.dataFor(want.type(), 0, 5, want.port())
+                            : null);
                     target.set(DnsRecordModel.VALUE, want.value());
                     target.set(DnsRecordModel.ENABLED, true);
                     writes.add(target);

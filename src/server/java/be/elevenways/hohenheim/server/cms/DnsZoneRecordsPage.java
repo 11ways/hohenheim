@@ -215,13 +215,13 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
             value = "";
         }
         String type = record.get(DnsRecordModel.TYPE);
-        Integer priority = record.get(DnsRecordModel.PRIORITY);
+        Integer priority = DnsRecordModel.priorityOf(record);
         if (DnsRecordModel.TYPE_MX.equals(type) && priority != null) {
             return priority + " " + value;
         }
         if (DnsRecordModel.TYPE_SRV.equals(type)) {
-            Integer weight = record.get(DnsRecordModel.WEIGHT);
-            Integer port = record.get(DnsRecordModel.PORT);
+            Integer weight = DnsRecordModel.weightOf(record);
+            Integer port = DnsRecordModel.portOf(record);
             return zeroIfNull(priority) + " " + zeroIfNull(weight) + " " + zeroIfNull(port) + " " + value;
         }
         return value;

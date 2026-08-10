@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
+import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
@@ -16,15 +18,16 @@ import java.net.http.HttpResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The stored-secret contract on a hohenheim bearer credential, walked over the
- * real admin routes: a {@code secret()} field is never echoed into the rendered
- * form, a blank submit keeps the stored value, an explicit value replaces it,
- * the {@code __clear} companion empties it, and the mint row action is the ONE
- * disclosure of a freshly generated token.
+ * The stored-secret contract on hohenheim admin forms, walked over the real
+ * routes: a {@code secret()} field is never echoed into the rendered form, a
+ * blank submit keeps the stored value, an explicit value replaces it, the
+ * {@code __clear} companion empties it (specimen: the DNS peer api key), and
+ * the dyndns mint row action is the ONE disclosure of a freshly minted token
+ * (specimen: a DNS record's credential).
  */
 class SecretFieldFormTest extends HohenheimTestBase {
 
-    private static final String STORED_TOKEN = "hdyn_secretform01.originaltokenvalue";
+    private static final String STORED_KEY = "peer-api-key-original-value";
 
     private String baseUrl() {
         return "http://localhost:" + getServerPort();
@@ -54,84 +57,92 @@ class SecretFieldFormTest extends HohenheimTestBase {
 
     @Test
     void secretFieldSurvivesABlankSubmitAndIsNeverEchoed() throws Exception {
-        int recordId = seedRecord();
-        String editPath = "/admin/dns-records/" + recordId;
+        int peerId = seedPeer();
+        String editPath = "/admin/dns-peers/" + peerId;
 
-        // 1. The stored bearer credential is HASHED at rest: the seed wrote the
-        //    plaintext, the write hook stored only its digest.
-        String storedDigest = DynamicDnsService.digest(STORED_TOKEN);
-        assertThat(tokenOf(recordId))
-            .as("1. the seeded record must hold the digest, never the recoverable plaintext")
-            .isEqualTo(storedDigest);
-
-        // 2. The edit form still OFFERS the field, but echoes NEITHER plaintext nor digest.
+        // 1. The edit form still OFFERS the field, but never echoes the stored value.
+        assertThat(keyOf(peerId))
+            .as("1. the seeded peer holds the stored api key").isEqualTo(STORED_KEY);
         HttpResponse<String> form = get(editPath);
-        assertThat(form.statusCode()).as("2. the edit form must render").isEqualTo(200);
+        assertThat(form.statusCode()).as("1. the edit form must render").isEqualTo(200);
         assertThat(form.body())
-            .as("2. the form must still offer the dyndns_token entry")
-            .contains("dyndns_token");
+            .as("1. the form must still offer the api_key entry")
+            .contains("api_key");
         assertThat(form.body())
-            .as("2. a secret() field must NEVER echo the plaintext OR its digest into the form")
-            .doesNotContain(STORED_TOKEN)
-            .doesNotContain(storedDigest);
+            .as("1. a secret() field must NEVER echo the stored value into the form")
+            .doesNotContain(STORED_KEY);
 
-        // 3. A submit that leaves the secret blank KEEPS the stored value.
-        HttpResponse<String> blank = post(editPath, recordBody(""));
-        assertThat(blank.statusCode()).as("3. the blank submit must be accepted").isIn(200, 302, 303);
-        assertThat(tokenOf(recordId))
-            .as("3. a blank secret submit must keep the stored value, not wipe it")
-            .isEqualTo(storedDigest);
+        // 2. A submit that leaves the secret blank KEEPS the stored value.
+        HttpResponse<String> blank = post(editPath, peerBody(""));
+        assertThat(blank.statusCode()).as("2. the blank submit must be accepted").isIn(200, 302, 303);
+        assertThat(keyOf(peerId))
+            .as("2. a blank secret submit must keep the stored value, not wipe it")
+            .isEqualTo(STORED_KEY);
 
-        // 4. A submitted value REPLACES the stored one and is itself hashed at rest.
-        String replacement = "hdyn_secretform02.replacementtokenvalue";
-        HttpResponse<String> replaced = post(editPath, recordBody(replacement));
-        assertThat(replaced.statusCode()).as("4. the replacing submit must be accepted").isIn(200, 302, 303);
-        assertThat(tokenOf(recordId))
-            .as("4. a non-blank secret submit must replace the stored value, hashed")
-            .isEqualTo(DynamicDnsService.digest(replacement));
+        // 3. A submitted value REPLACES the stored one.
+        String replacement = "peer-api-key-replacement-value";
+        HttpResponse<String> replaced = post(editPath, peerBody(replacement));
+        assertThat(replaced.statusCode()).as("3. the replacing submit must be accepted").isIn(200, 302, 303);
+        assertThat(keyOf(peerId))
+            .as("3. a non-blank secret submit must replace the stored value")
+            .isEqualTo(replacement);
 
-        // 5. The __clear companion is the one way to EMPTY a secret.
-        HttpResponse<String> cleared = post(editPath, recordBody("") + "&dyndns_token__clear=true");
-        assertThat(cleared.statusCode()).as("5. the clearing submit must be accepted").isIn(200, 302, 303);
-        assertThat(tokenOf(recordId))
-            .as("5. the __clear companion must empty the stored secret")
+        // 4. The __clear companion is the one way to EMPTY a secret.
+        HttpResponse<String> cleared = post(editPath, peerBody("") + "&api_key__clear=true");
+        assertThat(cleared.statusCode()).as("4. the clearing submit must be accepted").isIn(200, 302, 303);
+        assertThat(keyOf(peerId))
+            .as("4. the __clear companion must empty the stored secret")
             .isNull();
 
-        // 6. Minting discloses the PLAINTEXT token ONCE in the flash toast, while the
-        //    record stores only its digest.
-        HttpResponse<String> mint = post(editPath + "/action/dyndns_token", "");
-        assertThat(mint.statusCode()).as("6. the mint row action must be accepted").isIn(200, 302, 303);
+        // 5. The dyndns mint action discloses the PLAINTEXT token ONCE in the flash
+        //    toast, while the credential table stores only its digest.
+        int recordId = seedRecord();
+        String recordPath = "/admin/dns-records/" + recordId;
+        HttpResponse<String> mint = post(recordPath + "/action/dyndns_token", "");
+        assertThat(mint.statusCode()).as("5. the mint row action must be accepted").isIn(200, 302, 303);
 
-        HttpResponse<String> afterMint = get(editPath);
+        HttpResponse<String> afterMint = get(recordPath);
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("hdyn_[A-Za-z0-9._-]+")
             .matcher(afterMint.body());
-        assertThat(m.find()).as("6. the mint toast must disclose the plaintext token once").isTrue();
+        assertThat(m.find()).as("5. the mint toast must disclose the plaintext token once").isTrue();
         String disclosed = m.group();
-        assertThat(tokenOf(recordId))
-            .as("6. the record must store only the digest of the minted token")
+        assertThat((String) DynamicDnsService.credentialFor(recordId)
+            .get(DnsDyndnsCredentialModel.TOKEN_DIGEST))
+            .as("5. the credential stores only the digest of the minted token")
             .isEqualTo(DynamicDnsService.digest(disclosed))
             .doesNotContain(disclosed);
 
-        // 7. The disclosure is consumed: a reload shows the record without the token.
-        HttpResponse<String> reload = get(editPath);
+        // 6. The disclosure is consumed: a reload shows the record without the token.
+        HttpResponse<String> reload = get(recordPath);
         assertThat(reload.body())
-            .as("7. a reload must not re-disclose the minted token")
+            .as("6. a reload must not re-disclose the minted token")
             .doesNotContain(disclosed);
     }
 
     // ------------------------------------------------------------------
 
-    private static String tokenOf(int recordId) {
-        return Models.get(DnsRecordModel.class).findById(recordId).get(DnsRecordModel.DYNDNS_TOKEN);
+    private static String keyOf(int peerId) {
+        return Models.get(DnsPeerModel.class).findById(peerId).get(DnsPeerModel.API_KEY);
     }
 
-    /** The full record form body; only the secret entry varies. */
-    private String recordBody(String token) {
-        Row record = Models.get(DnsRecordModel.class).find()
-            .where(DnsRecordModel.NAME.eq("home")).first();
-        return "zone_id=" + record.get(DnsRecordModel.ZONE_ID)
-            + "&name=home&type=A&value=192.0.2.10&ttl=3600&enabled=true&dynamic=true"
-            + "&dyndns_token=" + token;
+    /** The full peer form body; only the secret entry varies. */
+    private static String peerBody(String apiKey) {
+        return "name=secret-form-peer&transfer_host=peer.secret-form.example&transfer_port=53"
+            + "&tsig_key_name=&tsig_algorithm=hmac-sha256&base_url=&enabled=true"
+            + "&api_key=" + apiKey;
+    }
+
+    private int seedPeer() {
+        DnsPeerModel peers = Models.get(DnsPeerModel.class);
+        Row peer = peers.createEmptyRow();
+        peer.set(DnsPeerModel.NAME, "secret-form-peer");
+        peer.set(DnsPeerModel.TRANSFER_HOST, "peer.secret-form.example");
+        peer.set(DnsPeerModel.TRANSFER_PORT, 53);
+        peer.set(DnsPeerModel.TSIG_ALGORITHM, "hmac-sha256");
+        peer.set(DnsPeerModel.API_KEY, STORED_KEY);
+        peer.set(DnsPeerModel.ENABLED, true);
+        peers.save(peer);
+        return peer.get(DnsPeerModel.ID);
     }
 
     private int seedRecord() {
@@ -151,8 +162,6 @@ class SecretFieldFormTest extends HohenheimTestBase {
         record.set(DnsRecordModel.VALUE, "192.0.2.10");
         record.set(DnsRecordModel.TTL, 3600);
         record.set(DnsRecordModel.ENABLED, true);
-        record.set(DnsRecordModel.DYNAMIC, true);
-        record.set(DnsRecordModel.DYNDNS_TOKEN, STORED_TOKEN);
         records.save(record);
         return record.get(DnsRecordModel.ID);
     }

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -11,6 +12,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.sitetype.types.ProxySiteType;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -296,6 +298,30 @@ public final class TenantWrites {
                 if (!authorized) {
                     throw refusal(DnsRecordModel.NAME.getName(), doomed.get(DnsRecordModel.NAME));
                 }
+            }
+        });
+        // The dyndns CREDENTIAL is grant-gated on EVERY lane, hostname authority included:
+        // the minted token is a bearer credential that survives grant revocation and
+        // hostname release (DYNDNS is declared non-delegable for exactly that reason), so
+        // a tenant that merely serves the name may never arm one. A dyndns grant is
+        // authority over the credential and NOTHING else -- the record itself stays under
+        // the ordinary record rules above.
+        DnsDyndnsCredentialModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && isTenantOriginated()) {
+                checkCredentialWrite(row.get(DnsDyndnsCredentialModel.RECORD_ID));
+            }
+        });
+        DnsDyndnsCredentialModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (!isTenantOriginated()) {
+                return;
+            }
+            // AIDEV-NOTE: DnsClaimReleases deletes credentials inside
+            // inAuthorizedOperation (the release is a mandated consequence of a
+            // domain delete that already passed its own gate), which makes the
+            // write non-tenant-originated and never reaches here.
+            for (Row doomed : doomedRows(context)) {
+                checkCredentialWrite(doomed.get(DnsDyndnsCredentialModel.RECORD_ID));
             }
         });
     }
@@ -808,29 +834,6 @@ public final class TenantWrites {
                 CmsSupport.violationText("tenant_zone_frozen"));
         }
 
-        // The dyndns columns are grant-gated on EVERY lane, hostname authority included:
-        // the minted token is a bearer credential that survives grant revocation and
-        // hostname release (DYNDNS is declared non-delegable for exactly that reason), so
-        // a tenant that merely serves the name may never arm one. Until this check, only
-        // the /manage form's omission of the columns stood between hostname authority and
-        // a self-minted permanent credential -- the UX-affordance-as-gate shape the class
-        // docblock forbids. The capability only exists on a stored record, which also
-        // refuses arming a row on CREATE (there is nothing to hold dyndns on yet).
-        boolean changesDynamic = changesColumn(row, stored, DnsRecordModel.DYNAMIC);
-        boolean changesToken = changesColumn(row, stored, DnsRecordModel.DYNDNS_TOKEN);
-        if (changesDynamic || changesToken) {
-            AccessContext ctx = acting();
-            Object recordId = stored != null ? stored.get(DnsRecordModel.ID) : null;
-            boolean holdsDyndns = ctx != null && !ctx.isAnonymous() && recordId != null
-                && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.DYNDNS);
-            if (!holdsDyndns) {
-                String field = changesDynamic ? DnsRecordModel.DYNAMIC.getName()
-                    : DnsRecordModel.DYNDNS_TOKEN.getName();
-                // Never echo a credential into the violation value.
-                throw refusal(field, changesDynamic ? row.get(field) : null);
-            }
-        }
-
         // managed_by drives the zone-file import's replace scope (it replaces only rows where
         // it is NULL), so writing it is writing that import's blast radius.
         Object storedManagedBy = stored != null ? stored.get(DnsRecordModel.MANAGED_BY) : null;
@@ -861,12 +864,14 @@ public final class TenantWrites {
         }
 
         // AIDEV-NOTE: the ANONYMOUS lane is /nic/update and nothing else. It is already
-        // authorized -- by a bearer token resolved against the row's digest before any write
-        // -- so it is not asked for a capability it structurally cannot hold. It is bounded
-        // instead: a stored DYNAMIC row, and VALUE the only column that may move. Without
-        // that bound the exemption would be the bypass shape it looks like.
+        // authorized -- by a bearer token resolved against the credential table's digest
+        // before any write -- so it is not asked for a capability it structurally cannot
+        // hold. It is bounded instead: a stored row holding a dyndns CREDENTIAL, and
+        // VALUE the only column that may move. Without that bound the exemption would be
+        // the bypass shape it looks like.
         if (ctx.isAnonymous()) {
-            if (stored == null || !Boolean.TRUE.equals(stored.get(DnsRecordModel.DYNAMIC))) {
+            if (stored == null
+                    || DynamicDnsService.credentialFor(stored.get(DnsRecordModel.ID)) == null) {
                 throw refusal(DnsRecordModel.NAME.getName(), effective(row, stored, DnsRecordModel.NAME));
             }
             refuseChangesOutside(row, stored, Set.of(DnsRecordModel.VALUE.getName()));
@@ -876,22 +881,15 @@ public final class TenantWrites {
         Object recordId = stored != null ? stored.get(DnsRecordModel.ID) : null;
         boolean holdsEdit = recordId != null
             && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.EDIT);
-        boolean holdsDyndns = recordId != null
-            && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.DYNDNS);
 
         HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
         boolean ownsStoredName = stored != null
             && HostnameAuthority.canManage(snapshot, ctx, fqdnOf(stored, stored));
 
-        // A CREATE has no row to hold authority over, so it answers to the claim half alone.
+        // A CREATE has no row to hold authority over, so it answers to the claim half
+        // alone. (A dyndns grant is authority over the CREDENTIAL table only -- see
+        // checkCredentialWrite -- never over any column of the record itself.)
         if (stored != null && !holdsEdit && !ownsStoredName) {
-            if (holdsDyndns) {
-                // dyndns alone is authority over the token, never over the record: only the
-                // two dynamic columns may move (the mint row action writes exactly those).
-                refuseChangesOutside(row, stored, Set.of(DnsRecordModel.DYNAMIC.getName(),
-                    DnsRecordModel.DYNDNS_TOKEN.getName()));
-                return;
-            }
             throw refusal(DnsRecordModel.NAME.getName(), effective(row, stored, DnsRecordModel.NAME));
         }
 
@@ -931,6 +929,22 @@ public final class TenantWrites {
         }
     }
 
+    /**
+     * A tenant write to a dyndns credential row: only a holder of the DYNDNS grant on
+     * the referenced record may arm, re-key or revoke it. Anonymous callers hold nothing
+     * (/nic/update updates the ADDRESS, it never touches credentials).
+     *
+     * @throws Violations on any refusal
+     */
+    private static void checkCredentialWrite(@Nullable Object recordId) {
+        AccessContext ctx = acting();
+        boolean authorized = ctx != null && !ctx.isAnonymous() && recordId != null
+            && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.DYNDNS);
+        if (!authorized) {
+            throw refusal(DnsDyndnsCredentialModel.RECORD_ID.getName(), recordId);
+        }
+    }
+
     private static @NonNull Violations refusal(@NonNull String field, @Nullable Object value) {
         return Violations.ofField(field, value,
             CmsSupport.violationText("tenant_record_not_authorized"));
@@ -961,17 +975,6 @@ public final class TenantWrites {
             queryContext.getCriteria(), List.of(), null, null, List.of(), null,
             queryContext.getRelatedFilters(), queryContext.getLocaleChain(),
             queryContext.isAcrossLocales(), true, true, queryContext.getHints()));
-    }
-
-    /** Whether the write stages a value for the column that differs from its baseline. */
-    private static boolean changesColumn(@NonNull Row row, @Nullable Row stored,
-                                         @NonNull Field<?, ?> field) {
-        String name = field.getName();
-        if (!row.has(name)) {
-            return false;
-        }
-        Object baseline = stored != null ? stored.get(name) : field.getDefaultValue();
-        return !Objects.equals(row.get(name), baseline);
     }
 
     /** The value the write will END UP with, reading the already-loaded stored row. */

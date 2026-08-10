@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -517,7 +518,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             };
             assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal, () -> {
                 Row row = record(model, "owned", type, value);
-                row.set(DnsRecordModel.PRIORITY, 10);
+                row.set(DnsRecordModel.DATA, DnsRecordModel.dataFor(type, 10, null, null));
                 model.save(row);
             })).as("%s is not a delegable record type", type).isInstanceOf(Violations.class);
             assertThat(model.find().where(DnsRecordModel.TYPE.eq(type))
@@ -594,10 +595,8 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         // 1. An ordinary dynamic A record updates, with no principal anywhere in sight.
         Row dynamic = record(model, "router", DnsRecordModel.TYPE_A, "10.9.9.9");
-        dynamic.set(DnsRecordModel.DYNAMIC, true);
-        String token = DynamicDnsService.mintToken();
-        dynamic.set(DnsRecordModel.DYNDNS_TOKEN, DynamicDnsService.digest(token));
         model.save(dynamic);
+        String token = DynamicDnsService.mintFor(dynamic.get(DnsRecordModel.ID));
 
         HttpResponse<String> good = nicUpdate(token, "hostname="
             + URLEncoder.encode("router." + ZONE_ORIGIN, StandardCharsets.UTF_8)
@@ -608,14 +607,14 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertThat((String) model.findById(dynamic.get(DnsRecordModel.ID)).get(DnsRecordModel.VALUE))
             .isEqualTo("203.0.113.7");
 
-        // 2. A record an operator mistakenly flagged dynamic on a non-address type is
-        //    refused by the protocol rather than by a thrown violation.
+        // 2. A record whose credential points at a non-address type (the row was
+        //    re-typed after arming) is refused by the protocol rather than by a
+        //    thrown violation.
         Row mistake = record(model, "mail", DnsRecordModel.TYPE_MX, "mx.example.com.");
-        mistake.set(DnsRecordModel.PRIORITY, 10);
-        mistake.set(DnsRecordModel.DYNAMIC, true);
-        String mxToken = DynamicDnsService.mintToken();
-        mistake.set(DnsRecordModel.DYNDNS_TOKEN, DynamicDnsService.digest(mxToken));
+        mistake.set(DnsRecordModel.DATA,
+            DnsRecordModel.dataFor(DnsRecordModel.TYPE_MX, 10, null, null));
         TenantConduits.as(adminPrincipal, () -> model.save(mistake));
+        String mxToken = DynamicDnsService.mintFor(mistake.get(DnsRecordModel.ID));
 
         HttpResponse<String> refused = nicUpdate(mxToken, "hostname="
             + URLEncoder.encode("mail." + ZONE_ORIGIN, StandardCharsets.UTF_8)
@@ -652,16 +651,19 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         //    and the stored digest is proof it wrote nothing.
         assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.EDIT);
         assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.VIEW);
-        String storedDigest = model.findById(dynamicId).get(DnsRecordModel.DYNDNS_TOKEN);
+        String storedDigest = DynamicDnsService.credentialFor(dynamicId)
+            .get(DnsDyndnsCredentialModel.TOKEN_DIGEST);
         assertThat(tenantPost("/manage/dns-records/" + dynamicId + "/action/dyndns_token", "")
             .statusCode()).as("edit is not dyndns").isIn(403, 404);
-        assertThat((String) model.findById(dynamicId).get(DnsRecordModel.DYNDNS_TOKEN))
+        assertThat((String) DynamicDnsService.credentialFor(dynamicId)
+            .get(DnsDyndnsCredentialModel.TOKEN_DIGEST))
             .as("the refused action minted nothing").isEqualTo(storedDigest);
 
         assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.DYNDNS);
         assertThat(tenantPost("/manage/dns-records/" + dynamicId + "/action/dyndns_token", "")
             .statusCode()).as("the dyndns holder may re-mint").isIn(200, 302, 303);
-        assertThat((String) model.findById(dynamicId).get(DnsRecordModel.DYNDNS_TOKEN))
+        assertThat((String) DynamicDnsService.credentialFor(dynamicId)
+            .get(DnsDyndnsCredentialModel.TOKEN_DIGEST))
             .as("and the stored digest actually rotated").isNotEqualTo(storedDigest);
 
         for (String capability : List.of(HohenheimAccess.EDIT, HohenheimAccess.VIEW,

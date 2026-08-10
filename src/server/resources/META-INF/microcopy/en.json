@@ -163,10 +163,6 @@
     "text": "This API key is too easy to guess: it would be recoverable from a database copy. Use the generate action, or paste a random key of at least {$min_length} characters",
     "scope": "violations"
   },
-  "weak_dyndns_token": {
-    "text": "Dynamic DNS tokens cannot be typed in by hand: use the token row action to generate a {$marker} token",
-    "scope": "violations"
-  },
   "api_keys": [
     {
       "text": "API keys",
@@ -3361,42 +3357,38 @@
     "text": "The owning peer could not be reached ({$message}); records are shown from the replica read-only.",
     "scope": "dns_remote"
   },
-  "record_dynamic": [
-    {
-      "text": "Dynamic DNS",
-      "scope": "field"
-    },
-    {
-      "text": "Allow this A/AAAA record's address to be updated over the dyndns2 protocol; use the row action to mint an update token",
-      "scope": "help"
-    }
-  ],
+  "record_data": {
+    "text": "Type settings",
+    "scope": "field"
+  },
   "dyndns_token": {
     "text": "Dynamic DNS token",
     "scope": "dns_record"
   },
   "dyndns_token_hint": {
-    "text": "Mint a new update token for this record (invalidates any previous one)",
-    "scope": "dns_record"
-  },
-  "dyndns_only_address": {
-    "text": "Dynamic DNS is only available for A and AAAA records",
+    "text": "Mint a new update token for this record (invalidates any previous one). Point a dyndns2 client (router, ddclient) at <host>/nic/update and send the token as the HTTP Basic password",
     "scope": "dns_record"
   },
   "dyndns_minted": {
     "text": "Update token generated. Copy it now; it will not be shown again: {$token}",
     "scope": "dns_record"
   },
-  "record_dyndns_token": [
-    {
-      "text": "Dynamic DNS token",
-      "scope": "field"
-    },
-    {
-      "text": "The update password. Point a dyndns2 client (router, ddclient) at <host>/nic/update?hostname=<this record's FQDN> and send this token as the HTTP Basic password. It is never shown again after it is set: leave this blank to keep the stored token, or use the row action to generate a new one",
-      "scope": "help"
-    }
-  ],
+  "dyndns_revoke": {
+    "text": "Revoke dynamic DNS",
+    "scope": "dns_record"
+  },
+  "dyndns_revoke_hint": {
+    "text": "Delete this record's update token; its dyndns client stops working immediately",
+    "scope": "dns_record"
+  },
+  "dyndns_revoke_confirm": {
+    "text": "Revoke this record's dynamic DNS token?",
+    "scope": "dns_record"
+  },
+  "dyndns_revoked": {
+    "text": "Dynamic DNS token revoked",
+    "scope": "dns_record"
+  },
   "jar_path": [
     {
       "text": "Jar file",

@@ -37,6 +37,7 @@
     {% if saved %}<pl-alert variant="default">{{ t("edit_saved", scope: "dns_remote") }}</pl-alert>{% /if %}
 
     {% if editRecord %}
+    {% let editType = editRecord.type %}
     <form method="POST" action={% "/admin/dns-zones/" + zoneId + "/remote-records" %}>
         {% csrf() %}
         <input type="hidden" name="record_id" value={% editRecord.id %}>
@@ -57,7 +58,7 @@
                 </pl-field>
                 <pl-field>
                     <pl-label target="rr_type">{{ t("record_type_column", scope: "dns_zone") }}</pl-label>
-                    <pl-select name="type" value={% editRecord.type %} submitEmpty={% true %}>
+                    <pl-select name="type" bind:value={% editType %} submitEmpty={% true %}>
                         {% each recordTypes as index, recordType %}
                         <pl-select-item value={% recordType %}>{{ recordType }}</pl-select-item>
                         {% /each %}
@@ -74,10 +75,15 @@
                         <pl-input-group-addon>s</pl-input-group-addon>
                     </pl-input-group>
                 </pl-field>
+                {#- Type-specific extras: only the fields the selected type actually uses.
+                    MX carries a priority; SRV carries priority/weight/port. -#}
+                {% if editType{:} == "MX" or editType == "SRV" %}
                 <pl-field>
                     <pl-label target="rr_priority">{{ t("priority", scope: "dns_remote") }}</pl-label>
                     <pl-input inputId="rr_priority" type="text" name="priority" value={% editRecord.priority %}></pl-input>
                 </pl-field>
+                {% /if %}
+                {% if editType{:} == "SRV" %}
                 <pl-field>
                     <pl-label target="rr_weight">{{ t("weight", scope: "dns_remote") }}</pl-label>
                     <pl-input inputId="rr_weight" type="text" name="weight" value={% editRecord.weight %}></pl-input>
@@ -86,6 +92,7 @@
                     <pl-label target="rr_port">{{ t("port", scope: "dns_remote") }}</pl-label>
                     <pl-input inputId="rr_port" type="text" name="port" value={% editRecord.port %}></pl-input>
                 </pl-field>
+                {% /if %}
                 <pl-field>
                     <pl-label target="rr_enabled">{{ t("record_status_column", scope: "dns_zone") }}</pl-label>
                     <pl-select name="enabled" value={% editRecord.enabled %} submitEmpty={% true %}>

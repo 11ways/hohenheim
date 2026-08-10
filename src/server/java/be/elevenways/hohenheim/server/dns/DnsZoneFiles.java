@@ -140,9 +140,9 @@ public final class DnsZoneFiles {
                 type != null ? type : "",
                 ttl,
                 value != null ? value : "",
-                row.get(DnsRecordModel.PRIORITY),
-                row.get(DnsRecordModel.WEIGHT),
-                row.get(DnsRecordModel.PORT));
+                DnsRecordModel.priorityOf(row),
+                DnsRecordModel.weightOf(row),
+                DnsRecordModel.portOf(row));
             return record.toString();
         }
         catch (DnsValueException e) {
@@ -223,9 +223,7 @@ public final class DnsZoneFiles {
         row.set(DnsRecordModel.TYPE, type);
         row.set(DnsRecordModel.TTL, (int) record.getTTL());
         row.set(DnsRecordModel.VALUE, value);
-        row.set(DnsRecordModel.PRIORITY, priority);
-        row.set(DnsRecordModel.WEIGHT, weight);
-        row.set(DnsRecordModel.PORT, port);
+        row.set(DnsRecordModel.DATA, DnsRecordModel.dataFor(type, priority, weight, port));
         row.set(DnsRecordModel.ENABLED, true);
         return row;
     }

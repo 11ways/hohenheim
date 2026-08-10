@@ -59,12 +59,16 @@ public final class DnsRecordEdits {
 
         Integer ttl = intOrNull(coerced.containsKey("ttl") ? coerced.get("ttl")
             : existing != null ? existing.get(DnsRecordModel.TTL) : null);
-        Integer priority = intOrNull(coerced.containsKey("priority") ? coerced.get("priority")
-            : existing != null ? existing.get(DnsRecordModel.PRIORITY) : null);
-        Integer weight = intOrNull(coerced.containsKey("weight") ? coerced.get("weight")
-            : existing != null ? existing.get(DnsRecordModel.WEIGHT) : null);
-        Integer port = intOrNull(coerced.containsKey("port") ? coerced.get("port")
-            : existing != null ? existing.get(DnsRecordModel.PORT) : null);
+
+        // Normalize the type-specific extras into the shape the TYPE declares: exactly
+        // the keys of that type's sub-schema, sourced from a submitted data map (the
+        // form) with the stored map as fallback. The normalized map replaces whatever
+        // was submitted, so a type SWITCH can never smuggle stale extras along.
+        Map<String, Object> data = dataShape(coerced, existing, type);
+        coerced.put("data", data);
+        Integer priority = DnsRecordModel.dataInt(data, "priority");
+        Integer weight = DnsRecordModel.dataInt(data, "weight");
+        Integer port = DnsRecordModel.dataInt(data, "port");
 
         String origin = zone.get(DnsZoneModel.ORIGIN);
         Integer zoneTtl = zone.get(DnsZoneModel.DEFAULT_TTL);
@@ -77,7 +81,13 @@ public final class DnsRecordEdits {
             throw Violations.ofField("name", owner, CmsSupport.violationText("dns_name_format"));
         }
         catch (DnsValueException e) {
-            throw Violations.ofField(e.getField(), coerced.get(e.getField()),
+            Object offending = switch (e.getField()) {
+                case "priority" -> priority;
+                case "weight" -> weight;
+                case "port" -> port;
+                default -> coerced.get(e.getField());
+            };
+            throw Violations.ofField(entryPathFor(e.getField()), offending,
                 CmsSupport.violationText(e.getMicrocopyKey()));
         }
 
@@ -130,6 +140,38 @@ public final class DnsRecordEdits {
         if (duplicate != null && (selfId == null || !selfId.equals(duplicate.get(DnsRecordModel.ID)))) {
             throw Violations.ofField("value", value, CmsSupport.violationText("dns_record_duplicate"));
         }
+    }
+
+    /**
+     * @return the normalized {@code data} map for the write: submitted sub-map first,
+     *         stored map as the partial-update fallback, reduced to the keys the type uses
+     */
+    private static @Nullable Map<String, Object> dataShape(@NonNull Map<String, Object> coerced,
+                                                           @Nullable Row existing,
+                                                           @NonNull String type) {
+        Object submitted = coerced.get("data");
+        Object stored = existing != null ? existing.get(DnsRecordModel.DATA) : null;
+        return DnsRecordModel.dataFor(type,
+            extra(submitted, stored, "priority"),
+            extra(submitted, stored, "weight"),
+            extra(submitted, stored, "port"));
+    }
+
+    /** Per-key partial-update semantics: a submitted key wins (blank = clear), an absent one keeps stored. */
+    private static @Nullable Integer extra(@Nullable Object submitted, @Nullable Object stored,
+                                           @NonNull String key) {
+        if (submitted instanceof Map<?, ?> map && map.containsKey(key)) {
+            return DnsRecordModel.dataInt(submitted, key);
+        }
+        return DnsRecordModel.dataInt(stored, key);
+    }
+
+    /** The form path a codec refusal anchors on: type-specific fields live under data. */
+    private static @NonNull String entryPathFor(@NonNull String codecField) {
+        return switch (codecField) {
+            case "priority", "weight", "port" -> "data." + codecField;
+            default -> codecField;
+        };
     }
 
     public static @Nullable Integer intOrNull(@Nullable Object value) {

@@ -110,9 +110,7 @@ class DnsServerTest {
         row.set(DnsRecordModel.NAME, name);
         row.set(DnsRecordModel.TYPE, type);
         row.set(DnsRecordModel.VALUE, value);
-        row.set(DnsRecordModel.PRIORITY, priority);
-        row.set(DnsRecordModel.WEIGHT, weight);
-        row.set(DnsRecordModel.PORT, port);
+        row.set(DnsRecordModel.DATA, DnsRecordModel.dataFor(type, priority, weight, port));
         row.set(DnsRecordModel.ENABLED, true);
         records.save(row);
     }

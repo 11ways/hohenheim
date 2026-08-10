@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -44,10 +45,8 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
         .add(DnsRecordModel.NAME)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(DnsRecordModel.TYPE))
         .add(DnsRecordModel.VALUE)
+        .add(Nested.of(DnsRecordModel.DATA).schemaFrom("type").build())
         .add(DnsRecordModel.TTL)
-        .add(DnsRecordModel.PRIORITY)
-        .add(DnsRecordModel.WEIGHT)
-        .add(DnsRecordModel.PORT)
         .add(DnsRecordModel.ENABLED)
         .build();
 
@@ -56,7 +55,6 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
         .column(ColumnSpec.fromField(DnsRecordModel.TYPE).build())
         .column(ColumnSpec.fromField(DnsRecordModel.VALUE).build())
         .column(ColumnSpec.fromField(DnsRecordModel.ENABLED).build())
-        .column(ColumnSpec.fromField(DnsRecordModel.DYNAMIC).build())
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_dns_record"); }

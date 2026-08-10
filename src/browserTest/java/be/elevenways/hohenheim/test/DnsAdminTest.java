@@ -103,6 +103,24 @@ class DnsAdminTest extends HohenheimTestBase {
         Row savedZone = Models.get(DnsZoneModel.class).find().where(DnsZoneModel.ID.eq(zoneId)).first();
         assertThat((int) savedZone.get(DnsZoneModel.SERIAL)).isGreaterThan(1);
 
+        // Type-specific fields ride the data sub-schema: an MX without its priority is
+        // refused by the codec, and one WITH data.priority saves it into the data map.
+        var mxNoPriority = postForm("/admin/dns-records/new",
+            "zone_id=" + zoneId + "&name=mail&type=MX&value=mx.admin-zone.example.");
+        assertThat(mxNoPriority.statusCode()).isEqualTo(200);
+        assertThat(mxNoPriority.body()).contains("priority");
+        var mxGood = postForm("/admin/dns-records/new",
+            "zone_id=" + zoneId + "&name=mail&type=MX&value=mx.admin-zone.example."
+            + "&data.priority=10&enabled=on");
+        assertThat(mxGood.statusCode()).isIn(200, 302, 303);
+        Row mx = Models.get(DnsRecordModel.class).find()
+            .where(DnsRecordModel.ZONE_ID.eq(zoneId))
+            .where(DnsRecordModel.TYPE.eq(DnsRecordModel.TYPE_MX)).first();
+        assertThat(mx).as("the MX row persisted").isNotNull();
+        assertThat(DnsRecordModel.priorityOf(mx))
+            .as("the submitted data.priority landed in the data map").isEqualTo(10);
+        Models.get(DnsRecordModel.class).delete(mx);
+
         // CNAME exclusivity is enforced.
         var cname = postForm("/admin/dns-records/new",
             "zone_id=" + zoneId + "&name=www&type=CNAME&value=other.admin-zone.example");
@@ -163,7 +181,7 @@ class DnsAdminTest extends HohenheimTestBase {
         Row srv = importedRecords.stream()
             .filter(r -> DnsRecordModel.TYPE_SRV.equals(r.get(DnsRecordModel.TYPE)))
             .findFirst().orElseThrow();
-        assertThat((Integer) srv.get(DnsRecordModel.PORT)).isEqualTo(8443);
+        assertThat(DnsRecordModel.portOf(srv)).isEqualTo(8443);
     }
 
     /** The certificate-request page only offers hosted DNS when a DNS server is serving. */
