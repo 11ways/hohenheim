@@ -50,7 +50,10 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class IncusInstanceRuntimeLiveTest {
 
-    private static final String HOST = "live-incus";
+    // AIDEV-NOTE: unique per live class BY REQUIREMENT -- the authorized_keys sweep
+    // is keyed on the comment hohenheim-<name>, so a name shared with another class
+    // lets one fork's enroll delete the other fork's live key mid-journey.
+    private static final String HOST = "live-incus-runtime";
 
     /** Small system-container image; the RAM budget rules out anything fatter. */
     private static final String IMAGE = "alpine/3.22";

@@ -466,9 +466,19 @@ public final class LiveIncusHost {
      * host, so an unlocked sweep (grep to .tmp, mv back) that read the file before a
      * sibling's append silently discarded that append at the mv. The product lane runs
      * IdentitiesOnly with the per-host key, so a lost line surfaces as exactly
-     * "Permission denied (publickey)" -- the failure recorded for IncusVmLiveTest and
-     * IncusWindowsTemplateLiveTest as "environmental, cause unknown". The same race could
-     * drop the OPERATOR key line and lock the fixture out of the host entirely.
+     * "Permission denied (publickey)". The same race could drop the OPERATOR key line
+     * and lock the fixture out of the host entirely.
+     *
+     * AIDEV-NOTE: the flock is NECESSARY but not sufficient. The sweep is keyed on the
+     * COMMENT, and the product mints it as {@code hohenheim-<host record name>}
+     * (HostKeys.rotateIdentity) -- per-fork SQLite databases mean two forks enrolling
+     * the SAME record name mint DIFFERENT keys carrying the SAME comment, so fork B's
+     * enroll-time sweep here (or its teardown's releaseAuthorizedKeys) legitimately
+     * deletes fork A's live key under the lock. That is a semantic collision, not a
+     * race: the invariant is that every live class uses a UNIQUE host record name
+     * (observed 2026-08-10: IncusVmLiveTest and IncusInstanceRuntimeLiveTest shared
+     * "live-incus"; the runtime class's @BeforeAll enroll cut the VM journey off
+     * mid-deploy with "Permission denied (publickey)" on the nft kernel-truth lane).
      */
     public void authorizeKey(String publicKey) throws IOException {
         String line = publicKey.trim().replace("'", "");
