@@ -610,10 +610,17 @@ public final class TenantWrites {
      * network the attach creates does. Widening exposure is a manage-level act, and
      * DatabaseModel has no {@code config} verb by deliberate declaration.
      *
+     * PUBLIC because {@code InstanceDatabaseResource.validate} must ask the SAME question
+     * BEFORE its reachability lookups: those lookups are unscoped, so run first they were
+     * an existence/name/host oracle for a probing tenant (absent, wrong-host-with-name,
+     * and not-yours each answered differently). One derivation, asked early for the
+     * refusal order and again by the hook as the gate. Callers guard with
+     * {@link #isTenantOriginated()} themselves, exactly like the hook does.
+     *
      * @throws Violations {@code tenant_instance_not_managed} or the uniform database refusal
      */
-    private static void requireInstanceLinkAuthority(@Nullable Object instanceIdValue,
-                                                     @Nullable Object databaseIdValue) {
+    public static void requireInstanceLinkAuthority(@Nullable Object instanceIdValue,
+                                                    @Nullable Object databaseIdValue) {
         AccessContext ctx = acting();
         if (!(instanceIdValue instanceof Integer instanceId) || ctx == null || ctx.isAnonymous()
                 || !HohenheimAccess.hasInstanceCapability(ctx, instanceId,

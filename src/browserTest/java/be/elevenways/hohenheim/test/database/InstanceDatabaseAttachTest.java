@@ -84,6 +84,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
     private static Integer remoteInstanceId;
     private static Integer databaseAId;
     private static Integer databaseBId;
+    private static Integer databaseRemoteId;
 
     @BeforeAll
     static void seed() {
@@ -105,6 +106,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         remoteInstanceId = instance(PREFIX + "srv-remote", "hohenheim:docker_container", otherHostId);
         databaseAId = database(PREFIX + "db-a", hostId);
         databaseBId = database(PREFIX + "db-b", hostId);
+        databaseRemoteId = database(PREFIX + "db-remote", otherHostId);
 
         // Tenant A owns instance A, the Incus one, the remote one and database A;
         // tenant B owns instance B and database B. MANAGE is the ownership marker and
@@ -121,6 +123,10 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
             HohenheimAccess.MANAGE, true);
         RecordGrants.grant("user", tenantBId, DatabaseModel.MODEL_ID, databaseBId,
             HohenheimAccess.MANAGE, true);
+        // Tenant B also owns a database on the OTHER host: the fixture whose stored
+        // (owner-namespaced) name and host the pre-fix mismatch refusal leaked.
+        RecordGrants.grant("user", tenantBId, DatabaseModel.MODEL_ID, databaseRemoteId,
+            HohenheimAccess.MANAGE, true);
         // The read-only teammate: VIEW on both ends of a legitimate pair, and nothing more.
         RecordGrants.grant("user", viewerId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.VIEW, true);
@@ -135,7 +141,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
     @AfterAll
     static void cleanUp() {
         Model links = Models.get(InstanceDatabaseModel.class);
-        for (Integer databaseId : List.of(databaseAId, databaseBId)) {
+        for (Integer databaseId : List.of(databaseAId, databaseBId, databaseRemoteId)) {
             for (Row link : Models.get(InstanceDatabaseModel.class).findByDatabaseId(databaseId)) {
                 links.delete(link.get(InstanceDatabaseModel.ID));
             }
@@ -150,7 +156,8 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
                     .where(InstanceModel.GENERATED_FOR_MODEL.eq(DatabaseModel.MODEL_ID.toString()))
                     .all()) {
                 Integer owner = row.get(InstanceModel.GENERATED_FOR_ID);
-                if (databaseAId.equals(owner) || databaseBId.equals(owner)) {
+                if (databaseAId.equals(owner) || databaseBId.equals(owner)
+                        || databaseRemoteId.equals(owner)) {
                     instances.delete(row.get(InstanceModel.ID));
                 }
             }
@@ -444,6 +451,124 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
             be.elevenways.hohenheim.server.auth.TenantWrites.inAuthorizedOperation(
                 () -> instances.save(revived));
         }
+    }
+
+    /**
+     * The FORM path must not be an existence/name/host oracle: before the fix,
+     * {@code InstanceDatabaseResource.validate} ran its UNSCOPED lookups ahead of the
+     * authority decision, so a tenant probing database ids from their own instance's
+     * attach form got three distinguishable answers -- {@code database_missing} for an
+     * absent id, {@code database_instance_server_mismatch} interpolating the stored
+     * (owner-namespaced) database NAME plus both host names for a foreign cross-host id,
+     * and the uniform refusal only for a foreign same-host id. That violates
+     * {@code HohenheimAccess.databaseRefusal}'s contract: visibility, absence and denial
+     * are one answer.
+     */
+    @Test
+    @Order(5)
+    void probingForeignDatabaseIdsThroughTheFormIsOneIndistinguishableAnswer() {
+        // 0. A FRESH instance owned by tenant A. Journey 4 soft-deleted instance A, and
+        //    zenit-auth's RecordGrantCleanup revokes a soft-deleted record's grants (a
+        //    restore never re-grants), so this journey brings its own probe base. The
+        //    precondition pins the capability so every refusal below is provably about
+        //    the DATABASE side.
+        int probeInstanceId = instance(PREFIX + "srv-probe", "hohenheim:docker_container",
+            hostId);
+        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, probeInstanceId,
+            HohenheimAccess.MANAGE, true);
+        assertThat(HohenheimAccess.hasInstanceCapability(
+                AccessContext.of(TenantConduits.stubFor(principalA)), probeInstanceId,
+                HohenheimAccess.CONFIG))
+            .as("precondition: tenant A authors the probe instance")
+            .isTrue();
+
+        // 1. THE THREE PROBES, all from tenant A's own instance: foreign-same-host,
+        //    foreign-cross-host, absent. Pre-fix these carried three different keys and
+        //    the cross-host one READ BACK tenant B's database name and both host names.
+        Throwable sameHost = probeAs(principalA, probeInstanceId, databaseBId);
+        Throwable crossHost = probeAs(principalA, probeInstanceId, databaseRemoteId);
+        Throwable absent = probeAs(principalA, probeInstanceId, 999999999);
+        assertThat(violationKeys(sameHost))
+            .as("step 1: the same-host foreign probe answers the uniform refusal")
+            .contains("database_not_permitted");
+        assertThat(violationKeys(crossHost))
+            .as("step 1: the cross-host foreign probe answers the SAME refusal, never"
+                + " database_instance_server_mismatch")
+            .contains("database_not_permitted")
+            .doesNotContain("server_mismatch");
+        assertThat(violationKeys(absent))
+            .as("step 1: the absent-id probe answers the SAME refusal, never"
+                + " database_missing")
+            .contains("database_not_permitted")
+            .doesNotContain("database_missing");
+        assertThat(String.valueOf(crossHost.getMessage()))
+            .as("step 1: and nothing about the foreign record leaks -- not its stored"
+                + " name, not its host")
+            .doesNotContain(PREFIX + "db-remote")
+            .doesNotContain(PREFIX + "other");
+
+        // 2. BYTE-IDENTICAL, which is the whole contract: a probing tenant cannot tell
+        //    absent from cross-host from same-host-not-yours.
+        assertThat(String.valueOf(crossHost.getMessage()))
+            .as("step 2: cross-host and same-host probes are indistinguishable")
+            .isEqualTo(String.valueOf(sameHost.getMessage()));
+        assertThat(String.valueOf(absent.getMessage()))
+            .as("step 2: and the absent id answers identically too")
+            .isEqualTo(String.valueOf(sameHost.getMessage()));
+        assertThat(linksOf(probeInstanceId))
+            .as("step 2: no probe wrote anything").isEmpty();
+
+        // 3. POSITIVE ANCHOR: the legitimate owner attaches THROUGH THE SAME FORM PATH,
+        //    so the collapse above is an ordering, not a form that refuses everyone.
+        TenantConduits.as(principalA, () -> new InstanceDatabaseResource().persistRow(
+            Map.of("instance_id", probeInstanceId, "database_id", databaseAId,
+                "env_prefix", "DB"),
+            AccessContext.of(TenantConduits.stubFor(principalA))));
+        List<Row> links = linksOf(probeInstanceId);
+        assertThat(links).as("step 3: the owner's attach landed").hasSize(1);
+
+        // 4. The UPDATE shape is the same oracle (re-point my link at your database):
+        //    probing through updateRow answers the identical uniform refusal and moves
+        //    nothing.
+        Row link = links.get(0);
+        Throwable repointed = catchThrowable(() -> TenantConduits.as(principalA,
+            () -> new InstanceDatabaseResource().updateRow(link,
+                Map.of("database_id", databaseRemoteId),
+                AccessContext.of(TenantConduits.stubFor(principalA)))));
+        assertThat(violationKeys(repointed))
+            .as("step 4: the update probe answers the uniform refusal")
+            .contains("database_not_permitted");
+        assertThat(String.valueOf(repointed.getMessage()))
+            .as("step 4: byte-identical to every other probe")
+            .isEqualTo(String.valueOf(sameHost.getMessage()));
+        assertThat((Integer) linksOf(probeInstanceId).get(0)
+                .get(InstanceDatabaseModel.DATABASE_ID))
+            .as("step 4: the link still names the owner's own database")
+            .isEqualTo(databaseAId);
+
+        // 5. POSITIVE ANCHOR for the diagnostic: an OPERATOR (no tenant origin) still
+        //    gets the reachability message by name -- the collapse is tenant-scoped
+        //    ordering, not a lobotomized validator.
+        Throwable operator = catchThrowable(() -> new InstanceDatabaseResource().persistRow(
+            Map.of("instance_id", probeInstanceId, "database_id", databaseRemoteId,
+                "env_prefix", "OP"), AccessContext.anonymous()));
+        assertThat(violationKeys(operator))
+            .as("step 5: operators keep database_instance_server_mismatch")
+            .contains("database_instance_server_mismatch");
+
+        // 6. Leave the class the way journey 4 left it: no attachments on instance A.
+        Models.get(InstanceDatabaseModel.class).find()
+            .where(InstanceDatabaseModel.DATABASE_ID.eq(databaseAId)).delete();
+    }
+
+    /** One form-path probe as one principal; @return the refusal (never null here). */
+    private static Throwable probeAs(Principal principal, Integer instanceId,
+                                     Integer databaseId) {
+        return catchThrowable(() -> TenantConduits.as(principal,
+            () -> new InstanceDatabaseResource().persistRow(
+                Map.of("instance_id", instanceId, "database_id", databaseId,
+                    "env_prefix", "DB"),
+                AccessContext.of(TenantConduits.stubFor(principal)))));
     }
 
     // -- fixtures -------------------------------------------------------------
