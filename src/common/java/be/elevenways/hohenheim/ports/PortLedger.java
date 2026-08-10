@@ -396,10 +396,15 @@ public final class PortLedger {
     public static boolean recordObserved(int serverId, @Nullable Object hostIp, int port,
                                          @Nullable Object protocol, @NonNull Identifier ownerModel,
                                          int ownerId, @Nullable String note) {
-        // The VERIFIED release is legitimate here and only here: both record-after flows
-        // reach this point strictly after OwnerLabels.removeIfOwnedBy verified (via the
-        // daemon) that the owner's previous container is gone, so its old port is an
-        // observed-free fact, not an optimistic guess.
+        // The VERIFIED release is legitimate here for all three callers, on two distinct
+        // arguments. The two record-after DEPLOY flows reach this point strictly after
+        // OwnerLabels.removeIfOwnedBy verified (via the daemon) that the owner's previous
+        // container is gone, so the old port is an observed-free fact. The third caller,
+        // DatabaseLinkNetworks.refreshInstancePort, runs against a still-RUNNING
+        // container -- its argument is not absence but SUPERSESSION: the daemon was just
+        // asked and reported the port the container holds NOW, so whatever older row the
+        // owner held describes a binding that no longer exists and correcting it must not
+        // wait out a release grace period.
         releaseOwnerObserved(ownerModel, ownerId);
         try {
             claim(serverId, hostIp, port, protocol, ownerModel, ownerId, note);
