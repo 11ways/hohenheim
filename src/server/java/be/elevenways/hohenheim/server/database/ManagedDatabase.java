@@ -389,6 +389,13 @@ public class ManagedDatabase {
                     throw new IOException("redis dump failed for '" + handle + "': " + save.stderr().trim());
                 }
                 Files.write(target, docker.getArchiveFile(handle, rdbPath, maxDumpBytes()));
+                // The exit code alone is a liar: redis-cli has shipped exit 0 while
+                // writing an error line (NOAUTH) into the dump file. The restore path
+                // checks the RDB magic; a backup that would fail that check is not a
+                // backup and must fail NOW, at capture, not months later at restore.
+                requireRdbMagic(target, "redis dump of '" + handle
+                    + "' (redis-cli exited 0 but produced no RDB; an error reply such as"
+                    + " NOAUTH may have landed in the dump file)");
             }
             case MONGO -> {
                 String archivePath = "/tmp/hohenheim-dump.archive";
@@ -458,6 +465,22 @@ public class ManagedDatabase {
     /** ASCII magic at the start of every RDB file ("REDIS" + 4-digit version). */
     private static final String REDIS_RDB_MAGIC = "REDIS";
 
+    /**
+     * ONE magic check for both directions: capture asserts what it produced, restore
+     * asserts what it was handed.
+     *
+     * @throws IOException naming {@code what} when the file does not start with REDIS
+     */
+    static void requireRdbMagic(Path file, String what) throws IOException {
+        byte[] header = new byte[REDIS_RDB_MAGIC.length()];
+        try (var in = Files.newInputStream(file)) {
+            if (in.read(header) != header.length
+                || !REDIS_RDB_MAGIC.equals(new String(header, StandardCharsets.US_ASCII))) {
+                throw new IOException("Not a redis RDB dump (missing REDIS magic): " + what);
+            }
+        }
+    }
+
     // AIDEV-NOTE: Redis only reads its RDB at startup, so there is no live restore. Instead the
     // dump is copied into the data volume (via exec -- the archive API cannot write into mounts)
     // and the server is restarted around it: SHUTDOWN NOSAVE stops the container without saving
@@ -465,13 +488,7 @@ public class ManagedDatabase {
     // shutdown could still overwrite it; that window is milliseconds and a retry recovers.
     private void restoreRedis(String handle, String user, String password, String database,
                               Path source) throws IOException {
-        byte[] header = new byte[REDIS_RDB_MAGIC.length()];
-        try (var in = Files.newInputStream(source)) {
-            if (in.read(header) != header.length
-                || !REDIS_RDB_MAGIC.equals(new String(header, StandardCharsets.US_ASCII))) {
-                throw new IOException("Not a redis RDB dump (missing REDIS magic): " + source);
-            }
-        }
+        requireRdbMagic(source, String.valueOf(source));
 
         requirePersistentData(handle, Engine.REDIS.dataPath);
 
