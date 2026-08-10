@@ -30,6 +30,9 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.hohenheim.server.task.BackupControlPlane;
+import be.elevenways.zenit.common.task.TaskCatalog;
+import be.elevenways.zenit.common.task.TaskDescriptor;
 import be.elevenways.zenit.common.task.TaskStatus;
 import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -40,10 +43,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Gathers the dashboard attention items: certificates in error, sites whose
@@ -101,6 +102,7 @@ public final class AttentionCollector {
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
             crashedInstances(items);
             failedInstanceBackups(items);
+            staleInstanceBackups(items);
             instancesLowOnDisk(items);
         }
         return items;
@@ -156,6 +158,58 @@ public final class AttentionCollector {
                     "name", instance.get(InstanceModel.NAME)),
                 literal(latest.get(InstanceBackupModel.ERROR)),
                 "/admin/instances/" + id + "/page/backups"));
+        }
+    }
+
+    /**
+     * Instances whose backup signal has degraded to SILENCE: a backup target is declared
+     * on the record (the operator's statement that this instance is supposed to be backed
+     * up) but no COMPLETE backup exists, or the newest one is older than
+     * {@code backup.stale_after_days}. The latest-FAILED collector above answers "is it
+     * failing right now"; this one answers the question that collector structurally
+     * cannot -- "when did it last SUCCEED" -- so an instance never backed up, or failing
+     * so long its failures predate its rows, stops reading as green. Both may fire for
+     * one instance (failing nightly AND stale); that is escalation, not duplication.
+     */
+    public static void staleInstanceBackups(List<AttentionItem> items) {
+        Integer days = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Backup.STALE_AFTER_DAYS);
+        if (days == null || days <= 0) {
+            return;
+        }
+        Instant threshold = Instant.now().minus(Duration.ofDays(days));
+        var backups = Models.get(InstanceBackupModel.class);
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.DELETED_AT.isNull())
+                .where(InstanceModel.BACKUP_TARGET_ID.isNotNull())
+                .all()) {
+            Integer id = instance.get(InstanceModel.ID);
+            if (id == null) {
+                continue;
+            }
+            Row newestComplete = backups.find()
+                .where(InstanceBackupModel.INSTANCE_ID.eq(id))
+                .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_COMPLETE))
+                .orderBy(InstanceBackupModel.ID, SortOrder.DESC)
+                .first();
+            if (newestComplete == null) {
+                items.add(item("warning", "box-archive",
+                    copy("instance_backup_never", "attention_title",
+                        "name", instance.get(InstanceModel.NAME)),
+                    copy("instance_backup_never", "attention_detail"),
+                    "/admin/instances/" + id + "/page/backups"));
+                continue;
+            }
+            Instant completedAt = newestComplete.get(InstanceBackupModel.CREATED_AT);
+            if (completedAt == null || completedAt.isBefore(threshold)) {
+                long age = completedAt == null
+                    ? -1 : Duration.between(completedAt, Instant.now()).toDays();
+                items.add(item("warning", "box-archive",
+                    copy("instance_backup_stale", "attention_title",
+                        "name", instance.get(InstanceModel.NAME)),
+                    copy("instance_backup_stale", "attention_detail", "days", age),
+                    "/admin/instances/" + id + "/page/backups"));
+            }
         }
     }
 
@@ -253,13 +307,51 @@ public final class AttentionCollector {
      * that the one backup covering this host's own database and keyring was never configured.
      */
     public static void controlPlaneBackupDestination(List<AttentionItem> items) {
-        if (ControlPlaneBackups.configuredDestinationName() != null) {
+        if (ControlPlaneBackups.configuredDestinationName() == null) {
+            items.add(item("error", "box-archive",
+                copy("control_plane_backup", "attention_title"),
+                copy("control_plane_backup", "attention_detail"),
+                "/admin/settings"));
             return;
         }
-        items.add(item("error", "box-archive",
-            copy("control_plane_backup", "attention_title"),
-            copy("control_plane_backup", "attention_detail"),
-            "/admin/settings"));
+        controlPlaneBackupFreshness(items);
+    }
+
+    /** The nightly task runs at 02:30; two missed nights is an alarm, not scheduling jitter. */
+    private static final Duration CONTROL_PLANE_BACKUP_STALE_AFTER = Duration.ofHours(48);
+
+    /**
+     * A configured destination is a CAPABILITY; this is the OBSERVATION: the newest
+     * COMPLETED {@code BackupControlPlane} run must be recent. The per-type failedTasks
+     * item says "the last run failed"; this one catches what that cannot -- a scheduler
+     * that stopped running the task at all, or a failure streak old enough that "last run
+     * failed" understates it. LIMITATION, stated: a brand-new install with no history row
+     * for the task yet stays silent until the first nightly run seeds one.
+     */
+    public static void controlPlaneBackupFreshness(List<AttentionItem> items) {
+        if (Models.get(SystemTaskHistoryModel.MODEL_ID) == null) {
+            return;
+        }
+        var history = Models.get(SystemTaskHistoryModel.class);
+        String typePath = BackupControlPlane.class.getName();
+        if (history.findRecentForType(typePath, 1).isEmpty()) {
+            return;
+        }
+        Row newestSuccess = history.find()
+            .where(SystemTaskHistoryModel.TASK_TYPE.eq(typePath))
+            .where(SystemTaskHistoryModel.STATUS.eq(TaskStatus.COMPLETED.name()))
+            .orderBy(SystemTaskHistoryModel.STARTED_AT, SortOrder.DESC)
+            .first();
+        Instant successAt = newestSuccess != null
+            ? newestSuccess.get(SystemTaskHistoryModel.STARTED_AT) : null;
+        if (successAt == null
+                || successAt.isBefore(Instant.now().minus(CONTROL_PLANE_BACKUP_STALE_AFTER))) {
+            items.add(item("error", "box-archive",
+                copy("control_plane_backup_stale", "attention_title"),
+                copy("control_plane_backup_stale", "attention_detail",
+                    "hours", CONTROL_PLANE_BACKUP_STALE_AFTER.toHours()),
+                "/admin/settings"));
+        }
     }
 
     /** A stacks node whose boot probe found no Docker daemon: a red item, not silence. */
@@ -472,35 +564,32 @@ public final class AttentionCollector {
         }
     }
 
-    /** Latest history row per task type; failed ones surface (no task UI yet, so no url). */
-    private static void failedTasks(List<AttentionItem> items) {
+    /** Latest history row per DECLARED task type; failed ones surface (no task UI yet, so no url).
+     *  Public for the same reason the instance collectors are: a test proves the projection. */
+    public static void failedTasks(List<AttentionItem> items) {
         // The task system registers its datasource-scoped model at its own boot
         // stage; a boot without it (tests, tools) simply has no task news.
         if (Models.get(SystemTaskHistoryModel.MODEL_ID) == null) {
             return;
         }
-        List<Row> recent = Models.get(SystemTaskHistoryModel.class).find()
-            .orderBy(SystemTaskHistoryModel.STARTED_AT, be.elevenways.zenit.common.orm.query.SortOrder.DESC)
-            .limit(200)
-            .all();
-        Map<String, Row> latestPerType = new LinkedHashMap<>();
-        for (Row row : recent) {
-            String type = row.get(SystemTaskHistoryModel.TASK_TYPE);
-            if (type != null) {
-                latestPerType.putIfAbsent(type, row);
+        // AIDEV-NOTE: per-type newest via the catalog, never one recent-N window across
+        // ALL types -- with several frequent cron tasks a 200-row window was a few HOURS
+        // deep, so a nightly task's 02:30 failure had scrolled out of it by mid-morning
+        // and the dashboard went green while the task stayed broken. A type is judged by
+        // ITS OWN newest row; a type with no history yet has no news.
+        var history = Models.get(SystemTaskHistoryModel.class);
+        for (TaskDescriptor descriptor : TaskCatalog.all()) {
+            List<Row> latest = history.findRecentForType(descriptor.typePath(), 1);
+            if (latest.isEmpty()) {
+                continue;
             }
-        }
-        Set<String> failed = new LinkedHashSet<>();
-        for (Map.Entry<String, Row> entry : latestPerType.entrySet()) {
-            if (TaskStatus.FAILED.name().equals(entry.getValue().get(SystemTaskHistoryModel.STATUS))) {
-                failed.add(entry.getKey());
+            if (TaskStatus.FAILED.name().equals(
+                    latest.get(0).get(SystemTaskHistoryModel.STATUS))) {
+                items.add(item("warning", "clock",
+                    copy("task", "attention_title", "name", descriptor.typePath()),
+                    copy("last_run_failed", "attention_detail"),
+                    null));
             }
-        }
-        for (String type : failed) {
-            items.add(item("warning", "clock",
-                copy("task", "attention_title", "name", type),
-                copy("last_run_failed", "attention_detail"),
-                null));
         }
     }
 

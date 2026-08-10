@@ -1189,6 +1189,15 @@ public class HohenheimSettings {
                 + "path nothing else closes")
             .build();
 
+        public static final SettingDefinition<Integer> STALE_AFTER_DAYS = GROUP
+            .buildSetting("stale_after_days", Integer.class)
+            .defaultValue(7)
+            .description("Days without a COMPLETED backup before an instance with a "
+                + "configured backup target raises a dashboard attention item (an "
+                + "instance with a target but no completed backup at all always "
+                + "raises one); 0 or less disables the freshness check")
+            .build();
+
         public static final SettingDefinition<Integer> MAX_ARCHIVE_MB = GROUP
             .buildSetting("max_archive_mb", Integer.class)
             .defaultValue(1024)

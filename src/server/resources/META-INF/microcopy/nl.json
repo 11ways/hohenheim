@@ -7334,6 +7334,26 @@
     "text": "Back-up van {$name} is mislukt",
     "scope": "attention_title"
   },
+  "instance_backup_never": [
+    {
+      "text": "Instantie {$name} is nog nooit geback-upt",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Er is een back-updoel ingesteld maar er bestaat geen voltooide back-up.",
+      "scope": "attention_detail"
+    }
+  ],
+  "instance_backup_stale": [
+    {
+      "text": "Back-ups van {$name} zijn verouderd",
+      "scope": "attention_title"
+    },
+    {
+      "text": "De nieuwste voltooide back-up is {$days} dagen oud.",
+      "scope": "attention_detail"
+    }
+  ],
   "instance_disk": [
     {
       "text": "Schijf bijna vol op {$name}",
@@ -7351,6 +7371,16 @@
     },
     {
       "text": "Herstelarchieven van het controlevlak (database + versleutelingssleutels) kunnen nergens heen. Stel database.control_plane_backup_target in.",
+      "scope": "attention_detail"
+    }
+  ],
+  "control_plane_backup_stale": [
+    {
+      "text": "Controlevlak-back-up is verouderd",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Geen controlevlak-back-up voltooid in de laatste {$hours} uur; het nieuwste herstelarchief weerspiegelt deze host niet meer.",
       "scope": "attention_detail"
     }
   ],

@@ -1,9 +1,14 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.task.BackupControlPlane;
+import be.elevenways.hohenheim.server.task.CleanOldProclogs;
+import be.elevenways.zenit.common.task.TaskStatus;
+import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -148,5 +153,154 @@ class InstanceAttentionTest {
                 .as("step 8: 88% is a warning, not an error")
                 .containsExactly("warning /admin/instances/" + healthy);
         });
+    }
+
+    /**
+     * The backup FRESHNESS projection: the latest-FAILED collector answers "is it
+     * failing right now", this one answers "when did it last succeed" -- an instance
+     * with a declared backup target and no (recent) COMPLETE backup must not read as
+     * green. What this cannot prove: the real nightly cadence; ages are forged.
+     */
+    @Test
+    void anInstanceWithABackupTargetButNoRecentSuccessStopsReadingAsGreen() {
+        Db.run(datasource, () -> {
+            int covered = instance("attn-fresh-covered", InstanceModel.STATUS_RUNNING);
+            int uncovered = instance("attn-fresh-uncovered", InstanceModel.STATUS_RUNNING);
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 7);
+            Models.get(InstanceModel.class).find()
+                .where(InstanceModel.ID.eq(covered))
+                .assign(InstanceModel.BACKUP_TARGET_ID, 4242)
+                .updateAll();
+
+            // 1. A declared target and ZERO completed backups: the never-backed-up item
+            //    fires. The instance WITHOUT a target stays silent -- no target means no
+            //    declared intent, and alarming it would drown the signal.
+            assertThat(raisedKeys(AttentionCollector::staleInstanceBackups))
+                .as("step 1: exactly the target-declared instance raises the"
+                    + " never-backed-up item")
+                .containsExactly("instance_backup_never warning /admin/instances/"
+                    + covered + "/page/backups");
+
+            // 2. A FAILED attempt is not a success: still the never item (the failure
+            //    itself is the OTHER collector's error).
+            backup(covered, InstanceBackupModel.STATUS_FAILED);
+            assertThat(raisedKeys(AttentionCollector::staleInstanceBackups))
+                .as("step 2: failed attempts do not count as coverage")
+                .containsExactly("instance_backup_never warning /admin/instances/"
+                    + covered + "/page/backups");
+
+            // 3. A recent COMPLETE backup: silence.
+            backup(covered, InstanceBackupModel.STATUS_COMPLETE);
+            assertThat(raisedKeys(AttentionCollector::staleInstanceBackups))
+                .as("step 3: a fresh completed backup silences the projection").isEmpty();
+
+            // 4. Age that success beyond the window: the STALE item fires -- last
+            //    success six months ago must not look like last night.
+            Models.get(InstanceBackupModel.class).find()
+                .where(InstanceBackupModel.INSTANCE_ID.eq(covered))
+                .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_COMPLETE))
+                .assign(InstanceBackupModel.CREATED_AT,
+                    Instant.now().minus(30, java.time.temporal.ChronoUnit.DAYS))
+                .updateAll();
+            assertThat(raisedKeys(AttentionCollector::staleInstanceBackups))
+                .as("step 4: a success older than the window raises the stale item")
+                .containsExactly("instance_backup_stale warning /admin/instances/"
+                    + covered + "/page/backups");
+
+            // 5. The check is an operator dial: 0 disables it entirely.
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 0);
+            assertThat(raisedKeys(AttentionCollector::staleInstanceBackups))
+                .as("step 5: stale_after_days 0 disables the freshness check").isEmpty();
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 7);
+
+            trash(covered);
+            trash(uncovered);
+        });
+    }
+
+    /**
+     * The task projection judges every DECLARED type by ITS OWN newest history row: a
+     * nightly task's failure must survive a flood of newer rows from chattier tasks
+     * (the old recent-200 window was a few hours deep and went green by mid-morning),
+     * and the control-plane freshness item fires when the newest COMPLETED run of the
+     * backup task is too old -- a capability ("a destination is configured") is not an
+     * observation ("archives are actually landing").
+     */
+    @Test
+    void aNightlyTaskFailureIsNotBuriedByChattierTasksAndBackupFreshnessIsObserved() {
+        Db.run(datasource, () -> {
+            // The lite boot never starts the task service, so its datasource-scoped
+            // model is registered here (the table exists: M001_CreateSystemTaskTables
+            // is auto-discovered by the migration runner).
+            if (Models.get(SystemTaskHistoryModel.MODEL_ID) == null) {
+                Models.registerInstance(new SystemTaskHistoryModel(datasource));
+            }
+            String nightly = BackupControlPlane.class.getName();
+            String chatty = CleanOldProclogs.class.getName();
+
+            // 1. One FAILED nightly run, then 250 newer successful runs of another task.
+            taskRun(nightly, TaskStatus.FAILED,
+                Instant.now().minus(9, java.time.temporal.ChronoUnit.HOURS));
+            for (int i = 0; i < 250; i++) {
+                taskRun(chatty, TaskStatus.COMPLETED,
+                    Instant.now().minusSeconds(250 - i));
+            }
+            assertThat(raisedKeys(AttentionCollector::failedTasks))
+                .as("step 1: the nightly failure is judged by its OWN newest row, so 250"
+                    + " newer rows of a chattier task cannot scroll it out of sight")
+                .contains("task warning ");
+
+            // 2. Freshness: a destination is configured but the newest COMPLETED backup
+            //    run is 3 days old -- the observation item fires.
+            HohenheimSettings.VALUES.setValue(
+                HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "attn-target");
+            taskRun(nightly, TaskStatus.COMPLETED,
+                Instant.now().minus(3, java.time.temporal.ChronoUnit.DAYS));
+            assertThat(raisedKeys(AttentionCollector::controlPlaneBackupFreshness))
+                .as("step 2: a stale newest success raises the freshness item")
+                .containsExactly("control_plane_backup_stale error /admin/settings");
+
+            // 3. A COMPLETED run within the window silences it.
+            taskRun(nightly, TaskStatus.COMPLETED,
+                Instant.now().minus(6, java.time.temporal.ChronoUnit.HOURS));
+            assertThat(raisedKeys(AttentionCollector::controlPlaneBackupFreshness))
+                .as("step 3: a recent success is silence").isEmpty();
+
+            // 4. And that recent success also clears the failed-tasks item for the type.
+            assertThat(raisedKeys(AttentionCollector::failedTasks))
+                .as("step 4: the newest row of the nightly type is now COMPLETED, so its"
+                    + " failure item clears; no other declared type has news")
+                .isEmpty();
+
+            HohenheimSettings.VALUES.setValue(
+                HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "");
+        });
+    }
+
+    private static void taskRun(String typePath, TaskStatus status, Instant startedAt) {
+        var model = (SystemTaskHistoryModel) Models.get(SystemTaskHistoryModel.MODEL_ID);
+        Row row = model.createEmptyRow();
+        row.set(SystemTaskHistoryModel.TASK_TYPE, typePath);
+        row.set(SystemTaskHistoryModel.STATUS, status.name());
+        row.set(SystemTaskHistoryModel.STARTED_AT, startedAt);
+        model.save(row);
+    }
+
+    private static void trash(int instanceId) {
+        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        row.set(InstanceModel.DELETED_AT, Instant.now());
+        Models.get(InstanceModel.class).save(row);
+    }
+
+    /** Each item as "titleKey severity url": key included where two claims share a url. */
+    private static List<String> raisedKeys(
+            java.util.function.Consumer<List<AttentionItem>> collector) {
+        List<AttentionItem> items = new ArrayList<>();
+        collector.accept(items);
+        List<String> rendered = new ArrayList<>();
+        for (AttentionItem item : items) {
+            rendered.add(item.title().key() + " " + item.severity() + " " + item.url());
+        }
+        return rendered;
     }
 }

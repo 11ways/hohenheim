@@ -7334,6 +7334,26 @@
     "text": "Backup of {$name} failed",
     "scope": "attention_title"
   },
+  "instance_backup_never": [
+    {
+      "text": "Instance {$name} has never been backed up",
+      "scope": "attention_title"
+    },
+    {
+      "text": "A backup target is configured but no completed backup exists.",
+      "scope": "attention_detail"
+    }
+  ],
+  "instance_backup_stale": [
+    {
+      "text": "Backups of {$name} are stale",
+      "scope": "attention_title"
+    },
+    {
+      "text": "The newest completed backup is {$days} days old.",
+      "scope": "attention_detail"
+    }
+  ],
   "instance_disk": [
     {
       "text": "Disk almost full on {$name}",
@@ -7351,6 +7371,16 @@
     },
     {
       "text": "Control-plane recovery archives (database + encryption keyring) have nowhere to go. Set database.control_plane_backup_target.",
+      "scope": "attention_detail"
+    }
+  ],
+  "control_plane_backup_stale": [
+    {
+      "text": "Control-plane backup is stale",
+      "scope": "attention_title"
+    },
+    {
+      "text": "No control-plane backup completed in the last {$hours} hours; the newest recovery archive no longer reflects this host.",
       "scope": "attention_detail"
     }
   ],
