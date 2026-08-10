@@ -56,4 +56,16 @@ public final class WildcardHostname {
     public static boolean matches(String hostname, String glob) {
         return compile(glob).matcher(hostname).matches();
     }
+
+    /**
+     * THE glob-specificity measure (literal character count), shared by the HTTP wildcard
+     * tier and the TLS/SNI table so the two tiers order candidates identically.
+     */
+    public static int literalSpecificity(String pattern) {
+        int count = 0;
+        for (int i = 0; i < pattern.length(); i++) {
+            if (pattern.charAt(i) != '*' && pattern.charAt(i) != '?') count++;
+        }
+        return count;
+    }
 }

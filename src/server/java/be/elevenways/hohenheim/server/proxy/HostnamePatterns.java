@@ -76,10 +76,16 @@ public final class HostnamePatterns {
         boolean regexA = SiteDomainModel.MATCH_REGEX.equals(effectiveKind(canonicalA, matchTypeA));
         boolean regexB = SiteDomainModel.MATCH_REGEX.equals(effectiveKind(canonicalB, matchTypeB));
         if (regexA || regexB) {
-            // Two regexes: identical patterns were already answered above, and pattern
-            // equivalence is the undecidable case.
-            return (regexA != regexB)
-                && regexMatchesHost(regexA ? canonicalA : canonicalB, regexA ? canonicalB : canonicalA);
+            // Two regexes: matching is case-insensitive (HostnameRegex), so sources equal
+            // MODULO CASE are one pattern in effect and must intersect -- otherwise
+            // "^App\.x$" and "^app\.x$" were two admitted routes serving the same hosts.
+            // (\S versus \s also collapses here; that is a FALSE conflict, fails closed,
+            // and a whitespace class matches no real hostname.) Beyond that, pattern
+            // equivalence stays the undecidable case.
+            if (regexA && regexB) {
+                return canonicalA.equalsIgnoreCase(canonicalB);
+            }
+            return regexMatchesHost(regexA ? canonicalA : canonicalB, regexA ? canonicalB : canonicalA);
         }
         return globsIntersect(canonicalA, canonicalB);
     }

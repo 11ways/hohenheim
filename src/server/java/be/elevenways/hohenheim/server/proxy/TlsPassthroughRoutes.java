@@ -86,10 +86,13 @@ public final class TlsPassthroughRoutes {
                 }
 
                 String matchType = domain.get(SiteDomainModel.MATCH_TYPE);
-                String kind = "regex".equals(matchType) ? "regex"
-                    : "wildcard".equals(matchType) || WildcardHostname.isWildcard(hostname)
-                        ? "wildcard" : "exact";
-                if (!"regex".equals(kind)) hostname = hostname.toLowerCase(Locale.ROOT);
+                // HostnamePatterns.effectiveKind is THE tier decision -- the same one the
+                // HTTP route table and the write-time overlap scan use. A local re-spelling
+                // here is the second-copy-of-the-tier shape that produced the takeover.
+                String kind = HostnamePatterns.effectiveKind(hostname, matchType);
+                if (!SiteDomainModel.MATCH_REGEX.equals(kind)) {
+                    hostname = hostname.toLowerCase(Locale.ROOT);
+                }
                 List<String> listenOn = ListenerAddressMatcher.parse(
                     domain.get(SiteDomainModel.LISTEN_ON));
                 Route route = new Route(siteName, listenOn, decision);
@@ -117,8 +120,8 @@ public final class TlsPassthroughRoutes {
                     }
                 }
                 case "wildcard" -> {
-                    wildcard.add(new PatternRoute(
-                        WildcardHostname.compile(group.hostname()), literalSpecificity(group.hostname()), routes));
+                    wildcard.add(new PatternRoute(WildcardHostname.compile(group.hostname()),
+                        WildcardHostname.literalSpecificity(group.hostname()), routes));
                     passthroughCount += countPassthrough(routes);
                 }
                 default -> {
@@ -256,11 +259,4 @@ public final class TlsPassthroughRoutes {
         return values == null || values.isEmpty();
     }
 
-    private static int literalSpecificity(String pattern) {
-        int count = 0;
-        for (int i = 0; i < pattern.length(); i++) {
-            if (pattern.charAt(i) != '*' && pattern.charAt(i) != '?') count++;
-        }
-        return count;
-    }
 }

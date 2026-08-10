@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -98,12 +99,22 @@ public final class RouteClaims {
      * IDENTICAL routes. Rows whose hostname sets merely INTERSECT (foo.example.com under
      * *.example.com) spell different keys on purpose -- they are refused by the serialized
      * conflict scan in SiteDomainResource, never by this key or its unique index.
+     *
+     * AIDEV-NOTE: a REGEX source folds to lowercase HERE (only here -- the stored pattern
+     * keeps its case, see HostnameRegex): matching is case-insensitive, so "^App\." and
+     * "^app\." route the SAME hosts and must be ONE claim the unique index can refuse.
+     * Metacharacter case folds too (\S and \s spell one key), which can only produce a
+     * FALSE conflict -- and a whitespace class in a hostname pattern matches nothing real.
      */
     public static @NonNull String keyOf(@Nullable Object hostname, @Nullable Object matchType,
                                         @Nullable Object path, @Nullable Object listenOn) {
+        String matchTypeText = matchType != null ? String.valueOf(matchType) : null;
         String canonicalHostname = SiteDomainModel.canonicalHostname(
-            hostname != null ? String.valueOf(hostname) : null,
-            matchType != null ? String.valueOf(matchType) : null);
+            hostname != null ? String.valueOf(hostname) : null, matchTypeText);
+        if (canonicalHostname != null && SiteDomainModel.MATCH_REGEX.equals(
+                SiteDomainModel.effectiveMatchType(canonicalHostname, matchTypeText))) {
+            canonicalHostname = BlastString.lower(canonicalHostname);
+        }
         String canonicalPath = SiteDispatcher.normalizeRoutePath(
             path != null ? String.valueOf(path) : null);
         List<String> listeners = ListenerAddressMatcher.parse(

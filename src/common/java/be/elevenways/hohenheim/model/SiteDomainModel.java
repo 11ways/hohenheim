@@ -26,14 +26,20 @@ public class SiteDomainModel extends Model {
     /** {@link #MATCH_TYPE} value for a glob-style wildcard hostname match. */
     public static final String MATCH_WILDCARD = "wildcard";
 
-    /** {@link #MATCH_TYPE} value for a regex hostname match (hostname stays case-sensitive). */
+    /**
+     * {@link #MATCH_TYPE} value for a regex hostname match. Matching is case-INSENSITIVE
+     * (request hostnames are pre-folded to lowercase; see HostnameRegex); the pattern
+     * SOURCE keeps its case in storage, and RouteClaims folds the claim KEY.
+     */
     public static final String MATCH_REGEX = "regex";
 
     /**
      * THE stored/canonical hostname form, shared by the beforeValidate hook, the
      * route-identity check and the dispatcher: trimmed, lowercased and stripped of the FQDN
-     * root dot, except for regex sources (patterns are case-sensitive, and a trailing
-     * {@code .} is a metacharacter there rather than the root label).
+     * root dot, except for regex sources (lowercasing pattern TEXT would flip class escapes
+     * like {@code \S} into {@code \s}, and a trailing {@code .} is a metacharacter there
+     * rather than the root label -- case-insensitive matching and the case-folded claim key
+     * live in HostnameRegex and RouteClaims respectively).
      *
      * AIDEV-NOTE: the root-dot fold is load-bearing, not cosmetic. Without it
      * {@code victim.test.} and {@code victim.test} spelled two claim keys that
