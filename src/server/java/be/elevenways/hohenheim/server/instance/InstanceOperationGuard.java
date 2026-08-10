@@ -26,6 +26,14 @@ final class InstanceOperationGuard {
     /**
      * Refuse while a snapshot capture, restore or migration protects this instance.
      *
+     * AIDEV-NOTE: read-then-act, NOT mutual exclusion -- the row was loaded at resolve()
+     * and the CAPTURING stamp lands later (after a network health check on the backup
+     * lane), so two operations that START close together can both pass this gate. That is
+     * accepted, by decision: the gate exists to refuse OBVIOUSLY rival operator actions,
+     * data-integrity does not ride on it (backup/snapshot payload names are row-id-unique
+     * and every status write is fenced), and making entry atomic is a
+     * compare-and-swap-entry redesign shared by all three lanes, not a patch here.
+     *
      * @throws Violations {@code instance_busy}
      */
     static void requireOperable(@NonNull Row row) {

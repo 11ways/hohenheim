@@ -293,6 +293,95 @@ class InstanceSnapshotRetentionTest {
         });
     }
 
+    /**
+     * Boot reclaim of interrupted captures: a FAILED row normally holds no payload, but a
+     * controller killed DURING a capture leaves one that does (the FAILED-first write
+     * discipline), and the never-prune-FAILED rule then preserves that payload forever.
+     * The settle removes the payload of rows whose last write predates the process start
+     * and KEEPS the rows as evidence; fresh FAILED rows (a capture in flight) are never
+     * touched.
+     */
+    @Test
+    void bootReclaimRemovesTheOrphanedPayloadOfAnInterruptedCaptureAndKeepsTheRow()
+            throws IOException {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceSnapshots snapshots = new InstanceSnapshots();
+            int instanceId = instanceRecord("snap-boot-reclaim", hostId);
+            service.deploy(instanceId);
+            Map<String, FakeNativeDaemons.FakeWorkload> daemon =
+                FakeNativeDaemons.daemonOf(hostId);
+            String handle = FakeNativeDaemons.handleOf(instanceId);
+            java.time.Instant beforeThisProcess = java.time.Instant.ofEpochMilli(
+                java.lang.management.ManagementFactory.getRuntimeMXBean().getStartTime())
+                .minusSeconds(3600);
+
+            // 1. A dead VOLUME capture: FAILED row, directory on disk. A dead NATIVE
+            //    capture: FAILED row, snapshot still held by the daemon. And a FRESH
+            //    failed row standing in for a capture this process has in flight.
+            Path orphanDir;
+            Path liveDir;
+            try {
+                orphanDir = Files.createTempDirectory("hohenheim-snap-orphan");
+                Files.writeString(orphanDir.resolve("data.tar"), "half-written");
+                liveDir = Files.createTempDirectory("hohenheim-snap-live");
+                Files.writeString(liveDir.resolve("data.tar"), "being written NOW");
+            } catch (IOException impossible) {
+                throw new IllegalStateException(impossible);
+            }
+            int deadVolume = failedRow(instanceId, orphanDir.toString(), null,
+                beforeThisProcess);
+            daemon.get(handle).snapshots.add("hib-test-orphan");
+            int deadNative = failedRow(instanceId, null, "hib-test-orphan",
+                beforeThisProcess);
+            failedRow(instanceId, liveDir.toString(), null, null);
+
+            // 2. The settle.
+            snapshots.recoverInterrupted();
+
+            assertThat(Map.of(
+                    "volumeRow", String.valueOf(Models.get(InstanceSnapshotModel.class)
+                        .findById(deadVolume) != null),
+                    "volumePayload", String.valueOf(Files.exists(orphanDir)),
+                    "nativeRow", String.valueOf(Models.get(InstanceSnapshotModel.class)
+                        .findById(deadNative) != null),
+                    "nativePayload", String.valueOf(
+                        daemon.get(handle).snapshots.contains("hib-test-orphan"))))
+                .as("step 2: both dead captures lost their payload (disk AND daemon) but"
+                    + " KEPT their rows -- the row is the evidence, the payload was the"
+                    + " leak")
+                .isEqualTo(Map.of("volumeRow", "true", "volumePayload", "false",
+                    "nativeRow", "true", "nativePayload", "false"));
+            assertThat(Files.exists(liveDir.resolve("data.tar")))
+                .as("step 2: the FRESH row's payload -- a capture this process has in"
+                    + " flight -- was left alone; settling it would destroy a capture"
+                    + " mid-write")
+                .isTrue();
+
+            service.destroy(instanceId);
+        });
+    }
+
+    /** A FAILED snapshot row; {@code writtenAt} null keeps save-time stamps (a live row). */
+    private static int failedRow(int instanceId, String directory, String nativeName,
+                                 java.time.Instant writtenAt) {
+        Row row = Models.get(InstanceSnapshotModel.class).createEmptyRow();
+        row.set(InstanceSnapshotModel.INSTANCE_ID, instanceId);
+        row.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED);
+        row.set(InstanceSnapshotModel.DIRECTORY, directory);
+        row.set(InstanceSnapshotModel.NATIVE_NAME, nativeName);
+        Models.get(InstanceSnapshotModel.class).save(row);
+        int id = row.get(InstanceSnapshotModel.ID);
+        if (writtenAt != null) {
+            Models.get(InstanceSnapshotModel.class).find()
+                .where(InstanceSnapshotModel.ID.eq(id))
+                .assign(InstanceSnapshotModel.CREATED_AT, writtenAt)
+                .assign(InstanceSnapshotModel.UPDATED_AT, writtenAt)
+                .updateAll();
+        }
+        return id;
+    }
+
     private static void denyWrites(Path directory) {
         try {
             Files.setPosixFilePermissions(directory,
