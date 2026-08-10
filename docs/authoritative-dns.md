@@ -40,9 +40,11 @@ orphan sweeper. `DnsClaimReleases` now disables a released name's non-generated
 records, clears their dyndns credentials and revokes their record grants in the
 same transaction as the release (site soft delete, domain row delete or
 rename); a name still covered by another live domain row, or belonging to a
-merely DISABLED site, is untouched. Additionally: the dyndns columns are now
-grant-gated on the model write pipeline (hostname authority alone can no longer
-arm a token), a CNAME at the zone apex is refused (the synthesized SOA is not a
+merely DISABLED site, is untouched. Additionally: the dyndns credential (its
+own `dns_dyndns_credentials` table since M091; a credential row IS the dynamic
+flag, only the sha256 digest at rest) is grant-gated on the model write
+pipeline (hostname authority alone can no longer arm a token), a CNAME at the
+zone apex is refused (the synthesized SOA is not a
 row, so the sibling scan never saw the conflict), and one malformed record no
 longer takes its whole zone out of the serving snapshot. Note also that the
 "attention items" list under Hohenheim integration below is a DESIGN wishlist:
@@ -86,8 +88,10 @@ Persist two normal models:
 
 - `DnsZone`: origin, SOA primary/contact, serial, default/negative TTL, enabled
   state and optional secondary/transfer policy.
-- `DnsRecord`: zone, owner name, type, TTL, value, priority/weight/port where
-  relevant, and enabled state. Multiple rows form one RRset.
+- `DnsRecord`: zone, owner name, type, TTL, value, a type-schema'd `data`
+  column for type-specific extras (MX priority; SRV priority/weight/port --
+  the TYPE enum value declares the sub-schema, `SchemaField.schemaFrom`), and
+  enabled state. Multiple rows form one RRset.
 
 The first record vocabulary should cover SOA, NS, A, AAAA, CNAME, MX, TXT, CAA
 and SRV. Wildcard owner names are ordinary authoritative records. The CMS

@@ -136,18 +136,19 @@ editing, DNSSEC, response-rate-limiting, and dynamic DNS are all implemented.
 
 ## Dynamic DNS (dyndns2)
 
-An A or AAAA record can be marked *dynamic*: the row action generates a
-per-record update token that is stored as-is and stays visible on the record's
-form, so the operator can re-read the update URL any time it needs to be put
-back into a router or ddclient config (a low-value credential, like FreeDNS's
-persistent update URL -- deliberately not the hash-only "shown once" posture
-used for account passwords and API keys). The public endpoint
+An A or AAAA record can be made *dynamic*: the mint row action (offered only
+on address records) creates the record's credential row in
+`dns_dyndns_credentials` and discloses the plaintext `hdyn_` token exactly
+once in its toast -- only the sha256 digest is at rest, re-minting rotates it,
+and the revoke row action (offered only while a credential exists) deletes it.
+The public endpoint
 
     GET /nic/update?hostname=<fqdn>&myip=<ip>
 
 speaks the de-facto dyndns2 protocol, so routers, ddclient, and any existing
 DDNS client work by pointing at it with the token as the HTTP Basic password
-(the token is also accepted as the username or a `?token=` param). Replies are
+(the token is also accepted as the username; a `?token=` query param is
+deliberately refused -- credentials do not travel in URLs). Replies are
 the bare `good <ip>` / `nochg <ip>` / `badauth` / `nohost` lines clients
 expect. `myip` is honored when present, otherwise the trusted-proxy-resolved
 caller IP is used; the IP family must match the record type (an A record takes
