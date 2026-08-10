@@ -616,8 +616,14 @@ public final class HohenheimHandlers {
 
     // -----------------------------------------------------------------------
     // Dynamic DNS: the public dyndns2 update endpoint (/nic/update). The update
-    // token travels in HTTP Basic auth (password, or username as a fallback) or
-    // a ?token= param; the service refuses anything the token does not unlock.
+    // token travels in HTTP Basic auth ONLY (password, or username as a fallback);
+    // the service refuses anything the token does not unlock.
+    //
+    // AIDEV-NOTE: a ?token= query fallback was DROPPED (2026-08-10). A DNS-write
+    // credential in the query string lands in access logs, proxy logs and the
+    // Referer of anything the response links to -- and dyndns2 clients (ddclient,
+    // routers) present the token as the Basic password anyway, which is exactly what
+    // the record's help text documents. Do not reintroduce the query fallback.
     // -----------------------------------------------------------------------
 
     private static void initDynamicDns() {
@@ -633,7 +639,7 @@ public final class HohenheimHandlers {
         });
     }
 
-    /** The update token from HTTP Basic auth (password preferred, username fallback) or ?token=. */
+    /** The update token from HTTP Basic auth (password preferred, username fallback); no query fallback. */
     private static @org.checkerframework.checker.nullness.qual.Nullable String dyndnsToken(Conduit conduit) {
         String authorization = conduit.getRequestHeader("Authorization");
         if (authorization != null && authorization.regionMatches(true, 0, "Basic ", 0, 6)) {
@@ -653,10 +659,12 @@ public final class HohenheimHandlers {
                 }
             }
             catch (IllegalArgumentException ignored) {
-                // Malformed base64: fall through to the query param.
+                // Malformed base64: no credential to use.
             }
         }
-        return conduit.getQueryParam("token");
+        // Deliberately NO ?token= fallback: a DNS-write credential must never ride the query
+        // string (access/proxy logs, Referer). See the section note above.
+        return null;
     }
 
     private static ActionResult<Object> validationError(Conduit conduit, Violations violations) {
@@ -773,6 +781,19 @@ public final class HohenheimHandlers {
         DatabaseService databaseService = new DatabaseService();
 
         HohenheimEndpoints.DATABASES_BACKUP.setHandler(conduit -> {
+            // AIDEV-NOTE: this is a side-effecting GET (it execs a full dump and records an
+            // activity row). The route stays GET because it is a file DOWNLOAD -- the CMS
+            // row-action download mechanism is a link and CmsActionResult cannot stream, so
+            // a POST twin of the RESTORE endpoint is not reachable without a chain change.
+            // Instead a Fetch-Metadata check refuses a CROSS-SITE drive: an <img src>/auto-
+            // navigation from an attacker page rides the victim's session cookie and would
+            // otherwise force a production dump + a false audit row attributing it to them.
+            // A same-origin link click (same-origin/same-site) and a top-level navigation
+            // (none) are allowed; a header-less non-browser client is not the CSRF victim.
+            if (isCrossSiteBrowserRequest(conduit)) {
+                conduit.notFound();
+                return null;
+            }
             String name = conduit.getParameter(HohenheimEndpoints.DATABASE_NAME);
             if (Models.get(DatabaseModel.class).find()
                     .where(DatabaseModel.NAME.eq(name)).first() == null) {
@@ -1086,6 +1107,25 @@ public final class HohenheimHandlers {
 
 
     /** Stream a binary body as a downloadable attachment with a sanitized filename. */
+    /**
+     * Whether this request is a cross-site browser drive (an {@code <img src>}, a
+     * cross-origin fetch, a form POST from another site) rather than a same-origin click or
+     * a top-level navigation. Reads the browser-set {@code Sec-Fetch-Site} metadata header.
+     */
+    private static boolean isCrossSiteBrowserRequest(Conduit conduit) {
+        return isCrossSiteFetch(conduit.getRequestHeader("Sec-Fetch-Site"));
+    }
+
+    /**
+     * The Fetch-Metadata decision, isolated as a pure function: {@code cross-site} is the ONLY
+     * value refused. {@code same-origin}/{@code same-site} (a real click) and {@code none} (a
+     * top-level navigation) pass, and so does a header-less client (an old browser, curl or
+     * ddclient) -- a request with no ambient cookie is not the CSRF victim this guards.
+     */
+    static boolean isCrossSiteFetch(@Nullable String secFetchSite) {
+        return secFetchSite != null && secFetchSite.equalsIgnoreCase("cross-site");
+    }
+
     private static void download(Conduit conduit, String contentType, String filename, byte[] body) {
         if (conduit instanceof HttpConduit http) {
             String safeName = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
