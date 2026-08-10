@@ -248,6 +248,22 @@ class DynamicDnsTest extends HohenheimTestBase {
             .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(bad.statusCode()).isEqualTo(200);
         assertThat(bad.body().trim()).isEqualTo("badauth");
+
+        // The valid token presented ONLY in the query string is rejected: a DNS-write
+        // credential must never travel in the URL (logs, Referer). Same token that just
+        // succeeded over Basic auth, now with no Authorization header at all.
+        HttpResponse<String> queryToken = client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort()
+                + "/nic/update?hostname=home.dyn-http.example&myip=203.0.113.66&token="
+                + token))
+            .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(queryToken.statusCode()).isEqualTo(200);
+        assertThat(queryToken.body().trim())
+            .as("the ?token= query fallback is gone; the credential must ride Basic auth")
+            .isEqualTo("badauth");
+        assertThat(recordValue("dyn-http.example", "home"))
+            .as("and the query-token attempt changed nothing")
+            .isEqualTo("203.0.113.55");
     }
 
     // ------------------------------------------------------------------
