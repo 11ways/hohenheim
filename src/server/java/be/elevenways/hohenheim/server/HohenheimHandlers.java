@@ -516,15 +516,17 @@ public final class HohenheimHandlers {
     }
 
     private static DnsRecordDto recordDto(Row record) {
+        // The peer wire stays FLAT (an external API contract); internally the
+        // extras live in the type-schema'd data column.
         return new DnsRecordDto(
             record.get(DnsRecordModel.ID),
             record.get(DnsRecordModel.NAME),
             record.get(DnsRecordModel.TYPE),
             record.get(DnsRecordModel.TTL),
             record.get(DnsRecordModel.VALUE),
-            record.get(DnsRecordModel.PRIORITY),
-            record.get(DnsRecordModel.WEIGHT),
-            record.get(DnsRecordModel.PORT),
+            DnsRecordModel.priorityOf(record),
+            DnsRecordModel.weightOf(record),
+            DnsRecordModel.portOf(record),
             Boolean.TRUE.equals(record.get(DnsRecordModel.ENABLED)),
             record.get(DnsRecordModel.MANAGED_BY));
     }
@@ -573,13 +575,25 @@ public final class HohenheimHandlers {
         return record;
     }
 
-    /** Submitted record fields as a validation map; absent keys fall back to the existing row. */
+    /**
+     * Submitted record fields as a validation map; absent keys fall back to the existing
+     * row. The wire's flat priority/weight/port fold into the data sub-map the model
+     * stores ({@code DnsRecordEdits.validate} normalizes it to the type's shape).
+     */
     private static Map<String, Object> recordValues(Map<String, String> form) {
         Map<String, Object> values = new LinkedHashMap<>();
+        Map<String, Object> data = new LinkedHashMap<>();
         for (String field : RECORD_FIELDS) {
-            if (form.containsKey(field)) {
-                values.put(field, form.get(field));
+            if (!form.containsKey(field)) {
+                continue;
             }
+            switch (field) {
+                case "priority", "weight", "port" -> data.put(field, form.get(field));
+                default -> values.put(field, form.get(field));
+            }
+        }
+        if (!data.isEmpty()) {
+            values.put("data", data);
         }
         return values;
     }
@@ -597,15 +611,8 @@ public final class HohenheimHandlers {
         if (values.containsKey("ttl")) {
             row.set(DnsRecordModel.TTL, DnsRecordEdits.intOrNull(values.get("ttl")));
         }
-        if (values.containsKey("priority")) {
-            row.set(DnsRecordModel.PRIORITY, DnsRecordEdits.intOrNull(values.get("priority")));
-        }
-        if (values.containsKey("weight")) {
-            row.set(DnsRecordModel.WEIGHT, DnsRecordEdits.intOrNull(values.get("weight")));
-        }
-        if (values.containsKey("port")) {
-            row.set(DnsRecordModel.PORT, DnsRecordEdits.intOrNull(values.get("port")));
-        }
+        // validate() always leaves the normalized per-type data map behind.
+        row.set(DnsRecordModel.DATA, values.get("data"));
         if (values.containsKey("enabled")) {
             row.set(DnsRecordModel.ENABLED, Boolean.parseBoolean(String.valueOf(values.get("enabled"))));
         }

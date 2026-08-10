@@ -215,7 +215,7 @@ class GameDomainLiveTest {
                 assertThat(srv).as("step 4: the generated SRV row exists").isNotNull();
                 assertThat((String) srv.get(DnsRecordModel.NAME))
                     .isEqualTo("_minecraft._tcp.mc");
-                assertThat((Integer) srv.get(DnsRecordModel.PORT))
+                assertThat(DnsRecordModel.portOf(srv))
                     .as("step 4: SRV rides the observed published port")
                     .isEqualTo(publishedPort);
 

@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.protoblast.common.Blast;
@@ -43,9 +44,9 @@ import java.util.Set;
  * Semantics, decided deliberately: released records are DISABLED, never deleted -- the
  * rows stay visible to an operator (and to a site restore) with an activity-log entry per
  * row, but leave the serving snapshot in the same transaction as the release. The dyndns
- * columns are cleared ({@code dynamic=false}, token null) and every record grant on the
- * row is revoked, because a bearer credential or a capability that outlives the claim it
- * was derived from is a permanent authority laundered out of a revocable one.
+ * credential row is deleted and every record grant on the row is revoked, because a
+ * bearer credential or a capability that outlives the claim it was derived from is a
+ * permanent authority laundered out of a revocable one.
  *
  * AIDEV-NOTE: liveness is enforced at RELEASE time, not per dyndns update. A per-update
  * coverage predicate ("the FQDN must be covered by a live domain row") looks stronger but
@@ -174,8 +175,7 @@ public final class DnsClaimReleases {
 
         for (Row record : model.find().where(DnsRecordModel.GENERATED_BY.isNull()).all()) {
             boolean armed = Boolean.TRUE.equals(record.get(DnsRecordModel.ENABLED))
-                || Boolean.TRUE.equals(record.get(DnsRecordModel.DYNAMIC))
-                || record.get(DnsRecordModel.DYNDNS_TOKEN) != null;
+                || DynamicDnsService.credentialFor(record.get(DnsRecordModel.ID)) != null;
             if (!armed) {
                 continue;
             }
@@ -191,9 +191,13 @@ public final class DnsClaimReleases {
             }
             RecordStamp.on(model, record)
                 .set(DnsRecordModel.ENABLED, false)
-                .set(DnsRecordModel.DYNAMIC, false)
-                .set(DnsRecordModel.DYNDNS_TOKEN, null)
                 .write();
+            // The credential dies WITH the claim: a released name's token must answer
+            // badauth immediately. The release is a mandated consequence of a domain
+            // delete that already passed its own gate, so the delete runs authorized
+            // (the tenant releasing a name rarely holds dyndns on the record).
+            TenantWrites.inAuthorizedOperation(() ->
+                DynamicDnsService.revokeFor(record.get(DnsRecordModel.ID)));
             ActivityLog.record(model, record.get(DnsRecordModel.ID), ACTIVITY_RELEASED, fqdn);
             RecordGrants.revokeAllForRecord(DnsRecordModel.MODEL_ID,
                 record.get(DnsRecordModel.ID));

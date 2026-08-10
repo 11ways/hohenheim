@@ -72,14 +72,13 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         assertThat(service.update(token, null, "203.0.113.99", null).status())
             .as("3. a released name's token no longer authenticates").isEqualTo(Status.BADAUTH);
 
-        // 4. And it is dead because the columns were cleared, not merely because serving
-        //    dropped it: dynamic off, token gone, record disabled -- the stored proof.
+        // 4. And it is dead because the credential row was DELETED, not merely because
+        //    serving dropped it: record disabled, credential gone -- the stored proof.
         Row after = Models.get(DnsRecordModel.class).findById(recordId);
         assertThat(after).as("4. the row is kept for the operator, not deleted").isNotNull();
         assertThat((Boolean) after.get(DnsRecordModel.ENABLED)).as("4. disabled").isFalse();
-        assertThat((Boolean) after.get(DnsRecordModel.DYNAMIC)).as("4. no longer dynamic").isFalse();
-        assertThat((String) after.get(DnsRecordModel.DYNDNS_TOKEN))
-            .as("4. the bearer credential is cleared").isNull();
+        assertThat(DynamicDnsService.credentialFor(recordId))
+            .as("4. the bearer credential row is deleted").isNull();
     }
 
     /**
@@ -201,18 +200,13 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         UserPrincipal tenantPrincipal = new UserPrincipal(tenantId, "Arm Tenant");
         Model model = Models.get(DnsRecordModel.class);
 
-        // 1. Arming dynamic via hostname authority alone is refused, and nothing is armed.
-        assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal, () -> {
-            Row row = model.findById(recordId);
-            row.set(DnsRecordModel.DYNAMIC, true);
-            row.set(DnsRecordModel.DYNDNS_TOKEN, DynamicDnsService.digest(DynamicDnsService.mintToken()));
-            model.save(row);
-        })).as("1. hostname authority is not dyndns authority").isInstanceOf(Violations.class);
-        Row afterRefusal = model.findById(recordId);
-        assertThat((Boolean) afterRefusal.get(DnsRecordModel.DYNAMIC))
-            .as("1. nothing was armed").isNotEqualTo(true);
-        assertThat((String) afterRefusal.get(DnsRecordModel.DYNDNS_TOKEN))
-            .as("1. no token was minted").isNull();
+        // 1. Arming dynamic via hostname authority alone is refused, and nothing is armed
+        //    (arming is now a CREDENTIAL row write, guarded on every lane).
+        assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal,
+            () -> DynamicDnsService.mintFor(recordId)))
+            .as("1. hostname authority is not dyndns authority").isInstanceOf(Violations.class);
+        assertThat(DynamicDnsService.credentialFor(recordId))
+            .as("1. nothing was armed").isNull();
 
         // 2. An ordinary value edit under the same hostname authority still saves -- the gate
         //    is on the dynamic columns, not a blanket wall.
@@ -226,12 +220,11 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         //    missing capability, not the value.
         RecordGrants.grant("user", tenantId, DnsRecordModel.MODEL_ID, recordId,
             HohenheimAccess.DYNDNS, true);
-        assertThatCode(() -> TenantConduits.as(tenantPrincipal, () -> {
-            Row row = model.findById(recordId);
-            row.set(DnsRecordModel.DYNAMIC, true);
-            row.set(DnsRecordModel.DYNDNS_TOKEN, DynamicDnsService.digest(DynamicDnsService.mintToken()));
-            model.save(row);
-        })).as("3. the dyndns holder may arm the token").doesNotThrowAnyException();
+        assertThatCode(() -> TenantConduits.as(tenantPrincipal,
+            () -> DynamicDnsService.mintFor(recordId)))
+            .as("3. the dyndns holder may arm the token").doesNotThrowAnyException();
+        assertThat(DynamicDnsService.credentialFor(recordId))
+            .as("3. the credential row exists").isNotNull();
     }
 
     // --- helpers ----------------------------------------------------------------------
@@ -286,17 +279,12 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
 
     private static Row dynamicRecord(int zoneId, String name, String value) {
         Row row = enabledRecord(zoneId, name, value);
-        row.set(DnsRecordModel.DYNAMIC, true);
-        Models.get(DnsRecordModel.class).save(row);
+        DynamicDnsService.mintFor(row.get(DnsRecordModel.ID));
         return row;
     }
 
     private static String mint(Row record) {
-        String token = DynamicDnsService.mintToken();
-        record.set(DnsRecordModel.DYNAMIC, true);
-        record.set(DnsRecordModel.DYNDNS_TOKEN, DynamicDnsService.digest(token));
-        Models.get(DnsRecordModel.class).save(record);
-        return token;
+        return DynamicDnsService.mintFor(record.get(DnsRecordModel.ID));
     }
 
     /**

@@ -1,14 +1,17 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.security.SecretShapes;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
+import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -24,14 +27,19 @@ import java.net.InetAddress;
  * source of truth, so an update flows through the normal serial bump ->
  * re-sign -> NOTIFY path and reaches secondaries within seconds.
  *
+ * The credential lives in {@link DnsDyndnsCredentialModel} (its own table): a
+ * credential row existing IS the record being dynamic, and only the digest is
+ * at rest. Minting and revoking go through {@link #mintFor}/{@link #revokeFor},
+ * the one write funnel.
+ *
  * AIDEV-NOTE: {@code update} deliberately asks NO hostname-liveness question. A
  * per-update "the FQDN must be covered by a live site" predicate would break the
  * feature's primary use -- operator dyndns names (a home router) are not sites and
  * are covered by nothing. The token-outlives-the-claim problem is closed one tier
- * over instead: {@link DnsClaimReleases} clears {@code dynamic}/{@code dyndns_token}
- * (and disables the record) the moment a hostname's last covering domain row is
- * released, so a released name's token answers badauth here without this method
- * ever asking whose name it is.
+ * over instead: {@link DnsClaimReleases} deletes the credential row (and disables
+ * the record) the moment a hostname's last covering domain row is released, so a
+ * released name's token answers badauth here without this method ever asking
+ * whose name it is.
  */
 public final class DynamicDnsService {
 
@@ -39,16 +47,13 @@ public final class DynamicDnsService {
     public static final String TOKEN_MARKER = "hdyn_";
 
     /**
-     * Marks a STORED value as a SHA-256 digest rather than a legacy plaintext
-     * token. The token is a live HTTP-Basic password that drives DNS updates, so
-     * only its digest is ever at rest (the {@code SiteApiKeys} shape). The client
-     * still presents the same plaintext {@code hdyn_} token; the service hashes
-     * what it is handed and looks up the record BY DIGEST, which is what lets an
-     * existing token keep working after the stored value is hashed in place.
+     * Marks a STORED value as a SHA-256 digest. The token is a live HTTP-Basic
+     * password that drives DNS updates, so only its digest is ever at rest (the
+     * {@code SiteApiKeys} shape). The client presents the plaintext {@code hdyn_}
+     * token; the service hashes what it is handed and looks the credential up BY
+     * DIGEST.
      */
     private static final String DIGEST_PREFIX = "sha256:";
-
-    private static volatile boolean hookInstalled;
 
     /** dyndns2 status codes returned to the client (text/plain). */
     public enum Status {
@@ -93,74 +98,82 @@ public final class DynamicDnsService {
      * AIDEV-NOTE: the COMPLETE shape is validated ({@code sha256:} + exactly 64
      * lowercase hex chars), never just the prefix -- a legacy plaintext token that
      * happens to start with "sha256:" must be hashed like any other plaintext,
-     * not misclassified as a digest and silently invalidated.
+     * not misclassified as a digest and silently invalidated (M091 relies on this
+     * during the credential copy).
      */
     public static boolean isDigest(@Nullable String stored) {
         return SecretShapes.isSha256Digest(stored, DIGEST_PREFIX);
     }
 
-    /**
-     * Register the write-time normalization hook so no plaintext dyndns token ever
-     * reaches the datasource, whichever path writes the record (mint action, admin
-     * form, clone). Idempotent, and runs BEFORE validation so revisions and activity
-     * deltas see the digest too.
-     */
-    public static synchronized void installTokenHashing() {
-        if (hookInstalled) {
-            return;
+    /** @return the credential row for a record, or null when the record is not dynamic */
+    public static @Nullable Row credentialFor(@Nullable Integer recordId) {
+        if (recordId == null) {
+            return null;
         }
-        hookInstalled = true;
-        DnsRecordModel.SCHEMA.addBeforeValidateHook(context -> {
-            Row row = context.getRow();
-            if (row == null || !row.has(DnsRecordModel.DYNDNS_TOKEN.getName())) {
-                return;
-            }
-            Object stored = row.get(DnsRecordModel.DYNDNS_TOKEN.getName());
-            if (stored == null) {
-                return;
-            }
-            String value = String.valueOf(stored);
-            if (value.isBlank() || isDigest(value)) {
-                return;
-            }
-            // Adoption entropy floor: a weak operator-typed token is dictionary-
-            // recoverable from its fast SHA-256 digest, and a token without the
-            // hdyn_ marker could never authenticate anyway (authenticate() requires
-            // it), so both are refused instead of silently stored. Legacy stored
-            // plaintext is unaffected: the seeder hashes it BEFORE save, so this
-            // hook only sees digests for grandfathered values.
-            String plaintext = value.trim();
-            if (!plaintext.startsWith(TOKEN_MARKER) || !SecretShapes.isAdoptablePlaintext(plaintext)) {
-                // Never echo the credential back; the violation value stays blank.
-                throw Violations.ofField("dyndns_token", "",
-                    Microcopy.of("weak_dyndns_token")
-                        .withFilter("scope", "violations")
-                        .withArg("marker", TOKEN_MARKER));
-            }
-            row.set(DnsRecordModel.DYNDNS_TOKEN, digest(plaintext));
-        });
+        return Models.get(DnsDyndnsCredentialModel.class).find()
+            .where(DnsDyndnsCredentialModel.RECORD_ID.eq(recordId)).first();
     }
 
     /**
-     * Rewrite every stored plaintext dyndns token to its digest, in place. NO TOKEN
-     * IS INVALIDATED: the plaintext its client presents still hashes to the stored
-     * digest. Idempotent, so it is safe to run again at any time.
-     *
-     * @return the number of records rewritten
+     * Arm (or re-key) a record's dyndns credential and return the plaintext token,
+     * which the caller must disclose exactly once.
      */
-    public static int hashStoredTokens() {
-        DnsRecordModel model = Models.get(DnsRecordModel.class);
-        int rewritten = 0;
-        for (Row record : model.find().where(DnsRecordModel.DYNDNS_TOKEN.isNotNull()).all()) {
-            String stored = record.get(DnsRecordModel.DYNDNS_TOKEN);
-            if (stored == null || stored.isBlank() || isDigest(stored)) {
-                continue;
-            }
-            record.set(DnsRecordModel.DYNDNS_TOKEN, digest(stored));
-            model.save(record);
-            rewritten++;
+    public static @NonNull String mintFor(int recordId) {
+        String token = mintToken();
+        DnsDyndnsCredentialModel credentials = Models.get(DnsDyndnsCredentialModel.class);
+        Row credential = credentialFor(recordId);
+        if (credential == null) {
+            credential = credentials.createEmptyRow();
+            credential.set(DnsDyndnsCredentialModel.RECORD_ID, recordId);
         }
-        return rewritten;
+        credential.set(DnsDyndnsCredentialModel.TOKEN_DIGEST, digest(token));
+        credentials.save(credential);
+        return token;
+    }
+
+    private static volatile boolean cascadeInstalled;
+
+    /**
+     * A credential dies WITH its record, whatever deletes it (resource, peer API,
+     * zone-file import replace): otherwise a token would keep resolving to whatever
+     * row id gets recycled. Installed AFTER TenantWrites so an unauthorized record
+     * delete refuses before this ever runs; the cascade itself runs authorized (the
+     * record delete already passed its own gate).
+     */
+    public static synchronized void installCredentialCascade() {
+        if (cascadeInstalled) {
+            return;
+        }
+        cascadeInstalled = true;
+        DnsRecordModel.SCHEMA.addBeforeRemoveHook(context -> {
+            Model model = context.getModel();
+            if (model == null) {
+                return;
+            }
+            QueryBuilder<Row> doomed = model.find();
+            QueryContext queryContext = context.getQueryContext();
+            if (queryContext != null && queryContext.getCriteria() != null) {
+                doomed.where(queryContext.getCriteria());
+            }
+            for (Row record : doomed.all()) {
+                Integer recordId = record.get(DnsRecordModel.ID);
+                if (recordId != null) {
+                    TenantWrites.inAuthorizedOperation(() -> revokeFor(recordId));
+                }
+            }
+        });
+    }
+
+    /** @return true when a credential existed and was deleted (the record stops being dynamic) */
+    public static boolean revokeFor(int recordId) {
+        DnsDyndnsCredentialModel credentials = Models.get(DnsDyndnsCredentialModel.class);
+        boolean revoked = false;
+        Row credential;
+        while ((credential = credentialFor(recordId)) != null) {
+            credentials.delete(credential);
+            revoked = true;
+        }
+        return revoked;
     }
 
     /**
@@ -197,13 +210,12 @@ public final class DynamicDnsService {
         }
 
         String type = record.get(DnsRecordModel.TYPE);
-        // dyndns2 writes an ADDRESS, so only an address record can be dynamic. Without this
-        // an operator who flagged, say, an MX row dynamic would have had its VALUE rewritten
-        // to an IP by an anonymous caller; the write pipeline refuses that now (a dyndns
-        // update is a tenant-originated write and MX is outside the tenant type allow-list),
-        // and refusing it HERE turns the 500 that refusal would be into the protocol's own
+        // dyndns2 writes an ADDRESS, so only an address record can be dynamic. The mint
+        // action's type predicate refuses arming anything else, but a credential row
+        // could still point at a row whose type was edited afterwards; refusing HERE
+        // turns the 500 the write pipeline's refusal would be into the protocol's own
         // dnserr answer.
-        if (!DnsRecordModel.TYPE_A.equals(type) && !DnsRecordModel.TYPE_AAAA.equals(type)) {
+        if (!DnsRecordModel.isAddressType(type)) {
             return new UpdateResult(Status.DNSERR, null);
         }
         String newIp = resolveIp(type, myip, callerIp);
@@ -231,25 +243,25 @@ public final class DynamicDnsService {
         if (presented == null || !presented.startsWith(TOKEN_MARKER) || presented.length() < 16) {
             return null;
         }
-        // The column holds the DIGEST, so hash the presented plaintext and look up
-        // by that. An existing client keeps working because it still presents the
-        // same plaintext, which hashes to the stored digest.
-        // AIDEV-NOTE: dyndns_token carries an index (M046_DyndnsTokenIndex) because this
-        // runs on every router poll; it used to be a full scan of dns_records.
+        // The table holds the DIGEST, so hash the presented plaintext and look up
+        // by that. token_digest carries an index (M091) because this runs on every
+        // router poll.
         String digest = digest(presented);
-        Row record = Models.get(DnsRecordModel.class).find()
-            .where(DnsRecordModel.DYNDNS_TOKEN.eq(digest)).first();
-        if (record == null || !Boolean.TRUE.equals(record.get(DnsRecordModel.DYNAMIC))) {
+        Row credential = Models.get(DnsDyndnsCredentialModel.class).find()
+            .where(DnsDyndnsCredentialModel.TOKEN_DIGEST.eq(digest)).first();
+        if (credential == null) {
             return null;
         }
         // The lookup above compares DIGESTS, which the caller already knows (it is a
         // pure function of what they presented), so its timing leaks nothing about the
         // secret. The decisive comparison is still made constant-time here so no future
         // change to the lookup can turn it into an oracle.
-        if (!SecureTokens.constantTimeEquals(digest, record.get(DnsRecordModel.DYNDNS_TOKEN))) {
+        if (!SecureTokens.constantTimeEquals(digest,
+                credential.get(DnsDyndnsCredentialModel.TOKEN_DIGEST))) {
             return null;
         }
-        return record;
+        return Models.get(DnsRecordModel.class)
+            .findById(credential.get(DnsDyndnsCredentialModel.RECORD_ID));
     }
 
     /** Picks the address matching the record type from an explicit myip (possibly comma-separated) or the caller IP. */

@@ -314,11 +314,12 @@ public class ServerMain {
             roleSkip(HohenheimRoles.Role.PROXY, "proxy listeners not started");
         }
 
-        // The secret-normalization hooks (site api keys, dyndns tokens, reserved
-        // env, enable invariant) install via the discovered HohenheimWriteHooks
-        // ZenitModule at the MODULES stage inside ServerZenitRuntime.main() above,
-        // BEFORE the HTTP server binds; the one-time sweeps of pre-existing
-        // plaintext ride SiteApiKeySeeder/DyndnsTokenSeeder at the SEED stage.
+        // The secret-normalization hooks (site api keys, reserved env, enable
+        // invariant) install via the discovered HohenheimWriteHooks ZenitModule
+        // at the MODULES stage inside ServerZenitRuntime.main() above, BEFORE
+        // the HTTP server binds; the one-time sweep of pre-existing plaintext
+        // rides SiteApiKeySeeder at the SEED stage. (Dyndns tokens live hashed
+        // in dns_dyndns_credentials; DynamicDnsService.mintFor is the one writer.)
 
         if (HohenheimRoles.enabled(HohenheimRoles.Role.DNS)) {
             // The zone store loads regardless of the listeners so zones stay

@@ -163,10 +163,6 @@
     "text": "Deze API-sleutel is te makkelijk te raden: ze zou uit een databankkopie te achterhalen zijn. Gebruik de genereeractie, of plak een willekeurige sleutel van minstens {$min_length} tekens",
     "scope": "violations"
   },
-  "weak_dyndns_token": {
-    "text": "Dynamische-DNS-tokens kunnen niet met de hand ingetypt worden: gebruik de rijactie om een {$marker}-token te genereren",
-    "scope": "violations"
-  },
   "api_keys": [
     {
       "text": "API-sleutels",
@@ -3361,42 +3357,38 @@
     "text": "De eigenaar-peer was onbereikbaar ({$message}); records worden alleen-lezen uit de replica getoond.",
     "scope": "dns_remote"
   },
-  "record_dynamic": [
-    {
-      "text": "Dynamische DNS",
-      "scope": "field"
-    },
-    {
-      "text": "Sta toe dat het adres van dit A/AAAA-record via het dyndns2-protocol wordt bijgewerkt; gebruik de rijactie om een updatetoken aan te maken",
-      "scope": "help"
-    }
-  ],
+  "record_data": {
+    "text": "Type-instellingen",
+    "scope": "field"
+  },
   "dyndns_token": {
     "text": "Dynamische DNS-token",
     "scope": "dns_record"
   },
   "dyndns_token_hint": {
-    "text": "Maak een nieuw updatetoken voor dit record aan (maakt een eerder token ongeldig)",
-    "scope": "dns_record"
-  },
-  "dyndns_only_address": {
-    "text": "Dynamische DNS is alleen beschikbaar voor A- en AAAA-records",
+    "text": "Maak een nieuw updatetoken voor dit record aan (maakt een eerder token ongeldig). Richt een dyndns2-client (router, ddclient) op <host>/nic/update en stuur het token als HTTP Basic-wachtwoord",
     "scope": "dns_record"
   },
   "dyndns_minted": {
     "text": "Update-token gegenereerd. Kopieer het nu; het wordt niet opnieuw getoond: {$token}",
     "scope": "dns_record"
   },
-  "record_dyndns_token": [
-    {
-      "text": "Dynamische DNS-token",
-      "scope": "field"
-    },
-    {
-      "text": "Het update-wachtwoord. Richt een dyndns2-client (router, ddclient) op <host>/nic/update?hostname=<FQDN van dit record> en stuur dit token als HTTP Basic-wachtwoord. Het wordt nooit meer getoond zodra het is ingesteld: laat dit leeg om het bewaarde token te behouden, of gebruik de rijactie om een nieuw token te genereren",
-      "scope": "help"
-    }
-  ],
+  "dyndns_revoke": {
+    "text": "Dynamische DNS intrekken",
+    "scope": "dns_record"
+  },
+  "dyndns_revoke_hint": {
+    "text": "Verwijder het updatetoken van dit record; de dyndns-client werkt onmiddellijk niet meer",
+    "scope": "dns_record"
+  },
+  "dyndns_revoke_confirm": {
+    "text": "Het dynamische-DNS-token van dit record intrekken?",
+    "scope": "dns_record"
+  },
+  "dyndns_revoked": {
+    "text": "Dynamische-DNS-token ingetrokken",
+    "scope": "dns_record"
+  },
   "jar_path": [
     {
       "text": "Jar-bestand",
