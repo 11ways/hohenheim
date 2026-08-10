@@ -18,6 +18,19 @@ class ListenerAddressMatcherTest {
     }
 
     @Test
+    void unknownListenerAddressRefusesNonEmptyRestrictions() {
+        // Missing evidence is not permission: a restricted route must refuse a
+        // listener whose address cannot be determined ...
+        assertThat(ListenerAddressMatcher.matches(
+            ListenerAddressMatcher.parse("192.0.2.25"), null)).isFalse();
+        assertThat(ListenerAddressMatcher.matches(
+            ListenerAddressMatcher.parse("192.0.2.25"), " ")).isFalse();
+        // ... while an EMPTY restriction means "listen everywhere" and is a true "true".
+        assertThat(ListenerAddressMatcher.matches(List.of(), null)).isTrue();
+        assertThat(ListenerAddressMatcher.matches(List.of(), "192.0.2.25")).isTrue();
+    }
+
+    @Test
     void anyAndReorderedListsHaveCanonicalOverlap() {
         assertThat(ListenerAddressMatcher.parse("any")).isEmpty();
         assertThat(ListenerAddressMatcher.parse("192.0.2.2, 192.0.2.1"))

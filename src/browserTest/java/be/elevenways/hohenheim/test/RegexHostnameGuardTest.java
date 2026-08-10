@@ -20,6 +20,7 @@ class RegexHostnameGuardTest {
         assertTrue(SiteDispatcher.isSuspiciousRegexHostname("project.notexist.example.com"));
         assertTrue(SiteDispatcher.isSuspiciousRegexHostname("foo.www.example.com"));
         assertTrue(SiteDispatcher.isSuspiciousRegexHostname("wwww.example.com"));
+        assertTrue(SiteDispatcher.isSuspiciousRegexHostname("app.git.example.com"));
     }
 
     @Test
@@ -28,5 +29,9 @@ class RegexHostnameGuardTest {
         assertFalse(SiteDispatcher.isSuspiciousRegexHostname("www.example.com"));
         assertFalse(SiteDispatcher.isSuspiciousRegexHostname("project.pages.example.com"));
         assertFalse(SiteDispatcher.isSuspiciousRegexHostname("digital.example.com"));
+        // The guards are LABEL-anchored: a label merely containing "git" is not the
+        // git label (substring matching tripped this one pre-fix).
+        assertFalse(SiteDispatcher.isSuspiciousRegexHostname("digit.example.com"));
+        assertFalse(SiteDispatcher.isSuspiciousRegexHostname("legit.example.com"));
     }
 }

@@ -37,8 +37,15 @@ public final class ListenerAddressMatcher {
     }
 
     static boolean matches(List<String> configured, String listenerIp) {
-        if (configured.isEmpty() || listenerIp == null || listenerIp.isBlank()) {
+        if (configured.isEmpty()) {
+            // No restriction: the route listens everywhere -- a true "true".
             return true;
+        }
+        if (listenerIp == null || listenerIp.isBlank()) {
+            // An unknown listener address is missing EVIDENCE, not permission: a
+            // non-empty restriction that cannot be checked must refuse. (Defence in
+            // depth -- no in-tree exchange reaches here without a local address.)
+            return false;
         }
         String normalized = normalize(listenerIp);
         for (String candidate : configured) {
