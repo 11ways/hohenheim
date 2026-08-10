@@ -110,6 +110,8 @@ class IncusVmLiveTest {
         if (remote == null) {
             return;
         }
+        System.out.println("=== cleanup: shared objects -> "
+            + remote.releaseControllerSharedObjects());
         System.out.println("=== cleanup: authorized_keys -> "
             + remote.releaseAuthorizedKeys());
         if (enrolledFingerprint != null) {

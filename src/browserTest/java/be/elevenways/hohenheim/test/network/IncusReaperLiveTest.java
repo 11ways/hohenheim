@@ -98,6 +98,8 @@ class IncusReaperLiveTest {
             }
         }
         if (remote != null) {
+            System.out.println("=== cleanup: shared objects -> "
+                + remote.releaseControllerSharedObjects());
             System.out.println("=== cleanup: authorized_keys -> " + remote.releaseAuthorizedKeys());
         }
         if (remote != null && enrolledFingerprint != null) {

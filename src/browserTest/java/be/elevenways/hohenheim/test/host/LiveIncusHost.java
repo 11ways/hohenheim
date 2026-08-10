@@ -2,10 +2,16 @@ package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.incus.ControllerPresence;
+import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
+import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
+import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -18,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -87,6 +94,14 @@ public final class LiveIncusHost {
      * Tracking it HERE makes {@link #releaseTrustEntries} unconditionally correct.
      */
     private final List<String> enrolledCertificates = new ArrayList<>();
+
+    /**
+     * Every daemon this fixture enrolled through the FULL ceremony, with the shared
+     * object names THIS controller mints there -- captured at enroll time (inside the
+     * caller's Db scope, where the identity token resolves) so the teardown release
+     * needs no scope of its own.
+     */
+    private final List<SharedObjects> mintedSharedObjects = new ArrayList<>();
 
     private LiveIncusHost(String url, String fingerprint, String trustTarget) {
         this.url = url;
@@ -239,7 +254,111 @@ public final class LiveIncusHost {
         String fingerprint = enrollDaemonTrustThroughProduct(hostName, clientName);
         enrollSshLaneThroughProduct(hostName);
         admitThroughProduct(hostName);
+        sweepAndRegisterSharedObjects(hostName);
         return fingerprint;
+    }
+
+    /**
+     * The two halves of keeping a shared TEST daemon from accumulating one ACL and one
+     * bridge per fork forever: run the PRODUCT's own presence-stamp-and-reap sweep now
+     * (our token is attributable from this moment, and any stamped garbage older than
+     * the grace goes), and remember THIS controller's shared-object names so
+     * {@link #releaseControllerSharedObjects} can hand them back at teardown.
+     *
+     * AIDEV-NOTE: the sweep is the SANCTIONED host-wide path -- three independent facts
+     * (foreign token, empty used_by re-read at delete time, stamped AND expired) must
+     * all agree before it removes anything, so a concurrent fork's fresh stamp or a
+     * referenced ACL refuses it. It is exactly what a production controller's 15-minute
+     * schedule runs; test daemons have no long-lived controller, so this is the only
+     * place that schedule's job ever happens for them. NEVER call
+     * {@code reapIncludingUnstamped} here: it once emptied daystrom of 72 ACLs and 9
+     * bridges, including objects other live forks were about to reference.
+     */
+    private void sweepAndRegisterSharedObjects(String hostName) {
+        Row host = Models.get(ServerModel.class).findByName(hostName);
+        ReapIncusControllers.HostOutcome outcome = ReapIncusControllers.sweepHost(host);
+        System.out.println("=== enroll sweep on " + hostName + ": "
+            + (outcome.reachable()
+                ? IncusReaper.tally(outcome.plan()) + " removed=" + outcome.removed()
+                    + " refused=" + outcome.refused()
+                : "UNREACHABLE " + outcome.errors()));
+        this.mintedSharedObjects.add(new SharedObjects(
+            new ServerService().incusClientFor(hostName),
+            IncusNetworkPolicy.aclName(),
+            IncusNetworkPolicy.extraNetwork(),
+            ControllerPresence.aclName()));
+    }
+
+    /** One enrolled daemon's per-controller shared-object names, captured in Db scope. */
+    private record SharedObjects(IncusClient incus, String isolationAcl, String bridge,
+                                 String presence) {}
+
+    /**
+     * Hand back THIS controller's shared objects on every enrolled daemon: the hhx
+     * bridge and isolation ACL when nothing references them (re-read live, the reaper's
+     * own guard), and the presence marker LAST and only when both others went -- the
+     * marker is the evidence any survivor would be judged by. Own token only, so it is
+     * safe beside three other live forks by construction. Call it in tearDown BEFORE
+     * the trust entry is removed; after that the client cannot authenticate.
+     *
+     * @return one printable outcome per daemon, or "nothing enrolled"
+     */
+    public String releaseControllerSharedObjects() {
+        if (this.mintedSharedObjects.isEmpty()) {
+            return "nothing enrolled";
+        }
+        List<String> outcomes = new ArrayList<>();
+        for (SharedObjects shared : this.mintedSharedObjects) {
+            List<String> parts = new ArrayList<>();
+            boolean bridgeGone = releaseIfUnused(parts, shared.bridge(), () ->
+                shared.incus().network(shared.bridge()),
+                () -> shared.incus().deleteNetwork(shared.bridge()));
+            boolean aclGone = releaseIfUnused(parts, shared.isolationAcl(), () ->
+                shared.incus().networkAcl(shared.isolationAcl()),
+                () -> shared.incus().deleteNetworkAcl(shared.isolationAcl()));
+            if (bridgeGone && aclGone) {
+                releaseIfUnused(parts, shared.presence(), () ->
+                    shared.incus().networkAcl(shared.presence()),
+                    () -> shared.incus().deleteNetworkAcl(shared.presence()));
+            } else {
+                parts.add(shared.presence() + " -> kept (it is the evidence the"
+                    + " surviving objects are judged by)");
+            }
+            outcomes.add(String.join(", ", parts));
+        }
+        this.mintedSharedObjects.clear();
+        return String.join("; ", outcomes);
+    }
+
+    private interface DaemonRead {
+        Map<String, Object> read() throws IOException;
+    }
+
+    private interface DaemonDelete {
+        void delete() throws IOException;
+    }
+
+    /** @return true when the object is gone afterwards (absent counts as gone) */
+    private static boolean releaseIfUnused(List<String> parts, String name,
+                                           DaemonRead read, DaemonDelete delete) {
+        try {
+            Map<String, Object> live = read.read();
+            if (live == null) {
+                parts.add(name + " -> already absent");
+                return true;
+            }
+            List<?> usedBy = ControllerPresence.usedBy(live);
+            if (!usedBy.isEmpty()) {
+                parts.add(name + " -> kept (referenced by " + usedBy + ")");
+                return false;
+            }
+            delete.delete();
+            parts.add(name + " -> released");
+            return true;
+        } catch (IOException failed) {
+            parts.add(name + " -> NOT released: " + failed.getMessage());
+            return false;
+        }
     }
 
     /**

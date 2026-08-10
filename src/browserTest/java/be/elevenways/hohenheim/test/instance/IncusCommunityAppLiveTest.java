@@ -94,6 +94,8 @@ class IncusCommunityAppLiveTest {
     static void tearDown() {
         InstanceConsoles.overrideTimingsForTest(null, null);
         if (remote != null) {
+            System.out.println("=== cleanup: shared objects -> "
+                + remote.releaseControllerSharedObjects());
             System.out.println("=== cleanup: authorized_keys -> "
                 + remote.releaseAuthorizedKeys());
         }

@@ -86,6 +86,8 @@ class IncusInstanceRuntimeLiveTest {
     @AfterAll
     static void tearDown() {
         if (remote != null) {
+            System.out.println("=== cleanup: shared objects -> "
+                + remote.releaseControllerSharedObjects());
             System.out.println("=== cleanup: authorized_keys -> "
                 + remote.releaseAuthorizedKeys());
         }

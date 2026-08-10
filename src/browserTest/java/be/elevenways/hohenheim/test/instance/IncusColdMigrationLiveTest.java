@@ -92,10 +92,14 @@ class IncusColdMigrationLiveTest {
     @AfterAll
     static void tearDown() {
         if (remoteA != null) {
+            System.out.println("=== cleanup: shared objects -> "
+                + remoteA.releaseControllerSharedObjects());
             System.out.println("live-mig cleanup A key: "
                 + remoteA.releaseAuthorizedKeys());
         }
         if (remoteB != null) {
+            System.out.println("=== cleanup: shared objects -> "
+                + remoteB.releaseControllerSharedObjects());
             System.out.println("live-mig cleanup B key: "
                 + remoteB.releaseAuthorizedKeys());
         }
