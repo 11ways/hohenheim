@@ -168,6 +168,21 @@ class NeverBanHostnamesTest {
             List.of("updated.example.net"));
 
         assertThat(resolved.await(5, TimeUnit.SECONDS)).isTrue();
-        assertThat(BanService.protectionProblem("203.0.113.91")).contains("never_ban");
+
+        // AIDEV-NOTE: the latch releases INSIDE the resolver, but refresh() publishes
+        // the snapshot only after the resolve loop finishes (NeverBanHostnames.refresh,
+        // the protectedKeys swap) on a virtual thread (HohenheimSecurity's change
+        // listener). Asserting immediately raced that publish and lost under fork load
+        // (2026-08-10, 43ms failure) -- so poll for the publish; the assertion itself
+        // is unchanged.
+        String problem = null;
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (problem == null && System.nanoTime() < deadline) {
+            problem = BanService.protectionProblem("203.0.113.91");
+            if (problem == null) {
+                Thread.sleep(10);
+            }
+        }
+        assertThat(problem).contains("never_ban");
     }
 }
