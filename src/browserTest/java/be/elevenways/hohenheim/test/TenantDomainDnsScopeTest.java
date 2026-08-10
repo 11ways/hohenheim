@@ -37,6 +37,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -188,6 +189,25 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             request.header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session);
         }
         return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    /**
+     * A dyndns2 update, credential in HTTP Basic auth.
+     *
+     * AIDEV-NOTE: the {@code ?token=} query fallback was REMOVED (it leaked the DNS-write
+     * credential into access logs and Referer headers), and this test kept spelling it --
+     * every update answered badauth. Basic auth is the only way to present the token now;
+     * DynamicDnsTest.publicNicUpdateRouteWorksWithBasicAuth pins that the query form stays
+     * refused. Never put the token back in the URL here.
+     */
+    private HttpResponse<String> nicUpdate(String token, String query) throws Exception {
+        String basic = Base64.getEncoder().encodeToString(
+            ("dyndns:" + token).getBytes(StandardCharsets.UTF_8));
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+        return client.send(HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + "/nic/update?" + query))
+            .header("Authorization", "Basic " + basic)
+            .build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> post(String path, String body, String session, String csrf,
@@ -579,9 +599,9 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         dynamic.set(DnsRecordModel.DYNDNS_TOKEN, DynamicDnsService.digest(token));
         model.save(dynamic);
 
-        HttpResponse<String> good = get("/nic/update?hostname="
+        HttpResponse<String> good = nicUpdate(token, "hostname="
             + URLEncoder.encode("router." + ZONE_ORIGIN, StandardCharsets.UTF_8)
-            + "&myip=203.0.113.7&token=" + token, null);
+            + "&myip=203.0.113.7");
         assertThat(good.statusCode()).isEqualTo(200);
         assertThat(good.body())
             .as("the tenant-write allow-list must not touch the dyndns path").startsWith("good");
@@ -597,9 +617,9 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         mistake.set(DnsRecordModel.DYNDNS_TOKEN, DynamicDnsService.digest(mxToken));
         TenantConduits.as(adminPrincipal, () -> model.save(mistake));
 
-        HttpResponse<String> refused = get("/nic/update?hostname="
+        HttpResponse<String> refused = nicUpdate(mxToken, "hostname="
             + URLEncoder.encode("mail." + ZONE_ORIGIN, StandardCharsets.UTF_8)
-            + "&myip=203.0.113.8&token=" + mxToken, null);
+            + "&myip=203.0.113.8");
         assertThat(refused.statusCode()).isEqualTo(200);
         assertThat(refused.body()).as("dyndns2 writes an address, so only an address record "
             + "can be dynamic").isEqualTo("dnserr");

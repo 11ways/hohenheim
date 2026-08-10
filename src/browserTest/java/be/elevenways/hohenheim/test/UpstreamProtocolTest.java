@@ -474,10 +474,18 @@ class UpstreamProtocolTest {
         return plainUpstream.getAddress().getPort();
     }
 
+    /**
+     * AIDEV-NOTE: the upstream delay is 1500ms, not 3000ms, and the number is load-bearing.
+     * rawRequest reads with a 5000ms socket timeout, so a 3000ms upstream left only 2s of
+     * slack -- and the unlimited half read an EMPTY response (a full-suite failure that
+     * passed in isolation) whenever the machine overshot that. 1500ms is still comfortably
+     * past the 1s request_timeout the limited half proves, and load can only push the
+     * upstream LATER, never earlier, so the kill stays certain while the slack triples.
+     */
     @Test
     void shortRequestTimeoutKillsSlowExchangesButZeroMeansUnlimited() throws Exception {
         resetDatabase();
-        int port = startSlowUpstream(3000);
+        int port = startSlowUpstream(1500);
 
         Row limited = setupSite("hohenheim:proxy", "Limited Site", "limited-site", Map.of(
             "forward_host", "127.0.0.1", "forward_port", port, "request_timeout", 1));
