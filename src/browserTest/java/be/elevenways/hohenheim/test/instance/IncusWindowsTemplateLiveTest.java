@@ -119,6 +119,8 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         if (remote == null) {
             return;
         }
+        System.out.println("=== cleanup: shared objects -> "
+            + remote.releaseControllerSharedObjects());
         System.out.println("=== cleanup: authorized_keys -> "
             + remote.releaseAuthorizedKeys());
         if (enrolledFingerprint != null) {
@@ -354,6 +356,8 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             AuthModels.users().delete(userId);
             // Give back both working credentials borrowed from a real machine, and PRINT
             // the outcome: a cleanup that fails silently leaves root access behind.
+            System.out.println("=== cleanup: shared objects -> "
+                + remote.releaseControllerSharedObjects());
             System.out.println("=== cleanup: authorized_keys -> "
                 + remote.releaseAuthorizedKeys());
             try {

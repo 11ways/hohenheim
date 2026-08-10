@@ -85,6 +85,8 @@ class IncusWorkloadLivenessLiveTest {
             // Both sweeps are unconditional and fixture-tracked: a setUp that aborts
             // AFTER the trust step (a failing required preflight check) must still hand
             // back the working admin credential it enrolled.
+            System.out.println("=== cleanup: shared objects -> "
+                + remote.releaseControllerSharedObjects());
             System.out.println("=== cleanup: authorized_keys -> "
                 + remote.releaseAuthorizedKeys());
             System.out.println("=== cleanup: incus trust -> " + remote.releaseTrustEntries());

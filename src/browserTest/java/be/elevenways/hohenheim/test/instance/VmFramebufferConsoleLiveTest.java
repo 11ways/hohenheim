@@ -121,6 +121,8 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
             Models.get(InstanceModel.class).delete(instanceId);
             AuthModels.users().delete(userId);
             try {
+                System.out.println("=== cleanup: shared objects -> "
+                    + remote.releaseControllerSharedObjects());
                 System.out.println("=== cleanup: authorized_keys -> "
                     + remote.releaseAuthorizedKeys());
                 remote.removeTrustEntry(enrolledFingerprint);
