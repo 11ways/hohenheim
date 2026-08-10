@@ -498,7 +498,7 @@ class UpstreamProtocolTest {
         proxy = startProxy();
         int proxyPort = httpPort(proxy);
 
-        // 1s limit against a 3s upstream: a definite 504, never the payload.
+        // 1s limit against a 1.5s upstream: a definite 504, never the payload.
         String killed = rawRequest(proxyPort, "limited.test", "/");
         assertThat(killed).doesNotContain("slow-upstream");
         assertThat(killed).contains("504");

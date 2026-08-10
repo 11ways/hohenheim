@@ -139,7 +139,7 @@ class SiteDatabaseLinkLiveTest {
 
             // 2. The injected environment is container-network shaped: the database's
             //    container hostname and the engine's own port, never 127.0.0.1.
-            Map<String, String> env = containerEnv(docker, siteHandle);
+            Map<String, String> env = awaitEnv(docker, siteHandle, "DB_HOST");
             assertThat(env).as("step 2: DB_HOST is the database container hostname")
                 .containsEntry("DB_HOST", handleA);
             assertThat(env).as("step 2: DB_PORT is redis's own port, not a published one")
@@ -216,7 +216,8 @@ class SiteDatabaseLinkLiveTest {
             assertThat(both.getUpstream())
                 .as("step 6: the site releases with two attachments").isNotNull();
             String bothHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, both.getInstanceId());
-            Map<String, String> bothEnv = containerEnv(docker, bothHandle);
+            Map<String, String> bothEnv = awaitEnv(docker, bothHandle,
+                "DB_HOST", "CACHE_HOST");
             assertThat(bothEnv)
                 .as("step 6: both families are injected")
                 .containsEntry("DB_HOST", handleA)
@@ -311,13 +312,27 @@ class SiteDatabaseLinkLiveTest {
         return row.get(SiteDatabaseModel.ID);
     }
 
-    /** The container's configured environment, parsed from the daemon's inspect. */
+    /**
+     * The container's configured environment, parsed from the daemon's inspect.
+     *
+     * AIDEV-NOTE: a 2xx inspect without a {@code Config} map is a THROW quoting the raw
+     * payload, never an empty map -- a missing container raises IOException instead, so
+     * that shape is a structurally odd daemon answer, and the old empty-map fallback
+     * turned one (observed 2026-08-10 under four-fork contention, step 6) into an
+     * undiagnosable "missing entry" assertion. {@code Config.Env=null} however IS a
+     * legitimate empty environment: the TestImages busybox responder ships no ENV at
+     * all, proven by step 5's detached release tripping a first cut that threw on it.
+     */
     private static Map<String, String> containerEnv(DockerClient docker, String handle)
             throws IOException {
         Map<String, Object> inspect = docker.inspectContainer(handle);
+        if (!(inspect.get("Config") instanceof Map<?, ?> config)) {
+            throw new IllegalStateException("inspect of " + handle
+                + " answered without Config; raw payload: " + inspect);
+        }
+        Object declared = config.get("Env");
         Map<String, String> env = new LinkedHashMap<>();
-        if (inspect.get("Config") instanceof Map<?, ?> config
-                && config.get("Env") instanceof List<?> entries) {
+        if (declared instanceof List<?> entries) {
             for (Object entry : entries) {
                 String text = String.valueOf(entry);
                 int eq = text.indexOf('=');
@@ -325,8 +340,34 @@ class SiteDatabaseLinkLiveTest {
                     env.put(text.substring(0, eq), text.substring(eq + 1));
                 }
             }
+        } else if (declared != null) {
+            throw new IllegalStateException("inspect of " + handle
+                + " answered a non-list Config.Env; raw payload: " + inspect);
         }
         return env;
+    }
+
+    /**
+     * The environment once it carries {@code requiredKeys}, retrying only the OBSERVATION
+     * under load; the final read propagates loudly, so the caller's assertions keep their
+     * full strength against whatever the daemon last answered.
+     */
+    private static Map<String, String> awaitEnv(DockerClient docker, String handle,
+                                                String... requiredKeys) throws Exception {
+        long deadline = System.currentTimeMillis() + 20_000;
+        List<String> keys = List.of(requiredKeys);
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                Map<String, String> env = containerEnv(docker, handle);
+                if (env.keySet().containsAll(keys)) {
+                    return env;
+                }
+            } catch (IllegalStateException | IOException transientUnderLoad) {
+                // retried; the final read below is the one that reports it
+            }
+            Thread.sleep(200);
+        }
+        return containerEnv(docker, handle);
     }
 
     /**
@@ -386,19 +427,33 @@ class SiteDatabaseLinkLiveTest {
         throw new IllegalStateException(handle + " has no address on " + network);
     }
 
-    /** Any address of a container (its own private network). */
+    /** Any address of a container (its own private network), retried briefly under load. */
     private static String anyAddress(DockerClient docker, String handle) throws IOException {
-        Object settings = docker.inspectContainer(handle).get("NetworkSettings");
-        Object networks = settings instanceof Map<?, ?> map ? map.get("Networks") : null;
-        if (networks instanceof Map<?, ?> map) {
-            for (Object endpoint : map.values()) {
-                if (endpoint instanceof Map<?, ?> e
-                        && e.get("IPAddress") instanceof String ip && !ip.isBlank()) {
-                    return ip;
+        long deadline = System.currentTimeMillis() + 5_000;
+        Object lastSeen = null;
+        while (true) {
+            Object settings = docker.inspectContainer(handle).get("NetworkSettings");
+            Object networks = settings instanceof Map<?, ?> map ? map.get("Networks") : null;
+            if (networks instanceof Map<?, ?> map) {
+                for (Object endpoint : map.values()) {
+                    if (endpoint instanceof Map<?, ?> e
+                            && e.get("IPAddress") instanceof String ip && !ip.isBlank()) {
+                        return ip;
+                    }
                 }
             }
+            lastSeen = networks;
+            if (System.currentTimeMillis() >= deadline) {
+                throw new IllegalStateException(handle + " has no address after 5s;"
+                    + " last NetworkSettings.Networks: " + lastSeen);
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(handle + " address wait interrupted");
+            }
         }
-        throw new IllegalStateException(handle + " has no address");
     }
 
     private static Row servingOf(int siteId) {
