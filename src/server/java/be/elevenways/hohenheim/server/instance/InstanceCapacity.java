@@ -301,16 +301,60 @@ public final class InstanceCapacity {
      * settle release a booking that was never taken, and an over-release is the shape that
      * ZEROES a bucket and wipes every other live workload's charge on that host.
      *
+     * AIDEV-NOTE: the reserved amount is RETURNED so {@code stampMigrating} can persist
+     * it as {@code MIGRATE_RESERVED_MB} in the very statement that opens the window, and
+     * both settle halves release that stored amount ({@link #windowReservedOf}) instead
+     * of recomputing it. The recompute was the drift bug: a window is minutes long, and
+     * any change to the row's booked amount inside it (a footprint edit, a kind default
+     * changing across an upgrade) made the settle release a number the window never
+     * reserved -- the over-release shape the paragraph above names. The rebook refusal
+     * ({@link #rebook}) closes the editing lane; the stamp closes every other one.
+     *
+     * @return the amount (MB) reserved on the destination
      * @throws Violations {@code host_capacity_reached} when the destination has no room
      */
-    static void openMigrationWindow(int instanceId, int targetServerId) {
-        reserve(targetServerId, bookedOfInstance(instanceId));
+    static long openMigrationWindow(int instanceId, int targetServerId) {
+        long amount = bookedOfInstance(instanceId);
+        reserve(targetServerId, amount);
+        return amount;
     }
 
     /** What one instance record holds against a host bucket; 0 for an absent record. */
     static long bookedOfInstance(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         return row == null ? 0 : bookedOf(row);
+    }
+
+    /**
+     * The exact amount the open migration window reserved on the destination: the stamp
+     * written by {@code stampMigrating}, else (a window opened before the stamp existed)
+     * the old recompute, logged because it can be the wrong number.
+     */
+    static long windowReservedOf(@Nullable Row stored) {
+        if (stored == null) {
+            return 0;
+        }
+        Integer reserved = stored.get(InstanceModel.MIGRATE_RESERVED_MB);
+        if (reserved != null) {
+            return reserved;
+        }
+        long derived = bookedOf(stored);
+        Blast.log("CAPACITY: migration window of instance", stored.get(InstanceModel.ID),
+            "carries no reserved stamp; releasing the current booking", derived);
+        return derived;
+    }
+
+    /**
+     * What the SOURCE host is actually holding for a mid-migration row: its stamp, or 0
+     * for a hostless row -- a row with no host was never booked anywhere
+     * ({@link #book} skips it), so a handoff from the implicit local daemon must not
+     * release a charge the local bucket never received.
+     */
+    static long sourceBookedOf(@Nullable Row stored) {
+        if (stored == null || stored.get(InstanceModel.SERVER_ID) == null) {
+            return 0;
+        }
+        return bookedOf(stored);
     }
 
     /** The host's name, or a bare id spelling -- the refusal path may never itself fail. */
@@ -395,6 +439,19 @@ public final class InstanceCapacity {
         boolean sameHost = targetServer != null && targetServer.equals(storedServer);
         if (sameHost && booked == amount) {
             return;
+        }
+        // AIDEV-NOTE: THE mid-window freeze (fix decision 2026-08-10, paired with the
+        // MIGRATE_RESERVED_MB stamp). This hook runs on ANY save of a live row -- a plain
+        // CMS form edit included -- and a migration window is minutes long. Letting a
+        // footprint or host change land mid-window restamps CAPACITY_MB and shifts the
+        // source bucket while the window's destination booking stays at the OLD amount,
+        // so the settle's arithmetic can no longer match what was reserved. Amount-
+        // neutral edits (a rename) return above and stay allowed; requireOperable cannot
+        // cover this lane because it guards only the service funnels.
+        if (InstanceModel.STATUS_MIGRATING.equals(stored.get(InstanceModel.STATUS))) {
+            throw Violations.ofForm(violation("instance_busy")
+                .withArg("name", String.valueOf((Object) stored.get(InstanceModel.NAME)))
+                .withArg("status", InstanceModel.STATUS_MIGRATING));
         }
         if (storedServer != null && booked > 0) {
             release(storedServer, booked);

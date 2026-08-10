@@ -679,6 +679,177 @@ class InstanceMigrationTest {
         });
     }
 
+    /**
+     * The migration-window AMOUNT contract: what the window reserved on the destination
+     * is exactly what every settle releases, and the writes that could move the row's
+     * booked amount inside the window are refused. A window is minutes long and the
+     * rebook hook runs on ANY save of a live row, so before this pair of fixes a plain
+     * CMS footprint edit mid-window made the settle release a number the window never
+     * reserved -- and Quotas.release's floor clamp then ZEROED the destination bucket,
+     * wiping every other workload's charge on that host.
+     */
+    @Test
+    void theWindowAmountIsSettledExactlyAndMidWindowFootprintEditsRefuse() {
+        Db.run(datasource, () -> {
+            int src = incusHost("win-src");
+            int dst = incusHost("win-dst");
+            InstanceService service = new InstanceService();
+
+            // 1. A neighbour lives on the destination (its 128 MB booking is the canary
+            //    this whole journey protects) and the workload to move sits on the source.
+            int neighbour = instanceRecord("win-neighbour", dst,
+                FakeNativeDaemons.FakeNativeKind.ID.toString());
+            int mover = instanceRecord("win-mover", src,
+                FakeNativeDaemons.FakeNativeKind.ID.toString());
+            service.deploy(mover);
+            assertThat(catchThrowable(
+                    () -> migrationsCrashingAt("imported").migrateTo(mover, dst)))
+                .as("step 1: the simulated kill leaves an OPEN migration window")
+                .isInstanceOf(IllegalStateException.class);
+            Row row = Models.get(InstanceModel.class).findById(mover);
+            assertThat((String) row.get(InstanceModel.STATUS))
+                .as("step 1: mid-window").isEqualTo(InstanceModel.STATUS_MIGRATING);
+            assertThat((Integer) row.get(InstanceModel.MIGRATE_RESERVED_MB))
+                .as("step 1: the window's reserved amount is STAMPED by the same fenced"
+                    + " statement that opened it -- the settle releases this, never a"
+                    + " recompute")
+                .isEqualTo(128);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 1: the destination carries neighbour + window").isEqualTo(256);
+
+            // 2. ATTACK: the plain CMS-form footprint edit mid-window. Pre-fix this
+            //    landed (rebook has no service funnel in front of it), restamped
+            //    CAPACITY_MB to 512 and shifted the source bucket -- after which the
+            //    rollback settle released 512 against a destination that received 128,
+            //    clamping the bucket to 0 and wiping the neighbour's charge.
+            Row edited = Models.get(InstanceModel.class).findById(mover);
+            edited.set(InstanceModel.SETTINGS,
+                Map.of("image", "fake/image", "memory_limit_mb", 512));
+            assertRefusal(() -> Models.get(InstanceModel.class).save(edited),
+                "instance_busy",
+                "step 2: a footprint edit mid-window is REFUSED at the hook level -- the"
+                    + " one lane requireOperable cannot guard");
+            assertThat(InstanceCapacity.bookedMbOn(src))
+                .as("step 2: the refused edit moved nothing on the source").isEqualTo(128);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 2: nor on the destination").isEqualTo(256);
+            assertThat((Integer) Models.get(InstanceModel.class).findById(mover)
+                    .get(InstanceModel.CAPACITY_MB))
+                .as("step 2: and the stamp is untouched").isEqualTo(128);
+
+            // 3. POSITIVE ANCHOR: an amount-neutral edit (a rename) still lands, so the
+            //    refusal is about the LEDGER, not a frozen record.
+            Row renamed = Models.get(InstanceModel.class).findById(mover);
+            renamed.set(InstanceModel.NAME, "win-mover-renamed");
+            Models.get(InstanceModel.class).save(renamed);
+            assertThat((String) Models.get(InstanceModel.class).findById(mover)
+                    .get(InstanceModel.NAME))
+                .as("step 3: a rename mid-window is not the hook's business")
+                .isEqualTo("win-mover-renamed");
+
+            // 4. Even a stamp that DID drift (hook-free write; the shape a cross-upgrade
+            //    kind-footprint change leaves) cannot corrupt the ROLLBACK settle: the
+            //    release is the WINDOW's stored 128, so the neighbour survives.
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(mover))
+                .assign(InstanceModel.CAPACITY_MB, 512).updateAll();
+            InstanceMigrations.recoverInterrupted();
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 4: the rollback released EXACTLY the window's 128 -- releasing"
+                    + " the drifted stamp instead clamps the bucket to 0 and wipes the"
+                    + " neighbour")
+                .isEqualTo(128);
+            assertThat((Object) Models.get(InstanceModel.class).findById(mover)
+                    .get(InstanceModel.MIGRATE_RESERVED_MB))
+                .as("step 4: the settled window cleared its stamp").isNull();
+            // Undo the simulated drift: stamp and source bucket agree again.
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(mover))
+                .assign(InstanceModel.CAPACITY_MB, 128).updateAll();
+
+            // 5. The FORWARD settle re-stamps CAPACITY_MB from the window, because from
+            //    the handoff on that is what the destination bucket holds for the row.
+            assertThat(catchThrowable(
+                    () -> migrationsCrashingAt("source_removed").migrateTo(mover, dst)))
+                .as("step 5: killed after the source copy was removed")
+                .isInstanceOf(IllegalStateException.class);
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(mover))
+                .assign(InstanceModel.CAPACITY_MB, 512).updateAll();
+            InstanceMigrations.recoverInterrupted();
+            row = Models.get(InstanceModel.class).findById(mover);
+            assertThat((Object) row.get(InstanceModel.SERVER_ID))
+                .as("step 5: the handoff completed onto the destination").isEqualTo(dst);
+            assertThat((Integer) row.get(InstanceModel.CAPACITY_MB))
+                .as("step 5: CAPACITY_MB is re-stamped to the WINDOW amount, not left at"
+                    + " the drifted number a later release would over-release")
+                .isEqualTo(128);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 5: the destination carries neighbour + the handed-over charge")
+                .isEqualTo(256);
+
+            // 6. The destroy of the migrated workload hands back exactly its stamp: the
+            //    neighbour's booking survives to the end.
+            service.destroy(mover);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 6: exactly 128 came back; the neighbour still holds its own")
+                .isEqualTo(128);
+
+            // 7. The HOSTLESS variant: a row with NO host was never booked anywhere, so
+            //    its handoff must release NOTHING against the implicit local daemon. A
+            //    sentinel ON the local host row proves it: pre-fix the handoff released
+            //    the hostless row's derived 128 against the local bucket and erased the
+            //    sentinel's charge.
+            int localId = ServerModel.localServerId();
+            // The implicit local row defaults to the docker runtime; the fake kind
+            // requires incus, and resolve() refuses a runtime mismatch before the
+            // ledger question this step exists to ask.
+            Row localRow = Models.get(ServerModel.class).findById(localId);
+            localRow.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
+            Models.get(ServerModel.class).save(localRow);
+            int sentinel = instanceRecord("win-sentinel", localId,
+                FakeNativeDaemons.FakeNativeKind.ID.toString());
+            assertThat(InstanceCapacity.bookedMbOn(localId))
+                .as("step 7: the sentinel holds the local bucket's only charge")
+                .isEqualTo(128);
+            Row hostless = Models.get(InstanceModel.class).createEmptyRow();
+            hostless.set(InstanceModel.NAME, "win-hostless");
+            hostless.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
+            hostless.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
+            hostless.set(InstanceModel.SERVER_ID, null);
+            Models.get(InstanceModel.class).save(hostless);
+            int hostlessId = hostless.get(InstanceModel.ID);
+            assertThat(InstanceCapacity.bookedMbOn(localId))
+                .as("step 7: creating the hostless row booked nothing").isEqualTo(128);
+            // Plant its workload on the local fake daemon directly (a deploy would drag
+            // host admission into a journey that is about the LEDGER).
+            FakeNativeDaemons.FakeWorkload planted = new FakeNativeDaemons.FakeWorkload();
+            planted.ownerModel = InstanceModel.MODEL_ID;
+            planted.ownerId = String.valueOf(hostlessId);
+            daemonOf(localId).put(handleOf(hostlessId), planted);
+            migrations().migrateTo(hostlessId, dst);
+            assertThat(InstanceCapacity.bookedMbOn(localId))
+                .as("step 7: the handoff released NOTHING against the local bucket -- the"
+                    + " sentinel's charge survives (an unbooked release wiped it pre-fix)")
+                .isEqualTo(128);
+            Row landed = Models.get(InstanceModel.class).findById(hostlessId);
+            assertThat((Object) landed.get(InstanceModel.SERVER_ID))
+                .as("step 7: the record moved").isEqualTo(dst);
+            assertThat((Integer) landed.get(InstanceModel.CAPACITY_MB))
+                .as("step 7: and carries the window's stamp, so its future release is"
+                    + " exactly what the destination received")
+                .isEqualTo(128);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 7: neighbour + the arrived workload").isEqualTo(256);
+
+            // 8. Every booking this journey took goes home.
+            service.destroy(hostlessId);
+            service.destroy(neighbour);
+            Models.get(InstanceModel.class).delete(sentinel);
+            assertThat(InstanceCapacity.bookedMbOn(dst))
+                .as("step 8: the destination ends empty").isEqualTo(0);
+            assertThat(InstanceCapacity.bookedMbOn(localId))
+                .as("step 8: the local bucket too").isEqualTo(0);
+        });
+    }
+
     private static void assertRefusal(Runnable action, String key, String description) {
         assertThat(catchThrowable(action::run))
             .as(description)

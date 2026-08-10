@@ -186,13 +186,17 @@ final class InstanceOperationGuard {
 
     /**
      * Open a migration window: the same fenced guard as {@link #stamp}, additionally
-     * recording the destination host. From here until the handoff (or a settle), the
-     * record's own host remains the data authority.
+     * recording the destination host AND the amount the window reserved on it -- the
+     * settle releases that stored amount verbatim, never a recompute (see
+     * {@code InstanceModel.MIGRATE_RESERVED_MB}). From here until the handoff (or a
+     * settle), the record's own host remains the data authority.
      *
+     * @param reservedMb what {@code InstanceCapacity.openMigrationWindow} booked
      * @throws Violations {@code instance_fenced_out}
      */
     static void stampMigrating(@NonNull HostLeases leases, int instanceId, int serverId,
-                               long fence, int targetServerId, @NonNull Object instanceName) {
+                               long fence, int targetServerId, long reservedMb,
+                               @NonNull Object instanceName) {
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
@@ -202,6 +206,7 @@ final class InstanceOperationGuard {
                 InstanceModel.CLAIM_FENCE.lte(fence)))
             .assign(InstanceModel.STATUS, InstanceModel.STATUS_MIGRATING)
             .assign(InstanceModel.MIGRATE_TARGET_ID, targetServerId)
+            .assign(InstanceModel.MIGRATE_RESERVED_MB, (int) reservedMb)
             .assign(InstanceModel.CLAIM_FENCE, fence)
             .updateAll();
         if (matched == 0) {
@@ -230,8 +235,10 @@ final class InstanceOperationGuard {
                                long fence, @Nullable Integer reservedTargetServerId,
                                @NonNull String status,
                                @NonNull Object instanceName) {
-        long booked = reservedTargetServerId == null
-            ? 0 : InstanceCapacity.bookedOfInstance(instanceId);
+        // The STORED window amount, never a recompute: releasing anything else against
+        // the destination is the over-release that clamps its bucket to zero.
+        long booked = reservedTargetServerId == null ? 0 : InstanceCapacity.windowReservedOf(
+            Models.get(InstanceModel.class).findById(instanceId));
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
@@ -241,6 +248,7 @@ final class InstanceOperationGuard {
                 InstanceModel.CLAIM_FENCE.lte(fence)))
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
+            .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null)
             .assign(InstanceModel.CLAIM_FENCE, fence)
             .updateAll();
         if (matched == 0) {
@@ -267,21 +275,28 @@ final class InstanceOperationGuard {
      * before: a handoff that loses the fence changed nothing, so it must move no charge
      * either -- the rival that owns the record answers for its ledger. The destination was
      * already booked when the window opened ({@link InstanceCapacity#openMigrationWindow}),
-     * which is where the ordering argument lives.
+     * which is where the ordering argument lives. What comes back is what the source
+     * actually holds -- the row's stamp, 0 for a hostless row -- and the statement
+     * re-stamps CAPACITY_MB to the WINDOW's reserved amount, because from the match on
+     * that is what the destination bucket carries for this row; a later release of any
+     * other number is the bucket-zeroing over-release.
      *
      * AIDEV-NOTE: this is a set-based updateAll and fires NO write hooks, so
-     * InstanceCapacity's rebook hook never sees a migration. Anything else this statement
-     * should keep in step (an owner-side ledger, a derived counter) must likewise be
-     * spelled out HERE -- reaching for save() to get hooks would trade away the fence,
-     * which is the only thing stopping a stale controller from handing off a record a
-     * rival already owns.
+     * InstanceCapacity's rebook hook never sees a migration (and now REFUSES the
+     * footprint edits that used to slip through it mid-window). Anything else this
+     * statement should keep in step (an owner-side ledger, a derived counter) must
+     * likewise be spelled out HERE -- reaching for save() to get hooks would trade away
+     * the fence, which is the only thing stopping a stale controller from handing off a
+     * record a rival already owns.
      *
      * @throws Violations {@code instance_fenced_out}
      */
     static void handoff(@NonNull HostLeases leases, int instanceId, int sourceServerId,
                         long sourceFence, int targetServerId, long targetFence,
                         @NonNull String status, @NonNull Object instanceName) {
-        long booked = InstanceCapacity.bookedOfInstance(instanceId);
+        Row stored = Models.get(InstanceModel.class).findById(instanceId);
+        long booked = InstanceCapacity.sourceBookedOf(stored);
+        long reserved = InstanceCapacity.windowReservedOf(stored);
         int matched = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
@@ -291,6 +306,8 @@ final class InstanceOperationGuard {
                 InstanceModel.CLAIM_FENCE.lte(sourceFence)))
             .assign(InstanceModel.SERVER_ID, targetServerId)
             .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
+            .assign(InstanceModel.MIGRATE_RESERVED_MB, (Object) null)
+            .assign(InstanceModel.CAPACITY_MB, (int) reserved)
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.CLAIM_FENCE, targetFence)
             .updateAll();

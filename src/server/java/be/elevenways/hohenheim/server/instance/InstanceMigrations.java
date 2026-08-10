@@ -220,14 +220,15 @@ public final class InstanceMigrations {
         // workload fits there (the chooser does it for the drain lane, RestoreCapacity
         // answers for DISK only). The booking is held for the whole window and settled by
         // the fenced write that ends it -- see InstanceCapacity.openMigrationWindow.
-        InstanceCapacity.openMigrationWindow(instanceId, targetServerId);
+        long reservedMb = InstanceCapacity.openMigrationWindow(instanceId, targetServerId);
         try {
             InstanceOperationGuard.stampMigrating(this.instances.leases(), instanceId,
-                resolved.serverId(), sourceFence, targetServerId, nameOf(resolved.row()));
+                resolved.serverId(), sourceFence, targetServerId, reservedMb,
+                nameOf(resolved.row()));
         } catch (RuntimeException notOurs) {
-            // The window never opened, so no settle will ever close it.
-            InstanceCapacity.release(targetServerId,
-                InstanceCapacity.bookedOfInstance(instanceId));
+            // The window never opened, so no settle will ever close it. The EXACT
+            // reservation comes back, never a recompute of the row's current booking.
+            InstanceCapacity.release(targetServerId, reservedMb);
             throw notOurs;
         }
         Path staging = stagingRoot().resolve("migrate-" + instanceId + "-"

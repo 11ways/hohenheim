@@ -385,6 +385,24 @@ public class InstanceModel extends Model {
     public static final IntegerField MIGRATE_TARGET_ID = SCHEMA.addField(
         IntegerField.builder().name("migrate_target_id").filterable(false).build());
 
+    /**
+     * The memory (MB) the open migration window reserved on {@link #MIGRATE_TARGET_ID},
+     * stamped by the same fenced statement that opens the window and cleared by the
+     * statement that settles it.
+     *
+     * AIDEV-NOTE: a THIRD amount stamp, and it exists because the settle used to
+     * RECOMPUTE the amount from {@link #CAPACITY_MB} at settle time. A migration window
+     * is minutes long; anything that moves the row's booked amount inside it (a CMS
+     * footprint edit before the rebook hook refused those, a kind-footprint change
+     * across an upgrade) made the settle release a different number than the window
+     * reserved -- and an over-release CLAMPS the destination bucket to zero, wiping
+     * every other workload's charge on that host. Both settle halves release exactly
+     * this stamp; the forward handoff also re-stamps CAPACITY_MB from it, because after
+     * the handoff this IS what the destination bucket holds for the row.
+     */
+    public static final IntegerField MIGRATE_RESERVED_MB = SCHEMA.addField(
+        IntegerField.builder().name("migrate_reserved_mb").filterable(false).build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
