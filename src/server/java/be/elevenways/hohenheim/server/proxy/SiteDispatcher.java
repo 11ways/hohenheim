@@ -225,6 +225,12 @@ public class SiteDispatcher implements HttpHandler {
     private static final int NEGATIVE_CACHE_MAX = 5000;
 
     private static final long REGEX_CACHE_TTL_MS = 5 * 60 * 1000;
+    // AIDEV-NOTE: the positive regex cache is capped like its negativeCache sibling. Its TTL
+    // only evicts on RE-READ, so a spray of distinct Host values that each match a broad
+    // operator regex ('.*') would otherwise grow it without bound; at the cap it stops caching
+    // and falls back to computeRegexMatches per request (correct, just uncached), exactly the
+    // negativeCache stance.
+    private static final int REGEX_CACHE_MAX = 5000;
     private static final HttpString HOST = Headers.HOST;
     private static final Pattern NAMED_GROUP_PATTERN = Pattern.compile("\\(\\?<([a-zA-Z][a-zA-Z0-9_]*)>");
 
@@ -1018,7 +1024,7 @@ public class SiteDispatcher implements HttpHandler {
         }
         if (regexMatches == null) {
             regexMatches = computeRegexMatches(rt, hostname, listenerIp);
-            if (!regexMatches.isEmpty()) {
+            if (!regexMatches.isEmpty() && rt.regexMatchCache.size() < REGEX_CACHE_MAX) {
                 rt.regexMatchCache.put(cacheKey,
                     new CachedRegexMatches(regexMatches, System.currentTimeMillis()));
             }
