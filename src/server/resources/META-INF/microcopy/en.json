@@ -3043,6 +3043,14 @@
     "text": "Only an administrator can bind a domain to a path prefix",
     "scope": "violations"
   },
+  "tenant_proxy_upstream_private": {
+    "text": "A delegated proxy site cannot forward to a loopback or private address",
+    "scope": "violations"
+  },
+  "proxy_upstream_invalid": {
+    "text": "The upstream host must be a plain http(s) address without credentials",
+    "scope": "violations"
+  },
   "tenant_field_frozen": {
     "text": "Only an administrator can change this setting",
     "scope": "violations"
