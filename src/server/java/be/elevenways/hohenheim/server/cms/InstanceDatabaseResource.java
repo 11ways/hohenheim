@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -37,12 +38,15 @@ import java.util.Map;
  * into a workload's environment, its command, its cloud-init and its config files. Hidden
  * from the sidebar -- reached through an instance's Databases tab.
  *
- * AIDEV-NOTE: the two-sided AUTHORITY is not here. It lives on the model write pipeline in
- * {@code TenantWrites.requireInstanceLinkAuthority}, for the reason that class documents at
- * length: the framework's revision-restore endpoint, the automation API and any direct
- * {@code model.save} never pass through a resource method, so a resource-level check would
- * be a UX affordance rather than a gate. What lives here is REACHABILITY -- the things that
- * make an attachment work at all, which the authority layer has no opinion about.
+ * AIDEV-NOTE: the two-sided AUTHORITY GATE is not here. It lives on the model write
+ * pipeline in {@code TenantWrites.requireInstanceLinkAuthority}, for the reason that class
+ * documents at length: the framework's revision-restore endpoint, the automation API and
+ * any direct {@code model.save} never pass through a resource method, so a resource-level
+ * check would be a UX affordance rather than a gate. What lives here is REACHABILITY --
+ * the things that make an attachment work at all -- plus ONE early call to that same
+ * authority check for tenant actors, which decides the refusal ORDER: the reachability
+ * lookups are unscoped, and run before the authority answer they were a cross-tenant
+ * existence/name/host oracle (see the note inside {@link #validate}).
  */
 public class InstanceDatabaseResource extends RowResource {
 
@@ -133,6 +137,26 @@ public class InstanceDatabaseResource extends RowResource {
             throw Violations.ofField("instance_id", null,
                 CmsSupport.violationText("instance_required"));
         }
+        Integer databaseId = intOf(coerced.get("database_id"),
+            existing != null ? existing.get(InstanceDatabaseModel.DATABASE_ID) : null);
+        // AIDEV-NOTE: for a TENANT the authority decision comes BEFORE any lookup below,
+        // because the lookups are UNSCOPED and their refusals used to be a cross-tenant
+        // oracle: absent answered database_missing, wrong-host answered
+        // database_instance_server_mismatch interpolating the stored (owner-namespaced)
+        // name and both host names, and only same-host-not-yours fell through to the
+        // uniform refusal -- three distinguishable answers to three probes, violating
+        // HohenheimAccess.databaseRefusal's "visibility, absence and denial are one
+        // answer". This is the same two-sided check TenantWrites' hook re-runs at save;
+        // asked here it decides the ORDER, so absent and not-yours collapse and only a
+        // database the actor may attach ever reaches the reachability messages below.
+        // Operators (no tenant origin) keep the full diagnostic vocabulary.
+        if (TenantWrites.isTenantOriginated()) {
+            if (databaseId == null) {
+                throw Violations.ofField("database_id", null,
+                    CmsSupport.violationText("database_required"));
+            }
+            TenantWrites.requireInstanceLinkAuthority(instanceId, databaseId);
+        }
         Row instance = Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
@@ -149,8 +173,6 @@ public class InstanceDatabaseResource extends RowResource {
                     .withArg("kind", String.valueOf(kind)));
         }
 
-        Integer databaseId = intOf(coerced.get("database_id"),
-            existing != null ? existing.get(InstanceDatabaseModel.DATABASE_ID) : null);
         if (databaseId == null) {
             throw Violations.ofField("database_id", null,
                 CmsSupport.violationText("database_required"));
