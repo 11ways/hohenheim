@@ -49,7 +49,10 @@ public class HohenheimSettings {
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.ANY)
             .description("Optional Unix socket path for the HTTP proxy instead of a public TCP listener. "
                 + "The socket bridges to a loopback TCP port, so on a multi-user host any local account "
-                + "can still reach the proxy via 127.0.0.1 regardless of the socket permissions")
+                + "can still reach the proxy via 127.0.0.1 regardless of the socket permissions. "
+                + "A Unix-socket client has no IP address, so every request counts as 127.0.0.1 unless "
+                + "the fronting proxy authenticates with X-Hohenheim-Key and forwards the client in "
+                + "X-Real-IP; the listener refuses to start until proxy.trusted_proxy_keys is configured")
             .restartRequired()
             .build();
 
