@@ -113,6 +113,45 @@ public class SiteDispatcher implements HttpHandler {
     // process-control actions, this one authorizes client-IP and proto propagation.
     private static final HttpString X_HOHENHEIM_KEY = ProxyScheme.X_HOHENHEIM_KEY;
 
+    // AIDEV-NOTE: the client-asserted forwarding family that hohenheim does NOT own. The four
+    // it does own (X-Forwarded-Proto/Host, X-Real-IP, X-Forwarded-For) are regenerated below
+    // from its own X-Hohenheim-Key-authenticated decision; every other spelling that conveys
+    // the same client-origin trust (RFC 7239 Forwarded, the X-Forwarded-* aliases, the CDN
+    // client-IP headers, the IIS URL-rewrite pair) is STRIPPED unconditionally -- trusted peer
+    // or not, since none is part of hohenheim's federation contract. This is a deny-list by
+    // deliberate design: a general reverse proxy must pass arbitrary application headers
+    // verbatim (a tenant app defines its own request headers), so an allow-list would silently
+    // break tenants; the honest boundary is to enumerate the trust-conveying family and drop it.
+    // The residual risk (a future vendor header not listed) is inherent to any reverse proxy and
+    // is why this list is ONE named constant the test enumerates -- adding one is a one-line edit.
+    private static final HttpString[] STRIPPED_FORWARDING_HEADERS = {
+        new HttpString("Forwarded"),
+        new HttpString("X-Forwarded-Server"),
+        new HttpString("X-Forwarded-Port"),
+        new HttpString("X-Forwarded-Prefix"),
+        new HttpString("X-Forwarded-Scheme"),
+        new HttpString("X-Forwarded-Ssl"),
+        new HttpString("True-Client-IP"),
+        new HttpString("CF-Connecting-IP"),
+        new HttpString("X-Client-IP"),
+        new HttpString("X-Original-URL"),
+        new HttpString("X-Rewrite-URL"),
+    };
+
+    // AIDEV-NOTE: hop-by-hop request headers that must never be forwarded to an upstream
+    // (RFC 7230 6.1). Transfer-Encoding and Upgrade are deliberately absent: Undertow owns the
+    // upstream wire framing and the WebSocket tunnel, and the websocket_upgrade gate governs
+    // Upgrade. Connection is handled separately in sanitizeHopByHopHeaders (its tokens name
+    // further headers to drop, and it must survive an upgrade so Undertow can still tunnel).
+    private static final HttpString[] HOP_BY_HOP_HEADERS = {
+        Headers.KEEP_ALIVE,
+        new HttpString("TE"),
+        new HttpString("Trailer"),
+        new HttpString("Proxy-Connection"),
+        Headers.PROXY_AUTHENTICATE,
+        Headers.PROXY_AUTHORIZATION,
+    };
+
     private final String instanceId = UUID.randomUUID().toString().substring(0, 8);
 
     /**
@@ -608,6 +647,12 @@ public class SiteDispatcher implements HttpHandler {
         // this pipeline strips X-Hohenheim-Key and rewrites X-Forwarded-Proto further down.
         ProxyScheme.resolve(exchange);
 
+        // AIDEV-NOTE: a proxy-level refusal of an ambiguously framed message (both Content-Length
+        // and Transfer-Encoding, RFC 7230 3.3.3) was tried here and REMOVED as redundant: this
+        // server's Undertow HttpRequestParser already answers 400 and never invokes this handler
+        // for such a request, so the check was unreachable. Proven by a counterfactual test that
+        // passed against the un-patched tree; do not re-add without evidence Undertow forwards it.
+
         // --- ACME HTTP-01 challenge: BEFORE ban enforcement, so certificate
         //     renewal survives a mistaken ban (serving a pending challenge
         //     response is harmless). ---
@@ -833,6 +878,15 @@ public class SiteDispatcher implements HttpHandler {
         // through this listener today. Moving the strip later would make a privileged
         // endpoint publicly reachable -- a deliberate decision, never a side effect.
         requestHeaders.remove(X_HOHENHEIM_KEY);
+
+        // Hop-by-hop hygiene, then strip the client-asserted forwarding family we do not own.
+        // Both happen after custom rules and before the four canonical values are regenerated,
+        // so an operator rule cannot re-introduce a spoofable trust header on the forward path.
+        sanitizeHopByHopHeaders(requestHeaders);
+        for (HttpString stripped : STRIPPED_FORWARDING_HEADERS) {
+            requestHeaders.remove(stripped);
+        }
+
         requestHeaders.put(X_FORWARDED_PROTO, ProxyScheme.effectiveScheme(exchange));
         requestHeaders.put(X_FORWARDED_HOST,
             trustedForwardedHost != null && !trustedForwardedHost.isBlank()
@@ -1038,6 +1092,59 @@ public class SiteDispatcher implements HttpHandler {
             || hostname.contains("notexist")
             || hostname.contains(".www")
             || hostname.contains("wwww");
+    }
+
+    /**
+     * Strip hop-by-hop request headers before forwarding: honour {@code Connection: <token>} by
+     * dropping every client-named header, then remove the fixed hop-by-hop set. Connection and
+     * Upgrade themselves survive a genuine upgrade request so Undertow can still tunnel it.
+     */
+    private static void sanitizeHopByHopHeaders(HeaderMap headers) {
+        boolean upgrade = isUpgradeRequest(headers);
+        for (String token : connectionTokens(headers)) {
+            if (token.equalsIgnoreCase("close") || token.equalsIgnoreCase("keep-alive")
+                    || token.equalsIgnoreCase("upgrade")) {
+                continue;
+            }
+            headers.remove(new HttpString(token));
+        }
+        for (HttpString hop : HOP_BY_HOP_HEADERS) {
+            headers.remove(hop);
+        }
+        if (!upgrade) {
+            headers.remove(Headers.CONNECTION);
+        }
+    }
+
+    /** A request is an upgrade only when both Upgrade and a {@code Connection: upgrade} token are present. */
+    private static boolean isUpgradeRequest(HeaderMap headers) {
+        if (!headers.contains(Headers.UPGRADE)) {
+            return false;
+        }
+        for (String token : connectionTokens(headers)) {
+            if (token.equalsIgnoreCase("upgrade")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Comma-split, trimmed tokens from every Connection header value on the exchange. */
+    private static List<String> connectionTokens(HeaderMap headers) {
+        List<String> values = headers.get(Headers.CONNECTION);
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        List<String> tokens = new ArrayList<>();
+        for (String value : values) {
+            for (String part : value.split(",")) {
+                String token = part.trim();
+                if (!token.isEmpty()) {
+                    tokens.add(token);
+                }
+            }
+        }
+        return tokens;
     }
 
     private static int countChar(String value, char c) {

@@ -154,9 +154,7 @@ public class ProxySiteType implements SiteTypeHandler {
         }
 
         return (exchange, forwarder) -> {
-            if (!websocketEnabled
-                    && "websocket".equalsIgnoreCase(
-                        exchange.getRequestHeaders().getFirst(Headers.UPGRADE))) {
+            if (refusesUpgrade(exchange, websocketEnabled)) {
                 exchange.setStatusCode(403);
                 exchange.getResponseSender().send("WebSocket upgrades disabled for this site");
                 return;
@@ -196,9 +194,7 @@ public class ProxySiteType implements SiteTypeHandler {
 
         @Override
         public void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder) {
-            if (!websocketEnabled
-                    && "websocket".equalsIgnoreCase(
-                        exchange.getRequestHeaders().getFirst(Headers.UPGRADE))) {
+            if (refusesUpgrade(exchange, websocketEnabled)) {
                 exchange.setStatusCode(403);
                 exchange.getResponseSender().send("WebSocket upgrades disabled for this site");
                 return;
@@ -207,7 +203,15 @@ public class ProxySiteType implements SiteTypeHandler {
             String resolvedSocket = socketTemplate;
             if (hasPlaceholders) {
                 Map<String, String> groups = exchange.getAttachment(SiteDispatcher.MATCHED_GROUPS);
-                resolvedSocket = substitutePlaceholders(socketTemplate, groups);
+                try {
+                    resolvedSocket = substitutePlaceholders(socketTemplate, groups);
+                } catch (IllegalArgumentException unsafe) {
+                    // A Host-derived capture tried to escape the socket path (see
+                    // substitutePlaceholders): refuse rather than dial an attacker-chosen path.
+                    exchange.setStatusCode(502);
+                    exchange.getResponseSender().send("Invalid upstream socket");
+                    return;
+                }
             }
 
             UnixSocketBridgeConnection conn;
@@ -251,9 +255,33 @@ public class ProxySiteType implements SiteTypeHandler {
         }
     }
 
+    /**
+     * Whether a {@code websocket_upgrade=false} site must refuse this exchange. AIDEV-NOTE: this
+     * fires on ANY upgrade attempt (the mere presence of an Upgrade header), not just an exact
+     * {@code Upgrade: websocket} spelling -- a comma-list ({@code h2c, websocket}) or a duplicate
+     * whose first value is not "websocket" would otherwise slip past and let a 101 tunnel
+     * regardless of the setting, since the actual tunnel is established by Undertow on the 101,
+     * not by our string match.
+     */
+    static boolean refusesUpgrade(HttpServerExchange exchange, boolean websocketEnabled) {
+        return !websocketEnabled && exchange.getRequestHeaders().contains(Headers.UPGRADE);
+    }
+
     /** {name} or {0} placeholders resolved against regex-host capture groups. */
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([A-Za-z_][A-Za-z0-9_]*|\\d+)\\}");
 
+    /**
+     * Resolve socket-path placeholders from regex-host capture groups.
+     *
+     * <p>AIDEV-NOTE: capture-group values originate in the untrusted Host header
+     * ({@code Hostnames.fromHostHeader} does no charset validation), so a substituted value is
+     * validated at the tier it is trusted -- here, where it becomes part of a filesystem path.
+     * A value carrying a path separator, {@code ..}, NUL or any control character is rejected,
+     * closing the path-escape that an operator regex with a permissive capture would otherwise
+     * open ({@code {project}} matching {@code ../../etc}).
+     *
+     * @throws IllegalArgumentException when a substituted value is unsafe for a socket path
+     */
     static String substitutePlaceholders(String template, Map<String, String> groups) {
         if (template == null || groups == null || groups.isEmpty()) {
             return template;
@@ -263,9 +291,30 @@ public class ProxySiteType implements SiteTypeHandler {
         while (m.find()) {
             String name = m.group(1);
             String value = groups.get(name);
-            m.appendReplacement(out, Matcher.quoteReplacement(value != null ? value : m.group(0)));
+            if (value != null) {
+                if (!isSafePathSegment(value)) {
+                    throw new IllegalArgumentException("unsafe socket placeholder value");
+                }
+                m.appendReplacement(out, Matcher.quoteReplacement(value));
+            } else {
+                m.appendReplacement(out, Matcher.quoteReplacement(m.group(0)));
+            }
         }
         m.appendTail(out);
         return out.toString();
+    }
+
+    /** A capture value is safe to splice into a socket path only if it names no separator, no {@code ..} and no control char. */
+    private static boolean isSafePathSegment(String value) {
+        if (value.isEmpty() || value.equals(".") || value.contains("..")) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '/' || c == '\\' || c <= ' ' || c == 0x7f) {
+                return false;
+            }
+        }
+        return true;
     }
 }
