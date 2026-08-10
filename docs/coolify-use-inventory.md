@@ -45,19 +45,21 @@ Thirteen numbered clauses, plus three argued rejections and one cross-reference:
 
 | verdict | count | items |
 | --- | --- | --- |
-| IMPLEMENTED | 11 | 1, 2, 4, 6, 7, 8, 9, 10, 11, 12, 13 |
-| PARTIAL | 2 | 3, 5 |
+| IMPLEMENTED | 12 | 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 |
+| PARTIAL | 1 | 3 |
 | REJECTED | 3 | A (compose runtime), C (large service marketplace), D (multi-server orchestration) |
 | OPEN | 0 as a row | ONE OPEN SLICE remains, named inside a row: the CLI test wiring (13). Item 12's site/database count quotas CLOSED 2026-08-08 |
 | CLAIMED | 0 sub-verdicts | ACME acquisition (item 9) moved CLAIMED -> IMPLEMENTED 2026-08-08; Gitea (item 3) did the same |
 
-Counts updated 2026-08-08: items 2 and 10 moved PARTIAL -> IMPLEMENTED when the
+Counts updated 2026-08-10: item 5 moved PARTIAL -> IMPLEMENTED when per-branch
+and manual preview creation shipped (its STATUS block records the quota decision).
+Previous update 2026-08-08: items 2 and 10 moved PARTIAL -> IMPLEMENTED when the
 two defects this document found were fixed (build isolation, and a named volume
 surviving a health-gated release). Each row keeps the original finding as history
 above its resolution -- do not delete those paragraphs, they are why the fix looks
 the way it does.
 
-Of the 10 IMPLEMENTED rows, **one is proven only `[live]`** (1, the buildpack
+Of the 12 IMPLEMENTED rows, **one is proven only `[live]`** (1, the buildpack
 build). Items 6 and 7 -- the rollout and rollback that are the product's
 centrepiece -- gained a hermetic STATE-MACHINE twin on 2026-08-08 beside their live
 class, item 9 gained hermetic ACME issuance against an in-JVM CA, and items 2 and
@@ -314,8 +316,9 @@ full injection path.
 
 ## 5. Preview deployments
 
-**PARTIAL -- per-pull-request only. There is no per-branch preview and no manual
-create.**
+**IMPLEMENTED (2026-08-10; was PARTIAL -- per-pull-request only, no per-branch
+preview and no manual create. The original finding is kept below; the STATUS
+block at the end of this row is the resolution).**
 
 `server/preview/PreviewDeployments.java:72` (`deploy` `:105`, expiry stamped
 `:150-154`, one-shot expiry schedule armed `:160`/`:327-331`), with
@@ -344,6 +347,43 @@ only non-webhook call sites are teardown.
 DRIFT worth naming: `PreviewDeployments.java:67-71` calls variable isolation
 "structural". The code honours it and the assertion exists -- but that assertion
 sits behind an `assumeTrue`, so the property is code-true and only live-proven.
+
+**STATUS 2026-08-10: the two missing lanes shipped, and the row moves PARTIAL ->
+IMPLEMENTED.** Per-BRANCH previews: a site declares glob patterns
+(`GitSourceSchema.PREVIEW_BRANCHES`, matched by `server/preview/PreviewBranches`),
+and a push to a matching non-production branch runs the same
+`PreviewDeployments.deployQuietly` lifecycle the PR lane uses
+(`GitWebhookHandler.handlePush`); a branch DELETE tears its preview down, and --
+found while building this -- a delete push of the PRODUCTION branch used to pass
+the ref equality check and queue a production deploy of a branch that no longer
+exists (now `ignored_deleted_ref`). MANUAL creation: the admin previews resource
+and the new `/manage` projection (`ManagePreviewDeploymentResource`, scoped and
+gated by the site's existing `manage` capability -- no new verb) create for a
+chosen ref through `PreviewDeployments.queue`, which claims the quota-charged row
+SYNCHRONOUSLY (refusals land on the form by name) and builds in the background.
+
+QUOTA DECISION (recorded here and in `PreviewDeployments.queue`): every lane
+charges the SITE's manage-grant owner bucket -- the `PreviewQuota` before-write
+hook fires on the row save regardless of surface, so charge == cap holds
+structurally. Branch previews are OPT-IN PER PATTERN (empty = PR previews only;
+the production branch never gets one). At the cap every lane REFUSES BY NAME
+(`preview_quota_reached`; webhook lanes also report a commit-status FAILURE when
+a sha is known); eviction of the oldest preview was REJECTED because it destroys
+a running environment to serve a push nobody is watching.
+
+- Test (hermetic): `GitWebhookSecurityTest.java`
+  `aPushToADeclaredPreviewBranchDrivesThePreviewLifecycleNotProduction` -- the
+  matching push queues a preview (pre-fix counterfactual: it answered
+  `ignored/branch`), an undeclared branch stays ignored, a branch delete reclaims
+  the preview row, a production-branch delete deploys NOTHING (pre-fix it
+  deployed), and the production lane still deploys. **[test]**
+- Test (hermetic): `PreviewCreationLanesTest.java` -- the glob vocabulary incl.
+  the empty-set opt-in default; `queue` claims synchronously, charges the owner
+  bucket, refuses over-cap BY NAME without evicting, records the async build
+  failure on the row, releases on destroy; and the /manage gate, with the
+  counterfactual that the ungated admin resource creates for the same stranger.
+  What this file cannot prove: a manual preview reaching RUNNING (live lane).
+  **[test]**
 
 ## 6. Health-gated zero-downtime rollout
 
@@ -859,9 +899,10 @@ Value against effort, with prerequisites, for the PaaS claim specifically.
    it. Prerequisite: agreement that refusing is acceptable UX.
 8. ~~**Wire `tools/hoh.test.js` into the build** (item 13).~~ DONE 2026-08-09:
    `HohCliTest` runs it in the browserTest lane; the suite was green on first run.
-9. **Per-branch or manual preview creation** (item 5). Value: low-medium -- today a
-   preview exists only for an open pull/merge request. Effort: low. Prerequisite:
-   a decision about quota, since branch previews multiply.
+9. ~~**Per-branch or manual preview creation** (item 5).~~ DONE 2026-08-10: branch
+   previews are opt-in glob patterns, manual creation exists on /admin and /manage,
+   and the quota decision (site-owner charge, refuse-by-name at the cap, never
+   evict) is recorded in the row and in `PreviewDeployments.queue`.
 10. **A `@Tag`-separated live lane** (cross-cutting). Value: medium -- see the
     Pterodactyl inventory; it is the same item and one fix serves both.
 
@@ -1019,6 +1060,12 @@ tenant lane inherits it.
 
 Closed since the original verdict, each with a dated STATUS block in its own row:
 
+- item 5, previews: CLOSED 2026-08-10 -- per-branch previews (opt-in glob
+  patterns, branch-delete teardown, and the production-branch-delete deploy bug
+  fixed on the way) and manual creation on /admin and /manage
+  (synchronous quota-charged claim, site-owner charge, refuse-by-name at the
+  cap). The one remaining preview limitation stays stated in the row: a manual
+  preview reaching RUNNING is live-lane-only proof. **[test]**
 - item 12, quotas: CLOSED 2026-08-08 -- per-owner SITE and managed-DATABASE counts
   (`SiteQuota`, `DatabaseQuota`, `OwnerQuota`, M089), beside the per-owner MEMORY
   budget that closed the Pterodactyl inventory's last blocker the same day. **[test]**
@@ -1043,7 +1090,8 @@ because a fake cannot discover a daemon or a public CA changing under us.
 
 What IS solid, with hermetic state-asserting proof: projects and environments,
 the webhook receiver, per-deployment logs, credential derivation, the API
-projection and scope narrowing, the preview expiry mechanics, build isolation,
+projection and scope narrowing, the preview expiry mechanics and all three
+preview creation lanes (pull-request, branch, manual), build isolation,
 persistent storage, the release state machine and certificate acquisition. What
 would block calling this a general Coolify replacement for someone else, in one
 sentence: there is no compose runtime and no provider provisioning flow -- both
