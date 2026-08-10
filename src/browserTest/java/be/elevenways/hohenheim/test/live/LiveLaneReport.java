@@ -7,10 +7,17 @@ import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Makes a skipped live test VISIBLE. Registered through {@code META-INF/services}, so it
@@ -23,22 +30,96 @@ import java.util.Map;
  * still shows up rather than vanishing. Completeness here does not depend on the migration
  * being exhaustive.
  *
+ * <p>It also makes a TRUNCATED run unmistakable: a Gradle task timeout kills the worker
+ * JVM mid-flight, Gradle then reports the killed test as SKIPPED with no message, its
+ * {@code finally} never runs (live-host credentials leak), and no JUnit event ever fires
+ * for it -- so the skip report above is structurally blind to it. This listener therefore
+ * keeps a live marker file naming every test that has not yet reported a result, deletes
+ * it only when the test plan finishes, and prints a truncation banner from a shutdown
+ * hook when the JVM dies with tests still unaccounted for.
+ *
  * AIDEV-NOTE: one report per forked JVM, each stamped with its pid, and it counts only
  * what THIS JVM ran -- browserTest shares JVMs across up to four parallel forks, so a
  * daemon-wide total would be a number about nothing.
+ *
+ * AIDEV-NOTE: the marker file is rewritten on every start/finish rather than only in the
+ * shutdown hook, because a hook only runs on SIGTERM -- a SIGKILLed worker leaves nothing
+ * behind except what was already on disk. Observed 2026-08-10: browserTestIsolated hit its
+ * 30m task timeout, RestoreCapacityLiveTest was killed mid-test and reported SKIPPED, and
+ * daystrom kept a stale root key its finally-block teardown would have swept.
  */
 public final class LiveLaneReport implements TestExecutionListener {
 
     /** need key (or "unclassified") -> reason -> the tests that aborted for it. */
     private final Map<String, Map<String, List<String>>> skipped = new LinkedHashMap<>();
 
+    /** Every planned-or-started test (uniqueId -> display name) with no verdict yet. */
+    private final Map<String, String> unfinished = new ConcurrentHashMap<>();
+
+    /** The subset of {@link #unfinished} that actually began executing. */
+    private final Set<String> inFlight = ConcurrentHashMap.newKeySet();
+
+    private final AtomicBoolean hookArmed = new AtomicBoolean();
+    private volatile TestPlan plan;
+    private volatile Path markerFile;
+
+    @Override
+    public void testPlanExecutionStarted(TestPlan testPlan) {
+        this.plan = testPlan;
+        for (TestIdentifier root : testPlan.getRoots()) {
+            for (TestIdentifier id : testPlan.getDescendants(root)) {
+                if (id.isTest()) {
+                    trackPlanned(id.getUniqueId(), id.getLegacyReportingName());
+                }
+            }
+        }
+        this.markerFile = Path.of(
+            System.getProperty("hohenheim.truncation.dir", "build/live-lane-truncations"),
+            "jvm-" + ProcessHandle.current().pid() + ".txt");
+        if (this.hookArmed.compareAndSet(false, true)) {
+            Runtime.getRuntime().addShutdownHook(
+                new Thread(this::reportTruncation, "live-lane-truncation"));
+        }
+        writeMarker();
+    }
+
+    @Override
+    public void executionStarted(TestIdentifier identifier) {
+        if (identifier.isTest()) {
+            trackStarted(identifier.getUniqueId(), identifier.getLegacyReportingName());
+            writeMarker();
+        }
+    }
+
+    @Override
+    public void executionSkipped(TestIdentifier identifier, String reason) {
+        settle(identifier);
+    }
+
     @Override
     public void executionFinished(TestIdentifier identifier, TestExecutionResult result) {
+        settle(identifier);
         if (result.getStatus() != TestExecutionResult.Status.ABORTED) {
             return;
         }
         record(identifier.getLegacyReportingName(),
             result.getThrowable().map(Throwable::getMessage).orElse(""));
+    }
+
+    /**
+     * A settled identifier accounts for itself AND, when it is a container (a class-level
+     * skip or a failed {@code @BeforeAll}), for every descendant that will now never fire
+     * its own event.
+     */
+    private void settle(TestIdentifier identifier) {
+        trackFinished(identifier.getUniqueId());
+        TestPlan current = this.plan;
+        if (current != null && !identifier.isTest()) {
+            for (TestIdentifier child : current.getDescendants(identifier)) {
+                trackFinished(child.getUniqueId());
+            }
+        }
+        writeMarker();
     }
 
     /**
@@ -61,8 +142,93 @@ public final class LiveLaneReport implements TestExecutionListener {
             .add(testName);
     }
 
+    // -- truncation tracking (the JUnit plumbing above delegates here; the test drives
+    // these directly for the same reason record() is package-private) ------------------
+
+    void trackPlanned(@NonNull String id, @NonNull String name) {
+        this.unfinished.put(id, name);
+    }
+
+    void trackStarted(@NonNull String id, @NonNull String name) {
+        this.unfinished.putIfAbsent(id, name);
+        this.inFlight.add(id);
+    }
+
+    void trackFinished(@NonNull String id) {
+        this.unfinished.remove(id);
+        this.inFlight.remove(id);
+    }
+
+    /**
+     * The truncation text naming every test with no verdict in this JVM, or empty when
+     * everything settled -- a completed run must never print it.
+     */
+    @NonNull String renderTruncation() {
+        if (this.unfinished.isEmpty()) {
+            return "";
+        }
+        StringBuilder report = new StringBuilder();
+        long pid = ProcessHandle.current().pid();
+        report.append("\n=== LIVE LANE TRUNCATION (jvm ").append(pid).append(") ===\n")
+            .append("This JVM was torn down MID-RUN (task timeout or kill). The tests\n")
+            .append("below have NO verdict -- a SKIPPED line for them is a lie, and an\n")
+            .append("in-flight test's finally blocks (live-host cleanup!) never ran.\n");
+        List<String> started = new ArrayList<>();
+        List<String> neverStarted = new ArrayList<>();
+        this.unfinished.forEach((id, name) ->
+            (this.inFlight.contains(id) ? started : neverStarted).add(name));
+        if (!started.isEmpty()) {
+            report.append("  KILLED IN FLIGHT:\n");
+            for (String name : started) {
+                report.append("    - ").append(name).append('\n');
+            }
+        }
+        if (!neverStarted.isEmpty()) {
+            report.append("  never started in this jvm:\n");
+            for (String name : neverStarted) {
+                report.append("    - ").append(name).append('\n');
+            }
+        }
+        report.append("=== END LIVE LANE TRUNCATION ===\n");
+        return report.toString();
+    }
+
+    /** Keep the on-disk marker current so even a SIGKILL leaves the evidence behind. */
+    private void writeMarker() {
+        Path file = this.markerFile;
+        if (file == null) {
+            return;
+        }
+        try {
+            String text = renderTruncation();
+            if (text.isEmpty()) {
+                Files.deleteIfExists(file);
+            } else {
+                Files.createDirectories(file.getParent());
+                Files.writeString(file, text, StandardCharsets.UTF_8);
+            }
+        } catch (IOException ignored) {
+            // the shutdown-hook banner still fires; a marker miss must not fail a test
+        }
+    }
+
+    /** Shutdown-hook half: loud on the console when the JVM dies with tests unaccounted. */
+    private void reportTruncation() {
+        String text = renderTruncation();
+        if (!text.isEmpty()) {
+            System.err.print(text);
+            System.err.flush();
+        }
+    }
+
     @Override
     public void testPlanExecutionFinished(TestPlan testPlan) {
+        // A finished plan settled everything; drop the tracking so the hook stays silent
+        // and the marker disappears (a leftover marker file IS the truncation evidence).
+        this.unfinished.clear();
+        this.inFlight.clear();
+        this.plan = null;
+        writeMarker();
         String report = render();
         if (!report.isEmpty()) {
             System.out.println(report);

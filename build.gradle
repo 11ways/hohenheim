@@ -322,7 +322,15 @@ task browserTest(type: Test) {
     // Gradle's Test default is 512m; the build lane buffers an image tar through heap
     // (bounded by builds.max_artifact_mb), so a realistic artifact needs real headroom.
     maxHeapSize = '2g'
-    timeout = java.time.Duration.ofMinutes(30)
+    // AIDEV-NOTE: a task timeout KILLS workers mid-test and Gradle then reports the
+    // killed test as SKIPPED with no message (observed 2026-08-10: browserTestIsolated
+    // hit 30m, RestoreCapacityLiveTest was killed mid-flight, its finally never ran and
+    // daystrom kept a stale root key). Two defenses: LiveLaneReport keeps a truncation
+    // marker (build/live-lane-truncations/) naming every unsettled test, and the budget
+    // is sized to real runs -- measured full browser-lane invocations complete in ~31m
+    // wall for BOTH buckets (runs 117/118, 2026-08-10) and the killed run's leftover
+    // work measured ~6.5m more, so a healthy worst case is ~37m; 60m is 1.6x that.
+    timeout = java.time.Duration.ofMinutes(60)
 
     systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
     // The live lane's host policy. Unset means "report every skip, fail on none"; a host
@@ -330,6 +338,12 @@ task browserTest(type: Test) {
     // turns a skip for those needs into a FAILURE. See test/live/LiveLane.
     systemProperty 'hohenheim.live.require', System.getProperty('hohenheim.live.require', '')
     systemProperty 'hohenheim.live.pull', System.getProperty('hohenheim.live.pull', 'true')
+    // Where LiveLaneReport keeps its truncation markers; per task so a --continue run of
+    // the sibling task cannot wipe this task's evidence. A leftover file after a run IS
+    // the list of tests that were killed with no verdict.
+    systemProperty 'hohenheim.truncation.dir',
+        "${buildDir}/live-lane-truncations/browserTest"
+    doFirst { delete "${buildDir}/live-lane-truncations/browserTest" }
 
     testLogging {
         showStandardStreams = true
@@ -356,7 +370,8 @@ task browserTestIsolated(type: Test) {
     // See browserTest: the buffered artifact read outgrows Gradle's 512m default.
     maxHeapSize = '2g'
     forkEvery = 1
-    timeout = java.time.Duration.ofMinutes(30)
+    // See browserTest for the derivation; the 2026-08-10 kill happened in THIS task.
+    timeout = java.time.Duration.ofMinutes(60)
 
     systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
     // The live lane's host policy. Unset means "report every skip, fail on none"; a host
@@ -364,6 +379,10 @@ task browserTestIsolated(type: Test) {
     // turns a skip for those needs into a FAILURE. See test/live/LiveLane.
     systemProperty 'hohenheim.live.require', System.getProperty('hohenheim.live.require', '')
     systemProperty 'hohenheim.live.pull', System.getProperty('hohenheim.live.pull', 'true')
+    // See browserTest: per-task truncation markers, wiped only by the task that owns them.
+    systemProperty 'hohenheim.truncation.dir',
+        "${buildDir}/live-lane-truncations/browserTestIsolated"
+    doFirst { delete "${buildDir}/live-lane-truncations/browserTestIsolated" }
 
     testLogging {
         showStandardStreams = true
@@ -371,6 +390,24 @@ task browserTestIsolated(type: Test) {
         events "passed", "skipped", "failed"
     }
 }
+
+// Surfaces LiveLaneReport's truncation markers in the build output. A task timeout kills
+// the worker JVM mid-test; Gradle prints the killed test as SKIPPED and the worker's own
+// shutdown banner never reaches the captured log (its pipe is gone by teardown), so this
+// finalizer -- which runs on task FAILURE too, that being the point -- reads what the
+// worker left on disk and says it where the log is actually read.
+task reportTruncatedBrowserTests {
+    doLast {
+        ['browserTest', 'browserTestIsolated'].each { lane ->
+            def dir = file("${buildDir}/live-lane-truncations/${lane}")
+            if (dir.directory) {
+                dir.eachFile { marker -> System.err.print(marker.text) }
+            }
+        }
+    }
+}
+tasks.named('browserTest') { finalizedBy reportTruncatedBrowserTests }
+tasks.named('browserTestIsolated') { finalizedBy reportTruncatedBrowserTests }
 
 // --- Task Dependencies ---
 afterEvaluate {
