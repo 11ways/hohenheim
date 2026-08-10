@@ -16,16 +16,17 @@ final class RetentionSweep {
     }
 
     /**
-     * Delete rows whose {@code createdAt} is past the retention window.
+     * Delete rows whose {@code agedBy} timestamp is past the retention window. For an
+     * UPSERTED row that column must be the LAST write, never the row's creation time.
      *
      * @throws RuntimeException on failure -- the task system records it as a
      *         FAILED history row; swallowing here made repeated failures invisible
      */
-    static void clean(String taskName, Model model, DateTimeField createdAt, int retentionDays) {
+    static void clean(String taskName, Model model, DateTimeField agedBy, int retentionDays) {
         Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
 
         long deleted = model.find()
-            .where(createdAt.lte(cutoff))
+            .where(agedBy.lte(cutoff))
             .delete();
 
         if (deleted > 0) {

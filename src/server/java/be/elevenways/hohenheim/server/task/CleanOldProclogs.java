@@ -41,9 +41,18 @@ public class CleanOldProclogs extends ScheduledTask {
         clean();
     }
 
-    /** Delete proclog rows older than the retention window. */
+    /**
+     * Delete proclog rows whose last write is past the retention window.
+     *
+     * AIDEV-NOTE: SAVED_AT, not CREATED_AT -- the CleanOldInstanceLogs rule, because this
+     * tier has the same write shape: a proclog row is UPSERTED for the whole life of ONE
+     * process (ManagedProcessSiteHandler.persistProclog re-finds it by id on every flush,
+     * and CREATED_AT is the process START time). Sweeping by created_at deleted the LIVE
+     * row of any process running past the window mid-write; the next flush silently
+     * started a fresh row and the history the window promised was gone.
+     */
     public static void clean() {
         RetentionSweep.clean("CleanOldProclogs", Models.get(ProclogModel.class),
-            ProclogModel.CREATED_AT, RETENTION_DAYS);
+            ProclogModel.SAVED_AT, RETENTION_DAYS);
     }
 }
