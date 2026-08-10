@@ -130,6 +130,7 @@ class ProxySocketDispatchTest {
         domain.set(SiteDomainModel.SITE_ID, siteId);
         domain.set(SiteDomainModel.HOSTNAME, hostname);
         domain.set(SiteDomainModel.MATCH_TYPE, "exact");
+        domain.set(SiteDomainModel.FORCE_SSL, false);
         domainModel.save(domain);
     }
 }

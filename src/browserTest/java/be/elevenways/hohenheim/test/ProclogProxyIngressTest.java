@@ -100,6 +100,7 @@ class ProclogProxyIngressTest extends HohenheimTestBase {
         domain.set(SiteDomainModel.SITE_ID, siteId);
         domain.set(SiteDomainModel.HOSTNAME, PROXY_HOST);
         domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domain.set(SiteDomainModel.FORCE_SSL, false);
         domainModel.save(domain);
         return siteId;
     }

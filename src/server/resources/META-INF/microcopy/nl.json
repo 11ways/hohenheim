@@ -7494,6 +7494,28 @@
     "text": "Er is momenteel geen dev-server geregistreerd voor '{$name}'. Start hem met de dev-tunnel ingeschakeld en herlaad.",
     "scope": "proxy_error"
   },
+  "https_required_title": {
+    "text": "HTTPS vereist",
+    "scope": "proxy_error"
+  },
+  "https_required_message": {
+    "text": "Deze site vereist HTTPS, maar er is momenteel geen certificaat beschikbaar. Probeer het straks opnieuw.",
+    "scope": "proxy_error"
+  },
+  "https_unavailable": [
+    {
+      "text": "HTTPS is niet beschikbaar",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Er kan geen certificaat worden aangeboden, dus sites die SSL afdwingen weigeren gewoon HTTP: {$sites}",
+      "scope": "attention_detail"
+    }
+  ],
+  "access_satisfy_invalid": {
+    "text": "Voldoen-aan moet 'any' of 'all' zijn",
+    "scope": "violations"
+  },
   "instance_required": {
     "text": "Een koppeling vereist een instantie",
     "scope": "violations"

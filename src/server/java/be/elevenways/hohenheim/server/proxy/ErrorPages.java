@@ -62,6 +62,18 @@ public final class ErrorPages {
         exchange.getResponseSender().send(html);
     }
 
+    /** 503 for a force-SSL route while HTTPS termination is down: refuse, never serve cleartext. */
+    static void sendHttpsRequired(HttpServerExchange exchange, String hostname) {
+        LocaleChain locales = localesOf(exchange);
+        String html = render("503", text(locales, "https_required_title"),
+            text(locales, "https_required_message"), hostname);
+
+        exchange.setStatusCode(503);
+        exchange.getResponseHeaders().put(Headers.RETRY_AFTER, "30");
+        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html; charset=UTF-8");
+        exchange.getResponseSender().send(html);
+    }
+
     static void send502(HttpServerExchange exchange, String message) {
         LocaleChain locales = localesOf(exchange);
         String html = render("502", text(locales, "bad_gateway_title"),

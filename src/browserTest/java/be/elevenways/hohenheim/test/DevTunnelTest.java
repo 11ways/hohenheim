@@ -149,6 +149,7 @@ class DevTunnelTest {
         domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
         domain.set(SiteDomainModel.HOSTNAME, "*." + BASE);
         domain.set(SiteDomainModel.MATCH_TYPE, "wildcard");
+        domain.set(SiteDomainModel.FORCE_SSL, false);
         domainModel.save(domain);
     }
 
