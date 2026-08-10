@@ -531,6 +531,13 @@ public final class HohenheimHandlers {
 
     /** Gate + zone resolution shared by every DNS api handler; null = response already written. */
     private static @org.checkerframework.checker.nullness.qual.Nullable Row apiPrimaryZone(Conduit conduit) {
+        // AIDEV-NOTE: this method authenticates the KIND of principal (api key) and the
+        // zone's primacy -- it does NOT scope which zones a key may edit. The only
+        // authorization is the endpoints' requiresPermission("hohenheim.admin.access")
+        // (HohenheimEndpoints API_DNS_*), which is therefore LOAD-BEARING: relax it, or
+        // mint admin-permissioned keys for a narrower purpose, and every such key can
+        // edit EVERY primary zone. API keys carry no per-zone scope today; adding one
+        // means checking it here, not only on the endpoint.
         if (!(conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal)) {
             conduit.forbidden();
             return null;
