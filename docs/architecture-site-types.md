@@ -165,10 +165,19 @@ These live in the common site configuration, NOT in type-specific settings:
 
 ### Request/Response Headers
 Every site supports configurable header rules:
-- Add/remove/rewrite request headers (X-Forwarded-For, X-Real-IP, X-Forwarded-Proto, etc.)
+- Add/remove/rewrite request headers
 - Add/remove response headers (CORS, security headers, CSP, X-Frame-Options)
 
 Stored in the `site_domains` table's `custom_headers` JSONB field and/or a separate `site_headers` table.
+
+CORRECTION (2026-08-10): custom request-header rules are NOT the mechanism for the
+forwarding trust boundary. In `SiteDispatcher.continueAfterAuth` the custom rules run
+FIRST and are then deliberately overridden for the forwarding family: `X-Forwarded-Proto`,
+`X-Forwarded-Host`, `X-Real-IP` and `X-Forwarded-For` are regenerated from hohenheim's own
+`X-Hohenheim-Key`-authenticated decision, and the wider client-asserted family (RFC 7239
+`Forwarded`, the `X-Forwarded-*` aliases, CDN client-IP headers, the IIS URL-rewrite pair)
+is stripped unconditionally. A header rule targeting any of those names is silently
+discarded on the forward path -- author rules for application headers only.
 
 ### Path-Based Routing
 The `site_domains` table already has `path` and `strip_path` fields. The SiteDispatcher must support path matching:
@@ -207,7 +216,14 @@ Per-site basic auth, IP allowlists, and auth-request integration. Orthogonal to 
 - `forward_scheme` (enum: http/https, default: http)
 - `forward_host` (string, required)
 - `forward_port` (integer, default: 80)
-- `forward_socket_path` (string, alternative to host:port -- requires Java 16+ Unix domain socket support; deferred to v2 if Undertow/XNIO support is insufficient)
+- `socket` (string, alternative to host:port) -- SHIPPED (2026-08-10 correction; the earlier
+  "forward_socket_path deferred to v2" note is obsolete). Reached through a loopback
+  TCP-to-AF_UNIX bridge (`UnixSocketBridge`) because Undertow 2.3/xnio-nio has no AF_UNIX
+  client. Supports `{name}`/`{0}` placeholders substituted from regex-host capture groups.
+  INPUT-TRUST OBLIGATION: those capture values originate in the untrusted Host header, so a
+  substituted value is validated (no path separator, no `..`, no control char) before it
+  becomes part of a filesystem path -- an operator regex with a permissive capture must not be
+  able to steer the dial to an attacker-chosen socket path.
 - `websocket_upgrade` (boolean, default: true)
 - `upstream_protocol` (enum: http1/h2, default: http1) -- h2 dials prior-knowledge h2c on
   http upstreams and ALPN h2 on https upstreams; required for native gRPC backends.

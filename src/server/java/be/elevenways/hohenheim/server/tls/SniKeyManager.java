@@ -14,9 +14,15 @@ import java.util.function.Predicate;
  * and to a wrapped X509ExtendedKeyManager for actual key/cert retrieval.
  *
  * Includes a domain-level resolution cache with TTL and negative-result backoff
- * to avoid repeated lookups on the TLS handshake hot path. Also enforces IP
- * reputation at the handshake stage: a banned peer gets no certificate, which
- * aborts the handshake before any content is served.
+ * to avoid repeated lookups on the TLS handshake hot path.
+ *
+ * AIDEV-NOTE: the handshake-stage ban check below is defense-in-depth, NOT the live enforcer.
+ * In the shipped topology HTTPS terminates on 127.0.0.1 behind {@code PublicTcpListener}, so
+ * {@code engine.getPeerHost()} here is always the loopback hop and the check never fires on a
+ * real client. The ban is actually enforced at {@code PublicTcpListener.handle}, on the real
+ * (or PROXY-v2-declared) source, before any TLS byte reaches this listener. The check is kept
+ * for a hypothetical direct-bind path; do not delete it as "unused" without confirming that
+ * path stays impossible, and do not describe it as THE enforcer.
  */
 public class SniKeyManager extends X509ExtendedKeyManager {
 
@@ -44,8 +50,8 @@ public class SniKeyManager extends X509ExtendedKeyManager {
     public String chooseEngineServerAlias(String keyType, Principal[] issuers, SSLEngine engine) {
         if (engine == null) return fallback(keyType, issuers);
 
-        // IP reputation at the handshake stage: refuse a certificate to a banned peer, aborting
-        // the handshake. The engine carries the peer address Undertow set when accepting it.
+        // Defense-in-depth only (see class docblock): in the shipped loopback topology peerIp is
+        // the internal hop, so the live ban enforcement is at PublicTcpListener.handle instead.
         String peerIp = engine.getPeerHost();
         if (peerIp != null && bannedIpCheck.test(peerIp)) {
             return null;

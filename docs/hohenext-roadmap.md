@@ -15,8 +15,15 @@ once they have a real consumer here and have stabilized — not speculatively.
 The current port already closed most of the original gap audit (regex host
 matching, scheduled maintenance tasks, system-user discovery + per-site uid
 execution). Done since: custom error pages (Hawkeye `ErrorPages`), IPv6
-dedicated listener (`ProxyServer.addIpv6Listener`), and TLS-handshake-stage IP
-reputation rejection (`SniKeyManager` refuses a cert to a banned peer).
+dedicated listener (`ProxyServer.addIpv6Listener`), and connection-stage IP
+reputation rejection.
+
+CORRECTION (2026-08-10): the ban is enforced at `PublicTcpListener.handle`, on the real
+(or PROXY-v2-declared) source, BEFORE any TLS bytes reach the internal HTTPS listener.
+`SniKeyManager`'s own handshake-stage check reads `engine.getPeerHost()`, which in the
+shipped topology is always the loopback hop (HTTPS terminates on `127.0.0.1` behind
+`PublicTcpListener`), so it is defense-in-depth for a hypothetical direct-bind topology,
+not the live enforcer.
 
 Remaining parity items, roughly in value order:
 
