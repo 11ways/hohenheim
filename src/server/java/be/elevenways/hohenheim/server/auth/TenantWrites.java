@@ -717,6 +717,29 @@ public final class TenantWrites {
                 CmsSupport.violationText("tenant_zone_frozen"));
         }
 
+        // The dyndns columns are grant-gated on EVERY lane, hostname authority included:
+        // the minted token is a bearer credential that survives grant revocation and
+        // hostname release (DYNDNS is declared non-delegable for exactly that reason), so
+        // a tenant that merely serves the name may never arm one. Until this check, only
+        // the /manage form's omission of the columns stood between hostname authority and
+        // a self-minted permanent credential -- the UX-affordance-as-gate shape the class
+        // docblock forbids. The capability only exists on a stored record, which also
+        // refuses arming a row on CREATE (there is nothing to hold dyndns on yet).
+        boolean changesDynamic = changesColumn(row, stored, DnsRecordModel.DYNAMIC);
+        boolean changesToken = changesColumn(row, stored, DnsRecordModel.DYNDNS_TOKEN);
+        if (changesDynamic || changesToken) {
+            AccessContext ctx = acting();
+            Object recordId = stored != null ? stored.get(DnsRecordModel.ID) : null;
+            boolean holdsDyndns = ctx != null && !ctx.isAnonymous() && recordId != null
+                && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.DYNDNS);
+            if (!holdsDyndns) {
+                String field = changesDynamic ? DnsRecordModel.DYNAMIC.getName()
+                    : DnsRecordModel.DYNDNS_TOKEN.getName();
+                // Never echo a credential into the violation value.
+                throw refusal(field, changesDynamic ? row.get(field) : null);
+            }
+        }
+
         // managed_by drives the zone-file import's replace scope (it replaces only rows where
         // it is NULL), so writing it is writing that import's blast radius.
         Object storedManagedBy = stored != null ? stored.get(DnsRecordModel.MANAGED_BY) : null;
@@ -847,6 +870,17 @@ public final class TenantWrites {
             queryContext.getCriteria(), List.of(), null, null, List.of(), null,
             queryContext.getRelatedFilters(), queryContext.getLocaleChain(),
             queryContext.isAcrossLocales(), true, true, queryContext.getHints()));
+    }
+
+    /** Whether the write stages a value for the column that differs from its baseline. */
+    private static boolean changesColumn(@NonNull Row row, @Nullable Row stored,
+                                         @NonNull Field<?, ?> field) {
+        String name = field.getName();
+        if (!row.has(name)) {
+            return false;
+        }
+        Object baseline = stored != null ? stored.get(name) : field.getDefaultValue();
+        return !Objects.equals(row.get(name), baseline);
     }
 
     /** The value the write will END UP with, reading the already-loaded stored row. */
