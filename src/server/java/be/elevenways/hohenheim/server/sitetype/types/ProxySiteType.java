@@ -240,7 +240,12 @@ public class ProxySiteType implements SiteTypeHandler {
                 if (existing != null) {
                     return existing;
                 }
-                UnixSocketBridgeConnection created = new UnixSocketBridgeConnection(socketPath, ignoreCertificates);
+                // verifyReachable=true: this cache is keyed by a resolved (placeholder-
+                // substituted, Host-derived) socket path, so an unreachable path must FAIL
+                // here rather than be cached as a permanent no-op bridge (a leaked loopback
+                // listener + accept thread per distinct path). Each later request retries fresh.
+                UnixSocketBridgeConnection created =
+                    new UnixSocketBridgeConnection(socketPath, ignoreCertificates, true);
                 bridges.put(socketPath, created);
                 return created;
             }

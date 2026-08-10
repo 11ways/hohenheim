@@ -17,7 +17,17 @@ public final class UnixSocketBridgeConnection implements UpstreamConnection {
     private final boolean ignoreCertificates;
 
     public UnixSocketBridgeConnection(String socketPath, boolean ignoreCertificates) throws IOException {
-        this.bridge = new UnixSocketBridge(socketPath);
+        this(socketPath, ignoreCertificates, false);
+    }
+
+    /**
+     * @param verifyReachable prove the upstream answers before the bridge exists (see
+     *        {@link UnixSocketBridge#UnixSocketBridge(String, boolean)}); callers that cache
+     *        the connection keyed by an externally-influenced path pass true.
+     */
+    public UnixSocketBridgeConnection(String socketPath, boolean ignoreCertificates,
+                                      boolean verifyReachable) throws IOException {
+        this.bridge = new UnixSocketBridge(socketPath, verifyReachable);
         this.connectUri = URI.create("http://127.0.0.1:" + bridge.getPort() + "/");
         this.ignoreCertificates = ignoreCertificates;
     }

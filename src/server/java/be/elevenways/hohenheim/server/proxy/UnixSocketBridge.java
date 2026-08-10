@@ -38,10 +38,33 @@ public final class UnixSocketBridge {
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     public UnixSocketBridge(String socketPath) throws IOException {
+        this(socketPath, false);
+    }
+
+    /**
+     * @param verifyReachable when true, prove the AF_UNIX upstream ANSWERS before the bridge
+     *        exists, closing the loopback listener and throwing when it does not. Callers that
+     *        CACHE a bridge keyed by an externally-influenced path ({@code ProxySiteType
+     *        .bridgeFor}) pass true so an unreachable path is never cached as a permanent
+     *        listener + accept thread; the process-lifecycle caller passes false because its
+     *        failure path releases but does not kill the child, and a still-binding child must
+     *        not fail the spawn.
+     */
+    public UnixSocketBridge(String socketPath, boolean verifyReachable) throws IOException {
         this.upstream = UnixDomainSocketAddress.of(socketPath);
         this.server = ServerSocketChannel.open();
         this.server.bind(new InetSocketAddress("127.0.0.1", 0));
         this.port = ((InetSocketAddress) this.server.getLocalAddress()).getPort();
+        if (verifyReachable) {
+            try {
+                // connectUpstream already applies the spawn-race retries a request uses, so a
+                // child still binding is tolerated; a genuinely absent path throws here.
+                closeQuietly(connectUpstream());
+            } catch (IOException unreachable) {
+                closeQuietly(this.server);
+                throw unreachable;
+            }
+        }
         Thread.ofVirtual().name("unix-bridge-accept-" + port).start(this::acceptLoop);
     }
 
