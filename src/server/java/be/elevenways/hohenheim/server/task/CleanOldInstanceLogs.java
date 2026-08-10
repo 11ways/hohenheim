@@ -46,8 +46,8 @@ public class CleanOldInstanceLogs extends ScheduledTask {
     /**
      * Delete instance console log rows whose last write is past the retention window.
      *
-     * AIDEV-NOTE: SAVED_AT, not CREATED_AT, and this is the one place the shared sweeper's
-     * usual column is wrong. An instance log row is UPSERTED for the whole life of ONE
+     * AIDEV-NOTE: SAVED_AT, not CREATED_AT -- the rule for every UPSERTED log tier
+     * (CleanOldProclogs sweeps the same way). An instance log row is UPSERTED for the whole life of ONE
      * console episode (InstanceConsoleLogs.sinkFor), so on a workload that has been
      * streaming for a month CREATED_AT is the age of the EPISODE, never the age of its
      * text: sweeping by it deleted a row still being written to, and the sink's next flush
