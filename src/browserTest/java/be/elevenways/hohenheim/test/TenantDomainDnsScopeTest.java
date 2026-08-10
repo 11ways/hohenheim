@@ -82,6 +82,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         ownDomain.set(SiteDomainModel.SITE_ID, ownSiteId);
         ownDomain.set(SiteDomainModel.HOSTNAME, "owned.tenantscope.test");
         ownDomain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        ownDomain.set(SiteDomainModel.FORCE_SSL, false);
         domainModel.save(ownDomain);
         ownDomainId = ownDomain.get(SiteDomainModel.ID);
 
@@ -89,6 +90,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         foreignDomain.set(SiteDomainModel.SITE_ID, foreignSiteId);
         foreignDomain.set(SiteDomainModel.HOSTNAME, "foreign.tenantscope.test");
         foreignDomain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        foreignDomain.set(SiteDomainModel.FORCE_SSL, false);
         domainModel.save(foreignDomain);
         foreignDomainId = foreignDomain.get(SiteDomainModel.ID);
 

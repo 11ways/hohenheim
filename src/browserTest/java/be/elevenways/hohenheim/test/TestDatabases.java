@@ -53,6 +53,11 @@ public final class TestDatabases {
         HohenheimDatabase.init();
         remintControllerIdentity();
 
+        // proxy.force_https defaults ON and now fails CLOSED (503) whenever no certificate
+        // is loaded -- which is every cleartext test proxy. The test baseline turns it off;
+        // the force-SSL availability tests re-enable it explicitly.
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);
+
         if (template == null) {
             captureTemplate(db);
         }

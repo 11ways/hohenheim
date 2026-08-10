@@ -139,12 +139,37 @@ public class ProxyServer {
 
         startHttpListener();
         startHttpsListener();
+        warnIfForceSslRefusing();
 
         boolean acmeEnabled = Boolean.TRUE.equals(
             HohenheimSettings.VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED));
         if (acmeEnabled) {
             acmeService.start();
         }
+    }
+
+    /** Whether force-SSL routes can currently be answered with a redirect instead of a 503. */
+    public boolean isHttpsTerminationAvailable() {
+        return httpsTerminationAddress != null;
+    }
+
+    /**
+     * Names every site that now REFUSES plain HTTP because HTTPS termination is down.
+     * The per-request 503 is the enforcement; this is the operator-facing statement of it
+     * (the dashboard twin lives in AttentionCollector), because a security control changing
+     * behaviour without a log line naming the affected sites is itself the defect.
+     */
+    private void warnIfForceSslRefusing() {
+        if (httpsTerminationAddress != null || httpState != State.RUNNING) return;
+        boolean globalForce = Boolean.TRUE.equals(
+            HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
+        List<String> siteNames = dispatcher.forceSslSiteNames();
+        boolean anyRoutes = dispatcher.getExactRouteCount() + dispatcher.getWildcardRouteCount()
+            + dispatcher.getRegexRouteCount() > 0;
+        if (siteNames.isEmpty() && !(globalForce && anyRoutes)) return;
+        Blast.log("PROXY: HTTPS is UNAVAILABLE; force-SSL sites refuse plain HTTP (503):",
+            siteNames.isEmpty() ? "(none)" : String.join(", ", siteNames),
+            globalForce ? "-- proxy.force_https is on, so EVERY routed site refuses" : "");
     }
 
     private void startHttpListener() {
@@ -157,6 +182,23 @@ public class ProxyServer {
         // public listener stays hop-free.
         boolean proxyProtocolIngress = !socketMode && !trustedProxyProtocolSources().isEmpty();
         boolean internalOnly = socketMode || proxyProtocolIngress;
+
+        // AIDEV-NOTE: socket mode REFUSES to start without trusted proxy keys. An AF_UNIX
+        // peer has no IP address and the bridge does no identity registration, so every
+        // request reaches the dispatcher as 127.0.0.1: bans are inert, denied_ips never
+        // matches (fail-open), allowed_ips refuses everyone, listen_on is unreachable and
+        // threat scoring blames loopback. The ONLY source of client identity in this
+        // topology is the fronting proxy's X-Hohenheim-Key + X-Real-IP headers, so that
+        // contract must be configured before this front may serve.
+        if (socketMode && !hasTrustedProxyKeys()) {
+            httpState = State.FAILED;
+            httpFailureReason = "proxy.http_socket_path requires proxy.trusted_proxy_keys: "
+                + "a Unix-socket client has no IP address, so without an authenticated "
+                + "fronting proxy every request would count as 127.0.0.1 and IP-based "
+                + "controls (bans, access lists, listen_on) would silently stop working";
+            Blast.log("PROXY HTTP NOT STARTED:", httpFailureReason);
+            return;
+        }
 
         try {
             Undertow.Builder builder = Undertow.builder()
@@ -237,6 +279,17 @@ public class ProxyServer {
             dispatcher::isBanned, maxConnections, maxPending, failureHandler);
         ipv6.start();
         target.add(ipv6);
+    }
+
+    /** Whether at least one non-blank X-Hohenheim-Key is configured. */
+    private static boolean hasTrustedProxyKeys() {
+        List<String> keys = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS);
+        if (keys == null) return false;
+        for (String key : keys) {
+            if (key != null && !key.isBlank()) return true;
+        }
+        return false;
     }
 
     private static List<String> trustedProxyProtocolSources() {
@@ -357,6 +410,14 @@ public class ProxyServer {
      * Reload routes and certificates. Restarts failed listeners.
      */
     public synchronized void reload() {
+        try {
+            reloadListeners();
+        } finally {
+            warnIfForceSslRefusing();
+        }
+    }
+
+    private void reloadListeners() {
         try {
             certificateStore.loadFromDatabase();
             dispatcher.reloadRoutes();

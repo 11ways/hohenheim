@@ -87,6 +87,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         d.set(SiteDomainModel.SITE_ID, s.get(SiteModel.ID));
         d.set(SiteDomainModel.HOSTNAME, hostname);
         d.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        d.set(SiteDomainModel.FORCE_SSL, false);
         domainModel.save(d);
     }
 
@@ -335,6 +336,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         domain.set(SiteDomainModel.SITE_ID, siteId);
         domain.set(SiteDomainModel.HOSTNAME, GATED_HOST);
         domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domain.set(SiteDomainModel.FORCE_SSL, false);
         domainModel.save(domain);
 
         // 2. The OPERATOR then puts the gate on: basic auth plus an IP allowlist.

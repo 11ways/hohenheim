@@ -7494,6 +7494,28 @@
     "text": "No dev server is currently registered for '{$name}'. Start it with the dev tunnel enabled and reload.",
     "scope": "proxy_error"
   },
+  "https_required_title": {
+    "text": "HTTPS required",
+    "scope": "proxy_error"
+  },
+  "https_required_message": {
+    "text": "This site requires HTTPS, but no certificate is available right now. Try again shortly.",
+    "scope": "proxy_error"
+  },
+  "https_unavailable": [
+    {
+      "text": "HTTPS is unavailable",
+      "scope": "attention_title"
+    },
+    {
+      "text": "No certificate can be served, so sites that force SSL refuse plain HTTP: {$sites}",
+      "scope": "attention_detail"
+    }
+  ],
+  "access_satisfy_invalid": {
+    "text": "Satisfy must be 'any' or 'all'",
+    "scope": "violations"
+  },
   "instance_required": {
     "text": "An attachment needs an instance",
     "scope": "violations"

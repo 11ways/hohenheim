@@ -69,6 +69,7 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -76,6 +77,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -285,6 +287,7 @@ public class SiteDispatcher implements HttpHandler {
         final @Nullable String authProviderName;
 
         // Access list enforcement
+        final boolean hasAccessList;
         final String[] allowedIps;
         final String[] deniedIps;
         final String basicAuthUser;
@@ -313,8 +316,16 @@ public class SiteDispatcher implements HttpHandler {
             this.listenOnAddresses = ListenerAddressMatcher.parse(
                 domain != null ? domain.get(SiteDomainModel.LISTEN_ON) : null);
 
+            this.hasAccessList = accessList != null;
             if (accessList != null) {
-                this.accessListSatisfy = accessList.get(AccessListModel.SATISFY);
+                // AIDEV-NOTE: a NULL/blank satisfy column must never disable the list.
+                // hasAccessList() used to be "satisfy != null", so one nullable column
+                // switched off ALL of the control (allowed/denied IPs AND basic auth).
+                // The ROW is the operator's statement that this site is guarded; an
+                // absent satisfy just defaults to the model/DB default ("any").
+                String satisfy = accessList.get(AccessListModel.SATISFY);
+                this.accessListSatisfy = satisfy != null && !satisfy.isBlank()
+                    ? satisfy : AccessListModel.SATISFY_ANY;
                 this.basicAuthUser = accessList.get(AccessListModel.BASIC_AUTH_USER);
                 this.basicAuthPass = accessList.get(AccessListModel.BASIC_AUTH_PASS);
                 String allowed = accessList.get(AccessListModel.ALLOWED_IPS);
@@ -331,7 +342,7 @@ public class SiteDispatcher implements HttpHandler {
         }
 
         boolean hasAccessList() {
-            return accessListSatisfy != null;
+            return hasAccessList;
         }
 
         /**
@@ -562,11 +573,11 @@ public class SiteDispatcher implements HttpHandler {
                 // who WINS a contested route, not whether two rows contest it, so an
                 // exact and a wildcard row spelling the same literal hostname are ONE
                 // route (a kind-prefixed key once let an unclaimed exact row silently
-                // take such a host from the wildcard row that held the claim). keyOf
-                // uses canonicalHostname, NOT a blanket lowercase: regex sources are
-                // case-sensitive patterns, so "^App\." and "^app\." are two distinct
-                // routes -- lowercasing the claim key dropped one of them here while
-                // both matched at request time.
+                // take such a host from the wildcard row that held the claim). Regex
+                // matching is case-INSENSITIVE (HostnameRegex), so keyOf folds a regex
+                // source to lowercase: "^App\." and "^app\." match the same hosts and
+                // are ONE claim, first-wins here and refused by the unique index at
+                // write time.
                 String claimKey = RouteClaims.keyOf(domain);
                 String owner = claimedRoutes.putIfAbsent(claimKey, siteName);
                 if (owner != null && !owner.equals(siteName)) {
@@ -618,6 +629,16 @@ public class SiteDispatcher implements HttpHandler {
         for (List<RouteEntry> bucket : newExact.values()) {
             bucket.sort((a, b) -> Integer.compare(b.pathLength(), a.pathLength()));
         }
+
+        // Most-specific glob first (the SAME measure the TLS/SNI table sorts by): selection
+        // keeps the FIRST entry on a path-length tie, so an unsorted list -- built in
+        // site-name order -- let a broader pattern (*.com) shadow a narrower one
+        // (*.example.com) and made renaming a site change production routing. Pattern-text
+        // tie-break keeps equal-specificity ordering deterministic.
+        newWildcard.sort(Comparator
+            .comparingInt((WildcardRoute route) ->
+                WildcardHostname.literalSpecificity(route.entry().hostPattern)).reversed()
+            .thenComparing(route -> route.pattern().pattern()));
 
         Map<String, List<RouteEntry>> frozenExact = new HashMap<>();
         for (Map.Entry<String, List<RouteEntry>> e : newExact.entrySet()) {
@@ -779,9 +800,23 @@ public class SiteDispatcher implements HttpHandler {
             return;
         }
 
-        // --- Force SSL redirect ---
-        if (httpsAvailable && entry.forceSsl && !ProxyScheme.isEffectivelyHttps(exchange)) {
-            redirectToHttps(exchange, hostname);
+        // --- Force SSL: redirect while HTTPS termination is up, REFUSE while it is not. ---
+        // AIDEV-NOTE: force_ssl is a confidentiality control and fails CLOSED. This used to be
+        // gated on httpsAvailable, so the moment the certificate store emptied (last cert
+        // deleted, keystore load failure, passthrough-only reload) every force-SSL site
+        // silently served cleartext with the checkbox still reading enabled. The ACME HTTP-01
+        // path is answered BEFORE this gate, so a Let's Encrypt bootstrap or renewal still
+        // completes while the site refuses -- the refusal self-heals. The global force_https
+        // setting rides the same gate for MATCHED routes only: an unmatched hostname has no
+        // content to protect and keeps its 404/fallback.
+        boolean forceSsl = entry.forceSsl || Boolean.TRUE.equals(
+            HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
+        if (forceSsl && !ProxyScheme.isEffectivelyHttps(exchange)) {
+            if (httpsAvailable) {
+                redirectToHttps(exchange, hostname);
+            } else {
+                ErrorPages.sendHttpsRequired(exchange, hostname);
+            }
             return;
         }
 
@@ -1090,14 +1125,24 @@ public class SiteDispatcher implements HttpHandler {
      * Hostnames that only ever appear in brute-force probes never match a
      * regex route (faithful to the Node original's guards): git/gitlab
      * subdomains, doubled/garbled www levels, and "notexist" scanners.
+     * Label-anchored on purpose: plain substring checks tripped the git guard
+     * for names like {@code digit.example.com}.
      */
     public static boolean isSuspiciousRegexHostname(String hostname) {
-        return hostname.contains("git.")
-            || hostname.contains("gitlab.")
+        return hasLabel(hostname, "git")
+            || hasLabel(hostname, "gitlab")
             || hostname.contains("www.www.")
             || hostname.contains("notexist")
-            || hostname.contains(".www")
+            || hasLabel(hostname, "www") && !hostname.startsWith("www.")
             || hostname.contains("wwww");
+    }
+
+    /** Whether the hostname contains this exact dot-separated label. */
+    private static boolean hasLabel(String hostname, String label) {
+        return hostname.equals(label)
+            || hostname.startsWith(label + ".")
+            || hostname.endsWith("." + label)
+            || hostname.contains("." + label + ".");
     }
 
     /**
@@ -1538,6 +1583,11 @@ public class SiteDispatcher implements HttpHandler {
         return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 
+    /**
+     * Pre-resolution global redirect, kept gated on availability on purpose: for MATCHED
+     * routes the entry-level gate above fails closed when HTTPS is down, and an UNMATCHED
+     * hostname has no content to protect, so it keeps its 404/fallback instead of a 503.
+     */
     private boolean shouldForceHttpsGlobally(HttpServerExchange exchange) {
         return httpsAvailable
             && !ProxyScheme.isEffectivelyHttps(exchange)
@@ -1546,6 +1596,31 @@ public class SiteDispatcher implements HttpHandler {
 
     public void setHttpsAvailable(boolean httpsAvailable) {
         this.httpsAvailable = httpsAvailable;
+    }
+
+    public boolean isHttpsAvailable() {
+        return httpsAvailable;
+    }
+
+    /**
+     * Distinct site names holding at least one force-SSL route, in name order -- the sites
+     * that REFUSE plain HTTP while HTTPS termination is unavailable.
+     */
+    public List<String> forceSslSiteNames() {
+        RouteTable rt = this.routes;
+        Set<String> names = new TreeSet<>();
+        for (List<RouteEntry> bucket : rt.exactRoutes.values()) {
+            for (RouteEntry entry : bucket) {
+                if (entry.forceSsl) names.add(entry.siteName);
+            }
+        }
+        for (WildcardRoute route : rt.wildcardRoutes) {
+            if (route.entry().forceSsl) names.add(route.entry().siteName);
+        }
+        for (RegexRoute route : rt.regexRoutes) {
+            if (route.entry().forceSsl) names.add(route.entry().siteName);
+        }
+        return List.copyOf(names);
     }
 
     /** The proxy-auth session store, shared with every per-site auth gate. */

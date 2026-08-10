@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.WorkloadIdentity;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
+import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -70,6 +71,7 @@ public final class AttentionCollector {
         List<AttentionItem> items = new ArrayList<>();
         if (HohenheimRoles.enabled(Role.PROXY)) {
             errorCertificates(items);
+            httpsUnavailableWithForceSsl(items);
             unhealthySites(items);
             failedDeployments(items);
         }
@@ -414,6 +416,34 @@ public final class AttentionCollector {
                     "/admin/dns-zones/" + zone.getZoneId() + "/page/records"));
             }
         }
+    }
+
+    /**
+     * HTTPS termination is down while force-SSL routes exist: those sites answer plain
+     * HTTP with a 503 (the fail-closed force_ssl gate in SiteDispatcher), so the operator
+     * must SEE the inert control instead of a checkbox that silently stopped mattering.
+     * Public so a test can prove the projection directly, like the instance collectors.
+     */
+    public static void httpsUnavailableWithForceSsl(List<AttentionItem> items) {
+        var proxy = ServerMain.getProxyServer();
+        if (proxy == null || proxy.isHttpsTerminationAvailable()
+                || proxy.getHttpState() != ProxyServer.State.RUNNING) {
+            return;
+        }
+        List<String> sites = proxy.getDispatcher().forceSslSiteNames();
+        boolean globalForce = Boolean.TRUE.equals(
+            HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
+        boolean anyRoutes = proxy.getDispatcher().getExactRouteCount()
+            + proxy.getDispatcher().getWildcardRouteCount()
+            + proxy.getDispatcher().getRegexRouteCount() > 0;
+        if (sites.isEmpty() && !(globalForce && anyRoutes)) {
+            return;
+        }
+        items.add(item("error", "certificate",
+            copy("https_unavailable", "attention_title"),
+            copy("https_unavailable", "attention_detail",
+                "sites", sites.isEmpty() ? "-" : String.join(", ", sites)),
+            "/admin/certificates"));
     }
 
     private static void errorCertificates(List<AttentionItem> items) {
