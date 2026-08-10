@@ -209,7 +209,7 @@ class ProcessTerminalHandlerTest extends HohenheimTestBase {
             Session session = Zenit.getSessionStore().create();
             session.set(AuthKeys.USER_ID, (long) this.userId);
             Zenit.getSessionStore().save(session);
-            this.sessionToken = session.id();
+            this.sessionToken = session.token().secret();
 
             WS_SITE_ID.set(this.siteId);
             WS_PROCESS.set(this.managed);

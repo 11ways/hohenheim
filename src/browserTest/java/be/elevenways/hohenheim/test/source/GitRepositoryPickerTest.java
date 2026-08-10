@@ -108,7 +108,7 @@ class GitRepositoryPickerTest extends HohenheimTestBase {
         session.set(AuthKeys.USER_ID, ((Integer) user.get(UserModel.ID)).longValue());
         session.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
         Zenit.getSessionStore().save(session);
-        return session.id();
+        return session.token().secret();
     }
 
     private HttpResponse<String> get(String path, String session) throws Exception {

@@ -91,7 +91,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
         limitedCsrf = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, limitedCsrf);
         Zenit.getSessionStore().save(session);
-        limitedSession = session.id();
+        limitedSession = session.token().secret();
     }
 
     private HttpResponse<String> limitedGet(String path) throws Exception {

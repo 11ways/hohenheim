@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.proxy.auth;
 import be.elevenways.hohenheim.server.proxy.ProxyScheme;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.session.SessionStore;
+import be.elevenways.zenit.common.session.SessionToken;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.Cookie;
 import io.undertow.server.handlers.CookieImpl;
@@ -25,8 +26,20 @@ public final class ProxySessionSupport {
         return cookieValue(exchange, ProxyAuthKeys.PERSISTENT_COOKIE);
     }
 
-    public static void writeSessionCookie(HttpServerExchange exchange, String sessionId) {
-        exchange.setResponseCookie(baseCookie(exchange, ProxyAuthKeys.SESSION_COOKIE, sessionId));
+    /**
+     * AIDEV-NOTE: takes the SESSION, never a String. The cookie carries Session.token() (the
+     * secret); Session.id() is the storage identity and authenticates nobody -- writing it here
+     * used to compile, send a cookie, and log the visitor out again on the very next request.
+     *
+     * @throws IllegalStateException when the session carries no token
+     */
+    public static void writeSessionCookie(HttpServerExchange exchange, Session session) {
+        SessionToken token = session.token();
+        if (token == null) {
+            throw new IllegalStateException("Cannot write a proxy session cookie for session "
+                + session.id() + ": this context never held its secret");
+        }
+        exchange.setResponseCookie(baseCookie(exchange, ProxyAuthKeys.SESSION_COOKIE, token.secret()));
     }
 
     public static void clearSessionCookie(HttpServerExchange exchange) {
@@ -54,12 +67,13 @@ public final class ProxySessionSupport {
      */
     public static @Nullable Session authenticatedSession(HttpServerExchange exchange,
                                                           SessionStore store, int siteId) {
-        String sessionId = readSessionCookie(exchange);
-        if (sessionId == null) {
+        String presented = readSessionCookie(exchange);
+        if (presented == null || presented.isEmpty()) {
             return null;
         }
 
-        Session session = store.get(sessionId);
+        // The wire boundary: the proxy cookie is the presented secret, never a stored id.
+        Session session = store.get(SessionToken.of(presented));
         if (session == null) {
             return null;
         }

@@ -63,7 +63,7 @@ class AuthFlowTest extends HohenheimTestBase {
         throwaway.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
         Zenit.getSessionStore().save(throwaway);
         context.addCookies(java.util.List.of(new com.microsoft.playwright.options.Cookie(
-            AuthCookieSupport.sessionCookieName(), throwaway.id())
+            AuthCookieSupport.sessionCookieName(), throwaway.token().secret())
             .setDomain("localhost").setPath("/")));
 
         // Navigate RAW, never through navigateToApp: the base helper re-injects the

@@ -83,7 +83,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         csrfA = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, csrfA);
         Zenit.getSessionStore().save(session);
-        sessionA = session.id();
+        sessionA = session.token().secret();
 
         instanceAId = instance(PREFIX + "alpha");
         instanceBId = instance(PREFIX + "bravo");
@@ -608,7 +608,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         HttpResponse<String> authRefused = authClient.send(HttpRequest.newBuilder()
             .uri(URI.create(baseUrl() + "/admin/instance-templates-import"))
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + authSession.id())
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + authSession.token().secret())
             .header("X-Csrf-Token", authCsrf)
             .POST(HttpRequest.BodyPublishers.ofString("catalog_app=gotify"))
             .build(), HttpResponse.BodyHandlers.ofString());

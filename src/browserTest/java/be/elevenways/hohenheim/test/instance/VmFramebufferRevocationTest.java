@@ -147,7 +147,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
         Session session = Zenit.getSessionStore().create();
         session.set(AuthKeys.USER_ID, (long) userId);
         Zenit.getSessionStore().save(session);
-        return session.id();
+        return session.token().secret();
     }
 
     private static void cleanup(int userId, int instanceId) {

@@ -427,7 +427,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         Session session = Zenit.getSessionStore().create();
         session.set(AuthKeys.USER_ID, (long) userId);
         Zenit.getSessionStore().save(session);
-        return session.id();
+        return session.token().secret();
     }
 
     /** Bounded poll: never assert a fresh workload's state with zero retry. */

@@ -182,7 +182,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             //    disabled and the hostname keeps its single owner (B).
             HttpResponse<String> manageRestore = post(
                 "/manage/sites/" + aId + "/revision/" + enabledRevA + "/restore",
-                "", operatorSession.id(), operatorCsrf);
+                "", operatorSession.token().secret(), operatorCsrf);
             // 404, not a redirect: ManageSiteResource.subpages() deliberately omits the
             // revision history, and the revision ROUTES are now bound to that
             // declaration (they used to consult the model's behaviour alone and served
@@ -373,7 +373,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             // 4. THE ATTACK: an ordinary manage grant replays the pre-gate revision.
             HttpResponse<String> attack = post(
                 "/manage/sites/" + siteId + "/revision/" + ungatedRevision + "/restore",
-                "", tenantSession.id(), tenantCsrf);
+                "", tenantSession.token().secret(), tenantCsrf);
 
             // 5. The SERVED effect first, because that is what the attack is FOR: the
             //    hostname must still be challenged. A refusal that left the site

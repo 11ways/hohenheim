@@ -154,7 +154,7 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         csrfToken = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, csrfToken);   // so direct-POST tests can send X-Csrf-Token
         Zenit.getSessionStore().save(session);
-        return session.id();
+        return session.token().secret();
     }
 
     @Override

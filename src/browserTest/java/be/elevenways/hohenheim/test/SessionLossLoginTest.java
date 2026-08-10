@@ -40,7 +40,7 @@ class SessionLossLoginTest extends HohenheimTestBase {
         Zenit.getSessionStore().save(session);
 
         page.context().addCookies(List.of(
-            new Cookie(AuthCookieSupport.sessionCookieName(), session.id())
+            new Cookie(AuthCookieSupport.sessionCookieName(), session.token().secret())
                 .setDomain("localhost")
                 .setPath("/")));
         page.navigate("http://localhost:" + getServerPort() + "/admin/dashboard");

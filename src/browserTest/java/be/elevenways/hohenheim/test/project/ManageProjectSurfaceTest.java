@@ -278,7 +278,7 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
         session.set(CsrfTokens.TOKEN, csrf);
         Zenit.getSessionStore().save(session);
         csrfSink.accept(csrf);
-        return session.id();
+        return session.token().secret();
     }
 
     private static int user(String email, String name) {

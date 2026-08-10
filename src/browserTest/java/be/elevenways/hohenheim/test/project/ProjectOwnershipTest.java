@@ -89,7 +89,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         csrfA = ZenitAuth.randomToken();
         session.set(CsrfTokens.TOKEN, csrfA);
         Zenit.getSessionStore().save(session);
-        sessionA = session.id();
+        sessionA = session.token().secret();
 
         projectOneId = project(PREFIX + "one");
         projectTwoId = project(PREFIX + "two");
