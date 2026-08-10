@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.server.sitetype.UnixSocketBridgeConnection;
+import be.elevenways.hohenheim.server.proxy.UnixSocketBridge;
 import be.elevenways.hohenheim.server.proxy.UnixSocketListenerBridge;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -20,12 +21,38 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies the loopback TCP-to-AF_UNIX bridge: an HTTP request to the bridge's loopback port reaches
  * an AF_UNIX HTTP server and the response is spliced back verbatim.
  */
 class UnixSocketBridgeTest {
+
+    /**
+     * A bridge to a path with no listener must FAIL construction rather than bind a loopback
+     * listener + accept thread that {@code ProxySiteType.bridgeFor} then caches forever.
+     *
+     * AIDEV-NOTE: this is the counterfactual for the leak the proxy wave named. Pre-fix the
+     * constructor never dialed the AF_UNIX path, so this returned a live (dead) bridge that was
+     * cached permanently -- one leaked listener + accept thread per distinct, Host-derived path.
+     */
+    @Test
+    @Timeout(15)
+    void aNonexistentSocketPathFailsConstructionInsteadOfCachingADeadBridge() throws Exception {
+        Path missing = Files.createTempDirectory("hh-bridge-missing").resolve("nope.sock");
+        assertThat(Files.exists(missing)).as("the socket path does not exist").isFalse();
+
+        // verifyReachable=true is the mode ProxySiteType.bridgeFor uses before caching.
+        assertThatThrownBy(() -> new UnixSocketBridge(missing.toString(), true))
+            .as("an unreachable upstream fails construction, so no dead bridge is ever cached")
+            .isInstanceOf(IOException.class);
+
+        // The unverified constructor (process-lifecycle caller) still tolerates a not-yet-bound
+        // path -- it must not fail a spawn whose child is still binding. It is closed at once.
+        UnixSocketBridge lenient = new UnixSocketBridge(missing.toString());
+        lenient.close();
+    }
 
     @Test
     @Timeout(15)
@@ -43,12 +70,23 @@ class UnixSocketBridgeTest {
         ServerSocketChannel unixServer = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
         unixServer.bind(UnixDomainSocketAddress.of(sockPath.toString()));
 
-        // AF_UNIX HTTP server: accept one connection, read the request, write a fixed response.
+        // AF_UNIX HTTP server: loop-accept and answer each connection. The bridge now makes a
+        // reachability PROBE connection at construction (closed immediately), so a single-accept
+        // server would leave the real request with nothing to accept.
         Thread.ofVirtual().start(() -> {
-            try (SocketChannel conn = unixServer.accept()) {
-                conn.read(ByteBuffer.allocate(4096));   // consume the request
-                conn.write(ByteBuffer.wrap(httpResponse.getBytes(StandardCharsets.UTF_8)));
-            } catch (IOException ignored) {
+            while (true) {
+                try {
+                    SocketChannel conn = unixServer.accept();
+                    Thread.ofVirtual().start(() -> {
+                        try (conn) {
+                            conn.read(ByteBuffer.allocate(4096));   // consume the request
+                            conn.write(ByteBuffer.wrap(httpResponse.getBytes(StandardCharsets.UTF_8)));
+                        } catch (IOException ignored) {
+                        }
+                    });
+                } catch (IOException closed) {
+                    return;   // server closed at teardown
+                }
             }
         });
 
