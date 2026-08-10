@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -146,7 +147,10 @@ public final class ManagePanel extends Panel {
             // The project tier's tenant projection: which projects the principal is a
             // MEMBER of, and who else is in them. Both read-only -- see
             // ManageProjectResource for why a membership editor here could only refuse.
-            new ManageProjectResource(), new ManageProjectMemberResource());
+            new ManageProjectResource(), new ManageProjectMemberResource(),
+            // Preview deployments of granted sites: view, create for a chosen ref,
+            // destroy. Scoped by the site's manage grant like domains are.
+            new ManagePreviewDeploymentResource());
     }
 
     /**
@@ -266,6 +270,19 @@ public final class ManagePanel extends Panel {
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDeviceModel.class)
             .search(InstanceDeviceModel.NAME)
             .accessCriteria(ManagePanel::instanceDeviceScope)
+            .build());
+
+        // Preview deployments: the same two-derived-defaults hazard (the admin
+        // PreviewDeploymentResource and the delegated ManagePreviewDeploymentResource
+        // both derive), and the widest one would name every tenant's branch names and
+        // preview hostnames to whoever a picker rendered for.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(
+                PreviewDeploymentModel.class)
+            .search(PreviewDeploymentModel.HOSTNAME,
+                PreviewDeploymentModel.REF)
+            .baseCriteria(() ->
+                PreviewDeploymentModel.DELETED_AT.isNull())
+            .accessCriteria(ManagePanel::previewScope)
             .build());
 
         // Instance-database attachments: the same hazard once more. The row names both a
@@ -444,6 +461,15 @@ public final class ManagePanel extends Panel {
     static @Nullable Criteria domainScope(@NonNull AccessContext ctx) {
         return HohenheimAccess.managedSiteScope(ctx, Models.get(SiteDomainModel.class),
             SiteDomainModel.SITE_ID::in);
+    }
+
+    /**
+     * @return null for admins, else the previews of the principal's managed sites
+     */
+    static @Nullable Criteria previewScope(@NonNull AccessContext ctx) {
+        return HohenheimAccess.managedSiteScope(ctx,
+            Models.get(PreviewDeploymentModel.class),
+            PreviewDeploymentModel.SITE_ID::in);
     }
 
     /** Matches nothing; NEVER ID.in(empty), which some backends reject or widen. */

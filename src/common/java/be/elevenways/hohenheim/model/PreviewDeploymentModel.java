@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -48,14 +49,14 @@ public class PreviewDeploymentModel extends Model {
 
     /** Pull/merge request number when webhook-created; null for manual previews. */
     public static final IntegerField PR_NUMBER = SCHEMA.addField(
-        IntegerField.builder().name("pr_number").build());
+        IntegerField.builder().name("pr_number").visibleIn(EditView.EDIT, EditView.DETAIL).build());
 
     public static final StringField HEAD_SHA = SCHEMA.addField(
-        StringField.builder().name("head_sha").filterable(false).build());
+        StringField.builder().name("head_sha").filterable(false).visibleIn(EditView.EDIT, EditView.DETAIL).build());
 
     /** The generated hostname this preview serves on; derived, never submitted. */
     public static final StringField HOSTNAME = SCHEMA.addField(
-        StringField.builder().name("hostname").build());
+        StringField.builder().name("hostname").visibleIn(EditView.EDIT, EditView.DETAIL).build());
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_DEPLOYING, v -> v.displayName("Deploying").icon("rotate").color("info"))
@@ -65,22 +66,23 @@ public class PreviewDeploymentModel extends Model {
         .value(STATUS_DESTROYED, v -> v.displayName("Destroyed").icon("trash").color("secondary"))
         .defaultValue(STATUS_DEPLOYING)
         .label(HohenheimFormCopy.label("status"))
+        .visibleIn(EditView.EDIT, EditView.DETAIL)
         .build());
 
     /** Hard end of life; enforcement is the expiry sweep, never advisory. */
     public static final DateTimeField EXPIRES_AT = SCHEMA.addField(
-        DateTimeField.builder().name("expires_at").build());
+        DateTimeField.builder().name("expires_at").visibleIn(EditView.EDIT, EditView.DETAIL).build());
 
     /** The owned instance backing this preview; explicit so destroy needs no scan. */
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
-        IntegerField.builder().name("instance_id").build());
+        IntegerField.builder().name("instance_id").visibleIn(EditView.EDIT, EditView.DETAIL).build());
 
     /** The quota ledger bucket this preview is charged against (owner-pack derived). */
     public static final StringField QUOTA_BUCKET = SCHEMA.addField(
         StringField.builder().name("quota_bucket").filterable(false).build());
 
     public static final TextField LAST_ERROR = SCHEMA.addField(
-        TextField.builder().name("last_error").filterable(false).build());
+        TextField.builder().name("last_error").filterable(false).visibleIn(EditView.EDIT, EditView.DETAIL).build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

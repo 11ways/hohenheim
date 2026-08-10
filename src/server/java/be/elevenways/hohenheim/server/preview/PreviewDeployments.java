@@ -30,7 +30,10 @@ import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -82,7 +85,12 @@ public final class PreviewDeployments {
 
     // -- create / refresh ------------------------------------------------------
 
-    /** {@link #deploy} for fire-and-forget callers (webhooks); failures are logged. */
+    /**
+     * {@link #deploy} for fire-and-forget callers (webhooks); failures are logged, and
+     * a refusal BEFORE the preview row exists (quota reached, unsupported type, no base
+     * domain) is additionally reported onto the commit status when a sha is known --
+     * without it a capped preview was invisible everywhere but the controller log.
+     */
     public static void deployQuietly(int siteId, @NonNull String ref, @Nullable String sha,
                                      @Nullable Integer prNumber) {
         try {
@@ -90,7 +98,56 @@ public final class PreviewDeployments {
         } catch (Exception e) {
             Blast.log("PREVIEW: deploy of site", siteId, "ref", ref, "failed -",
                 e.getMessage());
+            if (e instanceof Violations && sha != null && !sha.isBlank()) {
+                reportRefusal(siteId, sha, reasonOf(e));
+            }
         }
+    }
+
+    /**
+     * The manual lane: validate, charge and claim the preview row NOW (so a refusal --
+     * quota by name, unsupported type, missing base domain -- reaches the submitting
+     * form synchronously), then build in the background exactly like a webhook deploy.
+     *
+     * AIDEV-NOTE: QUOTA DECISION (2026-08-10, applies to ALL creation lanes). The
+     * charge is the SITE's manage-grant owner pack, always -- the PreviewQuota
+     * before-write hook fires on this row save no matter which surface asked, so
+     * charge == cap holds structurally and a manual or branch preview can never ride
+     * an uncharged side door. Charging the ACTING operator instead was rejected: the
+     * environment lives in the site owner's fleet, and an actor-derived charge would
+     * book a bucket the row's release path could not re-derive. At the cap every lane
+     * REFUSES BY NAME (preview_quota_reached); eviction of the oldest preview was
+     * rejected because it destroys a running environment (possibly a PR under active
+     * review) to serve a push nobody is watching.
+     *
+     * @return the claimed preview row, status deploying
+     * @throws Violations naming the refusal
+     */
+    public static @NonNull Row queue(int siteId, @NonNull String ref, @Nullable String sha,
+                                     @Nullable Integer prNumber) throws Exception {
+        Row preview;
+        synchronized (lockFor(siteId, ref)) {
+            preview = claimLocked(siteId, ref, prNumber);
+        }
+        Datasource datasource = Db.current();
+        String pinnedSha = sha;
+        JobRunner.startVirtualThread(() -> {
+            Runnable build = () -> {
+                try {
+                    deploy(siteId, ref, pinnedSha, prNumber);
+                } catch (Exception e) {
+                    // The row already records status failed + last_error.
+                    Blast.log("PREVIEW: queued deploy of site", siteId, "ref", ref,
+                        "failed -", e.getMessage());
+                }
+            };
+            if (datasource != null) {
+                Db.run(datasource, build);
+            } else {
+                build.run();
+            }
+        });
+        return preview;
     }
 
     /**
@@ -109,9 +166,13 @@ public final class PreviewDeployments {
         }
     }
 
-    private static @NonNull Row deployLocked(int siteId, @NonNull String ref,
-                                             @Nullable String sha,
-                                             @Nullable Integer prNumber) throws Exception {
+    /**
+     * The synchronous half of a deploy: validate the site, mint/refresh the
+     * quota-charged row (status deploying) and arm the expiry. Callers hold the
+     * per-(site, ref) lock.
+     */
+    private static @NonNull Row claimLocked(int siteId, @NonNull String ref,
+                                            @Nullable Integer prNumber) {
         Row site = Models.get(SiteModel.class).findById(siteId);
         if (site == null || site.get(SiteModel.DELETED_AT) != null) {
             throw Violations.ofField("site_id", siteId, violation("preview_site_required"));
@@ -129,8 +190,6 @@ public final class PreviewDeployments {
         if (baseDomain.isEmpty()) {
             throw Violations.ofForm(violation("preview_no_base_domain"));
         }
-        Map<String, Object> sourceSettings = castMap(site.get(SiteModel.SOURCE_SETTINGS));
-        Map<String, Object> siteSettings = castMap(site.get(SiteModel.SETTINGS));
         String hostname = hostnameFor(str(site.get(SiteModel.SLUG)), ref, baseDomain);
 
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
@@ -139,8 +198,7 @@ public final class PreviewDeployments {
             .where(PreviewDeploymentModel.REF.eq(ref))
             .where(PreviewDeploymentModel.DELETED_AT.isNull())
             .first();
-        boolean fresh = preview == null;
-        if (fresh) {
+        if (preview == null) {
             // The quota hook charges the site's owner bucket on this save and refuses
             // over-cap creates atomically -- no separate count-then-create window.
             preview = model.createEmptyRow();
@@ -154,10 +212,22 @@ public final class PreviewDeployments {
         preview.set(PreviewDeploymentModel.EXPIRES_AT, expiresAt);
         preview.set(PreviewDeploymentModel.LAST_ERROR, null);
         model.save(preview);
-        int previewId = preview.get(PreviewDeploymentModel.ID);
         // Armed BEFORE the build: a preview that fails to build still gets reclaimed
         // at its deadline, exactly like the old sweep's status-blind query did.
-        armExpiry(previewId, expiresAt);
+        armExpiry(preview.get(PreviewDeploymentModel.ID), expiresAt);
+        return preview;
+    }
+
+    private static @NonNull Row deployLocked(int siteId, @NonNull String ref,
+                                             @Nullable String sha,
+                                             @Nullable Integer prNumber) throws Exception {
+        Row preview = claimLocked(siteId, ref, prNumber);
+        PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
+        Row site = Models.get(SiteModel.class).findById(siteId);
+        Map<String, Object> sourceSettings = castMap(site.get(SiteModel.SOURCE_SETTINGS));
+        Map<String, Object> siteSettings = castMap(site.get(SiteModel.SETTINGS));
+        String hostname = str(preview.get(PreviewDeploymentModel.HOSTNAME));
+        int previewId = preview.get(PreviewDeploymentModel.ID);
 
         try {
             DeployStatuses.report(sourceSettings, sha, GitProviderClient.StatusState.PENDING,
@@ -214,6 +284,22 @@ public final class PreviewDeployments {
             DeployStatuses.report(sourceSettings, sha, GitProviderClient.StatusState.FAILURE,
                 DeployStatuses.CONTEXT_PREVIEW, "Preview failed: " + reasonOf(failed), null);
             throw failed;
+        }
+    }
+
+    /** Best-effort commit-status FAILURE for a refusal that never minted a row. */
+    private static void reportRefusal(int siteId, @NonNull String sha, @NonNull String reason) {
+        try {
+            Row site = Models.get(SiteModel.class).findById(siteId);
+            if (site == null) {
+                return;
+            }
+            DeployStatuses.report(castMap(site.get(SiteModel.SOURCE_SETTINGS)), sha,
+                GitProviderClient.StatusState.FAILURE, DeployStatuses.CONTEXT_PREVIEW,
+                "Preview refused: " + reason, null);
+        } catch (RuntimeException unreported) {
+            Blast.log("PREVIEW: could not report refusal for site", siteId, "-",
+                unreported.getMessage());
         }
     }
 
