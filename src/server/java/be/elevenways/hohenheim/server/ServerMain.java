@@ -19,7 +19,9 @@ import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.docker.SiteReleases;
 import be.elevenways.hohenheim.server.host.HostLeases;
+import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
+import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessCapacity;
@@ -259,6 +261,14 @@ public class ServerMain {
             // daemon attribution so ownership can never stay split. Virtual thread:
             // it does live daemon work on up to two hosts per record.
             JobRunner.startVirtualThread(InstanceMigrations::recoverInterrupted);
+            // A controller killed mid-upload leaves a backup row UPLOADING forever
+            // (invisible to the dashboard, never swept) and possibly a committed
+            // artifact; killed mid-capture it leaves a FAILED snapshot row whose
+            // payload nothing reclaims. Both settles fence on the process start time,
+            // so rows written by THIS process (live operations) are never touched.
+            // Virtual threads: both do target/daemon I/O.
+            JobRunner.startVirtualThread(InstanceBackups::recoverInterrupted);
+            JobRunner.startVirtualThread(() -> new InstanceSnapshots().recoverInterrupted());
         } else {
             roleSkip(HohenheimRoles.Role.INSTANCES,
                 "interrupted-migration settle skipped, no instances run here");

@@ -24,6 +24,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -393,10 +394,10 @@ public final class InstanceSnapshots {
      * indistinguishable from a stuck payload in this very catch. FAILED rows are never
      * counted and never pruned: they hold no payload and they are the evidence.
      *
-     * AIDEV-NOTE: ordered by ID, not by created_at as the backup lane is. A native
-     * snapshot's name is stamped to the SECOND, so two captures inside one second carry
-     * the same created_at and a timestamp sort would pick between them arbitrarily --
-     * which snapshot survives must not be arbitrary.
+     * AIDEV-NOTE: ordered by ID, not by created_at (the backup lane orders the same way
+     * now). A native snapshot's name is stamped to the SECOND, so two captures inside one
+     * second carry the same created_at and a timestamp sort would pick between them
+     * arbitrarily -- which snapshot survives must not be arbitrary.
      */
     public void pruneForRetention(int instanceId) {
         Integer retention = HohenheimSettings.VALUES.getValue(
@@ -423,6 +424,78 @@ public final class InstanceSnapshots {
                 Blast.log("SNAPSHOT: retention hit an unexpected failure on snapshot", id,
                     "- kept for a later sweep:", describe(unexpected));
             }
+        }
+    }
+
+    /**
+     * Boot recovery: reclaim the payload of FAILED rows a killed controller left behind.
+     *
+     * A FAILED row normally holds no payload (the capture's catch removed it), so the
+     * never-prune-FAILED rule is sound -- EXCEPT for a controller killed DURING a
+     * capture, which leaves a FAILED-first row whose directory (volume lane) or
+     * daemon-side snapshot (native lane) still exists with nothing left to reclaim it.
+     * Same fence as {@code InstanceBackups.recoverInterrupted}: only rows whose last
+     * write predates THIS process's start are touched -- captures are synchronous and
+     * in-process, so such a row cannot belong to a live capture. The ROW is kept: it is
+     * the evidence, and after this sweep it once again holds no payload.
+     */
+    public void recoverInterrupted() {
+        Instant processStart = Instant.ofEpochMilli(
+            ManagementFactory.getRuntimeMXBean().getStartTime());
+        List<Row> failed = Models.get(InstanceSnapshotModel.class).find()
+            .where(InstanceSnapshotModel.STATUS.eq(InstanceSnapshotModel.STATUS_FAILED))
+            .all();
+        for (Row row : failed) {
+            Instant written = row.get(InstanceSnapshotModel.UPDATED_AT);
+            if (written == null) {
+                written = row.get(InstanceSnapshotModel.CREATED_AT);
+            }
+            if (written != null && !written.isBefore(processStart)) {
+                continue;   // written by THIS process: a capture in flight, not a corpse
+            }
+            Object id = row.get(InstanceSnapshotModel.ID);
+            String directory = row.get(InstanceSnapshotModel.DIRECTORY);
+            if (directory != null && !directory.isBlank()
+                    && Files.exists(Path.of(directory))) {
+                IOException undeletable = deleteRecursivelyReporting(Path.of(directory));
+                if (undeletable != null) {
+                    Blast.log("SNAPSHOT: could not reclaim interrupted capture", id,
+                        "payload at", directory, "- retried at the next boot:",
+                        describe(undeletable));
+                } else {
+                    Blast.log("SNAPSHOT: reclaimed interrupted capture", id,
+                        "payload at", directory);
+                }
+            }
+            String nativeName = row.get(InstanceSnapshotModel.NATIVE_NAME);
+            if (nativeName != null && !nativeName.isBlank()) {
+                reclaimNative(row, nativeName);
+            }
+        }
+    }
+
+    /** The native half of {@link #recoverInterrupted}: observed-absent is a no-op. */
+    private void reclaimNative(@NonNull Row row, @NonNull String nativeName) {
+        Object id = row.get(InstanceSnapshotModel.ID);
+        int instanceId = row.get(InstanceSnapshotModel.INSTANCE_ID);
+        Resolved resolved;
+        try {
+            resolved = this.instances.resolve(instanceId);
+        } catch (Violations instanceGone) {
+            return;   // a destroyed instance took its pool snapshots with it
+        }
+        if (!(resolved.runtime() instanceof NativeSnapshotSupport support)) {
+            return;
+        }
+        try {
+            if (support.snapshotExists(resolved.spec(), nativeName)) {
+                support.deleteSnapshot(resolved.spec(), nativeName);
+                Blast.log("SNAPSHOT: reclaimed interrupted native capture", id,
+                    "(" + nativeName + ")");
+            }
+        } catch (IOException unreachable) {
+            Blast.log("SNAPSHOT: could not reclaim interrupted native capture", id,
+                "(" + nativeName + ") - retried at the next boot:", describe(unreachable));
         }
     }
 

@@ -31,6 +31,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -40,6 +41,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -78,6 +80,13 @@ public final class InstanceBackups {
      * @throws Violations naming the refusal or failure
      */
     public int backupNow(int instanceId) {
+        // The capability gate BEFORE the target resolves: targetFor's violations name
+        // the instance's backup-target configuration (and the ssh kind adds the host's
+        // admission state), which is operator information. Resolving first handed that
+        // to any caller who could merely SEE the instance, against the uniform-refusal
+        // doctrine requireOperationCapability documents. The explicit-target overload
+        // asks again; the double ask is idempotent and keeps that entry gated too.
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.BACKUPS);
         Resolved resolved = this.instances.resolve(instanceId);
         Integer targetId = resolved.row().get(InstanceModel.BACKUP_TARGET_ID);
         return backupNow(instanceId, targetId, BackupTargetKinds.targetFor(targetId));
@@ -177,13 +186,22 @@ public final class InstanceBackups {
         // shared infrastructure too: two controllers whose instance #1 backed up in the same
         // second would otherwise write the same object. Existing rows keep their stored key
         // (remote_key is data, not a derivation), so nothing already uploaded is orphaned.
-        String key = ControllerIdentity.token() + "/instance-" + instanceId + "/" + stamp + ".hib";
         Row backup = Models.get(InstanceBackupModel.class).createEmptyRow();
         backup.set(InstanceBackupModel.INSTANCE_ID, instanceId);
         backup.set(InstanceBackupModel.TARGET_ID, targetId);
         backup.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_UPLOADING);
-        backup.set(InstanceBackupModel.REMOTE_KEY, key);
         Models.get(InstanceBackupModel.class).save(backup);
+        // AIDEV-NOTE: the row id is part of the object key, and the row is saved FIRST so
+        // it can be -- the snapshot lanes' fix applied to the third lane. The stamp
+        // resolves to the SECOND, so two backups of one instance inside the same second
+        // used to write the SAME object (target.store overwrites): two COMPLETE rows over
+        // one artifact, and retention deleting the older row removed the payload the
+        // SURVIVING row still pointed at. Same hazard, same fix, all three lanes.
+        String key = ControllerIdentity.token() + "/instance-" + instanceId + "/" + stamp
+            + "-" + backup.get(InstanceBackupModel.ID) + ".hib";
+        RecordStamp.on(Models.get(InstanceBackupModel.class), backup)
+            .set(InstanceBackupModel.REMOTE_KEY, key)
+            .write();
         try {
             BackupManifest manifest = buildManifest(resolved, image, payload, captured);
             Map<String, Path> files = new LinkedHashMap<>();
@@ -238,7 +256,7 @@ public final class InstanceBackups {
         } finally {
             InstanceSnapshots.deleteRecursively(staging);
         }
-        pruneForRetention(instanceId);
+        pruneForRetention(instanceId, targetId, target);
         Blast.log("BACKUP: instance", instanceId, "exported to", key);
         return backup.get(InstanceBackupModel.ID);
     }
@@ -392,7 +410,7 @@ public final class InstanceBackups {
         }
         HohenheimAccess.requireOperationCapability(
             backup.get(InstanceBackupModel.INSTANCE_ID), HohenheimAccess.BACKUPS);
-        deleteAuthorized(backup);
+        deleteAuthorized(backup, null, null);
     }
 
     /**
@@ -400,14 +418,28 @@ public final class InstanceBackups {
      * instance when the operation was entered, and re-asking per row only made the
      * sweep's {@code catch (Violations)} unable to tell a refusal from an unreachable
      * target. Same reasoning as {@code InstanceSnapshots.deleteAuthorized}.
+     *
+     * AIDEV-NOTE: {@code currentTarget} exists for the explicit-target flow: a row whose
+     * TARGET_ID cannot be re-resolved (null, from the tests/re-target overload) made
+     * {@code targetFor} throw here, so retention kept the row FOREVER while its artifact
+     * stayed on the target. When the sweep runs inside a backup that holds the very
+     * target such a row was written to, that in-hand handle is used instead.
+     *
+     * @param currentTargetId the target id the calling operation used, or null
+     * @param currentTarget   the resolved target of the calling operation, or null
      */
-    private void deleteAuthorized(@NonNull Row backup) {
+    private void deleteAuthorized(@NonNull Row backup, @Nullable Integer currentTargetId,
+                                  @Nullable BackupTarget currentTarget) {
         int backupId = backup.get(InstanceBackupModel.ID);
         String key = backup.get(InstanceBackupModel.REMOTE_KEY);
         if (key != null && !key.isBlank()) {
             try {
-                BackupTargetKinds.targetFor(backup.get(InstanceBackupModel.TARGET_ID))
-                    .delete(key);
+                Integer rowTargetId = backup.get(InstanceBackupModel.TARGET_ID);
+                BackupTarget target = currentTarget != null
+                        && Objects.equals(rowTargetId, currentTargetId)
+                    ? currentTarget
+                    : BackupTargetKinds.targetFor(rowTargetId);
+                target.delete(key);
             } catch (IOException | Violations unreachable) {
                 throw Violations.ofForm(violationText("backup_delete_failed")
                     .withArg("reason", unreachable instanceof IOException io
@@ -425,6 +457,19 @@ public final class InstanceBackups {
      * kept as evidence (they hold no artifact).
      */
     public void pruneForRetention(int instanceId) {
+        pruneForRetention(instanceId, null, null);
+    }
+
+    /**
+     * The sweep as {@code backupNow} runs it, carrying the target the completed backup
+     * used so same-target rows are prunable even when their id cannot be re-resolved.
+     *
+     * AIDEV-NOTE: ordered by ID, not created_at -- two backups inside one second carry
+     * the same created_at and a timestamp sort would pick the survivor arbitrarily
+     * (the snapshot lanes' rule, {@code InstanceSnapshots.pruneForRetention}).
+     */
+    private void pruneForRetention(int instanceId, @Nullable Integer currentTargetId,
+                                   @Nullable BackupTarget currentTarget) {
         Integer retention = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Backup.RETENTION);
         if (retention == null || retention <= 0) {
@@ -433,12 +478,12 @@ public final class InstanceBackups {
         List<Row> complete = Models.get(InstanceBackupModel.class).find()
             .where(InstanceBackupModel.INSTANCE_ID.eq(instanceId))
             .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_COMPLETE))
-            .orderBy(InstanceBackupModel.CREATED_AT, SortOrder.DESC)
+            .orderBy(InstanceBackupModel.ID, SortOrder.DESC)
             .all();
         for (int i = retention; i < complete.size(); i++) {
             Object id = complete.get(i).get(InstanceBackupModel.ID);
             try {
-                deleteAuthorized(complete.get(i));
+                deleteAuthorized(complete.get(i), currentTargetId, currentTarget);
             } catch (Violations pruneFailed) {
                 Blast.log("BACKUP: retention could not remove backup", id,
                     "- kept for a later sweep");
@@ -448,6 +493,54 @@ public final class InstanceBackups {
                 Blast.log("BACKUP: retention hit an unexpected failure on backup", id,
                     "- kept for a later sweep:", InstanceSnapshots.describe(unexpected));
             }
+        }
+    }
+
+    /**
+     * Boot recovery: settle every backup row a killed controller left {@code uploading}.
+     *
+     * A row is settled only when its last write predates THIS process's start: an upload
+     * is a synchronous in-process operation, so no upload recorded before this process
+     * existed can still be running -- an exact fence, not an age guess. Rows written by
+     * this process (the listener binds before this sweep runs) are live operations and
+     * are left alone; if this process is killed too, the next boot settles them. The
+     * possibly-committed artifact is removed (absent is success, the target's delete
+     * contract); a target that refuses keeps the key in the FAILED row's error text so
+     * the evidence still names what may survive remotely.
+     */
+    public static void recoverInterrupted() {
+        Instant processStart = Instant.ofEpochMilli(
+            ManagementFactory.getRuntimeMXBean().getStartTime());
+        List<Row> stuck = Models.get(InstanceBackupModel.class).find()
+            .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_UPLOADING))
+            .all();
+        for (Row row : stuck) {
+            Instant written = row.get(InstanceBackupModel.UPDATED_AT);
+            if (written == null) {
+                written = row.get(InstanceBackupModel.CREATED_AT);
+            }
+            if (written != null && !written.isBefore(processStart)) {
+                continue;   // written by THIS process: a live upload, not a corpse
+            }
+            Object id = row.get(InstanceBackupModel.ID);
+            String key = row.get(InstanceBackupModel.REMOTE_KEY);
+            String error = "Interrupted by a controller restart mid-upload";
+            if (key != null && !key.isBlank()) {
+                try {
+                    BackupTargetKinds.targetFor(row.get(InstanceBackupModel.TARGET_ID))
+                        .delete(key);
+                } catch (IOException | Violations unreachable) {
+                    error += "; the possibly-committed artifact could not be removed"
+                        + " and may remain on the target under " + key;
+                    Blast.log("BACKUP: could not remove interrupted upload", key, ":",
+                        InstanceSnapshots.describe(unreachable));
+                }
+            }
+            RecordStamp.on(Models.get(InstanceBackupModel.class), row)
+                .set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED)
+                .set(InstanceBackupModel.ERROR, error)
+                .write();
+            Blast.log("BACKUP: settled interrupted upload row", id, "as failed");
         }
     }
 

@@ -29,7 +29,12 @@ public class InstanceBackupModel extends Model {
     /** {@link #STATUS}: committed on the target and verified end to end. */
     public static final String STATUS_COMPLETE = "complete";
 
-    /** {@link #STATUS}: capture or upload failed; artifact removed, row kept as evidence. */
+    /**
+     * {@link #STATUS}: capture or upload failed; artifact removed, row kept as evidence.
+     * The one exception: a boot settle that could not reach the target stamps FAILED with
+     * the possibly-surviving key named in {@link #ERROR} (see
+     * {@code InstanceBackups.recoverInterrupted}).
+     */
     public static final String STATUS_FAILED = "failed";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
