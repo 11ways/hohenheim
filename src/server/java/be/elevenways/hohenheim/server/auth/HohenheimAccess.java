@@ -263,10 +263,19 @@ public final class HohenheimAccess {
             // Seeing the record is implied by every verb that operates on it: an operator
             // handing out "console" must not have to remember to hand out "view" too, or
             // the delegate gets a 404 on the page carrying the console.
+            //
+            // AIDEV-NOTE: files.read, snapshots and backups were MISSING from this list
+            // until 2026-08-11, and the docblock above states exactly why that was wrong:
+            // each of the three is surfaced by ONE tab on the instance record page, so a
+            // delegate granted only that capability was 403'd off the record and could
+            // never reach the tab the grant exists for. The grant did strictly less than
+            // it claimed and nothing reported it -- InstanceFilesTabGateTest caught it
+            // while proving the files tab's own gate.
             KnownCapability.of(VIEW)
                 .label(Microcopy.of("view").withFilter("scope", "capability"))
                 .asDelegable()
-                .impliedBy(MANAGE, CONSOLE, POWER, CONFIG, DESTROY),
+                .impliedBy(MANAGE, CONSOLE, POWER, CONFIG, DESTROY,
+                    FILES_READ, SNAPSHOTS, BACKUPS),
             KnownCapability.of(CONSOLE)
                 .label(Microcopy.of("console").withFilter("scope", "capability"))
                 .asDelegable()

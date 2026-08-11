@@ -238,6 +238,22 @@ Policy question this document names rather than answers: a holder of
 `InstanceFiles.java:35-37` states the separation accurately but not this
 consequence.
 
+**Surface gate added 2026-08-11.** `InstanceFilesPage` declared NO `visibleFor`,
+so the tab rendered for every viewer of the record and the service's refusal
+arrived as a red error banner. It now answers to `files.read` -- hide AND
+enforce, so an unoffered slug 404s -- and an Incus workload (no driver implements
+`InstanceFileSupport` there) renders a named "not available for this runtime yet"
+state instead of the same banner, via the new `InstanceFiles.isSupported`.
+`InstanceFilesTabGateTest`, 3 journeys, 0 skipped. **[test]**
+
+**Defect found while gating it, and fixed:** `files.read` was NOT in the instance
+`view` capability's `impliedBy` list (nor were `snapshots` and `backups`), so a
+delegate granted exactly the capability a tab exists for was 403'd off the record
+page and could never reach that tab. The grant did strictly less than it claimed
+and nothing reported it. `HohenheimAccess.declareGrantableModels` now implies
+`view` from all three, matching the rule the docblock there already stated for
+console/power/config/destroy.
+
 ## 6. Port allocations
 
 **IMPLEMENTED.**
@@ -329,6 +345,18 @@ stops a stored chain.
   (`TenantInstanceSurfaceTest.java:353`).
 
 ## 9. Backups and restore
+
+**Per-instance surface added 2026-08-11.** Snapshots and backups were listed only
+in flat installation-wide resources, so finding one meant filtering a global list
+by instance id. `InstanceSnapshotsPage` / `InstanceBackupsPage` (slugs `snapshots`
+and `backups`, gated on the matching record capability) are a SCOPED VIEW of those
+same resources -- each row relays that resource's own declared row actions through
+the standard action-state translation and links into the generated record page, so
+there is no second UI and no second delete. Restore-to-new stays operator-only:
+the /manage projection is built over `ManageInstanceBackupResource`, whose
+`rowActions()` is empty, and `InstanceBackups.restoreToNew` refuses a
+tenant-originated call regardless. `InstanceArtifactTabsTest`, 3 journeys,
+0 skipped. **[test]**
 
 **PARTIAL.** The archive and the off-host target layers are proven hermetically,
 and since 2026-08-10 so are the BACKUP half of the lane (`InstanceBackupsTest`:
@@ -619,6 +647,15 @@ heading itself was still stale on 2026-08-08 and is corrected here).
 
 Stats: `src/server/java/be/elevenways/hohenheim/server/instance/InstanceStats.java:34`,
 `InstanceStatsHandler.java:32`, `cms/InstanceStatsPage.java`. **[code]**
+
+**Honesty added 2026-08-11, no metrics store added.** There is deliberately NO
+metrics history and that stays a roadmap decision, not a bug -- but the page said
+so nowhere, and it also omitted the ONE persisted number the product does keep.
+The Stats tab now states its live-only contract out loud and renders the disk
+sweeper's stored observation beside the live rings, as an explicit "not measured"
+state on a runtime that enforces no root quota (the whole Docker tier).
+`InstanceFilesTabGateTest.statsStatesItsLiveOnlyContractAndThePersistedDiskObservation`.
+**[test]**
 
 `src/browserTest/java/be/elevenways/hohenheim/test/instance/InstanceStatsLiveTest.java:47`
 is the ONLY test in the repository that touches `InstanceStats` -- verified by

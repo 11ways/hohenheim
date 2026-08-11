@@ -10,6 +10,7 @@
 {% declare crumbs: List %}
 {% declare entries: List %}
 {% declare canWrite: Boolean = false %}
+{% declare supported: Boolean = true %}
 {% declare maxFileBytes: Long = 0 %}
 {% declare error: String = "" %}
 {% declare editPath: String = "" %}
@@ -29,6 +30,15 @@
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {#- A runtime with no file lane states the absence; a broken browser would be worse
+        than an honest "not here yet". Only the Docker driver implements the lane. -#}
+    {% if !supported %}
+    <pl-empty-state icon="folder-tree" data-files-unsupported="1">
+        <pl-empty-state-title>{{ t("unsupported", scope: "instance_files") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("unsupported_hint", scope: "instance_files") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
 
     {% if error != "" %}
         <pl-alert variant="destructive">{{ error }}</pl-alert>

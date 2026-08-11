@@ -9,6 +9,7 @@
 {% declare memorySeed: List %}
 {% declare rxSeed: List %}
 {% declare txSeed: List %}
+{% declare disk: InstanceDiskView %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -20,6 +21,31 @@
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {#- The CONTRACT, stated rather than implied: the rings below are live-only (nothing
+        is stored, by decision), and the one PERSISTED figure -- the disk sweeper's
+        observation -- exists only on a runtime that enforces a root quota. -#}
+    <pl-alert variant="default" data-stats-contract="1">{{ t("live_only", scope: "instance_stats") }}</pl-alert>
+
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("disk", scope: "instance_stats") }}</pl-card-title>
+            <pl-card-description>{{ t("disk_description", scope: "instance_stats") }}</pl-card-description>
+        </pl-card-header>
+        {% if disk.measured && disk.enforced %}
+        <pl-card-content data-disk-state="measured">
+            <pl-usage-bar value={% disk.percent %} max={% 100 %} showLabel={% true %}></pl-usage-bar>
+            <p>{{ disk.usedBytes }} B / {{ disk.limitBytes }} B</p>
+        </pl-card-content>
+        {% else %}
+        <pl-card-content data-disk-state="not-measured">
+            <p class="hh-disk-unmeasured">
+                <pl-badge variant="secondary">{{ t("not_measured", scope: "instance_stats") }}</pl-badge>
+                {{ t("not_measured_body", scope: "instance_stats", runtime: disk.runtime) }}
+            </p>
+        </pl-card-content>
+        {% /if %}
+    </pl-card>
 
     {% if running %}
     <pl-card>

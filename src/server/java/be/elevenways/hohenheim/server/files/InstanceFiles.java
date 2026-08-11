@@ -100,6 +100,20 @@ public final class InstanceFiles {
 
     // -- read lane ------------------------------------------------------------
 
+    /**
+     * Whether this instance's DRIVER can browse files at all.
+     *
+     * AIDEV-NOTE: a runtime asymmetry, not a failure -- only the Docker driver implements
+     * {@code InstanceFileSupport}, so an Incus workload has no file lane yet and every
+     * call below refuses it with {@code files_unsupported}. The tab asks this so it can
+     * render the absence as a named state instead of an error banner. Asking READ first
+     * keeps it from being a capability-free probe of what runs where.
+     */
+    public boolean isSupported(int instanceId) {
+        HohenheimAccess.requireOperationCapability(instanceId, READ);
+        return this.instances.resolve(instanceId).runtime() instanceof InstanceFileSupport;
+    }
+
     /** The declared volume roots of an instance, the only places this service will look. */
     public @NonNull List<String> volumeRoots(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, READ);

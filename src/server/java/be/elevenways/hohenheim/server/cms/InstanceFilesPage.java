@@ -44,6 +44,21 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("folder-tree"); }
 
+    /**
+     * The tab exists only for a principal that may actually READ this record's files.
+     *
+     * AIDEV-NOTE: it had NO gate at all -- the tab rendered for every viewer and the
+     * refusal arrived as an error banner from {@code InstanceFiles.list}, which is a
+     * broken-looking tab where an absent one is the truth. Hide AND enforce, exactly like
+     * the exec tab: zenit-cms 404s an unoffered slug, so this gates the route too, and
+     * the service still asks the same capability on every call.
+     */
+    @Override
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return HohenheimAccess.hasInstanceCapability(
+            accessContext, record.get(InstanceModel.ID), HohenheimAccess.FILES_READ);
+    }
+
     @Override
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
                                            @NonNull AccessContext accessContext,
@@ -75,6 +90,16 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
         vars.put("editPath", "");
         vars.put("editContent", "");
         vars.put("editTooLarge", false);
+
+        // A runtime that has no file lane at all is a NAMED state, not an error banner:
+        // only the Docker driver implements InstanceFileSupport, so an Incus workload
+        // renders "not available for this runtime yet" and no browser chrome.
+        boolean supported = files.isSupported(instanceId);
+        vars.put("supported", supported);
+        if (!supported) {
+            return new RenderTemplateResult(
+                Identifier.of("hohenheim", "cms/instance-files"), vars);
+        }
 
         String requested = conduit.getQueryParam("path");
         String editing = conduit.getQueryParam("edit");
