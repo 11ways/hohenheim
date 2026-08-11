@@ -1169,6 +1169,10 @@
     {
       "text": "Geen extra apparaten",
       "scope": "instance_device"
+    },
+    {
+      "text": "Nog niets vastgelegd",
+      "scope": "instance_artifacts"
     }
   ],
   "empty_description": [
@@ -1583,6 +1587,10 @@
     {
       "text": "Status",
       "scope": "server_overview"
+    },
+    {
+      "text": "Status",
+      "scope": "instance_artifacts"
     }
   ],
   "stored_log": [
@@ -3141,6 +3149,10 @@
     {
       "text": "Voeg een peer toe om deze zone via geauthenticeerde AXFR naar hem te repliceren.",
       "scope": "dns_secondaries"
+    },
+    {
+      "text": "Gebruik de eigen momentopname- of back-upactie van de instantie om er een vast te leggen.",
+      "scope": "instance_artifacts"
     }
   ],
   "registration_token": [
@@ -4757,10 +4769,16 @@
     "text": "Docker-container",
     "scope": "instance_kind"
   },
-  "created": {
-    "text": "Aangemaakt",
-    "scope": "instance_status"
-  },
+  "created": [
+    {
+      "text": "Aangemaakt",
+      "scope": "instance_status"
+    },
+    {
+      "text": "Gemaakt",
+      "scope": "instance_artifacts"
+    }
+  ],
   "error": {
     "text": "Fout",
     "scope": "instance_status"
@@ -5351,10 +5369,16 @@
     "text": "Instantie",
     "scope": "field"
   },
-  "note": {
-    "text": "Notitie",
-    "scope": "field"
-  },
+  "note": [
+    {
+      "text": "Notitie",
+      "scope": "field"
+    },
+    {
+      "text": "Notitie",
+      "scope": "instance_artifacts"
+    }
+  ],
   "directory": {
     "text": "Map",
     "scope": "field"
@@ -6292,14 +6316,26 @@
     "text": "Statistieken",
     "scope": "instance"
   },
-  "size": {
-    "text": "Grootte",
-    "scope": "instance_files"
-  },
-  "actions": {
-    "text": "Acties",
-    "scope": "instance_files"
-  },
+  "size": [
+    {
+      "text": "Grootte",
+      "scope": "instance_files"
+    },
+    {
+      "text": "Grootte",
+      "scope": "instance_artifacts"
+    }
+  ],
+  "actions": [
+    {
+      "text": "Acties",
+      "scope": "instance_files"
+    },
+    {
+      "text": "Acties",
+      "scope": "instance_artifacts"
+    }
+  ],
   "up": {
     "text": "Een niveau omhoog",
     "scope": "instance_files"
@@ -7016,6 +7052,10 @@
     {
       "text": "Hoofdschijf",
       "scope": "instance_overview"
+    },
+    {
+      "text": "Hoofdschijf",
+      "scope": "instance_stats"
     }
   ],
   "nic": {
@@ -7426,6 +7466,14 @@
     {
       "text": "{$name} - Overzicht",
       "scope": "instance_overview"
+    },
+    {
+      "text": "{$name} - Momentopnames",
+      "scope": "instance_snapshots"
+    },
+    {
+      "text": "{$name} - Back-ups",
+      "scope": "instance_backups"
     }
   ],
   "stored_log_heading": {
@@ -7900,14 +7948,26 @@
     "text": "Waargenomen",
     "scope": "instance_overview"
   },
-  "not_measured": {
-    "text": "Niet gemeten",
-    "scope": "instance_overview"
-  },
-  "not_measured_body": {
-    "text": "De {$runtime}-runtime handhaaft geen quota voor de hoofdschijf en rapporteert geen verbruik, dus er wordt hier niets gerantsoeneerd en niets gemeten. Dat is het afgesproken contract, geen mislukte meting.",
-    "scope": "instance_overview"
-  },
+  "not_measured": [
+    {
+      "text": "Niet gemeten",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "Niet gemeten",
+      "scope": "instance_stats"
+    }
+  ],
+  "not_measured_body": [
+    {
+      "text": "De {$runtime}-runtime handhaaft geen quota voor de hoofdschijf en rapporteert geen verbruik, dus er wordt hier niets gerantsoeneerd en niets gemeten. Dat is het afgesproken contract, geen mislukte meting.",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "De {$runtime}-runtime handhaaft geen quota voor de hoofdschijf en rapporteert geen verbruik, dus er wordt hier niets gerantsoeneerd en niets gemeten.",
+      "scope": "instance_stats"
+    }
+  ],
   "endpoint": {
     "text": "Publiek eindpunt",
     "scope": "instance_overview"
@@ -7943,5 +8003,21 @@
   "no_endpoint_hint": {
     "text": "Deze instantie houdt geen poortclaim, dus niets buiten haar netwerk bereikt haar rechtstreeks.",
     "scope": "instance_overview"
+  },
+  "unsupported": {
+    "text": "Nog niet beschikbaar voor deze runtime",
+    "scope": "instance_files"
+  },
+  "unsupported_hint": {
+    "text": "Alleen het Docker-stuurprogramma biedt een bestandskanaal. Deze workload draait op een runtime zonder dat kanaal, dus er valt hier nog niets te doorbladeren.",
+    "scope": "instance_files"
+  },
+  "live_only": {
+    "text": "Deze metingen zijn alleen live: er wordt niets bewaard, dus een grafiek begint leeg en vult zich terwijl deze pagina open staat. Het hoofdschijfcijfer hieronder is de enige bewaarde waarneming, en alleen een runtime die een schijfquotum handhaaft levert die.",
+    "scope": "instance_stats"
+  },
+  "disk_description": {
+    "text": "De bewaarde waarneming, geen live meting.",
+    "scope": "instance_stats"
   }
 }
