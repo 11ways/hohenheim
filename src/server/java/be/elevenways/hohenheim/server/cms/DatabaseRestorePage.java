@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -67,7 +68,8 @@ public final class DatabaseRestorePage implements RecordScopedPage<Row> {
             if (site != null && site.get(SiteModel.DELETED_AT) == null) {
                 sites.add(Map.of(
                     "name", String.valueOf(site.get(SiteModel.NAME)),
-                    "url", "/admin/sites/" + site.get(SiteModel.ID) + "/page/databases"));
+                    "target", CmsRoutes.subpage("admin", "sites", site.get(SiteModel.ID),
+                        "databases")));
             }
         }
         return sites;

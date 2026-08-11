@@ -1,17 +1,22 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
@@ -79,6 +84,13 @@ public final class InstanceConsolePage implements RecordScopedPage<Row>, Termina
         vars.put("stopCommand", stopCommand == null ? "" : stopCommand);
         vars.put("commandError", error == null ? "" : error);
         vars.put("returnUrl", ReturnTarget.capture(conduit));
+        vars.put("commandTarget", HohenheimEndpoints.INSTANCE_CONSOLE_COMMAND
+            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
+        // AIDEV-NOTE: WebSocketEndpoint is not a RouteTarget and has no with(...), and
+        // pl-terminal takes a wsUrl STRING anyway, so the socket route is RENDERED from
+        // its own declaration here -- endpoint-derived, never concatenated.
+        vars.put("consoleWsUrl", HohenheimEndpoints.INSTANCE_CONSOLE.toUrl(
+            Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-console"), vars);
     }
@@ -96,6 +108,7 @@ public final class InstanceConsolePage implements RecordScopedPage<Row>, Termina
             for (Row log : model.findByInstanceId(instanceId, 50)) {
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("id", log.get(InstanceLogModel.ID));
+                entry.put("target", logTarget(conduit, instanceId, log.get(InstanceLogModel.ID)));
                 entry.put("handle", String.valueOf((Object) log.get(InstanceLogModel.HANDLE)));
                 entry.put("lineCount", log.get(InstanceLogModel.LINE_COUNT));
                 entry.put("createdAt", String.valueOf((Object) log.get(InstanceLogModel.CREATED_AT)));
@@ -124,6 +137,23 @@ public final class InstanceConsolePage implements RecordScopedPage<Row>, Termina
         }
         vars.put("selectedLogText", text);
         vars.put("selectedLogTitle", title);
-        vars.put("basePath", CmsSupport.panelBase(conduit));
+    }
+
+    /**
+     * This tab, with one stored episode selected.
+     *
+     * AIDEV-NOTE: composed off CmsEndpoints rather than CmsRoutes.subpage because a CMS
+     * route PLUS a query parameter cannot be built from CmsRoutes -- its builders return
+     * the RouteTarget interface, which has no with(...).
+     */
+    private static @NonNull RouteTarget logTarget(@NonNull Conduit conduit,
+                                                  @NonNull Integer instanceId,
+                                                  @NonNull Integer logId) {
+        return CmsEndpoints.RECORD_SUBPAGE
+            .with(CmsEndpoints.PANEL_PARAM, CmsSupport.panelSlug(conduit))
+            .with(CmsEndpoints.RESOURCE_PARAM, "instances")
+            .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
+            .with(CmsEndpoints.SUBPAGE_PARAM, SLUG)
+            .with(HohenheimParams.SELECTED_LOG, logId);
     }
 }

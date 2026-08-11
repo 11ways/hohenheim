@@ -26,6 +26,7 @@ import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -37,6 +38,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.http.ReturnTarget;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -81,8 +83,8 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
                                            @NonNull Row server) {
         String name = server.get(ServerModel.NAME);
         Integer serverId = server.get(ServerModel.ID);
-        String base = CmsSupport.panelBase(conduit);
-        String overviewUrl = base + "/servers/" + serverId + "/page/" + SLUG;
+        String panel = CmsSupport.panelSlug(conduit);
+        String overviewUrl = CmsRoutes.subpage(panel, "servers", serverId, SLUG).toUrl();
 
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, "server_overview", name));
@@ -104,7 +106,7 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
         vars.put("probedAtIso", isoOf(server.get(ServerModel.PROBED_AT)));
         vars.put("preflightOk", Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK)));
         vars.put("capacity", capacityOf(server, serverId));
-        vars.put("workloads", workloadsOf(conduit, serverId));
+        vars.put("workloads", workloadsOf(panel, serverId));
         vars.put("actions", this.actionsOf(server, accessContext, overviewUrl));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
@@ -239,9 +241,8 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
      * The SAME three populations {@link ServerModel#refuseRemovalWhileOwned} counts:
      * live instances, stacks and managed databases referencing this host.
      */
-    private static @NonNull List<WorkloadView> workloadsOf(@NonNull Conduit conduit,
+    private static @NonNull List<WorkloadView> workloadsOf(@NonNull String panel,
                                                            int serverId) {
-        String base = CmsSupport.panelBase(conduit);
         List<WorkloadView> workloads = new ArrayList<>();
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.SERVER_ID.eq(serverId))
@@ -251,7 +252,7 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
                 "instance",
                 badgeOf(InstanceModel.STATUS, instance.get(InstanceModel.STATUS)),
                 instance.get(InstanceModel.CAPACITY_MB),
-                base + "/instances/" + instance.get(InstanceModel.ID)));
+                CmsRoutes.detail(panel, "instances", instance.get(InstanceModel.ID))));
         }
         for (Row stack : Models.get(StackModel.class).find()
                 .where(StackModel.SERVER_ID.eq(serverId)).all()) {
@@ -260,7 +261,7 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
                 "stack",
                 badgeOf(StackModel.STATUS, stack.get(StackModel.STATUS)),
                 null,
-                base + "/stacks/" + stack.get(StackModel.ID)));
+                CmsRoutes.detail(panel, "stacks", stack.get(StackModel.ID))));
         }
         for (Row database : Models.get(DatabaseModel.class).find()
                 .where(DatabaseModel.SERVER_ID.eq(serverId)).all()) {
@@ -269,7 +270,7 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
                 "database",
                 badgeOf(DatabaseModel.STATUS, database.get(DatabaseModel.STATUS)),
                 database.get(DatabaseModel.MEMORY_LIMIT_MB),
-                base + "/databases/" + database.get(DatabaseModel.ID)));
+                CmsRoutes.detail(panel, "databases", database.get(DatabaseModel.ID))));
         }
         return workloads;
     }
@@ -284,11 +285,15 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
                                                  @NonNull AccessContext accessContext,
                                                  @NonNull String overviewUrl) {
         Object serverId = server.get(ServerModel.ID);
-        String suffix = "?_return=" + Uri.encodeComponent(overviewUrl);
+        // AIDEV-NOTE: RowAction.Url is Uri-typed, hence the render here. The panel slug is
+        // the literal "admin" this page already produced -- the server resource is
+        // installation administration and the URL must not move; converting the SHAPE is
+        // this change, converting the PANEL would be a behaviour change.
         ActionStateTranslator.RowActionPresentation presentation =
             this.actions.translateRowActionsForList(this.resource.rowActions(), server,
-                (actionId, row) -> new Uri("/admin/servers/" + serverId + "/action/"
-                    + actionId.getPath() + suffix),
+                (actionId, row) -> new Uri(ReturnTarget.bind(
+                    CmsRoutes.invokeRow("admin", "servers", serverId, actionId),
+                    overviewUrl).toUrl()),
                 accessContext);
         Map<String, InvokeActionState> byPath = new LinkedHashMap<>();
         for (InvokeActionState state : presentation.inlineInvokes()) {

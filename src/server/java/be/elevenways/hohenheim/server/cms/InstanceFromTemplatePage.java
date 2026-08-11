@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.EditView;
@@ -16,6 +17,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.RedirectResult;
@@ -48,7 +50,7 @@ public final class InstanceFromTemplatePage extends PanelPage {
                                            @NonNull AccessContext accessContext) {
         Row template = templateFromQuery(conduit);
         if (template == null) {
-            return new RedirectResult(CmsSupport.panelBase(conduit) + "/instance-templates");
+            return conduit.softRedirect(templateListTarget(conduit));
         }
         // The approval gate, ASKED AT RENDER as well as at submit: a tenant following a
         // guessed ?template= id must not be shown a form whose submit can only refuse.
@@ -56,7 +58,7 @@ public final class InstanceFromTemplatePage extends PanelPage {
         try {
             InstanceTemplates.requireSelectable(template, accessContext);
         } catch (Violations unapproved) {
-            return new RedirectResult(CmsSupport.panelBase(conduit) + "/instance-templates");
+            return conduit.softRedirect(templateListTarget(conduit));
         }
         return renderResult(conduit, accessContext, template, Map.of(), null);
     }
@@ -107,15 +109,15 @@ public final class InstanceFromTemplatePage extends PanelPage {
             projects.add(entry);
         }
 
-        String panelBase = CmsSupport.panelBase(conduit);
+        String panel = CmsSupport.panelSlug(conduit);
         Map<String, Object> vars = new HashMap<>();
         vars.put("chooseHost", chooseHost);
         vars.put("projects", projects);
         vars.put("chooseProject", !projects.isEmpty());
         vars.put("projectId", rawValues.get("project_id") != null
             ? String.valueOf(rawValues.get("project_id")) : "");
-        vars.put("formAction", HohenheimEndpoints.INSTANCES_FROM_TEMPLATE.toUrl());
-        vars.put("cancelUrl", panelBase + "/instance-templates");
+        vars.put("formTarget", HohenheimEndpoints.INSTANCES_FROM_TEMPLATE);
+        vars.put("cancelTarget", CmsRoutes.list(panel, "instance-templates"));
         vars.put("title", Microcopy.of("create_instance").withFilter("scope", "instance_template")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
         vars.put("templateId", templateId);
@@ -142,6 +144,11 @@ public final class InstanceFromTemplatePage extends PanelPage {
      */
     private static @NonNull List<Row> selectableProjects(@NonNull AccessContext ctx) {
         return Projects.visibleTo(ctx);
+    }
+
+    /** The hosting panel's instance-template list, for the two refusals above. */
+    private static @NonNull RouteTarget templateListTarget(@NonNull Conduit conduit) {
+        return CmsRoutes.list(CmsSupport.panelSlug(conduit), "instance-templates");
     }
 
     /** The ?template= row, or null when absent/malformed/missing. */

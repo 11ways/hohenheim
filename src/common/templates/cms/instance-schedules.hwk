@@ -4,7 +4,7 @@
 {% declare instanceId: Integer %}
 {% declare instanceName: String %}
 {% declare schedules: List %}
-{% declare basePath: String = "/admin" %}
+{% declare addScheduleTarget: RouteTarget %}
 {% declare canEdit: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
@@ -14,7 +14,7 @@
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header">
         <h1>{{ instanceName }}</h1>
-        {% if canEdit %}<pl-button variant="primary" href={% basePath + "/instance-schedules/new?record_id=" + instanceId %} id="add-schedule-link">{{ t("add", scope: "instance_schedule") }}</pl-button>{% /if %}
+        {% if canEdit %}<pl-button variant="primary" use:Zenit.route={% addScheduleTarget %} id="add-schedule-link">{{ t("add", scope: "instance_schedule") }}</pl-button>{% /if %}
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
@@ -31,7 +31,7 @@
         <pl-table-body>
             {% each schedules as index, schedule %}
             <pl-table-row>
-                <pl-table-cell>{% if canEdit %}<a href={% schedule.get("editUrl") %}>{{ schedule.get("name") }}</a>{% else %}{{ schedule.get("name") }}{% /if %}</pl-table-cell>
+                <pl-table-cell>{% if canEdit %}<a use:Zenit.route={% schedule.get("editTarget") %}>{{ schedule.get("name") }}</a>{% else %}{{ schedule.get("name") }}{% /if %}</pl-table-cell>
                 <pl-table-cell><code>{{ schedule.get("cron") }}</code></pl-table-cell>
                 <pl-table-cell>{{ schedule.get("timezone") }}</pl-table-cell>
                 <pl-table-cell>
@@ -42,7 +42,7 @@
                     {% if schedule.get("disabledReason") %} {{ schedule.get("disabledReason") }}{% /if %}
                     {% /if %}
                 </pl-table-cell>
-                <pl-table-cell><a href={% schedule.get("stepsUrl") %}>{{ t("steps", scope: "instance_schedule") }}</a></pl-table-cell>
+                <pl-table-cell><a use:Zenit.route={% schedule.get("stepsTarget") %}>{{ t("steps", scope: "instance_schedule") }}</a></pl-table-cell>
             </pl-table-row>
             {% /each %}
         </pl-table-body>

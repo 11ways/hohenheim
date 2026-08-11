@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -149,7 +150,10 @@ public final class ServerResource extends RowResource {
     /** The list row's title link opens the Overview page; the edit action keeps the form. */
     @Override
     public @NonNull String rowUrl(@NonNull Row row) {
-        return "/admin/servers/" + row.get(ServerModel.ID) + "/page/" + ServerOverviewPage.SLUG;
+        // Resource.rowUrl is String-typed (a zenit-cms boundary), so the typed target is
+        // rendered here rather than concatenated.
+        return CmsRoutes.subpage("admin", "servers", row.get(ServerModel.ID),
+            ServerOverviewPage.SLUG).toUrl();
     }
 
     @Override

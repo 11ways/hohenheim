@@ -6,6 +6,9 @@
 {% declare origin: String %}
 {% declare peerName: String = "" %}
 {% declare records: List<DnsRecordView> %}
+{% declare addRecordTarget: RouteTarget %}
+{% declare recordsTabTarget: RouteTarget %}
+{% declare remoteFormTarget: RouteTarget %}
 {% declare editable: Boolean = false %}
 {% declare notice: String = "" %}
 {% declare editRecord: DnsRecordFormView = null %}
@@ -21,7 +24,7 @@
     <header class="cms-resource-list-header">
         <h1>{{ origin }}</h1>
         {% if editable %}
-        <a href={% "/admin/dns-zones/" + zoneId + "/page/records?record=new" %} id="add-remote-record-link">
+        <a use:Zenit.route={% addRecordTarget %} id="add-remote-record-link">
             <pl-button variant={% "primary" %}>{{ t("add_record", scope: "dns_zone") }}</pl-button>
         </a>
         {% /if %}
@@ -38,8 +41,7 @@
 
     {% if editRecord %}
     {% let editType = editRecord.type %}
-    <form method="POST" action={% "/admin/dns-zones/" + zoneId + "/remote-records" %}>
-        {% csrf() %}
+    <form use:Zenit.form={% remoteFormTarget %}>
         <input type="hidden" name="record_id" value={% editRecord.id %}>
         <pl-card>
             <pl-card-header>
@@ -104,7 +106,7 @@
         </pl-card>
         <div class="cms-form-actions">
             <pl-button variant="primary" type="submit">{{ t("save_remote", scope: "dns_remote") }}</pl-button>
-            <a href={% "/admin/dns-zones/" + zoneId + "/page/records" %}>
+            <a use:Zenit.route={% recordsTabTarget %}>
                 <pl-button variant={% "ghost" %} type="button">{{ t("cancel_remote", scope: "dns_remote") }}</pl-button>
             </a>
         </div>
@@ -126,7 +128,7 @@
             <pl-table-row>
                 <pl-table-cell>
                     {% if editable %}
-                    <a href={% "/admin/dns-zones/" + zoneId + "/page/records?record=" + record.id %}><code>{{ record.name }}</code></a>
+                    <a use:Zenit.route={% record.editTarget %}><code>{{ record.name }}</code></a>
                     {% else %}
                     <code>{{ record.name }}</code>
                     {% /if %}
@@ -146,8 +148,7 @@
                 </pl-table-cell>
                 {% if editable %}
                 <pl-table-cell>
-                    <form method="POST" action={% "/admin/dns-zones/" + zoneId + "/remote-records" %} use:CmsConfirm.destructive={% t("delete_confirm", scope: "dns_remote") %}>
-                        {% csrf() %}
+                    <form use:Zenit.form={% remoteFormTarget %} use:CmsConfirm.destructive={% t("delete_confirm", scope: "dns_remote") %}>
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="record_id" value={% record.id %}>
                         <pl-button variant={% "ghost" %} type="submit">{{ t("delete_remote", scope: "dns_remote") }}</pl-button>

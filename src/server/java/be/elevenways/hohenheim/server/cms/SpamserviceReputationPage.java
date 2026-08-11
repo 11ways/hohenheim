@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.ReputationDiagnostic;
 import be.elevenways.spamservice.client.SpamserviceApiException;
 import be.elevenways.spamservice.client.SpamserviceClient;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -51,7 +52,7 @@ public final class SpamserviceReputationPage extends PanelPage {
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("title", Microcopy.of("reputation").withFilter("scope", "spamservice")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
-        vars.put("pageUrl", "/admin/" + SLUG);
+        vars.put("pageTarget", CmsRoutes.list("admin", SLUG));
         vars.put("ip", ip != null ? ip : "");
         vars.put("error", "");
         vars.put("result", Map.of());

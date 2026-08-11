@@ -35,7 +35,7 @@
                     {% each artifacts as artifact %}
                     <pl-table-row data-artifact-id={% artifact.id %}>
                         <pl-table-cell>
-                            <a href={% artifact.recordUrl %}>
+                            <a use:Zenit.route={% artifact.recordTarget %}>
                                 {% if artifact.createdAtIso != null %}
                                 <pl-relative-time datetime={% artifact.createdAtIso %} wording={% timeWording %} title={% artifact.createdAtIso %}></pl-relative-time>
                                 {% else %}

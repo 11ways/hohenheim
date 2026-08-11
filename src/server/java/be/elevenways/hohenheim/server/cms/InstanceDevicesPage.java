@@ -4,13 +4,17 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -37,7 +41,7 @@ public final class InstanceDevicesPage implements RecordScopedPage<Row> {
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row instance) {
         Integer instanceId = instance.get(InstanceModel.ID);
-        String basePath = CmsSupport.panelBase(conduit);
+        String panel = CmsSupport.panelSlug(conduit);
 
         List<Map<String, Object>> devices = new ArrayList<>();
         for (Row device : new InstanceDevices().rowsFor(instanceId)) {
@@ -48,8 +52,8 @@ public final class InstanceDevicesPage implements RecordScopedPage<Row> {
             entry.put("disk", InstanceDeviceModel.TYPE_DISK.equals(
                 device.get(InstanceDeviceModel.TYPE)));
             entry.put("sizeGb", device.get(InstanceDeviceModel.SIZE_GB));
-            entry.put("editUrl", basePath + "/instance-devices/"
-                + device.get(InstanceDeviceModel.ID));
+            entry.put("editTarget", CmsRoutes.detail(panel, "instance-devices",
+                device.get(InstanceDeviceModel.ID)));
             devices.add(entry);
         }
 
@@ -59,11 +63,25 @@ public final class InstanceDevicesPage implements RecordScopedPage<Row> {
         vars.put("instanceId", instanceId);
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("devices", devices);
-        vars.put("basePath", basePath);
+        // Create form + two prefill query parameters: composed off CmsEndpoints because
+        // CmsRoutes.create returns the RouteTarget interface, which has no with(...).
+        vars.put("addDiskTarget", newDeviceTarget(panel, InstanceDeviceModel.TYPE_DISK, instanceId));
+        vars.put("addNicTarget", newDeviceTarget(panel, InstanceDeviceModel.TYPE_NIC, instanceId));
         vars.put("canEdit", HohenheimAccess.isAdmin(accessContext)
             || HohenheimAccess.hasInstanceCapability(
                 accessContext, instanceId, HohenheimAccess.CONFIG));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-devices"), vars);
+    }
+
+    /** The device create form, opened with its kind and owning instance prefilled. */
+    private static @NonNull RouteTarget newDeviceTarget(@NonNull String panel,
+                                                        @NonNull String type,
+                                                        @NonNull Integer instanceId) {
+        return CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, panel)
+            .with(CmsEndpoints.RESOURCE_PARAM, "instance-devices")
+            .with(HohenheimParams.DEVICE_TYPE_PREFILL, type)
+            .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId);
     }
 }

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
 import be.elevenways.hohenheim.dns.DnsRecordFormView;
 import be.elevenways.hohenheim.dns.DnsRecordView;
@@ -11,6 +13,8 @@ import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -18,6 +22,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -64,7 +69,8 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
                 displayValue(record),
                 Boolean.TRUE.equals(record.get(DnsRecordModel.ENABLED)),
                 record.get(DnsRecordModel.MANAGED_BY) != null,
-                "/admin/dns-records/" + recordId));
+                // The DNS record resource lives only on the admin panel.
+                CmsRoutes.detail("admin", "dns-records", recordId)));
         }
 
         Map<String, Object> vars = new HashMap<>();
@@ -72,6 +78,12 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         vars.put("zoneId", zoneId);
         vars.put("origin", origin);
         vars.put("records", records);
+        // Create form + prefill query parameter: composed off CmsEndpoints, since
+        // CmsRoutes.create returns the RouteTarget interface (no with(...)).
+        vars.put("addRecordTarget", CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, "admin")
+            .with(CmsEndpoints.RESOURCE_PARAM, "dns-records")
+            .with(HohenheimParams.ZONE_ID_PREFILL, zoneId));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-records"), vars);
     }
@@ -108,7 +120,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
                         remoteDisplayValue(remote),
                         remote.enabled(),
                         remote.managed_by() != null,
-                        null));
+                        remoteRecordTarget(zoneId, id)));
                     if (id.equals(requestedRecord)) {
                         editRecord = formView(remote);
                     }
@@ -143,11 +155,32 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         vars.put("notice", notice);
         vars.put("editRecord", editRecord);
         vars.put("recordTypes", DnsRecordModel.ALL_TYPES);
+        vars.put("addRecordTarget", remoteRecordTarget(zoneId, "new"));
+        vars.put("recordsTabTarget", CmsRoutes.subpage("admin", "dns-zones", zoneId, "records"));
+        vars.put("remoteFormTarget", HohenheimEndpoints.DNS_REMOTE_RECORD
+            .with(HohenheimEndpoints.ZONE_ID, zoneId));
         String error = conduit.getQueryParam("error");
         vars.put("error", error != null ? error : "");
         vars.put("saved", conduit.getQueryParam("saved") != null);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-remote-records"), vars);
+    }
+
+    /**
+     * The secondary zone's Records tab, opened on ONE remote record (or {@code new}).
+     *
+     * AIDEV-NOTE: composed off CmsEndpoints rather than CmsRoutes.subpage because the
+     * link is a CMS route PLUS a query parameter, and CmsRoutes returns the RouteTarget
+     * interface, which has no with(...).
+     */
+    private static @NonNull RouteTarget remoteRecordTarget(@NonNull Integer zoneId,
+                                                           @NonNull String recordId) {
+        return CmsEndpoints.RECORD_SUBPAGE
+            .with(CmsEndpoints.PANEL_PARAM, "admin")
+            .with(CmsEndpoints.RESOURCE_PARAM, "dns-zones")
+            .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(zoneId))
+            .with(CmsEndpoints.SUBPAGE_PARAM, "records")
+            .with(HohenheimParams.REMOTE_RECORD, recordId);
     }
 
     /** Read-only listing from the replica snapshot when the owner cannot be reached. */

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.protoblast.common.i18n.Locale;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -38,6 +39,9 @@ import java.util.LinkedHashMap;
  */
 public final class AdminDashboard extends DashboardPanelPeer {
 
+    /** The dashboard is the OPERATOR surface; every tile links into the admin panel. */
+    private static final String ADMIN = "admin";
+
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dashboard"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("dashboard").withFilter("scope", "admin"); }
     @Override public @NonNull String slug() { return "dashboard"; }
@@ -63,7 +67,8 @@ public final class AdminDashboard extends DashboardPanelPeer {
                 "source", "hohenheim.ban",
                 "rules", RuleGroup.and(Rule.of("active", RuleOperator.IS_TRUE)),
                 "icon", "ban",
-                "link", "/admin/bans"))));
+                // StatWidget's stored "link" is a String, so the typed target renders here.
+                "link", CmsRoutes.list(ADMIN, "bans").toUrl()))));
 
         List<WidgetInstance> widgets = new ArrayList<>();
         if (proxy && Models.get(SiteModel.class).findActive().isEmpty()) {
@@ -100,7 +105,7 @@ public final class AdminDashboard extends DashboardPanelPeer {
             "label", localized("plural", modelScope),
             "source", sourceToken,
             "icon", icon,
-            "link", "/admin/" + resourceSlug));
+            "link", CmsRoutes.list(ADMIN, resourceSlug).toUrl()));
     }
 
     private static @NonNull WidgetInstance section(@NonNull WidgetInstance child) {

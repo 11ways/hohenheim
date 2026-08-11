@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -16,6 +18,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
@@ -87,6 +90,12 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         // The deploy/cancel/rollback forms echo this as _return so their
         // handlers redirect back to whichever panel rendered this page.
         vars.put("returnUrl", ReturnTarget.capture(conduit));
+        vars.put("deployTarget", HohenheimEndpoints.SITES_DEPLOY
+            .with(HohenheimEndpoints.SITE_ID, siteId));
+        vars.put("cancelDeployTarget", HohenheimEndpoints.SITES_DEPLOY_CANCEL
+            .with(HohenheimEndpoints.SITE_ID, siteId));
+        vars.put("rollbackTarget", HohenheimEndpoints.SITES_ROLLBACK
+            .with(HohenheimEndpoints.SITE_ID, siteId));
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
@@ -110,7 +119,11 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         vars.put("webhookAutoDeploy",
             Boolean.TRUE.equals(settings.get(GitSourceSchema.AUTO_DEPLOY.getName())));
 
-        String path = "/api/webhooks/git/" + orEmpty(site.get(SiteModel.SLUG));
+        // AIDEV-NOTE: the git webhook is intercepted by SiteDispatcher BEFORE the zenit
+        // conduit chain, so it is deliberately outside the Endpoint framework and has no
+        // RouteTarget. Referencing the handler's own PREFIX constant is what keeps this
+        // display URL from drifting away from the route that actually answers.
+        String path = GitWebhookHandler.PREFIX + orEmpty(site.get(SiteModel.SLUG));
         String url = path;
         Row domain = Models.get(SiteDomainModel.class).find()
             .where(SiteDomainModel.SITE_ID.eq(site.get(SiteModel.ID)))

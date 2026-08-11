@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
+import be.elevenways.hohenheim.server.cms.InstanceFilesPage;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -264,8 +266,13 @@ public final class InstanceFileEndpoints {
     private static @NonNull String filesUrl(@NonNull Conduit conduit, int instanceId,
                                             @NonNull String directory,
                                             @Nullable Violations refused) {
+        // AIDEV-NOTE: the destination is USUALLY the submitted _return, which
+        // ReturnTarget hands back as an already-sanitized String -- there is no endpoint
+        // left to bind path=/error= onto, hence the append below. The FALLBACK is built
+        // from the typed route, never from a literal.
         String base = ReturnTarget.or(ReturnTarget.read(conduit),
-            "/admin/instances/" + instanceId + "/page/files");
+            CmsRoutes.subpage("admin", "instances", instanceId,
+                InstanceFilesPage.SLUG).toUrl());
         StringBuilder url = new StringBuilder(base);
         url.append(base.contains("?") ? '&' : '?').append("path=").append(encode(directory));
         if (refused != null) {

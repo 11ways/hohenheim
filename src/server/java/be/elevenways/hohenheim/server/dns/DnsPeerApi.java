@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
 import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -67,10 +69,17 @@ public final class DnsPeerApi {
         return new DnsPeerApi(baseUrl.trim(), apiKey.trim());
     }
 
+    // AIDEV-NOTE: the paths below address a REMOTE peer, but a peer runs THIS software,
+    // so its record API is this app's own declared route. Rendering that declaration is
+    // what keeps the two ends from drifting -- a hand-copied literal is exactly the
+    // drift this forbids, and it is also why these are toUrl(Map) rather than a
+    // RouteTarget: the base URL is the peer's, only the PATH comes from here.
+
     /** @return the owner's live record rows for the zone */
     public @NonNull List<DnsRecordDto> listRecords(@NonNull String origin) {
         DnsRecordListResponse response = parseQuietly(
-            request("GET", recordsPath(origin), null), DnsRecordListResponse.class);
+            request("GET", HohenheimEndpoints.API_DNS_RECORDS.toUrl(
+            Map.of(HohenheimEndpoints.DNS_ORIGIN, origin)), null), DnsRecordListResponse.class);
         if (response == null || response.records() == null) {
             throw new PeerApiException("Unexpected response from peer", null, null);
         }
@@ -84,19 +93,20 @@ public final class DnsPeerApi {
     }
 
     public void createRecord(@NonNull String origin, @NonNull Map<String, String> fields) {
-        request("POST", recordsPath(origin), fields);
+        request("POST", HohenheimEndpoints.API_DNS_RECORD_CREATE.toUrl(
+            Map.of(HohenheimEndpoints.DNS_ORIGIN, origin)), fields);
     }
 
     public void updateRecord(@NonNull String origin, int recordId, @NonNull Map<String, String> fields) {
-        request("POST", recordsPath(origin) + "/" + recordId, fields);
+        request("POST", HohenheimEndpoints.API_DNS_RECORD_UPDATE.toUrl(Map.of(
+            HohenheimEndpoints.DNS_ORIGIN, origin,
+            HohenheimEndpoints.DNS_RECORD_ID, recordId)), fields);
     }
 
     public void deleteRecord(@NonNull String origin, int recordId) {
-        request("POST", recordsPath(origin) + "/" + recordId + "/delete", Map.of());
-    }
-
-    private static @NonNull String recordsPath(@NonNull String origin) {
-        return "/api/dns/zones/" + URLEncoder.encode(origin, StandardCharsets.UTF_8) + "/records";
+        request("POST", HohenheimEndpoints.API_DNS_RECORD_DELETE.toUrl(Map.of(
+            HohenheimEndpoints.DNS_ORIGIN, origin,
+            HohenheimEndpoints.DNS_RECORD_ID, recordId)), Map.of());
     }
 
     private @Nullable String request(@NonNull String method, @NonNull String path,

@@ -2,14 +2,18 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.ui.Icon;
@@ -36,7 +40,7 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row instance) {
         Integer instanceId = instance.get(InstanceModel.ID);
-        String basePath = CmsSupport.panelBase(conduit);
+        String panel = CmsSupport.panelSlug(conduit);
 
         List<Map<String, Object>> schedules = new ArrayList<>();
         for (Row schedule : Models.get(RecordScheduleModel.class)
@@ -48,9 +52,10 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
             entry.put("timezone", schedule.get(RecordScheduleModel.TIMEZONE));
             entry.put("enabled", Boolean.TRUE.equals(schedule.get(RecordScheduleModel.ENABLED)));
             entry.put("disabledReason", schedule.get(RecordScheduleModel.DISABLED_REASON));
-            entry.put("editUrl", basePath + "/instance-schedules/" + schedule.get(RecordScheduleModel.ID));
-            entry.put("stepsUrl", basePath + "/instance-schedules/"
-                + schedule.get(RecordScheduleModel.ID) + "/page/steps");
+            entry.put("editTarget", CmsRoutes.detail(panel, "instance-schedules",
+                schedule.get(RecordScheduleModel.ID)));
+            entry.put("stepsTarget", CmsRoutes.subpage(panel, "instance-schedules",
+                schedule.get(RecordScheduleModel.ID), "steps"));
             schedules.add(entry);
         }
 
@@ -60,7 +65,12 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
         vars.put("instanceId", instanceId);
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("schedules", schedules);
-        vars.put("basePath", basePath);
+        // Create form + prefill query parameter: composed off CmsEndpoints, since
+        // CmsRoutes.create returns the RouteTarget interface (no with(...)).
+        vars.put("addScheduleTarget", CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, panel)
+            .with(CmsEndpoints.RESOURCE_PARAM, "instance-schedules")
+            .with(HohenheimParams.RECORD_ID_PREFILL, instanceId));
         vars.put("canEdit", HohenheimAccess.isAdmin(accessContext)
             || HohenheimAccess.hasInstanceCapability(
                 accessContext, instanceId, HohenheimAccess.CONFIG));

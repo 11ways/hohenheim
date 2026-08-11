@@ -7,6 +7,7 @@ import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -129,8 +130,10 @@ public final class ManageInstanceResource extends InstanceResource {
     /** The delegated row title opens the same overview, under /manage. */
     @Override
     public @NonNull String rowUrl(@NonNull Row row) {
-        return "/manage/" + this.slug() + "/" + row.get(InstanceModel.ID)
-            + "/page/" + InstanceOverviewPage.SLUG;
+        // Resource.rowUrl is String-typed (a zenit-cms boundary), so the typed target is
+        // rendered here rather than concatenated.
+        return CmsRoutes.subpage("manage", this.slug(), row.get(InstanceModel.ID),
+            InstanceOverviewPage.SLUG).toUrl();
     }
 
     /** NAV-ONLY (zero granted instances hide the empty list); the route stays scoped. */

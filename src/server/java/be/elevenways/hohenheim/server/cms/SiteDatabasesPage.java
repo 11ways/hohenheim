@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -8,12 +9,15 @@ import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.sitetype.SiteTypeInfo;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -57,7 +61,9 @@ public final class SiteDatabasesPage implements RecordScopedPage<Row> {
             entry.put("id", link.get(SiteDatabaseModel.ID));
             entry.put("prefix", prefix);
             entry.put("primary", primary);
-            entry.put("editUrl", "/admin/site-databases/" + link.get(SiteDatabaseModel.ID));
+            // The site-database and database resources live only on the admin panel.
+            entry.put("editTarget", CmsRoutes.detail("admin", "site-databases",
+                link.get(SiteDatabaseModel.ID)));
             entry.put("varNames", prefix + "_HOST, _PORT, _USER, _PASSWORD, _NAME, _URL"
                 + (primary ? " + DATABASE_URL" : ""));
             primary = false;
@@ -69,12 +75,13 @@ public final class SiteDatabasesPage implements RecordScopedPage<Row> {
                 entry.put("dbName", database.get(DatabaseModel.NAME));
                 entry.put("engine", database.get(DatabaseModel.ENGINE));
                 entry.put("status", String.valueOf(database.get(DatabaseModel.STATUS)));
-                entry.put("dbUrl", "/admin/databases/" + database.get(DatabaseModel.ID));
+                entry.put("dbTarget", CmsRoutes.detail("admin", "databases",
+                    database.get(DatabaseModel.ID)));
             } else {
                 entry.put("dbName", "(deleted)");
                 entry.put("engine", "");
                 entry.put("status", "missing");
-                entry.put("dbUrl", "");
+                entry.put("dbTarget", null);
             }
             links.add(entry);
         }
@@ -83,6 +90,12 @@ public final class SiteDatabasesPage implements RecordScopedPage<Row> {
         vars.put("title", CmsSupport.pageTitle(conduit, "site_databases",
             site.get(SiteModel.NAME)));
         vars.put("siteId", siteId);
+        // Create form + prefill query parameter: composed off CmsEndpoints, since
+        // CmsRoutes.create returns the RouteTarget interface (no with(...)).
+        vars.put("attachDatabaseTarget", CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, "admin")
+            .with(CmsEndpoints.RESOURCE_PARAM, "site-databases")
+            .with(HohenheimParams.SITE_ID_PREFILL, siteId));
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("links", links);
         vars.put("recordTabs", recordTabs(conduit));

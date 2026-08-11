@@ -13,8 +13,8 @@
 {% declare projects: List %}
 {% declare chooseProject: Boolean = false %}
 {% declare projectId: String = "" %}
-{% declare formAction: String %}
-{% declare cancelUrl: String %}
+{% declare formTarget: RouteTarget %}
+{% declare cancelTarget: RouteTarget %}
 {% declare formError: String = "" %}
 {% declare variableForm: FormState %}
 {% declare flashMessage: Microcopy = null %}
@@ -32,8 +32,7 @@
     {% /if %}
     {% if formError != "" %}<pl-alert variant="destructive">{{ formError }}</pl-alert>{% /if %}
 
-    <form method="POST" action={% formAction %}>
-        {% csrf() %}
+    <form use:Zenit.form={% formTarget %}>
         <input type="hidden" name="template_id" value={% templateId %}>
         <pl-card><pl-card-content><zf-form-scope><div class="zf-entries">
             <pl-field>
@@ -74,7 +73,7 @@
         {% /if %}
         <div class="cms-form-actions">
             <pl-button variant="primary" type="submit">{{ t("create", scope: "instance_from_template") }}</pl-button>
-            <a href={% cancelUrl %}>{{ t("cancel", scope: "instance_from_template") }}</a>
+            <a use:Zenit.route={% cancelTarget %}>{{ t("cancel", scope: "instance_from_template") }}</a>
         </div>
     </form>
 </section>

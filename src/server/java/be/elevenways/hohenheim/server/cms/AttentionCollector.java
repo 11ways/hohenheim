@@ -28,10 +28,12 @@ import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.task.TaskCatalog;
 import be.elevenways.zenit.common.task.TaskDescriptor;
 import be.elevenways.zenit.common.task.TaskStatus;
@@ -58,6 +60,12 @@ import java.util.Map;
  * @since 0.2.0
  */
 public final class AttentionCollector {
+
+    /**
+     * Every attention item points into the OPERATOR panel: this widget is an
+     * installation-health surface, so its links keep the panel slug they always had.
+     */
+    private static final String ADMIN = "admin";
 
     private AttentionCollector() {}
 
@@ -130,7 +138,7 @@ public final class AttentionCollector {
                 copy("instance_crashed", "attention_title",
                     "name", instance.get(InstanceModel.NAME)),
                 copy("instance_crashed", "attention_detail"),
-                "/admin/instances/" + instance.get(InstanceModel.ID) + "/page/console"));
+                CmsRoutes.subpage(ADMIN, "instances", instance.get(InstanceModel.ID), "console")));
         }
     }
 
@@ -160,7 +168,7 @@ public final class AttentionCollector {
                 copy("instance_backup", "attention_title",
                     "name", instance.get(InstanceModel.NAME)),
                 literal(latest.get(InstanceBackupModel.ERROR)),
-                "/admin/instances/" + id + "/page/backups"));
+                CmsRoutes.subpage(ADMIN, "instances", id, "backups")));
         }
     }
 
@@ -200,7 +208,7 @@ public final class AttentionCollector {
                     copy("instance_backup_never", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
                     copy("instance_backup_never", "attention_detail"),
-                    "/admin/instances/" + id + "/page/backups"));
+                    CmsRoutes.subpage(ADMIN, "instances", id, "backups")));
                 continue;
             }
             Instant completedAt = newestComplete.get(InstanceBackupModel.CREATED_AT);
@@ -211,7 +219,7 @@ public final class AttentionCollector {
                     copy("instance_backup_stale", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
                     copy("instance_backup_stale", "attention_detail", "days", age),
-                    "/admin/instances/" + id + "/page/backups"));
+                    CmsRoutes.subpage(ADMIN, "instances", id, "backups")));
             }
         }
     }
@@ -251,7 +259,7 @@ public final class AttentionCollector {
                 copy("instance_disk", "attention_detail",
                     "percent", Math.round(fraction * 100),
                     "limit", Math.round(limit / (1024.0 * 1024 * 1024))),
-                "/admin/instances/" + instance.get(InstanceModel.ID)));
+                CmsRoutes.detail(ADMIN, "instances", instance.get(InstanceModel.ID))));
         }
     }
 
@@ -314,7 +322,7 @@ public final class AttentionCollector {
             items.add(item("error", "box-archive",
                 copy("control_plane_backup", "attention_title"),
                 copy("control_plane_backup", "attention_detail"),
-                "/admin/settings"));
+                CmsRoutes.list(ADMIN, "settings")));
             return;
         }
         controlPlaneBackupFreshness(items);
@@ -353,7 +361,7 @@ public final class AttentionCollector {
                 copy("control_plane_backup_stale", "attention_title"),
                 copy("control_plane_backup_stale", "attention_detail",
                     "hours", CONTROL_PLANE_BACKUP_STALE_AFTER.toHours()),
-                "/admin/settings"));
+                CmsRoutes.list(ADMIN, "settings")));
         }
     }
 
@@ -366,7 +374,7 @@ public final class AttentionCollector {
         items.add(item("error", "cubes",
             copy("docker_unreachable", "attention_title"),
             literal(health.problem()),
-            "/admin/settings"));
+            CmsRoutes.list(ADMIN, "settings")));
     }
 
     /**
@@ -382,7 +390,7 @@ public final class AttentionCollector {
                 copy("workload_identity", "attention_title", "name",
                     finding.siteName() != null ? finding.siteName() : finding.siteId()),
                 literal(finding.problem()),
-                "/admin/sites/" + finding.siteId()));
+                CmsRoutes.detail(ADMIN, "sites", finding.siteId())));
         }
     }
 
@@ -407,14 +415,14 @@ public final class AttentionCollector {
             items.add(item("error", "sitemap",
                 copy("dns_listener", "attention_title"),
                 literal(reason),
-                "/admin/settings"));
+                CmsRoutes.list(ADMIN, "settings")));
         }
         for (DnsZoneSnapshot zone : DnsZoneStore.INSTANCE.zones()) {
             if (zone.getRrset(zone.getOrigin(), Type.NS) == null) {
                 items.add(item("warning", "sitemap",
                     copy("dns_zone_no_ns", "attention_title", "origin", zone.getOriginString()),
                     copy("dns_zone_no_ns", "attention_detail"),
-                    "/admin/dns-zones/" + zone.getZoneId() + "/page/records"));
+                    CmsRoutes.subpage(ADMIN, "dns-zones", zone.getZoneId(), "records")));
             }
         }
     }
@@ -433,13 +441,13 @@ public final class AttentionCollector {
             items.add(item("error", "sitemap",
                 copy("proxy_http_listener", "attention_title"),
                 literal(proxy.getHttpFailureReason()),
-                "/admin/settings"));
+                CmsRoutes.list(ADMIN, "settings")));
         }
         if (proxy.getHttpsState() == ProxyServer.State.FAILED) {
             items.add(item("error", "certificate",
                 copy("proxy_https_listener", "attention_title"),
                 literal(proxy.getHttpsFailureReason()),
-                "/admin/certificates"));
+                CmsRoutes.list(ADMIN, "certificates")));
         } else if (proxy.getHttpsState() == ProxyServer.State.RUNNING
                 && proxy.getHttpsFailureReason() != null) {
             // Partial mode: passthrough listens but termination failed, so the listener
@@ -447,7 +455,7 @@ public final class AttentionCollector {
             items.add(item("error", "certificate",
                 copy("proxy_https_degraded", "attention_title"),
                 literal(proxy.getHttpsFailureReason()),
-                "/admin/certificates"));
+                CmsRoutes.list(ADMIN, "certificates")));
         }
     }
 
@@ -476,7 +484,7 @@ public final class AttentionCollector {
             copy("https_unavailable", "attention_title"),
             copy("https_unavailable", "attention_detail",
                 "sites", sites.isEmpty() ? "-" : String.join(", ", sites)),
-            "/admin/certificates"));
+            CmsRoutes.list(ADMIN, "certificates")));
     }
 
     private static void errorCertificates(List<AttentionItem> items) {
@@ -487,7 +495,7 @@ public final class AttentionCollector {
             items.add(item("error", "certificate",
                 copy("certificate", "attention_title", "name", row.get(CertificateModel.NICE_NAME)),
                 literal(row.get(CertificateModel.RENEWAL_ERROR)),
-                "/admin/certificates/" + row.get(CertificateModel.ID)));
+                CmsRoutes.detail(ADMIN, "certificates", row.get(CertificateModel.ID))));
         }
     }
 
@@ -511,7 +519,7 @@ public final class AttentionCollector {
                 items.add(item(health == SiteHealth.DOWN ? "error" : "warning", "globe",
                     copy("site", "attention_title", "name", site.get(SiteModel.NAME)),
                     copy(health == SiteHealth.DOWN ? "down" : "degraded", "attention_detail"),
-                    "/admin/sites/" + siteId));
+                    CmsRoutes.detail(ADMIN, "sites", siteId)));
             }
         }
     }
@@ -524,7 +532,7 @@ public final class AttentionCollector {
             items.add(item("error", "database",
                 copy("database", "attention_title", "name", row.get(DatabaseModel.NAME)),
                 copy("provisioning_failed", "attention_detail"),
-                "/admin/databases/" + row.get(DatabaseModel.ID)));
+                CmsRoutes.detail(ADMIN, "databases", row.get(DatabaseModel.ID))));
         }
     }
 
@@ -587,7 +595,7 @@ public final class AttentionCollector {
                 items.add(item("warning", "database",
                     copy("site", "attention_title", "name", site.get(SiteModel.NAME)),
                     detail,
-                    "/admin/sites/" + site.get(SiteModel.ID) + "/page/databases"));
+                    CmsRoutes.subpage(ADMIN, "sites", site.get(SiteModel.ID), "databases")));
             }
         }
     }
@@ -622,7 +630,7 @@ public final class AttentionCollector {
                 items.add(item("error", "rocket",
                     copy("deploy", "attention_title", "name", site.get(SiteModel.NAME)),
                     literal(deploy.get(DeploymentModel.ERROR)),
-                    "/admin/sites/" + siteId + "/page/deployments"));
+                    CmsRoutes.subpage(ADMIN, "sites", siteId, "deployments")));
             }
         }
     }
@@ -657,8 +665,9 @@ public final class AttentionCollector {
     }
 
     private static @NonNull AttentionItem item(String severity, String icon, Microcopy title,
-                                               @Nullable Microcopy detail, @Nullable String url) {
-        return new AttentionItem(severity, icon, title, detail, url != null ? url : "");
+                                               @Nullable Microcopy detail,
+                                               @Nullable RouteTarget target) {
+        return new AttentionItem(severity, icon, title, detail, target);
     }
 
     private static @Nullable Microcopy literal(@Nullable Object value) {

@@ -4,7 +4,7 @@
 {% declare stackId: Integer %}
 {% declare stackName: String %}
 {% declare services: List %}
-{% declare addServiceUrl: String = "" %}
+{% declare addServiceTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -13,7 +13,7 @@
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header">
         <h1>{{ stackName }}</h1>
-        <pl-button variant="primary" href={% addServiceUrl %} id="add-service-link">{{ t("add_service", scope: "stack_services") }}</pl-button>
+        <pl-button variant="primary" use:Zenit.route={% addServiceTarget %} id="add-service-link">{{ t("add_service", scope: "stack_services") }}</pl-button>
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
@@ -31,7 +31,7 @@
             {% each services as index, service %}
             <pl-table-row>
                 <pl-table-cell>
-                    <a href={% service.get("editUrl") %}>{{ service.get("name") }}</a>
+                    <a use:Zenit.route={% service.get("editTarget") %}>{{ service.get("name") }}</a>
                     {% if service.get("enabled") == false %}
                     <pl-badge variant={% "secondary" %}>{{ t("disabled", scope: "stack_services") }}</pl-badge>
                     {% /if %}
@@ -43,9 +43,9 @@
                 <pl-table-cell>{{ service.get("ports") }}</pl-table-cell>
                 <pl-table-cell class="hh-stack-files">
                     {% each service.get("files") as fileIndex, file %}
-                    <a href={% file.get("editUrl") %}><code>{{ file.get("path") }}</code></a>
+                    <a use:Zenit.route={% file.get("editTarget") %}><code>{{ file.get("path") }}</code></a>
                     {% /each %}
-                    <pl-button variant="ghost" size="sm" href={% service.get("addFileUrl") %} class="hh-stack-add-file">{{ t("add_file", scope: "stack_services") }}</pl-button>
+                    <pl-button variant="ghost" size="sm" use:Zenit.route={% service.get("addFileTarget") %} class="hh-stack-add-file">{{ t("add_file", scope: "stack_services") }}</pl-button>
                 </pl-table-cell>
             </pl-table-row>
             {% /each %}

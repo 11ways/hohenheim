@@ -21,10 +21,10 @@
     {% if data %}
     <ul class="hh-attention-list">
         {% each data as item %}
-        <li class={% item.url != "" ? "hh-attention-item" : "hh-attention-item hh-attention-static" %}
+        <li class={% item.target != null ? "hh-attention-item" : "hh-attention-item hh-attention-static" %}
             data-severity={% item.severity %}>
-            {% if item.url != "" %}
-            <a class="hh-attention-target" href={% item.url %}>
+            {% if item.target != null %}
+            <a class="hh-attention-target" use:Zenit.route={% item.target %}>
                 {% render attentionContent(item) %}
                 <span class="hh-attention-chevron" attr:aria-label={% Cms.text(t("open", scope: "attention")) %}>
                     <pl-icon name="chevron-right" size="sm"></pl-icon>

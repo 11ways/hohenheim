@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -20,6 +21,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -90,10 +92,8 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
                                            @NonNull Row instance) {
         Integer instanceId = instance.get(InstanceModel.ID);
         String name = String.valueOf((Object) instance.get(InstanceModel.NAME));
-        String base = CmsSupport.panelBase(conduit);
-        String resourceBase = base + "/" + this.resource.slug() + "/";
-        String pageUrl = base + "/instances/" + instanceId + "/page/" + this.slug();
-        String suffix = "?_return=" + Uri.encodeComponent(pageUrl);
+        String panel = CmsSupport.panelSlug(conduit);
+        String pageUrl = CmsRoutes.subpage(panel, "instances", instanceId, this.slug()).toUrl();
 
         List<InstanceArtifactView> rows = new ArrayList<>();
         for (Row artifact : this.resource.model().find()
@@ -107,9 +107,8 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
                 this.sizeOf(artifact),
                 isoOf(artifact.get(this.createdAtField())),
                 this.errorOf(artifact),
-                resourceBase + artifactId,
-                this.invokesFor(artifact, accessContext,
-                    resourceBase + artifactId + "/action/", suffix)));
+                CmsRoutes.detail(panel, this.resource.slug(), artifactId),
+                this.invokesFor(artifact, accessContext, panel, artifactId, pageUrl)));
         }
 
         Map<String, Object> vars = new HashMap<>();
@@ -127,11 +126,15 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
     /** That resource's own actions for THIS row and viewer, targeting its invoke route. */
     private @NonNull List<InvokeActionState> invokesFor(@NonNull Row artifact,
                                                         @NonNull AccessContext accessContext,
-                                                        @NonNull String actionBase,
-                                                        @NonNull String suffix) {
+                                                        @NonNull String panel,
+                                                        @NonNull Object artifactId,
+                                                        @NonNull String pageUrl) {
+        // AIDEV-NOTE: RowAction.Url is Uri-typed, so the typed target renders here.
         ActionStateTranslator.RowActionPresentation presentation =
             this.actions.translateRowActionsForList(this.resource.rowActions(), artifact,
-                (actionId, row) -> new Uri(actionBase + actionId.getPath() + suffix),
+                (actionId, row) -> new Uri(ReturnTarget.bind(
+                    CmsRoutes.invokeRow(panel, this.resource.slug(), artifactId, actionId),
+                    pageUrl).toUrl()),
                 accessContext);
         List<InvokeActionState> invokes = new ArrayList<>(presentation.inlineInvokes());
         invokes.addAll(presentation.overflowInvokes());

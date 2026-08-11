@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.instance.CommunityScripts;
@@ -11,6 +12,8 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -24,6 +27,7 @@ import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
@@ -106,7 +110,7 @@ public class InstanceTemplateResource extends RowResource {
         actions.add(HeaderAction.Url.builder(Identifier.of("hohenheim", "import_template"))
             .label(Microcopy.of("import").withFilter("scope", "instance_template"))
             .icon(Icon.of("file-import"))
-            .url(new Uri("/admin/instance-templates-import"))
+            .url(new Uri(CmsRoutes.list("admin", "instance-templates-import").toUrl()))
             .build());
         return actions;
     }
@@ -125,8 +129,13 @@ public class InstanceTemplateResource extends RowResource {
         return RowAction.Url.<Row>builder(Identifier.of("hohenheim", "template_create_instance"))
             .label(Microcopy.of("create_instance").withFilter("scope", "instance_template"))
             .icon(Icon.of("plus"))
-            .url(row -> new Uri("/admin/instances-from-template?template="
-                + row.get(InstanceTemplateModel.ID)))
+            // A CMS route PLUS a query parameter: composed off CmsEndpoints, since
+            // CmsRoutes returns the RouteTarget interface (no with(...)).
+            .url(row -> new Uri(CmsEndpoints.LIST
+                .with(CmsEndpoints.PANEL_PARAM, "admin")
+                .with(CmsEndpoints.RESOURCE_PARAM, "instances-from-template")
+                .with(HohenheimParams.FROM_TEMPLATE_TEMPLATE,
+                    row.get(InstanceTemplateModel.ID)).toUrl()))
             .build();
     }
 

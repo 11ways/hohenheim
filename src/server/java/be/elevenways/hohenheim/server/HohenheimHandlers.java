@@ -52,6 +52,15 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.server.cms.InstanceConsolePage;
+import be.elevenways.hohenheim.server.cms.SiteProcessesPage;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.common.routing.BoundEndpoint;
+import be.elevenways.zenit.common.routing.Endpoint;
+import be.elevenways.zenit.common.routing.ParameterDefinition;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -93,6 +102,16 @@ import java.util.Optional;
  * write path, and the health check.
  */
 public final class HohenheimHandlers {
+
+    /**
+     * Every redirect below lands on the OPERATOR panel: these are the installation
+     * administration lanes (certificates, DNS zones, databases). The slug is the literal
+     * these handlers already produced, so no URL moves.
+     */
+    private static final String ADMIN = "admin";
+
+    /** The certificate-request page's peer slug, shared with CertificateRequestPage. */
+    private static final String CERTIFICATES_REQUEST_SLUG = "certificates-request";
 
     private HohenheimHandlers() {
     }
@@ -198,7 +217,7 @@ public final class HohenheimHandlers {
                     return requestError(conduit, certificateError("dns_validation_failed"));
                 }
                 ActivityLog.record(certModel, certId, "requested", "manual DNS-01");
-                return redirectUntyped("/admin/certificates");
+                return redirect(CmsRoutes.list(ADMIN, "certificates"));
             }
 
             List<String> hostnames = CertificateRequestForm.submittedDomains(form);
@@ -246,8 +265,12 @@ public final class HohenheimHandlers {
                 try {
                     var manual = proxy.getAcmeService().prepareManualDnsCertificate(
                         hostnames, niceName, email.isEmpty() ? null : email, requester);
-                    return redirectUntyped("/admin/certificates-request?manual="
-                        + URLEncoder.encode(manual.token(), StandardCharsets.UTF_8));
+                    // A CMS route PLUS a query parameter: composed off CmsEndpoints,
+                    // since CmsRoutes returns the RouteTarget interface (no with(...)).
+                    return redirect(CmsEndpoints.LIST
+                        .with(CmsEndpoints.PANEL_PARAM, ADMIN)
+                        .with(CmsEndpoints.RESOURCE_PARAM, CERTIFICATES_REQUEST_SLUG)
+                        .with(HohenheimParams.MANUAL_CHALLENGE, manual.token()));
                 } catch (CertificateAuthority.Refused refused) {
                     return requestError(conduit, refusalMessage(refused));
                 } catch (Exception e) {
@@ -303,13 +326,13 @@ public final class HohenheimHandlers {
             }
 
             ActivityLog.record(certModel, certId, "requested", niceName);
-            return redirectUntyped("/admin/certificates");
+            return redirect(CmsRoutes.list(ADMIN, "certificates"));
         });
 
         HohenheimEndpoints.CERTIFICATES_DOWNLOAD.setHandler(conduit -> {
             Integer certId = conduit.getParameter(HohenheimEndpoints.CERT_ID);
             Row cert = certModel.findById(certId);
-            if (cert == null) return redirectUntyped("/admin/certificates");
+            if (cert == null) return redirect(CmsRoutes.list(ADMIN, "certificates"));
 
             String certPem = cert.get(CertificateModel.CERTIFICATE_PEM);
             String keyPem = cert.get(CertificateModel.PRIVATE_KEY_PEM);
@@ -334,34 +357,33 @@ public final class HohenheimHandlers {
             Row zone = Models.get(DnsZoneModel.class).find()
                 .where(DnsZoneModel.ID.eq(zoneId)).first();
             if (zone == null) {
-                return redirectUntyped("/admin/dns-zones");
+                return redirect(CmsRoutes.list(ADMIN, "dns-zones"));
             }
 
-            String backUrl = "/admin/dns-zones/" + zoneId + "/page/zonefile";
+            BoundEndpoint<Map<String, Object>> back = zoneSubpage(zoneId, "zonefile");
             Map<String, String> form = formMap(conduit);
             String text = form.getOrDefault("zone_text", "");
             if (text.isBlank()) {
-                return redirectUntyped(backUrl + "?error=" + URLEncoder.encode(
+                return redirect(back.with(HohenheimParams.ERROR_TEXT,
                     Microcopy.of("import_empty").withFilter("scope", "dns_zone")
-                        .resolve(conduit.getLocales(), conduit.getMessageResolver()),
-                    StandardCharsets.UTF_8));
+                        .resolve(conduit.getLocales(), conduit.getMessageResolver())));
             }
 
             try {
                 DnsZoneFiles.ImportResult result = DnsZoneFiles.importText(zone, text);
                 ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, "imported",
                     zone.get(DnsZoneModel.ORIGIN));
-                StringBuilder target = new StringBuilder(backUrl)
-                    .append("?imported=").append(result.imported());
+                BoundEndpoint<Map<String, Object>> target =
+                    back.with(HohenheimParams.IMPORTED_COUNT, result.imported());
                 if (!result.skipped().isEmpty()) {
-                    target.append("&skipped=").append(URLEncoder.encode(
-                        String.join("; ", result.skipped()), StandardCharsets.UTF_8));
+                    target = target.with(HohenheimParams.SKIPPED_RECORDS,
+                        String.join("; ", result.skipped()));
                 }
-                return redirectUntyped(target.toString());
+                return redirect(target);
             }
             catch (Exception e) {
-                return redirectUntyped(backUrl + "?error="
-                    + URLEncoder.encode(String.valueOf(e.getMessage()), StandardCharsets.UTF_8));
+                return redirect(back.with(HohenheimParams.ERROR_TEXT,
+                    String.valueOf(e.getMessage())));
             }
         });
 
@@ -698,18 +720,17 @@ public final class HohenheimHandlers {
             Row zone = Models.get(DnsZoneModel.class).find()
                 .where(DnsZoneModel.ID.eq(zoneId)).first();
             if (zone == null || !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
-                return redirectUntyped("/admin/dns-zones");
+                return redirect(CmsRoutes.list(ADMIN, "dns-zones"));
             }
-            String backUrl = "/admin/dns-zones/" + zoneId + "/page/records";
+            BoundEndpoint<Map<String, Object>> back = zoneSubpage(zoneId, "records");
 
             Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
             Row peer = peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null;
             DnsPeerApi api = DnsPeerApi.forPeer(peer);
             if (api == null) {
-                return redirectUntyped(backUrl + "?error=" + URLEncoder.encode(
+                return redirect(back.with(HohenheimParams.ERROR_TEXT,
                     Microcopy.of("peer_not_configured").withFilter("scope", "dns_remote")
-                        .resolve(conduit.getLocales(), conduit.getMessageResolver()),
-                    StandardCharsets.UTF_8));
+                        .resolve(conduit.getLocales(), conduit.getMessageResolver())));
             }
 
             Map<String, String> form = formMap(conduit);
@@ -735,7 +756,7 @@ public final class HohenheimHandlers {
                 }
             }
             catch (NumberFormatException e) {
-                return redirectUntyped(backUrl);
+                return redirect(back);
             }
             catch (DnsPeerApi.PeerApiException e) {
                 // A validation refusal round-trips by microcopy key (same catalogs
@@ -744,11 +765,10 @@ public final class HohenheimHandlers {
                     ? Microcopy.of(e.getViolationKey()).withFilter("scope", "violations")
                         .resolve(conduit.getLocales(), conduit.getMessageResolver())
                     : String.valueOf(e.getMessage());
-                return redirectUntyped(backUrl + "?error="
-                    + URLEncoder.encode(message, StandardCharsets.UTF_8));
+                return redirect(back.with(HohenheimParams.ERROR_TEXT, message));
             }
 
-            return redirectUntyped(backUrl + "?saved=1");
+            return redirect(back.with(HohenheimParams.SAVED_FLAG, "1"));
         });
     }
 
@@ -758,8 +778,12 @@ public final class HohenheimHandlers {
 
     private static ActionResult<Object> requestError(Conduit conduit, Microcopy message) {
         String resolved = message.resolve(conduit.getLocales(), conduit.getMessageResolver());
-        return redirectUntyped("/admin/certificates-request?error="
-            + URLEncoder.encode(resolved, StandardCharsets.UTF_8));
+        // A CMS route PLUS a query parameter: composed off CmsEndpoints, since CmsRoutes
+        // returns the RouteTarget interface (no with(...)).
+        return redirect(CmsEndpoints.LIST
+            .with(CmsEndpoints.PANEL_PARAM, ADMIN)
+            .with(CmsEndpoints.RESOURCE_PARAM, CERTIFICATES_REQUEST_SLUG)
+            .with(HohenheimParams.ERROR_TEXT, resolved));
     }
 
     /**
@@ -823,7 +847,7 @@ public final class HohenheimHandlers {
                 // A real failure for a caller who PASSED the gate (daemon down, no engine
                 // instance yet): they may know, so this stays the operator's redirect.
                 Blast.log("DB: backup of", name, "failed -", e.getMessage());
-                return redirectUntyped("/admin/databases");
+                return redirect(CmsRoutes.list(ADMIN, "databases"));
             }
             ActivityLog.record(Models.get(DatabaseModel.class), name, "backup_downloaded", name);
             download(conduit, dump.contentType(), dump.filename(), dump.content());
@@ -832,9 +856,9 @@ public final class HohenheimHandlers {
 
         HohenheimEndpoints.DATABASES_RESTORE.setHandler(conduit -> {
             String name = conduit.getParameter(HohenheimEndpoints.DATABASE_NAME);
-            String restorePage = restorePageUrl(name);
+            RouteTarget restorePage = restorePageTarget(name);
             if (!(conduit.getFormData().get("dump") instanceof DominoFile file) || file.getSize() == 0) {
-                return redirectUntyped(restorePage + "?error=Pick+a+dump+file+to+restore.");
+                return redirect(withError(restorePage, "Pick a dump file to restore."));
             }
             try {
                 Path temp = Files.createTempFile("hohenheim-restore-upload", null);
@@ -846,25 +870,24 @@ public final class HohenheimHandlers {
                 }
             } catch (UnsupportedOperationException e) {
                 Blast.log("DB: restore of", name, "rejected -", e.getMessage());
-                return redirectUntyped(restorePage + "?error="
-                    + URLEncoder.encode("This database does not support restore.", StandardCharsets.UTF_8));
+                return redirect(withError(restorePage, "This database does not support restore."));
             } catch (IOException e) {
                 Blast.log("DB: restore of", name, "failed -", e.getMessage());
-                return redirectUntyped(restorePage + "?error="
-                    + URLEncoder.encode("Restore failed; see the server log for details.", StandardCharsets.UTF_8));
+                return redirect(withError(restorePage,
+                    "Restore failed; see the server log for details."));
             }
             ActivityLog.record(Models.get(DatabaseModel.class), name, ActivityLog.ACTION_RESTORE, name);
-            return redirectUntyped(restorePage + "?restored=1");
+            return redirect(bind(restorePage, HohenheimParams.RESTORED_FLAG, "1"));
         });
     }
 
     /** The CMS restore tab for a named database (falls back to the list when unknown). */
-    private static String restorePageUrl(String name) {
+    private static @NonNull RouteTarget restorePageTarget(String name) {
         Row row = Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq(name)).first();
         if (row == null) {
-            return "/admin/databases";
+            return CmsRoutes.list(ADMIN, "databases");
         }
-        return "/admin/databases/" + row.get(DatabaseModel.ID) + "/page/restore";
+        return CmsRoutes.subpage(ADMIN, "databases", row.get(DatabaseModel.ID), "restore");
     }
 
     // -----------------------------------------------------------------------
@@ -953,7 +976,12 @@ public final class HohenheimHandlers {
             + " to start. Check the site's status for the reason.";
     }
 
-    /** Append an {@code error=} the processes page renders verbatim. */
+    /**
+     * Append an {@code error=} to a URL that is ALREADY a URL: the sanitized
+     * {@code _return} value a form submitted, which {@link ReturnTarget} hands back as a
+     * String. There is no endpoint left to bind onto -- the {@link RouteTarget} overload
+     * is what every constructible destination uses.
+     */
     private static String withError(String url, String message) {
         return url + (url.contains("?") ? "&" : "?") + "error="
             + URLEncoder.encode(message, StandardCharsets.UTF_8);
@@ -966,7 +994,7 @@ public final class HohenheimHandlers {
      */
     private static String processesPageUrl(Conduit conduit, Integer siteId) {
         return ReturnTarget.or(ReturnTarget.read(conduit),
-            "/admin/sites/" + siteId + "/page/processes");
+            CmsRoutes.subpage(ADMIN, "sites", siteId, SiteProcessesPage.SLUG).toUrl());
     }
 
     // -----------------------------------------------------------------------
@@ -1014,7 +1042,7 @@ public final class HohenheimHandlers {
 
     private static String deploymentsPageUrl(Conduit conduit, Integer siteId) {
         return ReturnTarget.or(ReturnTarget.read(conduit),
-            "/admin/sites/" + siteId + "/page/deployments");
+            CmsRoutes.subpage(ADMIN, "sites", siteId, "deployments").toUrl());
     }
 
     private static void initDevTunnel() {
@@ -1041,7 +1069,8 @@ public final class HohenheimHandlers {
                 return null;
             }
             String backUrl = ReturnTarget.or(ReturnTarget.read(conduit),
-                "/admin/instances/" + instanceId + "/page/console");
+                CmsRoutes.subpage(ADMIN, "instances", instanceId,
+                    InstanceConsolePage.SLUG).toUrl());
             String command = formMap(conduit).getOrDefault("command", "").strip();
             if (command.isEmpty()) {
                 return redirectUntyped(backUrl);
@@ -1050,9 +1079,8 @@ public final class HohenheimHandlers {
                 InstanceConsoles.sendCommand(instanceId, command);
             } catch (Violations refused) {
                 // NEVER a silent swallow: the console page renders ?error= verbatim.
-                return redirectUntyped(backUrl + (backUrl.contains("?") ? "&" : "?")
-                    + "error=" + URLEncoder.encode(String.valueOf(refused.getMessage()),
-                        StandardCharsets.UTF_8));
+                return redirectUntyped(withError(backUrl,
+                    String.valueOf(refused.getMessage())));
             }
             ActivityLog.record(Models.get(InstanceModel.class),
                 instanceId, "console_command", command);
@@ -1149,7 +1177,58 @@ public final class HohenheimHandlers {
     }
 
     @SuppressWarnings("unchecked")
+    /**
+     * THE redirect of this class: the URL comes from a typed {@link RouteTarget}, never
+     * from a concatenated literal.
+     */
+    private static ActionResult<Object> redirect(@NonNull RouteTarget target) {
+        return redirectUntyped(target.toUrl());
+    }
+
+    /**
+     * Redirect to a URL that is ALREADY a URL and not an endpoint: the sanitized
+     * {@code _return} value a form submitted. {@link ReturnTarget} hands that back as a
+     * String, so there is no target to compose -- every OTHER redirect here goes through
+     * {@link #redirect(RouteTarget)}.
+     */
     private static ActionResult<Object> redirectUntyped(String url) {
         return (ActionResult<Object>) (ActionResult<?>) new RedirectResult(url);
+    }
+
+    /** The zone tab {@code slug}, as a target extra parameters can still be bound onto. */
+    private static @NonNull BoundEndpoint<Map<String, Object>> zoneSubpage(@NonNull Integer zoneId,
+                                                                          @NonNull String slug) {
+        return CmsEndpoints.RECORD_SUBPAGE
+            .with(CmsEndpoints.PANEL_PARAM, ADMIN)
+            .with(CmsEndpoints.RESOURCE_PARAM, "dns-zones")
+            .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(zoneId))
+            .with(CmsEndpoints.SUBPAGE_PARAM, slug);
+    }
+
+    /** {@code target} carrying an {@code error=} the destination page renders verbatim. */
+    private static @NonNull RouteTarget withError(@NonNull RouteTarget target,
+                                                  @NonNull String message) {
+        return bind(target, HohenheimParams.ERROR_TEXT, message);
+    }
+
+    /**
+     * Bind one extra parameter onto a {@link CmsRoutes} result.
+     *
+     * AIDEV-NOTE: CmsRoutes returns the RouteTarget INTERFACE, which has no with(...),
+     * so a "CMS route plus one query parameter" needs the concrete BoundEndpoint back.
+     * A bare Endpoint is handled too; anything else has nowhere to put a parameter and
+     * says so rather than silently dropping it.
+     */
+    private static <V> @NonNull RouteTarget bind(@NonNull RouteTarget target,
+                                                 @NonNull ParameterDefinition<V> definition,
+                                                 V value) {
+        if (target instanceof BoundEndpoint<?> bound) {
+            return bound.with(definition, value);
+        }
+        if (target instanceof Endpoint<?> endpoint) {
+            return endpoint.with(definition, value);
+        }
+        throw new IllegalArgumentException("Cannot bind a parameter onto "
+            + target.getClass().getName());
     }
 }

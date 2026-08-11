@@ -4,7 +4,8 @@
 {% declare siteId: Integer %}
 {% declare siteName: String %}
 {% declare domains: List %}
-{% declare basePath: String = "/admin" %}
+{% declare addDomainTarget: RouteTarget %}
+{% declare requestCertTarget: RouteTarget %}
 {% declare canEditDomains: Boolean = true %}
 {% declare canRequestCert: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
@@ -16,9 +17,9 @@
     <header class="cms-resource-list-header">
         <h1>{{ siteName }}</h1>
         {% if canRequestCert %}
-        <pl-button variant="outline" href={% "/admin/certificates-request?site=" + siteId %} id="request-cert-link">{{ t("request_certificate", scope: "site_domains") }}</pl-button>
+        <pl-button variant="outline" use:Zenit.route={% requestCertTarget %} id="request-cert-link">{{ t("request_certificate", scope: "site_domains") }}</pl-button>
         {% /if %}
-        {% if canEditDomains %}<pl-button variant="primary" href={% basePath + "/domains/new?site_id=" + siteId %} id="add-domain-link">{{ t("add_domain", scope: "site_domains") }}</pl-button>{% /if %}
+        {% if canEditDomains %}<pl-button variant="primary" use:Zenit.route={% addDomainTarget %} id="add-domain-link">{{ t("add_domain", scope: "site_domains") }}</pl-button>{% /if %}
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
@@ -34,7 +35,7 @@
         <pl-table-body>
             {% each domains as index, domain %}
             <pl-table-row>
-                <pl-table-cell>{% if canEditDomains %}<a href={% domain.get("editUrl") %}>{{ domain.get("hostname") }}</a>{% else %}{{ domain.get("hostname") }}{% /if %}</pl-table-cell>
+                <pl-table-cell>{% if canEditDomains %}<a use:Zenit.route={% domain.get("editTarget") %}>{{ domain.get("hostname") }}</a>{% else %}{{ domain.get("hostname") }}{% /if %}</pl-table-cell>
                 <pl-table-cell><pl-badge variant={% "secondary" %}>{{ domain.get("matchType") }}</pl-badge></pl-table-cell>
                 <pl-table-cell>
                     {% if domain.get("forceSsl") == true %}
@@ -45,11 +46,11 @@
                 </pl-table-cell>
                 <pl-table-cell data-cert-status={% domain.get("certStatus") %}>
                     {% if domain.get("certStatus") == "active" %}
-                    {% if canRequestCert %}<a href={% domain.get("certUrl") %}><pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
+                    {% if canRequestCert %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
                     {% elseif domain.get("certStatus") == "error" %}
-                    {% if canRequestCert %}<a href={% domain.get("certUrl") %}><pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
+                    {% if canRequestCert %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
                     {% elseif domain.get("certStatus") == "pending" %}
-                    {% if canRequestCert %}<a href={% domain.get("certUrl") %}><pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
+                    {% if canRequestCert %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
                     {% elseif domain.get("certStatus") == "none" %}
                     <pl-badge variant={% "outline" %}>{{ t("none", scope: "site_domains") }}</pl-badge>
                     {% /if %}

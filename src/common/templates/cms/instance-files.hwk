@@ -15,9 +15,8 @@
 {% declare error: String = "" %}
 {% declare editPath: String = "" %}
 {% declare editContent: String = "" %}
-{% declare actionUrl: String %}
-{% declare downloadBase: String %}
-{% declare browseBase: String %}
+{% declare actionTarget: RouteTarget %}
+{% declare parentTarget: RouteTarget = null %}
 {% declare returnUrl: String = "" %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
@@ -48,7 +47,7 @@
         <pl-breadcrumb>
             {% each volumes as volumeIndex, volume %}
             <pl-breadcrumb-item>
-                <pl-breadcrumb-link href={% browseBase + volume %}>{{ volume }}</pl-breadcrumb-link>
+                <pl-breadcrumb-link use:Zenit.route={% volume.get("target") %}>{{ volume.get("label") }}</pl-breadcrumb-link>
             </pl-breadcrumb-item>
             {% /each %}
         </pl-breadcrumb>
@@ -58,7 +57,7 @@
         <pl-breadcrumb>
             {% each crumbs as crumbIndex, crumb %}
             <pl-breadcrumb-item>
-                <pl-breadcrumb-link href={% browseBase + crumb.get("path") %}>{{ crumb.get("label") }}</pl-breadcrumb-link>
+                <pl-breadcrumb-link use:Zenit.route={% crumb.get("target") %}>{{ crumb.get("label") }}</pl-breadcrumb-link>
             </pl-breadcrumb-item>
             {% /each %}
         </pl-breadcrumb>
@@ -68,7 +67,7 @@
     <pl-card>
         <pl-card-content>
             {% if parentPath != "" %}
-                <pl-button variant="outline" href={% browseBase + parentPath %}>{{ t("up", scope: "instance_files") }}</pl-button>
+                <pl-button variant="outline" use:Zenit.route={% parentTarget %}>{{ t("up", scope: "instance_files") }}</pl-button>
             {% /if %}
 
             {% if entries %}
@@ -84,7 +83,7 @@
                     <pl-table-row>
                         <pl-table-cell>
                             {% if entry.get("directory") %}
-                                <a href={% browseBase + entry.get("path") %}><code>{{ entry.get("name") }}/</code></a>
+                                <a use:Zenit.route={% entry.get("browseTarget") %}><code>{{ entry.get("name") }}/</code></a>
                             {% else %}
                                 <code>{{ entry.get("name") }}</code>
                             {% /if %}
@@ -99,14 +98,14 @@
                         <pl-table-cell><code>{{ entry.get("mode") }}</code></pl-table-cell>
                         <pl-table-cell>
                             {% if entry.get("editable") %}
-                                <pl-button size="sm" variant="ghost" href={% browseBase + path + "&edit=" + entry.get("path") %}>{{ t("edit", scope: "instance_files") }}</pl-button>
+                                <pl-button size="sm" variant="ghost" use:Zenit.route={% entry.get("editTarget") %}>{{ t("edit", scope: "instance_files") }}</pl-button>
                             {% /if %}
                             {% if entry.get("kind") == "FILE" %}
-                                <pl-button size="sm" variant="ghost" href={% downloadBase + entry.get("path") %}>{{ t("download", scope: "instance_files") }}</pl-button>
+                                <pl-button size="sm" variant="ghost" use:Zenit.route={% entry.get("downloadTarget") %}>{{ t("download", scope: "instance_files") }}</pl-button>
                             {% /if %}
                             {% if canWrite %}
-                            <form method="POST" action={% actionUrl %} class="instance-files-inline">
-                                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                            <form use:Zenit.form={% actionTarget %} class="instance-files-inline">
+                                <input type="hidden" name="_return" value={% returnUrl %}>
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="directory" value={% path %}>
                                 <input type="hidden" name="path" value={% entry.get("path") %}>
@@ -133,8 +132,8 @@
             <pl-card-title>{{ editPath }}</pl-card-title>
         </pl-card-header>
         <pl-card-content>
-            <form method="POST" action={% actionUrl %}>
-                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+            <form use:Zenit.form={% actionTarget %}>
+                <input type="hidden" name="_return" value={% returnUrl %}>
                 <input type="hidden" name="action" value="save">
                 <input type="hidden" name="directory" value={% path %}>
                 <input type="hidden" name="path" value={% editPath %}>
@@ -159,8 +158,8 @@
             <pl-card-description>{{ t("upload_limit", scope: "instance_files", bytes: maxFileBytes) }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
-            <form method="POST" action={% actionUrl %} enctype="multipart/form-data">
-                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+            <form use:Zenit.form={% actionTarget %} enctype="multipart/form-data">
+                <input type="hidden" name="_return" value={% returnUrl %}>
                 <input type="hidden" name="action" value="upload">
                 <input type="hidden" name="directory" value={% path %}>
                 <pl-field>
@@ -171,8 +170,8 @@
                 <pl-button variant="primary" type={% "submit" %}>{{ t("upload", scope: "instance_files") }}</pl-button>
             </form>
 
-            <form method="POST" action={% actionUrl %}>
-                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+            <form use:Zenit.form={% actionTarget %}>
+                <input type="hidden" name="_return" value={% returnUrl %}>
                 <input type="hidden" name="action" value="mkdir">
                 <input type="hidden" name="directory" value={% path %}>
                 <pl-field>
@@ -182,8 +181,8 @@
                 <pl-button variant="outline" type={% "submit" %}>{{ t("create", scope: "instance_files") }}</pl-button>
             </form>
 
-            <form method="POST" action={% actionUrl %}>
-                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+            <form use:Zenit.form={% actionTarget %}>
+                <input type="hidden" name="_return" value={% returnUrl %}>
                 <input type="hidden" name="action" value="rename">
                 <input type="hidden" name="directory" value={% path %}>
                 <pl-field>

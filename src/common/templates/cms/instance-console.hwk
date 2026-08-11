@@ -12,7 +12,8 @@
 {% declare storedLogs: List %}
 {% declare selectedLogText: String = "" %}
 {% declare selectedLogTitle: String = "" %}
-{% declare basePath: String = "/admin" %}
+{% declare commandTarget: RouteTarget %}
+{% declare consoleWsUrl: String %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -40,10 +41,10 @@
                         rows={% 24{:} %}
                         cols={% 100{:} %}
                         readOnly={% true %}
-                        wsUrl={% "/ws/instance-console/" + instanceId %}>
+                        wsUrl={% consoleWsUrl %}>
                     </pl-terminal>
-                    <form method="POST" action={% "/instances/" + instanceId + "/console/command" %} class="instance-console-command">
-                        {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                    <form use:Zenit.form={% commandTarget %} class="instance-console-command">
+                        <input type="hidden" name="_return" value={% returnUrl %}>
                         <pl-input name="command" placeholder={% t("command_placeholder", scope: "instance_console") %}></pl-input>
                         <pl-button variant="outline" type={% "submit" %}>{{ t("send", scope: "instance_console") }}</pl-button>
                     </form>
@@ -75,7 +76,7 @@
                     <pl-table-body>
                         {% each storedLogs as index, log %}
                         <pl-table-row>
-                            <pl-table-cell><a href={% basePath + "/instances/" + instanceId + "/page/console?log=" + log.get("id") %}>{{ log.get("createdAt") }}</a></pl-table-cell>
+                            <pl-table-cell><a use:Zenit.route={% log.get("target") %}>{{ log.get("createdAt") }}</a></pl-table-cell>
                             <pl-table-cell>{{ log.get("lineCount") }}</pl-table-cell>
                             <pl-table-cell>{{ log.get("handle") }}</pl-table-cell>
                         </pl-table-row>

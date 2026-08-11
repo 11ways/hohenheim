@@ -3,14 +3,18 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -36,7 +40,7 @@ public final class TemplateContentsPage implements RecordScopedPage<Row> {
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row template) {
         Integer templateId = template.get(InstanceTemplateModel.ID);
-        String basePath = CmsSupport.panelBase(conduit);
+        String panel = CmsSupport.panelSlug(conduit);
 
         List<Map<String, Object>> variables = new ArrayList<>();
         for (Row variable : Models.get(InstanceTemplateVariableModel.class)
@@ -48,8 +52,8 @@ public final class TemplateContentsPage implements RecordScopedPage<Row> {
             entry.put("required", Boolean.TRUE.equals(
                 variable.get(InstanceTemplateVariableModel.REQUIRED)));
             entry.put("defaultValue", variable.get(InstanceTemplateVariableModel.DEFAULT_VALUE));
-            entry.put("editUrl", basePath + "/instance-template-variables/"
-                + variable.get(InstanceTemplateVariableModel.ID));
+            entry.put("editTarget", CmsRoutes.detail(panel, "instance-template-variables",
+                variable.get(InstanceTemplateVariableModel.ID)));
             variables.add(entry);
         }
 
@@ -58,8 +62,8 @@ public final class TemplateContentsPage implements RecordScopedPage<Row> {
             Map<String, Object> entry = new HashMap<>();
             entry.put("path", file.get(InstanceTemplateFileModel.CONTAINER_PATH));
             entry.put("mode", file.get(InstanceTemplateFileModel.MODE));
-            entry.put("editUrl", basePath + "/instance-template-files/"
-                + file.get(InstanceTemplateFileModel.ID));
+            entry.put("editTarget", CmsRoutes.detail(panel, "instance-template-files",
+                file.get(InstanceTemplateFileModel.ID)));
             files.add(entry);
         }
 
@@ -68,10 +72,17 @@ public final class TemplateContentsPage implements RecordScopedPage<Row> {
         vars.put("templateName", template.get(InstanceTemplateModel.NAME));
         vars.put("variables", variables);
         vars.put("files", files);
-        vars.put("addVariableUrl",
-            basePath + "/instance-template-variables/new?template_id=" + templateId);
-        vars.put("addFileUrl",
-            basePath + "/instance-template-files/new?template_id=" + templateId);
+        // AIDEV-NOTE: create form + prefill query parameter, so this composes off
+        // CmsEndpoints: CmsRoutes.create returns the RouteTarget interface, which has
+        // no with(...) to hang an extra parameter on.
+        vars.put("addVariableTarget", CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, panel)
+            .with(CmsEndpoints.RESOURCE_PARAM, "instance-template-variables")
+            .with(HohenheimParams.TEMPLATE_ID_PREFILL, templateId));
+        vars.put("addFileTarget", CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, panel)
+            .with(CmsEndpoints.RESOURCE_PARAM, "instance-template-files")
+            .with(HohenheimParams.TEMPLATE_ID_PREFILL, templateId));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/template-contents"), vars);
     }

@@ -4,8 +4,8 @@
 {% declare templateName: String %}
 {% declare variables: List %}
 {% declare files: List %}
-{% declare addVariableUrl: String = "" %}
-{% declare addFileUrl: String = "" %}
+{% declare addVariableTarget: RouteTarget %}
+{% declare addFileTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -15,8 +15,8 @@
     <header class="cms-resource-list-header">
         <h1>{{ templateName }}</h1>
         <div>
-            <pl-button variant="primary" href={% addVariableUrl %} id="add-variable-link">{{ t("add_variable", scope: "template_contents") }}</pl-button>
-            <pl-button variant="secondary" href={% addFileUrl %} id="add-file-link">{{ t("add_file", scope: "template_contents") }}</pl-button>
+            <pl-button variant="primary" use:Zenit.route={% addVariableTarget %} id="add-variable-link">{{ t("add_variable", scope: "template_contents") }}</pl-button>
+            <pl-button variant="secondary" use:Zenit.route={% addFileTarget %} id="add-file-link">{{ t("add_file", scope: "template_contents") }}</pl-button>
         </div>
     </header>
 
@@ -35,7 +35,7 @@
         <pl-table-body>
             {% each variables as index, variable %}
             <pl-table-row>
-                <pl-table-cell><a href={% variable.get("editUrl") %}><code>{{ variable.get("key") }}</code></a></pl-table-cell>
+                <pl-table-cell><a use:Zenit.route={% variable.get("editTarget") %}><code>{{ variable.get("key") }}</code></a></pl-table-cell>
                 <pl-table-cell>{{ variable.get("label") }}</pl-table-cell>
                 <pl-table-cell><pl-badge variant="secondary">{{ variable.get("type") }}</pl-badge></pl-table-cell>
                 <pl-table-cell>{% if variable.get("required") %}{{ t("yes", scope: "template_contents") }}{% /if %}</pl-table-cell>
@@ -61,7 +61,7 @@
         <pl-table-body>
             {% each files as index, file %}
             <pl-table-row>
-                <pl-table-cell><a href={% file.get("editUrl") %}><code>{{ file.get("path") }}</code></a></pl-table-cell>
+                <pl-table-cell><a use:Zenit.route={% file.get("editTarget") %}><code>{{ file.get("path") }}</code></a></pl-table-cell>
                 <pl-table-cell><code>{{ file.get("mode") }}</code></pl-table-cell>
             </pl-table-row>
             {% /each %}

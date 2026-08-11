@@ -6,13 +6,17 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -40,7 +44,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         Integer siteId = site.get(SiteModel.ID);
         boolean tlsPassthrough = SiteModel.SITE_TYPE_TLS_PASSTHROUGH
             .equals(site.get(SiteModel.SITE_TYPE));
-        String basePath = CmsSupport.panelBase(conduit);
+        String panel = CmsSupport.panelSlug(conduit);
         List<Map<String, Object>> domains = new ArrayList<>();
         for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {
             Map<String, Object> entry = new HashMap<>();
@@ -48,7 +52,8 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             entry.put("hostname", domain.get(SiteDomainModel.HOSTNAME));
             entry.put("matchType", domain.get(SiteDomainModel.MATCH_TYPE));
             entry.put("forceSsl", Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)));
-            entry.put("editUrl", basePath + "/domains/" + domain.get(SiteDomainModel.ID));
+            entry.put("editTarget", CmsRoutes.detail(panel, "domains",
+                domain.get(SiteDomainModel.ID)));
             if (tlsPassthrough) entry.put("certStatus", "");
             else putCertCoverage(entry, domain);
             domains.add(entry);
@@ -60,7 +65,19 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         vars.put("siteId", siteId);
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("domains", domains);
-        vars.put("basePath", basePath);
+        // AIDEV-NOTE: a CMS route PLUS a query parameter cannot be built from CmsRoutes --
+        // its builders return the RouteTarget interface, which has no with(...). Composing
+        // off CmsEndpoints keeps it fully typed; the alternative is a concatenated URL.
+        vars.put("addDomainTarget", CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, panel)
+            .with(CmsEndpoints.RESOURCE_PARAM, "domains")
+            .with(HohenheimParams.SITE_ID_PREFILL, siteId));
+        // The certificate request page is installation administration and lives only on
+        // the admin panel, so the panel slug here is deliberately the literal "admin".
+        vars.put("requestCertTarget", CmsEndpoints.LIST
+            .with(CmsEndpoints.PANEL_PARAM, "admin")
+            .with(CmsEndpoints.RESOURCE_PARAM, "certificates-request")
+            .with(HohenheimParams.CERTIFICATE_REQUEST_SITE, siteId));
         boolean administerDomains = HohenheimAccess.isAdmin(accessContext);
         // Binding a hostname to a site the principal MANAGES is delegated (the write pipeline
         // decides what such a write may carry); requesting a certificate stays installation
@@ -89,6 +106,9 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         }
         entry.put("certStatus", String.valueOf(cert.get(CertificateModel.STATUS)));
         entry.put("certName", String.valueOf(cert.get(CertificateModel.NICE_NAME)));
-        entry.put("certUrl", "/admin/certificates/" + cert.get(CertificateModel.ID));
+        // The certificate resource lives only on the admin panel: the literal slug is the
+        // truth here, not an unconverted hardcode.
+        entry.put("certTarget", CmsRoutes.detail("admin", "certificates",
+            cert.get(CertificateModel.ID)));
     }
 }

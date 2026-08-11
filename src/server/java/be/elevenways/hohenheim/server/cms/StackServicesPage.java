@@ -4,14 +4,18 @@ import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -37,7 +41,7 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row stack) {
         Integer stackId = stack.get(StackModel.ID);
-        String basePath = CmsSupport.panelBase(conduit);
+        String panel = CmsSupport.panelSlug(conduit);
 
         Map<String, String> liveStates = StackRuntime.get().serviceStates(stackId);
         StackFileModel fileModel = Models.get(StackFileModel.class);
@@ -55,7 +59,7 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
             entry.put("state", state);
             entry.put("stateLabel", stateLabel(state));
             entry.put("stateVariant", stateVariant(state));
-            entry.put("editUrl", basePath + "/stack-services/" + serviceId);
+            entry.put("editTarget", CmsRoutes.detail(panel, "stack-services", serviceId));
 
             StringBuilder ports = new StringBuilder();
             for (Row port : service.getRecords(StackServiceModel.PORTS)) {
@@ -73,11 +77,17 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
                 Map<String, Object> fileEntry = new HashMap<>();
                 fileEntry.put("id", file.get(StackFileModel.ID));
                 fileEntry.put("path", file.get(StackFileModel.CONTAINER_PATH));
-                fileEntry.put("editUrl", basePath + "/stack-files/" + file.get(StackFileModel.ID));
+                fileEntry.put("editTarget", CmsRoutes.detail(panel, "stack-files",
+                    file.get(StackFileModel.ID)));
                 files.add(fileEntry);
             }
             entry.put("files", files);
-            entry.put("addFileUrl", basePath + "/stack-files/new?stack_service_id=" + serviceId);
+            // Create form + prefill query parameter: composed off CmsEndpoints, since
+            // CmsRoutes.create returns the RouteTarget interface (no with(...)).
+            entry.put("addFileTarget", CmsEndpoints.CREATE_FORM
+                .with(CmsEndpoints.PANEL_PARAM, panel)
+                .with(CmsEndpoints.RESOURCE_PARAM, "stack-files")
+                .with(HohenheimParams.STACK_SERVICE_ID_PREFILL, serviceId));
 
             services.add(entry);
         }
@@ -87,7 +97,10 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
         vars.put("stackId", stackId);
         vars.put("stackName", stack.get(StackModel.NAME));
         vars.put("services", services);
-        vars.put("addServiceUrl", basePath + "/stack-services/new?stack_id=" + stackId);
+        vars.put("addServiceTarget", CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, panel)
+            .with(CmsEndpoints.RESOURCE_PARAM, "stack-services")
+            .with(HohenheimParams.STACK_ID_PREFILL, stackId));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/stack-services"), vars);
     }

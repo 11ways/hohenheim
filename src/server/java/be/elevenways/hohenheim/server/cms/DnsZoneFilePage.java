@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsSecMaterial;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
@@ -39,6 +40,8 @@ public final class DnsZoneFilePage implements RecordScopedPage<Row> {
         vars.put("zoneId", zone.get(DnsZoneModel.ID));
         vars.put("origin", origin);
         vars.put("zoneText", DnsZoneFiles.export(zone));
+        vars.put("importTarget", HohenheimEndpoints.DNS_ZONE_IMPORT
+            .with(HohenheimEndpoints.ZONE_ID, zone.get(DnsZoneModel.ID)));
 
         // DNSSEC: the DS record the operator lodges with the registrar.
         DSRecord ds = Boolean.TRUE.equals(zone.get(DnsZoneModel.DNSSEC_ENABLED))

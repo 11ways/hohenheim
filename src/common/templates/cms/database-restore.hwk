@@ -62,7 +62,7 @@
                         <pl-table-cell>{{ t("used_by", scope: "database_tab") }}</pl-table-cell>
                         <pl-table-cell>
                             {% each usedBy as index, site %}
-                            <a href={% site.get("url") %}><pl-badge variant={% "secondary" %}>{{ site.get("name") }}</pl-badge></a>
+                            <a use:Zenit.route={% site.get("target") %}><pl-badge variant={% "secondary" %}>{{ site.get("name") }}</pl-badge></a>
                             {% /each %}
                         </pl-table-cell>
                     </pl-table-row>
