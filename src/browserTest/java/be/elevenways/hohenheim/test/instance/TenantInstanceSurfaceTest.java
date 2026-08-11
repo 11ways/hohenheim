@@ -540,13 +540,18 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             .as("step 1: a stopped instance says so instead of drawing an empty chart")
             .contains("This instance is not running");
 
-        // 2. The Files tab renders for a manage holder WITHOUT files.read, and says why it
-        //    is empty rather than showing a blank browser that looks like an empty volume.
+        // 2. A manage holder WITHOUT files.read is not offered the Files tab AT ALL, so
+        //    the route 404s: InstanceFilesPage.visibleFor hides AND enforces, and a tab
+        //    that renders only to show a refusal is a broken-looking tab. The gate's own
+        //    contract is pinned by InstanceFilesTabGateTest; this step is the reminder
+        //    that the tenant surface answers the same way.
+        //
+        // AIDEV-NOTE: this step asserted the pre-gate 200 + refusal banner until the gate
+        // landed in 7be522b1, which shipped its new test but left this one stale.
         HttpResponse<String> unread = tenantGet(filesUrl);
-        assertThat(unread.statusCode()).as("step 2: the files tab renders").isEqualTo(200);
-        assertThat(unread.body())
-            .as("step 2: without files.read the refusal is SHOWN, never a blank listing")
-            .contains("You are not allowed to perform this action on this instance");
+        assertThat(unread.statusCode())
+            .as("step 2: without files.read the files tab is absent, not merely refusing")
+            .isEqualTo(404);
 
         // 3. With files.read but NOT files.write, no mutating form is drawn at all.
         RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
