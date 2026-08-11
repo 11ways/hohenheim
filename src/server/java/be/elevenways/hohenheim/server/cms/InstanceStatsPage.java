@@ -55,6 +55,12 @@ public final class InstanceStatsPage implements RecordScopedPage<Row> {
         vars.put("memorySeed", seriesOf(history, sample -> sample.memoryBytes() / 1048576d));
         vars.put("rxSeed", seriesOf(history, sample -> sample.rxBytes() / 1024d));
         vars.put("txSeed", seriesOf(history, sample -> sample.txBytes() / 1024d));
+        // The PERSISTED half, beside the live ring: the disk sweeper's stored observation
+        // is the only number on this page that survives a restart, and on a runtime that
+        // enforces no root quota there is deliberately none. Stating both is the point --
+        // a live-only page that silently omits the one stored figure reads as "we measure
+        // nothing", which is wrong in one direction and right in the other.
+        vars.put("disk", InstanceOverviewPage.diskViewOf(instance));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-stats"), vars);
     }

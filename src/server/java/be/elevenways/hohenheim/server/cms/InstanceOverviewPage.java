@@ -103,6 +103,11 @@ public final class InstanceOverviewPage implements RecordScopedPage<Row> {
      * no root quota and stamps nothing, so the whole tier is unmeasured by contract and
      * a percentage computed from zeros would be a fabricated reading.
      */
+    static @NonNull InstanceDiskView diskViewOf(@NonNull Row instance) {
+        return diskOf(instance,
+            ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
+    }
+
     private static @NonNull InstanceDiskView diskOf(@NonNull Row instance, int serverId) {
         Long used = instance.get(InstanceModel.DISK_USED_BYTES);
         Long limit = instance.get(InstanceModel.DISK_LIMIT_BYTES);
