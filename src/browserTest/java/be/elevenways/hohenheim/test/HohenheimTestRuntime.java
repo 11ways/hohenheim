@@ -21,6 +21,13 @@ public final class HohenheimTestRuntime {
     private HohenheimTestRuntime() {
     }
 
+    // AIDEV-NOTE: this boots the REAL TaskService -- the zenit TASKS stage is an
+    // unconditional ROOT_STAGE child, and ensureBooted enables all 7 roles, so
+    // minutely and */5 crons (SuperviseProxyListeners, MonitorStacks,
+    // Verify*Isolation) tick throughout every browser test. Anything published via
+    // ServerMain.adoptProxyServer becomes visible to those ticks MID-ASSERTION:
+    // superviseListeners() mutates the very restart counters and listener state a
+    // proxy test is checking. Detach with adoptProxyServer(null) when done.
     public static void ensureBooted() {
         // Standalone tests that never load the hohenheim settings file still hit
         // role gates (task declarations at the TASKS stage, panel filtering, the

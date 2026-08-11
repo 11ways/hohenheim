@@ -92,6 +92,40 @@ silently aborts used to make a run of nothing look green.
 - Handlers are long-lived: created when a site loads, updated on config change, destroyed on removal. Not per-request.
 - ClientMain MUST call `HohenheimModels.registerAll()` + `HohenheimSources.register()` before `ClientZenitRuntime.main` (the browser has no MODELS/MODULES boot stage).
 
+## Tasks, roles and operator visibility
+
+A role-owned `ScheduledTask` declares its schedules through
+`HohenheimRoles.schedulesWhen(List.of(...), Role...)`, never a bare list. A bare
+list compiles, discovers and reconciles fine and then RUNS on nodes that do not
+host the capability -- `TaskService` knows nothing about roles and almost no
+executor self-guards. The two genuinely node-agnostic tasks
+(`BackupControlPlane`, `CleanOldActivity`) use a bare list on purpose. Reading
+roles before `HohenheimSettingsFiles.load()` throws; tests get their snapshot
+from `HohenheimTestRuntime.ensureBooted()` unless they need a restricted set,
+which they capture themselves before booting.
+
+Declaring a task obliges naming it in `HohenheimTaskBootstrapTest`: its `PINNED`
+list is compared for EXACT equality against the discovered `TaskCatalog`, so a
+new task fails the suite until a human has looked at it. Nothing else there is
+hand-maintained -- which tasks must reconcile into `system_task`, which must fire
+at boot and which must stay quiet are all derived from the tasks' own
+`ScheduleKind` declarations, so a pin and a declaration cannot disagree.
+
+A failure state an operator must find without looking lands on an
+`AttentionCollector` item or `Alerts.send`. A getter, a log line or an internal
+state field is not visibility: the Aug 2026 six-day HTTPS outage had accurate
+state in `getHttpsState()` that reached neither (it now feeds
+`AttentionCollector.failedProxyListeners`). Status pages, the activity log and
+flash toasts are operator-visible but pull-only or action-scoped -- they do not
+make a background failure find anyone.
+
+A new alert event is a constant plus an `ALL` entry, and that is the WHOLE
+declaration -- the OPPOSITE of the task pin. Coverage is derived:
+`NotificationAdminTest` asserts the rendered vocabulary `isEqualTo(ALL.size())`,
+and the admin select and validation both read `ALL`, so no test edit is owed. To
+test one end-to-end: inline `CommsDispatcher` + `webhook://default` + a local
+`HttpServer`, per `CertExpiryAlertTest`.
+
 ## Conventions
 
 - Follow the Hawkeye skill for `.hwk` templates; follow the Zenit skill for endpoints, models, migrations, settings.
