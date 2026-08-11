@@ -11,6 +11,10 @@
 {% declare selectedLogTitle: String = "" %}
 {% declare startTarget: RouteTarget %}
 {% declare returnUrl: String = "" %}
+{#- ReturnTarget.PARAM, supplied by the page: ReturnTarget lives in zenit's SERVER
+    source set, so a common template cannot reach the constant (nor its
+    Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
+{% declare returnParam: String %}
 {% declare error: String = "" %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
@@ -68,11 +72,11 @@
                                 the handler redirects back to whichever panel rendered
                                 this page; forged values fall back to /admin. -#}
                             <form use:Zenit.form={% proc.get("isolateTarget") %} style="display:inline">
-                                <input type="hidden" name="_return" value={% returnUrl %}>
+                                <input type="hidden" name={% returnParam %} value={% returnUrl %}>
                                 <pl-button variant={% "outline" %} size={% "sm" %} type={% "submit" %}>{% if proc.get("isolated") == true %}{{ t("unisolate", scope: "site_processes") }}{% else %}{{ t("isolate", scope: "site_processes") }}{% /if %}</pl-button>
                             </form>
                             <form use:Zenit.form={% proc.get("killTarget") %} style="display:inline" use:CmsConfirm.destructive={% t("kill_confirm", scope: "site_processes") %}>
-                                <input type="hidden" name="_return" value={% returnUrl %}>
+                                <input type="hidden" name={% returnParam %} value={% returnUrl %}>
                                 <pl-button variant={% "destructive" %} size={% "sm" %} type={% "submit" %}>{{ t("kill", scope: "site_processes") }}</pl-button>
                             </form>
                         </pl-table-cell>
@@ -84,7 +88,7 @@
             <p>{{ t("none_running", scope: "site_processes") }}</p>
             {% /if %}
             <form use:Zenit.form={% startTarget %}>
-                <input type="hidden" name="_return" value={% returnUrl %}>
+                <input type="hidden" name={% returnParam %} value={% returnUrl %}>
                 <pl-button variant={% "outline" %} type={% "submit" %}>{{ t("start", scope: "site_processes") }}</pl-button>
             </form>
         </pl-card-content>

@@ -68,6 +68,9 @@ public final class InstanceExecPage implements RecordScopedPage<Row> {
         vars.put("execOutput", output == null ? "" : output);
         vars.put("execExit", exit == null ? "" : exit);
         vars.put("returnUrl", ReturnTarget.capture(conduit));
+        // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
+        // ReturnTarget is server-only, so the common template cannot reach it.
+        vars.put("returnParam", ReturnTarget.PARAM);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-exec"), vars);
     }

@@ -10,6 +10,10 @@
 {% declare execOutput: String = "" %}
 {% declare execExit: String = "" %}
 {% declare returnUrl: String = "" %}
+{#- ReturnTarget.PARAM, supplied by the page: ReturnTarget lives in zenit's SERVER
+    source set, so a common template cannot reach the constant (nor its
+    Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
+{% declare returnParam: String %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -34,7 +38,7 @@
                 </pl-card-header>
                 <pl-card-content>
                     <form method="POST">
-                        {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                        {% csrf() %}<input type="hidden" name={% returnParam %} value={% returnUrl %}>
                         <pl-input name="command" placeholder={% t("command_placeholder", scope: "instance_exec") %}></pl-input>
                         <pl-button variant="outline" type={% "submit" %}>{{ t("run", scope: "instance_exec") }}</pl-button>
                     </form>

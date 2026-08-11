@@ -5,7 +5,6 @@
 {% declare instanceName: String %}
 {% declare instanceId: Integer %}
 {% declare running: Boolean = false %}
-{% declare returnUrl: String = "" %}
 {% declare framebufferWsUrl: String %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}

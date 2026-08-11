@@ -151,6 +151,9 @@ public final class SiteProcessesPage implements RecordScopedPage<Row>, TerminalC
         // The start/kill/isolate forms echo this as _return so their handlers
         // redirect back to whichever panel rendered this page (?log= included).
         vars.put("returnUrl", ReturnTarget.capture(conduit));
+        // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
+        // ReturnTarget is server-only, so the common template cannot reach it.
+        vars.put("returnParam", ReturnTarget.PARAM);
         vars.put("recordTabs", recordTabs(conduit));
 
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-processes"), vars);

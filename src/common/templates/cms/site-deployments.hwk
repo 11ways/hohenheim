@@ -8,6 +8,10 @@
 {% declare currentCommit: String = "" %}
 {% declare deployments: List %}
 {% declare returnUrl: String = "" %}
+{#- ReturnTarget.PARAM, supplied by the page: ReturnTarget lives in zenit's SERVER
+    source set, so a common template cannot reach the constant (nor its
+    Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
+{% declare returnParam: String %}
 {% declare deployTarget: RouteTarget %}
 {% declare cancelDeployTarget: RouteTarget %}
 {% declare rollbackTarget: RouteTarget %}
@@ -40,18 +44,18 @@
                     the handler redirects back to whichever panel rendered this
                     page (/admin or /manage); forged values fall back to /admin. -#}
                 <form use:Zenit.form={% deployTarget %}>
-                    <input type="hidden" name="_return" value={% returnUrl %}>
+                    <input type="hidden" name={% returnParam %} value={% returnUrl %}>
                     <pl-button variant={% "primary" %} type={% "submit" %} disabled={% isDeploying %}>{{ t("deploy_now", scope: "site_deployments") }}</pl-button>
                 </form>
                 {% if isDeploying %}
                 <form use:Zenit.form={% cancelDeployTarget %}>
-                    <input type="hidden" name="_return" value={% returnUrl %}>
+                    <input type="hidden" name={% returnParam %} value={% returnUrl %}>
                     <pl-button variant={% "outline" %} type={% "submit" %}>{{ t("cancel", scope: "site_deployments") }}</pl-button>
                 </form>
                 {% /if %}
                 {% if canRollback %}
                 <form use:Zenit.form={% rollbackTarget %} use:CmsConfirm.destructive={% t("rollback_confirm", scope: "site_deployments") %}>
-                    <input type="hidden" name="_return" value={% returnUrl %}>
+                    <input type="hidden" name={% returnParam %} value={% returnUrl %}>
                     <pl-button variant={% "destructive" %} type={% "submit" %}>{{ t("rollback", scope: "site_deployments") }}</pl-button>
                 </form>
                 {% /if %}

@@ -84,6 +84,9 @@ public final class InstanceConsolePage implements RecordScopedPage<Row>, Termina
         vars.put("stopCommand", stopCommand == null ? "" : stopCommand);
         vars.put("commandError", error == null ? "" : error);
         vars.put("returnUrl", ReturnTarget.capture(conduit));
+        // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
+        // ReturnTarget is server-only, so the common template cannot reach it.
+        vars.put("returnParam", ReturnTarget.PARAM);
         vars.put("commandTarget", HohenheimEndpoints.INSTANCE_CONSOLE_COMMAND
             .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
         // AIDEV-NOTE: WebSocketEndpoint is not a RouteTarget and has no with(...), and
