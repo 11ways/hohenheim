@@ -13,7 +13,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -69,54 +68,6 @@ public class ServerService extends DatasourceScoped {
                           int images, String daemonVersion, String operatingSystem,
                           String osType, String architecture,
                           @Nullable String errorKind, @Nullable String errorDetail) {}
-
-    /**
-     * One host's STORED state, projected off the record with no daemon involved.
-     *
-     * AIDEV-NOTE: it claimed to be "what the list and any allocator read" and was neither.
-     * The admin list renders rows through {@code ServerResource.statusCellOf}, placement
-     * reads {@code Row}s through {@code HostAdmission} and {@code InstanceCapacity}, and
-     * {@link #storedStates} has exactly one caller in the repo: {@code HostRecordTest},
-     * which uses it as the regression guard that a daemon-free projection of every host
-     * really does construct no {@code DockerClient}. That guard is the only reason this
-     * stays; a docblock naming readers it does not have is the same defect shape as a step
-     * reporting success it did not earn. Give it real callers or delete it -- do not
-     * restore the claim.
-     */
-    public record HostState(String name, String mode, String sshTarget,
-                            String admission, String posture, boolean preflightOk,
-                            @Nullable Instant probedAt, @Nullable Instant lastSeenAt,
-                            @Nullable String lastErrorKind, @Nullable String lastError,
-                            @Nullable Map<String, Object> capabilities) {}
-
-    /** Every host's stored state, in one query, without touching any daemon. */
-    public List<HostState> storedStates() {
-        List<HostState> result = new ArrayList<>();
-        for (Row row : query(() -> model().find().all())) {
-            result.add(stateOf(row));
-        }
-        return result;
-    }
-
-    private static HostState stateOf(Row row) {
-        String target = row.get(ServerModel.SSH_TARGET);
-        Object capabilities = row.get(ServerModel.CAPABILITIES);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> capabilityMap =
-            capabilities instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
-        return new HostState(
-            row.get(ServerModel.NAME),
-            row.get(ServerModel.MODE),
-            target != null ? target : "",
-            String.valueOf((Object) row.get(ServerModel.ADMISSION)),
-            String.valueOf((Object) row.get(ServerModel.POSTURE)),
-            Boolean.TRUE.equals(row.get(ServerModel.PREFLIGHT_OK)),
-            row.get(ServerModel.PROBED_AT),
-            row.get(ServerModel.LAST_SEEN_AT),
-            row.get(ServerModel.LAST_ERROR_KIND),
-            row.get(ServerModel.LAST_ERROR),
-            capabilityMap);
-    }
 
     /**
      * LIVE-probe one named server and PERSIST the typed outcome on its record
