@@ -22,11 +22,13 @@ public final class NotificationEvents {
     public static final String AUTO_BAN_BUDGET_EXHAUSTED = "auto_ban_budget_exhausted";
     public static final String SPAMSERVICE_OUTAGE = "spamservice_outage";
     public static final String SPAMSERVICE_RECOVERED = "spamservice_recovered";
+    /** ProxyServer supervision raises this ONCE per outage, after a supervised retry also failed. */
+    public static final String PROXY_LISTENER_DOWN = "proxy_listener_down";
 
     public static final List<String> ALL = List.of(
         CERT_RENEWAL_FAILED, CERT_EXPIRING, DEPLOY_FAILED, BACKUP_FAILED, PROCESS_CRASH_LOOP,
         INSTANCE_CRASH_LOOP, STACK_HEALTH, HOST_UNREACHABLE, AUTO_BAN_BUDGET_EXHAUSTED,
-        SPAMSERVICE_OUTAGE, SPAMSERVICE_RECOVERED);
+        SPAMSERVICE_OUTAGE, SPAMSERVICE_RECOVERED, PROXY_LISTENER_DOWN);
 
     private NotificationEvents() {}
 

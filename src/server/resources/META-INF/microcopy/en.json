@@ -7408,6 +7408,18 @@
     "text": "This site requires HTTPS, but no certificate is available right now. Try again shortly.",
     "scope": "proxy_error"
   },
+  "proxy_http_listener": {
+    "text": "Proxy HTTP listener is down",
+    "scope": "attention_title"
+  },
+  "proxy_https_listener": {
+    "text": "Proxy HTTPS listener is down",
+    "scope": "attention_title"
+  },
+  "proxy_https_degraded": {
+    "text": "HTTPS termination is degraded",
+    "scope": "attention_title"
+  },
   "https_unavailable": [
     {
       "text": "HTTPS is unavailable",

@@ -7408,6 +7408,18 @@
     "text": "Deze site vereist HTTPS, maar er is momenteel geen certificaat beschikbaar. Probeer het straks opnieuw.",
     "scope": "proxy_error"
   },
+  "proxy_http_listener": {
+    "text": "De HTTP-listener van de proxy is uitgevallen",
+    "scope": "attention_title"
+  },
+  "proxy_https_listener": {
+    "text": "De HTTPS-listener van de proxy is uitgevallen",
+    "scope": "attention_title"
+  },
+  "proxy_https_degraded": {
+    "text": "HTTPS-terminatie is verstoord",
+    "scope": "attention_title"
+  },
   "https_unavailable": [
     {
       "text": "HTTPS is niet beschikbaar",
