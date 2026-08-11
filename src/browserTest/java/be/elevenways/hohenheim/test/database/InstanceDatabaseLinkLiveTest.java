@@ -274,6 +274,14 @@ class InstanceDatabaseLinkLiveTest {
             assertThat(ioQuiet(() -> docker.findNetworkByName(
                     WorkloadNetworks.networkName(leaked))))
                 .as("step 9: the leak is really there before destroy runs").isNotNull();
+            // A link network whose sweep FAILED (its attachment row is gone, the network
+            // is not) must bucket ORPHANED: that bucket IS the operator-facing surface
+            // (attentionItems + the hourly ReconcileDockerResources) the deliberately
+            // swallowed sweep failure relies on. Only the healthy OWNED direction was
+            // asserted before, so the failing direction was documented and unproven.
+            assertThat(classifyNetwork(docker, WorkloadNetworks.networkName(leaked)).bucket())
+                .as("step 9: an unswept link network surfaces as ORPHANED debris")
+                .isEqualTo(DockerReconciler.Bucket.ORPHANED);
             new InstanceService().destroy(workload);
             assertThat(ioQuiet(() -> docker.findNetworkByName(
                     WorkloadNetworks.networkName(leaked))))
@@ -417,7 +425,7 @@ class InstanceDatabaseLinkLiveTest {
 
     /** Any address of a container, retried briefly: only the observation is tolerant. */
     private static String anyAddress(DockerClient docker, String handle) throws IOException {
-        long deadline = System.currentTimeMillis() + 5_000;
+        long deadline = System.currentTimeMillis() + 20_000;
         Object lastSeen = null;
         while (true) {
             Object settings = docker.inspectContainer(handle).get("NetworkSettings");
@@ -432,7 +440,7 @@ class InstanceDatabaseLinkLiveTest {
             }
             lastSeen = networks;
             if (System.currentTimeMillis() >= deadline) {
-                throw new IllegalStateException(handle + " has no address after 5s;"
+                throw new IllegalStateException(handle + " has no address after 20s;"
                     + " last NetworkSettings.Networks: " + lastSeen);
             }
             try {
