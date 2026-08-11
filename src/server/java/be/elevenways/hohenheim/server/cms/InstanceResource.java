@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
+import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
@@ -146,7 +147,30 @@ public class InstanceResource extends RowResource {
         actions.add(this.appUpdateAction());
         actions.add(this.snapshotAction());
         actions.add(this.backupAction());
+        actions.add(this.migrateAction());
         return actions;
+    }
+
+    /**
+     * Open the migrate tab. A LINK, not an invoke, because the destination is an operator
+     * choice the page makes -- and deliberately NOT inherited by
+     * {@link ManageInstanceResource}, whose rowActions() names its own list: placement is
+     * an operator authority.
+     *
+     * Visible whenever the viewer is an operator, INCLUDING while a capture, restore or
+     * migration protects the record -- the page then states which status blocks the move
+     * and offers no destination. A hidden control explains nothing.
+     */
+    private @NonNull RowAction<Row> migrateAction() {
+        return RowAction.Url.<Row>builder(Identifier.of("hohenheim", "migrate_instance"))
+            .label(Microcopy.of("migrate").withFilter("scope", "instance"))
+            .icon(Icon.of("truck-fast"))
+            .inlineInRow(false)
+            .description(Microcopy.of("migrate_hint").withFilter("scope", "instance"))
+            .visibleFor((row, ctx) -> HohenheimAccess.isAdmin(ctx))
+            .url(row -> new Uri("/admin/" + this.slug() + "/"
+                + row.get(InstanceModel.ID) + "/page/" + InstanceMigratePage.SLUG))
+            .build();
     }
 
     @Override
@@ -159,7 +183,10 @@ public class InstanceResource extends RowResource {
             // on the record (InstanceExecPage.visibleFor); the admin panel gate is not
             // the only thing standing between a delegate and an arbitrary command.
             new InstanceExecPage(),
-            new InstanceSchedulesPage(), new InstanceDevicesPage()));
+            new InstanceSchedulesPage(), new InstanceDevicesPage(),
+            // Operator-only: the page hides AND 404s itself for a delegate, and the
+            // /manage resource never lists it at all.
+            new InstanceMigratePage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
     }

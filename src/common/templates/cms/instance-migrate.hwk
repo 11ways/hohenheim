@@ -1,0 +1,95 @@
+{#- Migrate tab on an instance: the cold move to another host. Every candidate is listed
+    with its own confirmed submit, so the destructive confirmation can name BOTH the
+    source and the destination -- a single select could only say "the chosen host". -#}
+{% declare title: String %}
+{% declare instanceName: String %}
+{% declare instanceId: Integer %}
+{% declare sourceHost: String %}
+{% declare operable: Boolean = true %}
+{% declare status: String = "" %}
+{% declare targets: List<MigrationTargetView> %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page hh-instance-migrate">
+    <header class="cms-resource-list-header">
+        <h1>{{ instanceName }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    <pl-card class="hh-overview-card">
+        <pl-card-header>
+            <pl-card-title>{{ t("migrate", scope: "instance_migrate") }}</pl-card-title>
+            <pl-card-description>{{ t("cold_note", scope: "instance_migrate") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <p class="hh-migrate-source">
+                {{ t("current_host", scope: "instance_migrate") }}
+                <strong>{{ sourceHost }}</strong>
+            </p>
+            {% if !operable %}
+            <pl-alert variant="warning" data-migrate-blocked="1">
+                {{ t("blocked_by_status", scope: "instance_migrate", name: instanceName, status: status) }}
+            </pl-alert>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+
+    <pl-card class="hh-overview-card">
+        <pl-card-header>
+            <pl-card-title>{{ t("destinations", scope: "instance_migrate") }}</pl-card-title>
+        </pl-card-header>
+        <pl-card-content>
+            {% if targets %}
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("host", scope: "instance_migrate") }}</pl-table-head>
+                    <pl-table-head>{{ t("state", scope: "instance_migrate") }}</pl-table-head>
+                    <pl-table-head>{{ t("memory", scope: "instance_migrate") }}</pl-table-head>
+                    <pl-table-head>{{ t("action", scope: "instance_migrate") }}</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each targets as target %}
+                    <pl-table-row data-migrate-target={% target.serverId %}>
+                        <pl-table-cell>{{ target.name }}</pl-table-cell>
+                        <pl-table-cell>
+                            {% if target.eligible %}
+                            <pl-badge variant="success">{{ t("eligible", scope: "instance_migrate") }}</pl-badge>
+                            {% else %}
+                            <pl-badge variant="secondary">{{ t("ineligible", scope: "instance_migrate") }}</pl-badge>
+                            <span class="hh-migrate-refusal" data-migrate-refusal="1">{{ target.refusal }}</span>
+                            {% /if %}
+                        </pl-table-cell>
+                        <pl-table-cell>
+                            {% if target.measured %}
+                            <pl-usage-bar value={% target.bookedMb %} max={% target.bookableMb %} showLabel={% true %}></pl-usage-bar>
+                            {% else %}
+                            <pl-badge variant="warning">{{ t("unmeasured", scope: "instance_migrate") }}</pl-badge>
+                            {% /if %}
+                        </pl-table-cell>
+                        <pl-table-cell>
+                            {% if target.eligible && operable %}
+                            <form method="POST" use:CmsConfirm.destructive={% t("migrate_confirm", scope: "instance_migrate", name: instanceName, from: sourceHost, to: target.name) %}>
+                                {% csrf() %}
+                                <input type="hidden" name="target_server_id" value={% target.serverId %}>
+                                <pl-button variant="destructive" type="submit">{{ t("migrate_here", scope: "instance_migrate") }}</pl-button>
+                            </form>
+                            {% /if %}
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <pl-empty-state icon="server">
+                <pl-empty-state-title>{{ t("no_destinations", scope: "instance_migrate") }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ t("no_destinations_hint", scope: "instance_migrate") }}</pl-empty-state-description>
+            </pl-empty-state>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+</section>
+{% /block %}

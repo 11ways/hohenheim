@@ -40,9 +40,7 @@ final class InstanceOperationGuard {
      */
     static void requireOperable(@NonNull Row row) {
         String status = row.get(InstanceModel.STATUS);
-        if (InstanceModel.STATUS_CAPTURING.equals(status)
-                || InstanceModel.STATUS_RESTORING.equals(status)
-                || InstanceModel.STATUS_MIGRATING.equals(status)) {
+        if (!InstanceModel.isOperable(row)) {
             throw Violations.ofForm(Microcopy.of("instance_busy")
                 .withFilter("scope", "violations")
                 .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))

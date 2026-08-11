@@ -1329,6 +1329,10 @@
     {
       "text": "Geheugen",
       "scope": "instance_stats"
+    },
+    {
+      "text": "Geboekt geheugen",
+      "scope": "instance_migrate"
     }
   ],
   "no_logs": [
@@ -4397,6 +4401,10 @@
     {
       "text": "Toestand",
       "scope": "server_overview"
+    },
+    {
+      "text": "Toestand",
+      "scope": "instance_migrate"
     }
   ],
   "add_file": [
@@ -5830,10 +5838,16 @@
     "text": "Instantienaam",
     "scope": "instance_from_template"
   },
-  "host": {
-    "text": "Host",
-    "scope": "instance_from_template"
-  },
+  "host": [
+    {
+      "text": "Host",
+      "scope": "instance_from_template"
+    },
+    {
+      "text": "Host",
+      "scope": "instance_migrate"
+    }
+  ],
   "unapproved_note": {
     "text": "Dit sjabloon is nog niet goedgekeurd; enkel beheerders kunnen het gebruiken.",
     "scope": "instance_from_template"
@@ -6012,10 +6026,16 @@
     "text": "Volgorde",
     "scope": "schedule_step"
   },
-  "action": {
-    "text": "Actie",
-    "scope": "schedule_step"
-  },
+  "action": [
+    {
+      "text": "Actie",
+      "scope": "schedule_step"
+    },
+    {
+      "text": "Actie",
+      "scope": "instance_migrate"
+    }
+  ],
   "offset": {
     "text": "Wachttijd",
     "scope": "schedule_step"
@@ -7370,6 +7390,10 @@
     {
       "text": "{$name} - Overzicht",
       "scope": "server_overview"
+    },
+    {
+      "text": "{$name} - Migreren",
+      "scope": "instance_migrate"
     }
   ],
   "stored_log_heading": {
@@ -7702,10 +7726,16 @@
     "text": "Beheerde processen",
     "scope": "server_overview"
   },
-  "unmeasured": {
-    "text": "Ongemeten",
-    "scope": "server_overview"
-  },
+  "unmeasured": [
+    {
+      "text": "Ongemeten",
+      "scope": "server_overview"
+    },
+    {
+      "text": "Niet gemeten",
+      "scope": "instance_migrate"
+    }
+  ],
   "unmeasured_body": {
     "text": "Er is geen bruikbare geheugenmeting, dus deze host heeft geen plaatsingsbudget. Voer preflight uit om te meten; een lege balk zou hier onterecht als een lege host lezen.",
     "scope": "server_overview"
@@ -7749,5 +7779,67 @@
   "tier_database": {
     "text": "Database",
     "scope": "server_overview"
+  },
+  "migrate": [
+    {
+      "text": "Migreer naar host...",
+      "scope": "instance"
+    },
+    {
+      "text": "Migreren naar een andere host",
+      "scope": "instance_migrate"
+    }
+  ],
+  "migrate_hint": {
+    "text": "Verplaats deze workload naar een andere host (koud: hij wordt gestopt voor de kopie)",
+    "scope": "instance"
+  },
+  "migrated_toast": {
+    "text": "{$name} draait nu op {$host}",
+    "scope": "instance"
+  },
+  "cold_note": {
+    "text": "Een koude verplaatsing: de workload wordt gestopt, volledig geexporteerd, op de bestemming geimporteerd en opnieuw gestart als hij draaide.",
+    "scope": "instance_migrate"
+  },
+  "current_host": {
+    "text": "Staat nu op",
+    "scope": "instance_migrate"
+  },
+  "blocked_by_status": {
+    "text": "{$name} kan nu niet verplaatst worden: een operatie houdt hem vast (status {$status}). Migratie kan weer zodra die operatie klaar is.",
+    "scope": "instance_migrate"
+  },
+  "destinations": {
+    "text": "Bestemmingshosts",
+    "scope": "instance_migrate"
+  },
+  "eligible": {
+    "text": "Geschikt",
+    "scope": "instance_migrate"
+  },
+  "ineligible": {
+    "text": "Niet geschikt",
+    "scope": "instance_migrate"
+  },
+  "migrate_here": {
+    "text": "Hierheen migreren",
+    "scope": "instance_migrate"
+  },
+  "migrate_confirm": {
+    "text": "{$name} van {$from} naar {$to} verplaatsen? Hij wordt gestopt voor de hele kopie en op {$to} opnieuw gestart als hij draaide.",
+    "scope": "instance_migrate"
+  },
+  "no_destinations": {
+    "text": "Er is geen andere host ingeschreven",
+    "scope": "instance_migrate"
+  },
+  "no_destinations_hint": {
+    "text": "Schrijf een tweede host met dezelfde runtime in en laat hem toe om deze workload te verplaatsen.",
+    "scope": "instance_migrate"
+  },
+  "migrate_target_required": {
+    "text": "Noem de bestemmingshost om naar te migreren",
+    "scope": "violations"
   }
 }

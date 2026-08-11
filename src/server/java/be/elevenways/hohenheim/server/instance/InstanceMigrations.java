@@ -18,8 +18,10 @@ import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -100,6 +102,85 @@ public final class InstanceMigrations {
         this.instances = instances;
         this.checkpoint = checkpoint;
         this.capacity = capacity;
+    }
+
+    // -- destination survey (the operator surface) ------------------------------
+
+    /**
+     * One candidate host as the migrate surface renders it.
+     *
+     * @param eligible whether every pre-flight this survey can ask WITHOUT touching a
+     *                 daemon passed; {@link #migrateTo} remains the gate
+     * @param refusal  the named reason an ineligible host was excluded, else null
+     */
+    public record Destination(int serverId, @NonNull String name, boolean eligible,
+                              @Nullable Microcopy refusal, int bookedMb, int bookableMb) {}
+
+    /**
+     * Every host this instance could be told to move to, each either eligible or carrying
+     * the NAMED reason it is not.
+     *
+     * AIDEV-NOTE: an ADVISORY projection, deliberately CALLING the same gates rather than
+     * restating them -- the InstancePlacement lesson one file over (a re-stated eligible set
+     * silently drifts from the authority it imitates). It skips exactly the checks that
+     * touch a daemon or move capacity (the destination workload claim, the memory window),
+     * so a host listed eligible here can still be refused BY NAME at submit; that is the
+     * documented split, never a success toast over a refusal.
+     *
+     * @throws Violations when the instance itself cannot be resolved
+     */
+    public @NonNull List<Destination> destinationsFor(int instanceId) {
+        Resolved resolved = this.instances.resolve(instanceId);
+        String requiredRuntime = resolved.handler().requiredRuntime();
+        boolean sourceExports = resolved.runtime() instanceof NativeSnapshotSupport;
+        List<Destination> destinations = new ArrayList<>();
+        for (Row server : Models.get(ServerModel.class).find().all()) {
+            Integer serverId = server.get(ServerModel.ID);
+            if (serverId == null || serverId == resolved.serverId()) {
+                continue;
+            }
+            String name = String.valueOf((Object) server.get(ServerModel.NAME));
+            Microcopy refusal = refusalFor(server, serverId, name, resolved,
+                requiredRuntime, sourceExports);
+            Long budget = InstanceCapacity.budgetMbOf(server);
+            destinations.add(new Destination(serverId, name, refusal == null, refusal,
+                clampInt(InstanceCapacity.bookedMbOn(serverId)),
+                budget == null ? 0
+                    : clampInt(InstanceCapacity.bookableMbOn(serverId, budget))));
+        }
+        return destinations;
+    }
+
+    /** The first named reason this host cannot receive the workload, or null. */
+    private static @Nullable Microcopy refusalFor(@NonNull Row server, int serverId,
+                                                  @NonNull String name,
+                                                  @NonNull Resolved resolved,
+                                                  @NonNull String requiredRuntime,
+                                                  boolean sourceExports) {
+        if (!ServerModel.runtimeOf(server).equals(requiredRuntime)) {
+            return violationText("host_runtime_mismatch")
+                .withArg("name", name)
+                .withArg("runtime", ServerModel.runtimeOf(server))
+                .withArg("required", requiredRuntime);
+        }
+        if (!sourceExports
+                || !(resolved.handler().runtimeFor(name) instanceof NativeSnapshotSupport)) {
+            return violationText("migrate_unsupported")
+                .withArg("name", nameOf(resolved.row()));
+        }
+        try {
+            HostAdmission.requireInstancePlacement(serverId);
+        } catch (Violations refused) {
+            List<Violation> all = refused.all();
+            return all.isEmpty()
+                ? violationText("host_not_admitted").withArg("name", name)
+                : all.get(0).message();
+        }
+        return null;
+    }
+
+    private static int clampInt(long value) {
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(0, value));
     }
 
     // -- single-instance migration ---------------------------------------------
