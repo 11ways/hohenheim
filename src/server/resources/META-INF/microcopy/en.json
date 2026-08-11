@@ -1329,6 +1329,10 @@
     {
       "text": "Memory",
       "scope": "instance_stats"
+    },
+    {
+      "text": "Booked memory",
+      "scope": "instance_migrate"
     }
   ],
   "no_logs": [
@@ -4397,6 +4401,10 @@
     {
       "text": "State",
       "scope": "server_overview"
+    },
+    {
+      "text": "State",
+      "scope": "instance_migrate"
     }
   ],
   "add_file": [
@@ -5830,10 +5838,16 @@
     "text": "Instance name",
     "scope": "instance_from_template"
   },
-  "host": {
-    "text": "Host",
-    "scope": "instance_from_template"
-  },
+  "host": [
+    {
+      "text": "Host",
+      "scope": "instance_from_template"
+    },
+    {
+      "text": "Host",
+      "scope": "instance_migrate"
+    }
+  ],
   "unapproved_note": {
     "text": "This template is not approved yet; only administrators can use it.",
     "scope": "instance_from_template"
@@ -6012,10 +6026,16 @@
     "text": "Order",
     "scope": "schedule_step"
   },
-  "action": {
-    "text": "Action",
-    "scope": "schedule_step"
-  },
+  "action": [
+    {
+      "text": "Action",
+      "scope": "schedule_step"
+    },
+    {
+      "text": "Action",
+      "scope": "instance_migrate"
+    }
+  ],
   "offset": {
     "text": "Offset",
     "scope": "schedule_step"
@@ -7370,6 +7390,10 @@
     {
       "text": "{$name} - Overview",
       "scope": "server_overview"
+    },
+    {
+      "text": "{$name} - Migrate",
+      "scope": "instance_migrate"
     }
   ],
   "stored_log_heading": {
@@ -7702,10 +7726,16 @@
     "text": "Managed processes",
     "scope": "server_overview"
   },
-  "unmeasured": {
-    "text": "Unmeasured",
-    "scope": "server_overview"
-  },
+  "unmeasured": [
+    {
+      "text": "Unmeasured",
+      "scope": "server_overview"
+    },
+    {
+      "text": "Not measured",
+      "scope": "instance_migrate"
+    }
+  ],
   "unmeasured_body": {
     "text": "No usable memory reading exists, so this host has no placement budget. Run preflight to measure it; a zero bar here would wrongly read as an empty host.",
     "scope": "server_overview"
@@ -7749,5 +7779,67 @@
   "tier_database": {
     "text": "Database",
     "scope": "server_overview"
+  },
+  "migrate": [
+    {
+      "text": "Migrate to host...",
+      "scope": "instance"
+    },
+    {
+      "text": "Migrate to another host",
+      "scope": "instance_migrate"
+    }
+  ],
+  "migrate_hint": {
+    "text": "Move this workload to another host (cold: it is stopped for the copy)",
+    "scope": "instance"
+  },
+  "migrated_toast": {
+    "text": "{$name} now runs on {$host}",
+    "scope": "instance"
+  },
+  "cold_note": {
+    "text": "A cold move: the workload is stopped, exported whole, imported on the destination and started again if it was running.",
+    "scope": "instance_migrate"
+  },
+  "current_host": {
+    "text": "Currently on",
+    "scope": "instance_migrate"
+  },
+  "blocked_by_status": {
+    "text": "{$name} cannot move right now: an operation holds it (status {$status}). Migration resumes once that operation settles.",
+    "scope": "instance_migrate"
+  },
+  "destinations": {
+    "text": "Destination hosts",
+    "scope": "instance_migrate"
+  },
+  "eligible": {
+    "text": "Eligible",
+    "scope": "instance_migrate"
+  },
+  "ineligible": {
+    "text": "Not eligible",
+    "scope": "instance_migrate"
+  },
+  "migrate_here": {
+    "text": "Migrate here",
+    "scope": "instance_migrate"
+  },
+  "migrate_confirm": {
+    "text": "Move {$name} from {$from} to {$to}? It is stopped for the whole copy and started again on {$to} if it was running.",
+    "scope": "instance_migrate"
+  },
+  "no_destinations": {
+    "text": "No other host is enrolled",
+    "scope": "instance_migrate"
+  },
+  "no_destinations_hint": {
+    "text": "Enroll and admit a second host of the same runtime to move this workload.",
+    "scope": "instance_migrate"
+  },
+  "migrate_target_required": {
+    "text": "Name the destination host to migrate to",
+    "scope": "violations"
   }
 }

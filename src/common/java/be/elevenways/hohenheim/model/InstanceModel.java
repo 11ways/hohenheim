@@ -10,6 +10,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
 
@@ -94,6 +95,28 @@ public class InstanceModel extends Model {
      */
     public static final List<String> LIVE_GUEST_STATUSES =
         List.of(STATUS_RUNNING, STATUS_STARTING, STATUS_ERROR);
+
+    /**
+     * The in-flight statuses that refuse another operator operation on this record.
+     *
+     * AIDEV-NOTE: declared HERE, beside the statuses themselves, because two layers need
+     * the same answer for two different reasons and neither may re-spell it:
+     * {@code InstanceOperationGuard.requireOperable} REFUSES on it (the authority), and the
+     * admin surfaces ASK it to state why a control cannot act right now (the affordance).
+     * A surface that re-listed the statuses would silently drift the moment a fourth
+     * protected status ships.
+     */
+    public static final List<String> PROTECTED_STATUSES =
+        List.of(STATUS_CAPTURING, STATUS_RESTORING, STATUS_MIGRATING);
+
+    /**
+     * Whether another operator operation may start on this record right now.
+     *
+     * @see #PROTECTED_STATUSES
+     */
+    public static boolean isOperable(@NonNull Row row) {
+        return !PROTECTED_STATUSES.contains(row.get(STATUS));
+    }
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 

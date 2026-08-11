@@ -587,11 +587,23 @@ observed from inside the guest.
   proves the negative (a peer cannot reach it) anchored by a positive that can
   reach 1.1.1.1, restores to a new host, and simulates a killed controller. **[live]**
 
-**Open, stated:** there is no single-instance "migrate to host X" admin surface.
-`migrateTo(instanceId, targetServerId)` has no UI caller; drain and the service
-lane are its only production consumers. Device volumes are refused rather than
-silently emptied. There is no docker-tier drain (the pieces exist in
-`VolumeSnapshotSupport`; no consumer demanded it).
+**Closed 2026-08-11:** the single-instance "migrate to host X" admin surface
+exists. `InstanceMigratePage` (slug `migrate`, an operator-only `RecordScopedPage`
+reached from the instance's own `migrate_instance` row action) lists every enrolled
+host with the authority's OWN refusal beside the ineligible ones
+(`InstanceMigrations.destinationsFor`, which calls the same gates rather than
+restating them), and one destructive confirmation per destination names both the
+source and the target host. `visibleFor` hides AND 404s it for a delegate, and
+`ManageInstanceResource` never lists it: placement is an operator authority, the
+same decision `InstancePlacement` records for creates.
+**CI: `InstanceMigrateSurfaceTest` -- 6 journeys, all RAN, 0 skipped.**
+Counterfactuals: unregistering the page fails 4 of the 6 with HTTP 404, and
+declaring the migrate action on `ManageInstanceResource` fails the operator-only
+journey.
+
+**Still open, stated:** device volumes are refused rather than silently emptied.
+There is no docker-tier drain (the pieces exist in `VolumeSnapshotSupport`; no
+consumer demanded it).
 
 ## 12. Capacity and placement
 
