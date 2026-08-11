@@ -830,3 +830,126 @@ body collapsed onto one overlong line (a heredoc newline-loss issue): hawkeye
 and hohenheim `f38c8d9` -- the original count of eight missed the four F13/F14
 commits, which landed after it was written. All unpushed, so an interactive
 rebase to split them is still safe.
+
+# 2026-08-12 -- documentation re-verification pass
+
+This section supersedes specific claims above. Nothing earlier is deleted, and no
+counterfactual was re-observed: this pass was READ-ONLY (source reading only -- no build,
+no test run), by explicit instruction, because the framework chain was being edited
+concurrently. Every correction below therefore cites source, never a test result.
+
+## The header hash table: RETIRED as a live index, KEPT as evidence
+
+The "Tested commits" table (`:29-41`) is not refreshed, and this is a choice, not neglect.
+
+The argument for refreshing: a reader wants to know how far the current tree has drifted
+from the verified one. The argument against, which wins: the table's evidentiary job is
+done by the **0.A (2026-07-29) column alone** -- that column names the code each
+counterfactual was observed against, and it is immutable. The "Now" column has no
+evidentiary function; it is a drift gauge, and a drift gauge that must be hand-maintained
+across NINETEEN repositories decays into a lie the day after it is written. Refreshing it
+today would additionally record hashes from repos under concurrent edit, which is worse
+than an openly historical number.
+
+So: **treat the "Now (2026-08-01)" and "Commits since 0.A" columns as historical, per-row,
+from this date.** The 0.A column stands. One measurement, for scale: hohenheim is 281
+commits and eleven days past the `f38c8d9` the table pins it at (`git rev-list --count
+f38c8d9..HEAD` on 2026-08-12). Anyone needing the current distance should measure it, not
+read it here.
+
+## Open item 5 (0.6c at-rest encryption) -- the corpus claim is superseded
+
+`:356-357` and the 2026-08-01 correction at `:715-718` say hohenheim `StackModel`,
+`StackFileModel` and `StackDeploymentModel` "are the whole corpus". They are not, and have
+not been for some time. The corpus is **19 `.encrypted()` field declarations across 16
+models** (a raw grep also matches prose inside comments -- e.g.
+`M047_EncryptRecoverableSecrets.java:36` -- so count declarations, not lines):
+
+`SiteModel.java:109` (security_report_token), `DatabaseModel.java:64`,
+`StackModel.java:72`, `StackFileModel.java:35`, `StackServiceModel.java:116`,
+`StackDeploymentModel.java:40`, `InstanceFileModel.java:39`,
+`InstanceTemplateFileModel.java:38`, `InstanceVariableModel.java:69`,
+`GitProviderModel.java:69` and `:88`, `DnsZoneModel.java:73` (dnssec_private_key),
+`DnsPeerModel.java:28` and `:39`, `CertificateModel.java:59`,
+`NotificationChannelModel.java:36`, `ServerModel.java:250` and `:285`,
+`SpamserviceInstallationModel.java:41`.
+
+`M047_EncryptRecoverableSecrets.java` is the migration that carried existing rows into
+that state and is explicitly kept in step with the declarations
+(`M047_EncryptRecoverableSecrets.java:36`).
+
+What does NOT change: the shape of the limitation. Encryption still covers only
+specifically DECLARED main-table and table-stored sub-schema fields, and
+`refuseEncryptedJsonSubFields` still means every JSON-nested secret is `.secret()`-only
+and never encrypted -- which is exactly why the largest plaintext surface in the product,
+the site types' `environment_variables` map, is redaction-only (see the AIDEV-NOTE at
+`NodeSiteType.java:67-80`). **The prohibition stands unchanged: no text may claim
+platform-wide encryption.** Item 5 remains OPEN.
+
+## Open item 2 (0.B) -- HALF shipped, and the halves must not be conflated
+
+This is the correction most likely to be mis-read, so it is stated twice.
+
+- The SETTINGS half IS shipped: `database.migration_integrity` defaults to `fail` in zenit
+  (`zenit/src/server/java/be/elevenways/zenit/server/setting/ServerSettings.java:471-473`),
+  and the AIDEV-NOTE immediately above it (`:465-470`) records why warn was rejected. A
+  legitimate revision of a shipped migration declares itself with
+  `Migration.supersedesChecksums(...)`; an uninstalled module's history is acknowledged
+  with `MigrationRunner.acknowledgeMissingMigrationVersions(...)`.
+- The LIVE-INSTALL half CANNOT BE VERIFIED FROM SOURCE AT ALL. "Checksum stamping on a
+  live install" is a fact about the rows in a running database's migration table, not
+  about any file in any repo. No amount of code reading can close it, and this pass did
+  not run anything.
+
+**Item 2 therefore stays OPEN.** Do not mark it closed on the settings default alone: a
+tree that defaults to `fail` and a live install whose stamped checksums match are two
+different claims, and only the first has evidence. Closing it needs someone with access to
+the live install to boot it and record the outcome.
+
+## B8 -- superseded, the premise no longer holds
+
+`:761-762` records B8 as "hohenheim's `manage` capability is delegable and documented as
+view/edit/operate, but no MACHINE-credential mutation consumer exists". Machine-credential
+mutation consumers now exist in quantity. `InstanceApi` gates every one of its handlers on
+`ApiConduits.requireKey(conduit)` and then MUTATES: power start/stop/restart
+(`InstanceApi.java:89-110`), console command (`:125`), backup (`:153`), snapshot (`:173`),
+create (`:194`), variable set/delete (`:252`, `:276`), device attach/resize/detach
+(`:331`, `:366`, `:391`). The capability vocabulary those keys narrow to is registered in
+`HohenheimAccess.java:237-262`, whose AIDEV-NOTE records the umbrella decision: `manage`
+stays THE ownership marker and the narrow verbs are declared as capabilities it IMPLIES,
+so no stored grant row's effective authority moved -- and `exec` cannot be an implier at
+all, because `KnownCapability` structurally refuses ADMIN + `impliedBy`.
+
+B8 is closed as an OWNER DECISION in the sense that its premise is gone; the authority
+question it pointed at is now answered by that umbrella decision, in code.
+
+## B6 and E11 -- both still genuinely OPEN, and neither branch has been taken
+
+Stated plainly so a reader skimming the corrections above does not assume everything moved.
+
+- **B6** (`:757`) -- `hohenheim.sites.manage_all` still DOES NOT EXIST: no `manage_all`
+  anywhere in `src/`, and `ServerMain.installAuthBaselines` registers exactly four
+  permissions. All-sites authority is therefore still `hohenheim.admin.access`, the admin
+  bypass, which is BLUNTER than the plan intended because it also bypasses `exec` and
+  `image_any`. `instance-tier-plan.md:1344-1367` now carries a dated (2026-08-11) block
+  recording this and, importantly, WHY a cheap fix is worse than the status quo:
+  `ApiKeyService` short-circuits on the type-level permission, so a naive declaration would
+  let a holder mint `cap:hohenheim:site#manage` keys covering EVERY site while the UI
+  enumerated nothing. Both branches of B6 -- complete it, or delete it from the roadmap --
+  remain untaken. That plan bullet is the last place the name survives.
+- **E11** (`:748-756`) -- unchanged and open. The `NON_INTERACTIVE_ONLY` CSRF exemption
+  question was not revisited by this pass, and it still bears directly on the API-key
+  authority row now that B8's mutating consumers are real.
+
+## Open item 6 -- ROUTED, not resolved
+
+`AdminPagesTest.settingsPageRendersSavesResetsAndRefusesInvalidValues` exists at
+`src/browserTest/java/be/elevenways/hohenheim/test/AdminPagesTest.java:71`. Whether it
+still fails on a pristine tree **cannot be established by reading source**, and this pass
+was forbidden from running tests. No guess is recorded here.
+
+Routed to whoever may run the suite: run
+`zenit-dev test --browser --class AdminPagesTest` (ask `zd_verified` first -- a green
+receipt at the current fingerprint IS the answer), and record the outcome as a dated block
+under this one. Until that happens item 6 stands exactly as written, including its 2026-08-01
+"assume it still fails" note.
