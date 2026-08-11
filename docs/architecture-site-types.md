@@ -1,341 +1,339 @@
 # Site Type Architecture
 
-## Problem
+## STATUS 2026-08-12 -- full rewrite
 
-Hohenheim must support multiple site types (proxy, static, redirect, node process, compose, etc.), each with different configuration, proxy/handling behavior, and admin UI. Adding a new type must require implementing one class and registering it -- no changes to existing code.
+This document was rewritten from scratch today. Everything before this date described
+the 2024-era THREE-type design (proxy/static/redirect), hand-registration, a hand-built
+tabbed `edit.hwk` with `{% if siteType{:} == ... %}` blocks, and a "Migration Path"
+section listing work that shipped long ago. None of that describes the code any more:
+eleven types are implemented, registration is compile-time discovery, and the admin form
+is a generated zenit-cms resource. If you followed an old link here expecting the
+four-layer/three-type text, the layer VOCABULARY survived (data model, registry,
+request handling, admin UI) but every concrete claim under it was re-derived from source.
+Older wording is not preserved -- git history holds it (`git log -- docs/architecture-site-types.md`).
 
-## Design Principles
+## What a site type is
 
-1. **Use the framework.** Zenit has `RegistryEnumField`, `SchemaField.schemaFrom()`, and `TypeDefinition`. Use them.
-2. **Registry-driven.** Site types register themselves. The data model, admin UI, and proxy engine all read from the same registry.
-3. **Each type owns its concerns.** A type declares its schema, its form component, and its request handler.
-4. **Share what's universal.** Domain management, SSL, headers, enable/disable, audit logging are the same for every type. Only settings and request dispatch differ.
-5. **Lifecycle-aware.** Handlers are long-lived, not per-request. They are created when a site is loaded, updated when config changes, and destroyed when a site is removed.
+A site type is one class implementing `SiteTypeHandler`
+(`src/server/java/be/elevenways/hohenheim/server/sitetype/SiteTypeHandler.java`), which
+extends the common-side `SiteTypeInfo`
+(`src/common/java/be/elevenways/hohenheim/sitetype/SiteTypeInfo.java`). It declares:
 
-## Four Layers
+- its `Identifier typeId()` -- the string form is the stored `sites.site_type` value;
+- display facets from `TypeDefinition`: `getDisplayName()`, `getLabel()` (microcopy),
+  `getIcon()`, `getColor()`;
+- `getDescription()` (SiteTypeInfo:20);
+- `Schema getSchema()` -- the settings schema stored polymorphically in `sites.settings`;
+- `createHandler(Row site, Map<String, Object> settings)` -- the long-lived request handler.
 
-### Layer 1: Data Model
+`SiteTypeInfo` no longer declares `getIcon` itself: the icon and color facets ride the
+typed `TypeDefinition` contract (`SiteTypeInfo.java:10-12`), where the accessor is
+`default Icon getIcon()`
+(`zenit/src/common/java/be/elevenways/zenit/common/orm/field/TypeDefinition.java:41`) --
+an `Icon`, not a `String`.
 
-Single `sites` table with polymorphic `settings` (JSONB):
+Two capability booleans live on `SiteTypeInfo` and one on `SiteTypeHandler`:
+
+- `supportsEnvInjection()` (`SiteTypeInfo.java:29`) -- may receive managed-database
+  connection details as injected environment variables;
+- `containerRuntime()` (`SiteTypeInfo.java:39`) -- the runtime is a container, not a host
+  process, which decides whether an attached database must be on the SAME server (join its
+  link network) or the local one (dial the published loopback port);
+- `managedProcessEnvironment()` (`SiteTypeHandler.java:30`) -- the type spawns OS processes
+  through the managed-process pipeline (workload identity claims, reserved control variables).
+
+## Discovery: nothing is registered by hand
+
+`SiteTypeHandler` carries
+`@BlastDiscoverable(registrar = "be.elevenways.hohenheim.server.sitetype.SiteTypes#register")`
+(`SiteTypeHandler.java:16`). The compile-time-generated `BlastAutoLoadInit` calls
+`SiteTypes.register(handler)` for every implementation
+(`SiteTypes.java:32-36`), which puts the instance in BOTH the common registry
+`SiteTypeRegistry.REGISTRY` (`SiteTypeRegistry.java:12-13`) and the server-side
+`Map<Identifier, SiteTypeHandler> HANDLERS` (`SiteTypes.java:19`). Adding a site type is
+one class and no edit anywhere else.
+
+Both `SiteTypes` and `SiteTypeRegistry` force `BlastAutoLoadInit.loaded` from a static
+field that MUST stay LAST in the class, because the loader re-enters `register()` while
+the class is still initialising (`SiteTypes.java:21-29`, `SiteTypeRegistry.java:16-22`).
+Moving that field up silently empties the registry.
+
+`SiteTypes.boot()` (`SiteTypes.java:48-50`) only initialises the shared process
+infrastructure; the model write hooks it used to install now live in the discovered
+`HohenheimWriteHooks` ZenitModule -- see the AIDEV-NOTE at `SiteTypes.java:41-46` for why
+ordering forced that move.
+
+## Data model
+
+`SiteModel` stores the type in a `RegistryEnumField` fed by the registry and the settings
+in a `SchemaField` resolved from it
+(`src/common/java/be/elevenways/hohenheim/model/SiteModel.java:44-62`):
 
 ```java
-public static final RegistryEnumField SITE_TYPE = SCHEMA.addField(
-    RegistryEnumField.builder("site_type")
-        .registry(SiteTypeRegistry.REGISTRY)
-        .build());
+public static final EnumField SITE_TYPE = SCHEMA.addField(
+    RegistryEnumField.builder("site_type").registry(SiteTypeRegistry.REGISTRY) ... );
 
 public static final SchemaField SETTINGS = SCHEMA.addField(
-    SchemaField.builder("settings")
-        .schemaFrom("site_type")
-        .build());
+    SchemaField.builder("settings").schemaFrom("site_type") ... );
 ```
 
-Zenit validates and converts `settings` automatically based on `site_type`.
+A second, independent `schemaFrom` pair covers provisioning: `SOURCE` (`local` / `git`)
+and `SOURCE_SETTINGS` (`SiteModel.java:65-84`). Site type and source are orthogonal -- a
+Docker site can be git-provisioned.
 
-### Layer 2: Site Type Registry
+`SECURITY_REPORT_TOKEN` is deliberately a dedicated column and NOT a key inside the
+polymorphic settings map, because the dynamic form entry rewrites that map on every admin
+save and would drop it (AIDEV-NOTE at `SiteModel.java:100-109`).
 
-```
-SiteTypeRegistry.REGISTRY
-  hohenheim:proxy       ProxySiteType
-  hohenheim:static      StaticSiteType
-  hohenheim:redirect    RedirectSiteType
-```
+## The eleven implemented types
 
-Future types (node, compose) register themselves the same way but are designed separately due to their complexity.
+All in `src/server/java/be/elevenways/hohenheim/server/sitetype/types/`. Identifiers are
+`hohenheim:<name>`. `StaticFileHandler` in the same package is NOT a site type -- it is the
+`SiteRequestHandler` that `StaticSiteType` returns (`StaticFileHandler.java:19`).
 
-**Common/server split:** The registry is defined in `src/common` and holds `SiteTypeInfo` instances (display name, schema, properties). On the server side, `SiteTypeRegistry` also maintains a parallel `Map<Identifier, SiteTypeHandler>` so the proxy engine can access handler factories. The common-side registry drives the admin UI (type selector dropdown, schema for form rendering). The server-side map drives the proxy engine (handler creation). Both are populated at startup from the same type implementations.
+| Type | Id | Class | Runtime | env inject | container | managed proc |
+| --- | --- | --- | --- | --- | --- | --- |
+| Proxy | `proxy` | `ProxySiteType` | forwards HTTP upstream | no | no | no |
+| TLS passthrough | `tls_passthrough` | `TlsPassthroughSiteType` | raw TLS relay, no HTTP | no | no | no |
+| Static | `static` | `StaticSiteType` | serves files | no | no | no |
+| Redirect | `redirect` | `RedirectSiteType` | 3xx response | no | no | no |
+| Dead | `dead` | `DeadSiteType` | fixed 404 page | no | no | no |
+| Dev namespace | `dev_namespace` | `DevNamespaceSiteType` | routes wildcard labels to dev-tunnel leases | no | no | no |
+| Node.js | `node` | `NodeSiteType` | managed node child processes | yes | no | yes |
+| Alchemy | `alchemy` | `AlchemySiteType` (extends `NodeSiteType`) | node children with the Alchemy wrapper | yes | no | yes |
+| Java / Zenit | `java` | `JavaSiteType` | managed JVM fat-jar processes | yes | no | yes |
+| Command | `command` | `CommandSiteType` | arbitrary managed command | yes | no | yes |
+| Docker | `docker` | `DockerSiteType` | container per release | yes | yes | no |
 
-#### SiteTypeInfo (common, no server dependencies)
+### Settings schemas
 
-Declares display metadata and the settings schema. Lives in `src/common` so the client/admin UI can access type information without Undertow dependencies.
+Field names are the stored setting keys. Defaults are those declared on the field builder.
+
+**Proxy** (`ProxySiteType.java:38-90`): `forward_scheme` (http/https), `forward_host`,
+`forward_port`, `upstream_protocol` (http1 / h2-for-gRPC), `request_timeout` (s),
+`websocket_upgrade` (default true), `ignore_certificates` (default false),
+`rewrite_location` (default true), `socket` (PathField), `delay` (ms).
+Socket mode WINS over host/port when set (`ProxySiteType.java:135-139`) and is reached
+through a loopback TCP-to-AF_UNIX bridge because Undertow/xnio has no AF_UNIX client;
+`{name}`/`{0}` placeholders are substituted per request from regex-host capture groups.
+INPUT-TRUST OBLIGATION: those captures come from the untrusted Host header and are
+validated before becoming part of a filesystem path.
+Missing upstream and unparseable URIs both degrade to a 502 handler rather than throwing
+(`ProxySiteType.java:126-154`).
+
+**TLS passthrough** (`TlsPassthroughSiteType.java:25-49`): `forward_host` (required),
+`forward_port` (default 443, range 1-65535), `proxy_protocol_v2` (default false),
+`connect_timeout` (default 10s, range 1-300). It implements `TlsPassthroughProvider`,
+whose `createHandler` throws `UnsupportedOperationException` by design
+(`TlsPassthroughProvider.java:12-15`) -- these sites never see an HTTP exchange. Model
+validation refuses HTTP-only domain and site options for this type
+(`SiteModel.java:143`, `SiteModel.java:173`).
+
+**Static** (`StaticSiteType.java:27-52`): `root_path` (PathField, directory browser),
+`autoindex` (default **true** -- matching the Node original's ecstatic behaviour, see the
+comment at `StaticSiteType.java:32`), `indexes` (default true), `show_hidden_files`
+(default false), `delay` (ms), `fallback_file`. An empty `root_path` yields an empty 200,
+not a 500 (`StaticSiteType.java:85-91`).
+
+**Redirect** (`RedirectSiteType.java:25-46`): `target_url`, `http_status` (301/302/307/308,
+falls back to 302 when unset or unparseable), `preserve_path` (default false), `delay` (ms).
+A target that is not `http://`, `https://` or `/` is refused with a 502 rather than
+emitting an open redirect (`RedirectSiteType.java:85-94`).
+
+**Dead** (`DeadSiteType.java:21`): empty schema. Serves a fixed dark 404 page for parking
+domains.
+
+**Dev namespace** (`DevNamespaceSiteType.java:38-43`): `registration_token` (secret). The
+matched wildcard's first label picks a live `DevLease`; a name with no lease renders the
+dev-offline page (`DevNamespaceSiteType.java:83-100`). `SiteResource` mints a token
+automatically when the field is left blank (`SiteResource.java:338-345`).
+
+**Node.js** (`NodeSiteType.java:37-117`): `script` (PathField), `node` (RegistryEnumField
+over discovered node versions), `wait_for_ready` (default false), `minimum_processes`,
+`maximum_processes`, `delay` (ms), `environment_variables` (StringMapField, `secret()`),
+`api_keys` (ListField, `secret()`), `user` (RegistryEnumField over discovered system
+users), `use_ports` (default false), `memory_limit_mb`, `cpu_limit`.
+Read the AIDEV-NOTE at `NodeSiteType.java:67-80` before touching the env map: `secret()`
+is its ONLY control (it lives in a JSON SchemaField, so encryption is impossible), which
+is why revision snapshots omit it and activity deltas collapse it to one redacted pair.
+The AIDEV-NOTE at `NodeSiteType.java:105-110` is equally load-bearing: declaring
+`memory_limit_mb` is what puts the site's children on the host memory budget, and a host
+that cannot enforce a cgroup cap REFUSES the site rather than booking a paper limit.
+
+**Alchemy** (`AlchemySiteType.java`): inherits Node's schema unchanged -- it overrides only
+the facets, `getDefaultArgs()` (`--stream-janeway`), `useChildWrapper()` (true), and
+`createHandler`, where `defaultWaitForReady()` flips to true because Alchemy apps always
+signal readiness via janeway (`AlchemySiteType.java:42-68`).
+
+**Java / Zenit** (`JavaSiteType.java:37-104`): `jar_path`, `java_binary`, `jvm_args`,
+`app_args`, `working_directory`, `wait_for_ready`, `minimum_processes`,
+`maximum_processes`, `delay`, `environment_variables` (secret), `api_keys` (secret),
+`user`, `memory_limit_mb`, `cpu_limit`. No port argument is threaded onto the command
+line: a Zenit app picks its listen port up from the injected `ZENIT__NETWORK__PORT`
+override (`JavaSiteType.java:27-31`).
+
+**Command** (`CommandSiteType.java:35-95`): `start_command`, `working_directory`,
+`port_argument`, `wait_for_ready`, `minimum_processes`, `maximum_processes`, `delay`,
+`environment_variables` (secret), `api_keys` (secret), `user`, `memory_limit_mb`,
+`cpu_limit`. The command is tokenised on whitespace and `port_argument` is appended as
+`<arg>=<port>` (`CommandSiteType.java:162-176`).
+
+**Docker** (`DockerSiteType.java:28-108`): `image`, `tag`, `container_port`, `command`,
+`dockerfile` (git-sourced only), `builder` (Dockerfile / Nixpacks, default Dockerfile),
+`build_arguments`, `server` (RegistryEnumField over `ServerOptions`; blank = local daemon),
+`environment_variables` (secret), `volumes`, `health_path`, `memory_limit_mb`, `cpu_limit`.
+Two AIDEV-NOTEs here are worth reading before changing anything:
+`DockerSiteType.java:60-65` explains why `build_arguments` is a SEPARATE field from the
+runtime environment (a sandboxed build must never see runtime secrets, and a Dockerfile
+ARG lands in image history), and `DockerSiteType.java:84-90` records that volume identity
+is keyed to the SITE, not the instance, after a release was found mounting a fresh empty
+volume. `getSchema()` refreshes the server registry before returning
+(`DockerSiteType.java:131-134`).
+
+Managed-process types (Node/Alchemy/Java/Command) turn a misconfiguration into a
+`FaultedSiteHandler` serving an explicit 503 instead of half-starting -- see the identical
+catch in each `createHandler`.
+
+## Request handling
+
+`SiteRequestHandler`
+(`src/server/java/be/elevenways/hohenheim/server/sitetype/SiteRequestHandler.java`) is one
+interface for every type: proxy types call `forwarder.forwardTo(...)`, direct types write
+the exchange. Beyond `handleRequest`, it carries `getSiteId()` (default -1),
+`getHealth()` (default UP), `mutateResponse(exchange)` (default null -- an optional
+`ResponseMutator` applied just before response headers commit) and `destroy()`.
+
+`SiteHealth` is `UP, DOWN, DEGRADED, DEPLOYING, UNKNOWN` (`SiteHealth.java:3-9`) -- the
+`DEPLOYING` state is what a release-gated Docker site reports mid-swap.
+
+`UpstreamForwarder` (`UpstreamForwarder.java:10-16`) now takes an `UpstreamTarget`; the
+`forwardTo(URI)` overload is a default that wraps the URI. `UpstreamTarget` carries the
+protocol choice and the ignore-certificates flag alongside the URI, which is how h2/gRPC
+upstreams and per-site TLS trust reach the connector.
+
+Handler lifecycle stays as designed: `onSiteUpdated` defaults to destroy-and-recreate and
+`onSiteRemoved` to destroy (`SiteTypeHandler.java:38-49`).
+
+### Dispatch
+
+`server/proxy/SiteDispatcher.java` owns hostname+path resolution over an immutable
+`RouteTable` (`SiteDispatcher.java:195-222`) swapped through one volatile reference under
+`generationLock` (`SiteDispatcher.java:647-659`). In-flight requests lease their
+generation to completion (`SiteDispatcher.java:734-749`). The negative cache is capped at
+5000 entries with a 5 minute TTL (`SiteDispatcher.java:226-227`) and only a fully unknown
+hostname is cached negatively (`SiteDispatcher.java:1082-1085`). A positive regex-match
+cache sits beside it with the same capping stance (AIDEV-NOTE at `SiteDispatcher.java:230-234`).
+
+`REWRITE_LOCATION` is an exchange attachment (`SiteDispatcher.java:980`) that proxy and
+dev-namespace handlers set to opt into upstream `Location` rewriting.
+
+## Admin UI -- the real story
+
+There is no hand-built site edit template. `siteType` appears in ZERO of the 37 `.hwk`
+files in the repo; the `{% if siteType{:} == "hohenheim:proxy" %}` design was never how
+this shipped. The site editor is a generated zenit-cms `RowResource`
+(`src/server/java/be/elevenways/hohenheim/server/cms/SiteResource.java:66-79`):
 
 ```java
-public interface SiteTypeInfo extends TypeDefinition {
-    // From TypeDefinition:
-    //   String getDisplayName()
-    //   Schema getSchema()
-    //   Map<String, Object> getProperties()
-
-    String getDescription();
-    String getIcon();
-}
+FormSpec.builder()
+    .add(SiteModel.NAME)
+    .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SITE_TYPE))
+    .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SETTINGS))
+    .add(SiteModel.ENABLED)
+    .add(SiteModel.DESCRIPTION)
+    .add(RelationPick.of(SiteModel.AUTH_PROVIDER_ID, ...))
+    .add(RelationPick.of(SiteModel.ACCESS_LIST_ID, ...))
+    .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SOURCE))
+    .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SOURCE_SETTINGS))
+    .build();
 ```
 
-#### SiteTypeHandler (server-only, has Undertow dependency)
-
-Extends SiteTypeInfo with server-side handler creation and lifecycle management. Lives in `src/server`.
-
-```java
-public interface SiteTypeHandler extends SiteTypeInfo {
-
-    SiteRequestHandler createHandler(Row site, Map<String, Object> settings);
-
-    // Called when a site's config changes. Default: destroy + recreate.
-    default SiteRequestHandler onSiteUpdated(SiteRequestHandler existing,
-                                              Row site, Map<String, Object> newSettings) {
-        existing.destroy();
-        return createHandler(site, newSettings);
-    }
-
-    // Called when a site is disabled or deleted.
-    default void onSiteRemoved(SiteRequestHandler handler) {
-        handler.destroy();
-    }
-}
-```
-
-### Layer 3: Request Handling
-
-A single unified interface. No split between "proxy upstream" and "handle directly" -- every type gets the same dispatch method.
-
-```java
-public interface SiteRequestHandler {
-
-    // Handle an incoming request for this site.
-    // For proxy types: call upstreamForwarder to forward to upstream.
-    // For direct types: write the response to the exchange.
-    // MUST be thread-safe -- one handler instance serves concurrent requests.
-    void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder);
-
-    // Report health status for the admin UI.
-    // Static/redirect types should return UP (always healthy if configured).
-    // Proxy types should return based on upstream reachability.
-    default SiteHealth getHealth() { return SiteHealth.UP; }
-
-    // Clean up resources (kill processes, close connections, etc.).
-    default void destroy() {}
-}
-
-public enum SiteHealth { UP, DOWN, DEGRADED, UNKNOWN }
-
-// Passed to handleRequest. Proxy-type handlers call this to forward to an upstream.
-// Named UpstreamForwarder (not ProxyCallback) to avoid collision with
-// io.undertow.server.handlers.proxy.ProxyCallback.
-public interface UpstreamForwarder {
-    void forwardTo(URI upstream);
-}
-```
-
-A proxy type does `forwarder.forwardTo(uri)`. A static type reads a file and writes to `exchange`. A redirect type sends a 302. The dispatcher doesn't care which.
-
-**Integration with Undertow:** SiteDispatcher no longer implements Undertow's `ProxyClient` interface. Instead, it becomes a top-level `HttpHandler`. When a handler calls `forwarder.forwardTo(uri)`, the forwarder internally uses `UndertowClient` to establish the upstream connection and streams request/response with zero-copy IO (same as ProxyHandler does, but triggered from our dispatch flow). This preserves Undertow's non-blocking streaming and automatic WebSocket upgrade handling.
-
-**Error handling:** The dispatcher wraps every `handleRequest()` call in try-catch. If a handler throws, the dispatcher sends a 502 Bad Gateway response to the client and logs the error with the site name/id.
-
-#### SiteDispatcher Data Structures
-
-Two maps work together:
-
-- `Map<siteId, SiteRequestHandler>` -- handler lifecycle management (create/update/destroy)
-- `RouteTable` (hostname+path -> siteId) -- request routing lookup
-
-The RouteTable supports the full priority order:
-1. Exact hostname + longest path prefix
-2. Exact hostname + shorter/no path
-3. Wildcard hostname + longest path prefix
-4. Wildcard hostname + shorter/no path
-5. Negative cache (5000 entries, 5min TTL)
-
-Route changes are atomic: build a new RouteTable, swap with a single volatile reference. In-flight requests on the old table continue to completion.
-
-#### SiteDispatcher Lifecycle
-
-- **Route loading:** Captures enabled sites and domains once, builds HTTP and pre-TLS maps, then publishes one generation. No partial or 404 window.
-- **Site changes:** Rebuild the generation after commit; failed builds retain the serving generation.
-- **Active connections:** HTTP requests and upgraded connections lease their generation through completion/connection close. Established TLS passthrough relays keep their selected target.
-- **Shutdown:** Public listeners stop first, then routed handlers and internal schedulers are destroyed.
-
-Route loading uses one query for enabled sites and one for all domains, not an N+1 query per site.
-
-### Layer 4: Admin UI
-
-The site edit page has tabs: **General | Settings | Domains | Advanced**
-
-**General tab** (same for all types): name, slug, type selector, enabled toggle, description.
-
-**Settings tab** (type-specific): rendered based on selected type. Uses `{% if siteType{:} == "hohenheim:proxy" %}` conditional blocks with Plumage form components inside. When the type selector changes, the settings section reactively re-renders with the correct fields.
-
-**Domains tab** (same for all types): hostname list management, match type, per-domain SSL, HSTS.
-
-**Advanced tab** (same for all types): request/response header rules, timeout configuration, rate limiting. These are cross-cutting concerns that apply to every site type.
-
-## Cross-Cutting Concerns (Common to All Types)
-
-These live in the common site configuration, NOT in type-specific settings:
-
-### Request/Response Headers
-Every site supports configurable header rules:
-- Add/remove/rewrite request headers
-- Add/remove response headers (CORS, security headers, CSP, X-Frame-Options)
-
-Stored in the `site_domains` table's `custom_headers` JSONB field and/or a separate `site_headers` table.
-
-CORRECTION (2026-08-10): custom request-header rules are NOT the mechanism for the
-forwarding trust boundary. In `SiteDispatcher.continueAfterAuth` the custom rules run
-FIRST and are then deliberately overridden for the forwarding family: `X-Forwarded-Proto`,
-`X-Forwarded-Host`, `X-Real-IP` and `X-Forwarded-For` are regenerated from hohenheim's own
-`X-Hohenheim-Key`-authenticated decision, and the wider client-asserted family (RFC 7239
-`Forwarded`, the `X-Forwarded-*` aliases, CDN client-IP headers, the IIS URL-rewrite pair)
-is stripped unconditionally. A header rule targeting any of those names is silently
-discarded on the forward path -- author rules for application headers only.
-
-### Path-Based Routing
-The `site_domains` table already has `path` and `strip_path` fields. The SiteDispatcher must support path matching:
-- Exact hostname match first, then longest-prefix path match
-- `strip_path` removes the matched prefix before forwarding
-
-### SSL/TLS Termination and Passthrough
-TLS termination is a per-domain concern managed in the Domains tab:
-- Per-domain certificate selection (Let's Encrypt, custom upload, none)
-- SNI callback in the HTTPS listener selects the right certificate
-- ACME HTTP-01 challenge handling intercepts `/.well-known/acme-challenge/` before normal routing
-
-`PublicTcpListener` is the shared public-port front: it accepts an optional
-PROXY v2 header from a configured peer, hands the stream to a
-`ConnectionRouter`, and relays to the chosen backend. Two routers exist.
-`TlsSniRouter` parses only the bounded ClientHello needed for SNI and then
-either replays the exact bytes to a `hohenheim:tls_passthrough` backend or
-connects to an internal loopback Undertow TLS listener for HTTP/1.1, HTTP/2,
-gRPC, and WebSockets. `InternalListenerRouter` consumes nothing and is what puts
-the plain HTTP port behind the same ingress when trusted peers are configured.
-
-Identity survives the loopback hop through `ConnectionIdentities`, keyed by the
-internal socket's ephemeral source address, so Undertow exchanges see the public
-source and destination. HTTP and pre-TLS routes share one immutable generation.
-QUIC/HTTP3 will require a parallel datagram transport; it must reuse route policy
-and this identity seam rather than being folded into the TCP listener.
-
-### Access Control (future)
-Per-site basic auth, IP allowlists, and auth-request integration. Orthogonal to site type.
-
-## Site Type Implementations (v1)
-
-### ProxySiteType
-
-**Settings schema:**
-- `forward_scheme` (enum: http/https, default: http)
-- `forward_host` (string, required)
-- `forward_port` (integer, default: 80)
-- `socket` (string, alternative to host:port) -- SHIPPED (2026-08-10 correction; the earlier
-  "forward_socket_path deferred to v2" note is obsolete). Reached through a loopback
-  TCP-to-AF_UNIX bridge (`UnixSocketBridge`) because Undertow 2.3/xnio-nio has no AF_UNIX
-  client. Supports `{name}`/`{0}` placeholders substituted from regex-host capture groups.
-  INPUT-TRUST OBLIGATION: those capture values originate in the untrusted Host header, so a
-  substituted value is validated (no path separator, no `..`, no control char) before it
-  becomes part of a filesystem path -- an operator regex with a permissive capture must not be
-  able to steer the dial to an attacker-chosen socket path.
-- `websocket_upgrade` (boolean, default: true)
-- `upstream_protocol` (enum: http1/h2, default: http1) -- h2 dials prior-knowledge h2c on
-  http upstreams and ALPN h2 on https upstreams; required for native gRPC backends.
-  Response trailers (grpc-status) are captured and forwarded.
-- `request_timeout` (integer seconds; absent = 30s, 0 = unlimited for streaming/gRPC/WebSocket sites)
-- `ignore_certificates` (boolean, default: false) -- https upstreams are otherwise validated
-  against the platform trust store INCLUDING hostname (JDK endpoint identification)
-
-**Handler:** `forwarder.forwardTo(URI(scheme, host, port))`. Upstream connection streams request/response with zero-copy IO. WebSocket upgrades are handled transparently.
-
-### TlsPassthroughSiteType
-
-**Settings schema:**
-- `forward_host` (literal IP or DNS hostname, required)
-- `forward_port` (integer, required)
-- `proxy_protocol_v2` (boolean, default: false)
-- `connect_timeout` (integer seconds, bounded)
-
-**Handler:** no HTTP handler. The pre-TLS route snapshot connects directly to
-the backend, optionally emits PROXY v2, replays the ClientHello, and relays both
-directions until close. The backend owns certificates and every application-layer
-policy; model validation refuses HTTP-only domain and site options.
-
-### StaticSiteType
-
-**Settings schema:**
-- `root_path` (string, required)
-- `autoindex` (boolean, default: false)
-- `fallback_file` (string, e.g., "index.html" for SPAs)
-
-**Handler:** Serves files from `root_path` via Java NIO. 404 if not found, or fallback_file for SPAs.
-
-### RedirectSiteType
-
-**Settings schema:**
-- `target_url` (string, required)
-- `http_status` (enum: 301/302/307/308, default: 302)
-- `preserve_path` (boolean, default: false)
-
-**Handler:** Sends HTTP redirect. If `preserve_path`, appends the original request path to `target_url`.
-
-### Complex Types (Future -- Separate Design Documents)
-
-**NodeSiteType** and **ComposeSiteType** are NOT simple schema+handler pairs. They require:
-- Background threads (process supervision, container monitoring)
-- Resource management (port allocation, socket cleanup, container lifecycle)
-- IPC protocols (ready signals, health probes)
-- Their own admin UI panels (process list, container status, terminal access)
-
-The architecture guarantees these CAN be built on the extension points (registry, handler lifecycle, custom settings templates) but their design is deferred to separate documents.
-
-NodeSiteType has since shipped (managed process pools). Multi-container
-deployments shipped as the STACK tier -- deliberately NOT a site type, since a
-stack is infrastructure a proxy site points at, not a request handler. See
-`architecture-stacks.md`.
-
-## Framework Improvements
-
-### Plumage: Schema-driven form component (future)
-
-A `<pl-schema-form>` that renders form fields from a Zenit Schema. Benefits all Zenit apps.
-
-For v1, type-specific settings forms are hand-built with `{% if %}` blocks. This works and ships fast. The schema-driven form replaces the `{% if %}` blocks once proven.
-
-Design considerations for the schema-form component:
-- Field-level render overrides (custom widgets for specific fields)
-- Conditional field visibility (field A only shown when field B has value X)
-- Validation display (server-side errors mapped to specific fields)
-- Field ordering and grouping (schema fields have no inherent order -- needs metadata)
-
-### Hawkeye: Dynamic template rendering (future)
-
-A `{% render templateId with variables %}` directive that renders a template by identifier. Would allow type-specific settings panels without `{% if %}` blocks. Significant framework change -- deferred.
-
-### Zenit: JSON path query helper (future)
-
-For operational queries like "find all sites forwarding to host X", the JSONB `settings` field needs database-specific JSON path queries. A portable Zenit API for JSON field queries would help. Deferred -- manual queries suffice for v1.
-
-## File Structure
+The type selector is the derived `RegistryEnumField` entry; the settings block is the
+derived dynamic `SchemaField` entry, which re-renders from the selected type's schema.
+That is why a new type needs no UI work at all: declare labels/help via
+`HohenheimFormCopy.label(...)`/`.help(...)` on the schema fields and the form is done.
+The "future `<pl-schema-form>`" and "future `{% render templateId %}`" items from the old
+text are moot -- the framework's schema-driven form entry is what ships.
+
+The list view filters and sorts on type, enabled and status
+(`SiteResource.java:80-97`). Everything that is not per-type lives on record subpages:
+domains, databases, processes, deployments, dev sessions, plus the framework-contributed
+subpages including the generic record-access tab
+(`SiteResource.java:559-567`).
+
+## Cross-cutting concerns (identical for every type)
+
+### Request/response headers
+
+Custom header rules are NOT the mechanism for the forwarding trust boundary. In
+`SiteDispatcher.continueAfterAuth` the custom rules run FIRST and are then deliberately
+overridden for the forwarding family: `X-Forwarded-Proto`, `X-Forwarded-Host`,
+`X-Real-IP` and `X-Forwarded-For` are regenerated from hohenheim's own
+`X-Hohenheim-Key`-authenticated decision (see the comment at `SiteDispatcher.java:119`),
+and the wider client-asserted family (RFC 7239 `Forwarded`, the `X-Forwarded-*` aliases,
+CDN client-IP headers, the IIS URL-rewrite pair) is stripped unconditionally. A header
+rule targeting any of those names is silently discarded on the forward path -- author
+rules for application headers only.
+
+### Path-based routing
+
+`site_domains` carries `path` and `strip_path`; resolution is exact hostname first, then
+longest path prefix, then wildcard hostname, then the negative cache.
+
+### TLS termination and passthrough
+
+`PublicTcpListener` is the shared public-port front: it accepts an optional PROXY v2
+header from a configured peer, hands the stream to a `ConnectionRouter`, and relays to the
+chosen backend. Two routers exist. `TlsSniRouter` parses only the bounded ClientHello
+needed for SNI and then either replays the exact bytes to a `hohenheim:tls_passthrough`
+backend or connects to an internal loopback Undertow TLS listener for HTTP/1.1, HTTP/2,
+gRPC and WebSockets. `InternalListenerRouter` consumes nothing and is what puts the plain
+HTTP port behind the same ingress when trusted peers are configured. All of these live in
+`server/proxy/`.
+
+Identity survives the loopback hop through `ConnectionIdentities`, keyed by the internal
+socket's ephemeral source address, so Undertow exchanges see the public source and
+destination. HTTP and pre-TLS routes share one immutable generation. QUIC/HTTP3 will
+require a parallel datagram transport; it must reuse route policy and this identity seam
+rather than being folded into the TCP listener.
+
+## File map
 
 ```
 src/common/java/be/elevenways/hohenheim/
-  sitetype/
-    SiteTypeInfo.java              -- display metadata + schema (common)
-    SiteTypeRegistry.java          -- Registry singleton
+  sitetype/SiteTypeInfo.java          -- common metadata contract (extends TypeDefinition)
+  sitetype/SiteTypeRegistry.java      -- Registry<SiteTypeInfo>, autoload-forced
+  model/SiteModel.java                -- SITE_TYPE + polymorphic SETTINGS
 
 src/server/java/be/elevenways/hohenheim/server/
-  sitetype/
-    SiteTypeHandler.java           -- extends SiteTypeInfo with handler lifecycle
-    SiteRequestHandler.java        -- unified request dispatch interface
-    SiteHealth.java                -- health status enum
-    types/
-      ProxySiteType.java
-      StaticSiteType.java
-      RedirectSiteType.java
-  proxy/
-    SiteDispatcher.java            -- hostname+path matching, handler lifecycle
-    ProxyServer.java               -- Undertow listeners (HTTP + HTTPS)
-
-src/componentTemplates/resources/templates/
-  hohenheim/sites/
-    edit.hwk                       -- tabbed edit form
-  components/
-    domain-manager.hwk             -- domain list editor (reusable)
+  sitetype/SiteTypeHandler.java       -- @BlastDiscoverable server contract
+  sitetype/SiteTypes.java             -- registrar + handler map + boot()
+  sitetype/SiteRequestHandler.java    -- unified request dispatch
+  sitetype/SiteHealth.java            -- UP/DOWN/DEGRADED/DEPLOYING/UNKNOWN
+  sitetype/FaultedSiteHandler.java    -- explicit 503 for misconfigured sites
+  sitetype/TlsPassthroughProvider.java, TlsPassthroughTarget.java
+  sitetype/UpstreamForwarder.java, UpstreamTarget.java, UpstreamProtocol.java
+  sitetype/UnixSocketBridgeConnection.java, TcpUpstreamConnection.java
+  sitetype/types/                     -- the eleven types + StaticFileHandler
+  proxy/SiteDispatcher.java           -- route table, generations, header policy
+  proxy/PublicTcpListener.java, TlsSniRouter.java, InternalListenerRouter.java
+  cms/SiteResource.java               -- the generated admin form + subpages
 ```
 
-## Migration Path
+## Adding a site type
 
-1. Update `SiteModel` to use `RegistryEnumField` + `SchemaField.schemaFrom()`.
-2. Implement ProxySiteType, StaticSiteType, RedirectSiteType with schemas and handlers.
-3. Build the tabbed edit form with `{% if %}` blocks for type-specific settings.
-4. Fix SiteDispatcher: atomic route swaps, handler lifecycle, JOIN queries.
-5. Build domain management UI component.
-6. Design TLS termination (separate document).
-7. Design NodeSiteType (separate document).
+1. Write one class in `server/sitetype/types/` implementing `SiteTypeHandler` (or
+   `TlsPassthroughProvider` for a pre-HTTP type).
+2. Declare `ID`, a `SETTINGS_SCHEMA`, the facets, and `createHandler`.
+3. Give each schema field a `HohenheimFormCopy.label`/`help` and add the microcopy keys.
+4. Set `supportsEnvInjection` / `containerRuntime` / `managedProcessEnvironment` if the
+   type runs a workload.
+5. Nothing else. Discovery registers it, the model enum picks it up, and the admin form
+   renders the schema.
+
+## Related documents
+
+Multi-container deployments are the STACK tier, deliberately NOT a site type -- a stack
+is infrastructure a proxy site points at, not a request handler. See
+`architecture-stacks.md`. Game/VM workloads are the INSTANCE tier; see
+`instance-tier-plan.md`.
