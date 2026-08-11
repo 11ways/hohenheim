@@ -68,8 +68,14 @@ here first as a concrete consumer; promote to the framework once stable.
         `removeContainer`, `inspectContainer`, `listContainers`
   - [x] `containerLogs` (snapshot) + `exec` (stdout/stderr separated, exit code, env) —
         built on a shared multiplexed-stream demux + a binary-safe raw response path.
-  - [ ] Image `inspect`; container `logs` (follow/stream); networks; volume `create`/`list`
-- [x] **`DockerSiteType`** — `hohenheim:docker` site type (registered, 8 types now).
+  - [x] Image `inspect`; container `logs` (follow/stream); networks; volume `create`/`list`
+        STATUS 2026-08-12: all four shipped, box checked today. `inspectImage`
+        (`DockerClient.java:252`), `followLogs` returning a `ContainerStream`
+        (`DockerClient.java:735`), `createNetwork`/`listNetworks`
+        (`DockerClient.java:461`/`:497`), `createVolume`/`listVolumes`
+        (`DockerClient.java:407`/`:428`).
+- [x] **`DockerSiteType`** — `hohenheim:docker` site type (registered; 11 site types now,
+      see `architecture-site-types.md`).
       `DockerSiteRequestHandler` pulls the image if missing, creates+starts a container
       publishing the app port to an ephemeral `127.0.0.1` host port, reverse-proxies via
       `UpstreamForwarder`, reports health from `inspectContainer` State, and stop+removes
@@ -77,6 +83,25 @@ here first as a concrete consumer; promote to the framework once stable.
   - [x] Admin UI settings form (`docker-settings.hwk` + dispatcher entry).
   - [ ] Follow-ups: async container start (don't block site-load on a slow pull, like
         GitDeployment's queue); optional shared-network mode instead of host-port publishing.
+
+  STATUS 2026-08-12 (supersedes the two bullets above on their DETAIL, not their state):
+
+  - The handler description is stale ARCHITECTURE. `DockerSiteRequestHandler` owns no
+    container any more: `SiteInstances.ensureRunning` converges the site's
+    `site_container` instance through the instance tier and the handler only reads the
+    published loopback port back as its upstream, with no fallback container path
+    (`DockerSiteRequestHandler.java:18-31`, `:46-67`).
+  - There is no `docker-settings.hwk`, and no per-type settings template of any kind --
+    the settings form is the derived dynamic `SchemaField` entry in `SiteResource`
+    (`SiteResource.java:68-78`). The checkbox stays checked: the capability shipped, the
+    named file never existed.
+  - Async start is still genuinely OPEN -- construction converges synchronously and a long
+    pull/build still blocks that site's load (AIDEV-NOTE at
+    `DockerSiteRequestHandler.java:27-30`).
+  - Shared-network mode: the DATABASE half shipped (a release container joins each attached
+    database's link network, `docker/SiteDatabaseNetworks.java`, and `DockerSiteType`
+    declares `containerRuntime()`), but the site's own upstream is still a published
+    `127.0.0.1` port. The bullet stays unchecked for that half.
 
 ### Git provisioning: slot ownership model
 
@@ -109,7 +134,18 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
       currently brief downtime on redeploy via stable name); buildpacks/Nixpacks
       (no-Dockerfile builds — needs the `pack` CLI); optional local registry.
 
-## Phase 3 — Database management ← IN PROGRESS
+  STATUS 2026-08-12: two of those three shipped; the box stays open only for the local
+  registry. Zero-downtime swap is `SiteReleases.gatedSwap` (`docker/SiteReleases.java:393`,
+  entered from `:319`/`:369`), which health-gates a candidate instance on the site's
+  `health_path` before it takes traffic, with owner labels driving the orphan sweep
+  (`docker/OwnerLabels.java`, `docker/OrphanActions.java`). Buildpacks shipped WITHOUT the
+  `pack` CLI: `build/NixpacksBuilder.java` runs a sandboxed nixpacks DETECTION phase that
+  emits a Dockerfile and then reuses the ordinary Dockerfile lane -- read the AIDEV-NOTE at
+  `NixpacksBuilder.java:30-43` for why CNB was rejected and why exit codes are not a
+  detection signal. It is operator-selectable per site through `DockerSiteType`'s `builder`
+  field (`DockerSiteType.java:51-58`).
+
+## Phase 3 — Database management ← COMPLETE (2026-08-12: marker corrected)
 
 - [x] Provision Postgres/MySQL/Redis/Mongo as managed containers (built on Phase 1):
       `ManagedDatabase` runs the engine container with generated credentials + published
@@ -172,6 +208,17 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
 Phase 3 is complete: provision, persistence, orchestration, admin UI (backup download + restore
 upload), scheduled backups, backup + restore for all four engines (redis restore: persistent
 only), and site attachment with derived-env injection.
+
+STATUS 2026-08-12: the section heading carried "IN PROGRESS" while its own closing paragraph
+said complete; the heading was the stale half and is now COMPLETE. Two details in the env
+bullet above have since moved: a DOCKER site CAN now receive injected credentials (its
+release container joins each attached database's link network,
+`docker/SiteDatabaseNetworks.java`, and `DockerSiteType.supportsEnvInjection()` returns true
+-- `DockerSiteType.java:143`), so "host processes only" no longer holds, and the reachability
+rule is now expressed as `SiteTypeInfo.containerRuntime()` (same server for a container,
+local server for a host process -- `SiteTypeInfo.java:33-41`). The genuinely active work is
+NOT a numbered phase in this file: it is the INSTANCE tier plus the Phase 0 security
+baseline, both tracked in `instance-tier-plan.md`.
 
 ## Phase 4 — Multi-server ← COMPLETE (SSH-transport remote half untestable locally)
 
@@ -256,6 +303,18 @@ NOTIFY with an independent secondary, secondary-freshness UI, and DNSSEC as a
 separate project. A one-box home deployment works but the registrar delegation
 still applies and a single server remains a single point of failure.
 
+STATUS 2026-08-12 -- SUPERSEDED, and it contradicted the very next section of this same
+file. The "DNS federation / hidden primary" section below already reported AXFR + TSIG +
+NOTIFY as shipped; the code agrees with the LATER section, so treat this paragraph as
+history. Evidence: `server/dns/AxfrResponder.java`, `server/dns/DnsTsig.java`,
+`server/dns/DnsNotifier.java`, `server/dns/SecondaryZoneService.java` (SOA
+refresh/retry/expire and NOTIFY-triggered pulls), with the secondaries admin at
+`server/cms/DnsZoneSecondariesPage.java` and `DnsZonePeerResource.java`. DNSSEC is no
+longer a separate future project either: `server/dns/DnsSecSigner.java`,
+`DnsSecKeys.java`, `DnsSecMaterial.java`, migration `M037_AddDnssec.java`, and signing is
+wired into the zone snapshot build (`DnsZoneStore.java:219`). What remains true: the
+registrar delegation is still yours to configure, and one box is still one box.
+
 ## Dev tunnel (2026-07-17): SHIPPED
 
 Remote dev sites under one wildcard "Dev namespace" site: dev servers register
@@ -285,3 +344,10 @@ validation pipeline) plus read-through + edit-forwarding on a secondary
 zone's Records tab (replica read-only fallback when the owner is down).
 One instance is now the single pane for every federated zone. Remaining:
 phase 5 (DNSSEC) and response-rate-limiting.
+
+STATUS 2026-08-12: that last sentence is spent -- both landed. DNSSEC signing runs on every
+zone snapshot build (`DnsZoneStore.java:219` calling `DnsSecSigner.sign`, keys in
+`DnsSecKeys`/`DnsSecMaterial`, storage in `M037_AddDnssec`), and response-rate-limiting is
+`server/dns/DnsRateLimiter.java` (classic BIND/NSD RRL semantics, IPv4 /24 and IPv6 /56
+buckets) checked on both the FORMERR and the answer path in `DnsServer.java:207` and `:221`,
+test-pinned by `DnsRateLimiterTest`.
