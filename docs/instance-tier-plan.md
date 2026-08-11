@@ -802,6 +802,13 @@ only the first two are release blockers.
 - `architecture-stacks.md:24-27`'s "secrets are encrypted at rest" is true for
   stacks and misleading as a platform claim -- update it now to state that
   narrow scope, before the scheduled 0.6c workstream lands.
+
+  DONE 2026-08-11, but the OTHER way round: `architecture-stacks.md` was
+  rewritten and the narrow scope was DROPPED because it is no longer true.
+  0.6c landed, so the platform claim is now the accurate one -- nineteen
+  `.encrypted()` field declarations across hohenheim's models, including
+  instance environment variables. Do not re-narrow that document to "stacks
+  only"; see its 2026-08-11 header block.
 - WHY 0.6a is a HARD Phase 3 prerequisite and not merely hygiene: Phase 3 makes
   instances a GENERATED resource, and a generated RowResource gets revision +
   activity subpages by DEFAULT (`RowResource.java:189-198`). Today tenants are
@@ -814,6 +821,19 @@ hashing as open work were deleted on 2026-07-29: both are covered above, and
 -- the FOURTH-AUDIT STATUS block below is the current truth for 0.6.)
 
   FOURTH-AUDIT STATUS: 0.6a AND 0.6b REOPENED; 0.6c REMAINS UNSTARTED.
+
+  STATUS 2026-08-11: **the "0.6c REMAINS UNSTARTED" half of that heading is
+  superseded -- 0.6c LANDED.** Counted by reading declaration sites today
+  (comments and the M047 migration excluded), hohenheim carries NINETEEN
+  `.encrypted()` field declarations, not the three this document argues from.
+  `SiteModel.SECURITY_REPORT_TOKEN` in particular is `.secret().encrypted()`
+  (`SiteModel.java:108-109`), not `.secret()`-only. The backfill is
+  `M047_EncryptRecoverableSecrets` and `EncryptedSecretsAtRestTest` pins
+  ciphertext at rest per field. `docs/recoverable-secret-inventory.md` is the
+  live artifact; its 2026-08-11 correction block also records that key
+  ROTATION is now a whole story (`EncryptionRekey` re-encrypts and retires),
+  which several clauses below still call half a story. The 0.6a and 0.6b
+  findings in this block are NOT superseded here -- only the 0.6c line.
   - Legacy snapshots are ACTIVE input, not only copied-database exposure.
     `RevisionableBehaviour.restore` loads pre-redaction maps verbatim. A secret
     key already present is not grafted from the current row, so restoring an old
@@ -985,9 +1005,23 @@ STILL OPEN, with owners in this document:
   all three were born encrypted. `SiteModel.SECURITY_REPORT_TOKEN:103` is still
   `.secret()`-only. The keyring and `database.encryption.key_file` are
   pre-existing framework code, not new work. Owned by the Phase 2 parallel gate.
+
+  SUPERSEDED 2026-08-11: LANDED. Nineteen `.encrypted()` declarations exist,
+  and `SiteModel.SECURITY_REPORT_TOKEN` is `.secret().encrypted()` at
+  `SiteModel.java:108-109`. The line numbers this bullet pins have drifted too
+  (`StackModel.java:70-74`, `StackDeploymentModel.java:39-41`,
+  `StackFileModel.java:34-38`). See `docs/recoverable-secret-inventory.md`.
 - **0.5 published shell: NOT EVIDENCE.** The only manifest row with no observed
   counterfactual; never re-run; its detector recognizes `java/lang/Process` and
   `com/pty4j` only, so `Runtime.exec` and JNI evade it.
+
+  SUPERSEDED 2026-08-11: the evasion is closed. The detector now matches
+  constant-pool method references as OWNER#NAME PAIRS -- `java/lang/Runtime#exec`,
+  `#load`, `#loadLibrary`, `java/lang/ProcessBuilder#start`, `#startPipeline`,
+  `java/lang/System#load`, `#loadLibrary`
+  (`plumage/.../PublishedEndpointSafetyTest.java:81-87`), so both `Runtime.exec`
+  and the JNI entry points it named are caught, and a method merely CALLED
+  "exec" or "load" on an unrelated type still does not match.
 - **0.7 gate incomplete.** The mechanism landed (admission before
   authentication, `onError` routed to shared teardown) but the audit's actual
   ask -- open a real terminal, log out / revoke / disable / delete, observe 1008
@@ -1010,6 +1044,17 @@ each `GrantService.createDirectGrant` call site; nothing verifies an
 `AdministratorGuard` is on the stack. Writing the comment passes the test, and
 that test is what closed a re-review finding about a genuinely unguarded
 last-administrator path.
+
+SUPERSEDED 2026-08-11: FIXED, and fixed structurally rather than with a better
+test. `GrantWritePrimitiveGuardTest` no longer exists; the comment scan is gone.
+The guarantee is now UNFORGEABLE at the type level: `AdministratorGuard` alone
+mints a `GrantWriteWitness` (package-private constructor,
+`GrantWriteWitness.java:24-32`), the witness is bound to the thread the guard ran
+on and retired when the guard's mutation returns, and
+`GrantService.writeDirectGrant` DEMANDS one as a parameter and calls
+`witness.requireValid(...)` before touching a row
+(`GrantService.java:47-49`, used at `:88`). A caller cannot write a grant without
+having gone through the guard, so there is no comment left to forge.
 
 The manifest is stale against its own "Now" column -- every repo has moved past
 the hashes it pins (zenit by 31 commits at the time of checking). Treat its
@@ -1109,6 +1154,12 @@ checked-in red-team manifest records the command plus tested commit for each
 repository. The manifest does not exist yet; create it in this repo. Assert
 specific refusal codes and persisted state, never a bare status when more than
 one middleware can answer it.
+
+STATUS 2026-08-11: "the manifest does not exist yet" is superseded -- it exists,
+at `docs/phase0-red-team-manifest.md` (832 lines). The rest of the clause
+stands, and the manifest itself is not clean: its header hash table pins hashes
+that have gone stale, and items B6 and E11 remain genuinely open. Read it with
+that caveat rather than as a closed artifact.
 
 | Boundary | Required discriminating gate (0.A, code) |
 | --- | --- |
@@ -1293,6 +1344,27 @@ hohenheim (consumer proof):
   new `hohenheim.sites.manage_all`), SiteAccessPage is DELETED for the generic
   page, ManagePanel's constructor hack and `impossible()` move onto the core
   helpers (no side-effecting Panel constructor; `Model.matchNone()`).
+
+  STATUS 2026-08-11 (split verdict on this bullet). The `SiteAccessPage` half
+  IS done -- the class is gone, and two tests say so in passing
+  (`ManagePanelTest.java:164` "the hand-written SiteAccessPage is deleted",
+  `ConfirmDirectiveJourneysTest.java:22`). **The `hohenheim.sites.manage_all`
+  half is NOT done and was never started: that permission DOES NOT EXIST.**
+  `ServerMain.installAuthBaselines` (`:433-451`) registers exactly four
+  permissions -- `hohenheim.admin.access`, `hohenheim.manage.access`,
+  `hohenheim.instances.create`, `hohenheim.databases.create` -- and there is no
+  `.typeLevel(` anywhere in `src/`. All-sites authority today is therefore
+  `hohenheim.admin.access`, the admin bypass, which is BLUNTER than the plan
+  intended: it also bypasses `exec` and `image_any`.
+
+  Recorded so nobody "fixes" this cheaply: declaring the type-level rule naively
+  would be STRICTLY WORSE than today. `ApiKeyService.java:132-133` short-circuits
+  on `rules.typeLevelPermission()` when the actor holds it, so a
+  `sites.manage_all` holder could mint `cap:hohenheim:site#manage` API keys
+  covering EVERY site while the UI still enumerated nothing. This is red-team
+  item B6 (`docs/phase0-red-team-manifest.md:757`: "complete
+  `hohenheim.sites.manage_all` or delete it from the roadmap"), and neither
+  branch has been taken -- so this bullet is the last place the name survives.
 - Post-login routing for delegated users (finding: `/` -> `/admin` -> bare 403
   for a manage-only principal): a manage-only principal lands on `/manage`, not
   a 403. `PanelNav.mayAccess` must HIDE (not show-empty) peers a principal has
@@ -1886,6 +1958,27 @@ model is false without them, even if Docker itself starts correctly.
 Verified in source. Where this block contradicts the prose that follows, this
 block is what the code does; amend the prose, do not code against it.
 
+**HISTORY as of 2026-08-11 -- the instruction above is now INVERTED.** This
+block was ground truth on 2026-08-02 and is kept for the reasoning it records,
+but all four of its headline findings are false today, so "where this block
+contradicts the prose that follows, this block wins" must NOT be applied any
+more. What changed:
+
+- Node identity, leases and fences EXIST. `be.elevenways.zenit.common.orm.lease`
+  ships `Leases`/`Lease` -- fenced row leases on portable ORM statements -- and
+  hohenheim's `HostLeases` (`server/host/HostLeases.java:19-32`) is the wired
+  consumer: one fenced lease per server, heartbeat-renewed, with the FENCE as
+  the condition every runtime-outcome write carries.
+- The advisory-lock API this block dissects is DELETED, for exactly the reason
+  it gave. `Datasource.java:248-253` records it: "four of eight backends
+  answered a bare `true` while locking nothing ... Cross-process coordination is
+  `be.elevenways.zenit.common.orm.lease.Leases` ... Do not reintroduce a boolean
+  lock API here."
+- "Fencing IS buildable without a distributed lock service" was acted on -- that
+  is the mechanism above, in zenit core, as this block proposed.
+- The host record is no longer a stub: `ServerModel` carries posture, runtime,
+  Incus URL and TLS material, pinned host keys and encrypted identity keys.
+
 - **Node identity does not exist, at all.** No node id, no lease, no heartbeat,
   no `nodes` table anywhere in zenit. `TaskClaimManager` is a static JVM-wide
   `IdentityHashMap<Datasource, Set<String>>` of held lock strings plus an
@@ -2194,6 +2287,19 @@ block is what the code does; amend the prose, do not code against it.
     forward hook. A fix is an OUTPUT-hook policy keyed on the per-site run-as uid
     (`meta skuid` against the same `TenantNetworkRanges`) or per-process network namespaces;
     either is its own slice, not a StackDeployer variant.
+
+    SUPERSEDED AGAIN 2026-08-11: every `StackDeployer` reference in this bullet
+    names a DELETED class. The Phase 7 lowering removed it
+    (`StackInstances.java:66-74` calls it "the deleted StackDeployer"), so
+    `ensureNetwork`, `StackRuntime.deployerFor`, `StackDeployer.EGRESS` and
+    `StackDeployerTest` no longer exist. The BEHAVIOUR they described survived
+    and hardened: each stack service is an ordinary instance on its own
+    per-workload network under the tier's `WorkloadNetworkPolicy`, additionally
+    joined to the stack's shared LINK network between create and start
+    (`StackInstances.java:290-310`), and the tier's declared egress moved to
+    `StackServiceKind.EGRESS` (`:78-86`, still `Egress.OPEN` with the same
+    reasoning). The managed-PROCESSES gap named at the end of this bullet is
+    unchanged and still open.
     Also named 2026-08-06: the REBOOT re-apply gap for STACKS specifically. Docker networks
     survive a reboot, nft chains do not; instances re-apply on `start`, managed-database
     containers carry no restart policy (down after a reboot until re-provisioned, which
@@ -2421,6 +2527,16 @@ shape) is confirmable during the phase. Do not start Phase 3 with 7 or 8 open.
   the allocator, not operator memory. Host preflight verifies userns remap,
   seccomp/AppArmor, cgroup version/controllers, daemon reachability and required
   nftables support before the host accepts tenant placement.
+
+  RE-VERIFIED 2026-08-11, STILL OWED -- **do not supersede this clause.** This
+  is the one direction that does not usually happen: the CODE is behind and the
+  DOCUMENT is right. The shared-container acknowledgement (actor, timestamp,
+  warning version) does not exist; setting the `shared_container` posture is a
+  bare admin edit on an `EnumField`, and the code says so itself in an
+  AIDEV-NOTE at `ServerModel.java:99-107`: "the shared_container
+  acknowledgement record (actor, timestamp, warning version -- the plan's
+  requirement) is NOT built yet ... Follow-up owed with the placement
+  allocator." The clause stands as written and remains a real gate.
 - **Host lifecycle is an owned product flow.** Enrollment uses a short-lived
   bootstrap or an operator-pinned credential, never a pasted permanent root
   secret with implicit trust. Host records expose capabilities/version, health,
@@ -2674,6 +2790,14 @@ Driver and infrastructure:
 
   RECON 2026-08-02, verified in source: `port_allocations` DOES NOT EXIST. It
   occurs exactly once in this repository -- in the future-tense prose above.
+
+  SUPERSEDED 2026-08-11: `port_allocations` EXISTS. It is created by
+  `M051_PortLedgerAndHostFks` (`:47`, described at `:24` as "ONE port ledger and
+  ONE host key"), and `PortLedger` is the persistent claim-before-create
+  authority the prose asked for -- claims are released as `observed` or parked
+  in `releasing`, and the instance tier verifies a start against the daemon's own
+  binding. Read the four-authorities paragraph below as history of what it
+  replaced, not as a description of today.
   Any handoff or status note claiming it "already absorbed" the other consumers
   is FALSE; nothing has been absorbed. There are FOUR independent port
   authorities today: (1) `PortAllocator` for managed processes -- an in-memory
@@ -3521,6 +3645,40 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   transfer the backend to another eligible host, and repeat the ordinary power
   action through the tenant API. Every step proves a second tenant gets 404 and
   an `access.manage`-only user cannot grant exec.
+
+STATUS 2026-08-11 (gate correction): **STRIKE "cold-transfer the backend to
+another eligible host" from the clause above.** It is not merely unbuilt, it is
+UNSATISFIABLE for this phase's subject, and leaving it in reads as missing
+product when the truth is a deliberate refusal at four independent layers, each
+verified by reading the code today:
+
+1. Migration requires `NativeSnapshotSupport` on BOTH ends and refuses
+   `migrate_unsupported` otherwise (`InstanceMigrations.java:240-248`).
+2. The only implementer is `IncusInstanceRuntime` (`:51`); the sole other
+   implementer in the tree is the test fake `FakeNativeDaemons:229`.
+   `DockerInstanceRuntime` (`:46-49`) does not implement it -- an AIDEV-NOTE at
+   `InstanceMigrations.java:267` states "Migratable == NativeSnapshotSupport ==
+   IncusInstanceRuntime only" outright.
+3. Both game templates this phase seeds are Docker:
+   `GameTemplateSeeder.java:104` sets `InstanceTemplateModel.KIND` to
+   `KIND_DOCKER` (`:28`) for Velocity and Minecraft alike.
+4. The pair is host-locked anyway. `GameDomains.java:246-250` refuses a
+   cross-host proxy/backend mapping BY NAME (`game_domain_cross_host`) because
+   the link network is host-local, and `LinkNetworkSupport` is implemented only
+   by `DockerInstanceRuntime` (`:46-49`).
+
+The refusal is HONEST at every layer -- `InstanceMigrations.java:166-170`
+reports it per destination through `refusalFor`, so a caller enumerating hosts
+gets the reason per host rather than an empty list. Nothing moves silently and
+no second link network is ever minted; the previously suspected defect there
+does NOT exist.
+
+Restoring the step needs BOTH of: (a) a docker-tier drain -- already named open
+at `:4878` ("a docker-tier drain (VolumeSnapshotSupport has the pieces, no
+consumer demanded it)"), and (b) a DECISION on the game-domain mapping, because
+moving the backend alone would violate the same-host invariant the create path
+refuses. Until both exist, this clause cannot be tested and must not be counted
+as a gap in delivery.
 
 ---
 
@@ -4510,6 +4668,15 @@ the layer we can close it. What was established, in order:
   and the device-editing UI remain -- the framebuffer console landed in the
   framebuffer-console wave, drain/cold migration in the cross-host wave, and
   Windows prepared templates in the prepared-template wave below.
+
+  SUPERSEDED 2026-08-11: the device-editing UI is gone from that list too --
+  it shipped on 2026-08-06 in the device-surface wave, and this block simply
+  never absorbed its own document's later entry. The closure is already
+  recorded below at the "STATUS (2026-08-06, device-surface wave)" block
+  (Devices tab `InstanceDevicesPage` + nav-hidden `InstanceDeviceResource`,
+  mirrored onto /manage by `ManageInstanceDeviceResource`, plus the
+  `GET/POST /api/v1/instances/{id}/devices` lane), and independently in
+  `proxmox-use-inventory.md:1089`. Nothing from the original list is open here.
 
 STATUS (2026-08-05, trust-split wave): the remote-host gap the kernel-truth wave
 left OPEN is closed, and the isolation sweep now verifies daystrom through the
@@ -5636,11 +5803,24 @@ Each names its home and its first consumer.
     destination and a clean install already passes it, but flipping it today
     would refuse to boot the one live install. Flip it in the same change that
     stamps the checksums.
+
+    SUPERSEDED 2026-08-11: FLIPPED. `database.migration_integrity` ships with
+    `.defaultValue("fail")` (`zenit .../setting/ServerSettings.java:471-475`),
+    and retired versions are acknowledged in BOTH directions --
+    `Migration.supersedesChecksums(...)` for a superseded checksum and
+    `MigrationRunner.acknowledgeMissingMigrationVersions(...)` for a version an
+    uninstalled module's history still claims
+    (`MigrationRunner.java:110-115`, honoured at `:438-444`).
   - FRAMEWORK GAP found: `MigrationBuilder.createTable` has no `ifNotExists`
     option, so a migration that CREATES a table can never be replayed onto an
     existing schema. That caps the column-level `.ifNotExists()` work at
     ALTER-only migrations, and is why `M041`'s INSERT was left unguarded (its
     CREATE dies first, so the guard could never be reached or tested).
+
+    RE-VERIFIED 2026-08-11, STILL OPEN: `MigrationBuilder.createTable` still
+    takes only a name and a configurator (`MigrationBuilder.java:75-81`,
+    `TableBuilder.Mode.CREATE`), and `ifNotExists` remains column-level only.
+    This half of the clause is NOT superseded by the integrity flip above.
 - **Destructive-operation audit.** Every destroy/purge/snapshot-restore is a
   data-loss surface. Reuse the typed-confirmation + ownership-label pattern the
   stack tier already proved (`purge_stack_volumes`), and log every destructive
