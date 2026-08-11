@@ -4,8 +4,8 @@
 {% declare instanceId: Integer %}
 {% declare instanceName: String %}
 {% declare devices: List %}
-{% declare addDiskTarget: RouteTarget %}
-{% declare addNicTarget: RouteTarget %}
+{% declare addDiskTarget: RouteTarget = null %}
+{% declare addNicTarget: RouteTarget = null %}
 {% declare canEdit: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}

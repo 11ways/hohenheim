@@ -4,7 +4,7 @@
 {% declare instanceId: Integer %}
 {% declare instanceName: String %}
 {% declare schedules: List %}
-{% declare addScheduleTarget: RouteTarget %}
+{% declare addScheduleTarget: RouteTarget = null %}
 {% declare canEdit: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}

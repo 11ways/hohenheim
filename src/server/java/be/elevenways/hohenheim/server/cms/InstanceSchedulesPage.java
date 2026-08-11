@@ -65,15 +65,20 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
         vars.put("instanceId", instanceId);
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("schedules", schedules);
+        boolean canEdit = HohenheimAccess.isAdmin(accessContext)
+            || HohenheimAccess.hasInstanceCapability(
+                accessContext, instanceId, HohenheimAccess.CONFIG);
+        vars.put("canEdit", canEdit);
         // Create form + prefill query parameter: composed off CmsEndpoints, since
         // CmsRoutes.create returns the RouteTarget interface (no with(...)).
-        vars.put("addScheduleTarget", CmsEndpoints.CREATE_FORM
+        // AIDEV-NOTE: gated on the SAME boolean the template's {% if %} uses. A declared
+        // template variable is serialized into the hydration payload whether or not any
+        // element renders it, so an ungated target would publish an editor route to a
+        // viewer who may not edit (the certificates-request leak SiteDomainsPage hit).
+        vars.put("addScheduleTarget", canEdit ? CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, "instance-schedules")
-            .with(HohenheimParams.RECORD_ID_PREFILL, instanceId));
-        vars.put("canEdit", HohenheimAccess.isAdmin(accessContext)
-            || HohenheimAccess.hasInstanceCapability(
-                accessContext, instanceId, HohenheimAccess.CONFIG));
+            .with(HohenheimParams.RECORD_ID_PREFILL, instanceId) : null);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-schedules"), vars);
     }
