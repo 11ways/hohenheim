@@ -118,7 +118,7 @@ public class InstanceResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.COMPUTE_GROUP; }
     @Override public int navOrder() { return 15; }
     @Override public @NonNull Icon icon() { return Icon.of("cube"); }
 

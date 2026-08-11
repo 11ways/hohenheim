@@ -59,7 +59,7 @@ public final class GameDomainResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(GameDomainModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.COMPUTE_GROUP; }
     @Override public int navOrder() { return 21; }
     @Override public @NonNull Icon icon() { return Icon.of("gamepad"); }
 
