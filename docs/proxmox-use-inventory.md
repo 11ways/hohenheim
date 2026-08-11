@@ -386,7 +386,10 @@ and is not claimed to work.
 
 ## 7. Snapshots
 
-**IMPLEMENTED. Retention GAP.**
+**IMPLEMENTED.** ~~Retention GAP.~~ (Verdict corrected 2026-08-11: the retention
+gap CLOSED in the 2026-08-07 retention wave -- `hohenheim.backup.snapshot_retention`
+applied by `InstanceSnapshots.pruneForRetention` -- and the row's own SUPERSEDED
+block below has said so since. The headline never absorbed it.)
 
 Two capabilities, one per driver family: `NativeSnapshotSupport` (Incus:
 create/exists/restore/delete plus export/import) and `VolumeSnapshotSupport`

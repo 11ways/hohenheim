@@ -51,9 +51,11 @@ twenty-third row:
 | | | Ranked-open #4, instance-to-database linkage, CLOSED 2026-08-08 (item 10) |
 | CLAIMED | 0 as a row | but three sub-verdicts are CLAIMED inside PARTIAL rows: `InstanceBackups.restoreToNew`'s create-story docblock (item 9; NARROWED 2026-08-10 -- backupNow, retention and both refusals are hermetic now, only the restore create-story stays live-only), the durability contract of install (item 3), the file-capability enforcement matrix (item 5) |
 
-Of the 7 IMPLEMENTED rows, all 7 rest on hermetic state-asserting tests. Of the
-7 PARTIAL rows, five are partial specifically because the working half is proven
-only `[live]`.
+Of the 9 IMPLEMENTED rows, all 9 rest on hermetic state-asserting tests. Of the
+5 PARTIAL rows, five are partial specifically because the working half is proven
+only `[live]`. (Corrected 2026-08-11: this sentence still said "7 IMPLEMENTED"
+and "7 PARTIAL" while the table two lines above says 9 and 5. Item 12's
+IMPLEMENTED verdict is INCUS-TIER-ONLY -- see its row.)
 
 ---
 
@@ -144,12 +146,28 @@ is pinned ONLY by a `[live]` test. And install/reinstall is operator-only.
   (`:205-207`), and variables survive BOTH (`:209-210`). Three assumption gates
   at `:88`, `:91`, `:93`. **[live]**
 
-`reinstall` has exactly one production call site (`InstanceResource.java:220`)
+~~`reinstall` has exactly one production call site (`InstanceResource.java:220`)
 and one test call site (the live one). **There is no hermetic coverage of
-`reinstall` at all.**
+`reinstall` at all.**~~
 
-Stated limitation: `InstanceInstalls.install`/`reinstall` carry NO capability
-gate of their own -- only `InstanceOperationGuard.requireOperable` (`:64`, `:87`).
+**WRONG as of 2026-08-11 -- this was an ERROR, not staleness: the code is AHEAD
+of the document.** `InstanceReinstallTest` exists, contains ZERO `assume` calls
+(so it never skips), and walks two journeys:
+`reinstallClearsExactlyWhatThePolicyDeclaresAndNeverTheVariables` (`:106`) and
+`aCallerWithoutTheWipeAuthorityIsRefusedBeforeAnythingIsDestroyed` (`:203`).
+Hermetic coverage of `reinstall` exists, including its refusal half.
+
+~~Stated limitation: `InstanceInstalls.install`/`reinstall` carry NO capability
+gate of their own -- only `InstanceOperationGuard.requireOperable` (`:64`, `:87`).~~
+
+**ALSO WRONG as of 2026-08-11, same direction.** Both entry points now OPEN with
+`HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG)`
+-- `install` at `InstanceInstalls.java:80`, `reinstall` at `:104` -- and the
+`clear` branch additionally demands `DESTROY` before it touches anything
+(`:125-127`), with the reasoning recorded in the class docblock at `:44-50`. The
+`:64`/`:87` offsets this paragraph cites are pre-fix. The narrowing argument
+below (operator-only, no API route) still stands on its own; the "no capability
+gate" premise does not.
 Authority comes entirely from the admin row action, and `InstanceApi` registers
 no install route. So install and reinstall are OPERATOR-ONLY, while the same
 minimum-claim sentence also promises a tenant-facing API. In Pterodactyl a
@@ -605,7 +623,24 @@ A kind whose handler class is gone prices at 0 and books nothing, which is the
 
 ## 12. Transfer between eligible hosts
 
-**IMPLEMENTED.**
+**IMPLEMENTED -- for the INCUS TIER ONLY** (scope corrected 2026-08-11; the bare
+"IMPLEMENTED" above outranked prose and was being read as tier-wide).
+
+SCOPE, verified in source: migration requires `NativeSnapshotSupport` on both
+ends and refuses `migrate_unsupported` otherwise
+(`InstanceMigrations.java:240-248`); the only implementer is
+`IncusInstanceRuntime` (`:51`), and `DockerInstanceRuntime` (`:46-49`) is not
+one -- an AIDEV-NOTE at `InstanceMigrations.java:267` says "Migratable ==
+NativeSnapshotSupport == IncusInstanceRuntime only". **No Docker instance can be
+transferred**, and every Pterodactyl-class game workload is Docker: both
+templates `GameTemplateSeeder.java:104` seeds carry `KIND_DOCKER` (`:28`). So
+for the tier this document exists to compare against, transfer does not exist at
+all -- and the plan's own Pterodactyl definition-of-done
+(`instance-tier-plan.md:147`) lists "transfer between eligible hosts" as a
+replacement requirement, which is therefore **NOT met**. The refusal is honest
+(reported per destination at `InstanceMigrations.java:166-170`), so nothing moves
+silently; what is missing is a docker-tier drain, named open in
+`instance-tier-plan.md:4878`.
 
 - Code: `src/server/java/be/elevenways/hohenheim/server/instance/InstanceMigrations.java:58`
   -- `migrateTo(id, destinationHostId)` and `drain(hostId)` returning a typed
@@ -846,7 +881,12 @@ create, and the activity log still records the two rows.
 
 ---
 
-## The localization clause of the Phase 6 gate is NOT met
+## The localization clause of the Phase 6 gate -- MET since 2026-08-08
+
+(Heading corrected 2026-08-11. It read "is NOT met", which outranked the row's
+own STATUS block further down saying the clause is MET and the sweep ENFORCED by
+a source guard. Everything between here and that STATUS block is the HISTORY of
+what was found and fixed, not an open finding.)
 
 The gate says "every page and error is localized". It is not. **Ten page classes
 across eleven call sites** still build their page title by concatenating an
@@ -891,7 +931,8 @@ a bare record name in the title with no literal at all
 bucket also being nine is the likely source of the "nine pages" figure in
 circulation.
 
-**Verdict on the clause: OPEN.** It is one mechanical sweep -- the three pages
+~~**Verdict on the clause: OPEN.**~~ (Superseded 2026-08-11 by the STATUS block
+immediately below: the clause is MET. Kept as history.) It is one mechanical sweep -- the three pages
 fixed in the 2026-08-04 wave are the template -- and until it lands the Phase 6
 gate is not met no matter what the rest of this document says.
 
@@ -981,9 +1022,11 @@ Value against effort, with prerequisites, for the game-panel claim specifically.
    medium-high against its cost -- it is the exact shape this document exists to
    flag, sitting in our own suite. Effort: trivial, one absence assertion.
    Prerequisite: none.
-6. **Hermetic coverage of `reinstall`** (item 3). Value: medium -- a destructive
-   operator-only path with zero non-live proof. Effort: medium; the fake harness
-   needs an install-script runner seam. Prerequisite: item 1.
+6. ~~**Hermetic coverage of `reinstall`** (item 3).~~ **DONE** -- recorded
+   2026-08-11: `InstanceReinstallTest` covers it hermetically (two journeys at
+   `:106` and `:203`, no `assume`), and the capability gate the row called
+   missing is on both entry points (`InstanceInstalls.java:80`, `:104`, with
+   `DESTROY` for the clear branch at `:125-127`).
 7. **Delegable restore** (item 9). Value: medium -- a tenant who may TAKE a backup
    cannot use one. Effort: medium, but it is a policy decision first (a restore
    spends quota and placement). Prerequisite: a decision, not code.

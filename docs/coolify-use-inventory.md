@@ -48,7 +48,7 @@ Thirteen numbered clauses, plus three argued rejections and one cross-reference:
 | IMPLEMENTED | 12 | 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 |
 | PARTIAL | 1 | 3 |
 | REJECTED | 3 | A (compose runtime), C (large service marketplace), D (multi-server orchestration) |
-| OPEN | 0 as a row | ONE OPEN SLICE remains, named inside a row: the CLI test wiring (13). Item 12's site/database count quotas CLOSED 2026-08-08 |
+| OPEN | 0 as a row | CORRECTED 2026-08-11: the CLI-test-wiring slice (13) CLOSED 2026-08-09, so no slice remains inside a row. What IS open is ranked-list items 6, 7 and 10 -- git provider provisioning, the compose importer and the `@Tag` live lane -- none of which is a row verdict. Item 12's site/database count quotas CLOSED 2026-08-08 |
 | CLAIMED | 0 sub-verdicts | ACME acquisition (item 9) moved CLAIMED -> IMPLEMENTED 2026-08-08; Gitea (item 3) did the same |
 
 Counts updated 2026-08-10: item 5 moved PARTIAL -> IMPLEMENTED when per-branch
@@ -514,8 +514,15 @@ and not a generalization) is item 10 of `pterodactyl-use-inventory.md`.
 
 ## 9. Domains and TLS
 
-**PARTIAL.** Serving and issuance AUTHORIZATION are implemented and proven
-hermetically. Actual certificate ACQUISITION is CLAIMED.
+**IMPLEMENTED** (verdict corrected 2026-08-11; this row still read "PARTIAL ...
+ACQUISITION is CLAIMED" while the counts table above, and this row's own STATUS
+block below, had already moved it). Serving, issuance AUTHORIZATION and
+certificate ACQUISITION are all implemented and proven hermetically:
+`AcmeIssuanceContractTest.java:38-40` drives hohenheim's own acme4j client
+through account registration, an order, an HTTP-01 and a wildcard DNS-01
+challenge, a real CSR and a stored certificate against an in-JVM RFC 8555 CA.
+What is deliberately NOT claimed is interoperability with a specific public CA;
+see the STATUS block at the end of this row.
 
 Implemented and proven:
 
@@ -839,6 +846,14 @@ and a move is an operator act.
 ## Genuinely OPEN items, ranked
 
 Value against effort, with prerequisites, for the PaaS claim specifically.
+
+RE-VERIFIED 2026-08-11: exactly THREE of the ten below are still open -- **6, 7
+and 10**. Items 1-5 and 8-9 are struck DONE in place (the numbering is history,
+not a worklist). Each of the three was re-checked against the source today:
+`registerWebhook`/`createHook`/`/hooks`/`deploy_keys`/`/keys` have ZERO hits
+across `server/source/` (item 6); `docker-compose`/`composeFile`/`parseCompose`
+have zero hits anywhere in `src/` (item 7); and `src/browserTest/` contains no
+`@Tag` at all (item 10).
 
 1. **Isolate (or explicitly quarantine) the git `build_command` lane** (item 2).
    Value: highest -- it is the one place where a documented security property of
