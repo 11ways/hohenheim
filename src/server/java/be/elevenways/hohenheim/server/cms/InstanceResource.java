@@ -142,6 +142,7 @@ public class InstanceResource extends RowResource {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.add(this.deployAction());
         actions.add(this.stopAction());
+        actions.add(this.restartAction());
         actions.add(this.installAction());
         actions.add(this.reinstallAction());
         actions.add(this.appUpdateAction());
@@ -173,9 +174,21 @@ public class InstanceResource extends RowResource {
             .build();
     }
 
+    /**
+     * The list row's title opens the OVERVIEW, not the edit form: the form edits five
+     * columns, the overview is where an operator sees state, power, disk and endpoint.
+     * The synthesized edit action still points at the form.
+     */
+    @Override
+    public @NonNull String rowUrl(@NonNull Row row) {
+        return "/admin/" + this.slug() + "/" + row.get(InstanceModel.ID)
+            + "/page/" + InstanceOverviewPage.SLUG;
+    }
+
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {
         List<RecordScopedPage<Row>> pages = new ArrayList<>(List.of(
+            new InstanceOverviewPage(this),
             new InstanceConsolePage(), new InstanceFramebufferPage(),
             new InstanceProvisioningPage(),
             new InstanceFilesPage(), new InstanceStatsPage(),
@@ -339,6 +352,31 @@ public class InstanceResource extends RowResource {
                 this.instances.deploy(row.get(InstanceModel.ID));
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("deployed").withFilter("scope", "instance")
+                        .withArg("name", row.get(InstanceModel.NAME)));
+            })
+            .build();
+    }
+
+    /**
+     * Stop and start again, through {@link InstanceService#restart} -- the SAME
+     * composition the scheduled power action runs, never a UI-side stop-then-deploy pair.
+     */
+    protected @NonNull RowAction<Row> restartAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "restart_instance"))
+            .label(Microcopy.of("restart").withFilter("scope", "instance"))
+            .icon(Icon.of("rotate-right"))
+            .inlineInRow(false)
+            .visibleFor((row, ctx) -> HohenheimAccess.hasInstanceCapability(
+                ctx, row.get(InstanceModel.ID), HohenheimAccess.POWER))
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("restart").withFilter("scope", "instance"))
+                .body(Microcopy.of("restart_confirm").withFilter("scope", "instance"))
+                .confirmLabel(Microcopy.of("restart").withFilter("scope", "instance"))
+                .build())
+            .handler((row, ctx) -> {
+                this.instances.restart(row.get(InstanceModel.ID));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("restarted_toast").withFilter("scope", "instance")
                         .withArg("name", row.get(InstanceModel.NAME)));
             })
             .build();

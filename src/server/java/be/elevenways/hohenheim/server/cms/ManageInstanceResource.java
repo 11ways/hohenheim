@@ -113,12 +113,20 @@ public final class ManageInstanceResource extends InstanceResource {
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {
         List<RecordScopedPage<Row>> pages = new ArrayList<>(List.of(
+            new InstanceOverviewPage(this),
             new InstanceConsolePage(), new InstanceFramebufferPage(),
             new InstanceProvisioningPage(),
             new InstanceFilesPage(), new InstanceStatsPage(),
             new InstanceSchedulesPage(), new InstanceDevicesPage()));
         pages.addAll(RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));
         return pages;
+    }
+
+    /** The delegated row title opens the same overview, under /manage. */
+    @Override
+    public @NonNull String rowUrl(@NonNull Row row) {
+        return "/manage/" + this.slug() + "/" + row.get(InstanceModel.ID)
+            + "/page/" + InstanceOverviewPage.SLUG;
     }
 
     /** NAV-ONLY (zero granted instances hide the empty list); the route stays scoped. */
