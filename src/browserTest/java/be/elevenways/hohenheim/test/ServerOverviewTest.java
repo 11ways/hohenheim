@@ -93,8 +93,7 @@ class ServerOverviewTest extends HohenheimTestBase {
         HttpResponse<String> detail = get("/admin/servers/" + hostId);
         assertThat(detail.statusCode()).isEqualTo(200);
         for (String fake : List.of("live_overview", "host_key_state", "identity_public_key",
-                "kernel_isolation_state", "incus_cert_state", "incus_client_cert",
-                "trust_notice")) {
+                "kernel_isolation_state", "incus_cert_state", "incus_client_cert")) {
             assertThat(detail.body())
                 .withFailMessage("the EDIT form still renders the '%s' pseudo-field", fake)
                 .doesNotContain("data-path=\"" + fake + "\"");
@@ -106,12 +105,37 @@ class ServerOverviewTest extends HohenheimTestBase {
     }
 
     /**
+     * The trust NOTICE is enrolment consent copy, not status data: it renders exactly
+     * where the target gets pasted (the CREATE form) and nowhere else. The split rides
+     * the framework's own view seam ({@code FormSpec.entriesForView} filtering on
+     * {@code Field.visibleIn}) -- one declared spec, per-view visibility. Pre-fix the
+     * field carried no visibleIn declaration and rendered on the EDIT form too.
+     */
+    @Test
+    @Order(3)
+    void theTrustNoticeRendersOnCreateOnly() throws Exception {
+        HttpResponse<String> detail = get("/admin/servers/" + hostId);
+        assertThat(detail.statusCode()).isEqualTo(200);
+        assertThat(detail.body())
+            .withFailMessage("the EDIT form still renders the 'trust_notice' pseudo-field"
+                + " -- consent copy belongs on the enrolment form only")
+            .doesNotContain("data-path=\"trust_notice\"");
+
+        HttpResponse<String> create = get("/admin/servers/new");
+        assertThat(create.statusCode()).as("the create form renders").isEqualTo(200);
+        assertThat(create.body())
+            .as("positive anchor: the CREATE form still states what enrolling grants,"
+                + " so the edit-side absence is the view split and not a deleted notice")
+            .contains("data-path=\"trust_notice\"");
+    }
+
+    /**
      * The stored preflight report -- per-check status, requiredness, detail text and the
      * check's OWN timestamp -- reaches a rendered page. Pre-fix this data was persisted by
      * {@code HostPreflight.store} and rendered NOWHERE: the overview URL answered 404.
      */
     @Test
-    @Order(3)
+    @Order(4)
     void storedPreflightEvidenceReachesTheOverviewPage() throws Exception {
         // 1. Store a realistic report the way both batteries do.
         Instant checkedAt = Instant.parse("2026-08-10T09:15:30Z");
@@ -158,7 +182,7 @@ class ServerOverviewTest extends HohenheimTestBase {
      * stale shows a named "unmeasured" state, never a zero bar that reads as "empty host".
      */
     @Test
-    @Order(4)
+    @Order(5)
     void capacityShowsAnExplicitUnmeasuredStateNeverAZeroBar() throws Exception {
         // 1. Make the stored reading STALE by re-storing it with an old measurement
         //    stamp (the merge keeps per-fact provenance).
@@ -190,7 +214,7 @@ class ServerOverviewTest extends HohenheimTestBase {
      * so drain/cordon/delete refusals are legible BEFORE they fire.
      */
     @Test
-    @Order(5)
+    @Order(6)
     void theOverviewListsTheWorkloadsThatHoldTheHost() throws Exception {
         InstanceModel instances = Models.get(InstanceModel.class);
         Row row = instances.createEmptyRow();
@@ -220,7 +244,7 @@ class ServerOverviewTest extends HohenheimTestBase {
      * out-of-band verification IS the only clearing ceremony, and the banner says so.
      */
     @Test
-    @Order(6)
+    @Order(7)
     void theQuarantineBannerIsLoudAndOffersOnlyTheRepinCeremony() throws Exception {
         Row host = Models.get(ServerModel.class).findById(hostId);
         host.set(ServerModel.QUARANTINED_AT, Instant.now());
@@ -250,7 +274,7 @@ class ServerOverviewTest extends HohenheimTestBase {
      * not the old fully-resolved English sentence.
      */
     @Test
-    @Order(7)
+    @Order(8)
     void theServersListRendersAStructuredStatusCell() throws Exception {
         HttpResponse<String> list = get("/admin/servers");
         assertThat(list.statusCode()).isEqualTo(200);
