@@ -24,23 +24,27 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 @HawkeyeClass
 public record HostStatusCell(
     String state,
-    String dot,
     String daemon,
     @Nullable String errorKind,
     @Nullable String lastSeenIso,
     @Nullable RelativeTimeWording wording
 ) {
 
-    /** Build with the pl-status-dot token derived from the state. */
-    public static HostStatusCell of(String state, String daemon, @Nullable String errorKind,
-                                    @Nullable String lastSeenIso,
-                                    @Nullable RelativeTimeWording wording) {
-        String dot = switch (state) {
+    /**
+     * The pl-status-dot token for this state.
+     *
+     * AIDEV-NOTE: deliberately a METHOD, not a record component. Only components cross the
+     * DRY wire, so a derived value stored as one would be shipped instead of recomputed
+     * after revival. Hawkeye resolves a plain zero-arg method for property access
+     * ({@code {% value.dot %}}) exactly like a component -- but only in PROPERTY spelling;
+     * call syntax on a @HawkeyeClass is a compile error.
+     */
+    public String dot() {
+        return switch (state) {
             case "quarantined", "error" -> "error";
             case "silent" -> "warning";
             case "never_probed" -> "idle";
             default -> "online";
         };
-        return new HostStatusCell(state, dot, daemon, errorKind, lastSeenIso, wording);
     }
 }
