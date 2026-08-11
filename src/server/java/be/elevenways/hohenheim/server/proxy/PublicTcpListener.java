@@ -41,6 +41,23 @@ public final class PublicTcpListener implements AutoCloseable {
 
     private static final int COPY_BUFFER_SIZE = 32 * 1024;
 
+    // AIDEV-NOTE: accept() errors are almost always TRANSIENT resource pressure (EMFILE/ENFILE
+    // fd exhaustion, ECONNABORTED). Java surfaces them as message text on a plain IOException
+    // with no errno, so classifying by message is fragile and locale/JDK-dependent; the robust
+    // primary mechanism is consecutive-failure counting: back off briefly, retry, and escalate
+    // to the failure handler only once the pressure has provably persisted (or the server
+    // socket itself is closed, where retrying is pointless). This is the Aug 04 2026 incident
+    // fix: one "Too many open files in system" burst used to kill the HTTPS listener
+    // permanently while port 80 kept serving, and nobody noticed for six days.
+    private static final int DEFAULT_MAX_CONSECUTIVE_ACCEPT_FAILURES = 100;
+    private static final long DEFAULT_ACCEPT_BACKOFF_INITIAL_MILLIS = 50;
+    private static final long DEFAULT_ACCEPT_BACKOFF_MAX_MILLIS = 1_000;
+
+    /** Creates the server socket {@link #start()} binds; replaceable for tests. */
+    public interface ServerSocketFactory {
+        ServerSocket create() throws IOException;
+    }
+
     private final String bindAddress;
     private final int port;
     private final int prologueTimeoutMillis;
@@ -57,8 +74,13 @@ public final class PublicTcpListener implements AutoCloseable {
     private final AtomicLong nextFailureLogNanos = new AtomicLong();
     private final AtomicInteger suppressedFailures = new AtomicInteger();
 
+    private volatile int maxConsecutiveAcceptFailures = DEFAULT_MAX_CONSECUTIVE_ACCEPT_FAILURES;
+    private volatile long acceptBackoffInitialMillis = DEFAULT_ACCEPT_BACKOFF_INITIAL_MILLIS;
+    private volatile long acceptBackoffMaxMillis = DEFAULT_ACCEPT_BACKOFF_MAX_MILLIS;
+    private volatile ServerSocketFactory serverSocketFactory = ServerSocket::new;
+
     private volatile boolean running;
-    private ServerSocket listener;
+    private volatile ServerSocket listener;
 
     public PublicTcpListener(String bindAddress, int port, int prologueTimeoutMillis,
                              ConnectionRouter router, Supplier<List<String>> trustedProxySources,
@@ -86,9 +108,24 @@ public final class PublicTcpListener implements AutoCloseable {
         this.pendingPrologues = new Semaphore(maxPendingPrologues);
     }
 
+    /** Test seam: replaces the server socket the next {@link #start()} binds. */
+    public void setServerSocketFactoryForTesting(ServerSocketFactory factory) {
+        this.serverSocketFactory = factory;
+    }
+
+    /** Test seam: shrinks the accept-failure escalation threshold and backoff so tests finish fast. */
+    public void setAcceptFailurePolicyForTesting(int maxConsecutive, long initialMillis, long maxMillis) {
+        if (maxConsecutive < 1 || initialMillis < 1 || maxMillis < initialMillis) {
+            throw new IllegalArgumentException("Invalid accept failure policy");
+        }
+        this.maxConsecutiveAcceptFailures = maxConsecutive;
+        this.acceptBackoffInitialMillis = initialMillis;
+        this.acceptBackoffMaxMillis = maxMillis;
+    }
+
     public synchronized void start() throws IOException {
         if (running) return;
-        ServerSocket created = new ServerSocket();
+        ServerSocket created = serverSocketFactory.create();
         created.setReuseAddress(true);
         created.bind(new InetSocketAddress(InetAddress.getByName(bindAddress), port));
         listener = created;
@@ -104,16 +141,28 @@ public final class PublicTcpListener implements AutoCloseable {
     }
 
     private void acceptLoop() {
+        int consecutiveAcceptFailures = 0;
         while (running) {
             Socket client;
+            ServerSocket current = listener;
+            if (current == null) return;
             try {
-                client = listener.accept();
+                client = current.accept();
+                consecutiveAcceptFailures = 0;
             } catch (IOException e) {
-                if (running) {
+                if (!running) return;
+                consecutiveAcceptFailures++;
+                if (current.isClosed() || consecutiveAcceptFailures >= maxConsecutiveAcceptFailures) {
+                    // Terminal: the socket is gone, or the pressure provably persisted.
+                    // Escalation is safe now that the ProxyServer restart path is bounded
+                    // and supervised -- a FAILED listener heals instead of staying dead.
                     listenerFailureHandler.accept(e);
                     close();
+                    return;
                 }
-                return;
+                logAcceptFailure(e, consecutiveAcceptFailures);
+                if (!sleepAcceptBackoff(consecutiveAcceptFailures)) return;
+                continue;
             }
             boolean connectionAdmitted = false;
             boolean admitted = false;
@@ -219,6 +268,32 @@ public final class PublicTcpListener implements AutoCloseable {
             closeQuietly(client);
             closeQuietly(backend);
         }
+    }
+
+    /** Logs the first failure of a burst and every 25th after, so a storm cannot flood the log. */
+    private void logAcceptFailure(IOException failure, int count) {
+        if (count == 1 || count % 25 == 0) {
+            Blast.log("Public TCP listener: accept failed on port", port, "-", failure.getMessage(),
+                "(consecutive failure", count, "of", maxConsecutiveAcceptFailures,
+                "before escalation)");
+        }
+    }
+
+    /**
+     * Capped exponential backoff between accept retries.
+     *
+     * @return false when the loop must exit (interrupted or no longer running)
+     */
+    private boolean sleepAcceptBackoff(int failureCount) {
+        int shift = Math.min(failureCount - 1, 20);
+        long delay = Math.min(acceptBackoffInitialMillis << shift, acceptBackoffMaxMillis);
+        try {
+            Thread.sleep(delay);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        return running;
     }
 
     private void logFailure(Socket client, Exception failure) {
