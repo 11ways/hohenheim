@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.options;
 
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.registry.Registry;
@@ -26,8 +25,10 @@ public final class ServerOptions {
         if (!populated) refresh();
     }
 
+    // AIDEV-NOTE: read-only on purpose. This used to open with ensureLocal(), so the FIRST
+    // getSchema() of a type-switched sub-form INSERTED the local host row mid-render. The
+    // row is seeded at boot now (LocalServerSeeder); refreshing the registry only reads.
     public static synchronized void refresh() {
-        new ServerService().ensureLocal();
         var entries = new java.util.LinkedHashMap<Identifier, TypeDefinition>();
         for (Row row : Models.get(ServerModel.class).find().all()) {
             String name = row.get(ServerModel.NAME);

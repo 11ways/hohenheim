@@ -36,7 +36,6 @@ import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -209,13 +208,6 @@ public final class ServerResource extends RowResource {
             Object value = coerced.get("public_ipv6");
             row.set(ServerModel.PUBLIC_IPV6, value != null ? String.valueOf(value) : null);
         }
-    }
-
-    @Override
-    public @NonNull List<Row> listRows(TableView.Applied<Row> applied,
-                                       @NonNull AccessContext accessContext) {
-        this.serverService.ensureLocal();
-        return super.listRows(applied, accessContext);
     }
 
     /**

@@ -21,35 +21,59 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ServerAdminTest extends HohenheimTestBase {
 
-    /** The seeded local host renders in the list, the sidebar and its Overview tab. */
+    /**
+     * The BOOT-seeded local host renders in the list, the sidebar and its Overview tab --
+     * and rendering the list inserts nothing.
+     *
+     * AIDEV-NOTE: this used to assert that the LIST RENDER is what seeded the host
+     * (ServerResource.listRows opened with ensureLocal()), i.e. it pinned a GET performing
+     * an INSERT with full write hooks. The row is an installation invariant and is created
+     * by LocalServerSeeder at the SEED boot stage; the render must be read-only, which is
+     * why the row count is asserted AROUND the navigation and not merely the status.
+     */
     @Test
     @Order(1)
     void serverInventoryRendersTheLocalHost() {
+        // 1. The local host exists BEFORE anything rendered it: the seeder made it at boot.
+        Row seeded = Models.get(ServerModel.class).find()
+            .where(ServerModel.NAME.eq("local")).first();
+        assertThat(seeded)
+            .as("step 1: the local host is seeded at boot, not by a page render")
+            .isNotNull();
+        long serversBefore = Models.get(ServerModel.class).find().count();
+
+        // 2. Rendering the list shows it, and writes nothing.
         navigateToApp("/admin/servers");
         waitForHydration();
 
         String body = page.locator("body").textContent();
-        assertThat(body).contains("Servers");
-        assertThat(body).contains("local");        // ensureLocal() seeded the implicit host
+        assertThat(body).as("step 2: the list page renders").contains("Servers");
+        assertThat(body).as("step 2: and shows the seeded implicit host").contains("local");
+        assertThat(Models.get(ServerModel.class).find().count())
+            .as("step 2: a GET of the server list must INSERT nothing")
+            .isEqualTo(serversBefore);
 
-        // The shell sidebar carries the servers entry.
+        // 3. The shell sidebar carries the servers entry.
         PlaywrightAssertions.assertThat(
             page.locator("pl-app-sidebar a[href='/admin/servers']")).hasCount(1);
 
         Row local = Models.get(ServerModel.class).find()
             .where(ServerModel.NAME.eq("local")).first();
-        assertThat(local).isNotNull();
+        assertThat(local)
+            .as("step 3: and the rendered host is still the same seeded row")
+            .isNotNull();
+        assertThat((Object) local.get(ServerModel.ID)).isEqualTo(seeded.get(ServerModel.ID));
 
-        // The row-title target is the bespoke Overview page: structured state, no form.
+        // 4. The row-title target is the bespoke Overview page: structured state, no form.
         navigateToApp("/admin/servers/" + local.get(ServerModel.ID) + "/page/overview");
         waitForHydration();
 
         assertThat(page.locator(".hh-server-overview").count())
-            .as("the overview page renders").isEqualTo(1);
+            .as("step 4: the overview page renders").isEqualTo(1);
         assertThat(page.locator(".hh-host-state[data-host-state]").count())
-            .as("with the structured state cell in its header").isEqualTo(1);
+            .as("step 4: with the structured state cell in its header").isEqualTo(1);
         assertThat(page.locator("[data-capacity-state]").count())
-            .as("and an explicit capacity state").isEqualTo(1);
+            .as("step 4: and an explicit capacity state").isEqualTo(1);
     }
 
     /** SSH-target round trip, argument-injection refusal and the implicit local host's guards. */
