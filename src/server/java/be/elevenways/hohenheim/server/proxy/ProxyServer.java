@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.notification.Alerts;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
@@ -25,6 +27,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 
 /**
  * The reverse proxy server that listens on the proxy ports (80/443)
@@ -66,6 +69,23 @@ public class ProxyServer {
     private volatile State httpsState = State.STOPPED;
     private volatile String httpFailureReason;
     private volatile String httpsFailureReason;
+
+    // AIDEV-NOTE: bounded restart state, shared by BOTH listeners. Restarts bound the
+    // INTERVAL (exponential backoff, 30s doubling to a 1h ceiling), never the attempt
+    // count -- a permanently-given-up listener is an outage that never heals, while a
+    // permanently-unbindable one must not hot-loop bind() once a minute forever. The
+    // supervisor gates on volatile reads and only takes the monitor when an attempt is
+    // genuinely due, so a healthy tick can never tear down a listener mid-ACME-install.
+    private static final long RESTART_BACKOFF_INITIAL_MILLIS = 30_000;
+    private static final long RESTART_BACKOFF_MAX_MILLIS = 60L * 60 * 1000;
+
+    private volatile int httpRestartAttempts;
+    private volatile long httpNextRestartAttemptAt;
+    private volatile int httpsRestartAttempts;
+    private volatile long httpsNextRestartAttemptAt;
+    private volatile boolean httpDownAlertSent;
+    private volatile boolean httpsDownAlertSent;
+    private volatile LongSupplier clock = System::currentTimeMillis;
 
     private static final int IO_THREADS = Math.max(2, Runtime.getRuntime().availableProcessors());
 
@@ -192,6 +212,7 @@ public class ProxyServer {
         // contract must be configured before this front may serve.
         if (socketMode && !hasTrustedProxyKeys()) {
             httpState = State.FAILED;
+            recordHttpRestartFailure();
             httpFailureReason = "proxy.http_socket_path requires proxy.trusted_proxy_keys: "
                 + "a Unix-socket client has no IP address, so without an authenticated "
                 + "fronting proxy every request would count as 127.0.0.1 and IP-based "
@@ -228,6 +249,7 @@ public class ProxyServer {
             }
             httpState = State.RUNNING;
             httpFailureReason = null;
+            noteHttpListenerHealthy();
             Blast.log(socketMode ? "Proxy HTTP listening on Unix socket" : "Proxy HTTP listening on port",
                       socketMode ? httpSocketBridge.getSocketPath() : publicHttpAddress.getPort(),
                       proxyProtocolIngress ? "(PROXY v2 ingress," : "(",
@@ -236,6 +258,7 @@ public class ProxyServer {
         } catch (Exception e) {
             httpState = State.FAILED;
             httpFailureReason = e.getMessage();
+            recordHttpRestartFailure();
             stopHttpResources();
             Blast.log("PROXY HTTP STARTUP FAILED:", e.getMessage());
         }
@@ -339,6 +362,13 @@ public class ProxyServer {
             dispatcher.setHttpsAvailable(httpsTerminationAddress != null);
             httpsState = State.RUNNING;
             httpsFailureReason = terminationFailure != null ? terminationFailure.getMessage() : null;
+            if (terminationFailure == null) {
+                noteHttpsListenerHealthy();
+            } else {
+                // Partial mode: passthrough listens but termination is down, so force_ssl
+                // sites 503. Keep the supervised backoff armed so termination gets retried.
+                recordHttpsRestartFailure();
+            }
             Blast.log("Proxy HTTPS listening on port", publicHttpsAddress.getPort(),
                 "(" + certificateStore.getCertificateCount() + " certificates,",
                 dispatcher.hasTlsPassthroughRoutes() ? "passthrough enabled)" : "no passthrough routes)");
@@ -346,6 +376,7 @@ public class ProxyServer {
             dispatcher.setHttpsAvailable(false);
             httpsState = State.FAILED;
             httpsFailureReason = e.getMessage();
+            recordHttpsRestartFailure();
             stopHttpsResources();
             Blast.log("PROXY HTTPS STARTUP FAILED on port", httpsPort + ":", e.getMessage());
         }
@@ -403,21 +434,129 @@ public class ProxyServer {
         httpsState = State.STOPPED;
         httpFailureReason = null;
         httpsFailureReason = null;
+        // Administrative stop is not a failure: disarm the supervised restart machinery.
+        httpRestartAttempts = 0;
+        httpNextRestartAttemptAt = 0;
+        httpsRestartAttempts = 0;
+        httpsNextRestartAttemptAt = 0;
+        httpDownAlertSent = false;
+        httpsDownAlertSent = false;
         Blast.log("Proxy server stopped");
     }
 
     /**
-     * Reload routes and certificates. Restarts failed listeners.
+     * Reload routes and certificates. Restarts failed listeners immediately: a config-driven
+     * reload means something actually changed, so the restart backoff does not apply.
      */
     public synchronized void reload() {
         try {
-            reloadListeners();
+            reloadListeners(false);
         } finally {
             warnIfForceSslRefusing();
         }
     }
 
-    private void reloadListeners() {
+    /**
+     * Periodic listener supervision: restarts a dead or degraded listener under the bounded
+     * backoff, and raises a one-shot alert once an outage has survived a supervised retry.
+     *
+     * Gated on volatile reads first -- the monitor (which serializes with the blocking
+     * bind + SSLContext work in the start paths) is only taken when a restart is due.
+     */
+    public void superviseListeners() {
+        long now = clock.getAsLong();
+        boolean httpDue = httpState == State.FAILED && now >= httpNextRestartAttemptAt;
+        boolean httpsDue = (httpsState == State.FAILED
+                || (httpsState == State.RUNNING && httpsFailureReason != null))
+            && now >= httpsNextRestartAttemptAt;
+        if (httpDue || httpsDue) {
+            synchronized (this) {
+                try {
+                    reloadListeners(true);
+                } finally {
+                    warnIfForceSslRefusing();
+                }
+            }
+        }
+        maybeAlertListenerDown();
+    }
+
+    /** Fires the listener-down alert ONCE per outage, only after a supervised retry also failed. */
+    private void maybeAlertListenerDown() {
+        if (!httpDownAlertSent && httpState == State.FAILED && httpRestartAttempts >= 2) {
+            httpDownAlertSent = true;
+            Alerts.send(NotificationEvents.PROXY_LISTENER_DOWN,
+                "Proxy HTTP listener is down", httpFailureReason);
+        }
+        boolean httpsDown = httpsState == State.FAILED
+            || (httpsState == State.RUNNING && httpsFailureReason != null);
+        if (!httpsDownAlertSent && httpsDown && httpsRestartAttempts >= 2) {
+            httpsDownAlertSent = true;
+            Alerts.send(NotificationEvents.PROXY_LISTENER_DOWN,
+                "Proxy HTTPS listener is down", httpsFailureReason);
+        }
+    }
+
+    private void noteHttpListenerHealthy() {
+        if (httpDownAlertSent) {
+            Blast.log("Proxy HTTP listener recovered after", httpRestartAttempts, "restart attempts");
+        }
+        httpRestartAttempts = 0;
+        httpNextRestartAttemptAt = 0;
+        httpDownAlertSent = false;
+    }
+
+    private void noteHttpsListenerHealthy() {
+        if (httpsDownAlertSent) {
+            Blast.log("Proxy HTTPS listener recovered after", httpsRestartAttempts, "restart attempts");
+        }
+        httpsRestartAttempts = 0;
+        httpsNextRestartAttemptAt = 0;
+        httpsDownAlertSent = false;
+    }
+
+    private void recordHttpRestartFailure() {
+        httpRestartAttempts++;
+        httpNextRestartAttemptAt = clock.getAsLong() + restartBackoffMillis(httpRestartAttempts);
+    }
+
+    private void recordHttpsRestartFailure() {
+        httpsRestartAttempts++;
+        httpsNextRestartAttemptAt = clock.getAsLong() + restartBackoffMillis(httpsRestartAttempts);
+    }
+
+    private static long restartBackoffMillis(int attempts) {
+        int shift = Math.min(Math.max(attempts - 1, 0), 12);
+        return Math.min(RESTART_BACKOFF_INITIAL_MILLIS << shift, RESTART_BACKOFF_MAX_MILLIS);
+    }
+
+    /** Test seam: replaces the clock the restart backoff is computed against. */
+    public void setClockForTesting(LongSupplier replacement) {
+        this.clock = replacement;
+    }
+
+    /** Test seam. */
+    public int getHttpRestartAttemptsForTesting() {
+        return httpRestartAttempts;
+    }
+
+    /** Test seam. */
+    public long getHttpNextRestartAttemptAtForTesting() {
+        return httpNextRestartAttemptAt;
+    }
+
+    /** Test seam. */
+    public int getHttpsRestartAttemptsForTesting() {
+        return httpsRestartAttempts;
+    }
+
+    /** Test seam. */
+    public long getHttpsNextRestartAttemptAtForTesting() {
+        return httpsNextRestartAttemptAt;
+    }
+
+    private void reloadListeners(boolean respectBackoff) {
+        long now = clock.getAsLong();
         try {
             certificateStore.loadFromDatabase();
             dispatcher.reloadRoutes();
@@ -426,7 +565,7 @@ public class ProxyServer {
         }
 
         // Restart HTTP if it was failed
-        if (httpState == State.FAILED) {
+        if (httpState == State.FAILED && (!respectBackoff || now >= httpNextRestartAttemptAt)) {
             Blast.log("Proxy HTTP was FAILED -- attempting restart");
             startHttpListener();
         }
@@ -445,21 +584,30 @@ public class ProxyServer {
         }
 
         if (httpsState != State.RUNNING) {
-            Blast.log("Proxy HTTPS starting after certificate reload");
+            if (respectBackoff && now < httpsNextRestartAttemptAt) return;
+            // NOT cert-gated: this branch fires on ANY reload while certificates or
+            // passthrough routes exist and the listener is down. The old log text said
+            // "after certificate reload", which cost real diagnosis time in the Aug 04
+            // incident by making the recovery read as certificate-event-only.
+            Blast.log("Proxy HTTPS was DOWN -- attempting restart",
+                "(certificates or passthrough routes are present)");
             stopHttpsResources();
             startHttpsListener();
             return;
         }
 
         if (wantsTermination && httpsServer == null) {
+            if (respectBackoff && now < httpsNextRestartAttemptAt) return;
             try {
                 httpsTerminationAddress = startHttpsTermination();
                 dispatcher.setHttpsAvailable(true);
                 httpsFailureReason = null;
-                Blast.log("Proxy HTTPS termination enabled after certificate reload");
+                noteHttpsListenerHealthy();
+                Blast.log("Proxy HTTPS termination enabled after reload");
             } catch (Exception e) {
                 dispatcher.setHttpsAvailable(false);
                 httpsFailureReason = e.getMessage();
+                recordHttpsRestartFailure();
                 Blast.log("PROXY HTTPS TERMINATION START FAILED:", e.getMessage());
                 if (!wantsPassthrough) {
                     stopHttpsResources();
@@ -472,7 +620,14 @@ public class ProxyServer {
             httpsServer = null;
             dispatcher.setHttpsAvailable(false);
             httpsFailureReason = null;
+            noteHttpsListenerHealthy();
             Blast.log("Proxy HTTPS termination stopped; passthrough remains available");
+        } else if (!wantsTermination && httpsFailureReason != null) {
+            // Passthrough-only is now the WANTED shape: a lingering termination-failure
+            // reason from a deleted certificate would otherwise read as degraded forever
+            // and keep the supervisor probing a mode nothing asks for.
+            httpsFailureReason = null;
+            noteHttpsListenerHealthy();
         }
     }
 
@@ -531,15 +686,20 @@ public class ProxyServer {
         }
     }
 
-    // Backwards-compatible accessors for dashboard
+    /**
+     * Combined worst-of-both listener state. A dead HTTPS listener used to be invisible
+     * here (HTTP-only), which is how a six-day port-443 outage went unnoticed.
+     */
     public State getState() {
-        if (httpState == State.RUNNING) return State.RUNNING;
-        if (httpState == State.FAILED) return State.FAILED;
-        return State.STOPPED;
+        if (httpState == State.FAILED || httpsState == State.FAILED) return State.FAILED;
+        return httpState;
     }
 
+    /** The reason for {@link #getState()}, including a degraded-termination reason while RUNNING. */
     public String getFailureReason() {
         if (httpState == State.FAILED) return httpFailureReason;
+        if (httpsState == State.FAILED) return httpsFailureReason;
+        if (httpsState == State.RUNNING && httpsFailureReason != null) return httpsFailureReason;
         return null;
     }
 }

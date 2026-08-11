@@ -71,6 +71,7 @@ public final class AttentionCollector {
         List<AttentionItem> items = new ArrayList<>();
         if (HohenheimRoles.enabled(Role.PROXY)) {
             errorCertificates(items);
+            failedProxyListeners(items);
             httpsUnavailableWithForceSsl(items);
             unhealthySites(items);
             failedDeployments(items);
@@ -415,6 +416,38 @@ public final class AttentionCollector {
                     copy("dns_zone_no_ns", "attention_detail"),
                     "/admin/dns-zones/" + zone.getZoneId() + "/page/records"));
             }
+        }
+    }
+
+    /**
+     * A dead or degraded proxy listener, REGARDLESS of force_ssl population. The Aug 04
+     * 2026 port-443 outage stayed invisible for six days partly because the only listener
+     * attention item required force_ssl sites; this one fires on listener state alone.
+     * The force-SSL twin below stays because it names the affected sites.
+     * Public so a test can prove the projection directly, like the instance collectors.
+     */
+    public static void failedProxyListeners(List<AttentionItem> items) {
+        var proxy = ServerMain.getProxyServer();
+        if (proxy == null) return;
+        if (proxy.getHttpState() == ProxyServer.State.FAILED) {
+            items.add(item("error", "sitemap",
+                copy("proxy_http_listener", "attention_title"),
+                literal(proxy.getHttpFailureReason()),
+                "/admin/settings"));
+        }
+        if (proxy.getHttpsState() == ProxyServer.State.FAILED) {
+            items.add(item("error", "certificate",
+                copy("proxy_https_listener", "attention_title"),
+                literal(proxy.getHttpsFailureReason()),
+                "/admin/certificates"));
+        } else if (proxy.getHttpsState() == ProxyServer.State.RUNNING
+                && proxy.getHttpsFailureReason() != null) {
+            // Partial mode: passthrough listens but termination failed, so the listener
+            // reads healthy while every force_ssl vhost answers 503.
+            items.add(item("error", "certificate",
+                copy("proxy_https_degraded", "attention_title"),
+                literal(proxy.getHttpsFailureReason()),
+                "/admin/certificates"));
         }
     }
 
