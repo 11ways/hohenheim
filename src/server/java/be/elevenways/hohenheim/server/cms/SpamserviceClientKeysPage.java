@@ -4,7 +4,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.ManagedClient;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -24,10 +24,13 @@ final class SpamserviceClientKeysPage implements RecordScopedPage<ManagedClient>
     @Override
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext context,
                                            @NonNull ManagedClient client) {
-        String target = ResourcePageEndpoints.LIST
-            .with(ResourcePageEndpoints.PANEL_PARAM, "admin")
-            .with(ResourcePageEndpoints.RESOURCE_PARAM, SpamserviceClientKeysResource.SLUG)
-            .toUrl() + "?client_id=" + client.id();
-        return conduit.softRedirect(target);
+        // AIDEV-NOTE: the client scoping rides a bound ParameterDefinition (an extra
+        // parameter renders as a query param), never "?client_id=" concatenation. Built
+        // off CmsEndpoints rather than CmsRoutes.list because CmsRoutes returns the
+        // RouteTarget interface, which has no with(...) to chain the query onto.
+        return conduit.softRedirect(CmsEndpoints.LIST
+            .with(CmsEndpoints.PANEL_PARAM, "admin")
+            .with(CmsEndpoints.RESOURCE_PARAM, SpamserviceClientKeysResource.SLUG)
+            .with(SpamserviceClientKeysResource.CLIENT_ID_QUERY, String.valueOf(client.id())));
     }
 }

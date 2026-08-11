@@ -15,7 +15,7 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
-import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.field.BooleanField;
@@ -168,12 +168,10 @@ public final class SpamserviceClientsResource extends SpamserviceRemoteResource<
             .label(Microcopy.of("keys").withFilter("scope", "spamservice_client"))
             .description(Microcopy.of("keys_hint").withFilter("scope", "spamservice_client"))
             .icon(Icon.of("key"))
-            .url(row -> new Uri(ResourcePageEndpoints.RECORD_SUBPAGE
-                .with(ResourcePageEndpoints.PANEL_PARAM, "admin")
-                .with(ResourcePageEndpoints.RESOURCE_PARAM, SLUG)
-                .with(ResourcePageEndpoints.RESOURCE_ID_PARAM, row.id())
-                .with(ResourcePageEndpoints.SUBPAGE_PARAM, SpamserviceClientKeysPage.SLUG)
-                .toUrl()))
+            // AIDEV-NOTE: RowAction.Url is Uri-typed, so toUrl() is the boundary; the
+            // path shape still comes from CmsRoutes, never concatenation.
+            .url(row -> new Uri(CmsRoutes
+                .subpage("admin", SLUG, row.id(), SpamserviceClientKeysPage.SLUG).toUrl()))
             .build());
     }
 

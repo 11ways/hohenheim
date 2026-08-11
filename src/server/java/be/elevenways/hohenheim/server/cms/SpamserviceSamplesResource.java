@@ -14,7 +14,7 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
-import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -134,11 +134,8 @@ public final class SpamserviceSamplesResource extends SpamserviceRemoteResource<
 
     @Override
     public @NonNull String rowUrl(@NonNull SampleSummary row) {
-        return ResourcePageEndpoints.RECORD_SUBPAGE
-            .with(ResourcePageEndpoints.PANEL_PARAM, "admin")
-            .with(ResourcePageEndpoints.RESOURCE_PARAM, SLUG)
-            .with(ResourcePageEndpoints.RESOURCE_ID_PARAM, row.id())
-            .with(ResourcePageEndpoints.SUBPAGE_PARAM, SpamserviceSampleAnalysisPage.SLUG).toUrl();
+        // Resource.rowUrl is a String contract; toUrl() is the boundary.
+        return CmsRoutes.subpage("admin", SLUG, row.id(), SpamserviceSampleAnalysisPage.SLUG).toUrl();
     }
 
     @Override public @NonNull List<RecordScopedPage<SampleSummary>> subpages() {

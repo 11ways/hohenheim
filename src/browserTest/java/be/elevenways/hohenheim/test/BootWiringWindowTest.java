@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.server.ServerZenitRuntime;
@@ -54,7 +53,6 @@ class BootWiringWindowTest {
 
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        Object cmsRoutes = ResourcePageEndpoints.LIST;
         HohenheimAccess.declareGrantableModels();
         TestDatabases.freshDatabase();
 
