@@ -78,6 +78,9 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
         vars.put("instanceId", instanceId);
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("returnUrl", ReturnTarget.capture(conduit));
+        // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
+        // ReturnTarget is server-only, so the common template cannot reach it.
+        vars.put("returnParam", ReturnTarget.PARAM);
         vars.put("actionTarget", HohenheimEndpoints.INSTANCE_FILE_ACTION
             .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
         vars.put("canWrite", HohenheimAccess.hasInstanceCapability(accessContext, instanceId,

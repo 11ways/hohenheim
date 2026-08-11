@@ -9,6 +9,10 @@
 {% declare stopCommand: String = "" %}
 {% declare commandError: String = "" %}
 {% declare returnUrl: String = "" %}
+{#- ReturnTarget.PARAM, supplied by the page: ReturnTarget lives in zenit's SERVER
+    source set, so a common template cannot reach the constant (nor its
+    Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
+{% declare returnParam: String %}
 {% declare storedLogs: List %}
 {% declare selectedLogText: String = "" %}
 {% declare selectedLogTitle: String = "" %}
@@ -44,7 +48,7 @@
                         wsUrl={% consoleWsUrl %}>
                     </pl-terminal>
                     <form use:Zenit.form={% commandTarget %} class="instance-console-command">
-                        <input type="hidden" name="_return" value={% returnUrl %}>
+                        <input type="hidden" name={% returnParam %} value={% returnUrl %}>
                         <pl-input name="command" placeholder={% t("command_placeholder", scope: "instance_console") %}></pl-input>
                         <pl-button variant="outline" type={% "submit" %}>{{ t("send", scope: "instance_console") }}</pl-button>
                     </form>
