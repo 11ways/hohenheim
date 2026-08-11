@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -15,10 +16,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -42,7 +40,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * refuse non-admins outright, and the terminal WebSocket enforces both login
  * (handshake 401) and per-site authorization (policy close).
  */
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SiteAccessControlTest extends HohenheimTestBase {
 
     private static Integer siteAId;
@@ -119,16 +116,52 @@ class SiteAccessControlTest extends HohenheimTestBase {
         return getServerPort();
     }
 
-    /** Refused everywhere, then a manage grant on site A unlocks only site A, on HTTP and on the terminal socket. */
+    /**
+     * A bare 403 cannot say WHO refused: CsrfMiddleware (weight 25) runs ahead of BOTH
+     * authorization tiers -- zenit-auth's path baselines (weight 30) and core's endpoint
+     * permissions (weight 50) -- and every one of them answers 403, so an authorization
+     * regression would still "pass" whenever CSRF happened to reject first. The BODY is the
+     * discriminator, and authorization has exactly two shapes here: the JSON ErrorResponse
+     * with code FORBIDDEN (this client sends no Accept header, so acceptsHtml() is false),
+     * and zenit-auth's RENDERED forbidden page, which a path baseline returns as a template
+     * result without consulting Accept at all. CSRF can produce neither -- it always ends as
+     * an ErrorResult carrying CSRF_INVALID / CSRF_ORIGIN / CSRF_NO_STORE.
+     */
+    private static void assertAuthorizationRefusal(HttpResponse<String> response, String step) {
+        assertThat(response.statusCode()).describedAs(step + ": refused with 403").isEqualTo(403);
+        assertThat(response.body())
+            .describedAs(step + ": and the refusal is AUTHORIZATION's, never an earlier CSRF"
+                + " rejection wearing the same status")
+            .satisfiesAnyOf(
+                body -> assertThat(body).contains("\"code\":\"FORBIDDEN\""),
+                body -> assertThat(body).contains("zenitauth:auth/forbidden"));
+    }
+
+    /**
+     * One continuous journey: the limited principal is refused everywhere, a manage grant on
+     * site A unlocks only site A over HTTP and the terminal socket, and then trashing site A
+     * withdraws that authority for good -- restoring it hands nothing back.
+     *
+     * AIDEV-NOTE: this WAS two @Order-coupled methods over shared @BeforeAll statics with no
+     * per-test reset, so step 8 consumed the grant step 5 created. That is one journey wearing
+     * two names, and it split a single defect into two failures. The 54 other browserTest
+     * classes using OrderAnnotation are a house convention, not a target.
+     */
     @Test
-    @Order(1)
     void manageGrantJourney() throws Exception {
-        assertThat(limitedPost("/sites/" + siteAId + "/deploy").statusCode()).isEqualTo(403);
-        assertThat(limitedPost("/sites/" + siteAId + "/rollback").statusCode()).isEqualTo(403);
-        assertThat(limitedPost("/sites/" + siteAId + "/processes/start").statusCode()).isEqualTo(403);
-        // Installation-scoped sensitive endpoints are admin-only.
-        assertThat(limitedGet("/certificates/1/download").statusCode()).isEqualTo(403);
-        assertThat(limitedPost("/admin/certificates-request").statusCode()).isEqualTo(403);
+        // 1. Per-site endpoints refuse a principal holding no grant on the site.
+        assertAuthorizationRefusal(limitedPost("/sites/" + siteAId + "/deploy"),
+            "step 1: deploy on an ungranted site");
+        assertAuthorizationRefusal(limitedPost("/sites/" + siteAId + "/rollback"),
+            "step 1: rollback on an ungranted site");
+        assertAuthorizationRefusal(limitedPost("/sites/" + siteAId + "/processes/start"),
+            "step 1: process start on an ungranted site");
+
+        // 2. Installation-scoped sensitive endpoints are admin-only.
+        assertAuthorizationRefusal(limitedGet("/certificates/1/download"),
+            "step 2: a certificate download is installation-scoped");
+        assertAuthorizationRefusal(limitedPost("/admin/certificates-request"),
+            "step 2: so is requesting a certificate");
 
         // AIDEV-NOTE: the managed-database dump is deliberately NOT admin-only any more
         // (ccd1bd5): it is requiresLogin and answers to the per-database capability, and
@@ -137,33 +170,44 @@ class SiteAccessControlTest extends HohenheimTestBase {
         // journey pins is that identity plus the state: refused, and no dump on the wire.
         HttpResponse<String> dump = limitedGet("/databases/somedb/backup");
         assertThat(dump.statusCode())
-            .as("a database the caller holds no capability on is MISSING, never forbidden")
+            .as("step 3: a database the caller holds no capability on is MISSING, never forbidden")
             .isEqualTo(404);
         assertThat(dump.headers().firstValue("Content-Disposition"))
-            .as("and no dump crossed the wire")
+            .as("step 3: and no dump crossed the wire")
             .isEmpty();
         assertThat(dump.body())
-            .as("and the refusal never echoes the requested name back")
+            .as("step 3: and the refusal never echoes the requested name back")
             .doesNotContain("somedb");
 
+        // 4. The grant that changes everything below.
         RecordGrants.grant("user", limitedUserId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
 
-        // Site A passes authorization: no git source configured, so the handler
-        // falls through to its redirect -- the point is it no longer 403s.
-        assertThat(limitedPost("/sites/" + siteAId + "/deploy").statusCode()).isIn(302, 303);
-        assertThat(limitedPost("/sites/" + siteAId + "/processes/start").statusCode()).isIn(302, 303);
+        // 5. Site A passes authorization: no git source configured, so the handler falls
+        //    through to its redirect -- the point is it no longer 403s. These two are also
+        //    the control for step 1: the SAME client, the SAME CSRF token, now accepted.
+        assertThat(limitedPost("/sites/" + siteAId + "/deploy").statusCode())
+            .describedAs("step 5: deploy passes once the grant exists")
+            .isIn(302, 303);
+        assertThat(limitedPost("/sites/" + siteAId + "/processes/start").statusCode())
+            .describedAs("step 5: and so does starting a process")
+            .isIn(302, 303);
 
-        // Site B stays refused.
-        assertThat(limitedPost("/sites/" + siteBId + "/deploy").statusCode()).isEqualTo(403);
+        // 6. The grant is per RECORD: site B stays refused.
+        assertAuthorizationRefusal(limitedPost("/sites/" + siteBId + "/deploy"),
+            "step 6: a grant on site A unlocks nothing on site B");
 
-        // The policy's principal-facing views agree.
+        // 7. The policy's principal-facing views agree with the wire.
         UserPrincipal principal = new UserPrincipal(limitedUserId, "Limited User");
-        assertThat(HohenheimAccess.managedSiteIds(principal)).containsExactly(siteAId);
-        assertThat(HohenheimAccess.canManageSite(principal, siteAId)).isTrue();
-        assertThat(HohenheimAccess.canManageSite(principal, siteBId)).isFalse();
+        assertThat(HohenheimAccess.managedSiteIds(principal))
+            .describedAs("step 7: exactly the granted site is managed")
+            .containsExactly(siteAId);
+        assertThat(HohenheimAccess.canManageSite(principal, siteAId))
+            .describedAs("step 7: site A is manageable").isTrue();
+        assertThat(HohenheimAccess.canManageSite(principal, siteBId))
+            .describedAs("step 7: site B is not").isFalse();
 
-        // The terminal socket refuses an anonymous handshake outright.
+        // 8. The terminal socket refuses an anonymous handshake outright.
         HttpClient anonymous = HttpClient.newHttpClient();
         try {
             anonymous.newWebSocketBuilder()
@@ -194,57 +238,57 @@ class SiteAccessControlTest extends HohenheimTestBase {
             .get(15, TimeUnit.SECONDS);
         socket.request(10);
 
-        assertThat(closeCode.get(15, TimeUnit.SECONDS)).isEqualTo(1008);
-    }
+        assertThat(closeCode.get(15, TimeUnit.SECONDS))
+            .describedAs("step 8: an authenticated socket on an ungranted site closes on policy")
+            .isEqualTo(1008);
 
-    /** A trashed site is not a grant target, and restoring it does not hand authority back. */
-    @Test
-    @Order(2)
-    void aTrashedSiteHoldsNoAuthorityAndRestoringItGrantsNoneBack() {
-        // AIDEV-NOTE: Sites soft-delete by HAND (SiteResource stamps deleted_at without
-        // SoftDeleteBehaviour), so the row stays physically present. The framework's
-        // presence-only liveness therefore counted a trashed site as a live grant target:
-        // its grants survived the orphan sweep and came back on restore. The declaration's
-        // liveWhen predicate is what makes deleted_at mean dead to zenit-auth as well.
+        // AIDEV-NOTE: from here the journey turns to trashing. Sites soft-delete by HAND
+        // (SiteResource stamps deleted_at without SoftDeleteBehaviour), so the row stays
+        // physically present. The framework's presence-only liveness therefore counted a
+        // trashed site as a live grant target: its grants survived the orphan sweep and came
+        // back on restore. The declaration's liveWhen predicate is what makes deleted_at mean
+        // dead to zenit-auth as well.
         var siteModel = Models.get(SiteModel.class);
-        UserPrincipal principal = new UserPrincipal(limitedUserId, "Limited User");
 
-        // 1. The limited user manages site A (granted by the journey above).
-        assertThat(HohenheimAccess.canManageSite(principal, siteAId)).isTrue();
-
-        // 2. Trash site A the way the admin resource does it.
+        // 9. Trash site A the way the admin resource does it.
         Row siteA = siteModel.find().where(SiteModel.ID.eq(siteAId)).first();
         siteA.set(SiteModel.DELETED_AT, Instant.now());
         siteModel.save(siteA);
 
         assertThat(siteModel.find().where(SiteModel.ID.eq(siteAId)).count())
-            .describedAs("the trashed row must still be physically present")
+            .describedAs("step 9: the trashed row must still be physically present")
             .isEqualTo(1);
         assertThat(HohenheimAccess.canManageSite(principal, siteAId))
-            .describedAs("a trashed site must hold no authority")
+            .describedAs("step 9: a trashed site must hold no authority")
             .isFalse();
 
-        // 3. A grant cannot be planted on a trashed site either -- the SAME liveness
-        //    definition guards the write path.
+        // 10. A grant cannot be planted on a trashed site either -- the SAME liveness
+        //     definition guards the write path.
         assertThatThrownBy(() -> RecordGrants.grant("user", limitedUserId, SiteModel.MODEL_ID,
                 siteAId, HohenheimAccess.MANAGE, true))
+            .describedAs("step 10: a trashed site is not a grant target")
             .isInstanceOf(IllegalArgumentException.class);
 
-        // 4. RESTORE: clearing deleted_at must not resurrect the withdrawn authority.
+        // 11. RESTORE: clearing deleted_at must not resurrect the withdrawn authority.
         Row restored = siteModel.find().where(SiteModel.ID.eq(siteAId)).first();
         restored.set(SiteModel.DELETED_AT, null);
         siteModel.save(restored);
 
         assertThat(HohenheimAccess.canManageSite(principal, siteAId))
-            .describedAs("restoring a site must not revive the grants its delete withdrew")
+            .describedAs("step 11: restoring a site must not revive the grants its delete withdrew")
             .isFalse();
-        assertThat(HohenheimAccess.managedSiteIds(principal)).isEmpty();
+        assertThat(HohenheimAccess.managedSiteIds(principal))
+            .describedAs("step 11: and the principal manages nothing again")
+            .isEmpty();
 
-        // 5. And the site is grantable again now that it is live, so the refusal was
-        //    about liveness and not about the site being permanently poisoned.
+        // 12. The site is grantable again now that it is live, so the refusal was about
+        //     liveness and not about the site being permanently poisoned.
         assertThat(RecordGrants.grant("user", limitedUserId, SiteModel.MODEL_ID, siteAId,
-            HohenheimAccess.MANAGE, true).get(
-                be.elevenways.zenit.auth.model.RecordGrantModel.VALUE)).isTrue();
-        assertThat(HohenheimAccess.canManageSite(principal, siteAId)).isTrue();
+            HohenheimAccess.MANAGE, true).get(RecordGrantModel.VALUE))
+            .describedAs("step 12: a live site accepts a grant again")
+            .isTrue();
+        assertThat(HohenheimAccess.canManageSite(principal, siteAId))
+            .describedAs("step 12: and the authority is back")
+            .isTrue();
     }
 }
