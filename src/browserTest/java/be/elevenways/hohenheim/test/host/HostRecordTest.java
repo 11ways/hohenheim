@@ -4,7 +4,6 @@ import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
@@ -161,7 +160,7 @@ class HostRecordTest {
         });
     }
 
-    /** A probe failure is a TYPED, STORED outcome -- and the list never probes live. */
+    /** A probe failure is a TYPED, STORED outcome that also blocks admission. */
     @Test
     void probeFailuresAreTypedAndStoredAndTheListNeverProbes() {
         Db.run(datasource, () -> {
@@ -199,20 +198,17 @@ class HostRecordTest {
             assertThat((Object) stored.get(ServerModel.LAST_SEEN_AT))
                 .as("step 2: a host never reached has no last_seen_at").isNull();
 
-            // 3. The stored-state list reads columns WITHOUT constructing a single
-            //    docker client -- the old per-render serial probe is gone.
-            long constructions = DockerClient.constructionCount();
-            var states = servers.storedStates();
-            assertThat(DockerClient.constructionCount())
-                .as("step 3: storedStates() constructs no DockerClient")
-                .isEqualTo(constructions);
-            assertThat(states)
-                .as("step 3: and the dark host's stored state carries its typed failure")
-                .anySatisfy(state -> {
-                    assertThat(state.name()).isEqualTo("edge-dark");
-                    assertThat(state.lastErrorKind()).isEqualTo(summary.errorKind());
-                    assertThat(state.admission()).isEqualTo(ServerModel.ADMISSION_BLOCKED);
-                });
+            // 3. And a failing probe BLOCKS the host: the typed failure and the admission
+            //    verdict live on the same row, so no reader can see one without the other.
+            //    AIDEV-NOTE: this used to call ServerService.storedStates() and assert it
+            //    constructed no DockerClient -- tautological, since storedStates was on no
+            //    render path and had no other caller. The invariant that matters (rendering
+            //    a host page touches no daemon) is asserted on the REAL path by
+            //    ServerOverviewTest, and boot by RoleRestrictedBootTest; the machinery is
+            //    deleted.
+            assertThat(String.valueOf((Object) stored.get(ServerModel.ADMISSION)))
+                .as("step 3: a host that failed its probe is admission-blocked")
+                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
 
             servers.remove("edge-dark");
         });
