@@ -429,7 +429,7 @@ class SiteDatabaseLinkLiveTest {
 
     /** Any address of a container (its own private network), retried briefly under load. */
     private static String anyAddress(DockerClient docker, String handle) throws IOException {
-        long deadline = System.currentTimeMillis() + 5_000;
+        long deadline = System.currentTimeMillis() + 20_000;
         Object lastSeen = null;
         while (true) {
             Object settings = docker.inspectContainer(handle).get("NetworkSettings");
@@ -444,7 +444,7 @@ class SiteDatabaseLinkLiveTest {
             }
             lastSeen = networks;
             if (System.currentTimeMillis() >= deadline) {
-                throw new IllegalStateException(handle + " has no address after 5s;"
+                throw new IllegalStateException(handle + " has no address after 20s;"
                     + " last NetworkSettings.Networks: " + lastSeen);
             }
             try {
