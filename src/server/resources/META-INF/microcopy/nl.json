@@ -3701,6 +3701,10 @@
     {
       "text": "Overzicht",
       "scope": "server"
+    },
+    {
+      "text": "Overzicht",
+      "scope": "instance"
     }
   ],
   "installation": {
@@ -3823,16 +3827,26 @@
     {
       "text": "Herstarten bij crash",
       "scope": "crash_policy"
+    },
+    {
+      "text": "Herstarten",
+      "scope": "instance"
     }
   ],
   "restart_hint": {
     "text": "Herstart Spamservice en laad de runtimeconfiguratie opnieuw.",
     "scope": "spamservice"
   },
-  "restart_confirm": {
-    "text": "Spamservice nu herstarten? Verzoeken zijn kort onbeschikbaar.",
-    "scope": "spamservice"
-  },
+  "restart_confirm": [
+    {
+      "text": "Spamservice nu herstarten? Verzoeken zijn kort onbeschikbaar.",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Deze instantie stoppen en opnieuw starten?",
+      "scope": "instance"
+    }
+  ],
   "test_hint": {
     "text": "Roep het strikte managementstatus-endpoint aan.",
     "scope": "spamservice"
@@ -4405,6 +4419,10 @@
     {
       "text": "Toestand",
       "scope": "instance_migrate"
+    },
+    {
+      "text": "Toestand",
+      "scope": "instance_overview"
     }
   ],
   "add_file": [
@@ -5846,6 +5864,10 @@
     {
       "text": "Host",
       "scope": "instance_migrate"
+    },
+    {
+      "text": "Host",
+      "scope": "instance_overview"
     }
   ],
   "unapproved_note": {
@@ -6986,10 +7008,16 @@
       "scope": "help"
     }
   ],
-  "disk": {
-    "text": "Schijf",
-    "scope": "instance_device"
-  },
+  "disk": [
+    {
+      "text": "Schijf",
+      "scope": "instance_device"
+    },
+    {
+      "text": "Hoofdschijf",
+      "scope": "instance_overview"
+    }
+  ],
   "nic": {
     "text": "NIC",
     "scope": "instance_device"
@@ -7394,6 +7422,10 @@
     {
       "text": "{$name} - Migreren",
       "scope": "instance_migrate"
+    },
+    {
+      "text": "{$name} - Overzicht",
+      "scope": "instance_overview"
     }
   ],
   "stored_log_heading": {
@@ -7630,10 +7662,16 @@
     "text": "Nog geen clientreferentie aangemaakt.",
     "scope": "server_overview"
   },
-  "copy": {
-    "text": "Kopieer",
-    "scope": "server_overview"
-  },
+  "copy": [
+    {
+      "text": "Kopieer",
+      "scope": "server_overview"
+    },
+    {
+      "text": "Kopieer",
+      "scope": "instance_overview"
+    }
+  ],
   "kernel_isolation": {
     "text": "Kernelisolatie",
     "scope": "server_overview"
@@ -7841,5 +7879,69 @@
   "migrate_target_required": {
     "text": "Noem de bestemmingshost om naar te migreren",
     "scope": "violations"
+  },
+  "restarted_toast": {
+    "text": "{$name} is herstart",
+    "scope": "instance"
+  },
+  "install_error": {
+    "text": "Installatiefout",
+    "scope": "instance_overview"
+  },
+  "used": {
+    "text": "Gebruikt",
+    "scope": "instance_overview"
+  },
+  "limit": {
+    "text": "Limiet",
+    "scope": "instance_overview"
+  },
+  "observed_at": {
+    "text": "Waargenomen",
+    "scope": "instance_overview"
+  },
+  "not_measured": {
+    "text": "Niet gemeten",
+    "scope": "instance_overview"
+  },
+  "not_measured_body": {
+    "text": "De {$runtime}-runtime handhaaft geen quota voor de hoofdschijf en rapporteert geen verbruik, dus er wordt hier niets gerantsoeneerd en niets gemeten. Dat is het afgesproken contract, geen mislukte meting.",
+    "scope": "instance_overview"
+  },
+  "endpoint": {
+    "text": "Publiek eindpunt",
+    "scope": "instance_overview"
+  },
+  "endpoint_hint": {
+    "text": "Poorten die deze instantie in het grootboek houdt, samen met het hostadres waarop ze antwoorden.",
+    "scope": "instance_overview"
+  },
+  "address": {
+    "text": "Adres",
+    "scope": "instance_overview"
+  },
+  "protocol": {
+    "text": "Protocol",
+    "scope": "instance_overview"
+  },
+  "claim": {
+    "text": "Claim",
+    "scope": "instance_overview"
+  },
+  "reserved": {
+    "text": "Gereserveerd",
+    "scope": "instance_overview"
+  },
+  "no_public_address": {
+    "text": "de host geeft geen publiek adres op",
+    "scope": "instance_overview"
+  },
+  "no_endpoint": {
+    "text": "Geen gepubliceerde poort",
+    "scope": "instance_overview"
+  },
+  "no_endpoint_hint": {
+    "text": "Deze instantie houdt geen poortclaim, dus niets buiten haar netwerk bereikt haar rechtstreeks.",
+    "scope": "instance_overview"
   }
 }

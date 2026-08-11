@@ -3701,6 +3701,10 @@
     {
       "text": "Overview",
       "scope": "server"
+    },
+    {
+      "text": "Overview",
+      "scope": "instance"
     }
   ],
   "installation": {
@@ -3823,16 +3827,26 @@
     {
       "text": "Restart on crash",
       "scope": "crash_policy"
+    },
+    {
+      "text": "Restart",
+      "scope": "instance"
     }
   ],
   "restart_hint": {
     "text": "Restart Spamservice and reload its runtime configuration.",
     "scope": "spamservice"
   },
-  "restart_confirm": {
-    "text": "Restart Spamservice now? Requests are briefly unavailable.",
-    "scope": "spamservice"
-  },
+  "restart_confirm": [
+    {
+      "text": "Restart Spamservice now? Requests are briefly unavailable.",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Stop this instance and start it again?",
+      "scope": "instance"
+    }
+  ],
   "test_hint": {
     "text": "Call the strict management status endpoint.",
     "scope": "spamservice"
@@ -4405,6 +4419,10 @@
     {
       "text": "State",
       "scope": "instance_migrate"
+    },
+    {
+      "text": "State",
+      "scope": "instance_overview"
     }
   ],
   "add_file": [
@@ -5846,6 +5864,10 @@
     {
       "text": "Host",
       "scope": "instance_migrate"
+    },
+    {
+      "text": "Host",
+      "scope": "instance_overview"
     }
   ],
   "unapproved_note": {
@@ -6986,10 +7008,16 @@
       "scope": "help"
     }
   ],
-  "disk": {
-    "text": "Disk",
-    "scope": "instance_device"
-  },
+  "disk": [
+    {
+      "text": "Disk",
+      "scope": "instance_device"
+    },
+    {
+      "text": "Root disk",
+      "scope": "instance_overview"
+    }
+  ],
   "nic": {
     "text": "NIC",
     "scope": "instance_device"
@@ -7394,6 +7422,10 @@
     {
       "text": "{$name} - Migrate",
       "scope": "instance_migrate"
+    },
+    {
+      "text": "{$name} - Overview",
+      "scope": "instance_overview"
     }
   ],
   "stored_log_heading": {
@@ -7630,10 +7662,16 @@
     "text": "No client credential minted yet.",
     "scope": "server_overview"
   },
-  "copy": {
-    "text": "Copy",
-    "scope": "server_overview"
-  },
+  "copy": [
+    {
+      "text": "Copy",
+      "scope": "server_overview"
+    },
+    {
+      "text": "Copy",
+      "scope": "instance_overview"
+    }
+  ],
   "kernel_isolation": {
     "text": "Kernel isolation",
     "scope": "server_overview"
@@ -7841,5 +7879,69 @@
   "migrate_target_required": {
     "text": "Name the destination host to migrate to",
     "scope": "violations"
+  },
+  "restarted_toast": {
+    "text": "{$name} was restarted",
+    "scope": "instance"
+  },
+  "install_error": {
+    "text": "Install error",
+    "scope": "instance_overview"
+  },
+  "used": {
+    "text": "Used",
+    "scope": "instance_overview"
+  },
+  "limit": {
+    "text": "Limit",
+    "scope": "instance_overview"
+  },
+  "observed_at": {
+    "text": "Observed",
+    "scope": "instance_overview"
+  },
+  "not_measured": {
+    "text": "Not measured",
+    "scope": "instance_overview"
+  },
+  "not_measured_body": {
+    "text": "The {$runtime} runtime enforces no root-disk quota and reports no usage, so nothing here is rationed and nothing measures it. This is the declared contract, not a failed reading.",
+    "scope": "instance_overview"
+  },
+  "endpoint": {
+    "text": "Public endpoint",
+    "scope": "instance_overview"
+  },
+  "endpoint_hint": {
+    "text": "Ports this instance holds in the ledger, joined to the host address they answer at.",
+    "scope": "instance_overview"
+  },
+  "address": {
+    "text": "Address",
+    "scope": "instance_overview"
+  },
+  "protocol": {
+    "text": "Protocol",
+    "scope": "instance_overview"
+  },
+  "claim": {
+    "text": "Claim",
+    "scope": "instance_overview"
+  },
+  "reserved": {
+    "text": "Reserved",
+    "scope": "instance_overview"
+  },
+  "no_public_address": {
+    "text": "the host declares no public address",
+    "scope": "instance_overview"
+  },
+  "no_endpoint": {
+    "text": "No published port",
+    "scope": "instance_overview"
+  },
+  "no_endpoint_hint": {
+    "text": "This instance holds no port claim, so nothing outside its network reaches it directly.",
+    "scope": "instance_overview"
   }
 }

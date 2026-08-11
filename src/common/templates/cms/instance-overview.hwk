@@ -1,0 +1,140 @@
+{#- Overview tab on an instance: state and power, the STORED disk observation, and the
+    public endpoint from the port ledger. Every button is one of the resource's own row
+    actions rendered through the standard invoke partial, so confirmations, per-record
+    capability gates and the ambient busy state stay single-sourced. -#}
+{% declare title: String %}
+{% declare instanceName: String %}
+{% declare instanceId: Integer %}
+{% declare statusBadge: EnumBadgeState %}
+{% declare kindBadge: EnumBadgeState = null %}
+{% declare installBadge: EnumBadgeState = null %}
+{% declare hostName: String %}
+{% declare hostUrl: String %}
+{% declare installError: String = "" %}
+{% declare disk: InstanceDiskView %}
+{% declare endpoints: List<InstanceEndpointView> %}
+{% declare actions: InstanceActionsView %}
+{% declare timeWording: RelativeTimeWording = null %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page hh-instance-overview">
+    <header class="cms-resource-list-header">
+        <h1>{{ instanceName }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    <pl-card class="hh-overview-card">
+        <pl-card-header>
+            <pl-card-title>{{ t("state", scope: "instance_overview") }}</pl-card-title>
+        </pl-card-header>
+        <pl-card-content>
+            <div class="hh-state-badges">
+                {% render "zenitcms:cell/enum-badge" var:value=statusBadge %}
+                {% if kindBadge != null %}{% render "zenitcms:cell/enum-badge" var:value=kindBadge %}{% /if %}
+                {% if installBadge != null %}{% render "zenitcms:cell/enum-badge" var:value=installBadge %}{% /if %}
+            </div>
+            <p class="hh-overview-host">
+                {{ t("host", scope: "instance_overview") }}
+                <a href={% hostUrl %}>{{ hostName }}</a>
+            </p>
+            {% if installError != "" %}
+            <p class="hh-last-error">
+                <pl-icon name="circle-exclamation"></pl-icon>
+                {{ t("install_error", scope: "instance_overview") }}: {{ installError }}
+            </p>
+            {% /if %}
+            <div class="hh-state-actions" data-instance-actions="1">
+                {% if actions.deploy != null %}{% render "zenitcms:action/invoke" var:action=actions.deploy %}{% /if %}
+                {% if actions.restart != null %}{% render "zenitcms:action/invoke" var:action=actions.restart %}{% /if %}
+                {% if actions.stop != null %}{% render "zenitcms:action/invoke" var:action=actions.stop %}{% /if %}
+                {% if actions.install != null %}{% render "zenitcms:action/invoke" var:action=actions.install %}{% /if %}
+                {% if actions.reinstall != null %}{% render "zenitcms:action/invoke" var:action=actions.reinstall %}{% /if %}
+                {% if actions.appUpdate != null %}{% render "zenitcms:action/invoke" var:action=actions.appUpdate %}{% /if %}
+                {% if actions.snapshot != null %}{% render "zenitcms:action/invoke" var:action=actions.snapshot %}{% /if %}
+                {% if actions.backup != null %}{% render "zenitcms:action/invoke" var:action=actions.backup %}{% /if %}
+                {% if actions.migrate != null %}{% render "zenitcms:action/link" var:action=actions.migrate %}{% /if %}
+            </div>
+        </pl-card-content>
+    </pl-card>
+
+    <pl-card class="hh-overview-card">
+        <pl-card-header>
+            <pl-card-title>{{ t("disk", scope: "instance_overview") }}</pl-card-title>
+        </pl-card-header>
+        {% if disk.measured && disk.enforced %}
+        <pl-card-content data-disk-state="measured">
+            <pl-usage-bar value={% disk.percent %} max={% 100 %} showLabel={% true %}></pl-usage-bar>
+            <dl class="hh-capacity-numbers">
+                <dt>{{ t("used", scope: "instance_overview") }}</dt><dd>{{ disk.usedBytes }} B</dd>
+                <dt>{{ t("limit", scope: "instance_overview") }}</dt><dd>{{ disk.limitBytes }} B</dd>
+            </dl>
+            {% if disk.observedAtIso != null %}
+            <p class="hh-capacity-when">{{ t("observed_at", scope: "instance_overview") }}
+                <pl-relative-time datetime={% disk.observedAtIso %} wording={% timeWording %} title={% disk.observedAtIso %}></pl-relative-time>
+            </p>
+            {% /if %}
+        </pl-card-content>
+        {% else %}
+        {#- NOT breakage: only a driver implementing RootDiskUsageSupport stamps these
+            columns, and the docker tier enforces no root quota at all -- so the honest
+            rendering is a named "not measured" state, never a zero bar. -#}
+        <pl-card-content data-disk-state="not-measured">
+            <p class="hh-disk-unmeasured">
+                <pl-badge variant="secondary">{{ t("not_measured", scope: "instance_overview") }}</pl-badge>
+                {{ t("not_measured_body", scope: "instance_overview", runtime: disk.runtime) }}
+            </p>
+        </pl-card-content>
+        {% /if %}
+    </pl-card>
+
+    <pl-card class="hh-overview-card">
+        <pl-card-header>
+            <pl-card-title>{{ t("endpoint", scope: "instance_overview") }}</pl-card-title>
+            <pl-card-description>{{ t("endpoint_hint", scope: "instance_overview") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            {% if endpoints %}
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("address", scope: "instance_overview") }}</pl-table-head>
+                    <pl-table-head>{{ t("protocol", scope: "instance_overview") }}</pl-table-head>
+                    <pl-table-head>{{ t("claim", scope: "instance_overview") }}</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each endpoints as endpoint %}
+                    <pl-table-row data-endpoint-port={% endpoint.port %}>
+                        <pl-table-cell>
+                            {% if endpoint.address != "" %}
+                            <code>{{ endpoint.address }}:{{ endpoint.port }}</code>
+                            <pl-copy-button value={% endpoint.address + ":" + endpoint.port %} ariaLabel={% t("copy", scope: "instance_overview") %}></pl-copy-button>
+                            {% else %}
+                            <code>{{ endpoint.port }}</code>
+                            <span class="hh-endpoint-noaddress" data-endpoint-noaddress="1">{{ t("no_public_address", scope: "instance_overview") }}</span>
+                            {% /if %}
+                        </pl-table-cell>
+                        <pl-table-cell>{{ endpoint.protocol }}</pl-table-cell>
+                        <pl-table-cell>
+                            {% if endpoint.preallocated %}
+                            <pl-badge variant="outline">{{ t("reserved", scope: "instance_overview") }}</pl-badge>
+                            {% else %}
+                            <pl-badge variant="secondary">{{ endpoint.status }}</pl-badge>
+                            {% /if %}
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <pl-empty-state icon="plug">
+                <pl-empty-state-title>{{ t("no_endpoint", scope: "instance_overview") }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ t("no_endpoint_hint", scope: "instance_overview") }}</pl-empty-state-description>
+            </pl-empty-state>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+</section>
+{% /block %}

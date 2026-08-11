@@ -62,11 +62,7 @@ public class InstancePowerAction extends InstanceScheduleAction {
         switch (op) {
             case OP_START -> instances.deploy(instanceId);
             case OP_STOP -> instances.stop(instanceId);
-            case OP_RESTART -> {
-                // stop() is idempotent when already stopped; deploy is create+start.
-                instances.stop(instanceId);
-                instances.deploy(instanceId);
-            }
+            case OP_RESTART -> instances.restart(instanceId);
             default -> throw new IllegalStateException("unknown power operation: " + op);
         }
     }

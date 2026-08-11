@@ -264,6 +264,13 @@ Wider than Pterodactyl's allocations in one way that matters here: the ledger
 arbitrates across TIERS -- instances, docker sites, managed databases and stacks
 share it -- so two products on one host cannot both believe they own a port.
 
+**Operator surface added 2026-08-11.** The ledger's claims reached no instance
+page at all; the Overview tab now renders each one joined to the host's declared
+public address, marks a preallocated claim as RESERVED (a number that survives a
+stop) and, when the host record declares no public IP, says so instead of
+printing a reachable-looking `localhost`.
+`InstanceOverviewTest.theLedgersPublishedPortRendersWithItsHostAddress`. **[test]**
+
 ## 7. Subuser capability delegation
 
 **IMPLEMENTED.**
@@ -593,6 +600,13 @@ A kind whose handler class is gone prices at 0 and books nothing, which is the
   (`assumeTrue` at `:65`, `:67`). So the orchestration is hermetic and the real
   export/import is **[live]**.
 
+**Operator surface added 2026-08-11.** `migrateTo` had no UI caller: a single
+instance could only move as a side effect of draining its whole host. The
+instance's `migrate_instance` row action now opens an operator-only
+`InstanceMigratePage` listing every enrolled host with the authority's own
+refusal beside the ineligible ones, one destructive confirmation per destination
+naming BOTH hosts. `InstanceMigrateSurfaceTest`, 6 journeys, 0 skipped. **[test]**
+
 Known limitation carried from `proxmox-use-inventory.md` item 2: a PREPARED
 image lives in one daemon's store, so a workload provisioned from one cannot be
 moved to a host that lacks it. Placement does not know this and cannot avoid it.
@@ -784,6 +798,14 @@ between them. This is deliberate -- a single fenced "restart" would have to hold
 one fence across a create -- but it is a real difference from a panel where
 restart is one button with one outcome. It is now VISIBLE rather than hidden: as
 of 2026-08-08 the activity log records the two rows the operation actually is.
+
+**Updated 2026-08-11: there is now a restart BUTTON, and the rejection above is
+unchanged.** `InstanceService.restart` is the one composition every surface
+funnels through -- the `restart_instance` row action on the instance Overview tab
+and `InstancePowerAction`'s `restart` step are the same two fenced operations
+with the same window between them, spelled once instead of twice. What shipped is
+an affordance, not a new primitive: nothing here holds a single fence across the
+create, and the activity log still records the two rows.
 
 ---
 
