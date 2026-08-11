@@ -4,6 +4,49 @@ Checked in 2026-08-02, the artifact the Phase 2 parallel gate demands. Every
 field below was read at its declaration AND at its use site; the posture column
 is what the code does today, not what a docblock claims.
 
+## Correction 2026-08-11 -- TWO SECURITY CLAIMS BELOW WERE INVERTED
+
+Read this before anything else. This document was last touched 2026-08-07; the
+backup redesign landed 2026-08-08 (`7201269a`) and the rekey lane landed with it.
+Two statements here asserted the OPPOSITE of the code, which is worse than
+staleness because both were being quoted as known limits:
+
+1. **"Rotation prepends a key with no re-encryption and no key retirement"**
+   (2026-08-07 block, and the sequencing section). FALSE.
+   `EncryptionRekey` (zenit, `server/orm/crypto/EncryptionRekey.java:38-42`)
+   does exactly the two missing halves: `reencrypt` rewrites every stored
+   envelope under the ACTIVE key (resumable from a durable per-(key, model)
+   cursor, envelope shape preserved), and `retire` refuses to drop a key until a
+   SURVEY -- a real walk that decrypts every stored value and counts the key ids
+   it read -- proves nothing is left under it. CLI-wired in
+   `ServerMain.java:378` (`--reencrypt-secrets`), `:384`
+   (`--encryption-key-survey`) and `:392` (`--retire-encryption-key <id>`), with
+   `--rotate-encryption-key` deliberately NOT bundled with them
+   (`ServerMain.java:348`: one flag that hides the only destructive step behind
+   the two safe ones would be the trap). `EncryptionRekeyJourneyTest` pins the
+   journey. Rotation is now a whole story; stop offering it as half a
+   mitigation. The sentences making the old claim are struck in place below.
+2. **"The default backup destination is a LOCAL directory ... off-host transfer
+   remains a deployment concern"** (sequencing item 4). FALSE, and inverted:
+   the code REFUSES to run without a remote target. `ControlPlaneBackups
+   .destinationName():194-207` throws "There is deliberately no local default",
+   and `HohenheimSettings.java:487-503` declares
+   `database.control_plane_backup_target` with NO default at all. The local
+   `.zrec` is staging only (`ControlPlaneBackups.java:64`, `:217-221`), deleted
+   in a `finally` (`:122`) that fires on upload failure too; after upload the
+   archive is re-hashed ON THE TARGET and deleted there on mismatch
+   (`:125-132`); retention prunes on the REMOTE (`:133`, `:149-161`). What DOES
+   survive from the old text: the retention VALUE is still
+   `database.backup_retention` (`:84`), and the archive still carries the master
+   keys in the clear -- so the destination is now a security boundary of its own,
+   which is why `BackupTargetModel` joins the inventory below.
+
+Also corrected in this pass: the posture legend (ENCRYPTED did not distinguish
+`.secret().encrypted()` from bare `.encrypted()`), the `DnsRecordModel
+.DYNDNS_TOKEN` row (that field no longer exists), two of the three "named
+unknowns" (both answerable by reading code), and five secret-bearing or
+secret-adjacent records that were missing from the inventory entirely.
+
 ## Re-verification 2026-08-07 -- READ THIS BEFORE THE 2026-08-02 TEXT
 
 **This document was stale in BOTH directions.** It listed as OPEN five keyring
@@ -29,9 +72,14 @@ Verified in `zenit/src/server/java/.../orm/crypto/EncryptionKeyring.java`:
 
 Defect 3 (AAD) was already recorded as LANDED and still is.
 
-What is still HALF a story, unchanged: rotation prepends a key and there is no
+~~What is still HALF a story, unchanged: rotation prepends a key and there is no
 re-encryption and no key retirement, so nothing already written becomes less
-exposed by rotating. Say so whenever rotation is offered as mitigation.
+exposed by rotating. Say so whenever rotation is offered as mitigation.~~
+**STRUCK 2026-08-11: false as of the rekey lane.** `EncryptionRekey.reencrypt`
+rewrites every stored envelope under the active key and `EncryptionRekey.retire`
+drops an old key only after a survey proves nothing still reads under it
+(`EncryptionRekey.java:38-42`, `ServerMain.java:378,384,392`). Rotating and then
+running those two DOES reduce the exposure of what was already written.
 
 ### The field sweep was wrong by a factor of six
 
@@ -50,13 +98,13 @@ appear nowhere in it:**
 
 | Field | Declared | What it holds |
 | --- | --- | --- |
-| `GitProviderModel.ACCESS_TOKEN` | `GitProviderModel.java:60` | git-forge API token |
-| `GitProviderModel.APP_PRIVATE_KEY_PEM` | `GitProviderModel.java:79` | git-forge app private key |
+| `GitProviderModel.ACCESS_TOKEN` | `GitProviderModel.java:68` | git-forge API token |
+| `GitProviderModel.APP_PRIVATE_KEY_PEM` | `GitProviderModel.java:87` | git-forge app private key |
 | `ServerModel.IDENTITY_PRIVATE_KEY` | `ServerModel.java:250` | host SSH identity private key |
 | `ServerModel.INCUS_CLIENT_KEY` | `ServerModel.java:285` | Incus client TLS private key |
-| `InstanceFileModel.CONTENT` | `InstanceFileModel.java:39` | rendered instance file bodies (configs carry secrets) |
-| `InstanceTemplateFileModel.CONTENT` | `InstanceTemplateFileModel.java:38` | the template side of the same |
-| `InstanceVariableModel.SECRET_VALUE` | `InstanceVariableModel.java:69` | per-instance secret env values |
+| `InstanceFileModel.CONTENT` | `InstanceFileModel.java:38` | rendered instance file bodies (configs carry secrets) |
+| `InstanceTemplateFileModel.CONTENT` | `InstanceTemplateFileModel.java:37` | the template side of the same |
+| `InstanceVariableModel.SECRET_VALUE` | `InstanceVariableModel.java:67` | per-instance secret env values |
 
 Consequence for anyone reading the sequencing section: introducing a new
 envelope version is no longer near-zero blast radius in hohenheim, and any
@@ -177,8 +225,25 @@ encrypting it is the weaker design because it keeps a reversible copy for no
 reason. A credential the code must PRESENT to a third party (a TLS stack, a peer
 nameserver, a child process) cannot be hashed, and encryption is the only lever.
 
-Posture legend: HASHED (one-way, correct) | ENCRYPTED (`.secret().encrypted()`) |
-SECRET (redacted in derived surfaces, PLAINTEXT in the column) | PLAIN | EXTERNAL.
+Posture legend (CORRECTED 2026-08-11 -- it used to equate ENCRYPTED with
+`.secret().encrypted()`, which hid the difference below):
+
+- **HASHED** -- one-way, compared only. Correct for anything never presented.
+- **ENCRYPTED+SECRET** -- `.secret().encrypted()`. Ciphertext at rest AND
+  redacted on every derived surface (forms, exports, activity diffs).
+- **ENCRYPTED ONLY** -- bare `.encrypted()`, no `.secret()`. Ciphertext at rest,
+  NOT redacted on derived surfaces. Exactly four fields, all of them
+  operator-authored BODIES the admin must be able to read back:
+  `StackDeploymentModel.SPEC` (`StackDeploymentModel.java:39-41`),
+  `StackFileModel.CONTENT` (`StackFileModel.java:34-38`),
+  `InstanceFileModel.CONTENT` (`InstanceFileModel.java:38-42`) and
+  `InstanceTemplateFileModel.CONTENT` (`InstanceTemplateFileModel.java:37-41`).
+  A config file body and a deploy snapshot routinely CARRY credentials, so treat
+  them as secret-bearing even though the declaration does not say so.
+  (`InstanceVariableModel.SECRET_VALUE` is NOT in this class -- it is
+  `.secret().encrypted()` at `InstanceVariableModel.java:67-71`.)
+- **SECRET** -- redacted in derived surfaces, PLAINTEXT in the column.
+- **PLAIN** | **EXTERNAL**.
 
 ## Must be encrypted -- recoverable, main-table, no query breakage
 
@@ -195,39 +260,51 @@ pre-wave posture notes for the record.
 | 2 | `DnsZoneModel.DNSSEC_PRIVATE_KEY` | `DnsZoneModel.java:72` | zone signing key |
 | 3 | `DnsPeerModel.TSIG_SECRET` | `DnsPeerModel.java:39` | AXFR/IXFR transfer auth to peer nameservers |
 | 4 | `DnsPeerModel.API_KEY` | `DnsPeerModel.java:28` | peer nameserver control API (outbound bearer) |
-| 5 | `DatabaseModel.DB_PASSWORD` | `DatabaseModel.java:52` | managed tenant database password |
+| 5 | `DatabaseModel.DB_PASSWORD` | `DatabaseModel.java:62` | managed tenant database password |
 | 6 | `NotificationChannelModel.URL` | `NotificationChannelModel.java:36` | Slack/Discord/webhook URL -- the URL IS the bearer token |
-| 7 | `SiteModel.SECURITY_REPORT_TOKEN` | `SiteModel.java:103` | spamservice reporting credential; injected raw into the child env |
+| 7 | `SiteModel.SECURITY_REPORT_TOKEN` | `SiteModel.java:108` | spamservice reporting credential; injected raw into the child env |
 | 8 | `SpamserviceInstallationModel.CONTROLLER_KEY` | `SpamserviceInstallationModel.java:40` | local spamservice control API |
-| 9 | `StackServiceModel.ENVIRONMENT` | `StackServiceModel.java:110` | **PLAIN today, not even secret.** A `StringMapField` on the MAIN TABLE, so unlike `SiteModel.environment_variables` it is not inside a JSON SchemaField and encryption IS available |
+| 9 | `StackServiceModel.ENVIRONMENT` | `StackServiceModel.java:114` | **PLAIN today, not even secret.** A `StringMapField` on the MAIN TABLE, so unlike `SiteModel.environment_variables` it is not inside a JSON SchemaField and encryption IS available |
 | 10 | `TotpModel.SECRET` (zenit-auth) | `TotpModel.java:36` | ROW-BOUND ENCRYPTED as of 2026-08-02 (`encryptedBoundTo(USER_ID)`). Was the worst posture found (PLAIN, not even secret); a plain `.encrypted()` would have been a half-fix (still cross-row graftable). See the intro for the full framing |
 
 ## Correct as-is -- do not "improve" these
 
 | Field | Posture | Why it stays |
 | --- | --- | --- |
-| `DnsRecordModel.DYNDNS_TOKEN` | HASHED | Verified only. `DynamicDnsService.java:223` does `where(DYNDNS_TOKEN.eq(digest))` against an index; encrypting it would throw at `SqlCriteriaTranslator.java:92` and `DyndnsTokenIndexTest` pins the index. The exemplar of hashing being stronger |
+| ~~`DnsRecordModel.DYNDNS_TOKEN`~~ -> `DnsDyndnsCredentialModel.TOKEN_DIGEST` | HASHED | MOVED (2026-08-11 note): the field left `DnsRecordModel` in `M091_TypedDnsRecordData` and is now its own table -- `DnsDyndnsCredentialModel.java:30-31`, `.secret()`, sha256 digest only, one row per dynamic A/AAAA record (the row's EXISTENCE is the dynamic flag, so revoking deletes it). `DynamicDnsService.java:251` still looks it up with `where(TOKEN_DIGEST.eq(digest))` against an index, so the reasoning is unchanged: encrypting it would throw at `SqlCriteriaTranslator.java:92`. M091 hashed the legacy plaintext tokens during the copy and refused to carry over inert tokens on non-dynamic rows. Still the exemplar of hashing being stronger |
 | `TotpModel.BACKUP_CODES` | HASHED | one-time codes, compared only |
 | `PasswordModel.HASH`, `ApiKeyModel.HASH` | HASHED | correct; `ApiKeyModel` is the model to copy |
-| Site `api_keys` (`NodeSiteType.java:86`) | HASHED | 0.6b landed this; inside JSON so unencryptable anyway |
+| Site `api_keys` (`NodeSiteType.java:88`) | HASHED | 0.6b landed this; inside JSON so unencryptable anyway |
 | `CertificateModel.CERTIFICATE_PEM`, `DNSSEC_PUBLIC_KEY` | PLAIN | public by definition; encrypting is theatre |
 | `SiteDomainModel.LIVE_ROUTE_KEY` | PLAIN | not a credential -- a derived uniqueness key backing a UNIQUE index. Non-deterministic ciphertext would destroy it and break M045 |
 | All three `StackModel`/`StackDeploymentModel`/`StackFileModel` encrypted fields | ENCRYPTED | genuinely recoverable; the reference declarations |
 
+## Added 2026-08-11 -- records the inventory never covered
+
+Each read at its declaration AND at its use site, like the rows above.
+
+| Field | Declared | Posture | Verdict |
+| --- | --- | --- | --- |
+| `DnsDyndnsCredentialModel.TOKEN_DIGEST` | `DnsDyndnsCredentialModel.java:30-31` | HASHED + SECRET | Correct. sha256 of the plaintext the router presents, looked up by digest (`DynamicDnsService.java:251`); the plaintext is disclosed once by the mint action and never stored. The row's existence IS the dynamic flag, so revocation is a delete and a released hostname's token dies with it |
+| `ControllerIdentityModel.TOKEN` | `ControllerIdentityModel.java:27-28` | PLAIN | Correct, and NOT a credential despite the name: the lowercase alphanumeric namespace token every daemon resource name carries, on a single-row table. It authenticates nothing; encrypting or redacting it would only make container names unreadable in the admin |
+| `BackupTargetModel.SETTINGS` | `BackupTargetModel.java:42-46` | PLAIN (JSON `SchemaField`, `schemaFrom("kind")`) | Correct as data, load-bearing as SECURITY. It holds no credential of its own -- the ssh kind stores a `servers` record reference and a path (`SshTargetKind.java:39`, `:46`) and borrows that host's `ServerModel.IDENTITY_PRIVATE_KEY`, which IS encrypted. But this record now DECIDES WHERE the control-plane recovery archive lands, and that archive carries the field-encryption keyring in the clear. Write access to a backup-target row is therefore equivalent to exfiltration of every encrypted column, and it is not a "settings" decision guarded like one |
+| `InstanceBackupModel.REMOTE_KEY` | `InstanceBackupModel.java:63-64` | PLAIN | Correct. The committed object key on the target (the `.part` staging key is deliberately never recorded); it names an artifact, it does not open one. The payload itself is encrypted WHOLE under a keyring key -- `HIB1` magic, key id, 12-byte IV, AES-256-GCM with magic and key id as additional data (`BackupArchive.java:30-37`, `:192-223`) -- and `SUMMARY` is a deliberately non-sensitive manifest excerpt, with settings and secret variables living only inside the ciphertext |
+| `ExternalIdentityModel.CLAIMS` (zenit-auth) | `ExternalIdentityModel.java:29` | PLAIN | **CONDITIONALLY WRONG -- the 2026-08-02 "named unknown" is answered, and badly.** A plain `TextField`, written as `identity.claims().toString()` (`IdentityLoginService.java:84,104-109`). For an OIDC provider WITH a userinfo endpoint the map is the userinfo response and holds no tokens. For one WITHOUT, `OidcIdentityProvider.java:152-156` sets `claims = new LinkedHashMap<>(tokenResponse)` -- **the whole token response, `access_token` and any `refresh_token`/`id_token` included** -- and that is what lands in the column, in plaintext, as a Java `Map.toString()`. Proteus copies only the identity map (`ProteusIdentityProvider.java:143`) and is unaffected. This is a zenit-auth defect, not a hohenheim one: the right fix is to stop copying the token response into claims at all (a userinfo-less provider needs the id_token decoded, not the bearer stored), not to encrypt the column afterwards |
+
 ## Cannot be encrypted -- JSON sub-fields
 
-`Schema.refuseEncryptedJsonSubFields` (`Schema.java:154`) forbids it. Redaction
+`Schema.refuseEncryptedJsonSubFields` (`Schema.java:196`) forbids it. Redaction
 is the only lever until each gets a real column or a table-stored sub-schema.
 
 - `IncusVmKind.CLOUD_INIT` (`IncusVmKind.java:81`) -- SECRET as of `a2122de` (verified 2026-08-07). Cloud-init user-data routinely carries injected credentials; `.secret()` plus the FormSecrets mask/keep-on-blank/`__clear` lane is all this tier has.
-- `GitSourceSchema.WEBHOOK_SECRET` (`GitSourceSchema.java:42`) -- HMAC needs the raw value, so it cannot be hashed either.
+- `GitSourceSchema.WEBHOOK_SECRET` (`GitSourceSchema.java:63`) -- HMAC needs the raw value, so it cannot be hashed either.
 - `ProteusAuthProviderType` `access_key` (`ProteusAuthProviderType.java:42`).
 - `GitSourceSchema.BUILD_ENVIRONMENT_VARIABLES`, dev `registration_token`.
 - **`GitSourceSchema.REPOSITORY_URL` was PLAIN and was missed by every prior category list.** A private-repo clone URL routinely embeds `https://user:TOKEN@host/...`. The minimum fix -- `.secret()` -- LANDED 2026-08-02; the correct eventual fix remains a separate credential field so the URL itself can stay visible and editable.
 
 ## Fix by TIGHTENING hashing, not by encrypting
 
-`AccessListModel.BASIC_AUTH_PASS` (`AccessListModel.java:27`) hashes with argon2
+`AccessListModel.BASIC_AUTH_PASS` (`AccessListModel.java:35`) hashes with argon2
 when the value starts with `$argon2`, and otherwise USED TO fall back to a
 constant-time PLAINTEXT compare in `SiteDispatcher`. That legacy branch existed
 only for pre-hash values; nothing was deployed, so it was DELETED (2026-08-02):
@@ -240,8 +317,8 @@ argon2 branch for legacy hashed rows.
 ## Not columns at all -- state this honestly
 
 Comms DSNs (`CommsSettings.java:30,39,48`), `trusted_proxy_keys`
-(`HohenheimSettings.java:154`), the database password (`:441`) and the Proteus
-access key (`:611`) are SETTINGS, stored in `.dry` files. Field encryption cannot
+(`HohenheimSettings.java:157`), the database password (`:470`) and the Proteus
+access key (`:707`) are SETTINGS, stored in `.dry` files. Field encryption cannot
 reach them and should not claim to.
 
 **And the keyring default path is `settings/field-encryption.keys` -- the SAME
@@ -290,9 +367,13 @@ dominant defect shape.
    in any real repo the guard silently does nothing.
 
 Rotation itself is the best-built part (JVM mutex + cross-process `FileLock`,
-re-reads under the lock, regenerates on id collision) -- but there is **no
+re-reads under the lock, regenerates on id collision) -- ~~but there is **no
 re-encryption and no key retirement**, so rotation adds a key and never reduces
-exposure of anything already written. It is half a rotation story; say so.
+exposure of anything already written. It is half a rotation story; say so.~~
+**STRUCK 2026-08-11**, see the correction block at the top: `EncryptionRekey`
+supplies both missing halves, and `--rotate-encryption-key` deliberately does
+NOT bundle them (`ServerMain.java:348`) so the destructive step stays a separate,
+explicit decision.
 
 ## Sequencing, and why AAD goes FIRST
 
@@ -328,10 +409,27 @@ above are encrypted, that stops being true.
    keys), and is offline-by-design. Hohenheim wiring: `ControlPlaneBackups` +
    the role-free daily `BackupControlPlane` task (archives under
    `database.backup_path`/control-plane, `database.backup_retention` applies)
-   and the `--restore-control-plane <archive>` boot argument. HONEST LIMIT: the
+   and the `--restore-control-plane <archive>` boot argument. ~~HONEST LIMIT: the
    default destination is a LOCAL directory -- this protects against a lost or
    corrupt working copy, not against losing the host, and the archive holds the
-   master keys in the clear. Off-host transfer remains a deployment concern.
+   master keys in the clear. Off-host transfer remains a deployment concern.~~
+   **STRUCK 2026-08-11 -- inverted since the 2026-08-08 backup redesign
+   (`7201269a`).** There is no local destination to default to: the target is a
+   `BackupTargetModel` row named by `database.control_plane_backup_target`, a
+   setting declared with NO default (`HohenheimSettings.java:487-503`), and an
+   unset one throws "There is deliberately no local default"
+   (`ControlPlaneBackups.java:194-207`) so the nightly task fails loudly instead
+   of writing to the disk it exists to outlive. The local `.zrec` is staging
+   (`:64`, `:217-221`), removed in a `finally` (`:122`) that fires on upload
+   failure too; the uploaded artifact is re-hashed ON THE TARGET and deleted
+   there on mismatch (`:125-132`); retention prunes REMOTE keys (`:133`,
+   `:149-161`) using `database.backup_retention` (`:84`). What survives from the
+   struck text is its important half: the archive still holds the master keys in
+   the CLEAR, so the target is now a security boundary of its own -- read access
+   to it IS read access to every encrypted column. Restoring THROUGH the target
+   needs a readable control-plane database (it resolves a `backup_targets` row
+   and its `servers` host), so a total host loss is recovered by copying the
+   artifact down by hand and passing it to `--restore-control-plane <path>`.
    Also landed: `KeyringGuard` now ADVANCES the marker to the active key on
    every passing boot, so restoring a keyring from before the last rotation
    refuses instead of passing on the original key alone, and the refusal
@@ -368,10 +466,24 @@ stated at the call site.
   Linux.~~ ANSWERED: it does not. The AIDEV-NOTE at `EncryptionKeyring
   .loadOrCreate:94-100` records the empirical confirmation on OpenJDK 25, and
   the code no longer relies on it.
-- Whether an ACME account private key is persisted anywhere. No field exists on
-  `CertificateModel`; `AcmeService` was not fully read.
-- What `ExternalIdentityModel.CLAIMS` (zenit-auth) can contain. If IdP access or
-  refresh tokens land there, it joins the encrypt list.
-- The plan asserts `SiteModel` declares `ActivityPolicy.ALL`; a grep over
-  hohenheim's models finds no `ActivityPolicy` anywhere. `RevisionableBehaviour`
-  is confirmed at `SiteModel.java:112`.
+- ~~Whether an ACME account private key is persisted anywhere. No field exists on
+  `CertificateModel`; `AcmeService` was not fully read.~~ ANSWERED 2026-08-11,
+  and the question was MALFORMED: it needs no field of its own. Each account key
+  is a `CertificateModel` ROW with `provider = 'acme_account'`, stored in
+  `PRIVATE_KEY_PEM` (`AcmeService.loadOrCreateAccountKeyPair:971-1008`, written
+  at `:1001`) -- the same column as every leaf key, so it is already
+  `.secret().encrypted()` (`CertificateModel.java:58-59`) and already covered by
+  row 1. Nothing to add to the encrypt list.
+- ~~What `ExternalIdentityModel.CLAIMS` (zenit-auth) can contain. If IdP access or
+  refresh tokens land there, it joins the encrypt list.~~ ANSWERED 2026-08-11:
+  they DO land there, for an OIDC provider configured without a userinfo
+  endpoint. See its row in "Added 2026-08-11" above -- the fix belongs in
+  zenit-auth's provider, not in this column's declaration.
+- ~~The plan asserts `SiteModel` declares `ActivityPolicy.ALL`; a grep over
+  hohenheim's models finds no `ActivityPolicy` anywhere.~~ ANSWERED 2026-08-11:
+  the grep looked in the wrong place. Policies are not declared on the model,
+  they are REGISTERED -- `HohenheimSources.java:143` is
+  `ActivityLog.setPolicy(SiteModel.MODEL_ID, ActivityPolicy.ALL)`, with
+  `ActivityPolicy.NONE` registered beside it for the high-volume log-shaped
+  models (`:148-150`, `:156`). The plan was right. `RevisionableBehaviour` is
+  confirmed at `SiteModel.java:129-130` (drifted from the `:112` recorded here).
