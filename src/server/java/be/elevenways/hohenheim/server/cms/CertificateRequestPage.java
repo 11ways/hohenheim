@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -50,6 +51,9 @@ public final class CertificateRequestPage extends PanelPage {
             && new InternalDnsTxtPublisher().hasZones());
         vars.put("manualToken", "");
         vars.put("dnsRecords", List.of());
+        // Both are admin-panel routes; the page is an operator-only peer.
+        vars.put("startOverTarget", CmsRoutes.list("admin", this.slug()));
+        vars.put("certificatesTarget", CmsRoutes.list("admin", "certificates"));
         String manualToken = conduit.getQueryParam("manual");
         var proxy = ServerMain.getProxyServer();
         if (manualToken != null && proxy != null) {

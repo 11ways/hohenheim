@@ -67,14 +67,17 @@ public final class CmsSupport {
             .resolve(conduit.getLocales(), conduit.getMessageResolver());
     }
 
-    /** The hosting panel's slug during a cms dispatch (subpages render under /admin AND /manage). */
+    /**
+     * The hosting panel's slug during a cms dispatch (subpages render under /admin AND
+     * /manage).
+     *
+     * AIDEV-NOTE: this replaced a {@code panelBase} that returned {@code "/" + slug} and
+     * had ~20 call sites concatenating onto it. It is deliberately a SLUG and not a
+     * path: a slug is what {@code CmsRoutes} takes, so there is nothing to concatenate
+     * onto and the hand-built-URL failure mode cannot come back through this door.
+     */
     public static @NonNull String panelSlug(@NonNull Conduit conduit) {
         String slug = conduit.getParameter(CmsEndpoints.PANEL_PARAM);
         return slug != null && !slug.isBlank() ? slug : "admin";
-    }
-
-    /** The hosting panel's URL base, e.g. "/admin" or "/manage". */
-    public static @NonNull String panelBase(@NonNull Conduit conduit) {
-        return "/" + panelSlug(conduit);
     }
 }

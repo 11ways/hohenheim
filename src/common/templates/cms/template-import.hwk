@@ -5,6 +5,7 @@
 {% declare flashMessage: Microcopy = null %}
 {% declare catalogApps: List<String> = null %}
 {% declare catalogRevision: String = "" %}
+{% declare templatesTarget: RouteTarget %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
 {% block "main" %}
@@ -20,8 +21,7 @@
         <ul class="cms-catalog-apps">
             {% each catalogApps as appKey %}
                 <li>
-                    <form method="POST" action="/admin/instance-templates-import">
-                        {% csrf() %}
+                    <form use:Zenit.form={% Zenit.Endpoints.hohenheim.instance_templates_import %}>
                         <input type="hidden" name="catalog_app" value={% appKey %}>
                         <pl-button variant="secondary" size="sm" type="submit">{{ t("catalog_import_action", scope: "template_import", app: appKey) }}</pl-button>
                     </form>
@@ -30,8 +30,7 @@
         </ul>
     </pl-card-content></pl-card>
 
-    <form method="POST" action="/admin/instance-templates-import">
-        {% csrf() %}
+    <form use:Zenit.form={% Zenit.Endpoints.hohenheim.instance_templates_import %}>
         <pl-card><pl-card-content><zf-form-scope><div class="zf-entries">
             <pl-field>
                 <pl-label target="source">{{ t("source", scope: "template_import") }}</pl-label>
@@ -46,7 +45,7 @@
         </div></zf-form-scope></pl-card-content></pl-card>
         <div class="cms-form-actions">
             <pl-button variant="primary" type="submit">{{ t("import_action", scope: "template_import") }}</pl-button>
-            <a href="/admin/instance-templates">{{ t("cancel", scope: "instance_from_template") }}</a>
+            <a use:Zenit.route={% templatesTarget %}>{{ t("cancel", scope: "instance_from_template") }}</a>
         </div>
     </form>
 </section>

@@ -83,7 +83,7 @@ class InstanceAttentionTest {
         collector.accept(items);
         List<String> rendered = new ArrayList<>();
         for (AttentionItem item : items) {
-            rendered.add(item.severity() + " " + item.url());
+            rendered.add(item.severity() + " " + item.target().toUrl());
         }
         return rendered;
     }
@@ -299,7 +299,8 @@ class InstanceAttentionTest {
         collector.accept(items);
         List<String> rendered = new ArrayList<>();
         for (AttentionItem item : items) {
-            rendered.add(item.title().key() + " " + item.severity() + " " + item.url());
+            rendered.add(item.title().key() + " " + item.severity() + " "
+                + item.target().toUrl());
         }
         return rendered;
     }

@@ -11,6 +11,7 @@ import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
 import be.elevenways.zenit.cms.common.render.action.LinkActionState;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
@@ -23,6 +24,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.server.http.ReturnTarget;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -68,9 +70,9 @@ public final class InstanceOverviewPage implements RecordScopedPage<Row> {
         Integer instanceId = instance.get(InstanceModel.ID);
         String name = String.valueOf((Object) instance.get(InstanceModel.NAME));
         int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
-        String base = CmsSupport.panelBase(conduit);
-        String overviewUrl = base + "/" + this.resource.slug() + "/" + instanceId
-            + "/page/" + SLUG;
+        String panel = CmsSupport.panelSlug(conduit);
+        String overviewUrl = CmsRoutes.subpage(panel, this.resource.slug(), instanceId, SLUG)
+            .toUrl();
 
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, "instance_overview", name));
@@ -82,11 +84,12 @@ public final class InstanceOverviewPage implements RecordScopedPage<Row> {
         vars.put("installBadge", badgeOf(InstanceModel.INSTALL_STATE,
             instance.get(InstanceModel.INSTALL_STATE)));
         vars.put("hostName", ServerModel.nameOf(serverId));
-        vars.put("hostUrl", base + "/servers/" + serverId + "/page/" + ServerOverviewPage.SLUG);
+        vars.put("hostTarget", CmsRoutes.subpage(panel, "servers", serverId,
+            ServerOverviewPage.SLUG));
         vars.put("installError", blankable(instance.get(InstanceModel.INSTALL_ERROR)));
         vars.put("disk", diskOf(instance, serverId));
         vars.put("endpoints", endpointsOf(instanceId));
-        vars.put("actions", this.actionsOf(instance, accessContext, overviewUrl, base));
+        vars.put("actions", this.actionsOf(instance, accessContext, overviewUrl, panel));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
         vars.put("recordTabs", recordTabs(conduit));
@@ -174,13 +177,15 @@ public final class InstanceOverviewPage implements RecordScopedPage<Row> {
     private @NonNull InstanceActionsView actionsOf(@NonNull Row instance,
                                                    @NonNull AccessContext accessContext,
                                                    @NonNull String overviewUrl,
-                                                   @NonNull String base) {
+                                                   @NonNull String panel) {
         Object instanceId = instance.get(InstanceModel.ID);
-        String suffix = "?_return=" + Uri.encodeComponent(overviewUrl);
-        String actionBase = base + "/" + this.resource.slug() + "/" + instanceId + "/action/";
+        // AIDEV-NOTE: RowAction.Url is Uri-typed, so the typed target is rendered here
+        // rather than concatenated; _return rides ReturnTarget.bind, never "?_return=" + x.
         ActionStateTranslator.RowActionPresentation presentation =
             this.actions.translateRowActionsForList(this.resource.rowActions(), instance,
-                (actionId, row) -> new Uri(actionBase + actionId.getPath() + suffix),
+                (actionId, row) -> new Uri(ReturnTarget.bind(
+                    CmsRoutes.invokeRow(panel, this.resource.slug(), instanceId, actionId),
+                    overviewUrl).toUrl()),
                 accessContext);
         Map<String, InvokeActionState> invokes = new LinkedHashMap<>();
         for (InvokeActionState state : presentation.inlineInvokes()) {

@@ -608,7 +608,8 @@ public final class DockerReconciler {
                 .withFilter("scope", "attention_detail")
                 .withArg("count", names.size())
                 .withArg("names", listed);
-            items.add(new AttentionItem("warning", "cubes", title, detail, ""));
+            // No destination: a reconciler finding names a HOST, not a record page.
+            items.add(new AttentionItem("warning", "cubes", title, detail, null));
         });
     }
 }

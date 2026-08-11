@@ -1,15 +1,21 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.BoundEndpoint;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violation;
@@ -72,10 +78,8 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
         vars.put("instanceId", instanceId);
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("returnUrl", ReturnTarget.capture(conduit));
-        vars.put("actionUrl", "/instances/" + instanceId + "/files/action");
-        vars.put("downloadBase", "/instances/" + instanceId + "/files/download?path=");
-        vars.put("browseBase", CmsSupport.panelBase(conduit) + "/instances/" + instanceId
-            + "/page/" + SLUG + "?path=");
+        vars.put("actionTarget", HohenheimEndpoints.INSTANCE_FILE_ACTION
+            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
         vars.put("canWrite", HohenheimAccess.hasInstanceCapability(accessContext, instanceId,
             HohenheimAccess.FILES_WRITE));
         vars.put("maxFileBytes", InstanceFiles.maxFileBytes());
@@ -101,14 +105,18 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
                 Identifier.of("hohenheim", "cms/instance-files"), vars);
         }
 
+        String panel = CmsSupport.panelSlug(conduit);
         String requested = conduit.getQueryParam("path");
         String editing = conduit.getQueryParam("edit");
         try {
             InstanceFiles.Listing listing = files.list(instanceId, requested);
             vars.put("path", listing.path());
-            vars.put("volumes", listing.volumeRoots());
-            vars.put("crumbs", crumbsOf(listing));
-            vars.put("parentPath", parentWithin(listing));
+            vars.put("volumes", browseTargets(panel, instanceId, listing.volumeRoots()));
+            vars.put("crumbs", crumbsOf(panel, instanceId, listing));
+            String parent = parentWithin(listing);
+            vars.put("parentPath", parent);
+            vars.put("parentTarget", parent.isEmpty() ? null
+                : browseTarget(panel, instanceId, parent));
             List<Map<String, Object>> entries = new ArrayList<>();
             for (InstanceFiles.Entry entry : listing.entries()) {
                 Map<String, Object> row = new LinkedHashMap<>();
@@ -125,6 +133,11 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
                 row.put("managed", entry.managed());
                 row.put("editable", "FILE".equals(entry.kind()) && !entry.managed()
                     && entry.size() <= INLINE_EDIT_LIMIT);
+                row.put("browseTarget", browseTarget(panel, instanceId, entry.path()));
+                row.put("editTarget", editTarget(panel, instanceId, listing.path(), entry.path()));
+                row.put("downloadTarget", HohenheimEndpoints.INSTANCE_FILE_DOWNLOAD
+                    .with(HohenheimEndpoints.INSTANCE_ID, instanceId)
+                    .with(HohenheimParams.FILES_PATH, entry.path()));
                 entries.add(row);
             }
             vars.put("entries", entries);
@@ -139,28 +152,76 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-files"), vars);
     }
 
-    /** One crumb per path segment from the volume root down, each a browsable path. */
-    private static @NonNull List<Map<String, Object>> crumbsOf(InstanceFiles.@NonNull Listing listing) {
+    /** One crumb per path segment from the volume root down, each a browsable target. */
+    private static @NonNull List<Map<String, Object>> crumbsOf(@NonNull String panel,
+                                                               @NonNull Integer instanceId,
+                                                               InstanceFiles.@NonNull Listing listing) {
         List<Map<String, Object>> crumbs = new ArrayList<>();
         String root = rootOf(listing);
         StringBuilder current = new StringBuilder(root);
-        crumbs.add(crumb(root, root));
+        crumbs.add(crumb(panel, instanceId, root, root));
         String remainder = listing.path().substring(root.length());
         for (String segment : remainder.split("/")) {
             if (segment.isEmpty()) {
                 continue;
             }
             current.append('/').append(segment);
-            crumbs.add(crumb(segment, current.toString()));
+            crumbs.add(crumb(panel, instanceId, segment, current.toString()));
         }
         return crumbs;
     }
 
-    private static @NonNull Map<String, Object> crumb(@NonNull String label, @NonNull String path) {
+    private static @NonNull Map<String, Object> crumb(@NonNull String panel,
+                                                      @NonNull Integer instanceId,
+                                                      @NonNull String label,
+                                                      @NonNull String path) {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("label", label);
-        entry.put("path", path);
+        entry.put("target", browseTarget(panel, instanceId, path));
         return entry;
+    }
+
+    /** One {@code label}/{@code target} pair per volume root, for the volume breadcrumb. */
+    private static @NonNull List<Map<String, Object>> browseTargets(@NonNull String panel,
+                                                                    @NonNull Integer instanceId,
+                                                                    @NonNull List<String> roots) {
+        List<Map<String, Object>> volumes = new ArrayList<>();
+        for (String root : roots) {
+            volumes.add(crumb(panel, instanceId, root, root));
+        }
+        return volumes;
+    }
+
+    /**
+     * This tab, browsing one directory.
+     *
+     * AIDEV-NOTE: composed off CmsEndpoints rather than CmsRoutes.subpage because a CMS
+     * route PLUS a query parameter cannot be built from CmsRoutes -- its builders return
+     * the RouteTarget interface, which has no with(...).
+     */
+    private static @NonNull RouteTarget browseTarget(@NonNull String panel,
+                                                     @NonNull Integer instanceId,
+                                                     @NonNull String path) {
+        return subpageTarget(panel, instanceId).with(HohenheimParams.FILES_PATH, path);
+    }
+
+    /** This tab, browsing {@code directory} with {@code file} open in the inline editor. */
+    private static @NonNull RouteTarget editTarget(@NonNull String panel,
+                                                   @NonNull Integer instanceId,
+                                                   @NonNull String directory,
+                                                   @NonNull String file) {
+        return subpageTarget(panel, instanceId)
+            .with(HohenheimParams.FILES_PATH, directory)
+            .with(HohenheimParams.FILES_EDIT, file);
+    }
+
+    private static @NonNull BoundEndpoint<Map<String, Object>> subpageTarget(@NonNull String panel,
+                                                                            @NonNull Integer instanceId) {
+        return CmsEndpoints.RECORD_SUBPAGE
+            .with(CmsEndpoints.PANEL_PARAM, panel)
+            .with(CmsEndpoints.RESOURCE_PARAM, "instances")
+            .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
+            .with(CmsEndpoints.SUBPAGE_PARAM, SLUG);
     }
 
     /** The parent path, clamped at the volume root (never "" and never outside it). */

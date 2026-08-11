@@ -4,7 +4,8 @@
 {% declare instanceId: Integer %}
 {% declare instanceName: String %}
 {% declare devices: List %}
-{% declare basePath: String = "/admin" %}
+{% declare addDiskTarget: RouteTarget %}
+{% declare addNicTarget: RouteTarget %}
 {% declare canEdit: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
@@ -15,8 +16,8 @@
     <header class="cms-resource-list-header">
         <h1>{{ instanceName }}</h1>
         {% if canEdit %}
-        <pl-button variant="primary" href={% basePath + "/instance-devices/new?type=disk&instance_id=" + instanceId %} id="add-disk-link">{{ t("add_disk", scope: "instance_device") }}</pl-button>
-        <pl-button href={% basePath + "/instance-devices/new?type=nic&instance_id=" + instanceId %} id="add-nic-link">{{ t("add_nic", scope: "instance_device") }}</pl-button>
+        <pl-button variant="primary" use:Zenit.route={% addDiskTarget %} id="add-disk-link">{{ t("add_disk", scope: "instance_device") }}</pl-button>
+        <pl-button use:Zenit.route={% addNicTarget %} id="add-nic-link">{{ t("add_nic", scope: "instance_device") }}</pl-button>
         {% /if %}
     </header>
 
@@ -32,7 +33,7 @@
         <pl-table-body>
             {% each devices as index, device %}
             <pl-table-row>
-                <pl-table-cell>{% if canEdit %}<a href={% device.get("editUrl") %}>{{ device.get("name") }}</a>{% else %}{{ device.get("name") }}{% /if %}</pl-table-cell>
+                <pl-table-cell>{% if canEdit %}<a use:Zenit.route={% device.get("editTarget") %}>{{ device.get("name") }}</a>{% else %}{{ device.get("name") }}{% /if %}</pl-table-cell>
                 <pl-table-cell>
                     {% if device.get("disk") == true %}
                     <pl-badge variant={% "default" %}>{{ t("disk", scope: "instance_device") }}</pl-badge>

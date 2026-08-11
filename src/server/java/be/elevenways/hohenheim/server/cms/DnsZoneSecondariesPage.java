@@ -1,16 +1,20 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -51,7 +55,8 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
             Map<String, Object> entry = new HashMap<>();
             entry.put("peerName", peer != null ? peer.get(DnsPeerModel.NAME) : "(deleted peer)");
             entry.put("transferHost", peer != null ? peer.get(DnsPeerModel.TRANSFER_HOST) : "");
-            entry.put("editUrl", "/admin/dns-zone-peers/" + link.get(DnsZonePeerModel.ID));
+            entry.put("editTarget", CmsRoutes.detail("admin", "dns-zone-peers",
+                link.get(DnsZonePeerModel.ID)));
             links.add(entry);
         }
 
@@ -61,6 +66,12 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
         vars.put("origin", zone.get(DnsZoneModel.ORIGIN));
         vars.put("zoneId", zoneId);
         vars.put("links", links);
+        // Create form + prefill query parameter: composed off CmsEndpoints, since
+        // CmsRoutes.create returns the RouteTarget interface (no with(...)).
+        vars.put("attachPeerTarget", CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, "admin")
+            .with(CmsEndpoints.RESOURCE_PARAM, "dns-zone-peers")
+            .with(HohenheimParams.ZONE_ID_PREFILL, zoneId));
         vars.put("recordTabs", recordTabs(conduit));
 
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-secondaries"), vars);

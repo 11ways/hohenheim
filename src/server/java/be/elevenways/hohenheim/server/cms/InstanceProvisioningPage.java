@@ -4,8 +4,11 @@ import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -14,6 +17,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -42,7 +46,7 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row instance) {
         Integer instanceId = instance.get(InstanceModel.ID);
-        String basePath = CmsSupport.panelBase(conduit);
+        String panel = CmsSupport.panelSlug(conduit);
 
         Object templateId = instance.get(InstanceModel.TEMPLATE_ID);
         Row template = templateId instanceof Integer id
@@ -68,16 +72,16 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
         // actually offers -- ask the panel, never assume a slug exists -- so /manage renders
         // the same rows read-only and a later decision to delegate the editor lights them up
         // with no change here.
-        Panel panel = PanelRegistry.getBySlug(CmsSupport.panelSlug(conduit));
-        boolean editable = panel != null && panel.peerBySlug(FILE_RESOURCE_SLUG) != null;
+        Panel hostingPanel = PanelRegistry.getBySlug(panel);
+        boolean editable = hostingPanel != null && hostingPanel.peerBySlug(FILE_RESOURCE_SLUG) != null;
 
         List<Map<String, Object>> files = new ArrayList<>();
         for (Row file : Models.get(InstanceFileModel.class).findByInstanceId(instanceId)) {
             Map<String, Object> entry = new HashMap<>();
             entry.put("path", file.get(InstanceFileModel.CONTAINER_PATH));
             entry.put("mode", file.get(InstanceFileModel.MODE));
-            entry.put("editUrl", editable
-                ? basePath + "/" + FILE_RESOURCE_SLUG + "/" + file.get(InstanceFileModel.ID) : "");
+            entry.put("editTarget", editable
+                ? CmsRoutes.detail(panel, FILE_RESOURCE_SLUG, file.get(InstanceFileModel.ID)) : null);
             files.add(entry);
         }
 
@@ -95,8 +99,14 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
         vars.put("installError", installError == null ? "" : installError);
         vars.put("variables", variables);
         vars.put("files", files);
-        vars.put("addFileUrl", editable
-            ? basePath + "/" + FILE_RESOURCE_SLUG + "/new?instance_id=" + instanceId : "");
+        // Create form + prefill query parameter: composed off CmsEndpoints, since
+        // CmsRoutes.create returns the RouteTarget interface (no with(...)).
+        RouteTarget addFileTarget = editable ? CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, panel)
+            .with(CmsEndpoints.RESOURCE_PARAM, FILE_RESOURCE_SLUG)
+            .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId) : null;
+        vars.put("addFileTarget", addFileTarget);
+        vars.put("canAddFile", addFileTarget != null);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-provisioning"), vars);
     }

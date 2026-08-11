@@ -8,6 +8,8 @@
 {% declare internalDnsAvailable: Boolean = false %}
 {% declare manualToken: String = "" %}
 {% declare dnsRecords: List<Map<String, Object>> %}
+{% declare startOverTarget: RouteTarget %}
+{% declare certificatesTarget: RouteTarget %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
@@ -41,16 +43,15 @@
             </pl-table>
         </pl-card-content>
     </pl-card>
-    <form method="POST" action="/admin/certificates-request">
-        {% csrf() %}<input type="hidden" name="manual_token" value={% manualToken %}>
+    <form use:Zenit.form={% Zenit.Endpoints.hohenheim.certificates_request %}>
+        <input type="hidden" name="manual_token" value={% manualToken %}>
         <div class="cms-form-actions">
             <pl-button variant="primary" type="submit">{{ t("verify_dns", scope: "certificate_request") }}</pl-button>
-            <a href="/admin/certificates-request">{{ t("start_over", scope: "certificate_request") }}</a>
+            <a use:Zenit.route={% startOverTarget %}>{{ t("start_over", scope: "certificate_request") }}</a>
         </div>
     </form>
     {% else %}
-    <form method="POST" action="/admin/certificates-request">
-        {% csrf() %}
+    <form use:Zenit.form={% Zenit.Endpoints.hohenheim.certificates_request %}>
         <pl-card><pl-card-content><zf-form-scope><div class="zf-entries">
             <pl-field>
                 <pl-label target="nice_name">{{ t("name", scope: "certificate_request") }}</pl-label>
@@ -85,7 +86,7 @@
         </div></zf-form-scope></pl-card-content></pl-card>
         <div class="cms-form-actions">
             <pl-button variant="primary" type="submit">{{ t("request", scope: "certificate_request") }}</pl-button>
-            <a href="/admin/certificates">{{ t("cancel", scope: "certificate_request") }}</a>
+            <a use:Zenit.route={% certificatesTarget %}>{{ t("cancel", scope: "certificate_request") }}</a>
         </div>
     </form>
     {% /if %}

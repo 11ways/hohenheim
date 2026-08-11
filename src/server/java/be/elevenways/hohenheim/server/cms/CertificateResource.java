@@ -10,6 +10,7 @@ import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -197,7 +198,7 @@ public class CertificateResource extends RowResource {
         actions.add(HeaderAction.Url.builder(Identifier.of("hohenheim", "request_letsencrypt"))
             .label(Microcopy.of("request_le").withFilter("scope", "certificate"))
             .icon(Icon.of("lock"))
-            .url(new Uri("/admin/certificates-request"))
+            .url(new Uri(CmsRoutes.list("admin", "certificates-request").toUrl()))
             .build());
         return actions;
     }

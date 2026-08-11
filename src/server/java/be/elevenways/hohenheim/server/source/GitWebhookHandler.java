@@ -41,7 +41,8 @@ import java.util.Map;
  */
 public class GitWebhookHandler {
 
-    private static final String PREFIX = "/api/webhooks/git/";
+    /** The route this handler answers -- public so a page can DISPLAY it without re-typing it. */
+    public static final String PREFIX = "/api/webhooks/git/";
     private static final HttpString X_HUB_SIGNATURE_256 = new HttpString("X-Hub-Signature-256");
     private static final HttpString X_GITLAB_TOKEN = new HttpString("X-Gitlab-Token");
     private static final HttpString X_GITEA_SIGNATURE = new HttpString("X-Gitea-Signature");

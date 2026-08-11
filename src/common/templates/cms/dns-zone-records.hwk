@@ -4,6 +4,7 @@
 {% declare zoneId: Integer %}
 {% declare origin: String %}
 {% declare records: List<DnsRecordView> %}
+{% declare addRecordTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -12,7 +13,7 @@
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header">
         <h1>{{ origin }}</h1>
-        <pl-button variant="primary" href={% "/admin/dns-records/new?zone_id=" + zoneId %} id="add-record-link">{{ t("add_record", scope: "dns_zone") }}</pl-button>
+        <pl-button variant="primary" use:Zenit.route={% addRecordTarget %} id="add-record-link">{{ t("add_record", scope: "dns_zone") }}</pl-button>
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
@@ -29,7 +30,7 @@
         <pl-table-body>
             {% each records as index, record %}
             <pl-table-row>
-                <pl-table-cell><a href={% record.editUrl %}><code>{{ record.name }}</code></a></pl-table-cell>
+                <pl-table-cell><a use:Zenit.route={% record.editTarget %}><code>{{ record.name }}</code></a></pl-table-cell>
                 <pl-table-cell><pl-badge variant={% "secondary" %}>{{ record.type }}</pl-badge></pl-table-cell>
                 <pl-table-cell>{{ record.ttl }}</pl-table-cell>
                 <pl-table-cell><code>{{ record.value }}</code></pl-table-cell>

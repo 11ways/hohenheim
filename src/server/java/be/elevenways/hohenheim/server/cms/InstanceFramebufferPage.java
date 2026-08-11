@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.IncusVmKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -52,6 +53,11 @@ public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
         vars.put("instanceId", instanceId);
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status)
             || InstanceModel.STATUS_STARTING.equals(status));
+        // AIDEV-NOTE: WebSocketEndpoint is not a RouteTarget and has no with(...), and the
+        // framebuffer element takes a wsUrl STRING anyway, so the socket route is RENDERED
+        // from its own declaration -- never concatenated.
+        vars.put("framebufferWsUrl", HohenheimEndpoints.VM_FRAMEBUFFER.toUrl(
+            Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
         vars.put("returnUrl", ReturnTarget.capture(conduit));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(

@@ -7,6 +7,7 @@
 {% declare dsRecord: String = "" %}
 {% declare error: String = "" %}
 {% declare imported: String = "" %}
+{% declare importTarget: RouteTarget %}
 {% declare skipped: String = "" %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
@@ -46,8 +47,7 @@
         </pl-card-content>
     </pl-card>
 
-    <form method="POST" action={% "/admin/dns-zones/" + zoneId + "/zonefile" %}>
-        {% csrf() %}
+    <form use:Zenit.form={% importTarget %}>
         <pl-card>
             <pl-card-header>
                 <pl-card-title>{{ t("import_zone_file", scope: "dns_zone") }}</pl-card-title>

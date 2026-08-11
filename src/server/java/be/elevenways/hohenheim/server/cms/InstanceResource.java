@@ -18,6 +18,7 @@ import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -169,8 +170,11 @@ public class InstanceResource extends RowResource {
             .inlineInRow(false)
             .description(Microcopy.of("migrate_hint").withFilter("scope", "instance"))
             .visibleFor((row, ctx) -> HohenheimAccess.isAdmin(ctx))
-            .url(row -> new Uri("/admin/" + this.slug() + "/"
-                + row.get(InstanceModel.ID) + "/page/" + InstanceMigratePage.SLUG))
+            // RowAction.Url is Uri-typed, so the typed target is rendered here. The panel
+            // slug is the literal "admin" this action already produced (a row action has
+            // no conduit to ask), so the URL does not move.
+            .url(row -> new Uri(CmsRoutes.subpage("admin", this.slug(),
+                row.get(InstanceModel.ID), InstanceMigratePage.SLUG).toUrl()))
             .build();
     }
 
@@ -181,8 +185,10 @@ public class InstanceResource extends RowResource {
      */
     @Override
     public @NonNull String rowUrl(@NonNull Row row) {
-        return "/admin/" + this.slug() + "/" + row.get(InstanceModel.ID)
-            + "/page/" + InstanceOverviewPage.SLUG;
+        // Resource.rowUrl is String-typed (a zenit-cms boundary), so the typed target is
+        // rendered here rather than concatenated.
+        return CmsRoutes.subpage("admin", this.slug(), row.get(InstanceModel.ID),
+            InstanceOverviewPage.SLUG).toUrl();
     }
 
     @Override

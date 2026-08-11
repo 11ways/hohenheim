@@ -1,5 +1,5 @@
 {% declare title: String %}
-{% declare pageUrl: String %}
+{% declare pageTarget: RouteTarget %}
 {% declare ip: String = "" %}
 {% declare error: String = "" %}
 {% declare result: Map<String, Object> %}
@@ -19,7 +19,7 @@
     <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
     <pl-card>
         <pl-card-content>
-            <form method="get" action={% pageUrl %}>
+            <form use:Zenit.route={% pageTarget %} method="get">
                 <pl-field><pl-label target="spamservice-reputation-ip">{{ t("ip", scope: "spamservice_reputation") }}</pl-label><pl-input inputId="spamservice-reputation-ip" name="ip" value={% ip %} required></pl-input></pl-field>
                 <pl-button type="submit" variant="primary"><pl-icon name="magnifying-glass"></pl-icon>{{ t("lookup", scope: "spamservice_reputation") }}</pl-button>
             </form>

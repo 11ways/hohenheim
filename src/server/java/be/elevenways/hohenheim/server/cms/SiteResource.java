@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.types.DevNamespaceSiteType;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -549,8 +550,9 @@ public class SiteResource extends RowResource {
             domainModel.save(domainClone);
         }
 
+        // CmsActionResult.redirect is Uri-typed, so the typed target renders here.
         return CmsActionResult.redirect(new be.elevenways.protoblast.common.http.Uri(
-            "/admin/sites/" + newSiteId));
+            CmsRoutes.detail("admin", "sites", newSiteId).toUrl()));
     }
 
     @Override

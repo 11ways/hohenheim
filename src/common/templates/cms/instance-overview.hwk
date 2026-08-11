@@ -9,7 +9,7 @@
 {% declare kindBadge: EnumBadgeState = null %}
 {% declare installBadge: EnumBadgeState = null %}
 {% declare hostName: String %}
-{% declare hostUrl: String %}
+{% declare hostTarget: RouteTarget %}
 {% declare installError: String = "" %}
 {% declare disk: InstanceDiskView %}
 {% declare endpoints: List<InstanceEndpointView> %}
@@ -39,7 +39,7 @@
             </div>
             <p class="hh-overview-host">
                 {{ t("host", scope: "instance_overview") }}
-                <a href={% hostUrl %}>{{ hostName }}</a>
+                <a use:Zenit.route={% hostTarget %}>{{ hostName }}</a>
             </p>
             {% if installError != "" %}
             <p class="hh-last-error">

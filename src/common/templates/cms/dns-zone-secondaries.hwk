@@ -3,6 +3,7 @@
 {% declare origin: String %}
 {% declare zoneId: Integer %}
 {% declare links: List %}
+{% declare attachPeerTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -11,7 +12,7 @@
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header">
         <h1>{{ origin }}</h1>
-        <pl-button variant="primary" href={% "/admin/dns-zone-peers/new?zone_id=" + zoneId %} id="attach-secondary-link">{{ t("attach", scope: "dns_secondaries") }}</pl-button>
+        <pl-button variant="primary" use:Zenit.route={% attachPeerTarget %} id="attach-secondary-link">{{ t("attach", scope: "dns_secondaries") }}</pl-button>
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
@@ -25,7 +26,7 @@
         <pl-table-body>
             {% each links as index, link %}
             <pl-table-row>
-                <pl-table-cell><a href={% link.get("editUrl") %}>{{ link.get("peerName") }}</a></pl-table-cell>
+                <pl-table-cell><a use:Zenit.route={% link.get("editTarget") %}>{{ link.get("peerName") }}</a></pl-table-cell>
                 <pl-table-cell><code>{{ link.get("transferHost") }}</code></pl-table-cell>
             </pl-table-row>
             {% /each %}

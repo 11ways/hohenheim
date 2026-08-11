@@ -1,6 +1,10 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.zenit.common.routing.RouteTarget;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.InstanceFromTemplatePage;
@@ -34,6 +38,11 @@ public final class InstanceTemplateHandlers {
     /** Background installs run here; the durable install_state is the progress record. */
     private static final JobRunner INSTALL_RUNNER = JobRunner.create("hh-template-install");
 
+    /** Template administration is an operator lane; only the create redirect is panel-relative. */
+    private static final String ADMIN = "admin";
+
+    private static final String TEMPLATES_SLUG = "instance-templates";
+
     private InstanceTemplateHandlers() {
     }
 
@@ -42,7 +51,7 @@ public final class InstanceTemplateHandlers {
             Integer templateId = conduit.getParameter(HohenheimEndpoints.TEMPLATE_ID);
             Row template = Models.get(InstanceTemplateModel.class).findById(templateId);
             if (template == null) {
-                return redirect("/admin/instance-templates");
+                return redirect(CmsRoutes.list(ADMIN, TEMPLATES_SLUG));
             }
             String document = new TemplatePortability().export(template);
             String name = String.valueOf((Object) template.get(InstanceTemplateModel.NAME));
@@ -62,7 +71,7 @@ public final class InstanceTemplateHandlers {
                     int templateId = CommunityScripts.importApp(catalogApp);
                     ActivityLog.record(Models.get(InstanceTemplateModel.class), templateId,
                         "imported", "vendored catalog: " + catalogApp);
-                    return redirect("/admin/instance-templates/" + templateId);
+                    return redirect(CmsRoutes.detail(ADMIN, TEMPLATES_SLUG, templateId));
                 } catch (Violations violations) {
                     return importErrorText(conduit, firstMessage(conduit, violations));
                 }
@@ -76,7 +85,7 @@ public final class InstanceTemplateHandlers {
                 int templateId = new TemplatePortability().importDocument(document, source);
                 ActivityLog.record(Models.get(InstanceTemplateModel.class), templateId,
                     "imported", source.isEmpty() ? "paste" : source);
-                return redirect("/admin/instance-templates/" + templateId);
+                return redirect(CmsRoutes.detail(ADMIN, TEMPLATES_SLUG, templateId));
             } catch (Violations violations) {
                 return importErrorText(conduit, firstMessage(conduit, violations));
             }
@@ -87,10 +96,10 @@ public final class InstanceTemplateHandlers {
             AccessContext ctx = RecordSourceGate.accessContextOf(conduit);
             // Panel-relative, because this ONE endpoint now serves /admin and /manage:
             // a tenant refused (or redirected) into /admin would only meet a 403.
-            String panelBase = HohenheimAccess.isAdmin(ctx) ? "/admin" : "/manage";
+            String panel = HohenheimAccess.isAdmin(ctx) ? ADMIN : "manage";
             Row template = InstanceTemplates.templateFrom(form);
             if (template == null) {
-                return redirect(panelBase + "/instance-templates");
+                return redirect(CmsRoutes.list(panel, TEMPLATES_SLUG));
             }
 
             String name = InstanceTemplates.submittedString(form, "name");
@@ -115,7 +124,7 @@ public final class InstanceTemplateHandlers {
                         }
                     });
                 }
-                return redirect(panelBase + "/instances/" + instanceId);
+                return redirect(CmsRoutes.detail(panel, "instances", instanceId));
             } catch (Violations violations) {
                 // Typed refusal: re-render the form with the operator's raw values and
                 // the per-field violations -- the standard form contract, not a toast.
@@ -143,8 +152,12 @@ public final class InstanceTemplateHandlers {
     }
 
     private static ActionResult<Object> importErrorText(Conduit conduit, String message) {
-        return redirect("/admin/instance-templates-import?error="
-            + URLEncoder.encode(message, StandardCharsets.UTF_8));
+        // A CMS route PLUS a query parameter: composed off CmsEndpoints, since CmsRoutes
+        // returns the RouteTarget interface (no with(...)).
+        return redirect(CmsEndpoints.LIST
+            .with(CmsEndpoints.PANEL_PARAM, ADMIN)
+            .with(CmsEndpoints.RESOURCE_PARAM, "instance-templates-import")
+            .with(HohenheimParams.ERROR_TEXT, message));
     }
 
     private static String submittedString(Map<String, Object> values, String name) {
@@ -165,8 +178,9 @@ public final class InstanceTemplateHandlers {
     }
 
     @SuppressWarnings("unchecked")
-    private static ActionResult<Object> redirect(String url) {
-        return (ActionResult<Object>) (ActionResult<?>) new RedirectResult(url);
+    /** THE redirect of this class: the URL comes from a typed route target. */
+    private static ActionResult<Object> redirect(@NonNull RouteTarget target) {
+        return (ActionResult<Object>) (ActionResult<?>) new RedirectResult(target.toUrl());
     }
 
     @SuppressWarnings("unchecked")

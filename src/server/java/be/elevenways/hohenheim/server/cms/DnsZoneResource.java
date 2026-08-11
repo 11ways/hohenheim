@@ -10,6 +10,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -111,7 +112,10 @@ public final class DnsZoneResource extends RowResource {
     }
 
     private static @NonNull String recordsUrl(@NonNull Row row) {
-        return "/admin/dns-zones/" + row.get(DnsZoneModel.ID) + "/page/records";
+        // rowUrl / RowAction.Url are String- and Uri-typed boundaries, so the typed
+        // target is rendered here rather than concatenated.
+        return CmsRoutes.subpage("admin", "dns-zones", row.get(DnsZoneModel.ID),
+            "records").toUrl();
     }
 
     @Override

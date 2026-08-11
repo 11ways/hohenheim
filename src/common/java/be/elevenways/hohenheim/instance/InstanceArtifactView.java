@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.instance;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -13,7 +14,7 @@ import java.util.List;
  *
  * {@code invokes} carries THAT resource's own row actions for THIS row and viewer,
  * already permission- and visibleFor-filtered, so restore keeps the typed confirmation
- * and the operator-only refusal it declares on its own resource. {@code recordUrl} points
+ * and the operator-only refusal it declares on its own resource. {@code recordTarget} points
  * at the generated record page, which stays the one place a row is deleted -- this tab is
  * a scoped VIEW of that resource, never a second UI over the same records.
  *
@@ -27,7 +28,7 @@ public record InstanceArtifactView(
     long sizeBytes,
     @Nullable String createdAtIso,
     @NonNull String error,
-    @NonNull String recordUrl,
+    @NonNull RouteTarget recordTarget,
     @NonNull List<InvokeActionState> invokes
 ) {
 }

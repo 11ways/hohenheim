@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.server.instance.CommunityScripts;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -36,6 +37,7 @@ public final class InstanceTemplateImportPage extends PanelPage {
         vars.put("error", error != null ? error : "");
         vars.put("catalogApps", CommunityScripts.catalogApps());
         vars.put("catalogRevision", CommunityScripts.catalogRevision());
+        vars.put("templatesTarget", CmsRoutes.list("admin", "instance-templates"));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/template-import"), vars);
     }
 }

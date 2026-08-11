@@ -9,7 +9,7 @@
 {% declare proclogs: List %}
 {% declare selectedLogText: String = "" %}
 {% declare selectedLogTitle: String = "" %}
-{% declare basePath: String = "/admin" %}
+{% declare startTarget: RouteTarget %}
 {% declare returnUrl: String = "" %}
 {% declare error: String = "" %}
 {% declare recordTabs: List<RecordTabState> %}
@@ -67,12 +67,12 @@
                             {#- _return: the framework return target (zenit ReturnTarget) --
                                 the handler redirects back to whichever panel rendered
                                 this page; forged values fall back to /admin. -#}
-                            <form method="POST" action={% "/sites/" + siteId + "/processes/" + proc.get("pid") + "/isolate" %} style="display:inline">
-                                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                            <form use:Zenit.form={% proc.get("isolateTarget") %} style="display:inline">
+                                <input type="hidden" name="_return" value={% returnUrl %}>
                                 <pl-button variant={% "outline" %} size={% "sm" %} type={% "submit" %}>{% if proc.get("isolated") == true %}{{ t("unisolate", scope: "site_processes") }}{% else %}{{ t("isolate", scope: "site_processes") }}{% /if %}</pl-button>
                             </form>
-                            <form method="POST" action={% "/sites/" + siteId + "/processes/" + proc.get("pid") + "/kill" %} style="display:inline" use:CmsConfirm.destructive={% t("kill_confirm", scope: "site_processes") %}>
-                                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+                            <form use:Zenit.form={% proc.get("killTarget") %} style="display:inline" use:CmsConfirm.destructive={% t("kill_confirm", scope: "site_processes") %}>
+                                <input type="hidden" name="_return" value={% returnUrl %}>
                                 <pl-button variant={% "destructive" %} size={% "sm" %} type={% "submit" %}>{{ t("kill", scope: "site_processes") }}</pl-button>
                             </form>
                         </pl-table-cell>
@@ -83,8 +83,8 @@
             {% else %}
             <p>{{ t("none_running", scope: "site_processes") }}</p>
             {% /if %}
-            <form method="POST" action={% "/sites/" + siteId + "/processes/start" %}>
-                {% csrf() %}<input type="hidden" name="_return" value={% returnUrl %}>
+            <form use:Zenit.form={% startTarget %}>
+                <input type="hidden" name="_return" value={% returnUrl %}>
                 <pl-button variant={% "outline" %} type={% "submit" %}>{{ t("start", scope: "site_processes") }}</pl-button>
             </form>
         </pl-card-content>
@@ -100,7 +100,7 @@
             <pl-terminal
                 rows={% 24{:} %}
                 cols={% 100{:} %}
-                wsUrl={% "/ws/terminal/" + siteId + "/" + processes.get(0).get("pid") %}>
+                wsUrl={% processes.get(0).get("terminalWsUrl") %}>
             </pl-terminal>
         </pl-card-content>
     </pl-card>
@@ -127,7 +127,7 @@
                 <pl-table-body>
                     {% each proclogs as index, log %}
                     <pl-table-row>
-                        <pl-table-cell><a href={% basePath + "/sites/" + siteId + "/page/processes?log=" + log.get("id") %}>PID {{ log.get("pid") }}</a></pl-table-cell>
+                        <pl-table-cell><a use:Zenit.route={% log.get("target") %}>PID {{ log.get("pid") }}</a></pl-table-cell>
                         <pl-table-cell>{{ log.get("lineCount") }}</pl-table-cell>
                         <pl-table-cell>{{ log.get("createdAt") }}</pl-table-cell>
                     </pl-table-row>

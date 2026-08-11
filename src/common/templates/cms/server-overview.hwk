@@ -302,7 +302,7 @@
                 <pl-table-body>
                     {% each workloads as workload %}
                     <pl-table-row>
-                        <pl-table-cell><a href={% workload.url %}>{{ workload.name }}</a></pl-table-cell>
+                        <pl-table-cell><a use:Zenit.route={% workload.target %}>{{ workload.name }}</a></pl-table-cell>
                         <pl-table-cell>
                             {% if workload.tier == "instance" %}
                             {{ t("tier_instance", scope: "server_overview") }}
