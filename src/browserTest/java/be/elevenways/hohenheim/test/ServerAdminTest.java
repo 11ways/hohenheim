@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ServerAdminTest extends HohenheimTestBase {
 
-    /** The seeded local host renders in the list, the sidebar and its read-only detail overview. */
+    /** The seeded local host renders in the list, the sidebar and its Overview tab. */
     @Test
     @Order(1)
     void serverInventoryRendersTheLocalHost() {
@@ -40,13 +40,16 @@ class ServerAdminTest extends HohenheimTestBase {
             .where(ServerModel.NAME.eq("local")).first();
         assertThat(local).isNotNull();
 
-        navigateToApp("/admin/servers/" + local.get(ServerModel.ID));
+        // The row-title target is the bespoke Overview page: structured state, no form.
+        navigateToApp("/admin/servers/" + local.get(ServerModel.ID) + "/page/overview");
         waitForHydration();
 
-        var overview = page.locator("pl-field[data-path='live_overview']");
-        assertThat(overview.locator(".zf-field-readonly").count()).isEqualTo(1);
-        assertThat(overview.locator(".zf-field-readonly").innerText()).contains("Docker");
-        assertThat(overview.locator("input, textarea").count()).isZero();
+        assertThat(page.locator(".hh-server-overview").count())
+            .as("the overview page renders").isEqualTo(1);
+        assertThat(page.locator(".hh-host-state[data-host-state]").count())
+            .as("with the structured state cell in its header").isEqualTo(1);
+        assertThat(page.locator("[data-capacity-state]").count())
+            .as("and an explicit capacity state").isEqualTo(1);
     }
 
     /** SSH-target round trip, argument-injection refusal and the implicit local host's guards. */

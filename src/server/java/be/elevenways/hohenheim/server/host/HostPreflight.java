@@ -410,10 +410,10 @@ public final class HostPreflight {
     }
 
     /** The stored key holding the per-check map; every entry carries its own {@code at}. */
-    static final String CHECKS_KEY = "checks";
+    public static final String CHECKS_KEY = "checks";
 
     /** The stored key holding per-FACT provenance: fact name to ISO instant. */
-    static final String FACTS_AT_KEY = "facts_at";
+    public static final String FACTS_AT_KEY = "facts_at";
 
     /**
      * The status one named check carried in the host's LAST STORED report, or null when

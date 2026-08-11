@@ -301,6 +301,10 @@
     {
       "text": "Waarde",
       "scope": "instance_provisioning"
+    },
+    {
+      "text": "Waarde",
+      "scope": "server_overview"
     }
   ],
   "proteus_endpoint": [
@@ -621,10 +625,6 @@
       "scope": "help"
     }
   ],
-  "live_overview": {
-    "text": "Live Docker-status",
-    "scope": "field"
-  },
   "minimum_processes": [
     {
       "text": "Minimum processen",
@@ -1575,6 +1575,10 @@
     {
       "text": "Status",
       "scope": "stack_deployments"
+    },
+    {
+      "text": "Status",
+      "scope": "server_overview"
     }
   ],
   "stored_log": [
@@ -3685,10 +3689,16 @@
     "text": "WebSocket-authenticatie geweigerd",
     "scope": "security_event_type"
   },
-  "overview": {
-    "text": "Spamservice-overzicht",
-    "scope": "spamservice"
-  },
+  "overview": [
+    {
+      "text": "Spamservice-overzicht",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Overzicht",
+      "scope": "server"
+    }
+  ],
   "installation": {
     "text": "Installatie",
     "scope": "spamservice"
@@ -3969,10 +3979,16 @@
     "text": "Laatst gezien",
     "scope": "spamservice_event"
   },
-  "detail": {
-    "text": "Laatste detail",
-    "scope": "spamservice_event"
-  },
+  "detail": [
+    {
+      "text": "Laatste detail",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "Detail",
+      "scope": "server_overview"
+    }
+  ],
   "from": {
     "text": "Vanaf",
     "scope": "spamservice_event"
@@ -4007,10 +4023,16 @@
     "text": "Spam",
     "scope": "spamservice_sample"
   },
-  "confirmed": {
-    "text": "Bevestigd",
-    "scope": "spamservice_sample"
-  },
+  "confirmed": [
+    {
+      "text": "Bevestigd",
+      "scope": "spamservice_sample"
+    },
+    {
+      "text": "Bevestigd",
+      "scope": "server_overview"
+    }
+  ],
   "flags": {
     "text": "Vlaggen",
     "scope": "spamservice_sample"
@@ -4371,6 +4393,10 @@
     {
       "text": "Status",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Toestand",
+      "scope": "server_overview"
     }
   ],
   "add_file": [
@@ -4845,18 +4871,6 @@
     "text": "Host {$name} is afgegrendeld; geen nieuwe plaatsing",
     "scope": "server"
   },
-  "host_error_state": {
-    "text": "Probe mislukt ({$kind}) - {$admission}",
-    "scope": "server"
-  },
-  "host_never_probed": {
-    "text": "Nooit geprobed - {$admission}",
-    "scope": "server"
-  },
-  "host_stored_state": {
-    "text": "{$docker} - {$admission}",
-    "scope": "server"
-  },
   "blocked": {
     "text": "Geblokkeerd",
     "scope": "host_admission"
@@ -5009,54 +5023,10 @@
     "text": "Een host toevoegen geeft Hohenheim controle over zijn Docker-daemon, wat gelijkstaat aan root op die machine: het kan elke container starten, elk pad lezen dat een container koppelt, en het ontvangt elke inloggegeven die Hohenheim daar in werklasten injecteert. Voeg alleen machines toe die van jou zijn. Installeer na het opslaan de getoonde publieke sleutel op de host, scan de hostsleutel en bevestig de vingerafdruk buiten dit kanaal om.",
     "scope": "server"
   },
-  "host_key_local": {
-    "text": "De lokale daemon wordt via een Unix-socket bereikt; er komt geen SSH-hostsleutel aan te pas.",
-    "scope": "server"
-  },
-  "host_key_none": {
-    "text": "Niet vastgepind. Scan de hostsleutel voordat deze host uberhaupt bereikt kan worden.",
-    "scope": "server"
-  },
-  "host_key_confirmed": {
-    "text": "{$fingerprint} (bevestigd)",
-    "scope": "server"
-  },
-  "host_key_unconfirmed": {
-    "text": "{$fingerprint} (NIET bevestigd -- vergelijk ze buiten dit kanaal om en bevestig ze)",
-    "scope": "server"
-  },
-  "host_key_mismatch_state": {
-    "text": "KOMT NIET OVEREEN. Vastgepind {$pinned}, de host biedt nu {$offered} aan. Verbindingen worden geweigerd en de host is geblokkeerd tot je bewust opnieuw vastpint.",
-    "scope": "server"
-  },
-  "identity_missing": {
-    "text": "Nog geen clientsleutel.",
-    "scope": "server"
-  },
   "trust_notice": {
     "text": "Wat je toekent",
     "scope": "field"
   },
-  "identity_public_key": [
-    {
-      "text": "Publieke sleutel van Hohenheim",
-      "scope": "field"
-    },
-    {
-      "text": "Zet deze regel in ~/.ssh/authorized_keys van het account op de host. Ze is uniek voor deze host, dus intrekken raakt niets anders.",
-      "scope": "help"
-    }
-  ],
-  "host_key_state": [
-    {
-      "text": "Hostsleutel",
-      "scope": "field"
-    },
-    {
-      "text": "De vingerafdruk van de SSH-hostsleutel die Hohenheim afdwingt bij elke verbinding met deze machine.",
-      "scope": "help"
-    }
-  ],
   "host_key_mismatch": {
     "text": "{$name} bood een andere SSH-hostsleutel aan (vastgepind {$pinned}, aangeboden {$offered}). Er is niets opnieuw vastgepind en de host is geblokkeerd; verifieer buiten dit kanaal om voor je de nieuwe sleutel overneemt.",
     "scope": "violations"
@@ -5792,10 +5762,16 @@
     "text": "Label",
     "scope": "template_contents"
   },
-  "required": {
-    "text": "Verplicht",
-    "scope": "template_contents"
-  },
+  "required": [
+    {
+      "text": "Verplicht",
+      "scope": "template_contents"
+    },
+    {
+      "text": "Vereist",
+      "scope": "server_overview"
+    }
+  ],
   "default": {
     "text": "Standaard",
     "scope": "template_contents"
@@ -6800,10 +6776,6 @@
     "text": "Een host toevoegen geeft Hohenheim controle over zijn Incus-daemon, wat gelijkstaat aan root op die machine: het kan elke container of VM starten en alles lezen wat ze koppelen. Voeg alleen machines toe die van jou zijn. Scan na het opslaan het servercertificaat, bevestig de vingerafdruk tegen incus info op de host zelf, en schrijf het clientcertificaat in (vertrouwenstoken of incus config trust).",
     "scope": "server"
   },
-  "host_daemon_unavailable": {
-    "text": "{$daemon} niet beschikbaar",
-    "scope": "server"
-  },
   "incus_url_format": {
     "text": "De Incus-URL moet https://host[:poort] of unix://[pad] zijn.",
     "scope": "violations"
@@ -7140,79 +7112,9 @@
     "text": "Nieuw clientcertificaat gegenereerd voor {$name}. Schrijf het in op de daemon.",
     "scope": "server"
   },
-  "incus_cert_none": {
-    "text": "Niet vastgepind. Scan het servercertificaat voordat deze daemon uberhaupt bereikt kan worden.",
-    "scope": "server"
-  },
-  "incus_cert_confirmed": {
-    "text": "{$fingerprint} (bevestigd)",
-    "scope": "server"
-  },
-  "incus_cert_unconfirmed": {
-    "text": "{$fingerprint} (NIET bevestigd -- vergelijk met incus info op de host en bevestig)",
-    "scope": "server"
-  },
-  "incus_client_missing": {
-    "text": "Nog geen clientcertificaat.",
-    "scope": "server"
-  },
-  "incus_cert_state": [
-    {
-      "text": "Servercertificaat",
-      "scope": "field"
-    },
-    {
-      "text": "De vingerafdruk van het Incus-servercertificaat die Hohenheim afdwingt bij elke https-verbinding met deze daemon.",
-      "scope": "help"
-    }
-  ],
-  "incus_client_cert": [
-    {
-      "text": "Clientcertificaat van Hohenheim",
-      "scope": "field"
-    },
-    {
-      "text": "Schrijf dit certificaat in op de daemon (incus config trust add-certificate). Het is uniek voor deze host, dus intrekken raakt niets anders.",
-      "scope": "help"
-    }
-  ],
   "incus_cert_mismatch": {
     "text": "{$name} bood een ander Incus-servercertificaat aan (vastgepind {$pinned}, aangeboden {$offered}). Er is niets opnieuw vastgepind en de host is geblokkeerd; verifieer buiten dit kanaal om voor je het nieuwe certificaat overneemt.",
     "scope": "violations"
-  },
-  "ssh_lane_none": {
-    "text": "Geen SSH-beheerkanaal vastgepind. Zet een SSH-doel, scan de hostsleutel en bevestig ze om er een te openen; het veld Kernelisolatie hieronder zegt wat deze host nodig heeft.",
-    "scope": "server"
-  },
-  "kernel_isolation_state": [
-    {
-      "text": "Kernelisolatie",
-      "scope": "field"
-    },
-    {
-      "text": "Of Hohenheim de nftables van deze host zelf kan lezen om te verifiëren dat de isolatie van een workload echt in de kernel staat, in plaats van te vertrouwen op wat de daemon meldt.",
-      "scope": "help"
-    }
-  ],
-  "kernel_isolation_proven": {
-    "text": "Geverifieerd in de kernel: de laatste preflight deed een nftables-transactie op deze host zelf.",
-    "scope": "server"
-  },
-  "kernel_isolation_unproven": {
-    "text": "NIET geverifieerd. Er is een kanaal aangegeven, maar de laatste preflight bewees niet dat het de kernel van deze host bereikt. Draai preflight; er komt geen nieuwe tenant-workload bij tot dat lukt.",
-    "scope": "server"
-  },
-  "kernel_isolation_missing": {
-    "text": "GEEN kanaal. Deze host aanvaardt tenant-workloads maar niets kan zijn kernel lezen, dus er komt geen nieuwe tenant-workload bij. Geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet de houding op trusted-only.",
-    "scope": "server"
-  },
-  "kernel_isolation_optional": {
-    "text": "Niet vereist: de trusted-only houding van deze host aanvaardt geen tenant-workloads, dus hier hoeft niets in de kernel geverifieerd te worden.",
-    "scope": "server"
-  },
-  "host_quarantined_state": {
-    "text": "IN QUARANTAINE. Deze machine sprak een vastgepinde identiteit tegen: {$reason}. Elk kanaal wordt geweigerd en er komt niets nieuws bij tot je bewust opnieuw pint.",
-    "scope": "server"
   },
   "framebuffer": {
     "text": "Framebuffer",
@@ -7464,6 +7366,10 @@
     {
       "text": "{$name} - Domeinen",
       "scope": "site_domains"
+    },
+    {
+      "text": "{$name} - Overzicht",
+      "scope": "server_overview"
     }
   ],
   "stored_log_heading": {
@@ -7574,22 +7480,6 @@
     "text": "Databankquotum bereikt: {$used} van {$limit} in gebruik",
     "scope": "violations"
   },
-  "host_quarantined_status": {
-    "text": "IN QUARANTAINE - {$admission}",
-    "scope": "server"
-  },
-  "host_contact_lapsed_status": {
-    "text": "{$docker} - {$minutes} min stil - {$admission}",
-    "scope": "server"
-  },
-  "host_local_socket": {
-    "text": " Dit record spreekt de EIGEN daemon van de controller aan via {$socket}, dus elk oordeel hierboven gaat over de machine waarop hohenheim draait, hoe deze host ook heet.",
-    "scope": "server"
-  },
-  "kernel_isolation_proven_at": {
-    "text": "Geverifieerd in de kernel: een preflight heeft om {$when} een transactie op de eigen nftables van deze host uitgevoerd.",
-    "scope": "server"
-  },
   "host_contact_lapsed": {
     "text": "Host '{$name}' heeft {$minutes} minuten geleden voor het laatst geantwoord, voorbij de contactgrens; er wordt geen nieuwe workload geplaatst tot hij weer antwoordt",
     "scope": "violations"
@@ -7615,5 +7505,237 @@
   "destroy_confirm": {
     "text": "Dit vernietigt de draaiende previewomgeving en geeft de hostnaam vrij.",
     "scope": "preview_deployment"
+  },
+  "probe_now": {
+    "text": "Nu peilen",
+    "scope": "server"
+  },
+  "probe_now_hint": {
+    "text": "Bevraag de daemon eenmalig en sla het resultaat op. Paginaweergaven peilen nooit.",
+    "scope": "server"
+  },
+  "host_probe_ok": {
+    "text": "{$name}: {$summary}",
+    "scope": "server"
+  },
+  "state_quarantined": {
+    "text": "IN QUARANTAINE",
+    "scope": "server"
+  },
+  "state_error": {
+    "text": "peiling mislukt ({$kind})",
+    "scope": "server"
+  },
+  "state_silent": {
+    "text": "stil",
+    "scope": "server"
+  },
+  "state_never_probed": {
+    "text": "nooit gepeild",
+    "scope": "server"
+  },
+  "host_probe_failed": {
+    "text": "Peiling van {$name} mislukt: {$kind}",
+    "scope": "violations"
+  },
+  "compute": {
+    "text": "Compute",
+    "scope": "nav"
+  },
+  "quarantined_title": {
+    "text": "Deze host staat in quarantaine",
+    "scope": "server_overview"
+  },
+  "quarantine_clears_by_repin": {
+    "text": "Verifieer de machine buiten deze verbinding om en pin daarna de identiteit die ze nu aanbiedt opnieuw vast. Opnieuw vastpinnen IS de enige manier waarop een quarantaine verdwijnt; een andere knop bestaat bewust niet.",
+    "scope": "server_overview"
+  },
+  "last_error": {
+    "text": "Laatste fout",
+    "scope": "server_overview"
+  },
+  "trust_ssh": {
+    "text": "SSH-hostsleutel",
+    "scope": "server_overview"
+  },
+  "trust_incus": {
+    "text": "Incus-servercertificaat",
+    "scope": "server_overview"
+  },
+  "pinned_fingerprint": {
+    "text": "Vastgepinde vingerafdruk",
+    "scope": "server_overview"
+  },
+  "not_pinned": {
+    "text": "Niet vastgepind",
+    "scope": "server_overview"
+  },
+  "unconfirmed": {
+    "text": "Niet bevestigd",
+    "scope": "server_overview"
+  },
+  "pinned_at": {
+    "text": "Vastgepind",
+    "scope": "server_overview"
+  },
+  "offered_mismatch": {
+    "text": "De machine biedt nu {$fingerprint} aan. Verbindingen falen gesloten tot een operator opnieuw vastpint.",
+    "scope": "server_overview"
+  },
+  "client_key": {
+    "text": "Publieke sleutel van Hohenheim",
+    "scope": "server_overview"
+  },
+  "client_cert": {
+    "text": "Clientcertificaat van Hohenheim",
+    "scope": "server_overview"
+  },
+  "client_missing": {
+    "text": "Nog geen clientreferentie aangemaakt.",
+    "scope": "server_overview"
+  },
+  "copy": {
+    "text": "Kopieer",
+    "scope": "server_overview"
+  },
+  "kernel_isolation": {
+    "text": "Kernelisolatie",
+    "scope": "server_overview"
+  },
+  "kernel_not_required": {
+    "text": "Niet vereist (alleen-vertrouwd houding)",
+    "scope": "server_overview"
+  },
+  "kernel_no_lane": {
+    "text": "Geen kanaal om de kernel van deze host te lezen",
+    "scope": "server_overview"
+  },
+  "kernel_proven": {
+    "text": "Bewezen in de kernel",
+    "scope": "server_overview"
+  },
+  "kernel_unproven": {
+    "text": "NIET bewezen",
+    "scope": "server_overview"
+  },
+  "kernel_endpoint_note": {
+    "text": "Dit oordeel gaat over de daemon van de controller zelf ({$socket})",
+    "scope": "server_overview"
+  },
+  "preflight_report": {
+    "text": "Preflightrapport",
+    "scope": "server_overview"
+  },
+  "last_preflight": {
+    "text": "Laatste preflight",
+    "scope": "server_overview"
+  },
+  "verdict_passed": {
+    "text": "geslaagd",
+    "scope": "server_overview"
+  },
+  "verdict_failed": {
+    "text": "mislukt",
+    "scope": "server_overview"
+  },
+  "never_preflighted": {
+    "text": "Nooit gepreflight",
+    "scope": "server_overview"
+  },
+  "never_preflighted_hint": {
+    "text": "Voer preflight uit om deze host te meten; plaatsing weigert ongemeten hosts.",
+    "scope": "server_overview"
+  },
+  "check": {
+    "text": "Controle",
+    "scope": "server_overview"
+  },
+  "advisory": {
+    "text": "Advies",
+    "scope": "server_overview"
+  },
+  "checked_at": {
+    "text": "Gecontroleerd",
+    "scope": "server_overview"
+  },
+  "facts": {
+    "text": "Gemeten feiten",
+    "scope": "server_overview"
+  },
+  "fact": {
+    "text": "Feit",
+    "scope": "server_overview"
+  },
+  "measured_at": {
+    "text": "Gemeten",
+    "scope": "server_overview"
+  },
+  "capacity": {
+    "text": "Capaciteit",
+    "scope": "server_overview"
+  },
+  "booked": {
+    "text": "Geboekt",
+    "scope": "server_overview"
+  },
+  "budget": {
+    "text": "Budget",
+    "scope": "server_overview"
+  },
+  "bookable": {
+    "text": "Boekbaar",
+    "scope": "server_overview"
+  },
+  "process_booked": {
+    "text": "Beheerde processen",
+    "scope": "server_overview"
+  },
+  "unmeasured": {
+    "text": "Ongemeten",
+    "scope": "server_overview"
+  },
+  "unmeasured_body": {
+    "text": "Er is geen bruikbare geheugenmeting, dus deze host heeft geen plaatsingsbudget. Voer preflight uit om te meten; een lege balk zou hier onterecht als een lege host lezen.",
+    "scope": "server_overview"
+  },
+  "evidence_stale": {
+    "text": "Bewijs te oud: de geheugenmeting is ouder dan de versheidsgrens van {$hours} uur, dus plaatsing weigert deze host tot preflight opnieuw meet. Laatst gemeten",
+    "scope": "server_overview"
+  },
+  "workloads": {
+    "text": "Workloads",
+    "scope": "server_overview"
+  },
+  "workloads_hint": {
+    "text": "Alles op deze host: dezelfde records die cordon, drain en verwijderen blokkeren.",
+    "scope": "server_overview"
+  },
+  "workloads_empty": {
+    "text": "Er draait niets op deze host",
+    "scope": "server_overview"
+  },
+  "workload_name": {
+    "text": "Naam",
+    "scope": "server_overview"
+  },
+  "tier": {
+    "text": "Laag",
+    "scope": "server_overview"
+  },
+  "booked_memory": {
+    "text": "Geboekt geheugen",
+    "scope": "server_overview"
+  },
+  "tier_instance": {
+    "text": "Instantie",
+    "scope": "server_overview"
+  },
+  "tier_stack": {
+    "text": "Stack",
+    "scope": "server_overview"
+  },
+  "tier_database": {
+    "text": "Database",
+    "scope": "server_overview"
   }
 }

@@ -1,0 +1,22 @@
+{#- Structured host-list status cell: a status dot, a short state word and a live
+    relative time -- never a fully-resolved sentence. Quarantine wins and is LOUD. -#}
+{% declare value: HostStatusCell %}
+{% if value != null %}
+<span class="hh-host-state" data-host-state={% value.state %}>
+    <pl-status-dot status={% value.dot %}></pl-status-dot>
+    {% if value.state == "quarantined" %}
+    <strong class="hh-host-state-quarantined">{{ t("state_quarantined", scope: "server") }}</strong>
+    {% elseif value.state == "error" %}
+    <span>{{ t("state_error", scope: "server", kind: value.errorKind) }}</span>
+    {% elseif value.state == "silent" %}
+    <span>{{ value.daemon }} {{ t("state_silent", scope: "server") }}</span>
+    {% elseif value.state == "never_probed" %}
+    <span>{{ t("state_never_probed", scope: "server") }}</span>
+    {% else %}
+    <span>{{ value.daemon }}</span>
+    {% /if %}
+    {% if value.lastSeenIso != null %}
+    <pl-relative-time datetime={% value.lastSeenIso %} wording={% value.wording %} title={% value.lastSeenIso %}></pl-relative-time>
+    {% /if %}
+</span>
+{% /if %}

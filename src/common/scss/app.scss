@@ -210,6 +210,153 @@
         overflow-x: auto;
     }
 
+    // Host Overview tab (server records)
+    .hh-server-overview {
+        .hh-overview-card {
+            margin-bottom: var(--pl-space-md);
+        }
+    }
+
+    .hh-quarantine-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--pl-space-md);
+        border: 2px solid var(--pl-color-destructive);
+        border-radius: var(--pl-radius-md);
+        background: color-mix(in srgb, var(--pl-color-destructive) 8%, transparent);
+        color: var(--pl-color-destructive);
+        padding: var(--pl-space-md);
+        margin-bottom: var(--pl-space-md);
+
+        .hh-quarantine-body p {
+            margin: var(--pl-space-2xs, 0.125rem) 0 0;
+        }
+
+        .hh-quarantine-actions {
+            margin-left: auto;
+            flex: none;
+        }
+    }
+
+    .hh-host-state {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--pl-space-xs);
+
+        .hh-host-state-quarantined {
+            color: var(--pl-color-destructive);
+        }
+    }
+
+    .hh-state-badges {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--pl-space-sm);
+        margin-bottom: var(--pl-space-sm);
+    }
+
+    .hh-state-actions,
+    .hh-trust-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--pl-space-xs);
+        margin-top: var(--pl-space-sm);
+    }
+
+    .hh-trust-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--pl-space-xs);
+
+        code {
+            overflow-wrap: anywhere;
+        }
+    }
+
+    .hh-trust-label {
+        font-weight: var(--pl-font-weight-medium);
+        font-size: var(--pl-font-size-sm);
+    }
+
+    .hh-trust-mismatch {
+        color: var(--pl-color-destructive);
+        display: flex;
+        align-items: baseline;
+        gap: var(--pl-space-xs);
+    }
+
+    .hh-trust-client {
+        margin-top: var(--pl-space-sm);
+    }
+
+    .hh-trust-material {
+        font-family: var(--pl-font-family-mono, monospace);
+        font-size: var(--pl-font-size-xs);
+        background: var(--pl-color-surface-muted, var(--pl-color-surface));
+        border: 1px solid var(--pl-color-border);
+        border-radius: var(--pl-radius-md);
+        padding: var(--pl-space-sm);
+        overflow-x: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        max-height: 12rem;
+        overflow-y: auto;
+    }
+
+    .hh-check-detail {
+        overflow-wrap: anywhere;
+        max-width: 32rem;
+    }
+
+    .hh-kernel-state {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--pl-space-xs);
+        margin-bottom: var(--pl-space-sm);
+    }
+
+    .hh-facts-title {
+        margin: var(--pl-space-md) 0 var(--pl-space-xs);
+        font-size: var(--pl-font-size-sm);
+        font-weight: var(--pl-font-weight-medium);
+    }
+
+    .hh-capacity-numbers {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: var(--pl-space-2xs, 0.125rem) var(--pl-space-md);
+        margin: var(--pl-space-sm) 0 0;
+
+        dt {
+            font-weight: var(--pl-font-weight-medium);
+            font-size: var(--pl-font-size-sm);
+        }
+
+        dd {
+            margin: 0;
+        }
+    }
+
+    .hh-capacity-unmeasured,
+    .hh-capacity-when,
+    .hh-quarantine-when {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--pl-space-xs);
+    }
+
+    .hh-last-error {
+        display: flex;
+        align-items: baseline;
+        gap: var(--pl-space-xs);
+        color: var(--pl-color-destructive);
+        font-size: var(--pl-font-size-sm);
+    }
+
     // Zone-file export (DNS zone Zone-file tab)
     .hh-zone-file {
         font-family: var(--pl-font-family-mono, monospace);
