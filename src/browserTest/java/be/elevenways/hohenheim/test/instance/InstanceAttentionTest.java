@@ -83,7 +83,7 @@ class InstanceAttentionTest {
         collector.accept(items);
         List<String> rendered = new ArrayList<>();
         for (AttentionItem item : items) {
-            rendered.add(item.severity() + " " + item.target().toUrl());
+            rendered.add(item.severity() + " " + targetUrl(item));
         }
         return rendered;
     }
@@ -300,8 +300,17 @@ class InstanceAttentionTest {
         List<String> rendered = new ArrayList<>();
         for (AttentionItem item : items) {
             rendered.add(item.title().key() + " " + item.severity() + " "
-                + item.target().toUrl());
+                + targetUrl(item));
         }
         return rendered;
+    }
+
+    /**
+     * The item's destination as a path, blank when it has none -- the contract the
+     * removed {@code AttentionItem.url()} had, kept so this projection still pins URL
+     * LITERALS rather than rebuilding them from the same builder the code uses.
+     */
+    private static String targetUrl(AttentionItem item) {
+        return item.target() == null ? "" : item.target().toUrl();
     }
 }
