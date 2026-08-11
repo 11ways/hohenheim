@@ -117,6 +117,10 @@ public final class ManageInstanceResource extends InstanceResource {
             new InstanceConsolePage(), new InstanceFramebufferPage(),
             new InstanceProvisioningPage(),
             new InstanceFilesPage(), new InstanceStatsPage(),
+            // The DELEGATED artifact resources: ManageInstanceBackupResource declares no
+            // row actions, which is how restore-to-new stays operator-only here too.
+            new InstanceSnapshotsPage(new ManageInstanceSnapshotResource()),
+            new InstanceBackupsPage(new ManageInstanceBackupResource()),
             new InstanceSchedulesPage(), new InstanceDevicesPage()));
         pages.addAll(RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));
         return pages;

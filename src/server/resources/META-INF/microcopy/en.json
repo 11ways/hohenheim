@@ -1169,6 +1169,10 @@
     {
       "text": "No extra devices",
       "scope": "instance_device"
+    },
+    {
+      "text": "Nothing captured yet",
+      "scope": "instance_artifacts"
     }
   ],
   "empty_description": [
@@ -1583,6 +1587,10 @@
     {
       "text": "Status",
       "scope": "server_overview"
+    },
+    {
+      "text": "Status",
+      "scope": "instance_artifacts"
     }
   ],
   "stored_log": [
@@ -3141,6 +3149,10 @@
     {
       "text": "Add a peer to replicate this zone to it over authenticated AXFR.",
       "scope": "dns_secondaries"
+    },
+    {
+      "text": "Use the instance's own snapshot or backup action to capture one.",
+      "scope": "instance_artifacts"
     }
   ],
   "registration_token": [
@@ -4757,10 +4769,16 @@
     "text": "Docker container",
     "scope": "instance_kind"
   },
-  "created": {
-    "text": "Created",
-    "scope": "instance_status"
-  },
+  "created": [
+    {
+      "text": "Created",
+      "scope": "instance_status"
+    },
+    {
+      "text": "Created",
+      "scope": "instance_artifacts"
+    }
+  ],
   "error": {
     "text": "Error",
     "scope": "instance_status"
@@ -5351,10 +5369,16 @@
     "text": "Instance",
     "scope": "field"
   },
-  "note": {
-    "text": "Note",
-    "scope": "field"
-  },
+  "note": [
+    {
+      "text": "Note",
+      "scope": "field"
+    },
+    {
+      "text": "Note",
+      "scope": "instance_artifacts"
+    }
+  ],
   "directory": {
     "text": "Directory",
     "scope": "field"
@@ -6292,14 +6316,26 @@
     "text": "Stats",
     "scope": "instance"
   },
-  "size": {
-    "text": "Size",
-    "scope": "instance_files"
-  },
-  "actions": {
-    "text": "Actions",
-    "scope": "instance_files"
-  },
+  "size": [
+    {
+      "text": "Size",
+      "scope": "instance_files"
+    },
+    {
+      "text": "Size",
+      "scope": "instance_artifacts"
+    }
+  ],
+  "actions": [
+    {
+      "text": "Actions",
+      "scope": "instance_files"
+    },
+    {
+      "text": "Actions",
+      "scope": "instance_artifacts"
+    }
+  ],
   "up": {
     "text": "Up one level",
     "scope": "instance_files"
@@ -7016,6 +7052,10 @@
     {
       "text": "Root disk",
       "scope": "instance_overview"
+    },
+    {
+      "text": "Root disk",
+      "scope": "instance_stats"
     }
   ],
   "nic": {
@@ -7426,6 +7466,14 @@
     {
       "text": "{$name} - Overview",
       "scope": "instance_overview"
+    },
+    {
+      "text": "{$name} - Snapshots",
+      "scope": "instance_snapshots"
+    },
+    {
+      "text": "{$name} - Backups",
+      "scope": "instance_backups"
     }
   ],
   "stored_log_heading": {
@@ -7900,14 +7948,26 @@
     "text": "Observed",
     "scope": "instance_overview"
   },
-  "not_measured": {
-    "text": "Not measured",
-    "scope": "instance_overview"
-  },
-  "not_measured_body": {
-    "text": "The {$runtime} runtime enforces no root-disk quota and reports no usage, so nothing here is rationed and nothing measures it. This is the declared contract, not a failed reading.",
-    "scope": "instance_overview"
-  },
+  "not_measured": [
+    {
+      "text": "Not measured",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "Not measured",
+      "scope": "instance_stats"
+    }
+  ],
+  "not_measured_body": [
+    {
+      "text": "The {$runtime} runtime enforces no root-disk quota and reports no usage, so nothing here is rationed and nothing measures it. This is the declared contract, not a failed reading.",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "The {$runtime} runtime enforces no root-disk quota and reports no usage, so nothing here is rationed and nothing measures it.",
+      "scope": "instance_stats"
+    }
+  ],
   "endpoint": {
     "text": "Public endpoint",
     "scope": "instance_overview"
@@ -7943,5 +8003,21 @@
   "no_endpoint_hint": {
     "text": "This instance holds no port claim, so nothing outside its network reaches it directly.",
     "scope": "instance_overview"
+  },
+  "unsupported": {
+    "text": "Not available for this runtime yet",
+    "scope": "instance_files"
+  },
+  "unsupported_hint": {
+    "text": "Only the Docker driver exposes a file lane. This workload runs on a runtime that has none, so there is nothing to browse here yet.",
+    "scope": "instance_files"
+  },
+  "live_only": {
+    "text": "These readings are live only: nothing is stored, so a chart starts empty and fills in while this page is open. The root-disk figure below is the one persisted observation, and only a runtime that enforces a root quota produces it.",
+    "scope": "instance_stats"
+  },
+  "disk_description": {
+    "text": "The stored observation, not a live reading.",
+    "scope": "instance_stats"
   }
 }

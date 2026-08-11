@@ -1,0 +1,74 @@
+{#- Snapshots / Backups tab on an instance: the SAME rows the panel-wide resource lists,
+    narrowed to this record. Every button is that resource's own row action rendered
+    through the standard invoke partial (so its confirmation, permission gate and
+    operator-only refusal come along), and the row title links to the generated record
+    page -- this is a scoped view, never a second UI over the same records. -#}
+{% declare title: String %}
+{% declare instanceName: String %}
+{% declare instanceId: Integer %}
+{% declare artifacts: List<InstanceArtifactView> %}
+{% declare timeWording: RelativeTimeWording = null %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page hh-instance-artifacts">
+    <header class="cms-resource-list-header">
+        <h1>{{ instanceName }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    <pl-card class="hh-overview-card">
+        <pl-card-content>
+            {% if artifacts %}
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("created", scope: "instance_artifacts") }}</pl-table-head>
+                    <pl-table-head>{{ t("status", scope: "instance_artifacts") }}</pl-table-head>
+                    <pl-table-head>{{ t("note", scope: "instance_artifacts") }}</pl-table-head>
+                    <pl-table-head>{{ t("size", scope: "instance_artifacts") }}</pl-table-head>
+                    <pl-table-head>{{ t("actions", scope: "instance_artifacts") }}</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each artifacts as artifact %}
+                    <pl-table-row data-artifact-id={% artifact.id %}>
+                        <pl-table-cell>
+                            <a href={% artifact.recordUrl %}>
+                                {% if artifact.createdAtIso != null %}
+                                <pl-relative-time datetime={% artifact.createdAtIso %} wording={% timeWording %} title={% artifact.createdAtIso %}></pl-relative-time>
+                                {% else %}
+                                {{ artifact.id }}
+                                {% /if %}
+                            </a>
+                        </pl-table-cell>
+                        <pl-table-cell>
+                            {% render "zenitcms:cell/enum-badge" var:value=artifact.status %}
+                            {% if artifact.error != "" %}
+                            <p class="hh-artifact-error" data-artifact-error="1">{{ artifact.error }}</p>
+                            {% /if %}
+                        </pl-table-cell>
+                        <pl-table-cell>{{ artifact.note }}</pl-table-cell>
+                        <pl-table-cell>{{ artifact.sizeBytes }} B</pl-table-cell>
+                        <pl-table-cell>
+                            <div class="hh-state-actions">
+                                {% each artifact.invokes as invoke %}
+                                {% render "zenitcms:action/invoke" var:action=invoke %}
+                                {% /each %}
+                            </div>
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <pl-empty-state icon="box-archive">
+                <pl-empty-state-title>{{ t("empty", scope: "instance_artifacts") }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ t("empty_hint", scope: "instance_artifacts") }}</pl-empty-state-description>
+            </pl-empty-state>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+</section>
+{% /block %}

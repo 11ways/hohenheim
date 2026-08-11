@@ -196,6 +196,8 @@ public class InstanceResource extends RowResource {
             // on the record (InstanceExecPage.visibleFor); the admin panel gate is not
             // the only thing standing between a delegate and an arbitrary command.
             new InstanceExecPage(),
+            new InstanceSnapshotsPage(new InstanceSnapshotResource()),
+            new InstanceBackupsPage(new InstanceBackupResource()),
             new InstanceSchedulesPage(), new InstanceDevicesPage(),
             // Operator-only: the page hides AND 404s itself for a delegate, and the
             // /manage resource never lists it at all.
