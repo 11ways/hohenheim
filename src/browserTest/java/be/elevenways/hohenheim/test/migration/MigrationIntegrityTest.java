@@ -3,10 +3,13 @@ package be.elevenways.hohenheim.test.migration;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.migration.HohenheimMigration;
 import be.elevenways.hohenheim.migration.M017_CreateServers;
+import be.elevenways.hohenheim.migration.M026_MigrateAuditLogToActivity;
 import be.elevenways.hohenheim.migration.M042_CreateStacks;
 import be.elevenways.hohenheim.migration.M043_StackUniqueKeys;
 import be.elevenways.hohenheim.migration.M051_PortLedgerAndHostFks;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
+import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
@@ -23,7 +26,10 @@ import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -455,6 +461,134 @@ class MigrationIntegrityTest {
             .as("every hohenheim migration must declare HohenheimMigration.STREAM; a second "
                 + "stream fragments out-of-order drift detection")
             .isEmpty();
+    }
+
+    /**
+     * The two declared supersessions (starfleet, upgraded 2026-08-10) re-derived instead
+     * of trusted: M026's superseded digest is the CURRENT operations under the token-era
+     * grammar (97f5788..a47a4d3 stamped "ifnotexists" into add_column signatures), so the
+     * operations themselves are provably identical; M043's is a replica of the pre-heal
+     * revision, whose add_index lines are asserted IDENTICAL to today's -- the schema the
+     * two revisions create is the same, only assertUnique became the rename heal.
+     */
+    @Test
+    void declaredSupersededChecksumsAreTheAppliedRevisionsDigests() throws Exception {
+        // 1. M026: reconstruct the token-era digest from the CURRENT canonical text.
+        M026_MigrateAuditLogToActivity m026 = new M026_MigrateAuditLogToActivity();
+        StringBuilder tokenEra = new StringBuilder();
+        for (String line : MigrationChecksum.canonicalText(m026).split("\n", -1)) {
+            if (tokenEra.length() > 0) {
+                tokenEra.append('\n');
+            }
+            // Both add_column operations carry ifNotExists, which the token-era grammar
+            // stamped as a trailing signature part.
+            tokenEra.append(line.startsWith("add_column:") ? line + "|ifnotexists" : line);
+        }
+        assertThat(m026.getSupersededChecksums())
+            .as("M026's declared superseded checksum must be the token-era digest of the"
+                + " CURRENT operations -- anything else means the body itself changed")
+            .containsExactly(sha256Hex(tokenEra.toString()));
+
+        // 2. M043: replica of the pre-heal revision (af6518e9~1).
+        Migration preHeal = new Migration("2026_07_27_000043", "Unique keys for stack services and files") {
+            @Override
+            public void up(MigrationBuilder schema) {
+                schema.assertUnique("stack_services", "stack_id", "name");
+                schema.alterTable("stack_services", table -> table.unique("stack_id", "name"));
+                schema.assertUnique("stack_files", "stack_service_id", "container_path");
+                schema.alterTable("stack_files", table -> table.unique("stack_service_id", "container_path"));
+            }
+
+            @Override
+            public void down(MigrationBuilder schema) {
+            }
+        };
+        M043_StackUniqueKeys m043 = new M043_StackUniqueKeys();
+        assertThat(m043.getSupersededChecksums())
+            .as("M043's declared superseded checksum must be the pre-heal revision's digest")
+            .containsExactly(MigrationChecksum.compute(preHeal));
+
+        // 3. Schema equivalence: BOTH revisions create exactly the same indexes.
+        assertThat(indexLines(preHeal))
+            .as("the pre-heal and healed M043 must create identical unique indexes")
+            .isEqualTo(indexLines(m043));
+    }
+
+    private static List<String> indexLines(Migration migration) {
+        return MigrationChecksum.canonicalText(migration).lines()
+            .filter(line -> line.startsWith("add_index:")).toList();
+    }
+
+    private static String sha256Hex(String input) throws Exception {
+        byte[] hash = MessageDigest.getInstance("SHA-256")
+            .digest(input.getBytes(StandardCharsets.UTF_8));
+        StringBuilder hex = new StringBuilder(hash.length * 2);
+        for (byte b : hash) {
+            hex.append(String.format("%02x", b));
+        }
+        return hex.toString();
+    }
+
+    /**
+     * The populated-upgrade path fresh-install tests cannot see: a LIVE site row whose
+     * security_report_token is still PLAINTEXT (the pre-M047 state) must survive the
+     * whole migration chain under the shipped fail posture. Pre-fix, M045's backfill
+     * hydrated the live SiteModel and aborted half-migrated with "Stored value of
+     * encrypted field 'security_report_token' is not an encrypted envelope" -- the
+     * 2026-08-10 starfleet outage. The era-frozen LegacySite read in RouteClaims.backfill
+     * is what makes this complete.
+     */
+    @Test
+    void aPopulatedInstallUpgradesAcrossTheEncryptionFlip() throws Exception {
+        SqliteDatasource datasource = emptyDatabase("populated");
+        FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
+            Files.createTempDirectory("hh-populated-upgrade").resolve("keys.dry")));
+        try {
+            // 1. Migrate to the pre-M045 era only: the schema a populated install had.
+            List<Supplier<Migration>> preM045 = new ArrayList<>();
+            for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
+                if (supplier.get().getVersion().compareTo("2026_07_30_000045") < 0) {
+                    preM045.add(supplier);
+                }
+            }
+            new MigrationRunner(datasource, preM045).migrate().requireSuccess();
+
+            // 2. Real data in YESTERDAY's field semantics: a live site with a plaintext
+            //    report token, two domains contesting one route plus a distinct one.
+            datasource.rawUpdate("INSERT INTO sites (id, name, slug, site_type, enabled,"
+                + " security_report_token) VALUES (1, 'Live', 'live', 'static', 1, 'PLAIN-token')");
+            datasource.rawUpdate(
+                "INSERT INTO site_domains (id, site_id, hostname) VALUES (1, 1, 'app.example.test')");
+            datasource.rawUpdate(
+                "INSERT INTO site_domains (id, site_id, hostname) VALUES (2, 1, 'app.example.test')");
+            datasource.rawUpdate(
+                "INSERT INTO site_domains (id, site_id, hostname) VALUES (3, 1, 'other.example.test')");
+
+            // 3. The upgrade: everything from M045 on, under the SHIPPED posture.
+            withIntegrityMode("fail", () ->
+                new MigrationRunner(datasource).migrate().requireSuccess());
+
+            // 4. M045's backfill really arbitrated: the lowest id claimed the contested
+            //    route, the duplicate stayed unclaimed, the distinct route claimed too.
+            assertThat(datasource.rawQuery(
+                    "SELECT live_route_key FROM site_domains WHERE id = 1").get(0).get("live_route_key"))
+                .as("step 4: the lowest contested id must hold a claim").isNotNull();
+            assertThat(datasource.rawQuery(
+                    "SELECT live_route_key FROM site_domains WHERE id = 2").get(0).get("live_route_key"))
+                .as("step 4: the contested duplicate must stay unclaimed").isNull();
+            assertThat(datasource.rawQuery(
+                    "SELECT live_route_key FROM site_domains WHERE id = 3").get(0).get("live_route_key"))
+                .as("step 4: the distinct route must hold its own claim").isNotNull();
+
+            // 5. M047 healed the plaintext into an envelope in the same batch.
+            assertThat(String.valueOf(datasource.rawQuery(
+                    "SELECT security_report_token FROM sites WHERE id = 1").get(0)
+                    .get("security_report_token")))
+                .as("step 5: the plaintext token must be an envelope after the upgrade")
+                .startsWith("zenc$");
+        } finally {
+            FieldEncryption.installKeyring(null);
+        }
     }
 
     @Test

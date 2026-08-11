@@ -38,6 +38,15 @@ public class M043_StackUniqueKeys extends HohenheimMigration {
 
     public M043_StackUniqueKeys() {
         super("2026_07_27_000043", "Unique keys for stack services and files");
+        // AIDEV-NOTE: the pre-heal revision opened with assertUnique instead of the
+        // rename UPDATE above (af6518e9, 2026-07-29). Both revisions create the SAME two
+        // unique indexes under the same names, so an install that already applied the
+        // assertUnique form carries no residual drift -- it could only have applied it
+        // by having no duplicates, which is exactly what the heal would have produced.
+        // The digest below is the pre-heal revision's; MigrationIntegrityTest re-derives
+        // it from a replica of those operations. Pinned so starfleet (applied
+        // 2026-07-27) boots instead of failing integrity.
+        supersedesChecksums("32dbf5fb1cf9b9a6b4673b301ed1228339d8d009c2816798eb87624a05042e30");
     }
 
     @Override

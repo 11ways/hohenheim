@@ -16,6 +16,15 @@ public class M026_MigrateAuditLogToActivity extends HohenheimMigration {
 
     public M026_MigrateAuditLogToActivity() {
         super("2026_07_07_000026", "Move audit_log into the framework activity log");
+        // AIDEV-NOTE: this up() body has NOT changed since starfleet applied it
+        // (2026-07-21) -- the digest moved because zenit STAMPED an "ifnotexists" token
+        // into add_column signatures between 2026-07-10 (97f5788) and 2026-07-29
+        // (a47a4d3, which removed the token again with a dated repair-on-sight clause),
+        // and the clause was deleted (3d33ba9) before starfleet ever booted an
+        // in-between build. The digest below is the token-era one starfleet recorded;
+        // MigrationIntegrityTest re-derives it from the CURRENT operations plus the
+        // token, proving the operations themselves are identical.
+        supersedesChecksums("7d545e398b92195b06837a31033a09c62147af4663af97d712233d8cb8b80918");
     }
 
     // AIDEV-NOTE: This migration is NOT re-run safe and cannot be made so. The copy is an
