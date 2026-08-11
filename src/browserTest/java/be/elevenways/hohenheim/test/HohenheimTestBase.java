@@ -13,7 +13,6 @@ import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.ZenitAuth;
@@ -82,8 +81,6 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
 
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).
-        Object cmsRoutes = ResourcePageEndpoints.LIST;
         // Before the migrations, exactly as ServerMain does it: the declarations carry the
         // per-model liveness definition zenit-auth's orphan-purge migration consults.
         HohenheimAccess.declareGrantableModels();

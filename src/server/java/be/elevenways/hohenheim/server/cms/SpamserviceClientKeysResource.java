@@ -26,6 +26,7 @@ import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.UuidField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -41,6 +42,16 @@ import java.util.function.Supplier;
 public final class SpamserviceClientKeysResource extends SpamserviceRemoteResource<ManagedClientKey> {
 
     public static final String SLUG = "spamservice-keys";
+
+    /**
+     * The client scoping query parameter, typed so links BIND it.
+     *
+     * AIDEV-NOTE: the reads below still use getQueryParam("client_id") -- the name
+     * here is the single spelling both sides share, and binding it through a
+     * ParameterDefinition is what keeps "?client_id=" out of the link builders.
+     */
+    static final ParameterDefinition<String> CLIENT_ID_QUERY = ParameterDefinition
+        .builder(String.class).name("client_id").stringResolver(value -> value).build();
     private static final Schema SCHEMA = new Schema();
     private static final UuidField CLIENT_ID = SCHEMA.addField(UuidField.builder("client_id").required()
         .label(Microcopy.of("client").withFilter("scope", "spamservice_key")).build());

@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.common.conduit.Conduit;
 
 import java.util.LinkedHashMap;
@@ -69,7 +69,7 @@ public final class CmsSupport {
 
     /** The hosting panel's slug during a cms dispatch (subpages render under /admin AND /manage). */
     public static @NonNull String panelSlug(@NonNull Conduit conduit) {
-        String slug = conduit.getParameter(ResourcePageEndpoints.PANEL_PARAM);
+        String slug = conduit.getParameter(CmsEndpoints.PANEL_PARAM);
         return slug != null && !slug.isBlank() ? slug : "admin";
     }
 

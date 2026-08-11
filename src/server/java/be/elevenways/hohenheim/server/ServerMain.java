@@ -39,7 +39,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.security.KnownPermission;
 import be.elevenways.zenit.common.security.KnownPermissions;
-import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.AuthRegistry;
 import be.elevenways.zenit.auth.server.AuthRequirement;
@@ -180,8 +179,6 @@ public class ServerMain {
 
         HohenheimEndpoints.init();
         HohenheimChannels.init();
-        // Force-load the zenit-cms panel routes (all /{panel}/... endpoints).
-        Object cmsRoutes = ResourcePageEndpoints.LIST;
         // AIDEV-NOTE: BEFORE the migrations, not with the rest of the auth wiring. The
         // grant declarations carry the per-model LIVENESS definition, and zenit-auth's
         // one-time orphan purge (M009) is a migration: a declaration that lands afterwards
