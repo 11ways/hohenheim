@@ -1,9 +1,12 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.host.HostStatusCell;
+import be.elevenways.hohenheim.host.KernelIsolationView;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.cms.ServerOverviewPage;
 import be.elevenways.hohenheim.server.cms.ServerResource;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
@@ -14,8 +17,6 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.task.VerifyIncusIsolation;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
-import be.elevenways.zenit.common.edit.Computed;
-import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -249,12 +250,13 @@ class HostEvidenceTest {
                     .as("step 3: no gate rewrites the admission column behind the operator")
                     .isEqualTo(ServerModel.ADMISSION_ADMITTED);
 
-                // 4. And it is READABLE: the list cell says the host is silent, where before
-                //    a lapsed host rendered identically to a healthy one.
-                assertThat(hostStatusCell(afterRefusal))
+                // 4. And it is READABLE: the list cell's structured state token says the
+                //    host is silent, where before a lapsed host rendered identically to a
+                //    healthy one.
+                assertThat(hostStatusCell(afterRefusal).state())
                     .withFailMessage("step 4: the host list shows nothing about a host that"
                         + " stopped answering: '%s'", hostStatusCell(afterRefusal))
-                    .containsIgnoringCase("silent");
+                    .isEqualTo("silent");
 
                 // 5. POSITIVE ANCHOR for the whole bound: a fresh contact clears both the
                 //    refusal and the cell, so steps 2 and 4 were the clock and not a gate
@@ -263,9 +265,8 @@ class HostEvidenceTest {
                 answering.set(ServerModel.LAST_SEEN_AT, Instant.now());
                 model.save(answering);
                 HostAdmission.requireInstancePlacement(serverId);
-                assertThat(hostStatusCell(model.findByName("evidence-b")))
-                    .as("step 5: and the cell stops saying it").doesNotContainIgnoringCase(
-                        "silent");
+                assertThat(hostStatusCell(model.findByName("evidence-b")).state())
+                    .as("step 5: and the cell stops saying it").isEqualTo("ok");
 
                 // 6. Zero disables the bound outright -- the declared way out for an
                 //    operator who would rather place onto an unheard-from host.
@@ -310,27 +311,25 @@ class HostEvidenceTest {
             // 1. THE DEFECT (item 4). The record has a blank incus_url, so it addresses the
             //    CONTROLLER's own socket -- while the operator reads a row named after some
             //    other machine and a kernel verdict that never says which machine it is
-            //    about.
-            String kernelState = kernelIsolationState("evidence-c");
-            assertThat(kernelState)
-                .as("step 1: the kernel verdict is a PASS").containsIgnoringCase("verified");
-            assertThat(kernelState)
-                .withFailMessage("step 1: the form reports a green kernel verdict without"
-                    + " ever saying it is about the controller's own daemon: '%s'",
-                    kernelState)
+            //    about. The overview page's structured view names the endpoint as data.
+            KernelIsolationView kernelState = kernelIsolationViewOf("evidence-c");
+            assertThat(kernelState.status())
+                .as("step 1: the kernel verdict is a PASS")
+                .isEqualTo(HostPreflight.STATUS_PASS);
+            assertThat(kernelState.endpointNote())
+                .withFailMessage("step 1: the overview reports a green kernel verdict"
+                    + " without ever saying it is about the controller's own daemon: '%s'",
+                    kernelState.endpointNote())
                 .contains("unix://");
-            assertThat(kernelState)
-                .as("step 1: and says whose machine that is")
-                .containsIgnoringCase("controller");
 
             // 2. POSITIVE ANCHOR: an https record addresses a real remote daemon, so the
-            //    local-socket sentence must NOT appear -- step 1 is not a constant string.
+            //    local-socket note must NOT appear -- step 1 is not a constant string.
             Row remote = model.findByName("evidence-c");
             remote.set(ServerModel.INCUS_URL, "https://192.0.2.44:8443");
             model.save(remote);
-            assertThat(kernelIsolationState("evidence-c"))
-                .as("step 2: a genuinely remote daemon carries no local-socket warning")
-                .doesNotContain("unix://");
+            assertThat(kernelIsolationViewOf("evidence-c").endpointNote())
+                .as("step 2: a genuinely remote daemon carries no local-socket note")
+                .isEmpty();
 
             // 3. THE DEFECT (the cheap one). A quarantined host that a later probe REACHED:
             //    the success cleared last_error_kind, which is the only thing the list cell
@@ -341,20 +340,23 @@ class HostEvidenceTest {
             quarantined.set(ServerModel.LAST_ERROR_KIND, (String) null);
             quarantined.set(ServerModel.LAST_SEEN_AT, Instant.now());
             model.save(quarantined);
-            assertThat(hostStatusCell(model.findByName("evidence-c")))
+            assertThat(hostStatusCell(model.findByName("evidence-c")).state())
                 .withFailMessage("step 3: a quarantined host renders in the list with no"
-                    + " quarantine word at all: '%s'",
+                    + " quarantine state at all: '%s'",
                     hostStatusCell(model.findByName("evidence-c")))
-                .containsIgnoringCase("quarantin");
+                .isEqualTo("quarantined");
 
             // 4. POSITIVE ANCHOR: lifting the stamp restores the ordinary cell, so step 3
             //    was the quarantine column and not a cell that always shouts.
             Row cleared = model.findByName("evidence-c");
             cleared.set(ServerModel.QUARANTINED_AT, (Instant) null);
             model.save(cleared);
-            assertThat(hostStatusCell(model.findByName("evidence-c")))
+            HostStatusCell ordinary = hostStatusCell(model.findByName("evidence-c"));
+            assertThat(ordinary.state())
                 .as("step 4: an unquarantined host reads as its daemon again")
-                .doesNotContainIgnoringCase("quarantin").contains("Incus");
+                .isNotEqualTo("quarantined");
+            assertThat(ordinary.daemon())
+                .as("step 4: with the stored daemon label").contains("Incus");
         });
     }
 
@@ -437,27 +439,24 @@ class HostEvidenceTest {
         model.save(row);
     }
 
-    /** The host list's status cell, through the resource's own production path. */
-    private static String hostStatusCell(Row row) {
+    /** The host list's structured status cell, through the resource's own production path. */
+    private static HostStatusCell hostStatusCell(Row row) {
         ServerResource resource = new ServerResource();
         for (ColumnSpec column : resource.tableSpec().columns()) {
             if ("host_status".equals(column.name())) {
-                return String.valueOf(resource.cellValue(row, column));
+                return (HostStatusCell) resource.cellValue(row, column);
             }
         }
         throw new IllegalStateException("the host list has no host_status column");
     }
 
-    /** The host form's kernel-isolation field, computed the way the form computes it. */
-    @SuppressWarnings("unchecked")
-    private static String kernelIsolationState(String name) {
-        for (FormEntry entry : new ServerResource().formSpec().entries()) {
-            if (entry instanceof Computed<?> computed
-                    && "kernel_isolation_state".equals(computed.name())) {
-                return String.valueOf(((Computed<String>) computed)
-                    .compute(Map.of("name", name)));
-            }
+    /** The overview page's kernel-isolation view, built the way the page builds it. */
+    private static KernelIsolationView kernelIsolationViewOf(String name) {
+        Row row = Models.get(ServerModel.class).findByName(name);
+        KernelIsolationView view = ServerOverviewPage.kernelIsolationViewOf(row);
+        if (view == null) {
+            throw new IllegalStateException("no kernel-isolation view for '" + name + "'");
         }
-        throw new IllegalStateException("the host form has no kernel_isolation_state entry");
+        return view;
     }
 }

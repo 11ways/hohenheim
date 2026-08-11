@@ -301,6 +301,10 @@
     {
       "text": "Value",
       "scope": "instance_provisioning"
+    },
+    {
+      "text": "Value",
+      "scope": "server_overview"
     }
   ],
   "proteus_endpoint": [
@@ -621,10 +625,6 @@
       "scope": "help"
     }
   ],
-  "live_overview": {
-    "text": "Live Docker status",
-    "scope": "field"
-  },
   "minimum_processes": [
     {
       "text": "Minimum processes",
@@ -1575,6 +1575,10 @@
     {
       "text": "Status",
       "scope": "stack_deployments"
+    },
+    {
+      "text": "Status",
+      "scope": "server_overview"
     }
   ],
   "stored_log": [
@@ -3685,10 +3689,16 @@
     "text": "WebSocket authentication refused",
     "scope": "security_event_type"
   },
-  "overview": {
-    "text": "Spamservice overview",
-    "scope": "spamservice"
-  },
+  "overview": [
+    {
+      "text": "Spamservice overview",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Overview",
+      "scope": "server"
+    }
+  ],
   "installation": {
     "text": "Installation",
     "scope": "spamservice"
@@ -3969,10 +3979,16 @@
     "text": "Last seen",
     "scope": "spamservice_event"
   },
-  "detail": {
-    "text": "Last detail",
-    "scope": "spamservice_event"
-  },
+  "detail": [
+    {
+      "text": "Last detail",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "Detail",
+      "scope": "server_overview"
+    }
+  ],
   "from": {
     "text": "From",
     "scope": "spamservice_event"
@@ -4007,10 +4023,16 @@
     "text": "Spam",
     "scope": "spamservice_sample"
   },
-  "confirmed": {
-    "text": "Confirmed",
-    "scope": "spamservice_sample"
-  },
+  "confirmed": [
+    {
+      "text": "Confirmed",
+      "scope": "spamservice_sample"
+    },
+    {
+      "text": "Confirmed",
+      "scope": "server_overview"
+    }
+  ],
   "flags": {
     "text": "Flags",
     "scope": "spamservice_sample"
@@ -4371,6 +4393,10 @@
     {
       "text": "State",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "State",
+      "scope": "server_overview"
     }
   ],
   "add_file": [
@@ -4845,18 +4871,6 @@
     "text": "Host {$name} is cordoned; no new placement",
     "scope": "server"
   },
-  "host_error_state": {
-    "text": "Probe failed ({$kind}) - {$admission}",
-    "scope": "server"
-  },
-  "host_never_probed": {
-    "text": "Never probed - {$admission}",
-    "scope": "server"
-  },
-  "host_stored_state": {
-    "text": "{$docker} - {$admission}",
-    "scope": "server"
-  },
   "blocked": {
     "text": "Blocked",
     "scope": "host_admission"
@@ -5009,54 +5023,10 @@
     "text": "Enrolling a host gives Hohenheim control of its Docker daemon, which is equivalent to root on that machine: it can start any container, read any path a container mounts, and it receives every credential Hohenheim injects into workloads there. Only enroll machines you own. After saving, install the shown public key on the host, scan its host key, and confirm the fingerprint out of band.",
     "scope": "server"
   },
-  "host_key_local": {
-    "text": "The local daemon is reached over a Unix socket; no SSH host key is involved.",
-    "scope": "server"
-  },
-  "host_key_none": {
-    "text": "Not pinned. Scan the host key before this host can be reached at all.",
-    "scope": "server"
-  },
-  "host_key_confirmed": {
-    "text": "{$fingerprint} (confirmed)",
-    "scope": "server"
-  },
-  "host_key_unconfirmed": {
-    "text": "{$fingerprint} (NOT confirmed -- compare it out of band and confirm it)",
-    "scope": "server"
-  },
-  "host_key_mismatch_state": {
-    "text": "MISMATCH. Pinned {$pinned}, the host now offers {$offered}. Connections are refused and the host is blocked until you re-pin deliberately.",
-    "scope": "server"
-  },
-  "identity_missing": {
-    "text": "No client key yet.",
-    "scope": "server"
-  },
   "trust_notice": {
     "text": "What you are granting",
     "scope": "field"
   },
-  "identity_public_key": [
-    {
-      "text": "Hohenheim public key",
-      "scope": "field"
-    },
-    {
-      "text": "Add this line to the remote account's ~/.ssh/authorized_keys. It is unique to this host, so revoking it affects nothing else.",
-      "scope": "help"
-    }
-  ],
-  "host_key_state": [
-    {
-      "text": "Host key",
-      "scope": "field"
-    },
-    {
-      "text": "The SSH host key fingerprint Hohenheim enforces on every connection to this machine.",
-      "scope": "help"
-    }
-  ],
   "host_key_mismatch": {
     "text": "{$name} presented a different SSH host key (pinned {$pinned}, offered {$offered}). Nothing was re-pinned and the host is blocked; verify out of band before adopting the new key.",
     "scope": "violations"
@@ -5792,10 +5762,16 @@
     "text": "Label",
     "scope": "template_contents"
   },
-  "required": {
-    "text": "Required",
-    "scope": "template_contents"
-  },
+  "required": [
+    {
+      "text": "Required",
+      "scope": "template_contents"
+    },
+    {
+      "text": "Required",
+      "scope": "server_overview"
+    }
+  ],
   "default": {
     "text": "Default",
     "scope": "template_contents"
@@ -6800,10 +6776,6 @@
     "text": "Enrolling a host gives Hohenheim control of its Incus daemon, which is equivalent to root on that machine: it can start any container or VM and read anything they mount. Only enroll machines you own. After saving, scan the server certificate, confirm its fingerprint against incus info on the host itself, and enroll the client certificate (trust token or incus config trust).",
     "scope": "server"
   },
-  "host_daemon_unavailable": {
-    "text": "{$daemon} unavailable",
-    "scope": "server"
-  },
   "incus_url_format": {
     "text": "The Incus URL must be https://host[:port] or unix://[path].",
     "scope": "violations"
@@ -7140,79 +7112,9 @@
     "text": "New client certificate generated for {$name}. Enroll it on the daemon.",
     "scope": "server"
   },
-  "incus_cert_none": {
-    "text": "Not pinned. Scan the server certificate before this daemon can be reached at all.",
-    "scope": "server"
-  },
-  "incus_cert_confirmed": {
-    "text": "{$fingerprint} (confirmed)",
-    "scope": "server"
-  },
-  "incus_cert_unconfirmed": {
-    "text": "{$fingerprint} (NOT confirmed -- compare it against incus info on the host and confirm it)",
-    "scope": "server"
-  },
-  "incus_client_missing": {
-    "text": "No client certificate yet.",
-    "scope": "server"
-  },
-  "incus_cert_state": [
-    {
-      "text": "Server certificate",
-      "scope": "field"
-    },
-    {
-      "text": "The Incus server certificate fingerprint Hohenheim enforces on every https connection to this daemon.",
-      "scope": "help"
-    }
-  ],
-  "incus_client_cert": [
-    {
-      "text": "Hohenheim client certificate",
-      "scope": "field"
-    },
-    {
-      "text": "Enroll this certificate on the daemon (incus config trust add-certificate). It is unique to this host, so revoking it affects nothing else.",
-      "scope": "help"
-    }
-  ],
   "incus_cert_mismatch": {
     "text": "{$name} presented a different Incus server certificate (pinned {$pinned}, offered {$offered}). Nothing was re-pinned and the host is blocked; verify out of band before adopting the new certificate.",
     "scope": "violations"
-  },
-  "ssh_lane_none": {
-    "text": "No SSH admin lane pinned. Set an SSH target, scan the host key and confirm it to open one; the Kernel isolation field below says what this host needs.",
-    "scope": "server"
-  },
-  "kernel_isolation_state": [
-    {
-      "text": "Kernel isolation",
-      "scope": "field"
-    },
-    {
-      "text": "Whether Hohenheim can read this host's own nftables to verify that a workload's isolation really landed in the kernel, instead of trusting what the daemon reports.",
-      "scope": "help"
-    }
-  ],
-  "kernel_isolation_proven": {
-    "text": "Verified in the kernel: the last preflight transacted on this host's own nftables.",
-    "scope": "server"
-  },
-  "kernel_isolation_unproven": {
-    "text": "NOT verified. A lane is declared but the last preflight did not prove it reaches this host's kernel. Run preflight; no new tenant workload is placed here until it passes.",
-    "scope": "server"
-  },
-  "kernel_isolation_missing": {
-    "text": "NO lane. This host accepts tenant workloads but nothing can read its kernel, so no new tenant workload is placed here. Give it an SSH admin lane and confirm the host key, or set the posture to trusted-only.",
-    "scope": "server"
-  },
-  "kernel_isolation_optional": {
-    "text": "Not required: this host's trusted-only posture accepts no tenant workloads, so nothing here needs kernel verification.",
-    "scope": "server"
-  },
-  "host_quarantined_state": {
-    "text": "QUARANTINED. This machine contradicted a pinned identity: {$reason}. Every lane is refused and nothing new is placed here until you re-pin deliberately.",
-    "scope": "server"
   },
   "framebuffer": {
     "text": "Framebuffer",
@@ -7464,6 +7366,10 @@
     {
       "text": "{$name} - Domains",
       "scope": "site_domains"
+    },
+    {
+      "text": "{$name} - Overview",
+      "scope": "server_overview"
     }
   ],
   "stored_log_heading": {
@@ -7574,22 +7480,6 @@
     "text": "Database quota reached: {$used} of {$limit} in use",
     "scope": "violations"
   },
-  "host_quarantined_status": {
-    "text": "QUARANTINED - {$admission}",
-    "scope": "server"
-  },
-  "host_contact_lapsed_status": {
-    "text": "{$docker} - silent for {$minutes} min - {$admission}",
-    "scope": "server"
-  },
-  "host_local_socket": {
-    "text": " This record addresses the CONTROLLER's own daemon over {$socket}, so every verdict above is about the machine hohenheim runs on, whatever this host is named.",
-    "scope": "server"
-  },
-  "kernel_isolation_proven_at": {
-    "text": "Verified in the kernel: a preflight transacted on this host's own nftables at {$when}.",
-    "scope": "server"
-  },
   "host_contact_lapsed": {
     "text": "Host '{$name}' last answered {$minutes} minutes ago, past the host contact bound; no new workload is placed there until it answers again",
     "scope": "violations"
@@ -7615,5 +7505,237 @@
   "destroy_confirm": {
     "text": "This destroys the preview's running environment and releases its hostname.",
     "scope": "preview_deployment"
+  },
+  "probe_now": {
+    "text": "Probe now",
+    "scope": "server"
+  },
+  "probe_now_hint": {
+    "text": "Contact the daemon once and store the outcome. Page views never probe.",
+    "scope": "server"
+  },
+  "host_probe_ok": {
+    "text": "{$name}: {$summary}",
+    "scope": "server"
+  },
+  "state_quarantined": {
+    "text": "QUARANTINED",
+    "scope": "server"
+  },
+  "state_error": {
+    "text": "probe failed ({$kind})",
+    "scope": "server"
+  },
+  "state_silent": {
+    "text": "silent",
+    "scope": "server"
+  },
+  "state_never_probed": {
+    "text": "never probed",
+    "scope": "server"
+  },
+  "host_probe_failed": {
+    "text": "Probe of {$name} failed: {$kind}",
+    "scope": "violations"
+  },
+  "compute": {
+    "text": "Compute",
+    "scope": "nav"
+  },
+  "quarantined_title": {
+    "text": "This host is quarantined",
+    "scope": "server_overview"
+  },
+  "quarantine_clears_by_repin": {
+    "text": "Verify the machine out of band, then re-pin the identity it now presents. Re-pinning IS the only way a quarantine clears; there is deliberately no other switch.",
+    "scope": "server_overview"
+  },
+  "last_error": {
+    "text": "Last error",
+    "scope": "server_overview"
+  },
+  "trust_ssh": {
+    "text": "SSH host key",
+    "scope": "server_overview"
+  },
+  "trust_incus": {
+    "text": "Incus server certificate",
+    "scope": "server_overview"
+  },
+  "pinned_fingerprint": {
+    "text": "Pinned fingerprint",
+    "scope": "server_overview"
+  },
+  "not_pinned": {
+    "text": "Not pinned",
+    "scope": "server_overview"
+  },
+  "unconfirmed": {
+    "text": "Not confirmed",
+    "scope": "server_overview"
+  },
+  "pinned_at": {
+    "text": "Pinned",
+    "scope": "server_overview"
+  },
+  "offered_mismatch": {
+    "text": "The machine now offers {$fingerprint}. Connections fail closed until an operator re-pins.",
+    "scope": "server_overview"
+  },
+  "client_key": {
+    "text": "Hohenheim public key",
+    "scope": "server_overview"
+  },
+  "client_cert": {
+    "text": "Hohenheim client certificate",
+    "scope": "server_overview"
+  },
+  "client_missing": {
+    "text": "No client credential minted yet.",
+    "scope": "server_overview"
+  },
+  "copy": {
+    "text": "Copy",
+    "scope": "server_overview"
+  },
+  "kernel_isolation": {
+    "text": "Kernel isolation",
+    "scope": "server_overview"
+  },
+  "kernel_not_required": {
+    "text": "Not required (trusted-only posture)",
+    "scope": "server_overview"
+  },
+  "kernel_no_lane": {
+    "text": "No lane to read this host's kernel",
+    "scope": "server_overview"
+  },
+  "kernel_proven": {
+    "text": "Proven in the kernel",
+    "scope": "server_overview"
+  },
+  "kernel_unproven": {
+    "text": "NOT proven",
+    "scope": "server_overview"
+  },
+  "kernel_endpoint_note": {
+    "text": "This verdict is about the controller's own daemon ({$socket})",
+    "scope": "server_overview"
+  },
+  "preflight_report": {
+    "text": "Preflight report",
+    "scope": "server_overview"
+  },
+  "last_preflight": {
+    "text": "Last preflight",
+    "scope": "server_overview"
+  },
+  "verdict_passed": {
+    "text": "passed",
+    "scope": "server_overview"
+  },
+  "verdict_failed": {
+    "text": "failed",
+    "scope": "server_overview"
+  },
+  "never_preflighted": {
+    "text": "Never preflighted",
+    "scope": "server_overview"
+  },
+  "never_preflighted_hint": {
+    "text": "Run preflight to measure this host; placement refuses unmeasured hosts.",
+    "scope": "server_overview"
+  },
+  "check": {
+    "text": "Check",
+    "scope": "server_overview"
+  },
+  "advisory": {
+    "text": "Advisory",
+    "scope": "server_overview"
+  },
+  "checked_at": {
+    "text": "Checked",
+    "scope": "server_overview"
+  },
+  "facts": {
+    "text": "Measured facts",
+    "scope": "server_overview"
+  },
+  "fact": {
+    "text": "Fact",
+    "scope": "server_overview"
+  },
+  "measured_at": {
+    "text": "Measured",
+    "scope": "server_overview"
+  },
+  "capacity": {
+    "text": "Capacity",
+    "scope": "server_overview"
+  },
+  "booked": {
+    "text": "Booked",
+    "scope": "server_overview"
+  },
+  "budget": {
+    "text": "Budget",
+    "scope": "server_overview"
+  },
+  "bookable": {
+    "text": "Bookable",
+    "scope": "server_overview"
+  },
+  "process_booked": {
+    "text": "Managed processes",
+    "scope": "server_overview"
+  },
+  "unmeasured": {
+    "text": "Unmeasured",
+    "scope": "server_overview"
+  },
+  "unmeasured_body": {
+    "text": "No usable memory reading exists, so this host has no placement budget. Run preflight to measure it; a zero bar here would wrongly read as an empty host.",
+    "scope": "server_overview"
+  },
+  "evidence_stale": {
+    "text": "Evidence too old: the memory reading exceeds the {$hours}-hour freshness bound, so placement refuses this host until preflight re-measures it. Last measured",
+    "scope": "server_overview"
+  },
+  "workloads": {
+    "text": "Workloads",
+    "scope": "server_overview"
+  },
+  "workloads_hint": {
+    "text": "Everything on this host: the same records that block cordon, drain and delete.",
+    "scope": "server_overview"
+  },
+  "workloads_empty": {
+    "text": "Nothing runs on this host",
+    "scope": "server_overview"
+  },
+  "workload_name": {
+    "text": "Name",
+    "scope": "server_overview"
+  },
+  "tier": {
+    "text": "Tier",
+    "scope": "server_overview"
+  },
+  "booked_memory": {
+    "text": "Booked memory",
+    "scope": "server_overview"
+  },
+  "tier_instance": {
+    "text": "Instance",
+    "scope": "server_overview"
+  },
+  "tier_stack": {
+    "text": "Stack",
+    "scope": "server_overview"
+  },
+  "tier_database": {
+    "text": "Database",
+    "scope": "server_overview"
   }
 }

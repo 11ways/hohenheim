@@ -152,7 +152,7 @@ public class ServerModel extends Model {
     public static final BooleanField PREFLIGHT_OK = SCHEMA.addField(
         BooleanField.builder("preflight_ok").defaultValue(false).build());
 
-    /** Last time any probe (preflight, live overview, reconcile sweep) reached the daemon. */
+    /** Last time any probe (preflight, explicit probe action, reconcile sweep) reached the daemon. */
     public static final DateTimeField LAST_SEEN_AT = SCHEMA.addField(
         DateTimeField.builder().name("last_seen_at").build());
 

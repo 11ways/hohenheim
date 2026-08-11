@@ -56,7 +56,7 @@ public final class HostAdmission {
      *
      * AIDEV-NOTE: the heartbeat had no reader with an age bound at all. Every sweep that
      * reaches a daemon stamps {@code last_seen_at} ({@code ReapIncusControllers} every 15
-     * minutes, {@code DockerReconciler} hourly, plus preflight and the live overview) and
+     * minutes, {@code DockerReconciler} hourly, plus preflight and the explicit probe action) and
      * nothing anywhere compared it to a clock -- so a host that stopped answering stayed
      * {@code admitted} and kept receiving placements, with a status string no code read as
      * its only trace.

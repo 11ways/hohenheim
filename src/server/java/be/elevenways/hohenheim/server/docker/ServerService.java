@@ -25,7 +25,7 @@ import java.util.Map;
  * are reached over SSH.
  *
  * AIDEV-NOTE: the admin LIST reads STORED host state -- it renders the host ROWS through
- * {@code ServerResource.storedStatus} and never probes a daemon, because the old
+ * {@code ServerResource.statusCellOf} and never probes a daemon, because the old
  * per-render serial probe (8s ceiling PER
  * host) hung the page on one down remote and its exception-to-null swallowing made
  * host-down, bad-key, host-key-changed, docker-absent and DNS failure one
@@ -74,7 +74,7 @@ public class ServerService extends DatasourceScoped {
      * One host's STORED state, projected off the record with no daemon involved.
      *
      * AIDEV-NOTE: it claimed to be "what the list and any allocator read" and was neither.
-     * The admin list renders rows through {@code ServerResource.storedStatus}, placement
+     * The admin list renders rows through {@code ServerResource.statusCellOf}, placement
      * reads {@code Row}s through {@code HostAdmission} and {@code InstanceCapacity}, and
      * {@link #storedStates} has exactly one caller in the repo: {@code HostRecordTest},
      * which uses it as the regression guard that a daemon-free projection of every host

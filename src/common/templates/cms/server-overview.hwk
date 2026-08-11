@@ -1,0 +1,335 @@
+{#- Overview tab on a host record: the STORED evidence, structured. Every button is one
+    of the resource's own row actions rendered through the standard invoke partial, so
+    confirmations and permissions stay single-sourced. No live probe happens here. -#}
+{% declare title: String %}
+{% declare serverName: String %}
+{% declare runtimeBadge: EnumBadgeState = null %}
+{% declare admissionBadge: EnumBadgeState = null %}
+{% declare postureBadge: EnumBadgeState = null %}
+{% declare statusCell: HostStatusCell %}
+{% declare lastError: String = "" %}
+{% declare quarantinedAtIso: String = null %}
+{% declare quarantineReason: String = "" %}
+{% declare trustLanes: List<TrustLaneView> %}
+{% declare kernel: KernelIsolationView = null %}
+{% declare preflightChecks: List<PreflightCheckView> %}
+{% declare preflightFacts: List<HostFactView> %}
+{% declare probedAtIso: String = null %}
+{% declare preflightOk: Boolean = false %}
+{% declare capacity: HostCapacityView %}
+{% declare workloads: List<WorkloadView> %}
+{% declare actions: ServerActionsView %}
+{% declare timeWording: RelativeTimeWording = null %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page hh-server-overview">
+    <header class="cms-resource-list-header">
+        <h1>{{ serverName }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if quarantinedAtIso != null %}
+    <section class="hh-quarantine-banner" data-quarantine-banner="1">
+        <pl-icon name="triangle-exclamation"></pl-icon>
+        <div class="hh-quarantine-body">
+            <strong>{{ t("quarantined_title", scope: "server_overview") }}</strong>
+            {% if quarantineReason != "" %}<p>{{ quarantineReason }}</p>{% /if %}
+            <p class="hh-quarantine-when">
+                <pl-relative-time datetime={% quarantinedAtIso %} wording={% timeWording %} title={% quarantinedAtIso %}></pl-relative-time>
+            </p>
+            <p>{{ t("quarantine_clears_by_repin", scope: "server_overview") }}</p>
+        </div>
+        <div class="hh-quarantine-actions">
+            {% if actions.sshRepin != null %}{% render "zenitcms:action/invoke" var:action=actions.sshRepin %}{% /if %}
+            {% if actions.incusRepin != null %}{% render "zenitcms:action/invoke" var:action=actions.incusRepin %}{% /if %}
+        </div>
+    </section>
+    {% /if %}
+
+    <pl-card class="hh-overview-card">
+        <pl-card-header>
+            <pl-card-title>{{ t("state", scope: "server_overview") }}</pl-card-title>
+        </pl-card-header>
+        <pl-card-content>
+            <div class="hh-state-badges">
+                {% if runtimeBadge != null %}{% render "zenitcms:cell/enum-badge" var:value=runtimeBadge %}{% /if %}
+                {% if admissionBadge != null %}{% render "zenitcms:cell/enum-badge" var:value=admissionBadge %}{% /if %}
+                {% if postureBadge != null %}{% render "zenitcms:cell/enum-badge" var:value=postureBadge %}{% /if %}
+                {% render "hohenheim:cms/cell/host-status" var:value=statusCell %}
+            </div>
+            {% if lastError != "" %}
+            <p class="hh-last-error">
+                <pl-icon name="circle-exclamation"></pl-icon>
+                {{ t("last_error", scope: "server_overview") }}: {{ lastError }}
+            </p>
+            {% /if %}
+            <div class="hh-state-actions">
+                {% if actions.probe != null %}{% render "zenitcms:action/invoke" var:action=actions.probe %}{% /if %}
+                {% if actions.preflight != null %}{% render "zenitcms:action/invoke" var:action=actions.preflight %}{% /if %}
+                {% if actions.admit != null %}{% render "zenitcms:action/invoke" var:action=actions.admit %}{% /if %}
+                {% if actions.uncordon != null %}{% render "zenitcms:action/invoke" var:action=actions.uncordon %}{% /if %}
+                {% if actions.cordon != null %}{% render "zenitcms:action/invoke" var:action=actions.cordon %}{% /if %}
+                {% if actions.drain != null %}{% render "zenitcms:action/invoke" var:action=actions.drain %}{% /if %}
+                {% if actions.reap != null %}{% render "zenitcms:action/invoke" var:action=actions.reap %}{% /if %}
+            </div>
+        </pl-card-content>
+    </pl-card>
+
+    {% each trustLanes as lane %}
+    <pl-card class="hh-overview-card" data-trust-lane={% lane.laneId %}>
+        <pl-card-header>
+            <pl-card-title>
+                {% if lane.laneId == "incus_cert" %}
+                {{ t("trust_incus", scope: "server_overview") }}
+                {% else %}
+                {{ t("trust_ssh", scope: "server_overview") }}
+                {% /if %}
+            </pl-card-title>
+        </pl-card-header>
+        <pl-card-content>
+            {% if lane.pinned %}
+            <div class="hh-trust-row">
+                <span class="hh-trust-label">{{ t("pinned_fingerprint", scope: "server_overview") }}</span>
+                <code>{{ lane.fingerprint }}</code>
+                <pl-copy-button value={% lane.fingerprint %} ariaLabel={% t("copy", scope: "server_overview") %}></pl-copy-button>
+                {% if lane.verified %}
+                <pl-badge variant="success">{{ t("confirmed", scope: "server_overview") }}</pl-badge>
+                {% else %}
+                <pl-badge variant="warning">{{ t("unconfirmed", scope: "server_overview") }}</pl-badge>
+                {% /if %}
+                {% if lane.pinnedAtIso != null %}
+                <span class="hh-trust-when">{{ t("pinned_at", scope: "server_overview") }}
+                    <pl-relative-time datetime={% lane.pinnedAtIso %} wording={% timeWording %} title={% lane.pinnedAtIso %}></pl-relative-time>
+                </span>
+                {% /if %}
+            </div>
+            {% else %}
+            <p class="hh-trust-unpinned"><pl-badge variant="destructive">{{ t("not_pinned", scope: "server_overview") }}</pl-badge></p>
+            {% /if %}
+            {% if lane.offeredFingerprint != "" %}
+            <p class="hh-trust-mismatch" data-trust-mismatch="1">
+                <pl-icon name="triangle-exclamation"></pl-icon>
+                {{ t("offered_mismatch", scope: "server_overview", fingerprint: lane.offeredFingerprint) }}
+            </p>
+            {% /if %}
+            <div class="hh-trust-client">
+                <span class="hh-trust-label">
+                    {% if lane.laneId == "incus_cert" %}
+                    {{ t("client_cert", scope: "server_overview") }}
+                    {% else %}
+                    {{ t("client_key", scope: "server_overview") }}
+                    {% /if %}
+                </span>
+                {% if lane.clientMaterial != "" %}
+                <pre class="hh-trust-material">{{ lane.clientMaterial }}</pre>
+                <pl-copy-button value={% lane.clientMaterial %} ariaLabel={% t("copy", scope: "server_overview") %}></pl-copy-button>
+                {% else %}
+                <span>{{ t("client_missing", scope: "server_overview") }}</span>
+                {% /if %}
+            </div>
+            <div class="hh-trust-actions">
+                {% if lane.laneId == "incus_cert" %}
+                {% if actions.incusScan != null %}{% render "zenitcms:action/invoke" var:action=actions.incusScan %}{% /if %}
+                {% if actions.incusConfirm != null %}{% render "zenitcms:action/invoke" var:action=actions.incusConfirm %}{% /if %}
+                {% if actions.incusRepin != null %}{% render "zenitcms:action/invoke" var:action=actions.incusRepin %}{% /if %}
+                {% if actions.incusRotate != null %}{% render "zenitcms:action/invoke" var:action=actions.incusRotate %}{% /if %}
+                {% else %}
+                {% if actions.sshScan != null %}{% render "zenitcms:action/invoke" var:action=actions.sshScan %}{% /if %}
+                {% if actions.sshConfirm != null %}{% render "zenitcms:action/invoke" var:action=actions.sshConfirm %}{% /if %}
+                {% if actions.sshRepin != null %}{% render "zenitcms:action/invoke" var:action=actions.sshRepin %}{% /if %}
+                {% if actions.sshRotate != null %}{% render "zenitcms:action/invoke" var:action=actions.sshRotate %}{% /if %}
+                {% /if %}
+            </div>
+        </pl-card-content>
+    </pl-card>
+    {% /each %}
+
+    <pl-card class="hh-overview-card">
+        <pl-card-header>
+            <pl-card-title>{{ t("preflight_report", scope: "server_overview") }}</pl-card-title>
+            {% if probedAtIso != null %}
+            <pl-card-description>
+                {{ t("last_preflight", scope: "server_overview") }}
+                <pl-relative-time datetime={% probedAtIso %} wording={% timeWording %} title={% probedAtIso %}></pl-relative-time>
+                {% if preflightOk %}
+                <pl-badge variant="success">{{ t("verdict_passed", scope: "server_overview") }}</pl-badge>
+                {% else %}
+                <pl-badge variant="destructive">{{ t("verdict_failed", scope: "server_overview") }}</pl-badge>
+                {% /if %}
+            </pl-card-description>
+            {% /if %}
+        </pl-card-header>
+        <pl-card-content>
+            {% if kernel != null %}
+            <p class="hh-kernel-state" data-kernel-isolation="1">
+                <span class="hh-trust-label">{{ t("kernel_isolation", scope: "server_overview") }}</span>
+                {% if kernel.required == false %}
+                <pl-badge variant="secondary">{{ t("kernel_not_required", scope: "server_overview") }}</pl-badge>
+                {% elseif kernel.laneAvailable == false %}
+                <pl-badge variant="destructive">{{ t("kernel_no_lane", scope: "server_overview") }}</pl-badge>
+                {% elseif kernel.status == "pass" %}
+                <pl-badge variant="success">{{ t("kernel_proven", scope: "server_overview") }}</pl-badge>
+                {% if kernel.checkedAtIso != null %}
+                <pl-relative-time datetime={% kernel.checkedAtIso %} wording={% timeWording %} title={% kernel.checkedAtIso %}></pl-relative-time>
+                {% /if %}
+                {% else %}
+                <pl-badge variant="destructive">{{ t("kernel_unproven", scope: "server_overview") }}</pl-badge>
+                {% /if %}
+                {% if kernel.endpointNote != "" %}
+                <span class="hh-kernel-endpoint">{{ t("kernel_endpoint_note", scope: "server_overview", socket: kernel.endpointNote) }}</span>
+                {% /if %}
+            </p>
+            {% /if %}
+            {% if preflightChecks %}
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("check", scope: "server_overview") }}</pl-table-head>
+                    <pl-table-head>{{ t("status", scope: "server_overview") }}</pl-table-head>
+                    <pl-table-head>{{ t("required", scope: "server_overview") }}</pl-table-head>
+                    <pl-table-head>{{ t("detail", scope: "server_overview") }}</pl-table-head>
+                    <pl-table-head>{{ t("checked_at", scope: "server_overview") }}</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each preflightChecks as check %}
+                    <pl-table-row>
+                        <pl-table-cell><code>{{ check.name }}</code></pl-table-cell>
+                        <pl-table-cell><pl-badge variant={% check.statusVariant %}>{{ check.status }}</pl-badge></pl-table-cell>
+                        <pl-table-cell>
+                            {% if check.required %}
+                            <pl-badge variant="outline">{{ t("required", scope: "server_overview") }}</pl-badge>
+                            {% else %}
+                            <pl-badge variant="secondary">{{ t("advisory", scope: "server_overview") }}</pl-badge>
+                            {% /if %}
+                        </pl-table-cell>
+                        <pl-table-cell class="hh-check-detail">{{ check.detail }}</pl-table-cell>
+                        <pl-table-cell>
+                            {% if check.atIso != null %}
+                            <pl-relative-time datetime={% check.atIso %} wording={% timeWording %} title={% check.atIso %}></pl-relative-time>
+                            {% /if %}
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <pl-empty-state icon="stethoscope">
+                <pl-empty-state-title>{{ t("never_preflighted", scope: "server_overview") }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ t("never_preflighted_hint", scope: "server_overview") }}</pl-empty-state-description>
+            </pl-empty-state>
+            {% /if %}
+            {% if preflightFacts %}
+            <h3 class="hh-facts-title">{{ t("facts", scope: "server_overview") }}</h3>
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("fact", scope: "server_overview") }}</pl-table-head>
+                    <pl-table-head>{{ t("value", scope: "server_overview") }}</pl-table-head>
+                    <pl-table-head>{{ t("measured_at", scope: "server_overview") }}</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each preflightFacts as fact %}
+                    <pl-table-row>
+                        <pl-table-cell><code>{{ fact.name }}</code></pl-table-cell>
+                        <pl-table-cell>{{ fact.value }}</pl-table-cell>
+                        <pl-table-cell>
+                            {% if fact.measuredAtIso != null %}
+                            <pl-relative-time datetime={% fact.measuredAtIso %} wording={% timeWording %} title={% fact.measuredAtIso %}></pl-relative-time>
+                            {% /if %}
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+
+    <pl-card class="hh-overview-card">
+        <pl-card-header>
+            <pl-card-title>{{ t("capacity", scope: "server_overview") }}</pl-card-title>
+        </pl-card-header>
+        {% if capacity.measured %}
+        <pl-card-content data-capacity-state="measured">
+            <pl-usage-bar value={% capacity.bookedMb %} max={% capacity.budgetMb %} showLabel={% true %}></pl-usage-bar>
+            <dl class="hh-capacity-numbers">
+                <dt>{{ t("booked", scope: "server_overview") }}</dt><dd>{{ capacity.bookedMb }} MB</dd>
+                <dt>{{ t("budget", scope: "server_overview") }}</dt><dd>{{ capacity.budgetMb }} MB</dd>
+                <dt>{{ t("bookable", scope: "server_overview") }}</dt><dd>{{ capacity.bookableMb }} MB</dd>
+                {% if capacity.processBookedMb > 0 %}
+                <dt>{{ t("process_booked", scope: "server_overview") }}</dt><dd>{{ capacity.processBookedMb }} MB</dd>
+                {% /if %}
+            </dl>
+            {% if capacity.measuredAtIso != null %}
+            <p class="hh-capacity-when">{{ t("measured_at", scope: "server_overview") }}
+                <pl-relative-time datetime={% capacity.measuredAtIso %} wording={% timeWording %} title={% capacity.measuredAtIso %}></pl-relative-time>
+            </p>
+            {% /if %}
+        </pl-card-content>
+        {% else %}
+        <pl-card-content data-capacity-state="unmeasured">
+            <p class="hh-capacity-unmeasured">
+                <pl-badge variant="warning">{{ t("unmeasured", scope: "server_overview") }}</pl-badge>
+                {% if capacity.stale %}
+                {{ t("evidence_stale", scope: "server_overview", hours: capacity.maxAgeHours) }}
+                {% if capacity.measuredAtIso != null %}
+                <pl-relative-time datetime={% capacity.measuredAtIso %} wording={% timeWording %} title={% capacity.measuredAtIso %}></pl-relative-time>
+                {% /if %}
+                {% else %}
+                {{ t("unmeasured_body", scope: "server_overview") }}
+                {% /if %}
+            </p>
+        </pl-card-content>
+        {% /if %}
+    </pl-card>
+
+    <pl-card class="hh-overview-card">
+        <pl-card-header>
+            <pl-card-title>{{ t("workloads", scope: "server_overview") }}</pl-card-title>
+            <pl-card-description>{{ t("workloads_hint", scope: "server_overview") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            {% if workloads %}
+            <pl-table>
+                <pl-table-header><pl-table-row>
+                    <pl-table-head>{{ t("workload_name", scope: "server_overview") }}</pl-table-head>
+                    <pl-table-head>{{ t("tier", scope: "server_overview") }}</pl-table-head>
+                    <pl-table-head>{{ t("status", scope: "server_overview") }}</pl-table-head>
+                    <pl-table-head>{{ t("booked_memory", scope: "server_overview") }}</pl-table-head>
+                </pl-table-row></pl-table-header>
+                <pl-table-body>
+                    {% each workloads as workload %}
+                    <pl-table-row>
+                        <pl-table-cell><a href={% workload.url %}>{{ workload.name }}</a></pl-table-cell>
+                        <pl-table-cell>
+                            {% if workload.tier == "instance" %}
+                            {{ t("tier_instance", scope: "server_overview") }}
+                            {% elseif workload.tier == "stack" %}
+                            {{ t("tier_stack", scope: "server_overview") }}
+                            {% else %}
+                            {{ t("tier_database", scope: "server_overview") }}
+                            {% /if %}
+                        </pl-table-cell>
+                        <pl-table-cell>
+                            {% if workload.status != null %}
+                            {% render "zenitcms:cell/enum-badge" var:value=workload.status %}
+                            {% /if %}
+                        </pl-table-cell>
+                        <pl-table-cell>
+                            {% if workload.bookedMb != null %}{{ workload.bookedMb }} MB{% /if %}
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <pl-empty-state icon="cubes">
+                <pl-empty-state-title>{{ t("workloads_empty", scope: "server_overview") }}</pl-empty-state-title>
+            </pl-empty-state>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+</section>
+{% /block %}

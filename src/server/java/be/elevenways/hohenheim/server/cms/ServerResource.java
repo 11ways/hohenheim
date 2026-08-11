@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 
+import be.elevenways.hohenheim.host.HostStatusCell;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.incus.IncusReaper;
@@ -9,16 +10,14 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
-import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPreflight;
-import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
-import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -27,6 +26,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
@@ -48,7 +48,6 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -64,9 +63,9 @@ import java.util.stream.Collectors;
  * Multi-server Docker host inventory. The implicit {@code local} host always
  * exists and cannot be renamed or removed (only its declared public addresses
  * and its posture are editable); remote hosts are reached over SSH.
- * The LIST reads stored host state (health columns + last preflight); the only
- * live daemon contacts are the detail page's overview and the explicit
- * preflight action, both of which persist their outcome.
+ * The LIST and the Overview subpage read STORED host state (health columns + last
+ * preflight); the only live daemon contacts are the explicit probe and preflight
+ * actions, both of which persist their outcome. Rendering any page is side-effect-free.
  */
 public final class ServerResource extends RowResource {
 
@@ -77,57 +76,21 @@ public final class ServerResource extends RowResource {
 
     private final ServerService serverService = new ServerService();
 
-    private static final StringField LIVE_OVERVIEW = StringField.builder("live_overview")
-        .label(HohenheimFormCopy.label("live_overview"))
-        .visibleIn(EditView.EDIT)
-        .build();
-
     /**
      * The plain statement of what enrolling grants, at the point of enrolling. Driving a
      * remote Docker daemon IS root-equivalent access to that machine and no mechanism we
      * add changes that; the honest mitigation is that nobody pastes a target without
      * being told.
+     *
+     * AIDEV-NOTE: CREATE-only since the overview wave (2026-08-11). This was one of seven
+     * Computed pseudo-fields faking a status panel on the EDIT form; the other six are
+     * deleted (their data renders structured on {@link ServerOverviewPage}), but this one
+     * is consent copy for the enrolment act itself, so it stays exactly where the target
+     * gets pasted and nowhere else.
      */
     private static final StringField TRUST_NOTICE = StringField.builder("trust_notice")
         .label(HohenheimFormCopy.label("trust_notice"))
-        .build();
-
-    private static final StringField IDENTITY_PUBLIC_KEY = StringField.builder("identity_public_key")
-        .label(HohenheimFormCopy.label("identity_public_key"))
-        .help(HohenheimFormCopy.help("identity_public_key"))
-        .visibleIn(EditView.EDIT)
-        .build();
-
-    private static final StringField HOST_KEY_STATE = StringField.builder("host_key_state")
-        .label(HohenheimFormCopy.label("host_key_state"))
-        .help(HohenheimFormCopy.help("host_key_state"))
-        .visibleIn(EditView.EDIT)
-        .build();
-
-    /**
-     * Whether this host's workload isolation can be PROVEN in its own kernel -- the
-     * placement requirement {@link HostAdmission#requireKernelTruth} enforces, stated where
-     * the operator can act on it.
-     */
-    private static final StringField KERNEL_ISOLATION_STATE =
-        StringField.builder("kernel_isolation_state")
-            .label(HohenheimFormCopy.label("kernel_isolation_state"))
-            .help(HohenheimFormCopy.help("kernel_isolation_state"))
-            .visibleIn(EditView.EDIT)
-            .build();
-
-    /** The Incus daemon's PINNED server certificate, a different trust relationship. */
-    private static final StringField INCUS_CERT_STATE = StringField.builder("incus_cert_state")
-        .label(HohenheimFormCopy.label("incus_cert_state"))
-        .help(HohenheimFormCopy.help("incus_cert_state"))
-        .visibleIn(EditView.EDIT)
-        .build();
-
-    /** The client CERTIFICATE an operator enrolls on the daemon (the ssh key's twin). */
-    private static final StringField INCUS_CLIENT_CERT = StringField.builder("incus_client_cert")
-        .label(HohenheimFormCopy.label("incus_client_cert"))
-        .help(HohenheimFormCopy.help("incus_client_cert"))
-        .visibleIn(EditView.EDIT)
+        .visibleIn(EditView.CREATE)
         .build();
 
     /**
@@ -153,28 +116,6 @@ public final class ServerResource extends RowResource {
                     ? "trust_notice_body_incus" : "trust_notice_body")))
             .dependsOn("runtime")
             .build())
-        .add(Computed.of(HOST_KEY_STATE, values -> hostKeyState(String.valueOf(values.get("name"))))
-            .dependsOn("name")
-            .build())
-        .add(Computed.of(IDENTITY_PUBLIC_KEY,
-                values -> identityPublicKey(String.valueOf(values.get("name"))))
-            .dependsOn("name")
-            .build())
-        .add(Computed.of(KERNEL_ISOLATION_STATE,
-                values -> kernelIsolationState(String.valueOf(values.get("name"))))
-            .dependsOn("name")
-            .build())
-        .add(Computed.of(INCUS_CERT_STATE,
-                values -> incusCertState(String.valueOf(values.get("name"))))
-            .dependsOn("name")
-            .build())
-        .add(Computed.of(INCUS_CLIENT_CERT,
-                values -> incusClientCertificate(String.valueOf(values.get("name"))))
-            .dependsOn("name")
-            .build())
-        .add(Computed.of(LIVE_OVERVIEW, values -> serverOverview(String.valueOf(values.get("name"))))
-            .dependsOn("name")
-            .build())
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -183,7 +124,8 @@ public final class ServerResource extends RowResource {
         .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).filterable().build())
         .column(ColumnSpec.fromField(ServerModel.ADMISSION).filterable().build())
         .column(ColumnSpec.fromField(ServerModel.POSTURE).filterable().build())
-        .column(ColumnSpec.virtual("host_status", Microcopy.of("host_status").withFilter("scope", "server")).build())
+        .column(ColumnSpec.virtual("host_status", Microcopy.of("host_status").withFilter("scope", "server"))
+            .renderer("hohenheim:cms/cell/host-status").build())
         .filter(FilterSpec.forField(ServerModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(ServerModel.NAME)).build())
         .filter(FilterSpec.forField(ServerModel.RUNTIME, FilterSpec.Kind.SELECT)
@@ -204,6 +146,19 @@ public final class ServerResource extends RowResource {
     @Override public int navOrder() { return 20; }
     @Override public @NonNull Icon icon() { return Icon.of("server"); }
 
+    /** The list row's title link opens the Overview page; the edit action keeps the form. */
+    @Override
+    public @NonNull String rowUrl(@NonNull Row row) {
+        return "/admin/servers/" + row.get(ServerModel.ID) + "/page/" + ServerOverviewPage.SLUG;
+    }
+
+    @Override
+    public @NonNull List<RecordScopedPage<Row>> subpages() {
+        List<RecordScopedPage<Row>> pages = new ArrayList<>();
+        pages.add(new ServerOverviewPage(this));
+        pages.addAll(this.frameworkSubpages());
+        return pages;
+    }
 
     /** mode is staged by persist/update but is not a form entry; stamp it here. */
     @Override
@@ -260,49 +215,60 @@ public final class ServerResource extends RowResource {
     }
 
     /**
-     * STORED state per host: health columns and the last preflight, never a live probe.
+     * STORED state per host as a structured cell: health columns and the last preflight,
+     * never a live probe and never a flattened sentence.
      *
      * AIDEV-NOTE: QUARANTINE is asked FIRST and off its own column, because it was
      * invisible here. This branched on {@code last_error_kind} alone, and since M078 moved
      * the quarantine verdict to {@code quarantined_at}, a successful probe CLEARS the error
      * kind -- so a quarantined-but-reachable host rendered in the list with no quarantine
-     * word anywhere, visible only to an operator who opened the form and read
-     * {@code pinState}. A security state a later success hides is worse than no state.
+     * word anywhere. A security state a later success hides is worse than no state.
+     * Static and package-reachable on purpose: {@link ServerOverviewPage} renders the SAME
+     * cell in its state header, so the list and the overview can never disagree.
      */
-    private @NonNull String storedStatus(@NonNull Row row) {
-        String admission = String.valueOf((Object) row.get(ServerModel.ADMISSION));
-        String errorKind = row.get(ServerModel.LAST_ERROR_KIND);
+    static @NonNull HostStatusCell statusCellOf(@NonNull Row row) {
         Instant lastSeen = row.get(ServerModel.LAST_SEEN_AT);
+        String lastSeenIso = lastSeen != null ? lastSeen.toString() : null;
+        String daemon = daemonLabelOf(row);
+        RelativeTimeWording wording = defaultWording();
         if (row.get(ServerModel.QUARANTINED_AT) != null) {
-            return hostCopy(Microcopy.of("host_quarantined_status")
-                .withArg("admission", admission));
+            return HostStatusCell.of("quarantined", daemon, null, lastSeenIso, wording);
         }
+        String errorKind = row.get(ServerModel.LAST_ERROR_KIND);
         if (errorKind != null && !errorKind.isBlank()) {
-            return hostCopy(Microcopy.of("host_error_state")
-                .withArg("kind", errorKind)
-                .withArg("admission", admission));
+            return HostStatusCell.of("error", daemon, errorKind, lastSeenIso, wording);
         }
         if (lastSeen == null) {
-            return hostCopy(Microcopy.of("host_never_probed").withArg("admission", admission));
+            return HostStatusCell.of("never_probed", daemon, null, null, wording);
         }
+        // A host whose last contact is older than the placement bound looks identical to a
+        // healthy one otherwise: same version, same admission, no error kind. The refusal
+        // an operator would otherwise only meet at deploy is stated where they read.
+        if (lapsed(row)) {
+            return HostStatusCell.of("silent", daemon, null, lastSeenIso, wording);
+        }
+        return HostStatusCell.of("ok", daemon, null, lastSeenIso, wording);
+    }
+
+    /** "Docker 27.1.1" / "Incus 7.3": the daemon label plus its STORED version. */
+    private static @NonNull String daemonLabelOf(@NonNull Row row) {
         Object capabilities = row.get(ServerModel.CAPABILITIES);
         String label = ServerModel.isIncus(row) ? "Incus" : "Docker";
         String versionKey = ServerModel.isIncus(row) ? "incus_version" : "docker_version";
-        String daemon = capabilities instanceof Map<?, ?> map
+        return capabilities instanceof Map<?, ?> map
             && map.get(versionKey) instanceof String version && !version.isBlank()
             ? label + " " + version : label;
-        // A host whose last contact is older than the placement bound looks identical to a
-        // healthy one here otherwise: same version, same admission, no error kind. The
-        // refusal an operator would otherwise only meet at deploy is stated where they read.
-        if (lapsed(row)) {
-            return hostCopy(Microcopy.of("host_contact_lapsed_status")
-                .withArg("docker", daemon)
-                .withArg("minutes", Duration.between(lastSeen, Instant.now()).toMinutes())
-                .withArg("admission", admission));
+    }
+
+    /** Server-default-locale relative-time wording; null when no runtime is booted. */
+    private static @Nullable RelativeTimeWording defaultWording() {
+        try {
+            return RelativeTimeWording.resolve(
+                LocaleChain.of(RouteLocales.get().getDefaultLocale()),
+                Zenit.getMessageResolver());
+        } catch (RuntimeException unbooted) {
+            return null;
         }
-        return hostCopy(Microcopy.of("host_stored_state")
-            .withArg("docker", daemon)
-            .withArg("admission", admission));
     }
 
     /** Whether this host is past the declared contact bound, asked through the GATE itself. */
@@ -313,140 +279,6 @@ public final class ServerResource extends RowResource {
         } catch (Violations refused) {
             return true;
         }
-    }
-
-    /**
-     * The SSH pin as the operator must be able to READ it: which fingerprint we enforce,
-     * whether a human ever confirmed it, and -- loudly -- that the host has since offered
-     * a different one. An Incus host shows this for its ADMIN lane, which is a different
-     * relationship from its daemon certificate below.
-     */
-    private @NonNull String hostKeyState(@NonNull String name) {
-        Row row = Models.get(ServerModel.class).findByName(name);
-        if (row == null || !ServerModel.hasSshLane(row)) {
-            // An Incus host without a lane is not "local" -- it is a host whose kernel we
-            // cannot read, and the copy says which of the two this is.
-            return hostCopy(Microcopy.of(row != null && ServerModel.isIncus(row)
-                ? "ssh_lane_none" : "host_key_local"));
-        }
-        return pinState(row, HostTrustSlot.SSH, HostKeys::fingerprintOf,
-            "host_key_none", "host_key_confirmed", "host_key_unconfirmed");
-    }
-
-    /**
-     * Whether kernel-truth isolation verification is possible here, PROVEN, or simply not
-     * required -- so an operator never has to infer a placement refusal from a preflight
-     * check buried in the stored capabilities.
-     *
-     * AIDEV-NOTE: it names the MACHINE the verdict is about, which is the answer to a
-     * record that can green-light every gate about the wrong host. A blank
-     * {@code incus_url} means the controller's OWN unix socket
-     * ({@link IncusEndpoint#parse}), the shipping native-deploy shape -- but the row still
-     * carries whatever name the operator typed, so a record named after a remote machine
-     * needs no pin, is stamped alive by the reaper, has its capacity measured and passes
-     * kernel truth through the local sudo runner, all about the controller. Refusing on a
-     * name mismatch would be guessing (the record is USUALLY named after the machine it
-     * runs on); saying which endpoint the verdict came from is not.
-     *
-     * AIDEV-NOTE: it also states WHEN the evidence was produced, because
-     * {@link HostPreflight#store} now merges: a stored verdict can outlive the run that
-     * stamped {@code probed_at}, and evidence whose age cannot be read is evidence that
-     * silently reads as current.
-     */
-    private @NonNull String kernelIsolationState(@NonNull String name) {
-        Row row = Models.get(ServerModel.class).findByName(name);
-        if (row == null || !ServerModel.isIncus(row)) {
-            return "";
-        }
-        String endpoint = ServerModel.isIncusHttps(row) ? ""
-            : hostCopy(Microcopy.of("host_local_socket")
-                .withArg("socket", IncusEndpoint.of(row).describe()));
-        if (!ServerModel.acceptsTenantWorkloads(row)) {
-            return hostCopy(Microcopy.of("kernel_isolation_optional")) + endpoint;
-        }
-        if (!IncusKernelIsolation.laneAvailable(row)) {
-            return hostCopy(Microcopy.of("kernel_isolation_missing")) + endpoint;
-        }
-        boolean proven = HostPreflight.STATUS_PASS.equals(
-            HostPreflight.storedCheckStatus(row, IncusPreflight.KERNEL_LANE_CHECK));
-        Instant provenAt = HostPreflight.storedCheckAt(row, IncusPreflight.KERNEL_LANE_CHECK);
-        String verdict = proven && provenAt != null
-            ? hostCopy(Microcopy.of("kernel_isolation_proven_at")
-                .withArg("when", provenAt.toString()))
-            : hostCopy(Microcopy.of(proven
-                ? "kernel_isolation_proven" : "kernel_isolation_unproven"));
-        return verdict + endpoint;
-    }
-
-    /** The Incus daemon's pinned server certificate, read the same way. */
-    private @NonNull String incusCertState(@NonNull String name) {
-        Row row = Models.get(ServerModel.class).findByName(name);
-        if (row == null || !ServerModel.isIncusHttps(row)) {
-            return "";
-        }
-        return pinState(row, HostTrustSlot.INCUS_TLS, IncusTrust::fingerprintOf,
-            "incus_cert_none", "incus_cert_confirmed", "incus_cert_unconfirmed");
-    }
-
-    /** One slot's pin state: unpinned, MISMATCH (loudest), confirmed or unconfirmed. */
-    private @NonNull String pinState(@NonNull Row row, @NonNull HostTrustSlot slot,
-                                     @NonNull UnaryOperator<String> digest,
-                                     @NonNull String noneKey, @NonNull String confirmedKey,
-                                     @NonNull String unconfirmedKey) {
-        String fingerprint = row.get(slot.fingerprint());
-        if (fingerprint == null || fingerprint.isBlank()) {
-            return hostCopy(Microcopy.of(noneKey));
-        }
-        String offered = slot.offeredOf(row);
-        if (!offered.isBlank()) {
-            return hostCopy(Microcopy.of("host_key_mismatch_state")
-                .withArg("pinned", fingerprint)
-                .withArg("offered", digest.apply(offered)));
-        }
-        // A quarantine with NO offered material: a live connection was refused because the
-        // identity contradicted the pin and nobody rescanned. Without this the form would
-        // report a quarantined host as "confirmed" -- the pin is confirmed, the machine is
-        // the thing that is not.
-        if (HostPins.isQuarantined(row, slot)) {
-            String reason = row.get(ServerModel.QUARANTINE_REASON);
-            return hostCopy(Microcopy.of("host_quarantined_state")
-                .withArg("reason", reason != null && !reason.isBlank()
-                    ? reason : String.valueOf((Object) row.get(ServerModel.LAST_ERROR))));
-        }
-        return hostCopy(Microcopy.of(Boolean.TRUE.equals(row.get(slot.verified()))
-            ? confirmedKey : unconfirmedKey).withArg("fingerprint", fingerprint));
-    }
-
-    /** The public half of this host's OWN ssh key, for the remote's authorized_keys. */
-    private @NonNull String identityPublicKey(@NonNull String name) {
-        Row row = Models.get(ServerModel.class).findByName(name);
-        if (row == null || !ServerModel.hasSshLane(row)) {
-            return "";
-        }
-        String publicKey = row.get(HostTrustSlot.SSH.clientPublic());
-        return publicKey != null && !publicKey.isBlank() ? publicKey
-            : hostCopy(Microcopy.of("identity_missing"));
-    }
-
-    /** This host's client CERTIFICATE, for the daemon's trust store. */
-    private @NonNull String incusClientCertificate(@NonNull String name) {
-        Row row = Models.get(ServerModel.class).findByName(name);
-        if (row == null || !ServerModel.isIncusHttps(row)) {
-            return "";
-        }
-        String certificate = row.get(HostTrustSlot.INCUS_TLS.clientPublic());
-        return certificate != null && !certificate.isBlank() ? certificate
-            : hostCopy(Microcopy.of("incus_client_missing"));
-    }
-
-    /** The detail page's LIVE overview; the probe persists its typed outcome either way. */
-    private @NonNull String serverOverview(@NonNull String name) {
-        Row row = Models.get(ServerModel.class).findByName(name);
-        String label = row != null && ServerModel.isIncus(row) ? "Incus" : "Docker";
-        ServerService.Summary summary = this.serverService.probeAndStore(name);
-        return summary == null || !summary.reachable()
-            ? hostCopy(Microcopy.of("host_daemon_unavailable").withArg("daemon", label))
-            : formatSummary(summary, label);
     }
 
     private static @NonNull String formatSummary(ServerService.@NonNull Summary summary,
@@ -488,7 +320,7 @@ public final class ServerResource extends RowResource {
     @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
         if ("host_status".equals(column.name())) {
-            return storedStatus(row);
+            return statusCellOf(row);
         }
         return super.cellValue(row, column);
     }
@@ -554,6 +386,7 @@ public final class ServerResource extends RowResource {
             actions.add(this.repinAction(lane));
             actions.add(this.rotateAction(lane));
         }
+        actions.add(this.probeAction());
         actions.add(this.preflightAction());
         actions.add(this.admitAction());
         actions.add(this.cordonAction());
@@ -737,6 +570,34 @@ public final class ServerResource extends RowResource {
                 lane.rotate().accept(row);
                 return CmsActionResult.refreshWithToast(serverCopy(lane.copy().rotatedToast())
                     .withArg("name", row.get(ServerModel.NAME)));
+            })
+            .build();
+    }
+
+    /**
+     * The EXPLICIT live probe. This used to be the {@code live_overview} pseudo-field,
+     * which ran {@code probeAndStore} as a side effect of RENDERING the edit form --
+     * a page view must never contact a remote daemon. Deliberate now: one click, one
+     * probe, the typed outcome persisted and reported either way.
+     */
+    private @NonNull RowAction<Row> probeAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "probe_server"))
+            .label(serverCopy("probe_now"))
+            .description(serverCopy("probe_now_hint"))
+            .icon(Icon.of("heart-pulse"))
+            .handler((row, ctx) -> {
+                String name = row.get(ServerModel.NAME);
+                String label = ServerModel.isIncus(row) ? "Incus" : "Docker";
+                ServerService.Summary summary = this.serverService.probeAndStore(name);
+                if (summary == null || !summary.reachable()) {
+                    throw Violations.ofForm(CmsSupport.violationText("host_probe_failed")
+                        .withArg("name", name)
+                        .withArg("kind", summary != null && summary.errorKind() != null
+                            ? summary.errorKind() : "unknown"));
+                }
+                return CmsActionResult.refreshWithToast(serverCopy("host_probe_ok")
+                    .withArg("name", name)
+                    .withArg("summary", formatSummary(summary, label)));
             })
             .build();
     }
