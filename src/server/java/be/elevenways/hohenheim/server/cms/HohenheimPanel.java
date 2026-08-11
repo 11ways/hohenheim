@@ -41,6 +41,15 @@ public final class HohenheimPanel extends Panel {
     public static final NavGroup INFRA_GROUP =
         NavGroup.of("infra", Microcopy.of("infra").withFilter("scope", "nav"), 200, Icon.of("server"));
 
+    /**
+     * Compute group: the container/VM management surface -- instances, templates,
+     * quotas, snapshots, backups, backup targets, game domains. Weight sorts ASCENDING
+     * (PanelNav), so 180 lands it before Infrastructure; Servers and reconcile findings
+     * stay in Infrastructure deliberately (host inventory, not workloads).
+     */
+    public static final NavGroup COMPUTE_GROUP =
+        NavGroup.of("compute", Microcopy.of("compute").withFilter("scope", "nav"), 180, Icon.of("cubes"));
+
     /** Security group: IP bans. */
     public static final NavGroup SECURITY_GROUP =
         NavGroup.of("security", Microcopy.of("security").withFilter("scope", "nav"), 150, Icon.of("shield-halved"));
