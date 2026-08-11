@@ -5,7 +5,7 @@
 {% declare scheduleName: String %}
 {% declare steps: List %}
 {% declare runs: List %}
-{% declare addStepTarget: RouteTarget %}
+{% declare addStepTarget: RouteTarget = null %}
 {% declare canEdit: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}

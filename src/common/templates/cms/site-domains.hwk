@@ -4,8 +4,8 @@
 {% declare siteId: Integer %}
 {% declare siteName: String %}
 {% declare domains: List %}
-{% declare addDomainTarget: RouteTarget %}
-{% declare requestCertTarget: RouteTarget %}
+{% declare addDomainTarget: RouteTarget = null %}
+{% declare requestCertTarget: RouteTarget = null %}
 {% declare canEditDomains: Boolean = true %}
 {% declare canRequestCert: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}

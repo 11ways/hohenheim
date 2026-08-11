@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceExec;
@@ -19,8 +22,6 @@ import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -91,17 +92,25 @@ public final class InstanceExecPage implements RecordScopedPage<Row> {
         String command = raw == null ? "" : String.valueOf(raw).strip();
         int instanceId = instance.get(InstanceModel.ID);
 
-        String base = conduit.getPath();
+        // AIDEV-NOTE: this tab renders under /admin AND /manage, so the destination is
+        // built from the HOSTING panel rather than from conduit.getPath(). Composed off
+        // CmsEndpoints because it is a CMS route PLUS query parameters, and CmsRoutes
+        // returns the RouteTarget interface, which has no with(...).
+        BoundEndpoint<Map<String, Object>> back = CmsEndpoints.RECORD_SUBPAGE
+            .with(CmsEndpoints.PANEL_PARAM, CmsSupport.panelSlug(conduit))
+            .with(CmsEndpoints.RESOURCE_PARAM, "instances")
+            .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
+            .with(CmsEndpoints.SUBPAGE_PARAM, SLUG);
         try {
             InstanceExec.Run run = new InstanceExec().run(instanceId, command);
-            return CmsActionResult.redirect(new Uri(base
-                + "?exit=" + run.exitCode()
-                + "&output=" + URLEncoder.encode(run.output(), StandardCharsets.UTF_8)));
+            // CmsActionResult.redirect is Uri-typed, so the typed target renders here.
+            return CmsActionResult.redirect(new Uri(back
+                .with(HohenheimParams.EXEC_EXIT, run.exitCode())
+                .with(HohenheimParams.EXEC_OUTPUT, run.output()).toUrl()));
         } catch (Violations refused) {
             // NEVER a silent swallow: the page renders ?error= verbatim.
-            return CmsActionResult.redirect(new Uri(base + "?error="
-                + URLEncoder.encode(String.valueOf(refused.getMessage()),
-                    StandardCharsets.UTF_8)));
+            return CmsActionResult.redirect(new Uri(back.with(HohenheimParams.ERROR_TEXT,
+                String.valueOf(refused.getMessage())).toUrl()));
         }
     }
 }

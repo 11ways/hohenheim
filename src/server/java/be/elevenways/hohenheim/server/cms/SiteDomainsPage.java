@@ -65,26 +65,33 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         vars.put("siteId", siteId);
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("domains", domains);
-        // AIDEV-NOTE: a CMS route PLUS a query parameter cannot be built from CmsRoutes --
-        // its builders return the RouteTarget interface, which has no with(...). Composing
-        // off CmsEndpoints keeps it fully typed; the alternative is a concatenated URL.
-        vars.put("addDomainTarget", CmsEndpoints.CREATE_FORM
-            .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, "domains")
-            .with(HohenheimParams.SITE_ID_PREFILL, siteId));
-        // The certificate request page is installation administration and lives only on
-        // the admin panel, so the panel slug here is deliberately the literal "admin".
-        vars.put("requestCertTarget", CmsEndpoints.LIST
-            .with(CmsEndpoints.PANEL_PARAM, "admin")
-            .with(CmsEndpoints.RESOURCE_PARAM, "certificates-request")
-            .with(HohenheimParams.CERTIFICATE_REQUEST_SITE, siteId));
         boolean administerDomains = HohenheimAccess.isAdmin(accessContext);
         // Binding a hostname to a site the principal MANAGES is delegated (the write pipeline
         // decides what such a write may carry); requesting a certificate stays installation
         // administration, because an issued certificate is authority over a name.
-        vars.put("canEditDomains", administerDomains
-            || HohenheimAccess.canManageSite(accessContext, siteId));
-        vars.put("canRequestCert", administerDomains && !tlsPassthrough);
+        boolean canEditDomains = administerDomains
+            || HohenheimAccess.canManageSite(accessContext, siteId);
+        boolean canRequestCert = administerDomains && !tlsPassthrough;
+        vars.put("canEditDomains", canEditDomains);
+        vars.put("canRequestCert", canRequestCert);
+        // AIDEV-NOTE: a CMS route PLUS a query parameter cannot be built from CmsRoutes --
+        // its builders return the RouteTarget interface, which has no with(...). Composing
+        // off CmsEndpoints keeps it fully typed; the alternative is a concatenated URL.
+        vars.put("addDomainTarget", canEditDomains ? CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, panel)
+            .with(CmsEndpoints.RESOURCE_PARAM, "domains")
+            .with(HohenheimParams.SITE_ID_PREFILL, siteId) : null);
+        // AIDEV-NOTE: gated on the SAME boolean the template's {% if %} uses, not merely
+        // provided and left for the template to hide. A declared template variable is
+        // serialized into the hydration payload whether or not any element renders it, so
+        // an ungated target would put "certificates-request" in the page source of a
+        // /manage render -- which is exactly what ManagePanelTest forbids. The certificate
+        // request page is installation administration and lives only on the admin panel,
+        // so the panel slug is deliberately the literal "admin".
+        vars.put("requestCertTarget", canRequestCert ? CmsEndpoints.LIST
+            .with(CmsEndpoints.PANEL_PARAM, "admin")
+            .with(CmsEndpoints.RESOURCE_PARAM, "certificates-request")
+            .with(HohenheimParams.CERTIFICATE_REQUEST_SITE, siteId) : null);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-domains"), vars);
     }

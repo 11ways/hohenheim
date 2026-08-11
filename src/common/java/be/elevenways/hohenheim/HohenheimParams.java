@@ -119,6 +119,16 @@ public final class HohenheimParams {
         ParameterDefinition.builder(String.class).name("restored")
             .stringResolver(value -> value).build();
 
+    /** The exit code an exec run reports back to the Exec tab. */
+    public static final ParameterDefinition<Integer> EXEC_EXIT =
+        ParameterDefinition.builder(Integer.class).name("exit")
+            .stringResolver(Integer::parseInt).build();
+
+    /** The captured output an exec run reports back to the Exec tab. */
+    public static final ParameterDefinition<String> EXEC_OUTPUT =
+        ParameterDefinition.builder(String.class).name("output")
+            .stringResolver(value -> value).build();
+
     /** The manual-DNS challenge token the certificate request page resumes with. */
     public static final ParameterDefinition<String> MANUAL_CHALLENGE =
         ParameterDefinition.builder(String.class).name("manual")
