@@ -5097,6 +5097,26 @@ of its gate clauses are closed by tests that RAN (CI and live on daystrom).
   MANAGE holder still passes and revoking MANAGE still closes the socket. What
   the MANAGE wording now gets WRONG is the floor -- a CONSOLE-only grantee
   reaches the framebuffer, which this text denies.
+
+  CODE FOLLOW-UPS from the same sweep, listed here because they are the SOURCE
+  side of this drift and a docs pass may not touch `src/` (all four verified
+  2026-08-12, none fixed):
+  1. `VmFramebufferHandler.java:30-34` -- the authorization AIDEV-NOTE says
+     "per-record MANAGE capability" and "the instant MANAGE stops holding"; the
+     code four lines later checks `HohenheimAccess.CONSOLE`.
+  2. `HohenheimEndpoints.java:896-897` -- `INSTANCE_CONSOLE`'s docblock says
+     "the handler's per-record manage check"; the handler asks CONSOLE.
+  3. `ManageInstanceDeviceResource.java:22` -- "Every WRITE already re-asks
+     InstanceDevices (which demands manage on the instance)"; it demands CONFIG.
+  4. `InstanceDevicesPage` declares no `visibleFor`, so the Devices tab and its
+     Add-disk/Add-NIC targets render on a Docker instance whose every device
+     POST can only answer `devices_unsupported`. `InstanceFramebufferPage`
+     `visibleFor` is the shape to copy.
+  And the reason this drift could sit unnoticed: **no test distinguishes the
+  verbs on the framebuffer.** `VmFramebufferRevocationTest` grants and revokes
+  `HohenheimAccess.MANAGE` (`:75`, `:94`, `:155`), which passes whether the
+  handler checks MANAGE or CONSOLE, because CONSOLE is `impliedBy(MANAGE)`. A
+  CONSOLE-only journey is what would pin the actual floor.
 - GATE "use the framebuffer rescue console" + "revoke tenant access mid-console":
   VmFramebufferConsoleLiveTest (daystrom, production endpoint, real socket, real
   VM): PNG framebuffer frame arrives pre-agent, scancodes ride the live SPICE
