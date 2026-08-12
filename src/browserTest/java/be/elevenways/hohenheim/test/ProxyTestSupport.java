@@ -12,12 +12,14 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -120,15 +122,94 @@ public final class ProxyTestSupport {
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             StringBuilder response = new StringBuilder();
             try {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line).append("\n");
-                }
+                readFramedResponse(reader, response);
             } catch (java.net.SocketTimeoutException e) {
                 // A killed exchange may leave the connection open without EOF;
                 // whatever was read so far is the observable response.
             }
             return response.toString();
+        }
+    }
+
+    /**
+     * Read one HTTP/1.1 response using its OWN framing, falling back to read-to-EOF.
+     *
+     * AIDEV-NOTE: this used to read to EOF unconditionally, relying on the appended
+     * "Connection: close". A caller that sends its own Connection header (three do -- the
+     * hop-by-hop test and the two websocket-upgrade tests) overrides it, so the server never
+     * closed and every one of those calls ate the full 5s soTimeout, silently swallowed by
+     * the catch above: 16.05s of SiteDispatcherTest's 17.42s body. Framing the read is also
+     * STRICTLY STRONGER than waiting -- a genuine upstream hang used to be indistinguishable
+     * from success, because "as much as arrived in 5s" and "the complete response" returned
+     * the same string.
+     */
+    private static void readFramedResponse(BufferedReader reader, StringBuilder response)
+            throws IOException {
+        int contentLength = -1;
+        boolean chunked = false;
+        String line;
+        while ((line = reader.readLine()) != null) {
+            response.append(line).append("\n");
+            if (line.isEmpty()) {
+                break;
+            }
+            int colon = line.indexOf(':');
+            if (colon <= 0) {
+                continue;
+            }
+            String name = line.substring(0, colon).trim().toLowerCase(Locale.ROOT);
+            String value = line.substring(colon + 1).trim();
+            if (name.equals("content-length")) {
+                try {
+                    contentLength = Integer.parseInt(value);
+                } catch (NumberFormatException ignored) {
+                    contentLength = -1;
+                }
+            } else if (name.equals("transfer-encoding")) {
+                chunked = value.toLowerCase(Locale.ROOT).contains("chunked");
+            }
+        }
+
+        if (line == null) {
+            return;
+        }
+        if (chunked) {
+            // Terminating chunk is a "0" size line...
+            while ((line = reader.readLine()) != null) {
+                response.append(line).append("\n");
+                if (line.trim().equals("0")) {
+                    break;
+                }
+            }
+            // ...and the TRAILER section follows it, ended by a blank line. Stopping at the
+            // "0" would drop exactly the grpc-status/grpc-message headers the trailer
+            // forwarding tests exist to assert.
+            while ((line = reader.readLine()) != null) {
+                response.append(line).append("\n");
+                if (line.isEmpty()) {
+                    break;
+                }
+            }
+            return;
+        }
+        if (contentLength >= 0) {
+            int remaining = contentLength;
+            char[] buffer = new char[Math.min(Math.max(contentLength, 1), 8192)];
+            while (remaining > 0) {
+                int read = reader.read(buffer, 0, Math.min(buffer.length, remaining));
+                if (read < 0) {
+                    break;
+                }
+                response.append(buffer, 0, read);
+                // Content-Length counts BYTES; the reader hands out chars. Decrement by the
+                // encoded width so a multi-byte body still terminates on the declared length.
+                remaining -= new String(buffer, 0, read).getBytes(StandardCharsets.UTF_8).length;
+            }
+            return;
+        }
+        // No self-framing: the appended Connection: close is the only terminator left.
+        while ((line = reader.readLine()) != null) {
+            response.append(line).append("\n");
         }
     }
 }
