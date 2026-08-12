@@ -15,6 +15,21 @@ import java.util.Map;
  * DockerClient.createContainer where no caller can omit it. The split is deliberate and
  * is about PROVENANCE: what is here is per-workload configuration an operator chooses,
  * what is there is policy an operator does not get to weaken. Do not merge them.
+ *
+ * AIDEV-NOTE: THE recorded verdict on the missing third dimension, because this is where
+ * the next reader will come looking for it. The instance-tier gate clause says runtime
+ * limits cover "pids, logs and ephemeral disk"; pids and logs are enforced in
+ * {@link ContainerHardening#applyTo}, and EPHEMERAL (root) DISK is STRUCK for the Docker
+ * tier rather than pending. Three reasons, each sufficient: the tier is UNDECLARABLE
+ * ({@code DockerContainerKind.SETTINGS_SCHEMA} has no root-disk field, so there is nothing
+ * to charge or stamp); {@code --storage-opt size=} is accepted only on overlay2 backed by
+ * XFS with pquota, a HOST filesystem property hohenheim neither owns nor can verify
+ * through the API, so the identical declaration would enforce on some hosts and silently
+ * do nothing on most; and the honest branch is already taken everywhere else -- the disk
+ * view reports null as UNMEASURED instead of a fabricated zero, and
+ * {@code RootDiskSizeSupport} is a DECLARED capability the Incus runtime implements and
+ * the Docker runtime does not, so a spec carrying {@code rootDiskGb} is refused by name.
+ * Do not add a memoryMb-style {@code diskGb} member here to make the sentence true.
  */
 public record ResourceLimits(@Nullable Integer memoryMb, @Nullable Double cpus) {
 

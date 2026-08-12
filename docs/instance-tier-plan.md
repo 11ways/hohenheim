@@ -2742,6 +2742,33 @@ shape) is confirmable during the phase. Do not start Phase 3 with 7 or 8 open.
     port LEDGER already refuses collisions and a per-owner port count is not
     the scarce thing. The gate is MET on the dimensions that exist; treat the
     word "cpu/port" in it as struck, not as pending work.
+  - **AMENDED 2026-08-13, the "runtime limits also cover pids, logs and
+    ephemeral disk" half.** PIDS and LOGS both ship now and are enforced in the
+    one funnel no caller can bypass (`ContainerHardening.applyTo`: `PidsLimit`,
+    plus `LogConfig` json-file with operator-tunable
+    `security.container_log_max_size_mb` x `security.container_log_max_files`;
+    both keys are `ESCAPE_KEYS` entries, so a caller can neither raise nor
+    remove them). **EPHEMERAL (root) DISK is STRUCK for the Docker tier, not
+    pending.** Three independent reasons, each sufficient: the tier is
+    *undeclarable* (`DockerContainerKind.SETTINGS_SCHEMA` declares image, tag,
+    command, port/protocol/exposure, host port, env, volumes, memory and cpu --
+    there is no root-disk field for a quota to charge or a driver to stamp);
+    Docker's `--storage-opt size=` is accepted only on overlay2 backed by XFS
+    with `pquota` mounted, which is a HOST filesystem property hohenheim does
+    not own, cannot create and cannot verify from the API, so the same
+    declaration would enforce on some hosts and silently do nothing on most;
+    and the code already took the honest branch -- `InstanceOverviewPage`'s
+    disk view reports null as UNMEASURED rather than fabricating a zero, and
+    `RootDiskSizeSupport` exists as a DECLARED capability the Incus runtime
+    implements and the Docker runtime does not, so a spec carrying `rootDiskGb`
+    is refused BY NAME rather than accepted and ignored. Root-disk quota
+    therefore reads as an INCUS-tier capability in this plan; shipping a Docker
+    `--storage-opt` to make the sentence true would be a limit that silently
+    does nothing on most hosts, which is exactly the shape this plan's other
+    clauses forbid. The remaining Docker-tier exposure is a workload filling
+    the shared docker root, which the LOG half no longer contributes to and
+    which a host-level disk observer (not a per-container quota) is the honest
+    answer to.
 - **Control-plane recovery precedes encrypted instance secrets.** Back up the
   Hohenheim database AND field-encryption keyring atomically to an off-host
   target, document restore on a fresh controller, and exercise it before Phase 3
