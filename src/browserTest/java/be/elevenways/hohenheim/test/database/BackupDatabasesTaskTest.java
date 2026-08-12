@@ -24,6 +24,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * to a timestamped dump and prunes stale dumps to the retention setting. Isolated SQLite + live
  * Docker daemon (skipped without either).
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class BackupDatabasesTaskTest {
 
     private static PrivateNetns netns;

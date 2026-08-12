@@ -20,6 +20,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * convention -- this machine has no passwordless host nft, and a skipped check would
  * be a green check).
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class HostPreflightTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

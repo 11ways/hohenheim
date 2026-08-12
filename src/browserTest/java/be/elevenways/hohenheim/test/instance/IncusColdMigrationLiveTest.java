@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -45,6 +46,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * Skips (never fails) when the second host is not enrolled in
  * {@code ~/.config/hohenheim-livehost/incus.properties} ({@code url_b} keys).
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusColdMigrationLiveTest {
 
     private static final String HOST_A = "live-mig-a";

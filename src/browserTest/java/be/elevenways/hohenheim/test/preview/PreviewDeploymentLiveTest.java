@@ -38,6 +38,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * generated hostname row, DNS rows and quota charge, asserted at the daemon and in the
  * database while a hand-authored domain row survives untouched.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class PreviewDeploymentLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

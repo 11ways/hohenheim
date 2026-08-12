@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -48,6 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Every assertion is scoped to THIS class's own instance handle -- never a daemon-wide
  * count, which parallel forks and a shared remote host would make meaningless.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusWorkloadLivenessLiveTest {
 
     private static final String HOST = "live-incus-liveness";

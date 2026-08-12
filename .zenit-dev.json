@@ -1,6 +1,20 @@
 {
     "reuse": {
         "lanes": { "hohenheim": { "unit": false, "browser": true } },
-        "nonHermeticClasses": ["*Incus*", "*Live*"]
+        "nonHermeticClasses": [
+            "*Incus*", "*Live*",
+            "BackupDatabasesTaskTest", "BackupTargetsTest", "BinaryBackupTest",
+            "ContainerHardeningTest", "DatabaseNetworkIsolationTest",
+            "DatabaseRestoreUploadTest", "DatabaseServiceTest", "DockerClientTest",
+            "DockerReclaimTest", "DockerReconcilerTest", "DockerSiteHandlerTest",
+            "DockerStreamingTest", "EngineMemoryCeilingTest", "EnvInjectionFlowTest",
+            "HostFencingTest", "HostKeyPinningTest", "HostPreflightTest",
+            "InstanceBackupsTest", "InstanceNetworkIsolationTest",
+            "InstanceSnapshotRetentionTest", "ManagedDatabaseTest",
+            "ManagedNodeSocketTest", "OrphanActionsTest", "ProcessCapacityTest",
+            "ProcessConfinementTest", "ProcessNetworkIsolationTest",
+            "ProclogProxyIngressTest", "StackInstancesTest", "StackNetworkIsolationTest",
+            "StackRuntimeFlowTest", "VerifyWorkloadIsolationTest", "WorkloadNetworkPolicyTest"
+        ]
     }
 }

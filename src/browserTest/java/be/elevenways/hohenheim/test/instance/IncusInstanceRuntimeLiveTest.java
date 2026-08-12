@@ -37,6 +37,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -48,6 +49,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * REST API) beside every service answer. Uses a small Alpine image because the host's
  * 3.9 GiB of RAM is the binding limit, and removes everything it creates.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusInstanceRuntimeLiveTest {
 
     // AIDEV-NOTE: unique per live class BY REQUIREMENT -- the authorized_keys sweep

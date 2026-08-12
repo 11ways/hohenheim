@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * skips. Everything here is hermetic on purpose -- a live-lane gate that only worked on a
  * host with a daemon would be the exact failure it exists to prevent.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class LiveLaneTest {
 
     /**

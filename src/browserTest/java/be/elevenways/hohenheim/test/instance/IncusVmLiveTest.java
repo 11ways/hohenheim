@@ -40,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -54,6 +55,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  *
  * 512 MiB VM + 128 MiB peer container: the host's 3.9 GiB is the binding limit.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusVmLiveTest {
 
     // AIDEV-NOTE: the record name must be UNIQUE across live classes: the product's

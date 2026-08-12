@@ -24,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -43,6 +44,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * No Docker daemon is involved: every connection here dies at authentication, which
  * is strictly AFTER host-key verification.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class HostKeyPinningTest {
 
     private static SqliteDatasource datasource;

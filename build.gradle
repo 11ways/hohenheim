@@ -308,12 +308,16 @@ task browserTest(type: Test) {
     testClassesDirs = sourceSets.browserTest.output.classesDirs
     classpath = sourceSets.browserTest.runtimeClasspath
 
-    // AIDEV-NOTE: two buckets. Shared-server classes (@Tag("shared-server"), inherited
-    // from HohenheimTestBase) share one booted server per JVM across parallel forks --
+    // AIDEV-NOTE: two buckets, times two lanes. Shared-server classes (@Tag("shared-server"),
+    // inherited from HohenheimTestBase) share one booted server per JVM across parallel forks --
     // forkEvery = 1 here was skeleton cargo cult that cost a JVM + full server boot per
     // class (the whole 18-minute suite). Standalone classes re-point the GLOBAL
     // Database.PATH and re-init the runtime for themselves, which yanks the database out
     // from under a live shared server, so they stay isolated in browserTestIsolated.
+    // Orthogonally, live-capable classes carry @Tag("slow") (SlowLaneGuardTest enforces
+    // it): zenit-dev's init script excludes that tag on ordinary runs, so the default
+    // lane is the hermetic suite; `zenit-dev test --all` (or any --class filter) runs
+    // the live classes too. The 60m timeouts below are sized to the FULL --all runs.
     useJUnitPlatform {
         includeTags 'shared-server'
     }
@@ -343,7 +347,14 @@ task browserTest(type: Test) {
     // the list of tests that were killed with no verdict.
     systemProperty 'hohenheim.truncation.dir',
         "${buildDir}/live-lane-truncations/browserTest"
-    doFirst { delete "${buildDir}/live-lane-truncations/browserTest" }
+    // Forks of this invocation share one freshly-migrated database template
+    // (TestDatabases); wiped up front so a migration change can never leak in.
+    systemProperty 'hohenheim.testdb.template.dir',
+        "${buildDir}/test-db-templates/browserTest"
+    doFirst {
+        delete "${buildDir}/live-lane-truncations/browserTest"
+        delete "${buildDir}/test-db-templates/browserTest"
+    }
 
     testLogging {
         showStandardStreams = true
@@ -382,7 +393,13 @@ task browserTestIsolated(type: Test) {
     // See browserTest: per-task truncation markers, wiped only by the task that owns them.
     systemProperty 'hohenheim.truncation.dir',
         "${buildDir}/live-lane-truncations/browserTestIsolated"
-    doFirst { delete "${buildDir}/live-lane-truncations/browserTestIsolated" }
+    // See browserTest: one migrated template shared across this invocation's forks.
+    systemProperty 'hohenheim.testdb.template.dir',
+        "${buildDir}/test-db-templates/browserTestIsolated"
+    doFirst {
+        delete "${buildDir}/live-lane-truncations/browserTestIsolated"
+        delete "${buildDir}/test-db-templates/browserTestIsolated"
+    }
 
     testLogging {
         showStandardStreams = true

@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (/admin, /manage) carry the strict admin CSP, an unclaimed public path does not,
  * and the admin shell bootstraps exactly once with no inline onload handler.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class ProclogProxyIngressTest extends HohenheimTestBase {
 
     /** Raw <script> in the request PATH (sent percent-encoded, decoded for the access log). */

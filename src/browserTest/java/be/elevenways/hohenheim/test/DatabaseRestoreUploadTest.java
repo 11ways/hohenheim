@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * End-to-end test for the admin-UI restore upload: a multipart POST to
  * /databases/:name/restore loads the dump into the live container.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class DatabaseRestoreUploadTest extends HohenheimTestBase {
 

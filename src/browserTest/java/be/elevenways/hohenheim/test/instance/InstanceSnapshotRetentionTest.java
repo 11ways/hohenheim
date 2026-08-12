@@ -29,6 +29,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * at all -- every other snapshot test needs a live Incus or Docker daemon, which the
  * Proxmox-use inventory named as a gap under item 7.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceSnapshotRetentionTest {
 
     private static SqliteDatasource datasource;

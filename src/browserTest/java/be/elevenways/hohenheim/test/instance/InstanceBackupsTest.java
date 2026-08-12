@@ -43,6 +43,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -60,6 +61,7 @@ import static org.assertj.core.api.Assertions.fail;
  * interleaving of two captures stay with the live suites; the "same second" here is two
  * sequential captures inside one wall-clock second, not two racing threads.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceBackupsTest {
 
     private static SqliteDatasource datasource;

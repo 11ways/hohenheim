@@ -27,6 +27,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * workstation suite driving one daemon (docs/deploy-native.md). Every assertion here is
  * about STATE on a real daemon and about the IDENTITY named in a refusal, never a status.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class TwoControllerCollisionLiveTest {
 
     private static final Path SOCKET = Path.of("/var/run/docker.sock");

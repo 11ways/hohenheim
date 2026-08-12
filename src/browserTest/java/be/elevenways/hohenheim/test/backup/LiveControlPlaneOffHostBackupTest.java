@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code uname -n}, and the local staging directory is asserted to hold nothing, so the bytes
  * the restore reads could only have crossed the wire.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class LiveControlPlaneOffHostBackupTest {
 
     private static final String REMOTE_HOST_NAME = "offhost-control-plane-host";

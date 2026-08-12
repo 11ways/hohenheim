@@ -16,6 +16,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Jelle De Loecker
  * @since  0.2.0
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class DockerReclaimTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

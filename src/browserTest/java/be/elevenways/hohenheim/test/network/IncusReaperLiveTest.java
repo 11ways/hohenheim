@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * parallel forks. The daemon's own listing is the assertion surface: "the API returned
  * success" and "the object is gone" are independent facts here.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusReaperLiveTest {
 
     private static final String HOST = "live-incus-reap";

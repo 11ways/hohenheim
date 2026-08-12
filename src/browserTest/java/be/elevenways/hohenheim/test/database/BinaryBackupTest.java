@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Binary-backup integration tests: Redis (RDB snapshot) and Mongo (mongodump archive) produce
  * their native dump fetched out via the container archive API. Isolated SQLite + live Docker.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class BinaryBackupTest {
 
     private static PrivateNetns netns;

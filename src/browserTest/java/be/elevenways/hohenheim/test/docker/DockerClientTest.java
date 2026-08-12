@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Integration test for {@link DockerClient} against a real Docker daemon.
  * Daemon-dependent tests are skipped when the socket is absent (e.g. CI without Docker).
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class DockerClientTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
