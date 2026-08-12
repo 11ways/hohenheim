@@ -190,6 +190,20 @@ public class HohenheimEndpoints {
         .build();
 
     // --- Instance templates: export download, import paste, create-from-template ---
+
+    /**
+     * The template catalog export, deliberately NOT {@code requiresInteractiveLogin()}.
+     *
+     * AIDEV-NOTE: the line this endpoint sits on the safe side of, stated so the next
+     * reader does not "harden" it by reflex or copy its stance onto the next download.
+     * The DECIDING question is whether the response body is a CREDENTIAL -- something
+     * that outlives the request and grants authority somewhere else. This document is
+     * operator-authored catalog content (name, scripts, config files, variable
+     * DECLARATIONS with their non-secret defaults, {@code TemplatePortability.export});
+     * an admin-scoped key already reads every one of those fields off the template
+     * resource, which is the accepted residual. {@code CERTIFICATES_DOWNLOAD} is the
+     * opposite answer under the same question and carries the note that says so.
+     */
     public static final Endpoint<Object> INSTANCE_TEMPLATES_EXPORT = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "instance_templates_export"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
@@ -242,6 +256,14 @@ public class HohenheimEndpoints {
 
     // Typed DataPage answers, so the admin picker's DataProviders ride
     // Endpoint.call directly (the RecordSourceEndpoints shape).
+    //
+    // AIDEV-NOTE: deliberately NOT requiresInteractiveLogin(), unlike
+    // CERTIFICATES_DOWNLOAD. Both answers are read-only ENUMERATIONS of the operator's
+    // own provider (repository paths, branch names) -- no token, no clone URL with
+    // credentials in it, nothing that grants authority elsewhere; the stored provider
+    // credential never leaves the controller. Automation is a DECLARED consumer here
+    // (the docblock on the handlers says so), and closing an enumeration to it would buy
+    // nothing the admin permission does not already decide.
     public static final Endpoint<DataPage> GIT_PROVIDER_REPOSITORIES = Endpoint.<DataPage>builder()
         .identifier(Identifier.of("hohenheim", "git_provider_repositories"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
@@ -270,12 +292,26 @@ public class HohenheimEndpoints {
         .build();
 
     // --- Certificate PEM bundle download ---
+
+    /**
+     * The certificate bundle download: certificate AND private key, so INTERACTIVE only.
+     *
+     * AIDEV-NOTE: the accepted residual of the admin permission is that a long-lived
+     * non-interactive credential can READ admin surfaces. A response body that IS a
+     * credential is past that line: this bundle carries {@code PRIVATE_KEY_PEM}, which
+     * outlives the request and impersonates the TLS host anywhere. Being a GET, no CSRF
+     * layer stands between an API key and it either, so the endpoint declaration is the
+     * only gate there can be. Read this note before adding the next download: the
+     * question is not "is it admin-gated", it is "is the body a credential"
+     * ({@code INSTANCE_TEMPLATES_EXPORT} carries the same question's other answer).
+     */
     public static final Endpoint<Object> CERTIFICATES_DOWNLOAD = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "certificates_download"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
             .addDelimiter().addStatic("download").build())
         .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresInteractiveLogin()
         .rateLimit(DOWNLOAD_LIMIT)
         .build();
 
