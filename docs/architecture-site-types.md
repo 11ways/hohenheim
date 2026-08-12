@@ -255,6 +255,17 @@ That is why a new type needs no UI work at all: declare labels/help via
 The "future `<pl-schema-form>`" and "future `{% render templateId %}`" items from the old
 text are moot -- the framework's schema-driven form entry is what ships.
 
+**AMENDED 2026-08-12: the old text deferred THREE framework items, not two, and
+the third was dropped without a verdict.** The missing one is **"Zenit: JSON
+path query helper"** -- a portable API for querying inside a JSON `settings`
+column, wanted for operational questions like "find every site forwarding to
+host X", deferred in the original because manual per-dialect queries sufficed
+for v1. It is neither moot nor built: zenit's ORM exposes no JSON-path query
+helper today, so such a question still needs a hand-written per-backend
+predicate, which the no-raw-SQL rule makes awkward. Recording it OPEN rather
+than silently dropping it: it is a framework capability, so its home is zenit
+core (`common/orm/query`), not this app.
+
 The list view filters and sorts on type, enabled and status
 (`SiteResource.java:80-97`). Everything that is not per-type lives on record subpages:
 domains, databases, processes, deployments, dev sessions, plus the framework-contributed

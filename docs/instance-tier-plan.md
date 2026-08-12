@@ -302,6 +302,20 @@ cannot state which boundary it defends, it is not ready to build.
   record's own grants -- delegation of delegation, Pterodactyl's most
   sensitive subuser permission) -- elevated tenant capabilities (can change
   what runs, exfiltrate, or widen access).
+
+  ANNOTATED 2026-08-12: **`access.manage` is a FICTIONAL spelling** -- no such
+  capability exists in `HohenheimAccess` or anywhere in `src/` (the only
+  in-tree occurrence is a comment in `InstanceCapabilitySplitTest.java:419`
+  saying it deliberately does not exist). The AUTHORITY this bullet describes
+  is entirely real; only the name is invented. Its shipped form is
+  zenit-auth's `GrantAdministration.requireAuthorizedRecordDiff` -- hold at
+  least one DELEGABLE capability on the record, plus per-capability
+  containment and delegability -- which is STRICTLY NARROWER than a dedicated
+  capability would have been, and it is why "an `access.manage`-only user
+  cannot grant exec" is met in a stronger form: NO non-admin can grant exec,
+  because exec is non-delegable. This is adjudicated in full at the Phase 5
+  capability-split block later in this document; keep the sensitivity CLASS,
+  drop the spelling.
 - `exec` (run an ARBITRARY command as an arbitrary user inside the container)
   -- this is effectively root-in-container and therefore a host-escape
   amplifier. It is NOT an ordinary capability and is NOT the same thing as
@@ -2238,6 +2252,19 @@ more. What changed:
     to keep honest: NO production kind declares `STRICT` any more -- it survives as the
     unconditional base of every profile and as what the tests pin, not as a policy
     anything uses.
+
+    CORRECTED 2026-08-12: that last sentence is FALSE as written. One production
+    (non-test) caller still creates a container under `ContainerHardening.STRICT`
+    -- the Docker host preflight's kernel-truth probe
+    (`HostPreflight.probeContainerKernel`, `HostPreflight.java:218`), which runs
+    `alpine:latest` with `sleep 60` and reads cgroup controllers, pids.max,
+    Seccomp/NoNewPrivs, `/proc/self/uid_map` and the LSM label out of the live
+    container. The spirit of the sentence survives -- no instance KIND, i.e. no
+    tenant-workload declaration, uses STRICT -- but the profile is not merely a
+    base and a test fixture: it is what the admission probe itself runs under,
+    which is the correct choice there (the probe is our own image with no
+    entrypoint to break) and is worth knowing before anyone deletes STRICT as
+    unused.
 - **Per-tenant networking is essentially absent.** `NftService` covers IP BANS
   only (one input-hook chain, timeout sets) -- no forward chain, no per-tenant
   chain, no egress rule, no metadata-range deny, nothing about container IPv6.
@@ -2592,6 +2619,34 @@ shape) is confirmable during the phase. Do not start Phase 3 with 7 or 8 open.
   acknowledgement record (actor, timestamp, warning version -- the plan's
   requirement) is NOT built yet ... Follow-up owed with the placement
   allocator." The clause stands as written and remains a real gate.
+
+  RE-VERIFIED AGAIN 2026-08-12, STILL OWED. `ServerModel.POSTURE` is a plain
+  four-value `EnumField` (trusted_only / dedicated / shared_container /
+  vm_isolated, defaulting to trusted_only) with no companion actor, timestamp
+  or warning-version column anywhere on the model, and the AIDEV-NOTE quoted
+  above is still attached to it verbatim. `ServerAdminTest` posts
+  `posture=shared_container` as an ordinary form field, which is exactly the
+  bare admin edit the clause objects to. **Do not supersede.**
+
+  ANNOTATION 2026-08-12, on the PREFLIGHT sentence only -- **the
+  shared-container acknowledgement above is untouched and still owed.** "Host
+  preflight verifies userns remap, seccomp/AppArmor ... before the host accepts
+  tenant placement" reads as one uniform rule and is not one: the two runtimes
+  DISAGREE on this clause deliberately, and the disagreement was never recorded
+  at the gate. Docker tier: `userns_remap` and `lsm` are both constructed
+  `required=false` (`HostPreflight.java:305`, `:329`) -- userns-remap is off by
+  default on every Docker distribution and requiring it would refuse both live
+  twins, and an LSM's absence is a distribution fact (Arch ships no
+  AppArmor/SELinux), so a required check would make the reference host
+  inadmissible. Incus tier: `container_userns` and `container_seccomp` are
+  REQUIRED whenever the host accepts tenant workloads
+  (`IncusPreflight.java:186`, `:252-262`), because unprivileged is the Incus
+  DEFAULT. **Correction to a claim made against this gate:** `lsm` is advisory
+  on BOTH tiers -- the Incus battery calls the shared `HostPreflight.lsmCheck`
+  unchanged (`IncusPreflight.java:187`), so only the USERNS twin diverges. The
+  reasoning is sound in both places; what was missing is any statement of it
+  where the gate is read. Net: the gate is MET on Incus as written and MET on
+  Docker only in the "verifies and records" sense, never "refuses on".
 - **Host lifecycle is an owned product flow.** Enrollment uses a short-lived
   bootstrap or an operator-pinned credential, never a pasted permanent root
   secret with implicit trust. Host records expose capabilities/version, health,
@@ -2637,6 +2692,20 @@ shape) is confirmable during the phase. Do not start Phase 3 with 7 or 8 open.
   same headroom. Runtime limits also cover pids, logs and ephemeral disk; later
   snapshot/backup/file/image quotas plug into the same ledger when their
   consumers land. Declared allocation and observed usage are distinct.
+  - **AMENDED 2026-08-12: TWO of the five dimensions in that gate sentence do
+    not exist, and were struck deliberately rather than missed.** The strike
+    lives in a STATUS block roughly 490 lines above (the 2026-08-08
+    quota-dimension wave) and the gate sentence itself was never updated, so
+    reading the gate alone gives the wrong answer. Wired: COUNT, MEMORY (M088,
+    per-owner, charged at the enforced cap), DISK GB (`InstanceDeviceQuota` +
+    `InstanceRootDiskQuota` into the same owner bucket), extra NICs, plus SITE
+    and DATABASE counts (M089). NOT wired, by decision: **CPU** -- timeshared,
+    overcommit degrades rather than OOM-kills, so nothing would enforce a
+    booking, and `InstanceQuota.java:38` records it as out of scope in the
+    code -- and **PORTS**: there is no port reservation bucket, because the
+    port LEDGER already refuses collisions and a per-owner port count is not
+    the scarce thing. The gate is MET on the dimensions that exist; treat the
+    word "cpu/port" in it as struck, not as pending work.
 - **Control-plane recovery precedes encrypted instance secrets.** Back up the
   Hohenheim database AND field-encryption keyring atomically to an off-host
   target, document restore on a fresh controller, and exercise it before Phase 3
@@ -5962,6 +6031,14 @@ Each names its home and its first consumer.
     takes only a name and a configurator (`MigrationBuilder.java:75-81`,
     `TableBuilder.Mode.CREATE`), and `ifNotExists` remains column-level only.
     This half of the clause is NOT superseded by the integrity flip above.
+
+    RE-VERIFIED AGAIN 2026-08-12, STILL OPEN, read at the source: zenit
+    `common/orm/migration/MigrationBuilder.java:75-81` is byte-for-byte the
+    two-argument signature this clause describes, constructing a
+    `TableBuilder` in `Mode.CREATE` unconditionally. **Do not supersede this
+    clause** -- it is one of the two places in this corpus where the CODE is
+    behind and the DOCUMENT is right, and superseding it would erase the only
+    record of the gap.
 - **Destructive-operation audit.** Every destroy/purge/snapshot-restore is a
   data-loss surface. Reuse the typed-confirmation + ownership-label pattern the
   stack tier already proved (`purge_stack_volumes`), and log every destructive

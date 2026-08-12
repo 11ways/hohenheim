@@ -325,6 +325,20 @@ longer a separate future project either: `server/dns/DnsSecSigner.java`,
 wired into the zone snapshot build (`DnsZoneStore.java:219`). What remains true: the
 registrar delegation is still yours to configure, and one box is still one box.
 
+AMENDED 2026-08-12 -- **the whole-paragraph strike swallowed its MIDDLE item.**
+Of the three things the struck paragraph listed, two shipped (AXFR+TSIG+NOTIFY,
+DNSSEC) and one did NOT: the **secondary-freshness UI**. The page cited as
+evidence, `DnsZoneSecondariesPage`, emits four things per row -- peer name,
+transfer host, an edit link and an attach-peer target -- and no health or
+freshness at all, because there is nothing to emit: `DnsZonePeerModel`'s whole
+schema is id / zone_id / peer_id / created_at / updated_at, and `AxfrResponder`
+writes nothing back when a secondary pulls. `DnsZoneModel.LAST_TRANSFER_AT` is
+the mirror-image fact (a zone THIS instance pulls as a secondary) and does not
+answer it. The "warn loudly when a production zone has no healthy secondary"
+half likewise has no collector and no `NotificationEvents` constant. So the
+production-redundancy threshold is met on the WIRE and unmet on the
+OBSERVABILITY clause; see `authoritative-dns.md`'s 2026-08-12 status block.
+
 ## Dev tunnel (2026-07-17): SHIPPED
 
 Remote dev sites under one wildcard "Dev namespace" site: dev servers register
