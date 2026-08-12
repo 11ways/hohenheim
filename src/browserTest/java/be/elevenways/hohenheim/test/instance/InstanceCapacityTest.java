@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -90,6 +91,7 @@ class InstanceCapacityTest {
         row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
         Models.get(ServerModel.class).save(row);
+        HostFixtures.acknowledgePosture(row);
         int id = row.get(ServerModel.ID);
         this.hosts.add(id);
         Map<String, Object> facts = new LinkedHashMap<>();

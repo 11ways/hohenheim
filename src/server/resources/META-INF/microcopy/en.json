@@ -8027,5 +8027,65 @@
   "disk_description": {
     "text": "The stored observation, not a live reading.",
     "scope": "instance_stats"
+  },
+  "host_posture_unacknowledged": {
+    "text": "Host {$name} declares shared containers, and no operator has accepted that risk; acknowledge the posture on the host before tenant containers land there",
+    "scope": "violations"
+  },
+  "host_posture_requires_vm": {
+    "text": "Host {$name} declares VM isolation and refuses a container workload, which would share its kernel with every guest on the machine",
+    "scope": "violations"
+  },
+  "host_dedicated_to_other": {
+    "text": "Host {$name} is dedicated to another owner's workloads",
+    "scope": "violations"
+  },
+  "posture_not_acknowledgeable": {
+    "text": "Host {$name} declares a posture that needs no risk acknowledgement",
+    "scope": "violations"
+  },
+  "posture_already_acknowledged": {
+    "text": "Host {$name} already carries a current risk acknowledgement",
+    "scope": "violations"
+  },
+  "posture_acknowledgement_needs_actor": {
+    "text": "A risk acknowledgement for host {$name} records who accepted it, so it cannot be made by unattended work",
+    "scope": "violations"
+  },
+  "acknowledge": {
+    "text": "Accept posture risk",
+    "scope": "server"
+  },
+  "acknowledge_hint": {
+    "text": "Record that you accept what shared containers mean on this host.",
+    "scope": "server"
+  },
+  "acknowledge_generic": {
+    "text": "Accept the shared-container risk on this host?",
+    "scope": "server"
+  },
+  "acknowledge_body": {
+    "text": "Shared containers on {$name} means hostile tenants run on ONE kernel: a container escape reaches every other workload on the machine and the host itself. Only VM isolation is rated against a hostile root tenant. Type the host name to accept this risk; it is recorded against your name and has to be accepted again if the posture or this warning changes.",
+    "scope": "server"
+  },
+  "posture_acknowledged": {
+    "text": "Posture risk accepted for {$name}.",
+    "scope": "server"
+  },
+  "acknowledgement": {
+    "text": "Posture risk",
+    "scope": "server_overview"
+  },
+  "ack_current": {
+    "text": "Accepted by {$actor} (warning v{$version})",
+    "scope": "server_overview"
+  },
+  "ack_stale": {
+    "text": "Acceptance out of date (warning v{$version})",
+    "scope": "server_overview"
+  },
+  "ack_missing": {
+    "text": "Not accepted",
+    "scope": "server_overview"
   }
 }

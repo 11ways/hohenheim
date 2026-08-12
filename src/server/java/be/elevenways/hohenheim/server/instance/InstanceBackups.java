@@ -366,14 +366,18 @@ public final class InstanceBackups {
                     .withArg("reason", InstanceSnapshots.describe(corrupt)));
             }
             BackupManifest manifest = opened.manifest();
-            if (InstanceKinds.getHandler(manifest.kind()) == null) {
+            InstanceKindHandler restoredKind = InstanceKinds.getHandler(manifest.kind());
+            if (restoredKind == null) {
                 throw Violations.ofField("kind", manifest.kind(),
                     violationText("instance_kind_unknown").withArg("kind", manifest.kind()));
             }
             int serverId = serverSpelling != null
                 ? ServerModel.canonicalServerId(serverSpelling)
                 : sourceServerId(backup);
-            HostAdmission.requireInstancePlacement(serverId);
+            // The record does not exist yet, so the owner it will be CHARGED to is asked
+            // for through the create hook's own derivation -- never a second spelling.
+            HostAdmission.requireInstancePlacement(serverId, restoredKind.isolation(),
+                InstanceQuota.creationBucket());
             RestoreCapacity.require(serverId, manifest.totalVolumeBytes());
 
             // -- create the NEW record (quota reserves in the save pipeline) ----

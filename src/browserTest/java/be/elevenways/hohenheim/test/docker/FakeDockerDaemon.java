@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -380,6 +381,12 @@ final class FakeDockerDaemon implements DockerTransport {
 
         @Override
         public boolean tenantAuthored() { return this.real.tenantAuthored(); }
+
+        // The wrapper answers for the REAL kind on both trust axes. Leaving one to the
+        // interface default is how a fake quietly answers SHARED_KERNEL for a kind that
+        // is not, and a placement test then passes for the wrong reason.
+        @Override
+        public @NonNull WorkloadIsolation isolation() { return this.real.isolation(); }
 
         @Override
         public boolean generatedOnly() { return this.real.generatedOnly(); }

@@ -26,6 +26,7 @@ public record ServerActionsView(
     @Nullable InvokeActionState cordon,
     @Nullable InvokeActionState uncordon,
     @Nullable InvokeActionState drain,
-    @Nullable InvokeActionState reap
+    @Nullable InvokeActionState reap,
+    @Nullable InvokeActionState acknowledgePosture
 ) {
 }

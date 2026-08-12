@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.HostTrustSlot;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -9,6 +11,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -16,8 +19,9 @@ import java.time.Instant;
 /**
  * The placement gate the host record exists for: NEW tenant-authored workloads
  * (the instance tier) land only on a host an operator ADMITTED after a passing
- * preflight, with a posture that accepts hostile containers. Stop/destroy are
- * never gated -- cleanup must always be possible.
+ * preflight, whose posture can satisfy THIS workload's isolation, whose
+ * shared-kernel risk an operator has accepted by name, and whose dedication no
+ * other owner holds. Stop/destroy are never gated -- cleanup must always be possible.
  */
 public final class HostAdmission {
 
@@ -25,13 +29,26 @@ public final class HostAdmission {
     }
 
     /**
-     * Refuse instance placement on a host that is not admitted or whose posture does
-     * not accept a hostile container workload.
+     * Refuse instance placement on a host that is not admitted, whose posture does not
+     * accept this workload, or whose dedication another owner already holds.
      *
+     * AIDEV-NOTE: the 1-arg form was DELETED rather than defaulted when the isolation and
+     * owner arguments landed. A default would be a second, quieter API over the same gate
+     * -- and the value it would have to default to (shared kernel, unknown owner) is
+     * exactly the pair a caller most needs the compiler to make them think about.
+     *
+     * @param isolation the boundary the workload's kind provides
+     *        ({@code InstanceKindHandler.isolation()})
+     * @param ownerBucket the quota bucket the workload is (or will be) charged to; null
+     *        means the caller cannot name an owner, which a dedicated host refuses
      * @throws Violations {@code host_not_admitted}, {@code host_posture_refuses},
-     *         {@code host_contact_lapsed} or one of {@link #requireKernelTruth}'s refusals
+     *         {@code host_posture_requires_vm}, {@code host_posture_unacknowledged},
+     *         {@code host_dedicated_to_other}, {@code host_contact_lapsed} or one of
+     *         {@link #requireKernelTruth}'s refusals
      */
-    public static void requireInstancePlacement(int serverId) {
+    public static void requireInstancePlacement(int serverId,
+                                                @NonNull WorkloadIsolation isolation,
+                                                @Nullable String ownerBucket) {
         Row server = Models.get(ServerModel.class).findById(serverId);
         if (server == null) {
             throw Violations.ofForm(violation("host_not_admitted")
@@ -47,8 +64,80 @@ public final class HostAdmission {
             throw Violations.ofForm(violation("host_posture_refuses")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
+        requirePostureSatisfies(server, isolation);
+        requireDedicationRespected(server, serverId, ownerBucket);
         requireKernelTruth(server);
         requireRecentContact(server);
+    }
+
+    /**
+     * The posture/workload PAIRING: a host that promises VM isolation refuses a
+     * shared-kernel workload, and a host whose posture is shared-container refuses
+     * hostile-tenant containers until an operator has accepted that risk by name.
+     *
+     * AIDEV-NOTE: the VM refusal is checked FIRST because a vm_isolated host is
+     * deliberately not acknowledgeable -- offering "acknowledge this" for a host whose
+     * posture cannot be satisfied at all would point the operator at the wrong lever.
+     * Declaring shared_container and acknowledging it is the honest escape, and it is ONE
+     * mechanism rather than two.
+     *
+     * AIDEV-NOTE: the acknowledgement gate binds SHARED-KERNEL workloads only. A VM on a
+     * shared_container host does not incur the shared-kernel risk the warning is about, so
+     * refusing it would be a gate asking for consent to something that is not happening.
+     * The refusal fires on the FIRST such container, not the second: the acknowledgement
+     * is about the POSTURE, not about a count, and refusing only the second would assert
+     * that the first is safe.
+     *
+     * @throws Violations {@code host_posture_requires_vm} or
+     *         {@code host_posture_unacknowledged}
+     */
+    public static void requirePostureSatisfies(@NonNull Row server,
+                                               @NonNull WorkloadIsolation isolation) {
+        String name = String.valueOf((Object) server.get(ServerModel.NAME));
+        if (ServerModel.postureRequiresVirtualMachine(server, isolation)) {
+            throw Violations.ofForm(violation("host_posture_requires_vm").withArg("name", name));
+        }
+        if (isolation == WorkloadIsolation.SHARED_KERNEL
+                && !ServerModel.postureAcknowledged(server)) {
+            throw Violations.ofForm(
+                violation("host_posture_unacknowledged").withArg("name", name));
+        }
+    }
+
+    /**
+     * A {@code dedicated} host belongs to ONE owner: a live workload charged to any other
+     * bucket (the operator's empty-set bucket included) closes it to everybody else.
+     *
+     * AIDEV-NOTE: this MOVED here from InstancePlacement (2026-08-12), superseding the
+     * recorded decision that exclusivity was "placement's own, because it is not a deploy
+     * refusal". That premise was broken by placement's own admin lane:
+     * {@code InstancePlacement.forActor} honours a caller-supplied {@code server_id} for an
+     * admin and returns it WITHOUT walking chooseForOwner, so the exclusivity check never
+     * ran for the one actor who can name a host. The clause says dedication is "enforced by
+     * the allocator, not operator memory", and a rule only the non-admin path runs is
+     * operator memory wearing an allocator's clothes. In the gate it binds every lane.
+     *
+     * A workload already ON the host is counted like any other, and that is correct: its
+     * own bucket matches, so it never refuses itself, while a host that somehow holds two
+     * owners refuses the NEXT deploy of either instead of pretending the promise still
+     * holds. Stop and destroy are never gated, so unpicking it is always possible.
+     *
+     * @throws Violations {@code host_dedicated_to_other}
+     */
+    public static void requireDedicationRespected(@NonNull Row server, int serverId,
+                                                  @Nullable String ownerBucket) {
+        if (!ServerModel.POSTURE_DEDICATED.equals(server.get(ServerModel.POSTURE))) {
+            return;
+        }
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.SERVER_ID.eq(serverId))
+                .where(InstanceModel.DELETED_AT.isNull()).all()) {
+            String charged = instance.get(InstanceModel.QUOTA_BUCKET);
+            if (charged == null || !charged.equals(ownerBucket)) {
+                throw Violations.ofForm(violation("host_dedicated_to_other")
+                    .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
+            }
+        }
     }
 
     /**

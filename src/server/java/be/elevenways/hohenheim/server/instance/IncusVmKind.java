@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -160,6 +161,14 @@ public final class IncusVmKind implements InstanceKindHandler {
 
     @Override
     public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
+
+    /**
+     * The one kind that answers anything but {@code SHARED_KERNEL}: a hypervisor boundary
+     * is what this kind IS, per the class docblock's "the one workload flavour rated
+     * against a hostile root tenant on shared iron".
+     */
+    @Override
+    public @NonNull WorkloadIsolation isolation() { return WorkloadIsolation.VIRTUAL_MACHINE; }
 
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {

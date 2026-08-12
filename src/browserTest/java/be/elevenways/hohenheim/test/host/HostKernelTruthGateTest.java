@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
 
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -52,6 +53,9 @@ class HostKernelTruthGateTest {
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     private static final String SERVER_PEM =
         "-----BEGIN CERTIFICATE-----\nMIIBdaemoncertificate\n-----END CERTIFICATE-----\n";
+
+    /** No host here is DEDICATED, so the owner bucket is not what these steps are about. */
+    private static final String BUCKET = "kernel-gate-owner";
 
     private static SqlDatasource datasource;
 
@@ -108,7 +112,8 @@ class HostKernelTruthGateTest {
             admitted.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
             model.save(admitted);
             int serverId = model.findByName("gate-incus").get(ServerModel.ID);
-            assertThat(catchThrowable(() -> HostAdmission.requireInstancePlacement(serverId)))
+            assertThat(catchThrowable(() -> HostAdmission.requireInstancePlacement(serverId,
+                WorkloadIsolation.VIRTUAL_MACHINE, BUCKET)))
                 .as("step 3: an already-admitted host that cannot verify takes no NEW tenant")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
@@ -130,7 +135,8 @@ class HostKernelTruthGateTest {
             HostPins.confirm(model.findByName("gate-incus"), HostTrustSlot.SSH);
             markPreflightPassed("gate-incus", null);
             assertThat(catchThrowable(() ->
-                    HostAdmission.requireInstancePlacement(serverId)))
+                    HostAdmission.requireInstancePlacement(serverId,
+                WorkloadIsolation.VIRTUAL_MACHINE, BUCKET)))
                 .as("step 4: a declared lane without kernel EVIDENCE is not verification")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
@@ -143,7 +149,8 @@ class HostKernelTruthGateTest {
             markPreflightPassed("gate-incus", HostPreflight.STATUS_PASS);
             Row proven = model.findByName("gate-incus");
             HostAdmission.requireAdmittable(proven);
-            HostAdmission.requireInstancePlacement(serverId);
+            HostAdmission.requireInstancePlacement(serverId,
+                WorkloadIsolation.VIRTUAL_MACHINE, BUCKET);
             assertThat(HostPreflight.storedCheckStatus(proven, IncusPreflight.KERNEL_LANE_CHECK))
                 .as("step 5: the evidence the gate read is the STORED probe verdict")
                 .isEqualTo(HostPreflight.STATUS_PASS);
@@ -151,7 +158,8 @@ class HostKernelTruthGateTest {
             // 6. A FAILING stored probe is not evidence either: the lane is still declared
             //    and trusted, so only the probe verdict distinguishes these two states.
             markPreflightPassed("gate-incus", HostPreflight.STATUS_FAIL);
-            assertThat(catchThrowable(() -> HostAdmission.requireInstancePlacement(serverId)))
+            assertThat(catchThrowable(() -> HostAdmission.requireInstancePlacement(serverId,
+                WorkloadIsolation.VIRTUAL_MACHINE, BUCKET)))
                 .as("step 6: a lane that FAILED its probe verifies nothing")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
@@ -165,7 +173,8 @@ class HostKernelTruthGateTest {
             narrowed.set(ServerModel.POSTURE, ServerModel.POSTURE_TRUSTED_ONLY);
             model.save(narrowed);
             HostAdmission.requireAdmittable(model.findByName("gate-incus"));
-            assertThat(catchThrowable(() -> HostAdmission.requireInstancePlacement(serverId)))
+            assertThat(catchThrowable(() -> HostAdmission.requireInstancePlacement(serverId,
+                WorkloadIsolation.VIRTUAL_MACHINE, BUCKET)))
                 .as("step 7: and placement refuses for the POSTURE now, not the lane")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
@@ -184,6 +193,7 @@ class HostKernelTruthGateTest {
             host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
             host.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
             model.save(host);
+            HostFixtures.acknowledgePosture(host);
             markPreflightPassed("gate-docker", null);
 
             // 1. No kernel_isolation_lane check exists on a Docker report at all, and the

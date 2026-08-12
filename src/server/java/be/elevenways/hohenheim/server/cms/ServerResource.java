@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
@@ -382,6 +383,7 @@ public final class ServerResource extends RowResource {
             actions.add(this.repinAction(lane));
             actions.add(this.rotateAction(lane));
         }
+        actions.add(this.acknowledgePostureAction());
         actions.add(this.probeAction());
         actions.add(this.preflightAction());
         actions.add(this.admitAction());
@@ -430,6 +432,54 @@ public final class ServerResource extends RowResource {
 
     private static @NonNull Microcopy serverCopy(@NonNull String key) {
         return Microcopy.of(key).withFilter("scope", "server");
+    }
+
+    /**
+     * The operator accepts THIS host's shared-container risk, by name and on the record.
+     * The posture dropdown declares the intent; this act is what makes the host start
+     * taking hostile-tenant containers, and it is the only thing that writes the five
+     * acknowledgement columns.
+     *
+     * AIDEV-NOTE: deliberately NOT a form entry beside the posture select. A second
+     * control over the same decision is a second authority, and a warning rendered as
+     * field help next to a dropdown is exactly the "boolean hidden in settings" shape the
+     * plan's clause refuses. There is also no REVOKE action: changing the posture clears
+     * the acknowledgement through the schema hook, so a revoke would be a second path to
+     * one state.
+     *
+     * AIDEV-NOTE: {@code requireTypedConfirmation} is a CLIENT-SIDE mis-click guard and
+     * NOTHING else -- the phrase is compared in the dialog template and is never
+     * submitted, so a direct POST bypasses it entirely. It is not evidence, it is not the
+     * acknowledgement, and it must never be read as either. What actually records the act
+     * is {@link HostPostureAcknowledgement#record}, which demands a real actor; what gates
+     * the surface is the panel permission plus CSRF.
+     */
+    private @NonNull RowAction<Row> acknowledgePostureAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "acknowledge_posture"))
+            .label(serverCopy("acknowledge"))
+            .description(serverCopy("acknowledge_hint"))
+            .icon(Icon.of("triangle-exclamation"))
+            .style(ActionStyle.DESTRUCTIVE)
+            .visibleFor((row, ctx) -> ServerModel.postureNeedsAcknowledgement(row)
+                && !ServerModel.postureAcknowledged(row))
+            .confirmation(ConfirmationSpec.builder()
+                .title(serverCopy("acknowledge"))
+                .body(serverCopy("acknowledge_generic"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
+            .dynamicConfirmation(row -> ConfirmationSpec.builder()
+                .title(serverCopy("acknowledge"))
+                .body(serverCopy("acknowledge_body")
+                    .withArg("name", row.get(ServerModel.NAME)))
+                .style(ActionStyle.DESTRUCTIVE)
+                .requireTypedConfirmation(row.get(ServerModel.NAME))
+                .build())
+            .handler((row, ctx) -> {
+                HostPostureAcknowledgement.record(row);
+                return CmsActionResult.refreshWithToast(serverCopy("posture_acknowledged")
+                    .withArg("name", row.get(ServerModel.NAME)));
+            })
+            .build();
     }
 
     /**

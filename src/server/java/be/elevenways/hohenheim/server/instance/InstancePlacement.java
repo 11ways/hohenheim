@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -40,6 +40,18 @@ import java.util.Map;
  * the {@code dedicated} posture's exclusivity (a host that accepts this owner would accept
  * the deploy fine -- it is the CO-LOCATION that placement must not create), the runtime
  * match, and the exclude argument.
+ *
+ * SUPERSEDED 2026-08-12, on the exclusivity clause only -- the runtime match and the
+ * exclude argument stay placement's own. Exclusivity is now
+ * {@link HostAdmission#requireDedicationRespected}, called from the gate, because the
+ * premise above does not survive this class's OWN admin lane: {@link #forActor} honours a
+ * caller-supplied {@code server_id} for an admin and returns it without ever walking
+ * {@link #chooseForOwner}, so the check at the bottom of this file never ran for the one
+ * actor who can name a host -- an admin could place a second tenant's workload onto a
+ * dedicated machine and the deploy would accept it. The plan's clause says dedication is
+ * "enforced by the allocator, not operator memory"; a rule only the tenant path runs is
+ * operator memory. In the gate it binds every lane, and this class keeps consulting the
+ * gate rather than re-stating it.
  *
  * Selection among the survivors is FEWEST BOOKED MEMORY, lowest id as the tie-break: a
  * host with 128 GB and two small workloads outranks one with 4 GB and one large VM, which
@@ -96,6 +108,16 @@ public final class InstancePlacement {
         int footprintMb() {
             return this.handler == null ? 0
                 : InstanceCapacity.footprintMbOf(this.handler, this.settings);
+        }
+
+        /**
+         * The boundary this workload provides, derived from the kind exactly like the
+         * footprint is -- a kind-less caller answers SHARED_KERNEL, because the weakest
+         * isolation is the only conservative answer to "we do not know".
+         */
+        @NonNull WorkloadIsolation isolation() {
+            return this.handler == null ? WorkloadIsolation.SHARED_KERNEL
+                : this.handler.isolation();
         }
     }
 
@@ -172,7 +194,7 @@ public final class InstancePlacement {
                     || !ServerModel.runtimeOf(server).equals(workload.requiredRuntime())) {
                 continue;
             }
-            if (!acceptsTenantWorkload(server, serverId, bucket)) {
+            if (!acceptsTenantWorkload(serverId, bucket, workload)) {
                 continue;
             }
             KindGate gate = kindGateFor(serverId, workload);
@@ -228,33 +250,22 @@ public final class InstancePlacement {
     }
 
     /**
-     * Whether this host may receive a workload owned by {@code bucket}, as far as
+     * Whether this host may receive this workload owned by {@code bucket}, as far as
      * ADMISSION is concerned.
      *
-     * AIDEV-NOTE: the first call IS the deploy gate, not a copy of it. Adding a refusal to
+     * AIDEV-NOTE: this call IS the deploy gate, not a copy of it. Adding a refusal to
      * HostAdmission.requireInstancePlacement automatically narrows the eligible set, which
-     * is the property this seam exists to hold -- do NOT re-inline admission, posture or
-     * identity checks here, however convenient the early exit looks.
+     * is the property this seam exists to hold -- do NOT re-inline admission, posture,
+     * isolation, dedication or identity checks here, however convenient the early exit
+     * looks. The dedication check was the last one still living outside it and moved into
+     * the gate on 2026-08-12; see the class docblock for why.
      */
-    private static boolean acceptsTenantWorkload(@NonNull Row server, int serverId,
-                                                 @NonNull String bucket) {
+    private static boolean acceptsTenantWorkload(int serverId, @NonNull String bucket,
+                                                 @NonNull Workload workload) {
         try {
-            HostAdmission.requireInstancePlacement(serverId);
+            HostAdmission.requireInstancePlacement(serverId, workload.isolation(), bucket);
         } catch (Violations refused) {
             return false;
-        }
-        if (!ServerModel.POSTURE_DEDICATED.equals(server.get(ServerModel.POSTURE))) {
-            return true;
-        }
-        // Dedicated: exclusive to one owner. A live instance charged to any OTHER bucket
-        // (the operator's empty-set bucket included) makes this host unavailable.
-        for (Row instance : Models.get(InstanceModel.class).find()
-                .where(InstanceModel.SERVER_ID.eq(serverId))
-                .where(InstanceModel.DELETED_AT.isNull()).all()) {
-            String charged = instance.get(InstanceModel.QUOTA_BUCKET);
-            if (charged == null || !charged.equals(bucket)) {
-                return false;
-            }
         }
         return true;
     }

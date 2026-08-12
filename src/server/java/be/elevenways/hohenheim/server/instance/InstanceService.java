@@ -122,7 +122,9 @@ public final class InstanceService {
         InstanceOperationGuard.requireInstalled(resolved.row());
         long fence = this.leases.requireFence(resolved.serverId());
         if (resolved.handler().tenantAuthored()) {
-            HostAdmission.requireInstancePlacement(resolved.serverId());
+            HostAdmission.requireInstancePlacement(resolved.serverId(),
+                resolved.handler().isolation(),
+                resolved.row().get(InstanceModel.QUOTA_BUCKET));
         }
         InstanceConsoles.Watch watch = null;
         try {

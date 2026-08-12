@@ -158,6 +158,15 @@ class ServerAdminTest extends HohenheimTestBase {
             .as("step 2: the local host's submitted posture is STORED, not silently"
                 + " dropped (the placement gate reads this column)")
             .isEqualTo(ServerModel.POSTURE_SHARED_CONTAINER);
+        // 2b. And storing it GRANTS nothing. This bare form post is exactly the "boolean
+        //     hidden in settings" shape the plan's clause refuses to accept as a risk
+        //     acknowledgement: it declares the intent and nothing else, so the host is
+        //     unacknowledged and takes no tenant container until an operator says so by
+        //     name. See HostPostureAcknowledgementTest for the whole journey.
+        assertThat(ServerModel.postureAcknowledged(updated))
+            .as("step 2b: a bare form post is a DECLARATION, never an acknowledgement --"
+                + " no actor, no timestamp, no warning version was recorded by it")
+            .isFalse();
 
         // 3. The identity guard itself still holds: the smuggled ssh_target is ignored.
         assertThat((String) updated.get(ServerModel.SSH_TARGET))

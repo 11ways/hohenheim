@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
@@ -17,6 +19,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -122,6 +125,11 @@ class InstancePlacementTest {
         row.set(ServerModel.ADMISSION, admission);
         row.set(ServerModel.POSTURE, posture);
         Models.get(ServerModel.class).save(row);
+        // An operator who declares shared containers also accepts that risk; without the
+        // act, this fixture would be asserting the acknowledgement gate rather than the
+        // chooser. The gate itself has its own journey, and the helper no-ops on the
+        // postures that need no acknowledgement.
+        HostFixtures.acknowledgePosture(row);
         int id = row.get(ServerModel.ID);
         this.hosts.add(id);
         storeReport(PREFIX + name, memoryMb, null);
@@ -130,6 +138,13 @@ class InstancePlacementTest {
 
     /** An INCUS host: the runtime whose kernel-truth gate placement must consult. */
     private int incusHost(String name, Long memoryMb, String kernelLaneStatus) {
+        return incusHost(name, memoryMb, kernelLaneStatus,
+            ServerModel.POSTURE_SHARED_CONTAINER);
+    }
+
+    /** The same, with the posture named -- the axis the isolation pairing reads. */
+    private int incusHost(String name, Long memoryMb, String kernelLaneStatus,
+                          String posture) {
         Row row = Models.get(ServerModel.class).createEmptyRow();
         row.set(ServerModel.NAME, PREFIX + name);
         row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
@@ -137,8 +152,9 @@ class InstancePlacementTest {
         row.set(ServerModel.INCUS_URL, "https://192.0.2.41:8443");
         row.set(ServerModel.SSH_TARGET, "root@192.0.2.41");
         row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+        row.set(ServerModel.POSTURE, posture);
         Models.get(ServerModel.class).save(row);
+        HostFixtures.acknowledgePosture(row);
         int id = row.get(ServerModel.ID);
         this.hosts.add(id);
         ServerModel model = Models.get(ServerModel.class);
@@ -562,6 +578,13 @@ class InstancePlacementTest {
             return this.delegate.defaultFootprintMb(settings);
         }
 
+        // Both trust axes follow the delegate; answering the interface default here
+        // would make a pairing assertion about a wrapped VM kind pass as a container.
+        @Override
+        public @NonNull WorkloadIsolation isolation() {
+            return this.delegate.isolation();
+        }
+
         @Override
         public void requirePlaceableOn(String serverName, Map<String, Object> settings) {
             throw Violations.ofForm(Microcopy.of("host_prepared_image_missing")
@@ -614,6 +637,95 @@ class InstancePlacementTest {
                 .as("step 4: the operator bucket does not get a pass onto a taken"
                     + " dedicated host")
                 .isEqualTo("no_placement_available");
+
+            // 5. THE ADMIN HOLE, and why exclusivity moved into HostAdmission on
+            //    2026-08-12. forActor honours a caller-supplied server_id for an admin and
+            //    returns it WITHOUT walking the chooser at all, so every assertion above
+            //    was about a path the operator does not take. The chooser is still allowed
+            //    to hand back the named host -- an operator may name one -- but the DEPLOY
+            //    gate now refuses to run a stranger's workload there.
+            assertThat(InstancePlacement.forActor(null, dedicated, workload(256)))
+                .as("step 5: an admin naming a host still gets the host they named")
+                .isEqualTo(dedicated);
+            assertThat(keyOf(catchThrowable(() -> HostAdmission.requireInstancePlacement(
+                    dedicated, WorkloadIsolation.SHARED_KERNEL, OTHER_BUCKET))))
+                .as("step 5: and the gate every deploy funnels through refuses to place a"
+                    + " SECOND owner's workload on a dedicated machine -- the rule used to"
+                    + " live only in the chooser the admin path skips")
+                .isEqualTo("host_dedicated_to_other");
+            // POSITIVE ANCHOR: the owner it is dedicated to is not refused by that gate.
+            HostAdmission.requireInstancePlacement(dedicated,
+                WorkloadIsolation.SHARED_KERNEL, BUCKET);
+        });
+    }
+
+    /**
+     * THE ISOLATION PAIRING: a host that declares VM isolation promises every tenant on it
+     * a hypervisor boundary, and a container cannot provide one.
+     *
+     * AIDEV-NOTE: this was a live hole, not a hypothetical. Both Incus kinds return
+     * RUNTIME_INCUS and both are tenant-authored, and {@code acceptsTenantWorkloads} is
+     * one-dimensional -- so a hostile-tenant CONTAINER placed and deployed on a
+     * {@code vm_isolated} host, which is the one posture whose whole meaning is that it
+     * does not happen. Nothing compared a workload's isolation to what the host declared
+     * because no workload declared one.
+     */
+    @Test
+    void aVmIsolatedHostRefusesAContainerWorkloadAndStillTakesAVirtualMachine() {
+        Db.run(datasource, () -> {
+            int vmOnly = incusHost("vm-isolated", 8192L, HostPreflight.STATUS_PASS,
+                ServerModel.POSTURE_VM_ISOLATED);
+            InstanceKindHandler containerKind =
+                InstanceKinds.getHandler("hohenheim:incus_container");
+            InstanceKindHandler vmKind = InstanceKinds.getHandler("hohenheim:incus_vm");
+            InstancePlacement.Workload container = InstancePlacement.Workload.of(
+                containerKind, Map.of("image", "images:debian/13"));
+            InstancePlacement.Workload machine = InstancePlacement.Workload.of(
+                vmKind, Map.of("image", "images:debian/13"));
+
+            // 1. The kinds DECLARE the two boundaries, which is what makes the pairing
+            //    answerable at all -- and the container's answer is the conservative one.
+            assertThat(containerKind.isolation())
+                .as("step 1: a system container shares the host kernel")
+                .isEqualTo(WorkloadIsolation.SHARED_KERNEL);
+            assertThat(vmKind.isolation())
+                .as("step 1: a VM does not")
+                .isEqualTo(WorkloadIsolation.VIRTUAL_MACHINE);
+
+            // 2. THE HOLE. A hostile-tenant container on a host promising VM isolation is
+            //    refused by name at the deploy gate...
+            assertThat(keyOf(catchThrowable(() -> HostAdmission.requireInstancePlacement(
+                    vmOnly, containerKind.isolation(), BUCKET))))
+                .as("step 2: a shared-kernel workload cannot satisfy a vm_isolated host")
+                .isEqualTo("host_posture_requires_vm");
+            // ...and never chosen, so no record is ever created pointing at it.
+            assertThat(keyOf(catchThrowable(() ->
+                    InstancePlacement.chooseForBucket(BUCKET, container, null))))
+                .as("step 2: and the chooser will not offer the host either")
+                .isEqualTo("no_placement_available");
+
+            // 3. POSITIVE ANCHOR: the SAME host, the SAME tenant, a VM -- it places. The
+            //    refusal above is about the boundary, not about the host or the tenant.
+            assertThat(InstancePlacement.chooseForBucket(BUCKET, machine, null))
+                .as("step 3: the workload the posture was declared for lands there")
+                .isEqualTo(vmOnly);
+            HostAdmission.requireInstancePlacement(vmOnly, vmKind.isolation(), BUCKET);
+
+            // 4. And the pairing is scoped to the posture that makes the promise: on a
+            //    shared_container host BOTH place, because that posture promises nothing
+            //    about kernels -- it only demands that an operator accepted the risk.
+            int shared = incusHost("vm-pair-shared", 8192L, HostPreflight.STATUS_PASS);
+            assertThat(InstancePlacement.chooseForBucket(BUCKET, container, vmOnly))
+                .as("step 4: a container places on an acknowledged shared-container host")
+                .isEqualTo(shared);
+            HostAdmission.requireInstancePlacement(shared, vmKind.isolation(), BUCKET);
+
+            // 5. A dedicated host is unaffected by the isolation axis in either direction:
+            //    it rations by OWNER, and says nothing about kernels.
+            int dedicated = incusHost("vm-pair-dedicated", 8192L, HostPreflight.STATUS_PASS,
+                ServerModel.POSTURE_DEDICATED);
+            HostAdmission.requireInstancePlacement(dedicated, containerKind.isolation(), BUCKET);
+            HostAdmission.requireInstancePlacement(dedicated, vmKind.isolation(), BUCKET);
         });
     }
 }
