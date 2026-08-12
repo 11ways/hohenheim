@@ -31,6 +31,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -52,6 +53,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * forward hook. The closing counterfactual (remove the policy, the metadata probe
  * passes again) proves the BLOCKED answers measured the policy, not a broken fixture.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class StackNetworkIsolationTest {
 
     private static SqliteDatasource datasource;

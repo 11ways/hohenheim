@@ -43,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -56,6 +57,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * direct read SUCCEEDS. A refusal beside a demonstrated escape is a refusal that is doing
  * work; a refusal beside a path that never resolved anywhere would be a vacuous test.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceFilesLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

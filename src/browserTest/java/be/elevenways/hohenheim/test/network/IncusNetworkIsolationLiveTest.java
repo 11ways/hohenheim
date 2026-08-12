@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,6 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * images because daystrom's 3.9 GiB RAM is the binding limit; both instances are removed
  * and the shared ACL swept afterwards.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusNetworkIsolationLiveTest {
 
     private static final String HOST = "live-incus-net";

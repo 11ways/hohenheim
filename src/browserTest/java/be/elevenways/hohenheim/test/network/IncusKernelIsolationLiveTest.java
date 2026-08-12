@@ -33,6 +33,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -62,6 +63,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * this proves the DEPLOYMENT. The fixture's own ssh helpers stay the INJECTION lane (they
  * break the kernel), never the verification lane.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusKernelIsolationLiveTest {
 
     private static final String HOST = "live-incus-kernel";

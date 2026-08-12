@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * class exists because that split would be worthless if the probe never ran -- a gate
  * whose measurement is only ever a test double measures nothing.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class RestoreCapacityLiveTest {
 
     private static final String HOST = "live-capacity-incus";

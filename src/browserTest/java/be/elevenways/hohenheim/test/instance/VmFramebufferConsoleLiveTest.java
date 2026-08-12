@@ -34,6 +34,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -45,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * revoked and the tenant's OPEN console is DISCONNECTED with 1008 -- not merely refused on
  * a later connect. Skips unless a live Incus host is enrolled.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
 
     private static final String HOST = "live-incus-framebuffer";

@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -64,6 +65,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * What this class does NOT prove is the boot scheduling of the task itself -- that is
  * the framework's bootAndCron contract, exercised by zenit's own task tests.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class VerifyWorkloadIsolationTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

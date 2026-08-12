@@ -42,6 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -57,6 +58,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * {@code uname -n}, and the restore reads the bytes back across the wire before
  * anything is created locally.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class LiveOffHostBackupTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

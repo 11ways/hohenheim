@@ -40,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -50,6 +51,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * receives traffic" are asserted as TRAFFIC, not as status fields. Skipped when the
  * daemon socket or the alpine base image is absent.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class SiteReleaseLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

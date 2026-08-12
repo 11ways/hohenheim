@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * counterfactual: every destination is reachable until the policy lands, and reachable
  * again after it is removed, so a passing AFTER cannot be an artefact of a broken fixture.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class WorkloadNetworkPolicyTest {
 
     /** nft table and container names are controller-namespaced, so this needs an identity. */

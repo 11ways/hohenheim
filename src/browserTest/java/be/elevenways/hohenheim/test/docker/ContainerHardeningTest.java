@@ -40,6 +40,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -60,6 +61,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * for why that is an image-shape statement and not a trust statement), so 0xcb is what
  * every running container here must show and 0xa80425fb is what none of them may.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class ContainerHardeningTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

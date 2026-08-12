@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -56,6 +57,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * through this funnel at a 1024 MB cap and at a 1280 MB cap. Re-measure before assuming
  * that of a new engine.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class EngineMemoryCeilingTest {
 
     /**

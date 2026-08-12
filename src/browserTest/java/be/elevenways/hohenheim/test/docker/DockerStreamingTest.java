@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * and attach-stdin halves run against the real local daemon (skipped without one); the
  * subprocess-leak half runs against real `cat` subprocesses and COUNTS process state.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class DockerStreamingTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

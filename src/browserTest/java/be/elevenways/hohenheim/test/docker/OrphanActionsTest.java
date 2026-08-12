@@ -28,6 +28,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -37,6 +38,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * refuses what live classification disagrees about, refuses volumes always, and the
  * host is asserted directly (container gone or survived at the daemon).
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class OrphanActionsTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

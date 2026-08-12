@@ -49,6 +49,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -78,6 +79,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * published on it: the image is an operator fixture this repo cannot mint for itself.
  * See docs/prepare-windows-template.md.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
 
     private static final String HOST = "live-incus-windows";

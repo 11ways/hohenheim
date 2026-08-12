@@ -28,6 +28,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * through the production ManagedProcessSiteHandler base -- asserting the child's
  * actual environment carries the derived connection variables. Docker-gated.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class EnvInjectionFlowTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

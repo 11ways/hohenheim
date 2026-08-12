@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * property proven is the one a real tenant gets. Redis is the fixture because it boots
  * in a second where Postgres initds for tens.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class DatabaseNetworkIsolationTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

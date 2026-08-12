@@ -43,6 +43,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,6 +66,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and therefore every daemon resource NAME it mints -- is unique to this fork. Nothing
  * here reads a daemon-wide listing or count; four forks share one daemon.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceDatabaseLinkLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

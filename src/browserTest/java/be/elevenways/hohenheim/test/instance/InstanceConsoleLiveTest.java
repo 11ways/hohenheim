@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * crashes are all produced on demand. Every status assertion reads the DATABASE row
  * (the fenced outcome), and every "container" assertion reads the DAEMON.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceConsoleLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

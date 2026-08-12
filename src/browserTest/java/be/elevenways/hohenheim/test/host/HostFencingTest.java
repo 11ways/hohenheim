@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -54,6 +55,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * SIGSTOP'd controller resumes too, so pausing there tests the same claim without
  * process signals.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class HostFencingTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

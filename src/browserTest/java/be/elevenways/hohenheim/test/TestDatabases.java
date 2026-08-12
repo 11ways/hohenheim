@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.orm.backup.SnapshotCapableDatasource;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -24,15 +25,31 @@ import java.nio.file.StandardCopyOption;
  * already populated and no-ops. Semantics are identical: callers still get a private,
  * fully-migrated, data-free database.
  *
- * <p>The copy is only sound because SQLite keeps everything in one file and the
- * datasource does not enable WAL. If WAL is ever turned on, the {@code -wal}/{@code -shm}
- * sidecars must be checkpointed before {@link #captureTemplate} copies the file.
+ * <p>The template is captured through {@link SnapshotCapableDatasource#snapshotTo}
+ * (VACUUM INTO), never a bare file copy: the datasource runs journal_mode=WAL, so the
+ * main file of a live database is just the header page and a {@code Files.copy} of it
+ * captures an EMPTY database -- which is exactly how this optimization was silently dead
+ * (every fork re-ran the full migration set) from the WAL default until 2026-08-12.
  */
 public final class TestDatabases {
 
     private static Path template;
 
     private TestDatabases() {
+    }
+
+    /**
+     * Where forks of one gradle invocation share a migrated template, or null outside gradle.
+     *
+     * AIDEV-NOTE: with forkEvery = 1 the in-JVM template never pays off -- every isolated
+     * class is the "first database of a JVM" and re-runs the full migration set (~4s x ~70
+     * booting forks per default-lane run). Each test task wipes its own directory in
+     * doFirst, so a template can never outlive the invocation that migrated it and a
+     * migration change cannot leak in from a previous run.
+     */
+    private static Path sharedTemplateDir() {
+        String dir = System.getProperty("hohenheim.testdb.template.dir");
+        return dir == null || dir.isBlank() ? null : Path.of(dir);
     }
 
     /**
@@ -45,6 +62,12 @@ public final class TestDatabases {
         db.delete();
         db.deleteOnExit();
 
+        if (template == null) {
+            Path shared = sharedTemplateDir();
+            if (shared != null && Files.isRegularFile(shared.resolve("template.db"))) {
+                template = shared.resolve("template.db");
+            }
+        }
         if (template != null) {
             Files.copy(template, db.toPath(), StandardCopyOption.REPLACE_EXISTING);
         }
@@ -91,11 +114,45 @@ public final class TestDatabases {
     private static void captureTemplate(File migrated) {
         try {
             Path candidate = Files.createTempFile("hohenheim-template", ".db");
-            Files.copy(migrated.toPath(), candidate, StandardCopyOption.REPLACE_EXISTING);
+            if (HohenheimDatabase.datasource() instanceof SnapshotCapableDatasource snapshotable) {
+                snapshotable.snapshotTo(candidate);
+            } else {
+                Files.copy(migrated.toPath(), candidate, StandardCopyOption.REPLACE_EXISTING);
+            }
+            if (Files.size(candidate) <= 4096) {
+                // A header-page-only "template" is the WAL trap again: refuse it so the
+                // fast path can only ever hand out genuinely migrated databases.
+                Files.deleteIfExists(candidate);
+                return;
+            }
             candidate.toFile().deleteOnExit();
             template = candidate;
+            publishSharedTemplate(candidate);
         } catch (Exception ignored) {
             // No template: every caller keeps running its own migrations, as before.
+        }
+    }
+
+    /**
+     * Offer this JVM's template to sibling forks; losing the publish race is fine.
+     */
+    private static void publishSharedTemplate(Path candidate) {
+        Path shared = sharedTemplateDir();
+        if (shared == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(shared);
+            Path staging = Files.createTempFile(shared, "staging-", ".db");
+            Files.copy(candidate, staging, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.move(staging, shared.resolve("template.db"),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (Exception raceLost) {
+                Files.deleteIfExists(staging);
+            }
+        } catch (Exception ignored) {
+            // Sibling forks keep migrating for themselves, exactly as before.
         }
     }
 }

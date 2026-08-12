@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -44,6 +45,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * certificate stands in for a swapped server, because the TLS client compares pin to
  * offer and cannot tell those apart (that equivalence is the point).
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusHostLiveTest {
 
     // AIDEV-NOTE: unique per live class BY REQUIREMENT (see LiveIncusHost.authorizeKey);

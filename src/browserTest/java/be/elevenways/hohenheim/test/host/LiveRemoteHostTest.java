@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -47,6 +48,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * is the whole point -- and rotating a live host's identity to prove it would be
  * vandalism, not evidence.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class LiveRemoteHostTest {
 
     private static final String HOST = "live-remote";

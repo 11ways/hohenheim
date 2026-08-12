@@ -60,6 +60,14 @@ silently aborts used to make a run of nothing look green.
   `zenit-dev test ... -Dhohenheim.live.require=docker-socket,netns` turns a skip
   for those needs into a FAILURE. Unset means report-only, which is the default
   because whether a skip is a defect is a property of the HOST, not the test.
+- Every live-capable test class carries `@Tag("slow")` and is listed (by name or
+  by the `*Live*`/`*Incus*` globs) in `.zenit-dev.json` nonHermeticClasses.
+  Ordinary `zenit-dev test` excludes them (the default lane finishes in
+  minutes); `zenit-dev test --all` runs everything, and any `--class` filter
+  also runs slow classes. Run the full `--all` suite before a release or after
+  touching the docker/incus/remote-host layers -- a live test nobody runs is
+  worse than a slow one. `SlowLaneGuardTest` enforces the tag + declaration
+  pair, so a new live test cannot silently land in the default lane.
 
 ## Architecture notes
 

@@ -38,6 +38,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -53,6 +54,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * policy against real nftables in a {@link PrivateNetns} -- a machine that cannot build
  * one SKIPS visibly instead of passing policy-less.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class StackInstancesTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);

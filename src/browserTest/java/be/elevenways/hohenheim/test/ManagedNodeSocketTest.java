@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * proxied through the loopback bridge. Exercises socket allocation, the PATH_TO_SOCKET child
  * contract, and the per-process bridge transport. Skipped if node is not installed.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class ManagedNodeSocketTest {
 
     private static ProxyServer proxy;

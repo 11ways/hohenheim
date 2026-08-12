@@ -35,6 +35,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -51,6 +52,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * pinned-but-unconfirmed, healthy, quarantined and host-key-changed, so every refusal
  * has the working case standing beside it.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class BackupTargetsTest {
 
     @TempDir

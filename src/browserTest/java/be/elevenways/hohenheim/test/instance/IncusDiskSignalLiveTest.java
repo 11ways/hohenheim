@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * Every assertion is scoped to THIS class's own instance handle, never a daemon-wide count.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class IncusDiskSignalLiveTest {
 
     private static final String HOST = "live-incus-disk";

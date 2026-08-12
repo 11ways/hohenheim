@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * apart. Assertions are scoped to THIS test's site handles: live classes share one
  * daemon under parallel forks, so a daemon-wide volume count would be a flake.
  */
+@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class SiteVolumeLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
