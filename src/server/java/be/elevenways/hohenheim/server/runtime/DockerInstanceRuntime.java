@@ -44,7 +44,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * the only remaining SHARED_BRIDGE authors are record-less test/preview callers.
  */
 public final class DockerInstanceRuntime
-        implements InstanceRuntime, VolumeSnapshotSupport, FileStagingSupport, InstallSupport,
+        implements InstanceRuntime, VolumeSnapshotSupport, WorkloadAttribution,
+                   FileStagingSupport, InstallSupport,
                    ConsoleStreamSupport, LinkNetworkSupport, InstanceFileSupport,
                    StatsStreamSupport, ExecSupport {
 
@@ -290,6 +291,39 @@ public final class DockerInstanceRuntime
             case "starting" -> InstanceStatus.HealthState.STARTING;
             default -> InstanceStatus.HealthState.NONE;
         };
+    }
+
+    // -- WorkloadAttribution ----------------------------------------------------
+
+    /**
+     * Attribution of the same-named container, from the owner labels stamped at create.
+     * OURS demands the full triple (controller, model, id) -- two controllers on one
+     * daemon label their respective record #1 identically, so a model+id match alone
+     * would attribute a stranger's container to this record (the OwnerLabels lesson).
+     */
+    @Override
+    public @NonNull WorkloadClaim claimOf(@NonNull InstanceSpec spec) throws IOException {
+        Map<String, Object> inspect;
+        try {
+            inspect = this.docker.inspectContainer(spec.handle());
+        } catch (DockerClient.ApiException e) {
+            if (e.isNotFound()) {
+                return WorkloadClaim.ABSENT;
+            }
+            throw e;
+        }
+        OwnerLabels.Owner mine = OwnerLabels.parse(spec.ownerLabels());
+        if (mine == null) {
+            throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid"
+                + " owner labels; attribution cannot be decided without them");
+        }
+        Object config = inspect.get("Config");
+        OwnerLabels.Owner held = OwnerLabels.parse(
+            config instanceof Map<?, ?> c && c.get("Labels") instanceof Map<?, ?> labels
+                ? labels : null);
+        boolean ours = OwnerLabels.isOurs(held)
+            && held.model().equals(mine.model()) && held.id().equals(mine.id());
+        return ours ? WorkloadClaim.OURS : WorkloadClaim.FOREIGN;
     }
 
     // -- VolumeSnapshotSupport ------------------------------------------------

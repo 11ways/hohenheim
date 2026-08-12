@@ -5140,7 +5140,11 @@
     "scope": "violations"
   },
   "migrate_unsupported": {
-    "text": "Instantie {$name} draait op een driver zonder volledige export/import; ze kan niet gemigreerd worden",
+    "text": "Instantie {$name} draait op een driver zonder migratietransport (geen volledige export/import en geen volume-opname/-herstel); ze kan niet gemigreerd worden",
+    "scope": "violations"
+  },
+  "migrate_game_paired": {
+    "text": "Instantie {$name} is gekoppeld aan een game-domeintoewijzing; het proxy/backend-paar gebruikt een host-lokaal koppelnetwerk, dus een kant alleen verplaatsen zou het breken. Verwijder eerst de toewijzing.",
     "scope": "violations"
   },
   "migrate_devices_present": {

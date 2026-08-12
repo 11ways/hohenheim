@@ -331,6 +331,16 @@ public final class GameDomains {
     // -- lifecycle wiring (instance tier) -------------------------------------
 
     /**
+     * Whether any mapping names this instance as backend OR proxy -- the pair lock the
+     * migration lane asks: a mapped pair rides a HOST-LOCAL link network (see the
+     * cross-host refusal in {@link #applyAuthorized}), so moving either side alone
+     * would break the invariant the create path refuses.
+     */
+    public static boolean isPaired(int instanceId) {
+        return !Models.get(GameDomainModel.class).findByInstanceId(instanceId).isEmpty();
+    }
+
+    /**
      * Explicit cleanup for {@code InstanceService.destroy}: destroy SOFT-deletes through
      * save(), so remove hooks never fire and nothing else would take the mappings, their
      * DNS rows or the link networks down with the instance.
