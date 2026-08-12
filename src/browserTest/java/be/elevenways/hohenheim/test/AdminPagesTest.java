@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -19,6 +21,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -228,12 +231,20 @@ class AdminPagesTest extends HohenheimTestBase {
             .where(SiteModel.NAME.eq("Audit Test Site")).first();
         assertThat(site).isNotNull();
 
-        navigateToApp("/admin/activity");
-        waitForHydration();
-
-        String content = page.locator("body").textContent();
-        assertThat(content).contains("create");
-        assertThat(content).contains("hohenheim:site");
+        // AIDEV-NOTE: read over HTTP, not through a hydrated page load. The activity LIST is
+        // server-rendered and nothing here asserts a client re-render, so the browser round
+        // trip bought only latency (~1.6s). What the list proves for hohenheim is that the
+        // zenit-cms ActivityResource is MOUNTED here; the row's content is asserted straight
+        // off the model below, which is stronger than a substring of the whole body.
+        assertThat(get("/admin/activity").body())
+            .as("the activity resource is mounted in the hohenheim panel")
+            .contains("hohenheim:site");
+        Row logged = Models.get(ActivityModel.class).find()
+            .where(ActivityModel.MODEL.eq("hohenheim:site"))
+            .orderBy(ActivityModel.ID, SortOrder.DESC)
+            .first();
+        assertThat(logged).as("the site creation was logged").isNotNull();
+        assertThat((String) logged.get(ActivityModel.ACTION)).isEqualTo("create");
 
         navigateToApp("/admin/dashboard");
         waitForHydration();
@@ -371,11 +382,13 @@ class AdminPagesTest extends HohenheimTestBase {
         certModel.save(cert);
 
         try {
-            navigateToApp("/admin/certificates");
-            waitForHydration();
-            assertThat(page.locator("a[href='/admin/certificates-request']").count())
-                .isGreaterThanOrEqualTo(1);
-            assertThat(page.content())
+            // AIDEV-NOTE: the LIST is read over HTTP -- both assertions are on server-rendered
+            // markup (a header-action anchor and a list column), so a hydrated load only added
+            // latency. The DETAIL page below stays hydrated on purpose: it is the one place
+            // this method proves the client render does not turn the diagnostic into an input.
+            String list = get("/admin/certificates").body();
+            assertThat(list).contains("/admin/certificates-request");
+            assertThat(list)
                 .as("the renewal error is a visible list column")
                 .contains("DNS problem: NXDOMAIN");
 
@@ -399,11 +412,18 @@ class AdminPagesTest extends HohenheimTestBase {
             certModel.delete(cert);
         }
 
-        // With the failure gone, its attention item disappears even if another subsystem still needs attention.
-        navigateToApp("/admin/dashboard");
-        waitForHydration();
-        assertThat(page.locator(".hh-attention-item > a.hh-attention-target[href='/admin/certificates/"
-            + cert.get(CertificateModel.ID) + "']").count()).isZero();
+        // With the failure gone, its attention item disappears even if another subsystem still
+        // needs attention. Asserted on the PROJECTION rather than through a second dashboard
+        // load: the render half is already proven above, and AttentionCollector documents this
+        // as the way to test a collector's negative case (see its note on the instance
+        // collectors, and InstanceAttentionTest, which does exactly this).
+        List<AttentionItem> afterDelete = new ArrayList<>();
+        AttentionCollector.errorCertificates(afterDelete);
+        String goneUrl = "/admin/certificates/" + cert.get(CertificateModel.ID);
+        assertThat(afterDelete.stream()
+            .map(raised -> raised.target() == null ? "" : raised.target().toUrl()).toList())
+            .as("the deleted certificate raises no attention item")
+            .doesNotContain(goneUrl);
     }
 
     // -----------------------------------------------------------------------
@@ -499,10 +519,12 @@ class AdminPagesTest extends HohenheimTestBase {
             siteModel.delete(managed);
         }
 
-        // The domains tab renders its empty state before any domain exists.
-        navigateToApp("/admin/sites/" + siteId + "/page/domains");
-        waitForHydration();
-        assertThat(page.locator("body").textContent()).contains("No domains configured");
+        // The domains tab renders its empty state before any domain exists. Read over HTTP:
+        // the empty state is server-rendered and RoutedLinkTargetsTest already reads this same
+        // page that way. The POPULATED tab below stays a hydrated load -- that is where the
+        // client render actually has something to get wrong.
+        assertThat(get("/admin/sites/" + siteId + "/page/domains").body())
+            .contains("No domains configured");
 
         var domainModel = Models.get(SiteDomainModel.class);
         Row covered = domainModel.createEmptyRow();
