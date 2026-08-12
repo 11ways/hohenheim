@@ -278,12 +278,25 @@ blastTeavmJar(
 
 teavm {
     js {
-        obfuscated = false
+        // AIDEV-NOTE: hohenheim shipped obfuscated=false + optimization=NONE until 2026-08-12
+        // and its bundle was 23,986,504 bytes -- SIX TIMES its sibling apps (orcono 4.0MB, QQ
+        // 3.9MB, thoth 3.5MB), all of which already carried these two settings and the reasoning
+        // below. Every admin page load paid that parse, in production and in every browser test:
+        // measured client-side cost per navigation was 311-1166ms against 35-229ms of server
+        // render, so the CLIENT was 6-10x the server on every page.
+        // Debuggability survives: sourceMap = true still maps stack traces back to Java source.
+        // Flip obfuscated to false TEMPORARILY when running protoblast/tools/analyze-teavm-bundle,
+        // which needs unmangled names -- and flip it back.
+        obfuscated = true
         addedToWebApp = true
         sourceMap = true
         strict = false
         sourceFilePolicy = SourceFilePolicy.LINK_LOCAL_FILES
-        optimization = OptimizationLevel.NONE
+        // BALANCED, deliberately, matching orcono/QQ/thoth: NONE ships the unoptimized bundle
+        // measured above, and AGGRESSIVE is catastrophic (orcono measured 87.8MB vs 14.9MB at
+        // BALANCED -- inlining multiplies the honest suspendable bodies). Do not flip to
+        // AGGRESSIVE without re-measuring.
+        optimization = OptimizationLevel.BALANCED
         mainClass = "be.elevenways.hohenheim.ClientMain"
         // The shell auto-injects the bundle from Hawkeye.clientScriptLocation;
         // ServerMain points that at /cms.js, so the bundle lands there.
