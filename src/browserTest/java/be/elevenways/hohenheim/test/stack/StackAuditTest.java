@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.cms.StackResource;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -17,7 +18,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
@@ -50,21 +51,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class StackAuditTest {
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static StackRuntime runtime;
 
     @BeforeAll
     static void setUp() throws Exception {
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
             Files.createTempDirectory("hh-stack-audit").resolve("keys.dry")));
-        File db = File.createTempFile("hohenheim-stack-audit-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
+        datasource = TestDatabases.freshDatasource();
         // ONE registered database per class: the controller identity every daemon
         // resource name resolves through reads the CURRENT datasource.
-        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         runtime = new StackRuntime(new DockerClient(), datasource);
     }

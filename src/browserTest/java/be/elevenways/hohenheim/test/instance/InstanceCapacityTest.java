@@ -6,12 +6,13 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -51,7 +52,7 @@ class InstanceCapacityTest {
     private static final String PREFIX = "capacity-";
     private static final String DOCKER_KIND = "hohenheim:docker_container";
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
 
     private final List<Integer> hosts = new ArrayList<>();
     private final List<Integer> instances = new ArrayList<>();
@@ -59,12 +60,7 @@ class InstanceCapacityTest {
     /** Its OWN database: a neighbour's live instance row would move every budget here. */
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-capacity-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
+        datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
         HohenheimSettings.VALUES.setValue(
             HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, 0);
