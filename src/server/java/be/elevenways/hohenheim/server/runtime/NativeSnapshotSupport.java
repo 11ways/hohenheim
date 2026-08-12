@@ -19,7 +19,7 @@ import java.nio.file.Path;
  * LXD/Incus/Proxmox nightly-snapshot semantic. That difference is this interface's
  * declared contract, not a per-call option.
  */
-public interface NativeSnapshotSupport {
+public interface NativeSnapshotSupport extends WorkloadAttribution {
 
     /**
      * Create the named daemon-side snapshot of the instance (running or stopped).
@@ -72,20 +72,6 @@ public interface NativeSnapshotSupport {
      * guard, so re-attribution is part of this contract, not a caller nicety.
      */
     void importBackup(@NonNull InstanceSpec spec, @NonNull Path archive) throws IOException;
-
-    /**
-     * Who the daemon says the same-named workload belongs to -- the pre-flight every
-     * cross-host move and every recovery deletion runs before touching a workload it
-     * did not just create. FOREIGN is the handle-collision hazard made visible: a
-     * same-named workload another controller owns must never be converged over or
-     * deleted.
-     *
-     * @throws IOException when the daemon cannot be asked (never folds to ABSENT)
-     */
-    @NonNull WorkloadClaim claimOf(@NonNull InstanceSpec spec) throws IOException;
-
-    /** Attribution verdict of a same-named daemon workload. */
-    enum WorkloadClaim { ABSENT, OURS, FOREIGN }
 
     /**
      * The image identity the workload actually runs (for the backup manifest).

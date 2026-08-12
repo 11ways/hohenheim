@@ -10,14 +10,17 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.ImageIdentity;
+import be.elevenways.hohenheim.server.runtime.LinkNetworkSupport;
 import be.elevenways.hohenheim.server.runtime.InstallSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
-import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport.WorkloadClaim;
+import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
+import be.elevenways.hohenheim.server.runtime.WorkloadAttribution.WorkloadClaim;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -62,6 +65,23 @@ final class FakeNativeDaemons {
     /** name -> handle -> workload; the fake daemons, keyed by HOST record name. */
     static final Map<String, Map<String, FakeWorkload>> DAEMONS = new ConcurrentHashMap<>();
 
+    /**
+     * name -> volume name -> volume; the daemons' NAMED VOLUME stores, keyed by HOST
+     * record name. Deliberately separate from the workload map: on the Docker tier a
+     * named volume OUTLIVES its container (destroy keeps volumes), and that split is
+     * what the volume-transport migration tests must be able to observe.
+     */
+    static final Map<String, Map<String, FakeVolume>> VOLUME_STORES = new ConcurrentHashMap<>();
+
+    /**
+     * name -> link handles present; the daemons' LINK NETWORKS, keyed by HOST record
+     * name. The fake volume runtime implements {@link LinkNetworkSupport} because the
+     * real Docker driver does: without it, a missing pair gate in the migration lane
+     * would be masked by {@code game_link_unsupported} in tests while the REAL driver
+     * would silently mint a second link network on the destination.
+     */
+    static final Map<String, Set<String>> LINK_NETWORKS = new ConcurrentHashMap<>();
+
     private FakeNativeDaemons() {
     }
 
@@ -81,11 +101,34 @@ final class FakeNativeDaemons {
         return "fake-instance-" + instanceId;
     }
 
+    /** The volume store of a host record, created on first use. */
+    static Map<String, FakeVolume> volumesOf(int serverId) {
+        return VOLUME_STORES.computeIfAbsent(ServerModel.nameOf(serverId),
+            name -> new ConcurrentHashMap<>());
+    }
+
+    /** The materialized volume name the fake volume kind spells for one logical volume. */
+    static String volumeNameOf(int instanceId, String logicalName) {
+        return handleOf(instanceId) + "-" + logicalName;
+    }
+
+    /** The link networks of a host record, created on first use. */
+    static Set<String> linkNetworksOf(int serverId) {
+        return LINK_NETWORKS.computeIfAbsent(ServerModel.nameOf(serverId),
+            name -> ConcurrentHashMap.newKeySet());
+    }
 
     static final class FakeWorkload {
         final Map<String, String> data = new LinkedHashMap<>();
         final List<String> snapshots = new ArrayList<>();
         boolean running;
+        Identifier ownerModel;
+        String ownerId;
+    }
+
+    /** One named daemon volume: owner labels stamped at create, contents keyed strings. */
+    static final class FakeVolume {
+        final Map<String, String> data = new LinkedHashMap<>();
         Identifier ownerModel;
         String ownerId;
     }
@@ -568,9 +611,24 @@ final class FakeNativeDaemons {
         @Override
         public @NonNull InstanceSpec specFor(int instanceId,
                                              @NonNull Map<String, Object> settings) {
+            // Materialize the DECLARED logical volumes onto the spec the way the real
+            // docker kinds do (materialized name -> container path), so create() mints
+            // them and the capture/restore seam has something to resolve against.
+            Map<String, String> volumes = new LinkedHashMap<>();
+            if (settings.get("volumes") instanceof Map<?, ?> declared) {
+                declared.forEach((name, path) -> volumes.put(
+                    volumeNameOf(instanceId, String.valueOf(name)), String.valueOf(path)));
+            }
+            // `container_port` declares a PUBLIC publication exactly like FakeNativeKind:
+            // the migrate_publication_present refusal is REACHABLE on the volume lane
+            // (a real Velocity proxy publishes), so it must be testable there too.
+            Object port = settings.get("container_port");
+            PortPublication publication = port instanceof Number number
+                ? new PortPublication(number.intValue(), PortPublication.TCP, true, null, null)
+                : null;
             return new InstanceSpec("fake-instance-" + instanceId,
                 String.valueOf(settings.getOrDefault("image", "fake/image")), null,
-                Map.of(), Map.of(), null, ResourceLimits.none(),
+                Map.of(), volumes, publication, ResourceLimits.none(),
                 new ContainerHardening.Profile("fake", List.of()),
                 OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
         }
@@ -583,22 +641,70 @@ final class FakeNativeDaemons {
     }
 
     /**
-     * The volume lane's runtime: the same in-memory daemon, with the capture/restore half
-     * of the driver seam writing REAL files, because the payload the prune must remove is
-     * a real directory on the controller.
+     * The volume lane's runtime: the same in-memory daemon plus a NAMED VOLUME store
+     * with Docker's semantics, and the capture half writing REAL files (the payload the
+     * snapshot prune must remove is a real directory on the controller). The Docker
+     * behaviours the migration lane depends on are modelled faithfully: create MINTS
+     * absent volumes and silently REUSES an existing one, destroy keeps volumes,
+     * restore MERGES into whatever the volume holds, and removeVolumesForRestore says
+     * NO to a volume the daemon does not attribute to this record.
      */
     static final class FakeVolumeSnapshotRuntime
-            implements InstanceRuntime, VolumeSnapshotSupport {
+            implements InstanceRuntime, VolumeSnapshotSupport, WorkloadAttribution,
+                       LinkNetworkSupport {
 
         private final FakeNativeRuntime inner;
+        private final Map<String, FakeVolume> volumes;
+        private final Set<String> linkNetworks;
 
         FakeVolumeSnapshotRuntime(String serverName) {
             this.inner = new FakeNativeRuntime(serverName);
+            this.volumes = VOLUME_STORES.computeIfAbsent(serverName,
+                name -> new ConcurrentHashMap<>());
+            this.linkNetworks = LINK_NETWORKS.computeIfAbsent(serverName,
+                name -> ConcurrentHashMap.newKeySet());
+        }
+
+        // -- LinkNetworkSupport (the Docker driver has it, so this fake must too) ----
+
+        @Override
+        public @NonNull String ensureLinkNetwork(@NonNull String linkHandle,
+                                                 @NonNull Map<String, String> ownerLabels,
+                                                 @NonNull Egress egress) {
+            this.linkNetworks.add(linkHandle);
+            return "fake-net-" + linkHandle;
+        }
+
+        @Override
+        public void connectToLinkNetwork(@NonNull String linkHandle,
+                                         @NonNull String containerHandle,
+                                         @NonNull List<String> aliases) throws IOException {
+            if (!this.linkNetworks.contains(linkHandle)) {
+                throw new IOException("no link network " + linkHandle);
+            }
+        }
+
+        @Override
+        public void removeLinkNetwork(@NonNull String linkHandle) {
+            this.linkNetworks.remove(linkHandle);
         }
 
         @Override
         public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
-            return this.inner.create(spec);
+            String handle = this.inner.create(spec);
+            OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
+            for (String materialized : spec.volumes().keySet()) {
+                // Docker's semantics on purpose: an existing volume is REUSED, never
+                // recreated -- which is exactly why the migration transport must remove
+                // destination debris before restoring, or the restore merges over it.
+                this.volumes.computeIfAbsent(materialized, name -> {
+                    FakeVolume volume = new FakeVolume();
+                    volume.ownerModel = owner.model();
+                    volume.ownerId = owner.id();
+                    return volume;
+                });
+            }
+            return handle;
         }
 
         @Override
@@ -613,6 +719,7 @@ final class FakeNativeDaemons {
 
         @Override
         public void destroy(@NonNull String handle) throws IOException {
+            // Container only; named volumes survive, exactly like the Docker driver.
             this.inner.destroy(handle);
         }
 
@@ -622,14 +729,33 @@ final class FakeNativeDaemons {
         }
 
         @Override
+        public @NonNull WorkloadClaim claimOf(@NonNull InstanceSpec spec) throws IOException {
+            return this.inner.claimOf(spec);
+        }
+
+        private @NonNull FakeVolume requireVolume(@NonNull InstanceSpec spec,
+                                                  @NonNull String logicalName)
+                throws IOException {
+            FakeVolume volume = this.volumes.get(spec.handle() + "-" + logicalName);
+            if (volume == null) {
+                throw new IOException("no volume " + spec.handle() + "-" + logicalName);
+            }
+            return volume;
+        }
+
+        @Override
         public @NonNull List<CapturedVolume> captureVolumes(
                 @NonNull InstanceSpec spec, @NonNull Map<String, String> logicalVolumes,
                 @NonNull Path directory, long maxBytesPerVolume) throws IOException {
-            FakeWorkload workload = this.inner.require(spec.handle());
+            this.inner.require(spec.handle());
             List<CapturedVolume> captured = new ArrayList<>();
             for (Map.Entry<String, String> volume : logicalVolumes.entrySet()) {
+                FakeVolume payload = requireVolume(spec, volume.getKey());
                 Path file = directory.resolve(volume.getKey() + ".tar");
-                Files.writeString(file, String.valueOf(workload.data));
+                StringBuilder text = new StringBuilder();
+                payload.data.forEach((key, value) ->
+                    text.append(key).append('=').append(value).append('\n'));
+                Files.writeString(file, text.toString());
                 captured.add(new CapturedVolume(volume.getKey(), volume.getValue(),
                     file, Files.size(file)));
             }
@@ -640,7 +766,19 @@ final class FakeNativeDaemons {
         public void restoreVolumes(@NonNull InstanceSpec spec,
                                    @NonNull Map<String, String> logicalVolumes,
                                    @NonNull Map<String, Path> tars) throws IOException {
-            this.inner.require(spec.handle()).data.put("restored", String.valueOf(tars.keySet()));
+            for (Map.Entry<String, Path> tar : tars.entrySet()) {
+                FakeVolume volume = requireVolume(spec, tar.getKey());
+                // MERGE, not replace: tar extraction over live contents keeps whatever
+                // the payload does not name -- the exact hazard removeVolumesForRestore
+                // exists to prevent, kept observable here on purpose.
+                for (String line : Files.readAllLines(tar.getValue())) {
+                    if (line.isBlank()) {
+                        continue;
+                    }
+                    String[] pair = line.split("=", 2);
+                    volume.data.put(pair[0], pair.length > 1 ? pair[1] : "");
+                }
+            }
         }
 
         @Override
@@ -648,7 +786,23 @@ final class FakeNativeDaemons {
                                             @NonNull Map<String, String> logicalVolumes,
                                             @NonNull Collection<String> names)
                 throws IOException {
-            this.inner.require(spec.handle()).data.keySet().removeAll(names);
+            OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
+            if (owner == null) {
+                throw new IOException("spec without owner labels");
+            }
+            for (String name : names) {
+                String materialized = spec.handle() + "-" + name;
+                FakeVolume volume = this.volumes.get(materialized);
+                if (volume == null) {
+                    continue;   // observed absent: create will mint it
+                }
+                if (!owner.model().equals(volume.ownerModel)
+                        || !owner.id().equals(volume.ownerId)) {
+                    throw new IOException("REFUSED to remove volume '" + materialized
+                        + "': not attributably ours");
+                }
+                this.volumes.remove(materialized);
+            }
         }
 
         @Override

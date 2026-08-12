@@ -3680,6 +3680,33 @@ moving the backend alone would violate the same-host invariant the create path
 refuses. Until both exist, this clause cannot be tested and must not be counted
 as a gap in delivery.
 
+STATUS 2026-08-12 (supersession): **both prerequisites now exist and the struck
+clause is RESTORED for unpaired workloads.** (a) The docker tier migrates and
+therefore drains: `InstanceMigrations` grew a second transport behind the same
+orchestration (`Transport` in `InstanceMigrations.java`) -- cold capture of the
+declared logical volumes over `VolumeSnapshotSupport`, recreate from the spec on
+the destination, restore into freshly minted volumes, source container AND
+volumes verifiably removed. Attribution moved to its own seam
+(`WorkloadAttribution.claimOf`, implemented by `DockerInstanceRuntime` from the
+owner labels), so the pre-flight claim and both crash-settle windows work
+identically to the Incus lane; the capacity window, fenced handoff and port
+ledger are shared, not re-implemented. (b) The game-domain mapping DECISION is a
+named refusal, not a pair move: an instance named by any mapping (either side)
+is refused `migrate_game_paired` at submit AND per-destination on the migrate
+survey, because the pair rides a host-local link network and moving one side
+alone breaks the exact invariant `GameDomains.java` refuses cross-host at
+create. Severing the mapping first is the operator's explicit unlock. The
+`migrate_publication_present` refusal is now REACHABLE (docker kinds publish):
+an unpaired Velocity proxy is refused by its port claim, by name. Proven by
+`InstanceVolumeMigrationTest` (4 journeys; counterfactuals run mutate-and-revert
+with the ATTACK SUCCEEDING: gate removed -> the paired backend migrates with no
+refusal at all; destination-debris removal skipped -> the restored volume
+carries the stale key; rollback without volume removal -> merge bait survives;
+source-remnant removal skipped -> tenant data left on the old host). The
+backend-console gate sentence this STRIKE removed can therefore be exercised for
+an UNPAIRED backend; a PAIRED backend deliberately cannot move, and that is the
+recorded product decision, not a gap.
+
 ---
 
 ## Phase 5b -- System-container app catalog (community-scripts adoption)
@@ -5043,7 +5070,9 @@ byte-identically on nightstrom before anything was measured).
   surface (drain and the service lane are the wired consumers; an
   explicit-destination row action is UI sugar over migrateTo); transporting
   device volumes (refused, never silently emptied); a docker-tier drain
-  (VolumeSnapshotSupport has the pieces, no consumer demanded it); recovery
+  (VolumeSnapshotSupport has the pieces, no consumer demanded it) [SUPERSEDED
+  2026-08-12: the volume transport shipped -- see the Phase 5 supersession
+  block and `InstanceVolumeMigrationTest`]; recovery
   does not restart a previously-running workload (see above); the
   two-CONTROLLERS handle-collision hazard is unchanged -- claimOf makes this
   controller refuse a foreign workload instead of converging over it, which

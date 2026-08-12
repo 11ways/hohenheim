@@ -5140,7 +5140,11 @@
     "scope": "violations"
   },
   "migrate_unsupported": {
-    "text": "Instance {$name} runs on a driver without whole-instance export/import; it cannot be migrated",
+    "text": "Instance {$name} runs on a driver without a migration transport (no whole-instance export/import and no volume capture/restore); it cannot be migrated",
+    "scope": "violations"
+  },
+  "migrate_game_paired": {
+    "text": "Instance {$name} is bound to a game domain mapping; its proxy/backend pair rides a host-local link network, so moving one side alone would break it. Remove the mapping first.",
     "scope": "violations"
   },
   "migrate_devices_present": {

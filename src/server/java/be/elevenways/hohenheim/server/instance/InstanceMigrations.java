@@ -6,12 +6,15 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
-import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport.WorkloadClaim;
+import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
+import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
+import be.elevenways.hohenheim.server.runtime.WorkloadAttribution.WorkloadClaim;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -30,7 +33,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -41,12 +46,17 @@ import java.util.function.Consumer;
  * policy; live migration is REJECTED for now (recorded in the plan's Proxmox-use
  * inventory): incus stateful transfer needs migration.stateful set before start,
  * CRIU for containers and matched CPU flags for VMs, plus a daemon-to-daemon trust
- * relationship this product deliberately does not hold. The TRANSPORT is the
- * existing NativeSnapshotSupport export/import pair, controller-mediated (daemon A
- * -> controller staging -> daemon B): it already carries re-attribution, the MAC
- * strip and the isolation rejoin, and the controller already holds pinned trust
- * with each daemon separately -- incus's own cross-host copy would be a second
- * transfer path riding a trust relationship that exists nowhere else in the product.
+ * relationship this product deliberately does not hold. The TRANSPORT is
+ * controller-mediated either way (daemon A -> controller staging -> daemon B) and
+ * comes in two shapes behind ONE orchestration (see {@link Transport}): the native
+ * whole-instance export/import pair (Incus -- carries re-attribution, the MAC strip,
+ * the isolation rejoin and the pool-resident snapshots), and the volume transport
+ * (Docker, 2026-08-12 -- cold capture of the DECLARED logical volumes, recreate from
+ * the spec on the destination, restore into the freshly minted volumes; daemon-side
+ * state that is not a declared volume does not travel, exactly like a backup of the
+ * same kind). Incus's own cross-host copy stays rejected: it would be a second
+ * transfer path riding a daemon-to-daemon trust relationship that exists nowhere
+ * else in the product.
  *
  * AIDEV-NOTE: ownership discipline. The record's server_id is THE single pointer,
  * and every step keeps it truthful: the source host stays the data authority until
@@ -132,7 +142,7 @@ public final class InstanceMigrations {
     public @NonNull List<Destination> destinationsFor(int instanceId) {
         Resolved resolved = this.instances.resolve(instanceId);
         String requiredRuntime = resolved.handler().requiredRuntime();
-        boolean sourceExports = resolved.runtime() instanceof NativeSnapshotSupport;
+        boolean sourceTransportable = hasTransport(resolved.runtime());
         List<Destination> destinations = new ArrayList<>();
         for (Row server : Models.get(ServerModel.class).find().all()) {
             Integer serverId = server.get(ServerModel.ID);
@@ -141,7 +151,7 @@ public final class InstanceMigrations {
             }
             String name = String.valueOf((Object) server.get(ServerModel.NAME));
             Microcopy refusal = refusalFor(server, serverId, name, resolved,
-                requiredRuntime, sourceExports);
+                requiredRuntime, sourceTransportable);
             Long budget = InstanceCapacity.budgetMbOf(server);
             destinations.add(new Destination(serverId, name, refusal == null, refusal,
                 clampInt(InstanceCapacity.bookedMbOn(serverId)),
@@ -151,21 +161,41 @@ public final class InstanceMigrations {
         return destinations;
     }
 
-    /** The first named reason this host cannot receive the workload, or null. */
+    /**
+     * The first named reason this host cannot receive the workload, or null.
+     *
+     * The instance-scoped gates (devices, game pairing, publication) are re-asked here
+     * even though their answer is the same for every host, because the survey's contract
+     * is a NAMED reason beside every ineligible destination -- an empty eligible list
+     * with no reason is exactly the illegible surface the Incus-only refusal never was.
+     */
     private static @Nullable Microcopy refusalFor(@NonNull Row server, int serverId,
                                                   @NonNull String name,
                                                   @NonNull Resolved resolved,
                                                   @NonNull String requiredRuntime,
-                                                  boolean sourceExports) {
+                                                  boolean sourceTransportable) {
         if (!ServerModel.runtimeOf(server).equals(requiredRuntime)) {
             return violationText("host_runtime_mismatch")
                 .withArg("name", name)
                 .withArg("runtime", ServerModel.runtimeOf(server))
                 .withArg("required", requiredRuntime);
         }
-        if (!sourceExports
-                || !(resolved.handler().runtimeFor(name) instanceof NativeSnapshotSupport)) {
+        if (!sourceTransportable || !hasTransport(resolved.handler().runtimeFor(name))) {
             return violationText("migrate_unsupported")
+                .withArg("name", nameOf(resolved.row()));
+        }
+        long devices = deviceCountOf(resolved.row().get(InstanceModel.ID));
+        if (devices > 0) {
+            return violationText("migrate_devices_present")
+                .withArg("name", nameOf(resolved.row()))
+                .withArg("count", devices);
+        }
+        if (GameDomains.isPaired(resolved.row().get(InstanceModel.ID))) {
+            return violationText("migrate_game_paired")
+                .withArg("name", nameOf(resolved.row()));
+        }
+        if (resolved.spec().publication() != null) {
+            return violationText("migrate_publication_present")
                 .withArg("name", nameOf(resolved.row()));
         }
         try {
@@ -237,37 +267,42 @@ public final class InstanceMigrations {
         }
         HostAdmission.requireInstancePlacement(targetServerId);
 
-        if (!(resolved.runtime() instanceof NativeSnapshotSupport sourceSupport)) {
-            throw Violations.ofForm(violationText("migrate_unsupported")
-                .withArg("name", nameOf(resolved.row())));
-        }
         String targetName = ServerModel.nameOf(targetServerId);
         InstanceRuntime targetRuntime = resolved.handler().runtimeFor(targetName);
-        if (!(targetRuntime instanceof NativeSnapshotSupport targetSupport)) {
+        Transport transport = transportFor(resolved, targetRuntime);
+        if (transport == null) {
             throw Violations.ofForm(violationText("migrate_unsupported")
                 .withArg("name", nameOf(resolved.row())));
         }
-        // Device rows are UNMOVABLE this wave, refused by name: the whole-instance
-        // export does not carry custom volumes, and the destination deploy's device
+        // Device rows are UNMOVABLE this wave, refused by name: neither transport
+        // carries custom volumes (the native export skips them, the volume capture
+        // reads only the DECLARED logical volumes), and the destination deploy's device
         // reconcile would attach FRESH EMPTY volumes -- a migration that "succeeds"
         // while silently emptying a tenant's disk is exactly the silent-success shape
         // this refusal exists to kill. Extra NICs are refused with them: their bridge
         // is host-local and an import naming it can fail or dangle.
-        long devices = Models.get(InstanceDeviceModel.class).find()
-            .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
-            .count();
+        long devices = deviceCountOf(instanceId);
         if (devices > 0) {
             throw Violations.ofForm(violationText("migrate_devices_present")
                 .withArg("name", nameOf(resolved.row()))
                 .withArg("count", devices));
         }
+        // A game-domain mapping binds this instance to its proxy/backend PARTNER over a
+        // host-local link network (GameDomains refuses a cross-host mapping by the same
+        // name), so moving either side alone would violate the exact invariant the
+        // create path refuses. Refused BY NAME until a pair-coherent move exists;
+        // severing the mapping first is the operator's explicit decision, never this
+        // lane's silent side effect.
+        if (GameDomains.isPaired(instanceId)) {
+            throw Violations.ofForm(violationText("migrate_game_paired")
+                .withArg("name", nameOf(resolved.row())));
+        }
         // A port publication is a host-scoped reservation (DNS may point at it); moving
         // one silently would strand the claim -- refused by name until a consumer needs it.
-        // AIDEV-NOTE: still no migratable kind carries one (re-verified 2026-08-09).
-        // Migratable == NativeSnapshotSupport == IncusInstanceRuntime only, and both Incus
-        // kinds declare their publication-free spec structurally. The Velocity game proxy
-        // does publish a port, but it is a KIND_DOCKER template, so it is refused one gate
-        // earlier by migrate_unsupported and never reaches this line.
+        // AIDEV-NOTE: since the volume transport (2026-08-12) this gate is REACHABLE:
+        // docker kinds are migratable and several publish. The Velocity game proxy is
+        // refused one gate earlier as game-paired when it carries mappings, and lands
+        // HERE when it does not -- its public port claim is what cannot move.
         if (resolved.spec().publication() != null) {
             throw Violations.ofForm(violationText("migrate_publication_present")
                 .withArg("name", nameOf(resolved.row())));
@@ -283,14 +318,15 @@ public final class InstanceMigrations {
         // previous attempt's debris (the record still points at the source, which
         // holds the authoritative data) and is removed before the fresh import.
         try {
-            WorkloadClaim claim = targetSupport.claimOf(resolved.spec());
+            WorkloadClaim claim = ((WorkloadAttribution) targetRuntime)
+                .claimOf(resolved.spec());
             if (claim == WorkloadClaim.FOREIGN) {
                 throw Violations.ofForm(violationText("migrate_destination_occupied")
                     .withArg("name", nameOf(resolved.row()))
                     .withArg("server", targetName));
             }
             if (claim == WorkloadClaim.OURS) {
-                targetRuntime.destroy(handle);
+                removeMigrationCopy(targetRuntime, resolved);
             }
         } catch (IOException unreachable) {
             throw refusal("instance_migrate_failed", resolved.row(), unreachable);
@@ -322,13 +358,11 @@ public final class InstanceMigrations {
             this.checkpoint.accept("stopped");
 
             Files.createDirectories(staging);
-            Path export = staging.resolve("instance.tar");
-            long size = sourceSupport.exportBackup(resolved.spec(), export,
-                InstanceSnapshots.maxArchiveBytes(), true);
+            long size = transport.exportFromSource(staging);
             this.checkpoint.accept("exported");
 
             this.capacity.require(targetServerId, size);
-            targetSupport.importBackup(resolved.spec(), export);
+            transport.importOnTarget();
             this.checkpoint.accept("imported");
             // "The API said yes" and "the destination holds a workload" are
             // independent facts; a move that leaves nothing on the far side must
@@ -345,6 +379,10 @@ public final class InstanceMigrations {
                     + ServerModel.nameOf(resolved.serverId())
                     + "' after its removal was accepted");
             }
+            // What the source daemon holds BESIDE the container (the volume transport's
+            // named volumes) goes with it: tenant data left on the old host, and a later
+            // migration BACK would merge-restore over the stale copy.
+            transport.removeSourceRemnants();
             this.checkpoint.accept("source_removed");
 
             InstanceOperationGuard.handoff(this.instances.leases(), instanceId,
@@ -509,20 +547,22 @@ public final class InstanceMigrations {
                 || targetId == null) {
             return true;   // nothing mid-flight
         }
-        if (!(resolved.runtime() instanceof NativeSnapshotSupport sourceSupport)) {
-            return true;   // cannot have been exported by this lane; nothing daemon-side
+        if (!(resolved.runtime() instanceof WorkloadAttribution sourceAttribution)) {
+            // Every transport requires attribution on both ends, so a runtime without
+            // it cannot have been moved by this lane; nothing daemon-side to settle.
+            return true;
         }
         String targetName = ServerModel.nameOf(targetId);
         InstanceRuntime targetRuntime = resolved.handler().runtimeFor(targetName);
-        NativeSnapshotSupport targetSupport = targetRuntime instanceof NativeSnapshotSupport t
+        WorkloadAttribution targetAttribution = targetRuntime instanceof WorkloadAttribution t
             ? t : null;
 
         WorkloadClaim sourceClaim;
         WorkloadClaim targetClaim;
         try {
-            sourceClaim = sourceSupport.claimOf(resolved.spec());
-            targetClaim = targetSupport != null
-                ? targetSupport.claimOf(resolved.spec()) : WorkloadClaim.ABSENT;
+            sourceClaim = sourceAttribution.claimOf(resolved.spec());
+            targetClaim = targetAttribution != null
+                ? targetAttribution.claimOf(resolved.spec()) : WorkloadClaim.ABSENT;
         } catch (IOException unreachable) {
             return false;   // refusing to answer is not evidence; defer
         }
@@ -533,7 +573,7 @@ public final class InstanceMigrations {
             // Roll back: the record's host is the data authority and still holds it.
             if (targetClaim == WorkloadClaim.OURS) {
                 try {
-                    targetRuntime.destroy(handle);
+                    removeMigrationCopy(targetRuntime, resolved);
                 } catch (IOException undeletable) {
                     Blast.log("MIGRATE: rollback of", handle, "could not remove the"
                         + " destination copy on", targetName, ":", undeletable.getMessage());
@@ -586,6 +626,178 @@ public final class InstanceMigrations {
             Blast.log("MIGRATE: could not restart instance", instanceId,
                 "after a rolled-back migration:", redeployFailed.getMessage());
         }
+    }
+
+    // -- the transport seam -------------------------------------------------------
+
+    /**
+     * One cold-transfer transport: how the payload leaves the source daemon and lands on
+     * the destination. The orchestration around it (window, fences, ledger, settle) is
+     * transport-agnostic by design -- see the class AIDEV-NOTEs.
+     */
+    private interface Transport {
+
+        /** Stage the whole payload into {@code staging}; returns the total bytes staged. */
+        long exportFromSource(@NonNull Path staging) throws IOException;
+
+        /** Materialize the staged payload on the destination as a STOPPED workload. */
+        void importOnTarget() throws IOException;
+
+        /**
+         * Remove what the source daemon holds BESIDE the container after a verified
+         * import (the volume transport's named volumes); the native transport holds
+         * nothing beside it.
+         */
+        void removeSourceRemnants() throws IOException;
+    }
+
+    /** Whether a runtime can carry a cold transfer at all (either transport shape). */
+    private static boolean hasTransport(@NonNull InstanceRuntime runtime) {
+        return runtime instanceof NativeSnapshotSupport
+            || (runtime instanceof VolumeSnapshotSupport
+                && runtime instanceof WorkloadAttribution);
+    }
+
+    /**
+     * The transport this source/destination pair can carry, or null for the named
+     * {@code migrate_unsupported} refusal. Native (whole-instance export/import, the
+     * Incus tier) when BOTH ends speak it; else the volume transport (cold capture of
+     * the declared logical volumes + recreate-and-restore, the Docker tier), which
+     * additionally demands {@link WorkloadAttribution} on both ends -- the pre-flight
+     * claim and the crash settle are what make the move safe, so a driver that cannot
+     * answer the ownership question does not get to move data.
+     */
+    private @Nullable Transport transportFor(@NonNull Resolved resolved,
+                                             @NonNull InstanceRuntime targetRuntime) {
+        if (resolved.runtime() instanceof NativeSnapshotSupport sourceNative
+                && targetRuntime instanceof NativeSnapshotSupport targetNative) {
+            return new NativeTransport(resolved, sourceNative, targetNative, targetRuntime);
+        }
+        if (resolved.runtime() instanceof VolumeSnapshotSupport sourceVolumes
+                && resolved.runtime() instanceof WorkloadAttribution
+                && targetRuntime instanceof VolumeSnapshotSupport targetVolumes
+                && targetRuntime instanceof WorkloadAttribution) {
+            return new VolumeTransport(resolved, sourceVolumes, targetVolumes, targetRuntime);
+        }
+        return null;
+    }
+
+    /** The daemon's own whole-instance export/import (snapshots ride along). */
+    private static final class NativeTransport implements Transport {
+
+        private final @NonNull Resolved resolved;
+        private final @NonNull NativeSnapshotSupport source;
+        private final @NonNull NativeSnapshotSupport target;
+        private final @NonNull InstanceRuntime targetRuntime;
+        private @Nullable Path export;
+
+        NativeTransport(@NonNull Resolved resolved, @NonNull NativeSnapshotSupport source,
+                        @NonNull NativeSnapshotSupport target,
+                        @NonNull InstanceRuntime targetRuntime) {
+            this.resolved = resolved;
+            this.source = source;
+            this.target = target;
+            this.targetRuntime = targetRuntime;
+        }
+
+        @Override
+        public long exportFromSource(@NonNull Path staging) throws IOException {
+            this.export = staging.resolve("instance.tar");
+            return this.source.exportBackup(this.resolved.spec(), this.export,
+                InstanceSnapshots.maxArchiveBytes(), true);
+        }
+
+        @Override
+        public void importOnTarget() throws IOException {
+            if (this.export == null) {
+                throw new IOException("importOnTarget before exportFromSource");
+            }
+            this.target.importBackup(this.resolved.spec(), this.export);
+        }
+
+        @Override
+        public void removeSourceRemnants() {
+            // The whole instance IS the export; destroy already removed everything.
+        }
+    }
+
+    /**
+     * The volume transport: cold capture of the DECLARED logical volumes, recreate the
+     * workload from its spec on the destination, restore the payloads into the freshly
+     * minted volumes. What travels is exactly what a backup of this kind captures --
+     * the declared volumes plus the record's own configuration (the deploy funnel
+     * re-stages config files and re-attaches links on the destination).
+     */
+    private static final class VolumeTransport implements Transport {
+
+        private final @NonNull Resolved resolved;
+        private final @NonNull VolumeSnapshotSupport source;
+        private final @NonNull VolumeSnapshotSupport target;
+        private final @NonNull InstanceRuntime targetRuntime;
+        private final @NonNull Map<String, String> volumes;
+        private final @NonNull Map<String, Path> tars = new LinkedHashMap<>();
+
+        VolumeTransport(@NonNull Resolved resolved, @NonNull VolumeSnapshotSupport source,
+                        @NonNull VolumeSnapshotSupport target,
+                        @NonNull InstanceRuntime targetRuntime) {
+            this.resolved = resolved;
+            this.source = source;
+            this.target = target;
+            this.targetRuntime = targetRuntime;
+            this.volumes = InstanceSnapshots.logicalVolumes(resolved);
+        }
+
+        @Override
+        public long exportFromSource(@NonNull Path staging) throws IOException {
+            long total = 0;
+            for (var captured : this.source.captureVolumes(this.resolved.spec(),
+                    this.volumes, staging, InstanceSnapshots.maxArchiveBytes())) {
+                this.tars.put(captured.name(), captured.file());
+                total += captured.size();
+            }
+            return total;
+        }
+
+        @Override
+        public void importOnTarget() throws IOException {
+            // Leftover same-named volumes on the destination (an earlier attempt's
+            // debris the container-claim pre-flight cannot see) would make the
+            // extraction a MERGE over stale data -- the lie shaped like a success.
+            // removeVolumesForRestore removes OURS, no-ops on absent and REFUSES a
+            // foreign same-named volume, which is exactly the collision gate needed.
+            this.target.removeVolumesForRestore(this.resolved.spec(), this.volumes,
+                this.volumes.keySet());
+            this.targetRuntime.create(this.resolved.spec());
+            this.target.restoreVolumes(this.resolved.spec(), this.volumes, this.tars);
+        }
+
+        @Override
+        public void removeSourceRemnants() throws IOException {
+            this.source.removeVolumesForRestore(this.resolved.spec(), this.volumes,
+                this.volumes.keySet());
+        }
+    }
+
+    /**
+     * Remove a same-record migration copy from a daemon: the container and, on a
+     * volume-transport runtime, the named volumes a later import would otherwise
+     * merge-restore over. The caller has already established the claim is OURS.
+     * Package-visible for {@code InstanceService.destroy}'s abandon-ship cleanup.
+     */
+    static void removeMigrationCopy(@NonNull InstanceRuntime runtime,
+                                    @NonNull Resolved resolved) throws IOException {
+        runtime.destroy(resolved.spec().handle());
+        if (runtime instanceof VolumeSnapshotSupport volumes) {
+            Map<String, String> logical = InstanceSnapshots.logicalVolumes(resolved);
+            volumes.removeVolumesForRestore(resolved.spec(), logical, logical.keySet());
+        }
+    }
+
+    /** Attached device rows of one instance; unmovable this wave, refused by name. */
+    private static long deviceCountOf(int instanceId) {
+        return Models.get(InstanceDeviceModel.class).find()
+            .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
+            .count();
     }
 
     private static @NonNull String nameOf(@NonNull Row row) {

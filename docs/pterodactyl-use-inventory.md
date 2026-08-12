@@ -623,8 +623,30 @@ A kind whose handler class is gone prices at 0 and books nothing, which is the
 
 ## 12. Transfer between eligible hosts
 
-**IMPLEMENTED -- for the INCUS TIER ONLY** (scope corrected 2026-08-11; the bare
-"IMPLEMENTED" above outranked prose and was being read as tier-wide).
+**IMPLEMENTED -- BOTH TIERS** (Docker added 2026-08-12; was "INCUS TIER ONLY",
+scope corrected 2026-08-11 -- the paragraph below is kept as the record of that
+correction).
+
+STATUS 2026-08-12: the Docker tier migrates. `InstanceMigrations` carries a
+second TRANSPORT behind the unchanged orchestration (window, fences, capacity
+ledger, port ledger, crash settle): cold capture of the declared logical volumes
+over `VolumeSnapshotSupport`, recreate from the spec on the destination, restore
+into freshly minted volumes, source container AND volumes verifiably removed.
+The Incus-only coupling was attribution, not export: `claimOf` moved from
+`NativeSnapshotSupport` to its own `WorkloadAttribution` seam, which
+`DockerInstanceRuntime` implements from the owner labels. Two DELIBERATE
+per-workload locks remain, refused BY NAME at submit and per-destination on the
+migrate survey: `migrate_game_paired` (an instance named by a game-domain
+mapping cannot move alone -- the pair rides a host-local link network, the same
+invariant the create path refuses cross-host; sever the mapping first) and
+`migrate_publication_present` (a published host port is a host-scoped claim DNS
+may point at). So the seeded Minecraft backend transfers once unmapped; the
+mapped pair and the publishing Velocity proxy are legible refusals, not silent
+failures. Hermetic proof: `InstanceVolumeMigrationTest` (4 journeys, data +
+charge movement, debris/merge attack, foreign-volume collision, both crash
+windows; every gate counterfactualed mutate-and-revert with the attack
+succeeding). The Docker DRIVER's capture/restore/attribution primitives remain
+**[live]**-lane territory, like the Incus export/import.
 
 SCOPE, verified in source: migration requires `NativeSnapshotSupport` on both
 ends and refuses `migrate_unsupported` otherwise
@@ -640,7 +662,9 @@ all -- and the plan's own Pterodactyl definition-of-done
 replacement requirement, which is therefore **NOT met**. The refusal is honest
 (reported per destination at `InstanceMigrations.java:166-170`), so nothing moves
 silently; what is missing is a docker-tier drain, named open in
-`instance-tier-plan.md:4878`.
+`instance-tier-plan.md:4878`. [SUPERSEDED 2026-08-12 by the STATUS block above:
+the docker tier migrates and the requirement is met, with the game-pair and
+publication locks as the two named, deliberate exceptions.]
 
 - Code: `src/server/java/be/elevenways/hohenheim/server/instance/InstanceMigrations.java:58`
   -- `migrateTo(id, destinationHostId)` and `drain(hostId)` returning a typed

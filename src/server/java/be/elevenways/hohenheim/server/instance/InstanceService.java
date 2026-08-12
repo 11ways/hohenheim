@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
+import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -343,10 +344,10 @@ public final class InstanceService {
         try {
             InstanceRuntime target = resolved.handler()
                 .runtimeFor(ServerModel.nameOf(targetId));
-            if (target instanceof NativeSnapshotSupport support
+            if (target instanceof WorkloadAttribution support
                     && support.claimOf(resolved.spec())
-                        == NativeSnapshotSupport.WorkloadClaim.OURS) {
-                target.destroy(resolved.spec().handle());
+                        == WorkloadAttribution.WorkloadClaim.OURS) {
+                InstanceMigrations.removeMigrationCopy(target, resolved);
             }
         } catch (IOException cleanupFailed) {
             Blast.log("INSTANCE: destroy could not remove the mid-migration copy of",
