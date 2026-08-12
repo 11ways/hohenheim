@@ -487,7 +487,14 @@ public final class AttentionCollector {
             CmsRoutes.list(ADMIN, "certificates")));
     }
 
-    private static void errorCertificates(List<AttentionItem> items) {
+    /**
+     * Certificates whose last renewal failed, linked to their detail page.
+     *
+     * PUBLIC for the reason the note above gives: a test proves this projection directly,
+     * positive and negative, instead of loading the whole dashboard twice to watch an item
+     * appear and then disappear.
+     */
+    public static void errorCertificates(List<AttentionItem> items) {
         List<Row> rows = Models.get(CertificateModel.class).find()
             .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ERROR))
             .all();
