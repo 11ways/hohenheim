@@ -1,12 +1,14 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.net.IpLiterals;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
+import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -97,13 +99,31 @@ public class ServerModel extends Model {
             .build());
 
     /**
+     * The version of the shared-container risk warning an acknowledgement answers for.
+     * Bump it when the WARNING TEXT changes materially: every stored acknowledgement of
+     * an older version goes stale with no write to any row, and the operator has to
+     * accept the new statement before the host takes another tenant container.
+     *
+     * AIDEV-NOTE: forgetting to bump is closed by a GUARD, not by discipline --
+     * {@code HostPostureAcknowledgementTest} pins the sha256 of the shipped en and nl
+     * {@code server.acknowledge_body} messages against this number and fails with a
+     * two-way instruction (bump = the meaning changed, re-pin = the wording did not).
+     * Material-versus-cosmetic stays a reviewed human call; what the guard removes is the
+     * possibility of neither happening.
+     */
+    public static final int POSTURE_WARNING_VERSION = 1;
+
+    /**
      * The host's declared isolation posture. Data the allocator reads, never operator
      * memory.
      *
-     * AIDEV-NOTE: the shared_container acknowledgement record (actor, timestamp,
-     * warning version -- the plan's requirement) is NOT built yet; until it is, setting
-     * shared_container is a bare admin edit. Follow-up owed with the placement
-     * allocator.
+     * AIDEV-NOTE: the shared_container acknowledgement record the plan requires (actor,
+     * timestamp, warning version) IS built now -- see {@link #ACKNOWLEDGED_POSTURE} and
+     * its four siblings, {@link #postureAcknowledged}, and
+     * {@code HostPostureAcknowledgement}. Superseding the earlier note here: setting
+     * shared_container through the form is still an ordinary admin edit and deliberately
+     * stays one, but it no longer GRANTS anything -- the posture only starts accepting
+     * hostile-tenant containers once the separate acknowledgement act names an actor.
      */
     public static final EnumField POSTURE = SCHEMA.addField(EnumField.builder("posture")
         .value(POSTURE_TRUSTED_ONLY, v -> v.displayName("Trusted only").icon("user-shield")
@@ -182,6 +202,48 @@ public class ServerModel extends Model {
     /** Why the host was quarantined, kept after {@link #LAST_ERROR} is overwritten. */
     public static final TextField QUARANTINE_REASON = SCHEMA.addField(
         TextField.builder().name("quarantine_reason").nullable(true).build());
+
+    // -- the operator's posture acknowledgement (a trust ACT, like a pin) -------
+
+    /**
+     * The posture TOKEN an operator acknowledged the risk of, null when none. Never a
+     * boolean: a flag would keep saying yes after the posture moved underneath it, and
+     * the plan's clause refuses "a boolean hidden in settings" for exactly that shape.
+     *
+     * AIDEV-NOTE: COLUMNS are the authority and the activity row is HISTORY, the same
+     * split {@code HostPins} uses. The activity log cannot be the authority here:
+     * {@code CleanOldActivity} prunes at a hard-coded 90 days, so a gate reading it would
+     * silently reopen the host on day 91 with nothing to see. And like
+     * {@link #QUARANTINED_AT}, no probe, sweep or preflight path writes these five
+     * columns -- a trust verdict may only be moved by a trust act.
+     *
+     * PROMOTION TRIGGER: the moment a SECOND consumer needs "a human accepted version N
+     * of a stated risk about record R", lift this shape to zenit core
+     * {@code common/security} as an {@code Acknowledgements} mechanism. One consumer is
+     * not a mechanism -- the same call {@code HostTrustSlot} was deliberately given.
+     */
+    public static final StringField ACKNOWLEDGED_POSTURE = SCHEMA.addField(
+        StringField.builder().name("acknowledged_posture").nullable(true).build());
+
+    /** The {@link #POSTURE_WARNING_VERSION} the acknowledged warning text carried. */
+    public static final IntegerField ACKNOWLEDGED_WARNING_VERSION = SCHEMA.addField(
+        IntegerField.builder().name("acknowledged_warning_version").nullable(true).build());
+
+    /** When the acknowledgement was recorded. */
+    public static final DateTimeField ACKNOWLEDGED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("acknowledged_at").build());
+
+    /** The acting principal id ({@code Accountability.current().actor()}), never a name. */
+    public static final StringField ACKNOWLEDGED_BY = SCHEMA.addField(
+        StringField.builder().name("acknowledged_by").nullable(true).build());
+
+    /**
+     * The actor's display label AS IT READ at acknowledgement time, so the record survives
+     * a rename or a deleted account -- the accountability half is worthless if the only
+     * human-readable trace is a foreign key that later resolves to nothing.
+     */
+    public static final StringField ACKNOWLEDGED_BY_LABEL = SCHEMA.addField(
+        StringField.builder().name("acknowledged_by_label").nullable(true).build());
 
     /**
      * The operator-facing digest of {@link #HOST_KEY} ({@code SHA256:...}, exactly what
@@ -349,6 +411,39 @@ public class ServerModel extends Model {
                         .withArg("address", v6));
             }
         });
+        SCHEMA.addBeforeValidateHook(ServerModel::clearAcknowledgementOnPostureChange);
+    }
+
+    /**
+     * An acknowledgement names ONE posture; the moment the row carries another, the
+     * acknowledgement is not stale evidence to reason about, it is gone.
+     *
+     * AIDEV-NOTE: a SCHEMA HOOK, not a branch in the resource, and that is the whole
+     * design. Posture reaches this row through two separate {@code ServerResource}
+     * branches (the ordinary update and the local-host identity guard) plus whatever API
+     * lands next -- a per-path clear is one forgotten path away from a host that quietly
+     * keeps an acknowledgement it was never given for its current posture.
+     *
+     * It closes the AWAY-AND-BACK hole specifically. {@link #postureAcknowledged} already
+     * refuses a mismatched pair on every read, so a stale row can never GRANT anything;
+     * without this hook, though, flipping a host to dedicated and back to
+     * shared_container would resurrect the old acknowledgement with no human involved.
+     * Two layers on purpose: the predicate is the gate, this is the eraser.
+     */
+    private static void clearAcknowledgementOnPostureChange(@NonNull SaveToDatasource context) {
+        Row row = context.getRow();
+        if (row == null) {
+            return;
+        }
+        String acknowledged = row.get(ACKNOWLEDGED_POSTURE);
+        if (acknowledged == null || acknowledged.equals(row.get(POSTURE))) {
+            return;
+        }
+        row.set(ACKNOWLEDGED_POSTURE, null);
+        row.set(ACKNOWLEDGED_WARNING_VERSION, null);
+        row.set(ACKNOWLEDGED_AT, null);
+        row.set(ACKNOWLEDGED_BY, null);
+        row.set(ACKNOWLEDGED_BY_LABEL, null);
     }
 
     /** Trim a staged address; a blank submit folds to null (the "none declared" state). */
@@ -459,6 +554,57 @@ public class ServerModel extends Model {
     public static boolean acceptsTenantWorkloads(@NonNull Row server) {
         String posture = server.get(POSTURE);
         return posture != null && !POSTURE_TRUSTED_ONLY.equals(posture);
+    }
+
+    /**
+     * Whether this host's posture PROMISES a boundary the given workload cannot provide:
+     * a {@code vm_isolated} host declares that hostile tenants only ever meet each other
+     * across a hypervisor, and a shared-kernel workload breaks that promise for every
+     * workload already there, not just for itself.
+     *
+     * AIDEV-NOTE: this is the pairing the plan's "placement refuses a hostile workload
+     * when the host posture cannot satisfy it" asked for, and it lives HERE rather than in
+     * the gate for the same reason {@link #acceptsTenantWorkloads} does: the posture
+     * vocabulary is this model's, so what a posture permits is answered once. The other
+     * three postures permit both isolations -- {@code trusted_only} refuses tenant
+     * workloads outright one gate earlier (that is a TRUST decision, not a boundary one),
+     * {@code dedicated} rations the host by owner, and {@code shared_container} is exactly
+     * the posture whose shared kernel needs the operator acknowledgement.
+     *
+     * A vm_isolated host is deliberately NOT acknowledgeable: the honest way to run
+     * containers on it is to declare shared_container and accept the risk, which is ONE
+     * mechanism instead of two.
+     */
+    public static boolean postureRequiresVirtualMachine(@NonNull Row server,
+                                                        @NonNull WorkloadIsolation isolation) {
+        return POSTURE_VM_ISOLATED.equals(server.get(POSTURE))
+            && isolation != WorkloadIsolation.VIRTUAL_MACHINE;
+    }
+
+    /**
+     * Whether this host's posture is one an operator must explicitly accept the risk of
+     * before hostile-tenant work lands on it -- {@code shared_container} and only that.
+     */
+    public static boolean postureNeedsAcknowledgement(@NonNull Row server) {
+        return POSTURE_SHARED_CONTAINER.equals(server.get(POSTURE));
+    }
+
+    /**
+     * Whether the stored acknowledgement answers for the posture this host declares TODAY
+     * and for the CURRENT warning text. True when no acknowledgement is needed at all.
+     *
+     * Two independent invalidators, neither of which writes anything: a posture the
+     * acknowledgement does not name (the schema hook normally erases those, so this is the
+     * belt to its braces) and a {@link #POSTURE_WARNING_VERSION} bump.
+     */
+    public static boolean postureAcknowledged(@NonNull Row server) {
+        if (!postureNeedsAcknowledgement(server)) {
+            return true;
+        }
+        String acknowledged = server.get(ACKNOWLEDGED_POSTURE);
+        Integer version = server.get(ACKNOWLEDGED_WARNING_VERSION);
+        return acknowledged != null && acknowledged.equals(server.get(POSTURE))
+            && version != null && version == POSTURE_WARNING_VERSION;
     }
 
     /**

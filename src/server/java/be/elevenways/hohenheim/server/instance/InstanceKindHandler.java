@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -39,6 +40,25 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      */
     default boolean tenantAuthored() {
         return true;
+    }
+
+    /**
+     * The boundary this kind's workloads put between the guest and the host kernel -- the
+     * SECOND axis of the plan's workload declaration, paired against the host's posture by
+     * {@code HostAdmission.requirePostureSatisfies}.
+     *
+     * AIDEV-NOTE: it lives HERE, beside {@link #tenantAuthored()}, and not on the common
+     * {@code InstanceKindInfo}: the two together are one declaration of what a kind's
+     * workloads are, and the only consumer is the server-side placement gate.
+     * {@code InstanceKindInfo} is the admin-UI metadata face (label, icon, description);
+     * isolation is a placement FACT, not a selector decoration.
+     *
+     * AIDEV-NOTE: the default is the WEAKEST boundary on purpose. A kind that forgets to
+     * declare is treated as sharing the kernel, so forgetting narrows placement instead of
+     * silently promising a hypervisor that is not there.
+     */
+    default @NonNull WorkloadIsolation isolation() {
+        return WorkloadIsolation.SHARED_KERNEL;
     }
 
     /**

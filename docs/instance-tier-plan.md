@@ -2643,6 +2643,27 @@ shape) is confirmable during the phase. Do not start Phase 3 with 7 or 8 open.
   `posture=shared_container` as an ordinary form field, which is exactly the
   bare admin edit the clause objects to. **Do not supersede.**
 
+  BUILT 2026-08-13. The clause text stands exactly as written and is NOT
+  superseded; what changed is the code, which has caught up. `servers` carries
+  five acknowledgement columns (M092: acknowledged posture TOKEN, warning
+  version, timestamp, actor id and the actor label as it read), written ONLY by
+  `HostPostureAcknowledgement.record` -- a row action that refuses a system
+  caller, because an actorless acknowledgement is the forgery this clause
+  objects to. The columns are the authority and the `zenit_activity` row is
+  history beside them (`CleanOldActivity` prunes at 90 days, so a gate reading
+  the log would silently reopen). `HostAdmission.requireInstancePlacement` now
+  takes the workload's isolation and owner bucket: it refuses
+  `host_posture_unacknowledged` on the FIRST hostile container, refuses
+  `host_posture_requires_vm` for a shared-kernel workload on a vm_isolated host
+  (the pairing the clause asks for; both Incus kinds used to place there), and
+  enforces `dedicated` exclusivity for EVERY lane including the admin one that
+  names a host and skips the chooser. Three invalidators, none of them a
+  discipline: a posture change (schema hook), a `POSTURE_WARNING_VERSION` bump
+  (digest-pinned against the shipped en/nl warning text), and nothing else.
+  NO BACKFILL: existing shared_container hosts start unacknowledged and stop
+  taking NEW tenant containers until an operator accepts the risk; running
+  workloads, stop and destroy are untouched.
+
   ANNOTATION 2026-08-12, on the PREFLIGHT sentence only -- **the
   shared-container acknowledgement above is untouched and still owed.** "Host
   preflight verifies userns remap, seccomp/AppArmor ... before the host accepts

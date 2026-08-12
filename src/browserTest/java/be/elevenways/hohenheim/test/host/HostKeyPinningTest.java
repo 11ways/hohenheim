@@ -134,6 +134,7 @@ class HostKeyPinningTest {
             pinned.set(ServerModel.PREFLIGHT_OK, true);
             pinned.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
             model.save(pinned);
+            HostFixtures.acknowledgePosture(pinned);
             assertThat(catchThrowable(() -> HostAdmission.requireAdmittable(pinned)))
                 .as("step 4: admit refuses while the fingerprint is unconfirmed")
                 .isInstanceOfSatisfying(Violations.class, violations ->

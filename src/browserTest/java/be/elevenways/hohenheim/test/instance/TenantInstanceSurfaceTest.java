@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -730,6 +731,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         row.set(ServerModel.PREFLIGHT_OK, true);
         servers.save(row);
+        HostFixtures.acknowledgePosture(row);
         // Placement will not CHOOSE a host whose memory nobody measured, so an admitted
         // host needs the reading a real admit always has (requireAdmittable demands a
         // passing preflight, and both batteries store mem_total).

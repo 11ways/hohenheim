@@ -8027,5 +8027,65 @@
   "disk_description": {
     "text": "De bewaarde waarneming, geen live meting.",
     "scope": "instance_stats"
+  },
+  "host_posture_unacknowledged": {
+    "text": "Host {$name} draait gedeelde containers en geen enkele operator heeft dat risico aanvaard; aanvaard de houding op de host voor er tenant-containers landen",
+    "scope": "violations"
+  },
+  "host_posture_requires_vm": {
+    "text": "Host {$name} belooft VM-isolatie en weigert een containerworkload, die zijn kernel met elke gast op de machine zou delen",
+    "scope": "violations"
+  },
+  "host_dedicated_to_other": {
+    "text": "Host {$name} is toegewezen aan de workloads van een andere eigenaar",
+    "scope": "violations"
+  },
+  "posture_not_acknowledgeable": {
+    "text": "Host {$name} heeft een houding die geen risicoaanvaarding nodig heeft",
+    "scope": "violations"
+  },
+  "posture_already_acknowledged": {
+    "text": "Host {$name} draagt al een geldige risicoaanvaarding",
+    "scope": "violations"
+  },
+  "posture_acknowledgement_needs_actor": {
+    "text": "Een risicoaanvaarding voor host {$name} legt vast wie ze aanvaardde, dus onbewaakt werk kan ze niet doen",
+    "scope": "violations"
+  },
+  "acknowledge": {
+    "text": "Risico aanvaarden",
+    "scope": "server"
+  },
+  "acknowledge_hint": {
+    "text": "Leg vast dat je aanvaardt wat gedeelde containers op deze host betekenen.",
+    "scope": "server"
+  },
+  "acknowledge_generic": {
+    "text": "Het risico van gedeelde containers op deze host aanvaarden?",
+    "scope": "server"
+  },
+  "acknowledge_body": {
+    "text": "Gedeelde containers op {$name} betekent dat vijandige tenants op EEN kernel draaien: een containerontsnapping bereikt elke andere workload op de machine en de host zelf. Enkel VM-isolatie is bestand tegen een vijandige root-tenant. Typ de hostnaam om dit risico te aanvaarden; het wordt op jouw naam vastgelegd en moet opnieuw aanvaard worden als de houding of deze waarschuwing verandert.",
+    "scope": "server"
+  },
+  "posture_acknowledged": {
+    "text": "Houdingsrisico aanvaard voor {$name}.",
+    "scope": "server"
+  },
+  "acknowledgement": {
+    "text": "Houdingsrisico",
+    "scope": "server_overview"
+  },
+  "ack_current": {
+    "text": "Aanvaard door {$actor} (waarschuwing v{$version})",
+    "scope": "server_overview"
+  },
+  "ack_stale": {
+    "text": "Aanvaarding verouderd (waarschuwing v{$version})",
+    "scope": "server_overview"
+  },
+  "ack_missing": {
+    "text": "Niet aanvaard",
+    "scope": "server_overview"
   }
 }

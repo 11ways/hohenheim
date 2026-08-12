@@ -96,6 +96,7 @@ public final class LiveRemoteHost {
         row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
         row.set(ServerModel.IDENTITY_PRIVATE_KEY, this.identityPrivateKey);
         model.save(row);
+        HostFixtures.acknowledgePosture(row);
         return model.findByName(name);
     }
 

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.host;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.HostStatusCell;
 import be.elevenways.hohenheim.host.KernelIsolationView;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -71,6 +72,9 @@ class HostEvidenceTest {
     private static final String SSH_KEY =
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     private static final long SIXTEEN_GB = 16L * 1024 * 1024 * 1024;
+
+    /** No host here is DEDICATED, so the owner bucket is not what these steps are about. */
+    private static final String BUCKET = "evidence-owner";
 
     private static SqlDatasource datasource;
 
@@ -213,6 +217,7 @@ class HostEvidenceTest {
             host.set(ServerModel.PREFLIGHT_OK, true);
             host.set(ServerModel.LAST_SEEN_AT, Instant.now());
             model.save(host);
+            HostFixtures.acknowledgePosture(host);
             int serverId = model.findByName("evidence-b").get(ServerModel.ID);
 
             Integer originalMinutes = HohenheimSettings.VALUES.getValue(
@@ -222,7 +227,8 @@ class HostEvidenceTest {
                     HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES, 180);
 
                 // 1. POSITIVE ANCHOR: a host that answered a moment ago places fine.
-                HostAdmission.requireInstancePlacement(serverId);
+                HostAdmission.requireInstancePlacement(serverId,
+                    WorkloadIsolation.SHARED_KERNEL, BUCKET);
 
                 // 2. THE DEFECT. Nine hours of silence, and every stored column still says
                 //    healthy: admitted, preflight_ok, no error kind. Only the clock knows.
@@ -230,7 +236,8 @@ class HostEvidenceTest {
                 lapsing.set(ServerModel.LAST_SEEN_AT, Instant.now().minus(Duration.ofHours(9)));
                 model.save(lapsing);
                 assertThat(catchThrowable(() ->
-                        HostAdmission.requireInstancePlacement(serverId)))
+                        HostAdmission.requireInstancePlacement(serverId,
+                    WorkloadIsolation.SHARED_KERNEL, BUCKET)))
                     .withFailMessage("step 2: a host nobody has heard from in nine hours"
                         + " still accepts new workloads")
                     .isInstanceOfSatisfying(Violations.class, violations ->
@@ -260,7 +267,8 @@ class HostEvidenceTest {
                 Row answering = model.findByName("evidence-b");
                 answering.set(ServerModel.LAST_SEEN_AT, Instant.now());
                 model.save(answering);
-                HostAdmission.requireInstancePlacement(serverId);
+                HostAdmission.requireInstancePlacement(serverId,
+                    WorkloadIsolation.SHARED_KERNEL, BUCKET);
                 assertThat(hostStatusCell(model.findByName("evidence-b")).state())
                     .as("step 5: and the cell stops saying it").isEqualTo("ok");
 
@@ -272,7 +280,8 @@ class HostEvidenceTest {
                 silentAgain.set(ServerModel.LAST_SEEN_AT,
                     Instant.now().minus(Duration.ofDays(30)));
                 model.save(silentAgain);
-                HostAdmission.requireInstancePlacement(serverId);
+                HostAdmission.requireInstancePlacement(serverId,
+                    WorkloadIsolation.SHARED_KERNEL, BUCKET);
             } finally {
                 HohenheimSettings.VALUES.setValue(
                     HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES,

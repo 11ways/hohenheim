@@ -11,6 +11,7 @@
 {% declare quarantinedAtIso: String = null %}
 {% declare quarantineReason: String = "" %}
 {% declare trustLanes: List<TrustLaneView> %}
+{% declare acknowledgement: PostureAcknowledgementView = null %}
 {% declare kernel: KernelIsolationView = null %}
 {% declare preflightChecks: List<PreflightCheckView> %}
 {% declare preflightFacts: List<HostFactView> %}
@@ -67,7 +68,23 @@
                 {{ t("last_error", scope: "server_overview") }}: {{ lastError }}
             </p>
             {% /if %}
+            {% if acknowledgement != null && acknowledgement.needed %}
+            <p class="hh-posture-ack" data-posture-acknowledgement="1">
+                <span class="hh-trust-label">{{ t("acknowledgement", scope: "server_overview") }}</span>
+                {% if acknowledgement.current %}
+                <pl-badge variant="success">{{ t("ack_current", scope: "server_overview", actor: acknowledgement.actorLabel, version: acknowledgement.version) }}</pl-badge>
+                {% if acknowledgement.acknowledgedAtIso != null %}
+                <pl-relative-time datetime={% acknowledgement.acknowledgedAtIso %} wording={% timeWording %} title={% acknowledgement.acknowledgedAtIso %}></pl-relative-time>
+                {% /if %}
+                {% elseif acknowledgement.stale %}
+                <pl-badge variant="destructive">{{ t("ack_stale", scope: "server_overview", version: acknowledgement.requiredVersion) }}</pl-badge>
+                {% else %}
+                <pl-badge variant="destructive">{{ t("ack_missing", scope: "server_overview") }}</pl-badge>
+                {% /if %}
+            </p>
+            {% /if %}
             <div class="hh-state-actions">
+                {% if actions.acknowledgePosture != null %}{% render "zenitcms:action/invoke" var:action=actions.acknowledgePosture %}{% /if %}
                 {% if actions.probe != null %}{% render "zenitcms:action/invoke" var:action=actions.probe %}{% /if %}
                 {% if actions.preflight != null %}{% render "zenitcms:action/invoke" var:action=actions.preflight %}{% /if %}
                 {% if actions.admit != null %}{% render "zenitcms:action/invoke" var:action=actions.admit %}{% /if %}

@@ -332,7 +332,8 @@
         max-width: 32rem;
     }
 
-    .hh-kernel-state {
+    .hh-kernel-state,
+    .hh-posture-ack {
         display: flex;
         flex-wrap: wrap;
         align-items: center;

@@ -277,6 +277,20 @@ public final class InstanceQuota {
      *
      * @return the manage-subject set to charge; empty IS the operator, never an error
      */
+    /**
+     * The count bucket a record created RIGHT NOW would be charged to -- the same
+     * derivation the create hook below uses, exposed for a caller that must judge a host
+     * against the owner before the record exists (the archive-restore placement gate).
+     *
+     * AIDEV-NOTE: exposed rather than re-derived at the call site on purpose. "Who will
+     * this be charged to" has exactly one answer, and a second spelling of it is how a
+     * dedicated host ends up admitting a workload the ledger then charges to somebody
+     * else.
+     */
+    public static @NonNull String creationBucket() {
+        return bucketKeyOf(HohenheimAccess.packSubjects(creationOwnerOf()));
+    }
+
     private static @NonNull Set<String> creationOwnerOf() {
         GeneratedRows.Attribution attribution = GeneratedRows.currentAttribution();
         if (attribution != null && attribution.forModel() != null && attribution.forId() != null) {

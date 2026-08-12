@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -422,6 +423,7 @@ class InstanceSnapshotRetentionTest {
         row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
         Models.get(ServerModel.class).save(row);
+        HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(List.of(
             new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
             new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,

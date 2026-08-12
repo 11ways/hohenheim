@@ -213,7 +213,8 @@ public final class InstanceMigrations {
                 .withArg("name", nameOf(resolved.row()));
         }
         try {
-            HostAdmission.requireInstancePlacement(serverId);
+            HostAdmission.requireInstancePlacement(serverId, resolved.handler().isolation(),
+                resolved.row().get(InstanceModel.QUOTA_BUCKET));
         } catch (Violations refused) {
             List<Violation> all = refused.all();
             return all.isEmpty()
@@ -279,7 +280,8 @@ public final class InstanceMigrations {
                 .withArg("runtime", target != null ? ServerModel.runtimeOf(target) : "absent")
                 .withArg("required", resolved.handler().requiredRuntime()));
         }
-        HostAdmission.requireInstancePlacement(targetServerId);
+        HostAdmission.requireInstancePlacement(targetServerId, resolved.handler().isolation(),
+            resolved.row().get(InstanceModel.QUOTA_BUCKET));
 
         String targetName = ServerModel.nameOf(targetServerId);
         // The named-refusal funnel: an unaddressable destination (unpinned SSH host)

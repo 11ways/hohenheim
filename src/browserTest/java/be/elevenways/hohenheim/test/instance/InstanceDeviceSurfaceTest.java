@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.CapabilityScopes;
@@ -98,6 +99,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         host.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
         Models.get(ServerModel.class).save(host);
+        HostFixtures.acknowledgePosture(host);
         hostId = host.get(ServerModel.ID);
 
         Row user = AuthModels.users().createEmptyRow();

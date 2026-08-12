@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.host.HostFactView;
 import be.elevenways.hohenheim.host.KernelIsolationView;
+import be.elevenways.hohenheim.host.PostureAcknowledgementView;
 import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.host.ServerActionsView;
 import be.elevenways.hohenheim.host.TrustLaneView;
@@ -100,6 +101,7 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
         vars.put("quarantinedAtIso", isoOf(server.get(ServerModel.QUARANTINED_AT)));
         vars.put("quarantineReason", blankable(server.get(ServerModel.QUARANTINE_REASON)));
         vars.put("trustLanes", trustLanes(server));
+        vars.put("acknowledgement", acknowledgementViewOf(server));
         vars.put("kernel", kernelIsolationViewOf(server));
         vars.put("preflightChecks", preflightChecks(server));
         vars.put("preflightFacts", preflightFacts(server));
@@ -146,6 +148,24 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
             offered.isBlank() ? "" : digest.apply(offered),
             HostPins.isQuarantined(server, slot),
             client != null ? client : "");
+    }
+
+    /**
+     * The posture acknowledgement as data: what is stored, and whether it still answers.
+     * Rendered for every host, including ones whose posture needs none -- "not required"
+     * is a state an operator has to be able to read too.
+     */
+    public static @NonNull PostureAcknowledgementView acknowledgementViewOf(@NonNull Row server) {
+        Instant at = server.get(ServerModel.ACKNOWLEDGED_AT);
+        String label = server.get(ServerModel.ACKNOWLEDGED_BY_LABEL);
+        return new PostureAcknowledgementView(
+            ServerModel.postureNeedsAcknowledgement(server),
+            ServerModel.postureAcknowledged(server),
+            server.get(ServerModel.ACKNOWLEDGED_POSTURE),
+            server.get(ServerModel.ACKNOWLEDGED_WARNING_VERSION),
+            ServerModel.POSTURE_WARNING_VERSION,
+            at != null ? at.toString() : null,
+            label != null ? label : "");
     }
 
     /**
@@ -310,7 +330,7 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
             byPath.get("probe_server"), byPath.get("preflight_server"),
             byPath.get("admit_server"), byPath.get("cordon_server"),
             byPath.get("uncordon_server"), byPath.get("drain_server"),
-            byPath.get("reap_controller_objects"));
+            byPath.get("reap_controller_objects"), byPath.get("acknowledge_posture"));
     }
 
     // -- helpers -------------------------------------------------------------------

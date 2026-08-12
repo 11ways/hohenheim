@@ -187,6 +187,7 @@ public final class LiveIncusHost {
         row.set(ServerModel.IDENTITY_PRIVATE_KEY, null);
         row.set(ServerModel.IDENTITY_PUBLIC_KEY, null);
         model.save(row);
+        HostFixtures.acknowledgePosture(row);
         return model.findByName(name);
     }
 

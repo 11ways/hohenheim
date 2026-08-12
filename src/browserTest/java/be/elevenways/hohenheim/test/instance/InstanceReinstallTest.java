@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -323,6 +324,7 @@ class InstanceReinstallTest extends HohenheimTestBase {
         row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
         Models.get(ServerModel.class).save(row);
+        HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(List.of(
             new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
             new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,

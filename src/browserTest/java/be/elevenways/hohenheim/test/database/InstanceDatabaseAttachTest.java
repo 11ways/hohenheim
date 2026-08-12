@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.database.EngineHandles;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -629,6 +630,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         row.set(ServerModel.PREFLIGHT_OK, true);
         servers.save(row);
+        HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));

@@ -165,7 +165,9 @@ public final class InstanceInstalls {
         if (!(resolved.runtime() instanceof InstallSupport support)) {
             throw refusal("install_unsupported", resolved.row(), null);
         }
-        HostAdmission.requireInstancePlacement(resolved.serverId());
+        HostAdmission.requireInstancePlacement(resolved.serverId(),
+            resolved.handler().isolation(),
+            resolved.row().get(InstanceModel.QUOTA_BUCKET));
 
         String installImage = template.get(InstanceTemplateModel.INSTALL_IMAGE);
         if (installImage == null || installImage.isBlank()) {

@@ -114,6 +114,7 @@ class HostRuntimeTest {
             admitted.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
             admitted.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
             Models.get(ServerModel.class).save(admitted);
+            HostFixtures.acknowledgePosture(admitted);
             // The eligible set is HostAdmission's own, so this host must satisfy every
             // gate a deploy would: a PROVEN kernel-truth lane and a measured memory
             // budget, both stored through the preflight funnel. Placement offering a

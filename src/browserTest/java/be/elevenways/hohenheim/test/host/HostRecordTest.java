@@ -95,6 +95,7 @@ class HostRecordTest {
             local.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
             local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_CORDONED);
             Models.get(ServerModel.class).save(local);
+            HostFixtures.acknowledgePosture(local);
             assertThat(catchThrowable(() -> service.deploy(id)))
                 .as("step 3: a cordoned host refuses new placement")
                 .isInstanceOfSatisfying(Violations.class, violations ->
