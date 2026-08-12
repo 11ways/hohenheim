@@ -520,10 +520,13 @@ public class HohenheimSettings {
                 + "spamservice reputation and the released-hostname quarantine")
             .icon("shield");
 
-        // AIDEV-NOTE: the ONLY tunable part of ContainerHardening. Everything else in the
-        // baseline (drop-ALL capabilities, no-new-privileges, the escape refusals) is
-        // deliberately not a setting: a security policy an operator can switch off from a
-        // form is a policy a compromised admin session can switch off.
+        // AIDEV-NOTE: the pids cap and the two log-rotation caps below are the ONLY
+        // tunable parts of ContainerHardening, and all three are the same KIND of knob:
+        // a NUMBER on a resource the policy caps unconditionally, never an on/off switch
+        // over the policy itself. Everything else in the baseline (drop-ALL capabilities,
+        // no-new-privileges, the escape refusals) is deliberately not a setting: a
+        // security policy an operator can switch off from a form is a policy a
+        // compromised admin session can switch off.
         public static final SettingDefinition<Integer> CONTAINER_PIDS_LIMIT = GROUP
             .buildSetting("container_pids_limit", Integer.class)
             .defaultValue(512)
@@ -532,6 +535,25 @@ public class HohenheimSettings {
                 + "bomb inside one tenant's container then exhausts its own cgroup instead "
                 + "of the host's process table. Raise it only for a workload that genuinely "
                 + "forks per connection; 0 or less falls back to the default")
+            .build();
+
+        public static final SettingDefinition<Integer> CONTAINER_LOG_MAX_SIZE_MB = GROUP
+            .buildSetting("container_log_max_size_mb", Integer.class)
+            .defaultValue(10)
+            .suffix("MB")
+            .description("Size at which a single managed container's log file rotates. "
+                + "Without a cap the daemon's json-file driver grows one file forever, so "
+                + "a workload that prints in a loop fills the host disk out from under "
+                + "every other tenant. 0 or less falls back to the default")
+            .build();
+
+        public static final SettingDefinition<Integer> CONTAINER_LOG_MAX_FILES = GROUP
+            .buildSetting("container_log_max_files", Integer.class)
+            .defaultValue(3)
+            .description("How many rotated log files a single managed container keeps. "
+                + "Multiplied by the rotation size, this is the hard ceiling on what one "
+                + "container's logs can ever occupy on the host. 0 or less falls back to "
+                + "the default")
             .build();
 
         public static final SettingDefinition<Integer> RELEASE_QUARANTINE_DAYS = GROUP.buildSetting("release_quarantine_days", Integer.class)

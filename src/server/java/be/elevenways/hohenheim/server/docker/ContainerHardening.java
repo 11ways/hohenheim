@@ -165,6 +165,12 @@ public final class ContainerHardening {
     /** Fallback pids cap when the setting is unreadable; also the setting's default. */
     public static final int DEFAULT_PIDS_LIMIT = 512;
 
+    /** Fallback log rotation size in MB when the setting is unreadable; also its default. */
+    public static final int DEFAULT_LOG_MAX_SIZE_MB = 10;
+
+    /** Fallback rotated-log file count when the setting is unreadable; also its default. */
+    public static final int DEFAULT_LOG_MAX_FILES = 3;
+
     /**
      * HostConfig keys a caller may never set: each one is either a documented container
      * escape or a way to opt back out of this policy.
@@ -179,11 +185,16 @@ public final class ContainerHardening {
      * daemon-level {@code userns-remap} in daemon.json, which hohenheim does not own),
      * and the only thing the field can do here is "host", i.e. opt a container OUT of
      * remapping on a daemon that has it configured.
+     *
+     * AIDEV-NOTE: {@code LogConfig} joined this list with the log cap itself. It is not a
+     * privilege escape -- it is here for the OTHER reason the list exists: the policy owns
+     * the key, so no caller can hand back the unbounded default (or a driver whose output
+     * the console lane cannot read) by setting it.
      */
     public static final List<String> ESCAPE_KEYS = List.of(
         "Privileged", "CapAdd", "CapDrop", "SecurityOpt", "PidsLimit", "UsernsMode",
         "Devices", "DeviceCgroupRules", "DeviceRequests", "CgroupParent", "Sysctls",
-        "Binds", "ReadonlyPaths", "MaskedPaths");
+        "Binds", "ReadonlyPaths", "MaskedPaths", "LogConfig");
 
     /**
      * HostConfig namespace-sharing keys: "host" defeats the container boundary outright,
@@ -314,6 +325,7 @@ public final class ContainerHardening {
             pids = Math.min(pids, tighterPidsLimit);
         }
         hostConfig.put("PidsLimit", (long) pids);
+        hostConfig.put("LogConfig", logConfig());
 
         containerSpec.put("HostConfig", hostConfig);
     }
@@ -323,6 +335,47 @@ public final class ContainerHardening {
         Integer configured = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Security.CONTAINER_PIDS_LIMIT);
         return configured != null && configured > 0 ? configured : DEFAULT_PIDS_LIMIT;
+    }
+
+    /**
+     * The bounded logging every managed container is stamped with.
+     *
+     * AIDEV-NOTE: an unrotated log is a TENANT-DRIVEN host-availability failure, which is
+     * why the cap lives in this funnel and not at a call site: a workload that prints in a
+     * loop fills the host's disk, and the daemon's own default for the json-file driver is
+     * one file with no maximum size at all. Every managed container therefore gets
+     * {@code max-size} x {@code max-file} as a hard ceiling on what it can occupy.
+     *
+     * AIDEV-NOTE: the DRIVER is stamped too, not just its options, and that is deliberate
+     * rather than incidental. Only {@code json-file} and {@code local} answer
+     * {@code GET /containers/{id}/logs}, which is the lane the console tab and the
+     * readiness matcher both read through -- a daemon configured with any other default
+     * driver would silently take the console away, and a caller cannot re-point it because
+     * {@code LogConfig} is an {@link #ESCAPE_KEYS} entry. Naming the driver we depend on is
+     * the honest half of depending on it.
+     */
+    private static @NonNull Map<String, Object> logConfig() {
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("max-size", logMaxSizeMb() + "m");
+        config.put("max-file", String.valueOf(logMaxFiles()));
+        Map<String, Object> logConfig = new LinkedHashMap<>();
+        logConfig.put("Type", "json-file");
+        logConfig.put("Config", config);
+        return logConfig;
+    }
+
+    /** @return the configured rotation size in MB for one container log file, never below 1 */
+    public static int logMaxSizeMb() {
+        Integer configured = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Security.CONTAINER_LOG_MAX_SIZE_MB);
+        return configured != null && configured > 0 ? configured : DEFAULT_LOG_MAX_SIZE_MB;
+    }
+
+    /** @return how many rotated log files one container keeps, never below 1 */
+    public static int logMaxFiles() {
+        Integer configured = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Security.CONTAINER_LOG_MAX_FILES);
+        return configured != null && configured > 0 ? configured : DEFAULT_LOG_MAX_FILES;
     }
 
     private static void refuseEscapes(Map<String, Object> hostConfig) {
