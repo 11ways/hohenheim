@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.auth.AuthKeys;
@@ -83,7 +82,7 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         HohenheimEndpoints.init();
         // Before the migrations, exactly as ServerMain does it: the declarations carry the
         // per-model liveness definition zenit-auth's orphan-purge migration consults.
-        HohenheimAccess.declareGrantableModels();
+        HohenheimTestRuntime.declareAccessModelsOnce();
         // Claims the database path too, AFTER HohenheimSettingsFiles.load() so a loaded
         // settings file can never point the suite at a developer's real database.
         try {

@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.WorkloadIdentity;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
@@ -51,7 +50,7 @@ class WorkloadIdentityTest {
         // BEFORE the boot stages, exactly as ServerMain does: zenit-auth's record-access
         // page registry is a MODULES-stage snapshot, and a declaration landing after the
         // drain is refused loudly by RecordAccessCoverage.
-        HohenheimAccess.declareGrantableModels();
+        HohenheimTestRuntime.declareAccessModelsOnce();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
         ZenitAuth.init(HohenheimDatabase.datasource());

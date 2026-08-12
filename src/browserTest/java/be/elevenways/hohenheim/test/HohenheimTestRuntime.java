@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -17,6 +18,8 @@ import java.io.IOException;
  * Boots the server-side runtime with a temporary default datasource when the test has not provided one.
  */
 public final class HohenheimTestRuntime {
+
+    private static boolean accessModelsDeclared;
 
     private HohenheimTestRuntime() {
     }
@@ -45,6 +48,7 @@ public final class HohenheimTestRuntime {
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.INSTANCES, true);
             HohenheimRoles.capture();
         }
+        declareAccessModelsOnce();
         ensureDatasource();
         // AIDEV-NOTE: auth is installed BEFORE the boot stages, exactly where
         // ServerMain installs it, because the MODULES stage now builds both CMS
@@ -61,6 +65,25 @@ public final class HohenheimTestRuntime {
         HohenheimSettings.VALUES.setValue(
             HohenheimSettings.Process.REQUIRE_DEDICATED_USER, false);
         ServerZenitRuntime.init().join();
+    }
+
+    /**
+     * Declare hohenheim's grantable models exactly once per JVM, before the boot stages.
+     *
+     * AIDEV-NOTE: zenit-auth's record-access page registry is a MODULES-stage SNAPSHOT, and
+     * RecordAccessCoverage refuses -- loudly, as it should -- a model that becomes grantable
+     * after the drain. Six test classes used to make this call themselves "before the boot
+     * stages, exactly as ServerMain does", which was true only because each owned its JVM.
+     * Sharing a JVM makes the SECOND caller the one that lands after the drain, so the
+     * declaration belongs to the funnel that owns the boot, not to whichever class happens
+     * to run first. Production keeps the loud guard; the harness declares once.
+     */
+    public static synchronized void declareAccessModelsOnce() {
+        if (accessModelsDeclared) {
+            return;
+        }
+        accessModelsDeclared = true;
+        HohenheimAccess.declareGrantableModels();
     }
 
     /**

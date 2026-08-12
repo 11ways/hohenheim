@@ -27,6 +27,8 @@ import be.elevenways.zenit.common.task.orm.SystemTaskModel;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -48,6 +50,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * database and settings and boots its own runtime, and both the Panel.peers()
  * memoization and the HohenheimRoles snapshot must be clean for this JVM.
  */
+// Solo: it declares a DNS-only role set and runs the real ServerMain.main, so it needs a
+// virgin HohenheimRoles snapshot and virgin Panel.peers() memoization -- neither of which
+// any later class in the same JVM could get back.
+@Tag("solo")
 class RoleRestrictedBootTest {
 
     @Test
@@ -161,6 +167,22 @@ class RoleRestrictedBootTest {
                 SecuritySweep.class.getName(),
                 CleanOrphanCertificates.class.getName(),
                 UpdateSystemIpAddresses.class.getName());
+    }
+
+    /**
+     * Shut down the appliance this class booted, so its worker JVM can actually exit.
+     *
+     * AIDEV-NOTE: this class starts the REAL ServerMain and used to stop nothing. The DNS
+     * server and the task scheduler are non-daemon threads, so the fork stayed alive after
+     * the last assertion and Gradle sat waiting for it: with forkEvery=1 the whole solo lane
+     * spent 40 of its 79 seconds AFTER its final test finished, for six tests. Measured by
+     * comparing the JUnit XML timestamps against the task duration in the Gradle profile --
+     * the test report looked perfectly healthy the whole time, because the cost was entirely
+     * outside any test.
+     */
+    @AfterAll
+    static void stopTheAppliance() {
+        ServerZenitRuntime.stop();
     }
 
     private static int statusOf(HttpClient client, int port, String session, String path)

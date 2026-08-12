@@ -34,9 +34,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SlowLaneGuardTest {
 
     /** The live helpers themselves plus this scanner; never test classes to enforce on. */
+    // BrowserTestLaneGuardTest is a sibling SOURCE SCANNER, not a live test: it names the
+    // live helpers and quotes @Tag("slow") in prose, which is exactly what this scan looks
+    // for, so without the exemption a guard would enforce lane rules against a guard.
     private static final Set<String> HELPERS = Set.of(
         "LiveLane", "LiveLaneReport", "LiveIncusHost", "LiveRemoteHost",
-        "FakeIncusTransport", "SlowLaneGuardTest");
+        "FakeIncusTransport", "SlowLaneGuardTest", "BrowserTestLaneGuardTest");
 
     private static final Pattern LIVE_REF = Pattern.compile(
         "\\bLiveLane\\s*\\.|\\bLiveIncusHost\\b|\\bLiveRemoteHost\\b");
