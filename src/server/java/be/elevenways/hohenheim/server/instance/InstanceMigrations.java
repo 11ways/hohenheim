@@ -180,7 +180,21 @@ public final class InstanceMigrations {
                 .withArg("runtime", ServerModel.runtimeOf(server))
                 .withArg("required", requiredRuntime);
         }
-        if (!sourceTransportable || !hasTransport(resolved.handler().runtimeFor(name))) {
+        // Through the ONE named-refusal funnel (InstanceService.runtimeFor): client
+        // construction fails closed for an unpinned SSH host, and letting that throw
+        // escape here 500ed the whole page over ONE unaddressable host in the estate
+        // (found by the full suite 2026-08-12 over another class's fixture host).
+        InstanceRuntime targetRuntime;
+        try {
+            targetRuntime = InstanceService.runtimeFor(resolved.handler(), name);
+        } catch (Violations unaddressable) {
+            List<Violation> named = unaddressable.all();
+            return named.isEmpty()
+                ? violationText("instance_host_unreachable").withArg("name", name)
+                    .withArg("reason", "client construction failed")
+                : named.get(0).message();
+        }
+        if (!sourceTransportable || !hasTransport(targetRuntime)) {
             return violationText("migrate_unsupported")
                 .withArg("name", nameOf(resolved.row()));
         }
@@ -268,7 +282,10 @@ public final class InstanceMigrations {
         HostAdmission.requireInstancePlacement(targetServerId);
 
         String targetName = ServerModel.nameOf(targetServerId);
-        InstanceRuntime targetRuntime = resolved.handler().runtimeFor(targetName);
+        // The named-refusal funnel: an unaddressable destination (unpinned SSH host)
+        // answers instance_host_unreachable, never a raw HostTrustException 500.
+        InstanceRuntime targetRuntime = InstanceService.runtimeFor(resolved.handler(),
+            targetName);
         Transport transport = transportFor(resolved, targetRuntime);
         if (transport == null) {
             throw Violations.ofForm(violationText("migrate_unsupported")
@@ -553,7 +570,10 @@ public final class InstanceMigrations {
             return true;
         }
         String targetName = ServerModel.nameOf(targetId);
-        InstanceRuntime targetRuntime = resolved.handler().runtimeFor(targetName);
+        // Same funnel as the submit lane: a thrown Violations reaches settle's callers
+        // as the loud "settling failed" log line instead of a raw HostTrustException.
+        InstanceRuntime targetRuntime = InstanceService.runtimeFor(resolved.handler(),
+            targetName);
         WorkloadAttribution targetAttribution = targetRuntime instanceof WorkloadAttribution t
             ? t : null;
 

@@ -342,14 +342,16 @@ public final class InstanceService {
             return;
         }
         try {
-            InstanceRuntime target = resolved.handler()
-                .runtimeFor(ServerModel.nameOf(targetId));
+            // The named-refusal funnel, caught below: destroy is the abandon-ship verb
+            // and must not be BLOCKED by a destination host that became unaddressable.
+            InstanceRuntime target = runtimeFor(resolved.handler(),
+                ServerModel.nameOf(targetId));
             if (target instanceof WorkloadAttribution support
                     && support.claimOf(resolved.spec())
                         == WorkloadAttribution.WorkloadClaim.OURS) {
                 InstanceMigrations.removeMigrationCopy(target, resolved);
             }
-        } catch (IOException cleanupFailed) {
+        } catch (IOException | Violations cleanupFailed) {
             Blast.log("INSTANCE: destroy could not remove the mid-migration copy of",
                 resolved.spec().handle(), "on server", targetId, ":",
                 cleanupFailed.getMessage());
@@ -683,10 +685,15 @@ public final class InstanceService {
      * the host key. This class's whole contract is "refusals are named Violations, never a
      * bare 500", so the gap was a contradiction of its own docblock, not a missing nicety.
      *
+     * AIDEV-NOTE: package-visible since 2026-08-12. The migration lane builds
+     * DESTINATION runtimes too (survey and submit), and bypassing this funnel let an
+     * unpinned SSH host's HostTrustException escape destinationsFor raw -- ONE
+     * unpinnable host in the estate 500ed the whole migrate page.
+     *
      * @throws Violations {@code instance_host_unreachable}, naming the host and the reason
      */
-    private static @NonNull InstanceRuntime runtimeFor(@NonNull InstanceKindHandler handler,
-                                                       @NonNull String serverName) {
+    static @NonNull InstanceRuntime runtimeFor(@NonNull InstanceKindHandler handler,
+                                               @NonNull String serverName) {
         try {
             return handler.runtimeFor(serverName);
         } catch (Violations alreadyNamed) {

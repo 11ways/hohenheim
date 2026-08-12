@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManageInstanceResource;
+import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -54,6 +55,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
     private static Integer instanceId;
     private static Integer strangerHostId;
+    private static Integer unpinnedHostId;
     private static Integer tenantId;
     private static String tenantSession;
     private static String tenantCsrf;
@@ -78,6 +80,13 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         stranger.set(ServerModel.SSH_TARGET, "nobody@migrate-stranger.invalid");
         servers.save(stranger);
         strangerHostId = servers.findByName("migrate-stranger").get(ServerModel.ID);
+
+        // An SSH-MODE host with NO pinned key, enrolled through the real funnel (add()
+        // stamps MODE_SSH): building a Docker client for it fails closed in
+        // HostKeys.sshArgv. The estate WILL contain such hosts (any freshly enrolled,
+        // not-yet-confirmed machine), so the survey must answer for it BY NAME.
+        new ServerService().add("migrate-unpinned", "nobody@migrate-unpinned.invalid");
+        unpinnedHostId = servers.findByName("migrate-unpinned").get(ServerModel.ID);
 
         Row user = AuthModels.users().createEmptyRow();
         user.set(UserModel.EMAIL, "migrate-tenant@hohenheim.local");
@@ -157,6 +166,31 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         assertThat(stranger.eligible()).as("step 3: an un-admitted host is not eligible")
             .isFalse();
         assertThat(stranger.refusal()).as("step 3: and carries a named refusal").isNotNull();
+
+        // 4. The UNADDRESSABLE host (SSH mode, no pinned key): client construction
+        //    fails closed, and pre-fix (2026-08-12, found by the full suite over
+        //    another class's fixture host) the survey let that throw ESCAPE -- one
+        //    unpinnable host in the estate 500ed the whole migrate page.
+        assertThat(page.statusCode())
+            .withFailMessage("step 4: one unpinnable host must not take the migrate"
+                + " page down (HTTP %s)", page.statusCode())
+            .isEqualTo(200);
+        assertThat(body)
+            .as("step 4: the unpinnable host is listed as an explicit target row,"
+                + " not silently omitted")
+            .contains("data-migrate-target=\"" + unpinnedHostId + "\"");
+
+        // 5. And the survey answers for it with the authority's OWN named refusal.
+        InstanceMigrations.Destination unpinned = new InstanceMigrations()
+            .destinationsFor(instanceId).stream()
+            .filter(candidate -> candidate.serverId() == unpinnedHostId)
+            .findFirst().orElseThrow();
+        assertThat(unpinned.eligible())
+            .as("step 5: an unaddressable host is not eligible").isFalse();
+        assertThat(unpinned.refusal().key())
+            .as("step 5: named as UNREACHABLE (scan and confirm the key), never a"
+                + " generic no and never a 500")
+            .isEqualTo("instance_host_unreachable");
     }
 
     /**
