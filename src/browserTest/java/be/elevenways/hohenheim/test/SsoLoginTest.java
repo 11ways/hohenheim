@@ -65,7 +65,10 @@ class SsoLoginTest extends HohenheimTestBase {
 
         @Override public IdentityResolution complete(Conduit conduit) {
             return IdentityResolution.success(
-                new RemoteIdentity("sso-test", "subject-1", "sso@example.com", "SSO User", Map.of()));
+                // emailVerified TRUE: this fake IS the provider, vouching for its own
+                // fixture subject (zenit-auth 4a33483 made the verified signal explicit).
+                new RemoteIdentity("sso-test", "subject-1", "sso@example.com", true,
+                    "SSO User", Map.of()));
         }
     }
 }
