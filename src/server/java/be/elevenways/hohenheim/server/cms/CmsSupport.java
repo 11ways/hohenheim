@@ -80,4 +80,22 @@ public final class CmsSupport {
         String slug = conduit.getParameter(CmsEndpoints.PANEL_PARAM);
         return slug != null && !slug.isBlank() ? slug : "admin";
     }
+
+    /**
+     * Whether this render is the DELEGATED tenant panel rather than the operator one.
+     *
+     * AIDEV-NOTE: the projection question is about the SURFACE, never about the viewer.
+     * An operator who opens /manage must see exactly what a tenant sees there, or the
+     * projection is untestable by anyone who can also reach /admin -- which is everyone
+     * who would notice a leak. Never rewrite this as an isAdmin check.
+     *
+     * AIDEV-NOTE: shared subpages ({@code InstanceOverviewPage},
+     * {@code InstanceProvisioningPage}) render under BOTH panels, so "the delegated
+     * resource omits it" only covers the FORM. Anything a subpage puts in its template
+     * vars -- a host name, a server id inside a route target, a daemon's own error text
+     * -- reaches a tenant unless the page asks this.
+     */
+    public static boolean isDelegatedPanel(@NonNull Conduit conduit) {
+        return ManagePanel.SLUG.equals(panelSlug(conduit));
+    }
 }

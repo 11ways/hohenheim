@@ -53,10 +53,17 @@ public final class ManagePanel extends Panel {
 
     public static final Permission ACCESS = Permission.of("hohenheim.manage.access");
 
+    /**
+     * This panel's URL slug, so a page that must PROJECT differently here compares
+     * against the declaration instead of re-spelling the literal
+     * ({@code CmsSupport.isDelegatedPanel} is the one reader).
+     */
+    public static final String SLUG = "manage";
+
     private static volatile boolean sourceRegistered = false;
 
     public ManagePanel() {
-        super(Identifier.of("hohenheim", "manage"), "manage",
+        super(Identifier.of("hohenheim", "manage"), SLUG,
             Microcopy.of("title").withFilter("scope", "manage"), ACCESS);
     }
 

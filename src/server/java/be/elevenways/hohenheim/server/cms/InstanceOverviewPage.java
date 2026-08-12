@@ -71,6 +71,11 @@ public final class InstanceOverviewPage implements RecordScopedPage<Row> {
         String name = String.valueOf((Object) instance.get(InstanceModel.NAME));
         int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
         String panel = CmsSupport.panelSlug(conduit);
+        // The delegated projection, applied FIELD BY FIELD rather than by trusting the
+        // resource: this page is the SAME class on both panels (ManageInstanceResource
+        // registers it verbatim), so the omissions are here or nowhere. See the two
+        // AIDEV-NOTEs below for what is dropped and what deliberately is not.
+        boolean delegated = CmsSupport.isDelegatedPanel(conduit);
         String overviewUrl = CmsRoutes.subpage(panel, this.resource.slug(), instanceId, SLUG)
             .toUrl();
 
@@ -83,10 +88,21 @@ public final class InstanceOverviewPage implements RecordScopedPage<Row> {
         vars.put("kindBadge", badgeOf(InstanceModel.KIND, instance.get(InstanceModel.KIND)));
         vars.put("installBadge", badgeOf(InstanceModel.INSTALL_STATE,
             instance.get(InstanceModel.INSTALL_STATE)));
-        vars.put("hostName", ServerModel.nameOf(serverId));
-        vars.put("hostTarget", CmsRoutes.subpage(panel, "servers", serverId,
-            ServerOverviewPage.SLUG));
-        vars.put("installError", blankable(instance.get(InstanceModel.INSTALL_ERROR)));
+        // AIDEV-NOTE: the host is operator inventory, and BOTH halves leak it -- the name
+        // is the machine's identity and the link carries its numeric server id, which is
+        // the id every host-scoped admin route is keyed on. A tenant is told WHAT their
+        // workload is doing, never WHERE it runs; the endpoint list below is the one
+        // address they legitimately get, because it is the address they connect to.
+        vars.put("hostName", delegated ? "" : ServerModel.nameOf(serverId));
+        vars.put("hostTarget", delegated ? null
+            : CmsRoutes.subpage(panel, "servers", serverId, ServerOverviewPage.SLUG));
+        // AIDEV-NOTE: install_error is stamped with the daemon's or transport's OWN text
+        // (InstanceInstalls stamps describe(IOException) and "exit N" plus the script's
+        // output tail), so it names image registries, socket paths, host paths and ssh
+        // failures. The install BADGE already tells the tenant the install failed, which
+        // is the fact they can act on; the operator reads the reason on /admin.
+        vars.put("installError", delegated ? ""
+            : blankable(instance.get(InstanceModel.INSTALL_ERROR)));
         vars.put("disk", diskOf(instance, serverId));
         vars.put("endpoints", endpointsOf(instanceId));
         vars.put("actions", this.actionsOf(instance, accessContext, overviewUrl, panel));
@@ -105,6 +121,10 @@ public final class InstanceOverviewPage implements RecordScopedPage<Row> {
      * A null observation is SILENCE, exactly as the collector reads it: Docker enforces
      * no root quota and stamps nothing, so the whole tier is unmeasured by contract and
      * a percentage computed from zeros would be a fabricated reading.
+     *
+     * AIDEV-NOTE: "by contract" is a recorded DECISION, not an omission awaiting a fix --
+     * the reasoning lives on {@code ResourceLimits} and in docs/instance-tier-plan.md
+     * beside the runtime-limits gate clause. Read it before changing this branch.
      */
     static @NonNull InstanceDiskView diskViewOf(@NonNull Row instance) {
         return diskOf(instance,

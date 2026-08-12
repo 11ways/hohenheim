@@ -95,7 +95,12 @@ public final class InstanceProvisioningPage implements RecordScopedPage<Row> {
         vars.put("installStateLabel", Microcopy.of(
                 installState == null ? InstanceModel.INSTALL_NONE : installState)
             .withFilter("scope", "install_state"));
-        String installError = instance.get(InstanceModel.INSTALL_ERROR);
+        // AIDEV-NOTE: the SECOND surface of the same leak InstanceOverviewPage's
+        // installError note describes -- this tab renders under /manage too, and the
+        // stored text is the daemon's or transport's own. The install-state label above
+        // carries the fact; the reason stays on the operator panel.
+        String installError = CmsSupport.isDelegatedPanel(conduit)
+            ? null : instance.get(InstanceModel.INSTALL_ERROR);
         vars.put("installError", installError == null ? "" : installError);
         vars.put("variables", variables);
         vars.put("files", files);
