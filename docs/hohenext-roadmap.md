@@ -130,7 +130,7 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
       bullet describes code that no longer exists.** `DockerClient` has no
       `buildImage` and must not grow one back: `/build` executes the tenant's
       Dockerfile inside the daemon, as root on the host, with the daemon's
-      network and no quota — the control-plane trust domain by definition. The
+      network and no quota -- the control-plane trust domain by definition. The
       AIDEV-NOTE at `DockerClient.java:229-235` says "Do not reintroduce
       /build: it has no sandbox to add". Builds now run in a hardened,
       quota-bound, daemonless container (`server.build.BuildSandbox`) and the

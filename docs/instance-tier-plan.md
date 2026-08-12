@@ -57,6 +57,21 @@ Never delete a HISTORY or RECON block to tidy up; supersede it in place with a
 dated line. Never state a finding twice in one section -- a second copy is how
 "already fixed" and "still open" end up on the same page.
 
+**EXCEPTION found 2026-08-12, and it is the only one across a full sweep of the
+corpus.** "The GATE wins" and its inventory sibling "a row verdict outranks
+ranked-open prose" both assume the short, prominent text is the CURRENT text.
+Once a row's own STATUS block explicitly says it supersedes its heading, the
+heading is the stale artifact and applying the rule literally gives the WRONG
+answer. `pterodactyl-use-inventory.md` item 10 is the case: the row is headlined
+PARTIAL while its STATUS block, the counts table's next line, the Verdict
+section and the code all say CLOSED. Refinement, not a replacement: prefer the
+gate/row heading, UNLESS a dated block beneath it names that heading as
+superseded -- in which case follow the dated block and annotate the heading, as
+that row now is. A gate that has never been annotated still wins outright; the
+quota gate's "cpu/port" clause is the reverse case, where the gate text is
+stale and the strike lived 490 lines away, which is why that one is now
+annotated at the gate itself.
+
 ---
 
 ## Replacement targets and honest definitions of done

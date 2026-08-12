@@ -91,7 +91,7 @@ silently aborts used to make a run of nothing look green.
   beside the panel (downloads, uploads, process control, terminal WS) live in
   `HohenheimEndpoints` + `HohenheimHandlers`.
 - Site types are registered via `SiteTypeRegistry`. Each type declares its schema (which drives the type-discriminated settings sub-form in the CMS) and its request handler. Adding a type means implementing one class and registering it — no edits to existing dispatch code. See `docs/architecture-site-types.md`.
-- Current types in `src/server/java/be/elevenways/hohenheim/server/sitetype/types/`: `AlchemySiteType`, `CommandSiteType`, `DeadSiteType`, `DockerSiteType`, `NodeSiteType`, `ProxySiteType`, `RedirectSiteType`, `StaticSiteType`.
+- Current types in `src/server/java/be/elevenways/hohenheim/server/sitetype/types/` (eleven, corrected 2026-08-12 -- this list omitted three): `AlchemySiteType` (extends `NodeSiteType`), `CommandSiteType`, `DeadSiteType`, `DevNamespaceSiteType`, `DockerSiteType`, `JavaSiteType`, `NodeSiteType`, `ProxySiteType`, `RedirectSiteType`, `StaticSiteType`, `TlsPassthroughSiteType` (a `TlsPassthroughProvider`, not an HTTP handler). `StaticFileHandler` in the same package is NOT a type -- it is the handler `StaticSiteType` returns. See `docs/architecture-site-types.md` for the full table.
 - Site-type settings store env vars/headers/credentials as `StringMapField`
   maps and reference discovered users/node versions via `RegistryEnumField`
   keys (`hohenheim:<username>` / `hohenheim:<version>`, registries refreshed
