@@ -259,7 +259,7 @@ class LiveOffHostBackupTest {
 
                 // 6. Restore to a NEW instance, reading the bytes back from the other
                 //    machine and re-verifying them before anything is created.
-                newId = backups.restoreToNew(backupId, "offhost-clone", null);
+                newId = backups.restoreToNew(backupId, "offhost-clone", null).instanceId();
                 newHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, newId);
                 assertThat(newId).as("step 6: the restore produced a NEW instance")
                     .isNotEqualTo(id);

@@ -5339,6 +5339,10 @@
     "text": "Backup restored to new instance #{$id}",
     "scope": "instance_backup"
   },
+  "restored_new_partial": {
+    "text": "Backup restored to new instance #{$id}, but not everything came back: {$missing}",
+    "scope": "instance_backup"
+  },
   "test_connection": [
     {
       "text": "Test connection",

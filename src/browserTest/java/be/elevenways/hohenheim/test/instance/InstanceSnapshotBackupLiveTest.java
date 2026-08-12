@@ -6,8 +6,13 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
+import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
+import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
@@ -17,6 +22,8 @@ import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
+import be.elevenways.hohenheim.server.instance.InstanceTemplates;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
@@ -39,6 +46,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,10 +60,12 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 /**
  * Phase 4's snapshot/backup gate against the REAL local daemon, asserting HOST and
  * FILESYSTEM state beside every API answer: a snapshot-restore round trip with real
- * marker data (restore REPLACES, never merges), an encrypted backup exported to a
- * filesystem target and restored to a genuinely NEW instance (own id, own port
- * claim, own quota reservation), a corrupted artifact refused BEFORE any live state
- * changes, and an interrupted upload that leaves nothing a restore would accept.
+ * marker data (restore REPLACES, never merges), an encrypted backup of a
+ * TEMPLATE-CREATED instance exported to a filesystem target and restored to a
+ * genuinely NEW instance (own id, own port claim, own quota reservation, and the
+ * template binding, crash policy, secret variable row and config-file row back), a
+ * corrupted artifact refused BEFORE any live state changes, and an interrupted upload
+ * that leaves nothing a restore would accept.
  *
  * WHAT IS REAL vs SIMULATED: the daemon, containers, volumes, archives, encryption
  * and target filesystem semantics are real; the OFF-HOST failure domain is
@@ -67,6 +77,17 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class InstanceSnapshotBackupLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
+
+    /** The declared SECRET variable's value: a forwarding secret, the plan's own shape. */
+    private static final String FORWARDING_SECRET = "f0rwarding-s3cret";
+
+    /**
+     * The managed config file's path, deliberately OUTSIDE the {@code /data} volume: a
+     * config file is staged from its {@code instance_files} row at every deploy, never
+     * captured in the volume payload, so a path under the volume would let the payload
+     * restore hide a missing file row.
+     */
+    private static final String CONFIG_PATH = "/etc/app/velocity.toml";
 
     private static SqliteDatasource datasource;
     private static PrivateNetns netns;
@@ -136,6 +157,47 @@ class InstanceSnapshotBackupLiveTest {
         row.set(InstanceModel.SETTINGS, settings);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
+    }
+
+    /**
+     * The approved catalog template the backup journey's source is created from: the
+     * alpine workload plus the two things a template create adds to a bare row -- a
+     * DECLARED SECRET variable (its own encrypted {@code instance_variables} row) and a
+     * managed config file that substitutes it.
+     *
+     * @return the template id
+     */
+    private static int backupSourceTemplate() {
+        Row template = Models.get(InstanceTemplateModel.class).createEmptyRow();
+        template.set(InstanceTemplateModel.NAME, "backup-gate-template");
+        template.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
+        template.set(InstanceTemplateModel.SETTINGS, alpineSettings());
+        // A bumped catalog version: the manifest records the version it was taken at, so
+        // it must be something other than the default to prove it travelled.
+        template.set(InstanceTemplateModel.VERSION, 4);
+        // The operator approval a real catalog entry carries; the approval GATE itself is
+        // proven by InstanceTemplatePolicyTest.
+        template.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+        Models.get(InstanceTemplateModel.class).save(template);
+        int templateId = template.get(InstanceTemplateModel.ID);
+
+        Row secret = Models.get(InstanceTemplateVariableModel.class).createEmptyRow();
+        secret.set(InstanceTemplateVariableModel.TEMPLATE_ID, templateId);
+        secret.set(InstanceTemplateVariableModel.KEY, "FORWARDING_SECRET");
+        secret.set(InstanceTemplateVariableModel.TYPE, "hohenheim:secret");
+        secret.set(InstanceTemplateVariableModel.REQUIRED, true);
+        // generate OFF: the journey supplies the value, so the assertions can name it.
+        secret.set(InstanceTemplateVariableModel.SETTINGS, Map.of("generate", false));
+        Models.get(InstanceTemplateVariableModel.class).save(secret);
+
+        Row file = Models.get(InstanceTemplateFileModel.class).createEmptyRow();
+        file.set(InstanceTemplateFileModel.TEMPLATE_ID, templateId);
+        file.set(InstanceTemplateFileModel.CONTAINER_PATH, CONFIG_PATH);
+        file.set(InstanceTemplateFileModel.CONTENT,
+            "forwarding-secret = \"{{FORWARDING_SECRET}}\"\n");
+        file.set(InstanceTemplateFileModel.MODE, "0600");
+        Models.get(InstanceTemplateFileModel.class).save(file);
+        return templateId;
     }
 
     private static Map<String, Object> alpineSettings() {
@@ -249,9 +311,22 @@ class InstanceSnapshotBackupLiveTest {
     }
 
     /**
-     * The backup gate: export to a configured target through the REAL resolution
-     * chain, then restore to a genuinely NEW instance -- new id, its own port claim,
-     * its own quota reservation, config and secret variables intact, data intact.
+     * The backup gate, on the plan's DEFAULT instance shape: an instance created FROM AN
+     * APPROVED TEMPLATE, carrying a declared SECRET variable in its own
+     * {@code instance_variables} row and a managed config file that substitutes it.
+     * Export to a configured target through the REAL resolution chain, then restore to a
+     * genuinely NEW instance -- new id, its own port claim, its own quota reservation,
+     * and the WHOLE record back: template binding, crash policy, the secret variable
+     * row, the config-file row, and the data.
+     *
+     * AIDEV-NOTE: the template half is what makes this journey able to FAIL. It used to
+     * back up a BARE instance row whose only "secret variable" was a plain
+     * {@code environment_variables} entry inside the settings map -- and the settings map
+     * is the one thing the manifest always carried, so the "secret variables intact"
+     * assertion passed identically against a restore that dropped every variable row,
+     * every config file, the template binding and the crash policy. A test that cannot
+     * fail is not evidence. The settings-map assertion is KEPT (step 6) beside the row
+     * assertions it used to stand in for.
      */
     @Test
     void backupExportsAndRestoresToANewInstance() throws IOException {
@@ -270,7 +345,10 @@ class InstanceSnapshotBackupLiveTest {
             targetRow.set(BackupTargetModel.SETTINGS, Map.of("path", targetDir.toString()));
             Models.get(BackupTargetModel.class).save(targetRow);
 
-            int id = instanceRecord("backup-source", alpineSettings());
+            int templateId = backupSourceTemplate();
+            int id = new InstanceTemplates().createFromTemplate(
+                Models.get(InstanceTemplateModel.class).findById(templateId),
+                "backup-source", null, Map.of("FORWARDING_SECRET", FORWARDING_SECRET), null);
             Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
                 .assign(InstanceModel.BACKUP_TARGET_ID,
                     (Integer) targetRow.get(BackupTargetModel.ID))
@@ -282,9 +360,25 @@ class InstanceSnapshotBackupLiveTest {
             Integer newId = null;
             String newHandle = null;
             try {
-                // 1. Deploy + marker.
+                // 1. Deploy + marker. The SOURCE proves the fixture is real first: a
+                //    template-bound record, restart-on-crash, the secret in its own row,
+                //    and the managed config file staged with that secret substituted.
                 service.deploy(id);
                 run(() -> execRun(docker, handle, "echo precious > /data/marker"));
+                Row source = Models.get(InstanceModel.class).findById(id);
+                assertThat(Map.of(
+                        "template", String.valueOf((Object) source.get(InstanceModel.TEMPLATE_ID)),
+                        "crash", String.valueOf((Object) source.get(InstanceModel.CRASH_POLICY))))
+                    .as("step 1: the source really is template-bound and restart-on-crash"
+                        + " -- without that the restore has nothing to lose")
+                    .isEqualTo(Map.of("template", String.valueOf(templateId),
+                        "crash", InstanceModel.CRASH_RESTART));
+                assertThat(new InstanceVariables().valuesFor(id).get("FORWARDING_SECRET"))
+                    .as("step 1: the declared secret lives in its own variable row")
+                    .isEqualTo(FORWARDING_SECRET);
+                assertThat(run(() -> execRead(docker, handle, "cat " + CONFIG_PATH)))
+                    .as("step 1: and the managed config file was staged with it substituted")
+                    .isEqualTo("forwarding-secret = \"" + FORWARDING_SECRET + "\"");
 
                 // 2. Back up NOW through the configured target.
                 int backupId = backups.backupNow(id);
@@ -302,9 +396,18 @@ class InstanceSnapshotBackupLiveTest {
                     .as("step 2: the source instance runs again after the capture")
                     .isEqualTo(ContainerState.RUNNING);
 
-                // 3. Restore to a NEW instance.
+                // 3. Restore to a NEW instance. Everything the archive named came back,
+                //    so the restore reports NOTHING unrestored -- a restore that quietly
+                //    dropped half the record and still answered with a bare id is the
+                //    whole defect.
                 long quotaBefore = InstanceQuota.usedBy(operatorBucket);
-                newId = backups.restoreToNew(backupId, "backup-clone", null);
+                InstanceBackups.Restored outcome =
+                    backups.restoreToNew(backupId, "backup-clone", null);
+                assertThat(outcome.describeLosses())
+                    .as("step 3: the restore reports itself COMPLETE, and says so as data"
+                        + " rather than by staying silent")
+                    .isEmpty();
+                newId = outcome.instanceId();
                 newHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, newId);
                 assertThat(newId).as("step 3: the new instance has its own id")
                     .isNotEqualTo(id);
@@ -334,15 +437,78 @@ class InstanceSnapshotBackupLiveTest {
                             assertThat(env.get("GAME_TOKEN")).isEqualTo("s3cret-token"));
                 });
 
-                // 7. And the DATA is intact in the NEW instance's OWN volume.
+                // 7. THE RECORD, not just the settings map: the manifest must carry the
+                //    control-plane facts the settings map cannot, and the restore must
+                //    re-materialize them. Every one of these is a column or a table row
+                //    a restore writing only name/kind/settings/host silently drops.
+                int restoredId = newId;
+                assertThat(Map.of(
+                        "template",
+                        String.valueOf((Object) restored.get(InstanceModel.TEMPLATE_ID)),
+                        "crash",
+                        String.valueOf((Object) restored.get(InstanceModel.CRASH_POLICY)),
+                        "target",
+                        String.valueOf((Object) restored.get(InstanceModel.BACKUP_TARGET_ID))))
+                    .as("step 7: the restored record keeps its template binding, its"
+                        + " crash policy and its backup destination -- a silent fallback"
+                        + " to crash_none turns a self-healing workload into one that"
+                        + " stays down after the first crash")
+                    .isEqualTo(Map.of("template", String.valueOf(templateId),
+                        "crash", InstanceModel.CRASH_RESTART,
+                        "target", String.valueOf(
+                            (Object) targetRow.get(BackupTargetModel.ID))));
+
+                List<Row> restoredVariables = Models.get(InstanceVariableModel.class)
+                    .findByInstanceId(restoredId);
+                assertThat(restoredVariables)
+                    .as("step 7: exactly the source's one declared variable row came back")
+                    .hasSize(1);
+                assertThat(Map.of(
+                        "key", String.valueOf(
+                            (Object) restoredVariables.get(0).get(InstanceVariableModel.KEY)),
+                        "kind", String.valueOf(
+                            (Object) restoredVariables.get(0).get(InstanceVariableModel.KIND)),
+                        "value", String.valueOf((Object) restoredVariables.get(0)
+                            .get(InstanceVariableModel.SECRET_VALUE))))
+                    .as("step 7: and it is the SECRET, in the encrypted carrier, with its"
+                        + " value -- the forwarding secret a proxy cannot run without")
+                    .isEqualTo(Map.of("key", "FORWARDING_SECRET",
+                        "kind", InstanceVariableModel.KIND_SECRET,
+                        "value", FORWARDING_SECRET));
+
+                List<Row> restoredFiles = Models.get(InstanceFileModel.class)
+                    .findByInstanceId(restoredId);
+                assertThat(restoredFiles)
+                    .as("step 7: the managed config file row came back too")
+                    .hasSize(1);
+                assertThat(Map.of(
+                        "path", String.valueOf((Object) restoredFiles.get(0)
+                            .get(InstanceFileModel.CONTAINER_PATH)),
+                        "content", String.valueOf((Object) restoredFiles.get(0)
+                            .get(InstanceFileModel.CONTENT))))
+                    .as("step 7: with its path and its UNSUBSTITUTED content (the"
+                        + " placeholder resolves per-deploy, never re-persisted)")
+                    .isEqualTo(Map.of("path", CONFIG_PATH,
+                        "content", "forwarding-secret = \"{{FORWARDING_SECRET}}\"\n"));
+
+                // 8. And the whole chain END TO END inside the NEW container: the
+                //    restored file row, rendered against the restored secret row, staged
+                //    by the restored deploy. Before the manifest carried them this file
+                //    simply was not there and NOTHING refused.
                 String finalNewHandle = newHandle;
+                assertThat(run(() -> execRead(docker, finalNewHandle, "cat " + CONFIG_PATH)))
+                    .as("step 8: the new container runs with its config file present and"
+                        + " the restored secret substituted into it")
+                    .isEqualTo("forwarding-secret = \"" + FORWARDING_SECRET + "\"");
+
+                // 9. And the DATA is intact in the NEW instance's OWN volume.
                 assertThat(run(() -> execRead(docker, finalNewHandle, "cat /data/marker")))
-                    .as("step 7: the volume data restored into the new instance")
+                    .as("step 9: the volume data restored into the new instance")
                     .isEqualTo("precious");
                 assertThat(run(() -> (Object) docker.inspectVolume(finalNewHandle + "-vol-data")))
-                    .as("step 7: the new instance has its own volume").isNotNull();
+                    .as("step 9: the new instance has its own volume").isNotNull();
 
-                // 8. CORRUPTION GATE: flip one byte of the committed artifact; restore
+                // 10. CORRUPTION GATE: flip one byte of the committed artifact; restore
                 //    must refuse BEFORE creating anything.
                 byte[] bytes = run(() -> Files.readAllBytes(artifact));
                 bytes[bytes.length - 40] ^= 0x01;
@@ -352,16 +518,16 @@ class InstanceSnapshotBackupLiveTest {
                 long containersBefore = countContainers(docker);
                 Throwable refusal = catchThrowable(() ->
                     backups.restoreToNew(backupId, "never-born", null));
-                assertThat(refusal).as("step 8: corrupted backup is a named refusal")
+                assertThat(refusal).as("step 10: corrupted backup is a named refusal")
                     .isInstanceOfSatisfying(Violations.class, violations ->
                         assertThat(violations.all()).anySatisfy(violation ->
                             assertThat(violation.message().key()).isEqualTo("backup_corrupt")));
                 assertThat(Models.get(InstanceModel.class).find().count())
-                    .as("step 8: no instance record was created").isEqualTo(instancesBefore);
+                    .as("step 10: no instance record was created").isEqualTo(instancesBefore);
                 assertThat(InstanceQuota.usedBy(operatorBucket))
-                    .as("step 8: no quota was spent").isEqualTo(quotaBeforeCorrupt);
+                    .as("step 10: no quota was spent").isEqualTo(quotaBeforeCorrupt);
                 assertThat(countContainers(docker))
-                    .as("step 8: no container appeared at the daemon").isEqualTo(containersBefore);
+                    .as("step 10: no container appeared at the daemon").isEqualTo(containersBefore);
             } finally {
                 destroyQuietly(service, id);
                 cleanup(docker, handle, handle + "-vol-data");
