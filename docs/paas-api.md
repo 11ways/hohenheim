@@ -25,6 +25,21 @@ Sites and instances are visible exactly where the key's owner holds the
 listings additionally require the key to cover site or instance `manage`
 (membership is grant-derived, so the listing enforces the scope itself).
 
+**CORRECTED 2026-08-12: instance VISIBILITY resolves at `view`, not `manage`.**
+`InstanceApi.visibleInstances`/`visibleInstance` ask
+`HohenheimAccess.VIEW` and nothing else, by design -- visibility answers "may
+you see this record", never "may you do this to it", and every mutating handler
+reaches a service that asks its own capability. The `/manage` UI resolves the
+same way (`ManageInstanceResource.java:91`, `:143`). This is NOT a wider-door
+violation: it is the same gate on both surfaces, which is the property this
+document promises. What it DOES mean, and what nobody delegating a capability
+is currently told: `view` is `impliedBy` EIGHT capabilities -- `manage`,
+`console`, `power`, `config`, `destroy`, `files.read`, `snapshots`, `backups`
+(`HohenheimAccess.java:274-278`). An operator who grants only `power` so a
+tenant can restart one workload has also handed over the instance listing and
+its projected fields, PLAIN variable values included (secret values are never
+returned). Say so when delegating; the grant UI does not.
+
 ## Conventions
 
 - Reads are GET; mutations are form-encoded POST.
@@ -53,7 +68,7 @@ listings additionally require the key to cover site or instance `manage`
 | GET | `/api/v1/sites/{id}/releases/{op}` | One operation, with its step log |
 | GET | `/api/v1/sites/{id}/builds` | Sandbox build operations |
 | GET | `/api/v1/sites/{id}/builds/{build}/log` | One build's captured log (build credentials were redacted at capture) |
-| GET | `/api/v1/instances` | Instances the key holds `manage` on (product-tier-generated ones excluded) |
+| GET | `/api/v1/instances` | Instances the key holds `view` on -- which eight capabilities imply; see Authentication (product-tier-generated ones excluded) |
 | GET | `/api/v1/instances/{id}` | One instance |
 | GET | `/api/v1/instances/{id}/logs?lines=N` | Console tail (default 200, max 2000); 422 `logs_unavailable` when the daemon cannot answer |
 | POST | `/api/v1/instances/{id}/power` | `action=start|stop|restart` |
@@ -72,6 +87,17 @@ listings additionally require the key to cover site or instance `manage`
 Also present (older lanes, admin-permission-gated): `/api/sites`,
 `/api/sites/{id}/deploy`, `/api/dns/...`, and the instance file API under
 `/api/v1/instances/{id}/files`.
+
+**CORRECTED 2026-08-12: the instance file API belongs in neither half of that
+sentence.** It is not older -- it is a v1 route (`API_INSTANCE_FILES` and
+`API_INSTANCE_FILE_CONTENT`, `HohenheimEndpoints.java:481-500`) -- and it is not
+admin-permission-gated: the read lane asks `InstanceFiles` for `files.read` and
+the write lane for `files.write`, both INSIDE the service, which is exactly what
+stops this surface and the Files tab holding different policies. Two details
+worth keeping when this line is rewritten: the path always travels as the `path`
+QUERY PARAMETER, never as a route segment (a segment would be split and
+reassembled, and a second decode is how a normalized traversal slips in), and
+the lane carries its own read rate limit.
 
 ## Secrets are write-only
 
