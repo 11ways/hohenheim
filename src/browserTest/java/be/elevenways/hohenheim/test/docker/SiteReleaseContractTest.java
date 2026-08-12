@@ -11,12 +11,13 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -61,7 +62,7 @@ class SiteReleaseContractTest {
 
     private static final String SITE_MODEL = SiteModel.MODEL_ID.toString();
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static FakeDockerDaemon daemon;
     private static Integer savedProbeTimeout;
     private static Integer savedProbeInterval;
@@ -69,14 +70,9 @@ class SiteReleaseContractTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-site-release-contract-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
+        datasource = TestDatabases.freshDatasource();
         // ONE registered database per class: the controller identity every daemon
         // resource name resolves through reads the CURRENT datasource.
-        Datasources.register(Datasources.DEFAULT, datasource);
         HohenheimTestRuntime.ensureBooted();
         daemon = new FakeDockerDaemon();
         daemon.install();
