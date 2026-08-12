@@ -111,7 +111,7 @@ class GameDomainLiveTest {
         workRoot = Files.createTempDirectory("hohenheim-game-live-test");
         FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
             workRoot.resolve("test-keyring.keys")));
-        HohenheimAccess.declareGrantableModels();
+        HohenheimTestRuntime.declareAccessModelsOnce();
         HohenheimTestRuntime.ensureBooted();
         if (PrivateNetns.available()) {
             netns = new PrivateNetns();

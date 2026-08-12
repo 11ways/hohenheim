@@ -299,6 +299,14 @@ afterEvaluate {
     serverJar.configure { dependsOn 'copyClientJs', 'compileHawkeyeScss' }
 }
 
+// AIDEV-NOTE: ONE fork count for all three browser lanes. Gradle never runs two tasks of the
+// same project concurrently, so the lanes are strictly sequential and this number IS the
+// machine's utilisation: at the old min(cpus/2-1, 4) exactly 4 of 10 cores were ever busy.
+// The old cap was sized for the forkEvery=1 world, where a full lane meant ~140 JVMs each
+// holding a 2g heap; collapsing the lanes took that to 13, so the memory argument for 4 is
+// gone. Sized to leave the gradle daemon and the OS four cores.
+ext.browserTestForks = Math.min(Math.max(Runtime.runtime.availableProcessors() - 4, 1), 6)
+
 // --- Browser Test Task ---
 task browserTest(type: Test) {
     description = 'Run browser tests using Playwright'
@@ -308,12 +316,11 @@ task browserTest(type: Test) {
     testClassesDirs = sourceSets.browserTest.output.classesDirs
     classpath = sourceSets.browserTest.runtimeClasspath
 
-    // AIDEV-NOTE: two buckets, times two lanes. Shared-server classes (@Tag("shared-server"),
-    // inherited from HohenheimTestBase) share one booted server per JVM across parallel forks --
-    // forkEvery = 1 here was skeleton cargo cult that cost a JVM + full server boot per
-    // class (the whole 18-minute suite). Standalone classes re-point the GLOBAL
-    // Database.PATH and re-init the runtime for themselves, which yanks the database out
-    // from under a live shared server, so they stay isolated in browserTestIsolated.
+    // AIDEV-NOTE: THREE buckets, times two lanes. This one holds the @Tag("shared-server")
+    // classes (inherited from HohenheimTestBase): they share one booted server and one
+    // browser per JVM across parallel forks. browserTestStandalone holds everything that
+    // needs no served app, ALSO sharing a JVM. browserTestSolo holds the handful that
+    // genuinely cannot share one. See browserTestStandalone for the derivation.
     // Orthogonally, live-capable classes carry @Tag("slow") (SlowLaneGuardTest enforces
     // it): zenit-dev's init script excludes that tag on ordinary runs, so the default
     // lane is the hermetic suite; `zenit-dev test --all` (or any --class filter) runs
@@ -322,12 +329,12 @@ task browserTest(type: Test) {
         includeTags 'shared-server'
     }
     filter.failOnNoMatchingTests = false
-    maxParallelForks = Math.min(Math.max(Runtime.runtime.availableProcessors().intdiv(2) - 1, 1), 4)
+    maxParallelForks = browserTestForks
     // Gradle's Test default is 512m; the build lane buffers an image tar through heap
     // (bounded by builds.max_artifact_mb), so a realistic artifact needs real headroom.
     maxHeapSize = '2g'
     // AIDEV-NOTE: a task timeout KILLS workers mid-test and Gradle then reports the
-    // killed test as SKIPPED with no message (observed 2026-08-10: browserTestIsolated
+    // killed test as SKIPPED with no message (observed 2026-08-10: the per-class-JVM lane
     // hit 30m, RestoreCapacityLiveTest was killed mid-flight, its finally never ran and
     // daystrom kept a stale root key). Two defenses: LiveLaneReport keeps a truncation
     // marker (build/live-lane-truncations/) naming every unsettled test, and the budget
@@ -363,24 +370,46 @@ task browserTest(type: Test) {
     }
 }
 
-// Standalone browser-test classes (no shared server): each re-initializes global
-// runtime state for itself, so every class gets a fresh JVM, exactly as before.
-task browserTestIsolated(type: Test) {
-    description = 'Run standalone browser tests needing per-class JVM isolation'
+// Standalone browser-test classes: no served app, no browser -- they exercise the server
+// runtime, the ORM and pure logic directly. They SHARE a JVM per fork, like browserTest.
+//
+// AIDEV-NOTE: this task carried forkEvery = 1 until 2026-08-12 and it was the single
+// biggest cost in the whole suite. Measured on the 513s default lane: 137 classes, 1064s
+// of suite time of which only 321s was test bodies -- 743s was @BeforeAll paying for 136
+// REDUNDANT ServerZenitRuntime boots (ensureBooted is idempotent per JVM, and forkEvery=1
+// gave every class its own JVM), plus 525s of JVM fork boot at ~3.8s a class. The sibling
+// shared-server lane proved the alternative at 0.86s of fixture per class against this
+// lane's 5.1s -- same kind of work, six times cheaper, purely because it shares a JVM.
+//
+// The old justification ("they re-point the global Database.PATH, which yanks the database
+// out from under a live shared server") did not survive reading: NO class in this lane
+// starts a served app or touches Playwright. The real coupling was never the HTTP server,
+// it was two services that CAPTURE a datasource and keep it forever -- zenit-auth's models
+// and session store, and the task service's three handles. TestDatabases.freshDatabase now
+// re-points both on every swap, which is what makes sharing safe.
+//
+// A class that genuinely cannot share a JVM declares @Tag("solo") and lands in
+// browserTestSolo, which keeps forkEvery = 1. BrowserTestLaneGuardTest enforces the
+// declaration; "it failed when I merged it" is not a reason to tag, the reason must be
+// process-global state with no reset.
+task browserTestStandalone(type: Test) {
+    description = 'Run standalone browser tests (no served app) sharing a JVM per fork'
     group = 'verification'
     dependsOn 'copyClientJs'
 
     testClassesDirs = sourceSets.browserTest.output.classesDirs
     classpath = sourceSets.browserTest.runtimeClasspath
 
+    // 'slow' is excluded STRUCTURALLY here, not just by the init script's iteration
+    // filter: live classes drive real daemons and hosts, so even on `--all` they must
+    // run in the per-class-JVM lane rather than share one.
     useJUnitPlatform {
-        excludeTags 'shared-server'
+        excludeTags 'shared-server', 'solo', 'slow'
     }
     filter.failOnNoMatchingTests = false
-    maxParallelForks = Math.min(Math.max(Runtime.runtime.availableProcessors().intdiv(2) - 1, 1), 4)
+    maxParallelForks = browserTestForks
     // See browserTest: the buffered artifact read outgrows Gradle's 512m default.
     maxHeapSize = '2g'
-    forkEvery = 1
     // See browserTest for the derivation; the 2026-08-10 kill happened in THIS task.
     timeout = java.time.Duration.ofMinutes(60)
 
@@ -392,13 +421,74 @@ task browserTestIsolated(type: Test) {
     systemProperty 'hohenheim.live.pull', System.getProperty('hohenheim.live.pull', 'true')
     // See browserTest: per-task truncation markers, wiped only by the task that owns them.
     systemProperty 'hohenheim.truncation.dir',
-        "${buildDir}/live-lane-truncations/browserTestIsolated"
+        "${buildDir}/live-lane-truncations/browserTestStandalone"
     // See browserTest: one migrated template shared across this invocation's forks.
     systemProperty 'hohenheim.testdb.template.dir',
-        "${buildDir}/test-db-templates/browserTestIsolated"
+        "${buildDir}/test-db-templates/browserTestStandalone"
     doFirst {
-        delete "${buildDir}/live-lane-truncations/browserTestIsolated"
-        delete "${buildDir}/test-db-templates/browserTestIsolated"
+        delete "${buildDir}/live-lane-truncations/browserTestStandalone"
+        delete "${buildDir}/test-db-templates/browserTestStandalone"
+    }
+
+    testLogging {
+        showStandardStreams = true
+        exceptionFormat = 'full'
+        events "passed", "skipped", "failed"
+    }
+}
+
+// The residue: classes that genuinely cannot share a JVM, each in its own.
+//
+// AIDEV-NOTE: membership is DECLARED with @Tag("solo") and the declaration must name
+// process-global state that has no reset -- not "it went red when I merged it", which is
+// usually a leak worth fixing instead. The live lane rides here too: @Tag("slow") classes
+// drive real daemons, hosts and images, so they keep a JVM each even under `--all`.
+task browserTestSolo(type: Test) {
+    description = 'Run browser tests that cannot share a JVM, one JVM per class'
+    group = 'verification'
+    dependsOn 'copyClientJs'
+
+    testClassesDirs = sourceSets.browserTest.output.classesDirs
+    classpath = sourceSets.browserTest.runtimeClasspath
+
+    // On an ordinary run zenit-dev's init script adds excludeTags 'slow', leaving just the
+    // handful of solo classes; `--all` widens this task to the whole live suite.
+    useJUnitPlatform {
+        includeTags 'solo', 'slow'
+        excludeTags 'shared-server'
+    }
+    filter.failOnNoMatchingTests = false
+    maxParallelForks = browserTestForks
+    // See browserTest: the buffered artifact read outgrows Gradle's 512m default.
+    maxHeapSize = '2g'
+    // AIDEV-NOTE: forkEvery = 1 costs this lane a FLAT ~65s, and that is the price of the
+    // two tests in it. Measured 2026-08-12, all with the same tree: 1 class 73.0s, 2 classes
+    // 75.9s, 3 classes 74.5s -- flat, so it is NOT per class. The same 3 classes with
+    // forkEvery removed: 11.4s (and RoleRestrictedBootTest then FAILS, which is the proof
+    // its solo tag is real). Ruled out by measurement, do not re-try: fewer solo classes
+    // (no effect), maxParallelForks 6 -> 2 (worse, 109s), maxHeapSize 2g -> 768m (no effect),
+    // and an @AfterAll stopping the appliance RoleRestrictedBootTest boots (no effect).
+    // What is left is Gradle's own worker restart cycle; removing this cost means removing
+    // the lane, which means making two boot-the-world tests share a JVM with each other.
+    forkEvery = 1
+    // See browserTest for the derivation; the 2026-08-10 kill happened in this lane.
+    timeout = java.time.Duration.ofMinutes(60)
+
+    systemProperty 'playwright.headless', System.getProperty('playwright.headless', 'true')
+    // The live lane's host policy. Unset means "report every skip, fail on none"; a host
+    // that declares what it can satisfy (e.g. -Dhohenheim.live.require=docker-socket,netns)
+    // turns a skip for those needs into a FAILURE. See test/live/LiveLane.
+    systemProperty 'hohenheim.live.require', System.getProperty('hohenheim.live.require', '')
+    systemProperty 'hohenheim.live.pull', System.getProperty('hohenheim.live.pull', 'true')
+    // See browserTest: per-task truncation markers, wiped only by the task that owns them.
+    systemProperty 'hohenheim.truncation.dir',
+        "${buildDir}/live-lane-truncations/browserTestSolo"
+    // See browserTest: one migrated template shared across this invocation's forks.
+    systemProperty 'hohenheim.testdb.template.dir',
+        "${buildDir}/test-db-templates/browserTestSolo"
+    doFirst {
+        delete "${buildDir}/live-lane-truncations/browserTestSolo"
+        delete "${buildDir}/test-db-templates/browserTestSolo"
     }
 
     testLogging {
@@ -415,7 +505,7 @@ task browserTestIsolated(type: Test) {
 // worker left on disk and says it where the log is actually read.
 task reportTruncatedBrowserTests {
     doLast {
-        ['browserTest', 'browserTestIsolated'].each { lane ->
+        ['browserTest', 'browserTestStandalone', 'browserTestSolo'].each { lane ->
             def dir = file("${buildDir}/live-lane-truncations/${lane}")
             if (dir.directory) {
                 dir.eachFile { marker -> System.err.print(marker.text) }
@@ -424,7 +514,8 @@ task reportTruncatedBrowserTests {
     }
 }
 tasks.named('browserTest') { finalizedBy reportTruncatedBrowserTests }
-tasks.named('browserTestIsolated') { finalizedBy reportTruncatedBrowserTests }
+tasks.named('browserTestStandalone') { finalizedBy reportTruncatedBrowserTests }
+tasks.named('browserTestSolo') { finalizedBy reportTruncatedBrowserTests }
 
 // --- Task Dependencies ---
 afterEvaluate {

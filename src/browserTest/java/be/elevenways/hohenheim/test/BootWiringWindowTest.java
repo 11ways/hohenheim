@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.ZenitAuth;
@@ -13,6 +12,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.setting.ServerSettings;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -37,6 +37,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * returned, i.e. after this point, and the browser suite hid that by wiring in
  * its own safer order.
  */
+// Solo: it appends children to the process-wide Zenit.ROOT_STAGE (no removal exists) and
+// calls ServerZenitRuntime.stop() in a finally, which shuts the boot executor and the task
+// runtime for the rest of the JVM.
+@Tag("solo")
 class BootWiringWindowTest {
 
     @Test
@@ -53,7 +57,7 @@ class BootWiringWindowTest {
 
         SiteTypes.boot();
         HohenheimEndpoints.init();
-        HohenheimAccess.declareGrantableModels();
+        HohenheimTestRuntime.declareAccessModelsOnce();
         TestDatabases.freshDatabase();
 
         ZenitAuth.init(HohenheimDatabase.datasource());

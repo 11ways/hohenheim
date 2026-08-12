@@ -81,7 +81,7 @@ class InstanceBackupsTest {
         // The lite boot skips ServerMain's grant declarations, and they must land
         // BEFORE the boot stages (the WorkloadIdentityTest rule: zenit-auth's
         // record-access registry is a MODULES-stage snapshot).
-        HohenheimAccess.declareGrantableModels();
+        HohenheimTestRuntime.declareAccessModelsOnce();
         HohenheimTestRuntime.ensureBooted();
 
         Path staging = Files.createTempDirectory("hohenheim-backup-staging");

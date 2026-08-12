@@ -23,19 +23,39 @@ public final class ProcessInfrastructure {
     private ProcessInfrastructure() {
     }
 
-    /** One-time boot of the shared process-management singletons. */
-    public static void init() {
+    /**
+     * One-time boot of the shared process-management singletons; a second call is a no-op.
+     *
+     * AIDEV-NOTE: the guard is load-bearing for the shared-JVM test lane. Production calls
+     * SiteTypes.boot() once, but 33 browser-test classes call it, and without the guard each
+     * one replaced all three singletons and started ANOTHER ProcessMonitor thread (10s
+     * sampling, never stopped) while orphaning the previous port/socket bookkeeping. With
+     * one JVM per class that leaked one thread and died; sharing a JVM across classes made
+     * it 33 live monitors sampling the same processes.
+     */
+    public static synchronized void init() {
+        if (processMonitor != null) {
+            return;
+        }
         portAllocator = new PortAllocator();
         socketAllocator = new SocketAllocator();
         processMonitor = new ProcessMonitor();
         processMonitor.start();
     }
 
-    /** Stop the monitor thread; the allocators hold no thread of their own. */
-    public static void shutdown() {
+    /**
+     * Stop the monitor thread; the allocators hold no thread of their own.
+     *
+     * @implNote clears the singletons so a later {@link #init()} rebuilds rather than
+     *     handing out the stopped monitor its guard would otherwise preserve.
+     */
+    public static synchronized void shutdown() {
         if (processMonitor != null) {
             processMonitor.stop();
         }
+        processMonitor = null;
+        portAllocator = null;
+        socketAllocator = null;
     }
 
     public static @Nullable PortAllocator portAllocator() {

@@ -4,9 +4,12 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ControllerIdentityModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.orm.datasource.Db;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.backup.SnapshotCapableDatasource;
+import be.elevenways.zenit.server.task.TaskRuntime;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -72,9 +75,13 @@ public final class TestDatabases {
             Files.copy(template, db.toPath(), StandardCopyOption.REPLACE_EXISTING);
         }
 
+        SqlDatasource outgoing = HohenheimDatabase.datasource();
+
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.PATH, db.getAbsolutePath());
         HohenheimDatabase.init();
+        closeOutgoing(outgoing);
         remintControllerIdentity();
+        rebindDatasourceBoundServices();
 
         // proxy.force_https defaults ON and now fails CLOSED (503) whenever no certificate
         // is loaded -- which is every cleartext test proxy. The test baseline turns it off;
@@ -86,6 +93,75 @@ public final class TestDatabases {
         }
 
         return db;
+    }
+
+    /**
+     * The registered default datasource, freshly migrated and private to the caller.
+     *
+     * AIDEV-NOTE: this exists to kill a copy-pasted fixture. 82 classes hand-rolled
+     * "temp file -> new SqliteDatasource -> new MigrationRunner(ds).migrate() ->
+     * Datasources.register(DEFAULT, ds)", which bypasses the template entirely (and made
+     * ensureDatasource early-return, so nothing downstream could rescue it): 45 full
+     * migration sets still ran in the default lane at ~4.3s each. Going through
+     * freshDatabase copies the migrated template instead, and also remints the controller
+     * identity and re-points the datasource-bound services -- three things the hand-rolled
+     * shape silently skipped. A class whose SUBJECT is migrating (MigrationIntegrityTest,
+     * the two encryption journeys, the two backfills) must keep migrating from empty.
+     *
+     * @return the datasource registered as {@code Datasources.DEFAULT}
+     */
+    public static synchronized SqlDatasource freshDatasource() throws Exception {
+        freshDatabase();
+        return HohenheimDatabase.datasource();
+    }
+
+    /**
+     * Release the connection pool of the database this swap just abandoned.
+     *
+     * AIDEV-NOTE: `Datasources.register` only replaces a map entry, so before this the
+     * outgoing SqliteDatasource kept its pool (MAX_IDLE_CONNECTIONS = 8) plus a WAL and a
+     * shm file alive until JVM exit. That was harmless while every class owned a JVM that
+     * died seconds later; sharing a JVM across ~30 classes turned it into hundreds of live
+     * descriptors per fork, and at six forks the accept loop in PublicTcpListenerRecoveryTest
+     * took a real ENFILE ("Too many open files in system") on a box whose fd limits are
+     * effectively unlimited. Closing on swap removes the leak instead of hiding it behind a
+     * lower fork count. Failure is swallowed: losing the release can only make the suite
+     * heavier, never wrong, and a close that throws must not fail the test that triggered it.
+     */
+    private static void closeOutgoing(SqlDatasource outgoing) {
+        if (outgoing == null || outgoing == HohenheimDatabase.datasource()) {
+            return;
+        }
+        try {
+            outgoing.close();
+        } catch (Exception ignored) {
+            // Best effort; see the note above.
+        }
+    }
+
+    /**
+     * Re-point the process-global services that CAPTURED the outgoing datasource.
+     *
+     * AIDEV-NOTE: this is what makes a shared-JVM lane possible. `Datasources.register` and
+     * `Models.get(X)` resolve the default per call, so ordinary ORM access follows a swap by
+     * itself -- but two consumers bind a datasource ONCE and keep it forever, and both go
+     * silently wrong rather than failing:
+     *   - zenit-auth: AuthModels.datasource plus the session store, permission resolver and
+     *     capability checkers built over it. After a swap, users()/grants()/sessions() answer
+     *     from the PREVIOUS database, so a seeded admin is invisible and a minted session
+     *     stops resolving. ZenitAuth.initForTests exists for exactly this and had no callers.
+     *   - the task service: TaskService captures SystemTaskModel/SystemTaskHistoryModel/
+     *     TaskClaimManager at construction, so every later cron tick claims and writes
+     *     history into the abandoned file.
+     * The task service is deliberately STOPPED rather than restarted: TaskService.initialize()
+     * reconciles and boot-fires (~1s), 11 classes swap the database 84 times between them, and
+     * the cron ticks are themselves a documented cross-class hazard (HohenheimTestRuntime's
+     * note on SuperviseProxyListeners mutating the counters a proxy test is asserting).
+     * A class that needs live scheduling starts its own service or declares itself solo.
+     */
+    private static void rebindDatasourceBoundServices() {
+        ZenitAuth.initForTests(HohenheimDatabase.datasource());
+        TaskRuntime.stop();
     }
 
     /**

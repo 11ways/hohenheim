@@ -78,7 +78,7 @@ class InstanceScheduleLiveTest {
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
         Datasources.register(Datasources.DEFAULT, datasource);
-        HohenheimAccess.declareGrantableModels();
+        HohenheimTestRuntime.declareAccessModelsOnce();
         HohenheimTestRuntime.ensureBooted();
 
         workRoot = Files.createTempDirectory("hohenheim-schedule-test");

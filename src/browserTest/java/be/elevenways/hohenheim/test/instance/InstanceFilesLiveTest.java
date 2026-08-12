@@ -84,7 +84,7 @@ class InstanceFilesLiveTest {
         // BEFORE the boot: the capability matrix below grants files.read/files.write, and
         // zenit-auth refuses a grant on an undeclared model -- while declaring one AFTER the
         // CMS contributions drained is itself a hard failure. Same order ServerMain uses.
-        HohenheimAccess.declareGrantableModels();
+        HohenheimTestRuntime.declareAccessModelsOnce();
         HohenheimTestRuntime.ensureBooted();
         previousMaxFileKb = HohenheimSettings.VALUES.getValue(HohenheimSettings.Files.MAX_FILE_KB);
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Files.MAX_FILE_KB, MAX_FILE_KB);
