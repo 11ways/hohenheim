@@ -1025,6 +1025,18 @@ effort:
 One BEHAVIOUR defect and three documentation defects, all found by reading code
 rather than plan notes.
 
+> **SECTION STATUS 2026-08-12.** This section's own convention is to annotate a
+> finding when it closes (defects 4 and 5 carry dated closes). Defect 1 was
+> missed: **it is FIXED** -- `f357bbf`, 2026-08-08 -- and the "NOT fixed here"
+> wording below is history, not standing. Volume names are now minted by
+> `SiteVolumes` off the SITE id, the existing volume is adopted, and
+> `SiteContainerKind.specFor` (`:172-190`) may no longer re-derive a name from
+> the instance handle; the ONE instance-keyed spelling still honoured is a
+> pre-fix row's logical key, mounted deliberately so a rollback reaches the
+> data it actually has until the site's next converge heals it
+> (`SiteVolumes.heal`), with a log line naming the situation. Nothing else in
+> this section changed.
+
 **Defect 1 (behaviour, NOT fixed here, ranked second in the OPEN list): a named
 volume does not survive a health-gated release.** Volume names are derived from
 the instance id (`docker/SiteContainerKind.java:170-174`); a gated release mints a
@@ -1064,6 +1076,15 @@ isolation ...", "domains/TLS" and "persistent storage" as flat clauses when all
 three are partial. That is recorded here rather than edited into the claim, because
 the claim is the thing this inventory gates.
 
+**CORRECTED 2026-08-12: none of those three is partial any more.** They are
+items 2 (build isolation), 9 (domains/TLS) and 10 (persistent storage), and all
+three now read IMPLEMENTED in the counts table and in their own rows -- item 2
+closed 2026-08-08 (`5d3a0ed`, each build lane states its boundary by name), item
+9 closed 2026-08-08 (the in-JVM RFC 8555 CA), item 10 closed 2026-08-08
+(`f357bbf`, site-keyed volumes, i.e. defect 1 above). The observation about the
+plan sentence being flat where the detail is nuanced was fair when written; it
+is no longer a list of partial clauses.
+
 ---
 
 ## Verdict
@@ -1082,7 +1103,20 @@ is kept below it as history.
 **VERDICT SUPERSEDED AGAIN 2026-08-08 (third block of the day), and this one moves
 the standing rather than only correcting it.**
 
-**Current standing: NO clause of the minimum claim is unmet.** The last one, item
+**Current standing: NO clause of the minimum claim is unmet.**
+
+> **QUALIFIED 2026-08-12: that sentence is contradicted twice by this document
+> itself and should be read as "no clause is unmet EXCEPT provider
+> provisioning".** Row 3 is still verdict PARTIAL -- "the outbound provider
+> client is read-and-status only, there is no provisioning", with the finding
+> that `GitProviderClient` declares five methods and there is no `/keys` and no
+> `/hooks` call anywhere, so the operator pastes the webhook URL into the
+> provider by hand. Ranked-open item 6 says the same. And this very section's
+> closing sentence, 45 lines below, names "no provider provisioning flow" as one
+> of two things that would block calling this a general Coolify replacement. The
+> minimum-claim clause the row answers to is item 3, and it is not met.
+
+The last one, item
 12's site and database counts, closed with M089 -- two transactional dimensions on
 the existing ledger, each proven against a race, a named refusal and every release
 path, plus the argued finding that a database count is NOT redundant with the

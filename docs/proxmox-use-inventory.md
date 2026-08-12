@@ -95,11 +95,42 @@ name by the prepared-alias preflight, which is the correct failure, but the
 placement layer does not know about it and so cannot avoid choosing that host.
 Owning slice: placement (item 12).
 
+**NARROWED 2026-08-12: the second half of that limitation is CLOSED and item 12
+of this same document already says so** (its point 2: "the eligible set is now
+the DEPLOY PATH'S OWN AUTHORITY", explicitly naming this as "the defect the
+deferral ranked above the scoring change"). Placement no longer chooses a host
+whose deploy will then refuse: the constraint rides
+`InstanceKindHandler.requirePlaceableOn`, called from
+`InstancePlacement.java:290` and implemented by `IncusVmKind:208` /
+`IncusContainerKind:153` over the SAME
+`IncusInstanceRuntime.requirePreparedImagePresent` the create path uses --
+extracted, not copied -- and a catalog image short-circuits before any daemon
+call. `host_prepared_image_missing` is now the FIRST of four named placement
+refusals. What remains true: a prepared image still lives in one daemon's store,
+so such a workload has a smaller eligible set. The eligible set is now correct;
+it is not larger.
+
 ## 3. Disks, and disk/NIC/device editing
 
 **IMPLEMENTED, mechanism AND surface** (surface added 2026-08-06; this row read
 "NO OPERATOR SURFACE" until then, and the paragraph that said so is kept below as
 the record of what was missing).
+
+**SCOPE, missing from that headline (added 2026-08-12): device editing is
+INCUS-ONLY.** `DeviceAttachSupport` is implemented by `IncusInstanceRuntime`
+and by no other driver -- `DockerInstanceRuntime`'s implements list
+(`:46-50`) does not carry it -- so `InstanceDevices` refuses every mutator on a
+Docker-tier instance with `devices_unsupported`
+(`InstanceDevices.requireSupport`, `:262-268`). The refusal is correct and by
+name. **The SURFACE does not know it, and that is a real defect:**
+`InstanceDevicesPage` declares no `visibleFor`, so the Devices tab renders on
+EVERY instance regardless of kind, and it publishes `addDiskTarget` /
+`addNicTarget` on nothing but the CONFIG capability. A Docker instance
+therefore shows working Add-disk and Add-NIC affordances whose POST can only
+ever end in `devices_unsupported`. The correct shape already exists two files
+away: `InstanceFramebufferPage.visibleFor` hides AND 404s the tab for a
+non-VM kind. Recorded as a code finding for the next code wave; not fixed
+here.
 
 The mechanism is real, complete and tested:
 
@@ -139,7 +170,14 @@ action, no `.hwk` page and no API endpoint that wrote an `instance_devices` row.
   a whitelist (`name`, `type`, `size_gb`); `quota_bucket` is absent by name.
 - **Authority is not re-implemented anywhere.** Both surfaces call
   `InstanceDevices`, whose every mutator opens with
-  `HohenheimAccess.requireOperationCapability(instanceId, MANAGE)`. `PaasApi`'s
+  `HohenheimAccess.requireOperationCapability(instanceId, MANAGE)`.
+  **CORRECTED 2026-08-12: the verb is CONFIG, not MANAGE.** `68927c22`
+  (2026-08-08) split the instance capability into enforced verbs, and all four
+  device mutators now demand `HohenheimAccess.CONFIG`
+  (`InstanceDevices.java:53`, `:89`, `:129`, `:161`). Nobody gained authority --
+  `CONFIG` is declared `impliedBy(MANAGE)`, so every prior MANAGE holder still
+  passes -- but a CONFIG-only grantee now reaches device editing, which the
+  MANAGE wording denies. `PaasApi`'s
   rule holds: the API's only own check is per-record VISIBILITY, and an instance
   the caller holds nothing on answers 404 exactly like one that does not exist.
 - **Detach carries a DESTRUCTIVE confirmation naming what it destroys**
@@ -508,6 +546,16 @@ speculatively is scaffolding.
   per-record MANAGE in `onOpen` (1008), and `revalidate()` re-checking MANAGE under
   core's default-on revalidator, so a REVOKED viewer's OPEN socket is closed
   rather than merely refused later.
+  **CORRECTED 2026-08-12: both console lanes gate on CONSOLE, not MANAGE**
+  (`68927c22`, 2026-08-08). The framebuffer checks
+  `HohenheimAccess.CONSOLE` in `onOpen` (`VmFramebufferHandler.java:77`) and
+  re-checks the same verb in `revalidate()` (`:192`); the serial lane's
+  read (`InstanceConsoles.tail`, `:256`) and its command POST
+  (`InstanceConsoles.sendCommand`, `:314`) both demand `CONSOLE` too, so the
+  "separate MANAGE-checked POST" phrasing two bullets up is stale in the same
+  way. The seam and the revocation behaviour are unchanged and still correct;
+  only the verb moved. `CONSOLE` is `impliedBy(MANAGE)`, so nobody gained
+  authority -- but a CONSOLE-only grantee reaches the framebuffer.
 - CI: `VmFramebufferHandlerTest` (4), `VmFramebufferRevocationTest` (1, over a
   real socket, counterfactual recorded in the plan). Live:
   `VmFramebufferConsoleLiveTest`, and `IncusWindowsTemplateLiveTest` receives a
@@ -599,7 +647,8 @@ observed from inside the guest.
   volume kind that mirrors the Docker driver's load-bearing semantics (its own
   AIDEV-NOTE says so), NOT `DockerInstanceRuntime` against a daemon. The
   transport is proven; the driver's participation in it is not yet proven live.
-- CI: `InstanceMigrationTest` -- 4 journeys, all RAN, with both counterfactuals
+- CI: `InstanceMigrationTest` -- 4 journeys, all RAN (RECOUNTED 2026-08-12: SIX
+  `@Test` methods today), with both counterfactuals
   recorded in the plan (source removal disabled -> 3 of 4 journeys fail).
 - **Live: `IncusColdMigrationLiveTest` re-run 2026-08-06 for this audit -- 1 test,
   PASSED, 0 skipped, 632s, daystrom -> nightstrom.** It moves a running VM with
@@ -859,7 +908,11 @@ an alert rather than a column.
 `server/instance/InstancePlacement.java`, `common/HohenheimSettings.java`
 (`Capacity` group), `server/migration/M080_InstanceCapacity.java`,
 `server/host/IncusPreflight.java`.
-**[test]** `InstancePlacementTest` (3 journeys, RAN 2026-08-07) -- the eligible
+**[test]** `InstancePlacementTest` (3 journeys, RAN 2026-08-07; RECOUNTED
+2026-08-12: FIVE `@Test` methods today -- the booked-memory scorer, the
+managed-process subtraction, the kernel-truth exclusion, the KIND's own host
+requirement and the dedicated-posture exclusivity. The "2 journeys" figure
+earlier in this item is older still) -- the eligible
 set as HostAdmission's own, the booked-memory score with a positive anchor, the
 capacity-versus-availability refusal split, the unmeasured host, the dedicated
 posture, and (2026-08-09) the chooser subtracting managed-process bookings from the

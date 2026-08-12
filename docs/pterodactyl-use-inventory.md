@@ -86,6 +86,30 @@ only `[live]`. (Corrected 2026-08-11: this sentence still said "7 IMPLEMENTED"
 and "7 PARTIAL" while the table two lines above says 9 and 5. Item 12's
 IMPLEMENTED verdict is INCUS-TIER-ONLY -- see its row.)
 
+**CORRECTED 2026-08-12 -- three separate errors in the two blocks above.**
+
+1. **Item 10 is CLOSED, not PARTIAL.** The `PARTIAL | 5 | 1, 3, 5, 9, 10` row is
+   contradicted by the line directly beneath it, by item 10's own STATUS block
+   ("the clause is now CLOSED, and the OPEN slice above landed essentially as
+   described", superseding the PARTIAL verdict), by the Verdict section, and by
+   the code (`InstanceDatabaseModel` + M087). Read the counts as **IMPLEMENTED
+   10 (2, 4, 6, 7, 8, 10, 11, 12, 13, 14), PARTIAL 4 (1, 3, 5, 9)**.
+   **METHOD NOTE:** this is the ONE place in this corpus where the standing
+   reading rule -- a row verdict outranks ranked-open prose -- gives the wrong
+   answer, because here the row HEADING is the stale artifact and the prose
+   under it is the correction. Where a row's own STATUS block explicitly says
+   it supersedes the heading, the STATUS block wins.
+2. **"five are partial specifically because the working half is proven only
+   `[live]`" is false for at least two of them.** Item 3 (install/reinstall) is
+   partial because install/reinstall is OPERATOR-ONLY while the minimum claim
+   promises a tenant-facing API -- its data policy has hermetic coverage
+   (`InstanceReinstallTest`, no tag, no `assume`). Item 10 is not partial at
+   all. Take the sentence as describing item 9's restore create-story and item
+   5's enforcement matrix, not as a property of every PARTIAL row.
+3. **Item 12 is BOTH TIERS, not INCUS-TIER-ONLY.** Its row header says so
+   ("IMPLEMENTED -- BOTH TIERS", Docker added 2026-08-12); the parenthetical
+   above predates the volume transport.
+
 ---
 
 ## 1. Curated templates
@@ -480,6 +504,11 @@ reduction in delegation.
 **PARTIAL -- and the plan's own clause is worded more strongly than what
 landed.** This row supersedes the assumption that `ccd1bd5` closed the clause
 outright.
+
+> **READ THE STATUS BLOCK BELOW FIRST (noted 2026-08-12).** This heading is
+> STALE: the row's own STATUS 2026-08-08 block closes the clause, and the counts
+> table, the Verdict section and the code all agree. The heading is kept because
+> the finding underneath it is the history that produced the fix.
 
 What DID land (2026-08-08, commit `ccd1bd5`, 19 files, +1820/-43), verified:
 
@@ -949,6 +978,18 @@ and `InstancePowerAction`'s `restart` step are the same two fenced operations
 with the same window between them, spelled once instead of twice. What shipped is
 an affordance, not a new primitive: nothing here holds a single fence across the
 create, and the activity log still records the two rows.
+
+**CORRECTED 2026-08-12: "every surface" is TWO of three.** The paragraph seven
+lines above this one already says it -- `InstanceApi`'s power lane still spells
+the pair INLINE (`InstanceApi.java:105-108`: `service.stop` then
+`service.deploy`), and it is the only caller that does. The two callers of
+`InstanceService.restart` are `InstanceResource.java:385` (the row action) and
+`InstancePowerAction.java:65` (the schedule step). Nothing is unsafe about the
+divergence -- `restart` adds no gate of its own precisely so it can never be a
+wider door than a stop, and both halves ask POWER themselves -- so the API's
+inline pair behaves identically today. It is a DRY gap, not an authority gap:
+the next thing added to `restart` will silently not apply to the API. The
+rejection of restart-as-a-primitive is unaffected.
 
 ---
 

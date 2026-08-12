@@ -1,5 +1,22 @@
 # Optional Authoritative DNS
 
+STATUS (2026-08-12): **phase 4 is implemented EXCEPT its secondary-health half,
+and the 2026-07-17 line below overstates it.** What shipped and is real: AXFR +
+TSIG + NOTIFY in both directions, the secondary-zone subsystem with SOA
+refresh/retry/expire, per-zone roles, the peer registry and the ACME propagation
+wait. What did NOT ship is the other clause of the same delivery item -- the
+secondary-health UI, i.e. "the UI should show secondary freshness and warn
+loudly when a production zone has no healthy secondary" (see Redundancy and
+transfers below). There is no freshness column on `DnsZonePeerModel` (its whole
+schema is id / zone_id / peer_id / created_at / updated_at) and `AxfrResponder`
+writes nothing back, so a PRIMARY records nothing about whether its secondaries
+ever pulled; `DnsZoneSecondariesPage` lists peer name, transfer host and an edit
+link and no health at all. `DnsZoneModel.LAST_TRANSFER_AT` is the mirror-image
+fact -- it tracks a zone THIS instance pulls as a secondary -- and is not a
+substitute. No `NotificationEvents` constant exists for a missing or stale
+secondary, so the "warn loudly" half has no collector and no event. Phase 4 is
+therefore the production-ready threshold MINUS its own monitoring clause.
+
 STATUS (2026-07-17): delivery phases 1-4 below are implemented. Phase 4 is
 the standards-based replication described in `dns-federation.md`: TSIG-
 authenticated AXFR (both directions), NOTIFY, a secondary-zone subsystem with
@@ -50,6 +67,15 @@ longer takes its whole zone out of the serving snapshot. Note also that the
 "attention items" list under Hohenheim integration below is a DESIGN wishlist:
 no attention-item surface for lame delegation / stale secondaries / failed ACME
 publishes exists yet.
+
+CORRECTED 2026-08-12: that "DESIGN wishlist" verdict is too broad -- the bullet
+it downgrades names FIVE items and one of them SHIPPED. `AttentionCollector`'s
+`dnsIssues` raises an ERROR item for a DNS listener that failed to bind (the
+"unreachable TCP/UDP listeners" sub-item), linking to settings and naming the
+startup error, plus a WARNING for an enabled zone whose apex carries no NS
+RRset, which is adjacent to -- but not the same as -- the lame-delegation and
+missing-glue sub-items (it checks OUR zone data, not the parent's delegation).
+Genuinely absent, as stated: stale secondaries and failed ACME publishes.
 
 Hohenheim can become the authoritative DNS service for zones it manages. This
 removes the runtime dependency on a hosted DNS control panel and gives ACME

@@ -3622,7 +3622,11 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   creator's manage grant a moment later.
 
   Proven by `TenantInstanceSurfaceTest` (6 journeys) and `TenantInstanceApiTest`
-  (4), both counterfactualed: dropping the list scope leaks the other tenant's
+  (4)
+  -- **RECOUNTED 2026-08-12: NINE and FIVE `@Test` methods respectively; both
+  classes grew after this sentence was written, and counts are load-bearing in
+  this corpus** --
+  both counterfactualed: dropping the list scope leaks the other tenant's
   name into the body AND turns its 404 into a 200; dropping the power gate turns
   the post-revocation refusal back into `host_not_admitted`; dropping the
   snapshot gate lets a manage-only holder reach `snapshot_no_volumes`; honouring
@@ -4998,6 +5002,17 @@ of its gate clauses are closed by tests that RAN (CI and live on daystrom).
   core's default-on revalidator at TERMINAL_REVALIDATION_INTERVAL_MS. The
   handler takes a FramebufferSource factory seam so the authorization contract is
   provable without a daemon.
+
+  CORRECTED 2026-08-12: **the verb is CONSOLE, not MANAGE, in both places**
+  (`VmFramebufferHandler.java:77` in `onOpen`, `:192` in `revalidate()`), and
+  the same applies to the bullet above that says "capability is the existing
+  MANAGE" and to the serial lane (`InstanceConsoles.java:256` read, `:314`
+  command POST). `68927c22` (2026-08-08) split the instance capability into
+  enforced verbs after this block was written. The seam, the 1008 behaviour and
+  the revocation proof are unaffected: `CONSOLE` is `impliedBy(MANAGE)`, so a
+  MANAGE holder still passes and revoking MANAGE still closes the socket. What
+  the MANAGE wording now gets WRONG is the floor -- a CONSOLE-only grantee
+  reaches the framebuffer, which this text denies.
 - GATE "use the framebuffer rescue console" + "revoke tenant access mid-console":
   VmFramebufferConsoleLiveTest (daystrom, production endpoint, real socket, real
   VM): PNG framebuffer frame arrives pre-agent, scancodes ride the live SPICE
@@ -5146,7 +5161,10 @@ byte-identically on nightstrom before anything was measured).
   daemons, record MIGRATING) and recoverInterrupted rolls back to exactly one
   owner with the data intact. Both hosts end holding zero instances and zero
   trust entries.
-- CI (InstanceMigrationTest, in-memory native runtime, 4 journeys, all RAN):
+- CI (InstanceMigrationTest, in-memory native runtime, 4 journeys, all RAN --
+  RECOUNTED 2026-08-12: the class now holds SIX `@Test` methods; the two added
+  since are the host-memory-charge journey and the window-amount/mid-window
+  footprint journey):
   the move (data + snapshots + one-direction ownership), the refusal set
   (same host, devices, non-native driver, FOREIGN destination untouched,
   MIGRATING blocks deploy/stop), drain reporting (partial then complete), and
