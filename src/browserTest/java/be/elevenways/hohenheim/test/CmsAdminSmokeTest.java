@@ -35,6 +35,17 @@ class CmsAdminSmokeTest extends HohenheimTestBase {
         assertThat(sidebar).contains("Activity");
         assertThat(sidebar).contains("Settings");
 
+        // The zenit-auth resources are wired into THIS panel's security group. Their own
+        // behaviour (create/edit/toggle/grants/roles journeys) is zenit-auth's to prove --
+        // AuthCmsResourcesIntegrationTest:194/292/382 -- and hohenheim used to re-prove all
+        // of it through the browser for 31.8s. What is hohenheim's is only the wiring.
+        assertThat(page.locator("pl-app-sidebar a[href='/admin/users']").count())
+            .as("zenit-auth's users resource is mounted in the hohenheim panel")
+            .isEqualTo(1);
+        assertThat(page.locator("pl-app-sidebar a[href='/admin/roles']").count())
+            .as("zenit-auth's roles resource is mounted in the hohenheim panel")
+            .isEqualTo(1);
+
         // Soft nav to the sites list keeps the page cost down.
         page.locator("pl-app-sidebar a[href='/admin/sites']").click();
         page.waitForCondition(() -> {
