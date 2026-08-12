@@ -16,6 +16,14 @@ unified NetBird deployment (netbird-server + dashboard + netbird-proxy).
 > and that environment variables were unencrypted; that was already false when
 > written and is corrected below. A reader arriving from an old link should
 > treat the pre-lowering description as history, not as an alternative.
+>
+> **AMENDED 2026-08-12:** the encryption half of that last sentence was itself
+> too strong. "Environment variables were unencrypted" is FALSE for INSTANCE
+> variables (a real table, `.secret().encrypted()`) and TRUE for SITE
+> `environment_variables` (a key inside a JSON `SchemaField`, which zenit
+> structurally refuses to encrypt). The encryption bullet below is scoped
+> accordingly, and its "what at-rest encryption does NOT cover" sub-bullet is
+> the binding statement.
 
 ## Design decisions
 
@@ -62,8 +70,11 @@ unified NetBird deployment (netbird-server + dashboard + netbird-proxy).
   `adopt_resources` opt-in is gone with it; adopting a pre-existing VOLUME is
   still expressible per mount via `external_name`, and such volumes are never
   removed.
-- **Secrets are encrypted at rest, platform-wide -- this is NOT a stacks-only
-  claim.** Nineteen column declarations across the model layer carry zenit's
+- **Secrets are encrypted at rest wherever the storage shape allows -- broader
+  than stacks, but NOT platform-wide** (narrowed back 2026-08-12; the
+  unqualified "platform-wide" wording this bullet carried from 2026-08-11 is
+  corrected by the sub-bullet below, which names what is excluded).
+  Nineteen column declarations across the model layer carry zenit's
   `.encrypted()` field modifier (AES-256-GCM envelopes, keyring at
   `database.encryption.key_file`), including instance environment variables
   (`InstanceVariableModel.java:67-71`), site secrets
@@ -82,6 +93,31 @@ unified NetBird deployment (netbird-server + dashboard + netbird-proxy).
     at-rest representation. Config-file `content`
     (`StackFileModel.java:34-38`) and deployment `spec`
     (`StackDeploymentModel.java:39-41`) are encrypted WITHOUT `.secret()`.
+  - **What at-rest encryption does NOT cover (restored 2026-08-12; do not drop
+    this sentence again).** Encryption reaches DECLARED main-table and
+    table-stored sub-schema columns only. Zenit STRUCTURALLY REFUSES
+    `.encrypted()` anywhere under a JSON-serialized sub-schema
+    (`Schema.refuseEncryptedJsonSubFields`, zenit
+    `common/orm/model/Schema.java:196-207`), so every JSON-nested secret is
+    `.secret()`-only and lands in the column as plaintext: site
+    `environment_variables` and `build_environment_variables` -- whose own
+    AIDEV-NOTE (`NodeSiteType.java:67-83`) calls the map "the largest
+    plaintext-secret surface in hohenheim" and states outright that "encryption
+    is impossible" -- site `api_keys` (`NodeSiteType.java:87-90`), the git
+    `webhook_secret` (`GitSourceSchema.java:63-65`, and see its `:15` note) and
+    the dev-namespace `registration_token`
+    (`DevNamespaceSiteType.java:38-43`). All of those are keys inside
+    `SiteModel.SETTINGS` / `SOURCE_SETTINGS`, which are plain JSON
+    `SchemaField`s (`SiteModel.java:58-62`, `:80-84`). Note the pair that is
+    easy to conflate: INSTANCE variables are table-stored and encrypted
+    (`InstanceVariableModel.java:67-71`), SITE environment variables are not.
+    Settings-file secrets (comms DSNs, the database password, the Proteus
+    access key) are equally out of reach, and the keyring's DEFAULT path is the
+    SAME directory as those plaintext settings files, so one directory read
+    yields the key and the settings plaintext together. Three documents forbid
+    an unqualified platform-wide claim and they stand:
+    `phase0-red-team-manifest.md:885-886`,
+    `recoverable-secret-inventory.md:146` and `:327`.
 - **Config files travel over the archive API**, staged into the created
   container before start with their declared octal mode
   (`DockerInstanceRuntime.java:395-418`). No host bind mounts, so remote (SSH)
