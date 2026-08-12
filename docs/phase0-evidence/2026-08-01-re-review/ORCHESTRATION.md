@@ -318,10 +318,141 @@ Dispatch after the main waves land; none is a release blocker.
    (one hunk per commit, documenting contracts it changed). Check for conflicting
    concurrent edits during final verification.
 
+### VERDICT PASS 2026-08-12 on the nine loose ends
+
+No partition had ever audited this list. Each of the nine is verdicted below against
+CODE, independently -- `reports/loose-ends.md` claims six items closed, but a report is
+a document and documents citing documents is how this corpus drifted, so nothing here
+rests on it. Nothing was executed during this pass.
+
+**1. Route identity has two spellings -- CLOSED.** `SiteDispatcher.java:581` now calls the
+single `RouteClaims.keyOf(domain)`, and the AIDEV-NOTE at `:570-580` records the decision
+and its reason: match type is deliberately NOT part of the key, because "a kind-prefixed
+key once let an unclaimed exact row silently take such a host from the wildcard row that
+held the claim". `HostnameRegex.java:14` documents the case-folding half. Every other
+`RouteClaims.keyOf` caller (`SiteDomainResource.java:185,344,435`,
+`M079_CanonicalHostnames.java:126`) shares the one spelling.
+
+**2. orcono byId guard -- PARTIALLY RESOLVED.** The FLAGGED site is fixed:
+`orcono/mvp-v01/.../server/ServerMain.java:114-129` replaced the registry probe with a
+`static volatile boolean choosersRegistered` once-flag, carrying an AIDEV-NOTE at
+`:120-123` that forbids the probe shape by name ("never probe the registry (byId == null)
+to skip an explicit register"), pinned by `ChooserRegistrationJourneyTest.java:47-62`
+which asserts the explicit source wins in the REVERSED boot order. But one instance of
+the forbidden shape survives inside the very method that note governs:
+`orcono/mvp-v01/.../common/entity/EntityCandidateSource.java:26-30` still opens with
+`if (RecordSourceRegistry.INSTANCE.byId(ID) != null) { return; }`. It is unexploitable
+TODAY only because `ID` is `Identifier.of("orcono", "entity_candidates")` (`:21`) while
+`EntityModel.MODEL_ID` is `Identifier.of("orcono", "entity")`, and zenit-cms derives
+defaults strictly under the model id -- so nothing can hold that id for the probe to yield
+to. It becomes live the day that id gains a second registrant. `56b1ada` did not touch the
+file.
+
+**3. spamservice wrong-separator byToken guards -- CLOSED.** Zero `byToken(` calls remain
+in spamservice production code. The guards are now a once-flag
+(`spamservice/.../server/ServerMain.java:106,119-123`, registrations unguarded at
+`:124,126,131`) and the dead-guard mechanism is recorded as a tombstone AIDEV-NOTE at
+`:112-117`. The mechanism is confirmed upstream: `RecordSourceRegistry.java:268` parses
+with `Identifier.trySplitOn(trimmed, '.')`, dot-only, so the colon spelling never resolved.
+Pinned by `CmsRegistrationJourneyTest.java:42-52`, which asserts BOTH that dot tokens
+resolve and that `byToken("spamservice:client")` is null.
+
+**NEW, found while verifying 2 and 3: the same defect is LIVE in zenit-ai and nobody has
+filed it.** `zenit-ai/.../common/data/AiRecordSources.java:27-29` guards with
+`byToken("zenit-ai.model_config")` and `:45-48` with `byToken("zenit-ai.mcp_server_config")`.
+Unlike spamservice these DOT probes RESOLVE (`ModelConfigModel.java:80-81`,
+`McpServerConfigModel.java:94-95`), so this is the live orcono-shaped defect, not a dead
+guard: when a host mounts `ModelConfigResource`/`ProviderConfigResource` first, `CmsBoot`
+registers the cms-derived default under `zenit-ai:model_config`, the probe returns non-null,
+`register()` returns at `:29`, and NEITHER the explicit model_config source NOR the
+provider_config source at `:36` is registered -- one probe gates two registrations, the
+host's `adminPermission` and projection never apply, and `RecordSourceRegistry.reportGateLoss`
+(`:152`) never fires because no replacement was attempted. Callers:
+`thoth/.../server/ServerMain.java:80` (wins only by boot ordering luck) and
+`quirkyquarters/.../web/QQSources.java:73-74`. No fix commit, and no test anywhere in the
+workspace references `AiRecordSources`. NOT a hohenheim item; filed here so it is not lost.
+
+**4. Test isolation -- CLOSED, with a named residual.** The inverse operations now exist:
+`protoblast .../registry/Registry.java:61` (`boolean remove(Identifier)`, impl `:141-143`,
+rationale AIDEV-NOTE at `:54` "this targeted remove exists so tests can undo ONLY what they
+added") and `zenit .../orm/model/Models.java:203` (`unregisterInstance`), used by ten zenit
+test classes. `SitemapsTest.java:44-49` now removes its class-load-registered endpoint in
+`@AfterAll`, and the provider (`:80`/`:89`) and second endpoint (`:96`/`:107`) are removed in
+try/finally. The exact-list assertion the item feared would be poisoned now EXISTS:
+`ZenitTestRegistryHygieneTest.java:41-68` asserts absence of ten model ids and five
+endpoint/provider ids, including all three of SitemapsTest's. RESIDUAL: the pattern is not
+eradicated -- six zenit classes still register in `@BeforeAll` with no unregister
+(`KeyringGuardTest.java:59`, `RecoveryArchiveTest.java:70`, `EncryptionRekeyTest.java:66-67`,
+`AdmissionRateLimitHttpTest.java:211-212`, `RecordSourceEndpointsTest.java:89`,
+`RecordSourceFieldTest.java:43`, the last deliberate), none of whose ids are in the hygiene
+list, and the pattern is widespread outside zenit where `unregisterInstance` is not used at
+all.
+
+**5. `@NonNull` in an illegal TYPE_USE position -- CLOSED, but NOT where the item looked.**
+The item asked for a durable guard. One exists, in the compiler lane rather than the
+source-scanning lane, and that is the correct lane. `BlastCompileGuardInstaller.java:44-69`
+wires the `BlastCompileGuard` javac plugin into EVERY source-set compile, installed
+unconditionally from `ProtoblastGradlePlugin.java:57` and `PublishModulePlugin.java:34`;
+`BlastCompileGuardTest.java:43` uses this exact defect as its `BAD_SOURCE` ("TYPE_USE-only
+annotation ahead of a qualified type: illegal, diagnosed at attr stage") and `:120-172`
+walks the six steps proving plain javac rejects it, Manifold silently turns it green, and
+the guard restores the failure. The second swallow -- a committed tree that was never
+compiled -- is closed by `zenit-dev:3319-3327`, which REFUSES a commit whose staged files
+differ from the worktree, and by `verify-head` (`:3007+`), which compiles HEAD's content in
+a throwaway checkout and runs in the CI sweep.
+IMPORTANT for the next reviewer: there is deliberately NO source-guard rule for this.
+`BuiltInRules` defines exactly five (`locale-fold`, `nul-byte`, `browser-anchors`,
+`hand-built-url`, `hand-built-url-template`) and `KNOWN_GUARD_MARKERS` (`zenit-dev:3246-3250`)
+exactly four; none targets annotation placement, and a regex rule there would be strictly
+weaker than javac, which already has the answer. Anyone auditing only those two lists will
+wrongly re-raise this a third time.
+
+**6. F15/alchemy permanent scope note -- CLOSED.** The note exists at
+`hawkeye/docs/skills/hawkeye-templates/SKILL.md:83-91`, and it covers both halves the item
+asked for: the Hawkejs-vs-hawkeye distinction with a syntax discriminator (`{%t %}`, `<% %>`,
+`self.`, word operators), the statement that `"" + value` in `alchemy/` is not a violation,
+and the disposition "alchemy/ is not a git repo, so nothing there is fixable anyway". It is
+NOT in `hawkeye/CLAUDE.md` or the workspace root `CLAUDE.md` -- it is in the skill, which is
+more durable, because the skill loads at the moment someone reasons about a `.hwk` file.
+`alchemy/` still has no `.git`.
+
+**7. Twelve collapsed commit subjects -- STILL OPEN, and its stated premise is now FALSE.**
+The twelve exist and the count is exact. Scanning every workspace repo for commits dated
+2026-07-31 whose subject exceeds the 72-character convention returns 12: hawkeye 6
+(`c7903b19`, `6c443d84`, `d7a71b35`, `4d05e77f`, `01c63dec`, `9cf4cd41`), zenit 2
+(`2c7d8fb`, `efb7c6e`), zenit-auth 2, plumage 1, spamservice 1.
+FALSIFIED: "Unpushed, safe to rebase". All five repos are 0 commits ahead of their upstream
+and the 07-31 commits are contained in remote branches (`origin/type-system-v1` for hawkeye,
+`origin/master` for zenit, zenit-auth and plumage, `origin/java-rewrite` for spamservice).
+Rewriting them today means force-pushing shared history, not a local rebase. The item still
+NEEDS THE OWNER'S WORD, and the cheap option is gone.
+
+**8. `resources/`, `references/`, `alchemy/`, `arcana/` not git repos -- STILL OPEN.**
+Re-checked directly: none of the four has a `.git` directory, and neither does the workspace
+root. Unchanged standing owner decision; it is the SAME decision recorded in
+`../OWNER-DECISIONS.md` under "the resources/ and references/ trees are NOT git
+repositories", not a second one.
+
+**9. `zenit/CLAUDE.md` concurrent edits -- CLOSED as the check it asked for.** The item asked
+to check for CONFLICTING concurrent edits. There are none: the file carries no conflict
+markers, and 13 commits touched it between 2026-07-30 and 2026-08-02, each documenting the
+contract it changed (`0c9731f`, `2bfaa4d`, `c486fa3`, `9880c53`, `3aeeeca`, `cdffae3`,
+`b9acefe`, `cb3750a`, `8b6a60b`, `9fc2846`, `fc89eaf`, `1d18d89`, `425b3b4`). The
+one-hunk-per-commit shape is now the established convention rather than an anomaly. Whether
+an agent SHOULD edit a CLAUDE.md outside its assigned file set is a governance question that
+no amount of code reading can answer; it is not recorded here as resolved.
+
 ## Still open for the owner from 07-31 (unchanged, not re-litigated here)
 D7 historical plaintext, D9 at-rest encryption scope, E11 CSRF-exempt Origin
 check, B6 `hohenheim.sites.manage_all` (recommend deleting the roadmap line),
 B8 capability-scoped keys (recommend wiring the deploy endpoint, ~10 lines).
+
+SUPERSEDED 2026-08-12: this paragraph is no longer accurate as a status line. All five
+were verdicted against code on 2026-08-12 and the answers are not uniform -- D7 still
+open, D9 open but its factual base falsified, E11 partially resolved, B6 open with the
+blocker moved and one of its stated facts false, B8 partially resolved (instance half
+superseded, site half untouched). Read `../OWNER-DECISIONS.md`, which now carries a dated
+VERDICT block per item; do not quote this line as current.
 
 ## Endgame
 1. Clean chain build with caching (hard gate).
