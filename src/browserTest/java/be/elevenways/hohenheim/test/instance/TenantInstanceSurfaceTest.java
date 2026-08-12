@@ -174,6 +174,16 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             .build(), HttpResponse.BodyHandlers.ofString());
     }
 
+    /** The harness OPERATOR's session, for the positive anchor a projection test needs. */
+    private HttpResponse<String> adminGet(String path) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER).build();
+        return client.send(HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + path))
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
     private HttpResponse<String> tenantPost(String path, String body) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER).build();
@@ -718,6 +728,108 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 .contains(marker);
         } finally {
             logs.find().where(InstanceLogModel.INSTANCE_ID.eq(consoleInstanceId)).delete();
+        }
+    }
+
+    /**
+     * The delegated PROJECTION, asserted field by field on what is RENDERED.
+     *
+     * The gate clause is "no server id, no socket/daemon addresses, no host filesystem
+     * paths, no raw runtime errors -- field-level, not just the wire path", and everything
+     * else in this class checks capability refusals and form-field absence, which the
+     * shared subpages are not covered by at all: {@code ManageInstanceResource} registers
+     * {@code InstanceOverviewPage} and {@code InstanceProvisioningPage} verbatim, so
+     * whatever those pages put in their template vars reaches a tenant unless the pages
+     * themselves drop it. Every assertion below therefore names a VALUE in the body, and
+     * every one of them is anchored by the same value being present on /admin -- a
+     * doesNotContain against a page that failed to render would otherwise pass.
+     */
+    @Test
+    @Order(10)
+    void theDelegatedOverviewNamesNoHostAndEchoesNoDaemonError() throws Exception {
+        Model servers = Models.get(ServerModel.class);
+        Row host = servers.createEmptyRow();
+        host.set(ServerModel.NAME, PREFIX + "inventory-host-01");
+        host.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+        servers.save(host);
+        Integer hostId = host.get(ServerModel.ID);
+
+        // The shape InstanceInstalls really stamps: the transport's or daemon's own text,
+        // which names sockets, registries and host paths nobody vetted for a tenant.
+        String daemonError = "exit 1\nunix:///var/run/docker.sock: pull access denied for "
+            + "registry.internal/" + PREFIX + "private-image, repository does not exist";
+
+        Model instances = Models.get(InstanceModel.class);
+        Row instance = instances.findById(instanceAId);
+        instance.set(InstanceModel.SERVER_ID, hostId);
+        instance.set(InstanceModel.INSTALL_STATE, InstanceModel.INSTALL_FAILED);
+        instance.set(InstanceModel.INSTALL_ERROR, daemonError);
+        instances.save(instance);
+
+        try {
+            ensureManageGrant();
+            String overview = "/instances/" + instanceAId + "/page/overview";
+            String provisioning = "/instances/" + instanceAId + "/page/provisioning";
+
+            // 1. POSITIVE ANCHOR on the operator panel: the SAME page class, rendering the
+            //    very values the tenant must not get. Without this, steps 2-4 would pass
+            //    against a page that renders nothing at all.
+            HttpResponse<String> adminView = adminGet("/admin" + overview);
+            assertThat(adminView.statusCode())
+                .as("step 1: the operator's overview renders").isEqualTo(200);
+            assertThat(adminView.body())
+                .as("step 1: and it really does carry the host name, a link keyed on the"
+                    + " numeric server id, and the daemon's own error text")
+                .contains(PREFIX + "inventory-host-01")
+                .contains("/admin/servers/" + hostId)
+                .contains("pull access denied");
+
+            // 2. THE PROJECTION: the same record, the same page class, under /manage.
+            HttpResponse<String> tenantView = tenantGet("/manage" + overview);
+            assertThat(tenantView.statusCode())
+                .as("step 2: the tenant's own overview renders").isEqualTo(200);
+            assertThat(tenantView.body())
+                .as("step 2: the tenant sees their own instance -- the projection is not"
+                    + " simply an empty page")
+                .contains(PREFIX + "alpha");
+            assertThat(tenantView.body())
+                .as("step 2: and NOTHING of the host: not its name, not a route carrying"
+                    + " its numeric id, on either panel's spelling")
+                .doesNotContain(PREFIX + "inventory-host-01")
+                .doesNotContain("/servers/" + hostId);
+
+            // 3. The daemon's own text is a raw runtime error, and the install BADGE is
+            //    what tells the tenant the install failed. State the difference: the fact
+            //    survives, the transport detail does not.
+            assertThat(tenantView.body())
+                .as("step 3: no raw daemon/transport text reaches the delegated panel")
+                .doesNotContain("pull access denied")
+                .doesNotContain("docker.sock")
+                .doesNotContain("registry.internal");
+            assertThat(tenantView.body())
+                .as("step 3: while the install-state BADGE still says so -- the tenant is"
+                    + " told WHAT happened, the operator is told why")
+                .contains("Install failed");
+
+            // 4. The SECOND surface of the same field. A fix on the overview alone would
+            //    pass steps 2-3 and still hand the text over one tab across.
+            assertThat(adminGet("/admin" + provisioning).body())
+                .as("step 4: the operator's provisioning tab shows the reason")
+                .contains("pull access denied");
+            HttpResponse<String> tenantProvisioning = tenantGet("/manage" + provisioning);
+            assertThat(tenantProvisioning.statusCode())
+                .as("step 4: the tenant's provisioning tab renders").isEqualTo(200);
+            assertThat(tenantProvisioning.body())
+                .as("step 4: without the daemon's text")
+                .doesNotContain("pull access denied")
+                .doesNotContain("docker.sock");
+        } finally {
+            Row reset = instances.findById(instanceAId);
+            reset.set(InstanceModel.SERVER_ID, null);
+            reset.set(InstanceModel.INSTALL_STATE, InstanceModel.INSTALL_NONE);
+            reset.set(InstanceModel.INSTALL_ERROR, null);
+            instances.save(reset);
+            servers.delete(hostId);
         }
     }
 

@@ -8,8 +8,8 @@
 {% declare statusBadge: EnumBadgeState %}
 {% declare kindBadge: EnumBadgeState = null %}
 {% declare installBadge: EnumBadgeState = null %}
-{% declare hostName: String %}
-{% declare hostTarget: RouteTarget %}
+{% declare hostName: String = "" %}
+{% declare hostTarget: RouteTarget = null %}
 {% declare installError: String = "" %}
 {% declare disk: InstanceDiskView %}
 {% declare endpoints: List<InstanceEndpointView> %}
@@ -37,10 +37,15 @@
                 {% if kindBadge != null %}{% render "zenitcms:cell/enum-badge" var:value=kindBadge %}{% /if %}
                 {% if installBadge != null %}{% render "zenitcms:cell/enum-badge" var:value=installBadge %}{% /if %}
             </div>
+            {#- The host block is ABSENT on the delegated panel: the page blanks both
+                halves there (name AND the target carrying the numeric server id), so
+                nothing about operator inventory reaches a tenant. -#}
+            {% if hostName != "" %}
             <p class="hh-overview-host">
                 {{ t("host", scope: "instance_overview") }}
                 <a use:Zenit.route={% hostTarget %}>{{ hostName }}</a>
             </p>
+            {% /if %}
             {% if installError != "" %}
             <p class="hh-last-error">
                 <pl-icon name="circle-exclamation"></pl-icon>
