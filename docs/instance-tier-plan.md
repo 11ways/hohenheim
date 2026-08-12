@@ -809,6 +809,28 @@ only the first two are release blockers.
   `.encrypted()` field declarations across hohenheim's models, including
   instance environment variables. Do not re-narrow that document to "stacks
   only"; see its 2026-08-11 header block.
+
+  SUPERSEDED 2026-08-12 -- the "do not re-narrow" instruction was WRONG and has
+  been withdrawn; the original narrowing above was correct. The nineteen
+  `.encrypted()` declarations are real (counted at their declaration sites
+  today), but they do not add up to "platform-wide", and the 2026-08-11 rewrite
+  turned a scope correction into a stronger security claim than the code
+  supports. Zenit REFUSES `.encrypted()` under any JSON-serialized sub-schema
+  (`Schema.refuseEncryptedJsonSubFields`, zenit
+  `common/orm/model/Schema.java:196-207`), and `SiteModel.SETTINGS` /
+  `SOURCE_SETTINGS` are exactly that (`SiteModel.java:58-62`, `:80-84`), so
+  site `environment_variables` / `build_environment_variables`, site
+  `api_keys`, the git `webhook_secret` and the dev `registration_token` are all
+  `.secret()`-only plaintext -- the product says so itself in
+  `NodeSiteType.java:67-83` ("the largest plaintext-secret surface in
+  hohenheim", "encryption is impossible"). The conflation that made the
+  reversal look right: INSTANCE variables ARE encrypted
+  (`InstanceVariableModel.java:67-71`); SITE environment variables are not.
+  Three documents forbid the unqualified claim and were never reconciled with
+  the rewrite -- `phase0-red-team-manifest.md:885-886` ("no text may claim
+  platform-wide encryption"), `recoverable-secret-inventory.md:146` and `:327`.
+  `architecture-stacks.md` now carries a "what at-rest encryption does NOT
+  cover" sub-bullet naming every exclusion; keep it there.
 - WHY 0.6a is a HARD Phase 3 prerequisite and not merely hygiene: Phase 3 makes
   instances a GENERATED resource, and a generated RowResource gets revision +
   activity subpages by DEFAULT (`RowResource.java:189-198`). Today tenants are
