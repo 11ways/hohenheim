@@ -103,6 +103,21 @@ sweep that deleted console episodes still being written to, and the hardcoded AC
 directory. No assumption gate was REMOVED; the cross-cutting `@Tag`-separated live
 lane remains open and is now safer to enforce.
 
+SUPERSEDED 2026-08-12 (`9a5ba585`): **the live lane SHIPPED and this clause is no
+longer open.** The tag is spelled `@Tag("slow")`, 73 of the 285 browserTest
+classes carry it, `build.gradle` excludes it structurally from the default
+browser lanes (`:420`) while `--all` widens the solo/slow task to it (`:470`),
+and `SlowLaneGuardTest` FAILS THE BUILD on any live-capable class that is
+untagged or undeclared in `.zenit-dev.json`'s `nonHermeticClasses`. Two
+consequences that invalidate the inventories' framing: `LiveLane.requireImage`
+PULLS and re-asks, so the cold-image-cache green skip is gone (only a failed
+pull is a skip), and `LiveLaneReport` -- a `META-INF/services`
+`TestExecutionListener`, so no per-class wiring -- prints and CLASSIFIES every
+abort by named `Need`, reports unmarked aborts as UNCLASSIFIED, and detects a
+truncated (killed-worker) run. `hohenheim.live.require` turns a named need's
+skip into a FAILURE. "A skipped test is a green test" is therefore INVERTED: a
+skip is now reported and can be made fatal per host.
+
 STATUS (2026-08-08, quota-dimension wave -- supersedes the count of blockers in the
 block above, not its rule). BOTH remaining clauses are closed, and both were missing
 CAPABILITIES rather than coverage gaps:
@@ -1949,6 +1964,24 @@ past. It is small if Phase 1 is done right: it is a consumer, not a mechanism.
   database-snapshot restore, which rewrites the ledger table itself rather than
   claiming through the write pipeline; and the regex-versus-glob residue above, which
   is open BY DECISION rather than unexercised.
+
+  SUPERSEDED 2026-08-12 -- **both named sides ARE verified, and one of them was
+  already verified when this clause was written.** DNS side: `77e77df0`
+  (2026-08-10) releases DNS records and dyndns tokens WITH the hostname claim,
+  and `ReleasedHostnameDnsTest` proves it in five journeys asserting the SERVED
+  answer, not a column -- a soft-deleted site's dyndns name stops resolving and
+  its token stops working, a still-covered sibling name survives, renaming a
+  domain row releases the departing name, release revokes the name's record
+  grants, and hostname authority alone cannot arm a token. Certificate side:
+  `CleanOrphanCertificates` has swept certs whose SAN set is fully unlinked
+  since 2026-06-10 (`f5224374`), and `TlsResilienceTest` pins the whole matrix
+  -- partially-linked kept, fully-unlinked LE cert deleted, user-uploaded cert
+  never touched, DISABLED site keeps its cert, soft-DELETED site orphans it --
+  with the soft-delete journey landing 2026-07-16 (`58b6ead0`), THREE WEEKS
+  BEFORE this clause was written on 2026-08-06. Unchanged and still open:
+  database-snapshot restore, and the regex-versus-glob residue (open by
+  decision). The identical earlier list higher up in this item is superseded by
+  the same evidence.
 - Generated records (ACME challenge records, Velocity forced-hosts, SRV/A rows
   materialized from a mapping) carry owner + source metadata and reconcile or
   delete ONLY their own output. A generated row is never adopted by whoever
@@ -3309,6 +3342,30 @@ via any RecordSource, subpage, activity/revision route or WebSocket handshake.
   risk), port publications (proxy devices), InstanceFileSupport/FileStaging/
   Install on incus (each refuses by name through the existing funnels).
 
+  NARROWED 2026-08-12: **two of those four shipped and the sentence above must
+  not be read as current.** (a) Per-instance network isolation on Incus is
+  BUILT: `IncusNetworkPolicy` is the daemon-side counterpart of
+  `WorkloadNetworkPolicy`, expressed in the daemon's OWN vocabulary (a
+  controller-scoped network ACL plus a per-NIC device override) with the same
+  throwing, READ-BACK-verifying contract -- an ACL that exists but reads back
+  ruleless, or a NIC whose config never took, are both refusals. It rejects the
+  static `TenantNetworkRanges` (peer, host and metadata unreachable) and flips
+  the NIC's default egress action to drop for `Egress.NONE`. It is
+  ADMISSION-GATED (`IncusPreflight.checkAclSupport` proves ACL support by
+  creating, reading back and deleting a probe ACL, so a daemon that cannot
+  isolate fails enrollment rather than a tenant deploy), SWEPT (`IncusReaper`
+  classifies both the scoped ACL and the `hhx-<token>` extra bridge, refusing
+  unattributable objects), and proven live (`IncusNetworkIsolationLiveTest`,
+  `IncusKernelIsolationLiveTest`, `IncusReaperLiveTest`). Deliberate design
+  note: the ACL is ONE shared object per CONTROLLER, not one per instance --
+  per-controller lifecycle is what stops one controller stripping another's
+  live NICs. (b) `Install` on Incus shipped: `IncusInstanceRuntime` implements
+  `InstallSupport` and `AppUpdateSupport` (`:752`, `:809`). STILL not built,
+  and verified so today: port publications (`IncusInstanceRuntime.java:621-622`
+  states "proxy devices are a later mechanism") and
+  `InstanceFileSupport`/`FileStaging` (absent from the driver's implements
+  list, so the existing named refusals stand).
+
   STATUS (2026-08-05, second wave): the SNAPSHOT/BACKUP half LANDED ON INCUS and
   the Phase 4 gate is MET, proven live against daystrom (Incus 7.3). What
   shipped: `NativeSnapshotSupport` -- the whole-instance capability seam BESIDE
@@ -4354,7 +4411,22 @@ network, quota, ownership, secret and durable-operation mechanisms.
   minute `PreviewExpirySweep` task AND a boot sweep -- RecordSchedules was
   deliberately NOT used: it has no one-shot lane (a spent cron stores
   next_fire_at NULL, which findDue reads as due-forever), a framework gap
-  noted rather than worked around. Quota = `hohenheim:previews:` buckets over
+  noted rather than worked around.
+  **CORRECTED 2026-08-12: that sentence describes a mechanism that never
+  existed and rejects the one actually shipped.** There is no
+  `PreviewExpirySweep` class anywhere in `src/` and no boot sweep; the string
+  appears in this document and nowhere else. The framework gap was CLOSED
+  instead of worked around -- zenit `8239f5e` (2026-08-04) added the one-shot
+  lane, `RecordSchedules.armOnce`. `PreviewDeployments.armExpiry` arms (or
+  EXTENDS) exactly one such schedule per preview, and `PreviewExpireAction`
+  (a `RecordScheduleActionHandler`, `requiredCapability` = MANAGE) runs the
+  full verified reclaim when the sweeper fires it. The consequence the old
+  text got backwards: because the deadline is a stored SCHEDULE, a controller
+  that was down past it still enforces expiry at its next sweep -- delayed but
+  never voided -- and a destroy the daemon cannot confirm THROWS, so the step
+  records the failure and retries per policy instead of lying. The `expires_at`
+  column is DISPLAY data only (`PreviewDeployments.java:410-413`).
+  Quota = `hohenheim:previews:` buckets over
   the site-owner pack (a project is one owner) through the atomic core
   ledger, cap `previews.max_per_owner`. Variables are isolated STRUCTURALLY:
   the preview spec is built from scratch and only
@@ -5954,8 +6026,29 @@ upgraded box. Prefer deleting such accommodations over carrying them.
 5. Whether stack services eventually BECOME instances or remain a separate
    product tier over the shared runtime-resource mechanisms. Decide the Phase 3
    ownership adapter now; revisit full convergence after Phase 4 with real use.
+
+   CLOSED 2026-08-12 (answered in code 2026-08-07, `b7749a36`): they BECAME
+   instances. Every enabled stack service is an owned
+   `hohenheim:stack_service` instance deployed and destroyed through
+   `InstanceService`; the stack's own Docker executor (`StackDeployer`) is
+   deleted. The product tier kept exactly what is a statement ABOUT OTHER
+   RECORDS -- multi-service ordering and condition gating (`StackRuntime`) --
+   the same line the database tier drew when it kept `awaitReady` out of
+   `InstanceService`. See `StackInstances.java:33-58` and
+   `architecture-stacks.md`.
 6. Incus testing strategy if no daemon runs in CI (fake + live smoke vs
    privileged testcontainer) -- decide at Phase 4 start.
+
+   CLOSED 2026-08-12 (answered in code): FAKE plus live smoke, as decision 6's
+   own first option and the Phase 4 text at `:3249` predicted. The fake is
+   `FakeIncusTransport`, an in-memory ECHO of the endpoints the driver touches
+   -- it stores what is POSTed/PUT and returns it verbatim, so the driver's own
+   ACL and NIC READ-BACK verifications pass on their merits instead of against
+   maintained fixture data, and an unhandled path throws loudly rather than
+   answering success. The live half is opt-in per machine
+   (`~/.config/hohenheim-livehost/incus.properties`, the `LiveRemoteHost`
+   pattern) and now rides the `@Tag("slow")` lane. No privileged testcontainer
+   was introduced.
 7. The tenancy boundary shape: per-owner quota (Phase 3 minimum) vs a full
    hierarchical project/tenant model with aggregate quotas. The public shift
    makes the create-gate + reservation-backed per-owner cap non-negotiable; the
@@ -5982,6 +6075,15 @@ upgraded box. Prefer deleting such accommodations over carrying them.
     clustering/HA/live migration/shared storage/device passthrough/ISO install
     are requirements. Without that inventory, "replacement" has no testable
     meaning.
+
+    CLOSED 2026-08-12: the inventory was written and checked in --
+    `docs/proxmox-use-inventory.md`, 22 numbered items with per-row verdicts and
+    file:line evidence -- and each named capability now has a decision inside
+    it rather than in this list. Live migration in particular is REJECTED with
+    its reasoning recorded at `InstanceMigrations.java:40-58` (cold
+    stop/export/import/start is the policy; stateful transfer would need
+    daemon-to-daemon trust this product deliberately does not hold). Read the
+    inventory's rows, not this line, for the per-capability answers.
 12. Confirm SFTP as a Pterodactyl non-goal after the Phase 6 browser/API file
     manager is used on real game workloads; do not declare it unnecessary from
     design preference alone.

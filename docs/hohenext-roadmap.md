@@ -126,6 +126,16 @@ uid switching). uid `0` (no `system_user_id`) keeps the original all-Hohenheim p
       tars a context and POSTs `/build`; `removeImage` for lifecycle. Pull/build run on a
       long (10 min) timeout; the transport handles binary bodies and Docker's
       RST-after-response on `/build`. Integration-tested (FROM alpine + RUN).
+      **CORRECTED 2026-08-12: that mechanism was DELETED on purpose and this
+      bullet describes code that no longer exists.** `DockerClient` has no
+      `buildImage` and must not grow one back: `/build` executes the tenant's
+      Dockerfile inside the daemon, as root on the host, with the daemon's
+      network and no quota — the control-plane trust domain by definition. The
+      AIDEV-NOTE at `DockerClient.java:229-235` says "Do not reintroduce
+      /build: it has no sandbox to add". Builds now run in a hardened,
+      quota-bound, daemonless container (`server.build.BuildSandbox`) and the
+      artifact enters the daemon as a tar through `loadImage`
+      (`POST /images/load`), which is the ONE ingress.
 - [x] **Git → build → run integration** — a `docker` site sourced from git builds its
       image from the checkout's Dockerfile (`build_context` injected by `GitDeployment`)
       to a per-site tag and runs a container from it; falls back to pulling a remote

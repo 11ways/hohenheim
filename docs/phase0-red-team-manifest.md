@@ -188,6 +188,16 @@ Nothing is pushed. `zenit-dev` is the only build/test entry point used.
   Every production caller in both trees is on the 3-arg access-aware form; the
   last 2-arg caller is an orcono TEST. Retiring that lets the shim be deleted.
 
+  CLOSED 2026-08-12, and the outcome is STRONGER than "deleted": both 2-arg
+  forms are now `private` in zenit's `RecordSource`
+  (`common/data/RecordSource.java:627` `project`, `:673` `item`), so the ONLY
+  public translation boundary is the access-aware 3-arg overload (`:656`,
+  `:717`) which re-checks `authorizes` on top of the scope proof. A caller
+  cannot translate a row without naming the viewer whose gate is re-checked --
+  a compile-time guarantee, where deleting the shim would only have been a
+  convention. Landed with zenit `eeb5bfd` (2026-07-30), i.e. this residual was
+  already stale when recorded.
+
 ### Published shell (boundary 1/3)
 
 - **Test:** `PublishedEndpointSafetyTest` (plumage, browserTest).
@@ -352,6 +362,17 @@ Nothing is pushed. `zenit-dev` is the only build/test entry point used.
 2. Live-install migration checksum stamping and the flip to
    `migration_integrity=fail` (open decision 13). This is 0.B.
 3. WebSocket revalidation default-on (open decision 2).
+   **DECIDED IN CODE 2026-07-30 (zenit `942c85a`), recorded here 2026-08-12:
+   default-on WON.** `WebSocketRevalidator.intervalFor` revalidates any socket
+   BOUND TO AN IDENTITY -- a gated endpoint (`requiresLogin`/
+   `requiresPermission`) OR merely a non-anonymous principal on the wire -- at
+   `network.websocket_revalidation_interval_ms`. A fully anonymous socket on an
+   ungated endpoint has no identity to outlive and is untouched.
+   `WebSocketEndpoint.Builder.neverRevalidate()` is the ONLY opt-out;
+   `revalidateEvery` merely retunes the cadence. Three guards stop the setting
+   being used as an off switch (load-path coercer, write listener, and the read
+   itself, which logs and falls back to the default). Nothing was left to
+   decide -- this item should have been closed at the same time as the E8 row.
 4. `/admin/**` GETs interactive-only (open decision 3).
 5. 0.6c at-rest encryption -- a scheduled workstream, not a Phase 0 blocker, but
    no text may claim platform-wide encryption until it lands.
@@ -723,6 +744,11 @@ Rests on **(a)**.
   (non-positive is now refused loudly) but did not decide open decision 2, and
   G6's audit confirms the 17 generated CMS routes are still interactive-only
   without deciding open decision 3.
+  **CORRECTED 2026-08-12: item 3 WAS decided, one day before E8.** zenit
+  `942c85a` (2026-07-30) made revalidation default-on for every identity-bound
+  socket with `neverRevalidate()` as the sole opt-out; E8 (`9fc2846`,
+  2026-07-31) then hardened the interval setting on top of that decision, which
+  is why the two read as one change. Item 4 is genuinely unchanged.
 
 ### Reconciling the header's "open decisions 1 and 13" with the ledger
 

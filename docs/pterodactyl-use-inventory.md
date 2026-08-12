@@ -33,6 +33,35 @@ namespace. **A skipped test is a green test.** Any row whose only evidence is
 such a test is marked `[live]`, and that mark means the capability has NO
 coverage on a machine without that daemon while the suite still reports green.
 
+> **SUPERSEDED 2026-08-12 (`9a5ba585`) -- the census above is stale and its
+> conclusion is INVERTED.** The tree now holds 285 browserTest classes, of which
+> 73 declare `@Tag("slow")`; exactly ONE class still calls `Assumptions` directly
+> (`LiveLaneTest`, which tests the gate helper itself). Every other gate funnels
+> through `LiveLane`, which aborts with a machine-readable `Need`
+> (docker-socket, docker-image, netns, incus-host, remote-host, ssh,
+> confinement, node, unprivileged-fs). Three things follow, and each contradicts
+> a sentence above:
+>
+> 1. **A skipped test is no longer a silently green test.** `LiveLaneReport` is
+>    registered through `META-INF/services`, so it observes every forked JVM with
+>    no per-class wiring, prints every abort grouped by need, lists unmarked
+>    aborts as UNCLASSIFIED, and raises a truncation banner when a worker is
+>    killed with tests unaccounted for. `-Dhohenheim.live.require=<needs>` turns
+>    a skip for a declared need into a FAILURE.
+> 2. **The cold-image-cache skip is dead.** `LiveLane.requireImage` PULLS the
+>    image and re-asks; only a failing pull is a skip
+>    (`hohenheim.live.pull` defaults to `true`).
+> 3. **The separation is enforced, not remembered.** `SlowLaneGuardTest` source-
+>    scans the browserTest tree (following in-tree inheritance) and fails on any
+>    live-capable class missing `@Tag("slow")` or missing from
+>    `.zenit-dev.json`'s `nonHermeticClasses`.
+>
+> The `[live]` mark on the rows below still means "the strongest proof needs a
+> daemon", which remains useful. It no longer means "and the suite will hide
+> that from you". Row-by-row `[live]`/`[test]` marks were NOT re-derived in this
+> pass; treat a `[live]` mark as a pointer to the row's evidence, not as a claim
+> about the lane's reporting.
+
 Verification legend: **[code]** = source read at the cited file:line;
 **[test]** = hermetic test, asserts state, no assumption gate; **[live]** =
 the only proof is a daemon-gated test that can skip green.
@@ -128,6 +157,24 @@ Wired at `server/instance/InstanceTemplates.java:101` (`variableFormSpec`),
 **PARTIAL.** The refusal paths are pinned hermetically. The thing that actually
 matters -- whether a `clear` reinstall wipes data and a `preserve` one does not --
 is pinned ONLY by a `[live]` test. And install/reinstall is operator-only.
+
+**CORRECTED 2026-08-12: the "ONLY by a `[live]` test" clause is false** (the row
+already says so twice further down, in the two 2026-08-11 WRONG blocks, but the
+headline was never brought into line). `InstanceReinstallTest` carries NO
+`@Tag`, contains ZERO `assume` calls, and pins the data policy in FIVE numbered
+steps with the counterfactual built in: step 2 runs a PRESERVE reinstall as the
+POSITIVE ANCHOR ("a reinstall that wiped unconditionally would pass step 3
+anyway"), step 3 proves CLEAR destroyed the workload, step 4 proves NO policy
+touches the variable rows and the record survives its own wipe, step 5 proves
+the wipe already happened when the install step then fails. Its second journey
+pins the authority ladder: ungranted refused, CONFIG alone refused with nothing
+run, CONFIG+DESTROY performs the wipe. What IS still live-only is narrower and
+worth keeping: the NAMED-VOLUME wipe branch
+(`InstanceInstalls.java:131-144`, `removeVolumesForRestore` with its
+owner-verified per-volume refusal). The hermetic test drives `FakeNativeKind`,
+which is rootfs-stateful and has no named volumes, so it exercises the
+"destroying the workload IS the wipe" path only. The row's PARTIAL verdict
+stands on the operator-only clause, not on the coverage clause.
 
 - Code: `server/instance/InstanceInstalls.java:62` (`install`), `:85`
   (`reinstall`), the clear branch at `:102-127`, the shared runner at `:133`.
@@ -1054,10 +1101,14 @@ Value against effort, with prerequisites, for the game-panel claim specifically.
 7. **Delegable restore** (item 9). Value: medium -- a tenant who may TAKE a backup
    cannot use one. Effort: medium, but it is a policy decision first (a restore
    spends quota and placement). Prerequisite: a decision, not code.
-8. **A `@Tag`-separated live lane** (cross-cutting). Value: medium -- it turns "67
-   classes can skip green" from something you must remember into something the
-   build reports. Effort: low. Prerequisite: agreement on whether CI should FAIL
-   when a live class skips.
+8. ~~**A `@Tag`-separated live lane** (cross-cutting).~~ **DONE 2026-08-12**
+   (`9a5ba585`): the tag is `@Tag("slow")` on 73 of 285 browserTest classes,
+   excluded structurally in `build.gradle:420` and re-included by `--all` at
+   `:470`; `SlowLaneGuardTest` fails the build on an untagged live-capable
+   class; `LiveLaneReport` prints and classifies every skip. The open
+   prerequisite ("should CI FAIL when a live class skips") was answered
+   per-host rather than globally: `-Dhohenheim.live.require=<needs>` makes a
+   skip for a DECLARED need fatal, and the default reports without failing.
 
 ---
 
@@ -1177,6 +1228,11 @@ also have hermetic twins: three new classes, 11 journeys, ~116 state assertions 
 execute on any machine. The cross-cutting `@Tag`-separated live lane is still open,
 and is now MORE worth doing, not less: with twins in place, a CI that fails when a
 live class skips no longer risks hiding a whole capability behind one missing image.
+
+**Update 2026-08-12 (`9a5ba585`):** the live lane SHIPPED -- `@Tag("slow")`,
+`SlowLaneGuardTest`, `LiveLaneReport`, `LiveLane.requireImage` pulling instead of
+skipping. See the superseding block under "How this document was built"; the
+"still open" clause above is history.
 
 ---
 

@@ -30,6 +30,17 @@ separating the live lane from the hermetic one. **A skipped test is a green
 test.** Every capability below except projects/environments and the webhook
 receiver has its strongest proof behind one of those gates.
 
+> **SUPERSEDED 2026-08-12 (`9a5ba585`).** All three sentences in bold above are
+> now false. The live lane IS `@Tag`-separated (`@Tag("slow")`, 73 of 285
+> browserTest classes, excluded in `build.gradle:420`), `SlowLaneGuardTest`
+> fails the build on an untagged live-capable class, and the cold-image-cache
+> case specifically is gone: `LiveLane.requireImage` PULLS and re-asks, so only
+> a failed pull is a skip. `LiveLaneReport` prints and classifies every skip by
+> named need, and `-Dhohenheim.live.require=<needs>` makes those skips fatal on
+> a host that declares it can satisfy them. The `[live]` marks below still name
+> where the strongest proof needs a daemon; they no longer imply the suite hides
+> it. See the Pterodactyl inventory's matching block for the full detail.
+
 Verification legend: **[code]** = source read at the cited file:line;
 **[test]** = hermetic test, asserts state, no assumption gate; **[live]** = the
 only proof is a daemon-gated test that can skip green.
@@ -48,7 +59,7 @@ Thirteen numbered clauses, plus three argued rejections and one cross-reference:
 | IMPLEMENTED | 12 | 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 |
 | PARTIAL | 1 | 3 |
 | REJECTED | 3 | A (compose runtime), C (large service marketplace), D (multi-server orchestration) |
-| OPEN | 0 as a row | CORRECTED 2026-08-11: the CLI-test-wiring slice (13) CLOSED 2026-08-09, so no slice remains inside a row. What IS open is ranked-list items 6, 7 and 10 -- git provider provisioning, the compose importer and the `@Tag` live lane -- none of which is a row verdict. Item 12's site/database count quotas CLOSED 2026-08-08 |
+| OPEN | 0 as a row | CORRECTED 2026-08-11: the CLI-test-wiring slice (13) CLOSED 2026-08-09, so no slice remains inside a row. What IS open is ranked-list items 6, 7 and 10 -- git provider provisioning, the compose importer and the `@Tag` live lane -- none of which is a row verdict. Item 12's site/database count quotas CLOSED 2026-08-08. REVISED 2026-08-12: ranked item 10 (the live lane) CLOSED with `9a5ba585`, leaving ranked 6 and 7 |
 | CLAIMED | 0 sub-verdicts | ACME acquisition (item 9) moved CLAIMED -> IMPLEMENTED 2026-08-08; Gitea (item 3) did the same |
 
 Counts updated 2026-08-10: item 5 moved PARTIAL -> IMPLEMENTED when per-branch
@@ -855,6 +866,11 @@ across `server/source/` (item 6); `docker-compose`/`composeFile`/`parseCompose`
 have zero hits anywhere in `src/` (item 7); and `src/browserTest/` contains no
 `@Tag` at all (item 10).
 
+REVISED 2026-08-12: **TWO of the ten are still open -- 6 and 7.** Item 10 closed
+with `9a5ba585`; the "no `@Tag` at all" observation is now false (73 classes
+carry `@Tag("slow")`, 3 carry `@Tag("solo")`, 1 carries
+`@Tag("shared-server")`). Items 6 and 7 were not re-checked in this pass.
+
 1. **Isolate (or explicitly quarantine) the git `build_command` lane** (item 2).
    Value: highest -- it is the one place where a documented security property of
    this product is false, and the site's runtime environment variables are handed
@@ -918,8 +934,10 @@ have zero hits anywhere in `src/` (item 7); and `src/browserTest/` contains no
    previews are opt-in glob patterns, manual creation exists on /admin and /manage,
    and the quota decision (site-owner charge, refuse-by-name at the cap, never
    evict) is recorded in the row and in `PreviewDeployments.queue`.
-10. **A `@Tag`-separated live lane** (cross-cutting). Value: medium -- see the
-    Pterodactyl inventory; it is the same item and one fix serves both.
+10. ~~**A `@Tag`-separated live lane** (cross-cutting).~~ **DONE 2026-08-12**
+    (`9a5ba585`) -- one fix served both inventories, as predicted. See the
+    Pterodactyl inventory's ranked item 8 and the superseding block at the top
+    of this document.
 
 ---
 

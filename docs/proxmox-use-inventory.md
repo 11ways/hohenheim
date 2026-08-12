@@ -582,6 +582,23 @@ observed from inside the guest.
   attach FRESH EMPTY disks -- the silent-success shape), port publications, and
   non-native drivers (the docker tier). **[code]** `server/cms/ServerResource.java:634-705`,
   `server/instance/InstanceMigrations.java:291-331`.
+  **CORRECTED 2026-08-12 (`e18bb8e3`):** "non-native drivers (the docker tier)"
+  is NO LONGER an unmovable class. A second `Transport` shape landed behind the
+  unchanged orchestration -- cold capture of the DECLARED logical volumes,
+  recreate from the spec on the destination, restore into the freshly minted
+  volumes (`InstanceMigrations.java:40-58`) -- and `claimOf` moved to
+  `WorkloadAttribution` so Docker can answer destination-occupancy. Undeclared
+  daemon-side state does not travel, exactly like a backup of the same kind.
+  Two refusals became REACHABLE as a result and are stated by name at submit
+  and on the survey: `migrate_game_paired` (a game-domain mapping binds the
+  instance to a partner over a host-local link network) and
+  `migrate_publication_present` (a host-scoped port claim DNS may point at)
+  -- see the AIDEV-NOTE at `InstanceMigrations.java:318-322`. Device rows
+  (`migrate_devices_present`) remain refused. **Evidence caveat, stated
+  deliberately:** the CI proof `InstanceVolumeMigrationTest` drives a FAKE
+  volume kind that mirrors the Docker driver's load-bearing semantics (its own
+  AIDEV-NOTE says so), NOT `DockerInstanceRuntime` against a daemon. The
+  transport is proven; the driver's participation in it is not yet proven live.
 - CI: `InstanceMigrationTest` -- 4 journeys, all RAN, with both counterfactuals
   recorded in the plan (source removal disabled -> 3 of 4 journeys fail).
 - **Live: `IncusColdMigrationLiveTest` re-run 2026-08-06 for this audit -- 1 test,
@@ -607,6 +624,14 @@ journey.
 **Still open, stated:** device volumes are refused rather than silently emptied.
 There is no docker-tier drain (the pieces exist in `VolumeSnapshotSupport`; no
 consumer demanded it).
+
+**SUPERSEDED 2026-08-12 (`e18bb8e3`):** the docker-tier half of that sentence is
+false -- the volume transport shipped, so a Docker-tier instance migrates and
+therefore drains through the SAME orchestration (drain is built on migration; it
+gained no separate docker lane and needed none). Device volumes are still
+refused rather than silently emptied, which was always the correct half. The
+proof drives a fake volume kind rather than `DockerInstanceRuntime`; see the
+caveat recorded on the drain bullet above.
 
 ## 12. Capacity and placement
 
