@@ -269,7 +269,7 @@ class IncusColdMigrationLiveTest {
                             assertThat(violation.message().key())
                                 .isEqualTo("host_not_admitted")));
                 setAdmission(hostAId, ServerModel.ADMISSION_ADMITTED);
-                restoredId = backups.restoreToNew(backupId, "mig-restored", HOST_A);
+                restoredId = backups.restoreToNew(backupId, "mig-restored", HOST_A).instanceId();
                 restoredHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, restoredId);
                 Row restored = Models.get(InstanceModel.class).findById(restoredId);
                 assertThat((Object) restored.get(InstanceModel.SERVER_ID))

@@ -25,7 +25,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Backup rows: created by the instance's backup action or the nightly task,
@@ -92,17 +92,29 @@ public class InstanceBackupResource extends RowResource {
                 .confirmLabel(Microcopy.of("restore_new").withFilter("scope", "instance_backup"))
                 .build())
             .handler((row, ctx) -> {
-                AtomicInteger newId = new AtomicInteger();
+                AtomicReference<InstanceBackups.Restored> restored = new AtomicReference<>();
                 // AIDEV-NOTE: this wrapper is NOT vacuous, unlike the drain one it
                 // resembled. Traced 2026-08-07: restoreToNew ends in a real
                 // InstanceModel.save() of the new record, so a create hook DOES fire
                 // inside and there is a row for this name to rename.
                 ActivityLog.withAction(ActivityLog.ACTION_CREATE, "restore_backup",
-                    () -> newId.set(this.backups.restoreToNew(
+                    () -> restored.set(this.backups.restoreToNew(
                         row.get(InstanceBackupModel.ID), null, null)));
+                // A restore that could not bring everything back says so HERE, at the
+                // moment the operator is looking: a bare "restored as #N" over a record
+                // missing its template, variables or config files is the silent
+                // degradation the manifest inventory exists to end.
+                InstanceBackups.Restored outcome = restored.get();
+                if (!outcome.complete()) {
+                    return CmsActionResult.refreshWithToast(
+                        Microcopy.of("restored_new_partial")
+                            .withFilter("scope", "instance_backup")
+                            .withArg("id", outcome.instanceId())
+                            .withArg("missing", outcome.describeLosses()));
+                }
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("restored_new").withFilter("scope", "instance_backup")
-                        .withArg("id", newId.get()));
+                        .withArg("id", outcome.instanceId()));
             })
             .build());
         return actions;

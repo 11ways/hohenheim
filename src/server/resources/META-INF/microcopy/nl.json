@@ -5339,6 +5339,10 @@
     "text": "Back-up hersteld naar nieuwe instantie #{$id}",
     "scope": "instance_backup"
   },
+  "restored_new_partial": {
+    "text": "Back-up hersteld naar nieuwe instantie #{$id}, maar niet alles kwam terug: {$missing}",
+    "scope": "instance_backup"
+  },
   "test_connection": [
     {
       "text": "Verbinding testen",
