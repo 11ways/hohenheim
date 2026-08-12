@@ -45,6 +45,57 @@ public final class IncusPreflight {
     /** The stored check name carrying the seccomp verdict of a real instance. */
     public static final String SECCOMP_CHECK = "container_seccomp";
 
+    /**
+     * The checks whose REQUIRED-ness is a function of the host's posture rather than a
+     * property of the check, listed once so a gate can re-derive it.
+     *
+     * AIDEV-NOTE: this list is the answer to a real hole, not bookkeeping. Every entry's
+     * required flag is frozen at PROBE time from the posture then in force, and the only
+     * caller of {@code runAndStore} is a manual row action -- so a host preflighted while
+     * {@code trusted_only} stores these as non-required, keeps {@code preflight_ok = true},
+     * and a later flip to {@code shared_container} silently turns three advisory FAILs into
+     * three requirements nothing re-evaluates. {@code kernel_isolation_lane} was already
+     * re-gated live by {@link HostAdmission#requireKernelTruth}; the userns/seccomp pair is
+     * what {@link HostPreflight#failedRequirementNow} closes, WITHOUT re-probing.
+     *
+     * AIDEV-NOTE: {@code lsm} is NOT here and must not be added. It is advisory on BOTH
+     * tiers by decision -- the Incus battery calls the shared {@link HostPreflight#lsmCheck}
+     * unchanged, which never takes a required flag at all (daystrom's kernel carries no LSM
+     * and answers the read with EINVAL). Only the userns twin diverges between the tiers.
+     */
+    public static final List<String> POSTURE_SENSITIVE_CHECKS =
+        List.of(KERNEL_LANE_CHECK, USERNS_CHECK, SECCOMP_CHECK);
+
+    /**
+     * Whether {@code checkName}'s required-ness on this host is decided by the posture
+     * rather than by the flag frozen into the stored report.
+     *
+     * @return false on a non-Incus host: the Docker battery's {@code userns_remap} and
+     *         {@code lsm} checks are advisory by construction (they never take a required
+     *         flag) and its {@code nftables} check is unconditionally required, so nothing
+     *         there is posture-driven and the stored flag is already the honest answer
+     */
+    public static boolean isPostureDriven(@NonNull Row server, @NonNull String checkName) {
+        return POSTURE_SENSITIVE_CHECKS.contains(checkName) && ServerModel.isIncus(server);
+    }
+
+    /**
+     * Whether {@code checkName} is REQUIRED for the host's CURRENT posture, whatever the
+     * posture was when the stored report was produced.
+     *
+     * AIDEV-NOTE: this answers in BOTH directions, and the narrowing one is not an
+     * oversight. Re-deriving means the current posture is authoritative: widening turns a
+     * banked advisory FAIL into a refusal, and narrowing back to {@code trusted_only} lifts
+     * it again -- which is the same operator escape {@link HostAdmission#requireKernelTruth}
+     * already offers by returning early for a host that accepts no tenant workloads. A
+     * one-way ratchet would leave "run preflight again" as the only exit from an edit the
+     * operator can simply undo.
+     */
+    public static boolean postureRequires(@NonNull Row server, @NonNull String checkName) {
+        return isPostureDriven(server, checkName)
+            && ServerModel.acceptsTenantWorkloads(server);
+    }
+
     /** Run the battery against one host record and STORE the outcome. */
     public static HostPreflight.@NonNull Report runAndStore(@NonNull Row server) {
         HostPreflight.Report report;

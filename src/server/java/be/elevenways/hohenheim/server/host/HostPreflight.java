@@ -433,6 +433,59 @@ public final class HostPreflight {
     }
 
     /**
+     * Re-derive the stored report's verdict against the host's CURRENT posture: the name
+     * of the first stored check that FAILED and is required NOW, or null when none is.
+     *
+     * AIDEV-NOTE: THE posture-escalation fix, and the reason it reads rather than re-probes.
+     * {@link #store} writes {@code preflight_ok = report.passed()}, and {@code passed}
+     * counts only the checks that were REQUIRED when the probe ran -- a flag frozen from the
+     * posture then in force. Nothing re-runs on a posture change (the only caller of
+     * {@code runAndStore} is a manual row action), so a host preflighted as
+     * {@code trusted_only} carries advisory {@code container_userns}/{@code container_seccomp}
+     * FAILs and a true {@code preflight_ok} straight through a flip to
+     * {@code shared_container}. Every stored entry already records its own {@code required}
+     * flag AND its status, so the honest verdict is a re-read: a check is required now when
+     * it was required then OR {@link IncusPreflight#postureRequires} says the current posture
+     * demands it. No ssh, no daemon call, nothing on the hot path but a map walk.
+     *
+     * AIDEV-NOTE: deliberately NOT a second {@code ServerModel} before-validate hook beside
+     * M092's {@code clearAcknowledgementOnPostureChange}. Two hooks writing the same record
+     * on one save is worse than the bug, and clearing {@code preflight_ok} on a posture edit
+     * would SILENTLY CORDON a running production host -- the availability decision
+     * {@link HostAdmission#requireKernelTruth} already refused to take on an operator's
+     * behalf, for the same reason, one gate over. A LIVE re-read refuses NEW tenant
+     * placement by name, leaves running workloads and every cleanup path untouched, and
+     * needs no eraser to stay correct. The acknowledgement hook stays the only writer.
+     *
+     * @return null when the host carries no stored checks at all -- "never probed" is
+     *         {@code preflight_ok}'s own question, answered by the admit gate
+     */
+    public static @Nullable String failedRequirementNow(@NonNull Row server) {
+        if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
+                || !(capabilities.get(CHECKS_KEY) instanceof Map<?, ?> checks)) {
+            return null;
+        }
+        for (Map.Entry<?, ?> entry : checks.entrySet()) {
+            if (!(entry.getValue() instanceof Map<?, ?> check)) {
+                continue;
+            }
+            if (!STATUS_FAIL.equals(String.valueOf(check.get("status")))) {
+                continue;
+            }
+            String name = String.valueOf(entry.getKey());
+            // Posture-driven checks are re-derived (the stored flag is exactly the stale
+            // thing); every other check keeps the flag its own probe decided.
+            boolean requiredNow = IncusPreflight.isPostureDriven(server, name)
+                ? IncusPreflight.postureRequires(server, name)
+                : Boolean.TRUE.equals(check.get("required"));
+            if (requiredNow) {
+                return name;
+            }
+        }
+        return null;
+    }
+
+    /**
      * When the stored verdict of one named check was actually PRODUCED.
      *
      * <p>Since {@link #store} merges rather than replaces, a stored verdict can be older

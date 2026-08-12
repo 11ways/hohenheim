@@ -5107,6 +5107,10 @@
     "text": "Host '{$name}' heeft geen BEWEZEN kernelkanaal: de laatste preflight deed geen nftables-transactie op de daemonhost; draai preflight opnieuw en los de kernel_isolation_lane-check op",
     "scope": "violations"
   },
+  "host_preflight_check_now_required": {
+    "text": "Host '{$name}' slaagde voor het laatst voor preflight onder een andere houding: de check {$check} FAALDE en telde toen enkel als advies, terwijl de houding die hij nu opgeeft hem vereist; los die check op en draai preflight opnieuw",
+    "scope": "violations"
+  },
   "host_capacity_reached": {
     "text": "Host '{$name}' heeft geen ruimte voor deze workload: er is {$needed} MB nodig en slechts {$free} MB van het geheugenbudget is vrij. Kies een kleinere geheugenlimiet, maak een workload vrij of laat een extra host toe",
     "scope": "violations"
