@@ -822,15 +822,20 @@ public class AcmeService {
         }
     }
 
+    // AIDEV-NOTE: poll BEFORE sleeping, in all three loops below. They used to sleep first,
+    // so a CA that had already validated still cost a full POLL_INTERVAL_MS per authorization
+    // -- 18 of AcmeIssuanceContractTest's 19.2s were this Thread.sleep against an in-process
+    // fake that answers synchronously, and against a real CA it is a needless 3s on every
+    // issuance. RFC 8555 polling starts immediately; the interval is the gap BETWEEN attempts.
     private void awaitAuthorization(Authorization auth, Dns01Challenge challenge) throws Exception {
         for (int i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-            Thread.sleep(POLL_INTERVAL_MS);
             auth.update();
             if (auth.getStatus() == Status.VALID) return;
             if (auth.getStatus() == Status.INVALID) {
                 Challenge failed = auth.findChallenge(Dns01Challenge.class).orElse(challenge);
                 throw challengeFailure(auth.getIdentifier().getDomain(), failed);
             }
+            Thread.sleep(POLL_INTERVAL_MS);
         }
         throw new RuntimeException("Challenge timed out for " + auth.getIdentifier().getDomain());
     }
@@ -845,11 +850,14 @@ public class AcmeService {
 
         Order order = context.order();
         for (int i = 0; i < MAX_POLL_ATTEMPTS && order.getStatus() != Status.VALID; i++) {
-            Thread.sleep(POLL_INTERVAL_MS);
             order.update();
             if (order.getStatus() == Status.INVALID) {
                 throw orderFailure(order);
             }
+            if (order.getStatus() == Status.VALID) {
+                break;
+            }
+            Thread.sleep(POLL_INTERVAL_MS);
         }
 
         if (order.getStatus() != Status.VALID) {
@@ -883,13 +891,13 @@ public class AcmeService {
             challenge.trigger();
 
             for (int i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-                Thread.sleep(POLL_INTERVAL_MS);
                 auth.update();
                 if (auth.getStatus() == Status.VALID) return;
                 if (auth.getStatus() == Status.INVALID) {
                     Challenge failed = auth.findChallenge(Http01Challenge.class).orElse(challenge);
                     throw challengeFailure(auth.getIdentifier().getDomain(), failed);
                 }
+                Thread.sleep(POLL_INTERVAL_MS);
             }
 
             throw new RuntimeException("Challenge timed out for " + auth.getIdentifier().getDomain());
