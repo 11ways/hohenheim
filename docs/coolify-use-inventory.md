@@ -934,7 +934,9 @@ carry `@Tag("slow")`, 3 carry `@Tag("solo")`, 1 carries
    previews are opt-in glob patterns, manual creation exists on /admin and /manage,
    and the quota decision (site-owner charge, refuse-by-name at the cap, never
    evict) is recorded in the row and in `PreviewDeployments.queue`.
-10. ~~**A `@Tag`-separated live lane** (cross-cutting).~~ **DONE 2026-08-12**
+10. ~~**A `@Tag`-separated live lane** (cross-cutting). Value: medium -- see the
+    Pterodactyl inventory; it is the same item and one fix serves both.~~
+    **DONE 2026-08-12**
     (`9a5ba585`) -- one fix served both inventories, as predicted. See the
     Pterodactyl inventory's ranked item 8 and the superseding block at the top
     of this document.

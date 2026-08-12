@@ -1142,7 +1142,11 @@ Value against effort, with prerequisites, for the game-panel claim specifically.
 7. **Delegable restore** (item 9). Value: medium -- a tenant who may TAKE a backup
    cannot use one. Effort: medium, but it is a policy decision first (a restore
    spends quota and placement). Prerequisite: a decision, not code.
-8. ~~**A `@Tag`-separated live lane** (cross-cutting).~~ **DONE 2026-08-12**
+8. ~~**A `@Tag`-separated live lane** (cross-cutting). Value: medium -- it turns
+   "67 classes can skip green" from something you must remember into something
+   the build reports. Effort: low. Prerequisite: agreement on whether CI should
+   FAIL when a live class skips.~~
+   **DONE 2026-08-12**
    (`9a5ba585`): the tag is `@Tag("slow")` on 73 of 285 browserTest classes,
    excluded structurally in `build.gradle:420` and re-included by `--all` at
    `:470`; `SlowLaneGuardTest` fails the build on an untagged live-capable
