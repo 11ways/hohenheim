@@ -43,7 +43,8 @@ public final class HostAdmission {
      *        means the caller cannot name an owner, which a dedicated host refuses
      * @throws Violations {@code host_not_admitted}, {@code host_posture_refuses},
      *         {@code host_posture_requires_vm}, {@code host_posture_unacknowledged},
-     *         {@code host_dedicated_to_other}, {@code host_contact_lapsed} or one of
+     *         {@code host_dedicated_to_other}, {@code host_contact_lapsed},
+     *         {@code host_preflight_check_now_required}, or one of
      *         {@link #requireKernelTruth}'s refusals
      */
     public static void requireInstancePlacement(int serverId,
@@ -67,7 +68,35 @@ public final class HostAdmission {
         requirePostureSatisfies(server, isolation);
         requireDedicationRespected(server, serverId, ownerBucket);
         requireKernelTruth(server);
+        requirePreflightVerdictForPosture(server);
         requireRecentContact(server);
+    }
+
+    /**
+     * Refuse placement on a host whose STORED preflight no longer passes under the
+     * posture the host declares TODAY.
+     *
+     * AIDEV-NOTE: the posture-escalation half of the same live-gate stance
+     * {@link #requireKernelTruth} takes, and it exists because that one only covered a
+     * THIRD of the exposure. All three posture-sensitive Incus checks freeze their
+     * required flag at probe time; {@code kernel_isolation_lane} is re-gated above
+     * because a gate happened to read its stored status directly, while
+     * {@code container_userns} and {@code container_seccomp} were re-read by nobody. A
+     * host preflighted as {@code trusted_only} therefore stored two advisory FAILs, kept
+     * {@code preflight_ok = true}, and after a flip to {@code shared_container} passed
+     * every gate with its kernel isolation known-broken and unread.
+     * {@link HostPreflight#failedRequirementNow} re-derives the verdict from the flags
+     * already stored -- no probe, no ssh, no daemon call.
+     *
+     * @throws Violations {@code host_preflight_check_now_required}, naming the check
+     */
+    public static void requirePreflightVerdictForPosture(@NonNull Row server) {
+        String failed = HostPreflight.failedRequirementNow(server);
+        if (failed != null) {
+            throw Violations.ofForm(violation("host_preflight_check_now_required")
+                .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)))
+                .withArg("check", failed));
+        }
     }
 
     /**
@@ -309,7 +338,8 @@ public final class HostAdmission {
      * outrun verification.
      *
      * @throws Violations {@code host_key_unverified}, {@code host_kernel_lane_missing},
-     *         {@code host_kernel_lane_unproven} or {@code admit_needs_preflight}
+     *         {@code host_kernel_lane_unproven}, {@code host_preflight_check_now_required}
+     *         or {@code admit_needs_preflight}
      */
     public static void requireAdmittable(@NonNull Row server) {
         requireVerifiedIdentity(server);
@@ -317,6 +347,11 @@ public final class HostAdmission {
         // preflight_ok, and "run preflight first" is the wrong thing to tell an operator
         // whose preflight ran and named this exact reason.
         requireKernelTruth(server);
+        // Same reasoning one step further: the stored preflight_ok column answers the
+        // posture that was in force when the probe ran, so it is re-derived against the
+        // CURRENT one before it is trusted. Naming the check beats "run preflight first"
+        // for an operator whose preflight ran and passed under the old posture.
+        requirePreflightVerdictForPosture(server);
         if (!Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK))) {
             throw Violations.ofForm(violation("admit_needs_preflight")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));

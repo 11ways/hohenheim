@@ -5107,6 +5107,10 @@
     "text": "Host '{$name}' has no PROVEN kernel-truth lane: its last preflight did not transact on the daemon host's nftables; run preflight again and fix the kernel_isolation_lane check",
     "scope": "violations"
   },
+  "host_preflight_check_now_required": {
+    "text": "Host '{$name}' last passed preflight under a different posture: the {$check} check FAILED and only counted as advisory then, and the posture it declares now requires it; fix that check and run preflight again",
+    "scope": "violations"
+  },
   "host_capacity_reached": {
     "text": "Host '{$name}' has no room for this workload: it needs {$needed} MB and only {$free} MB of its memory budget is free. Choose a smaller memory limit, free a workload, or admit another host",
     "scope": "violations"
