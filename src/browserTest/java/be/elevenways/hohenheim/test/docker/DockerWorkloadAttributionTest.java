@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
-import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution.WorkloadClaim;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -48,9 +47,8 @@ class DockerWorkloadAttributionTest {
     }
 
     private static InstanceSpec spec(String handle, Map<String, String> ownerLabels) {
-        return new InstanceSpec(handle, "fake/image", null, Map.of(), Map.of(),
-            (PortPublication) null, ResourceLimits.none(),
-            new ContainerHardening.Profile("fake", List.of()), ownerLabels);
+        return InstanceSpec.builder(handle, "fake/image", ResourceLimits.none(),
+            new ContainerHardening.Profile("fake", List.of()), ownerLabels).build();
     }
 
     private static WorkloadClaim claim(DockerInstanceRuntime runtime, InstanceSpec spec) {

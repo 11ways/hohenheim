@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.Egress;
-import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
@@ -145,14 +144,14 @@ public final class IncusContainerKind implements InstanceKindHandler {
         // No command override (a system container boots its init), no named volumes
         // (the rootfs IS the persistent state) and no port publication yet (proxy
         // devices are a later mechanism) -- each absence is structural, not an omission.
-        return new InstanceSpec(handle, image, null,
-            EnvVars.toMap(settings.get("environment_variables")), Map.of(), null,
-            ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
-            privileged ? PRIVILEGED : UNPRIVILEGED,
-            OwnerLabels.of(InstanceModel.MODEL_ID, instanceId), null, null,
-            ImageOrigin.CATALOG, false, true,
-            Map.of(), RootDisk.declaredGb(settings),
-            NetworkBandwidth.declaredMbit(settings));
+        return InstanceSpec.builder(handle, image,
+                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
+                privileged ? PRIVILEGED : UNPRIVILEGED,
+                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+            .env(EnvVars.toMap(settings.get("environment_variables")))
+            .rootDiskGb(RootDisk.declaredGb(settings))
+            .networkLimitMbit(NetworkBandwidth.declaredMbit(settings))
+            .build();
     }
 
     /** A system container shares the host kernel: its floor is its userland, not a guest OS. */

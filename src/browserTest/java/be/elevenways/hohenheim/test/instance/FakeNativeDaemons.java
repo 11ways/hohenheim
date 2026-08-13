@@ -553,11 +553,13 @@ final class FakeNativeDaemons {
             PortPublication publication = port instanceof Number number
                 ? new PortPublication(number.intValue(), PortPublication.TCP, true, null, null)
                 : null;
-            return new InstanceSpec("fake-instance-" + instanceId,
-                String.valueOf(settings.getOrDefault("image", "fake/image")), null,
-                Map.of(), Map.of(), publication, ResourceLimits.none(),
-                new ContainerHardening.Profile("fake", List.of()),
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+            return InstanceSpec.builder("fake-instance-" + instanceId,
+                    String.valueOf(settings.getOrDefault("image", "fake/image")),
+                    ResourceLimits.none(),
+                    new ContainerHardening.Profile("fake", List.of()),
+                    OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+                .publication(publication)
+                .build();
         }
 
         /** Test kinds declare a footprint like any other: the interface has no default. */
@@ -626,11 +628,14 @@ final class FakeNativeDaemons {
             PortPublication publication = port instanceof Number number
                 ? new PortPublication(number.intValue(), PortPublication.TCP, true, null, null)
                 : null;
-            return new InstanceSpec("fake-instance-" + instanceId,
-                String.valueOf(settings.getOrDefault("image", "fake/image")), null,
-                Map.of(), volumes, publication, ResourceLimits.none(),
-                new ContainerHardening.Profile("fake", List.of()),
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+            return InstanceSpec.builder("fake-instance-" + instanceId,
+                    String.valueOf(settings.getOrDefault("image", "fake/image")),
+                    ResourceLimits.none(),
+                    new ContainerHardening.Profile("fake", List.of()),
+                    OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+                .volumes(volumes)
+                .publication(publication)
+                .build();
         }
 
         /** Test kinds declare a footprint like any other: the interface has no default. */
@@ -882,11 +887,11 @@ final class FakeNativeDaemons {
         @Override
         public @NonNull InstanceSpec specFor(int instanceId,
                                              @NonNull Map<String, Object> settings) {
-            return new InstanceSpec("fake-instance-" + instanceId,
-                String.valueOf(settings.getOrDefault("image", "fake/image")), null,
-                Map.of(), Map.of(), null, ResourceLimits.none(),
+            return InstanceSpec.builder("fake-instance-" + instanceId,
+                String.valueOf(settings.getOrDefault("image", "fake/image")),
+                ResourceLimits.none(),
                 new ContainerHardening.Profile("fake", List.of()),
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId)).build();
         }
 
         /** Test kinds declare a footprint like any other: the interface has no default. */

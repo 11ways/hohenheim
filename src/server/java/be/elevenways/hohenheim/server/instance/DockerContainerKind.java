@@ -189,11 +189,14 @@ public final class DockerContainerKind implements InstanceKindHandler {
             }
         });
 
-        return new InstanceSpec(handle, imageRef, cmd,
-            EnvVars.toMap(settings.get("environment_variables")), volumes,
-            publicationOf(settings),
-            ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)), HARDENING,
-            OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+        return InstanceSpec.builder(handle, imageRef,
+                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)), HARDENING,
+                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+            .command(cmd)
+            .env(EnvVars.toMap(settings.get("environment_variables")))
+            .volumes(volumes)
+            .publication(publicationOf(settings))
+            .build();
     }
 
     /** An application container: its own userland and heap, nothing underneath it. */
