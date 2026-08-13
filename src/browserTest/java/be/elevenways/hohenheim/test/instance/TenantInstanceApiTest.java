@@ -3,9 +3,12 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
+import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.AuthKeys;
@@ -66,7 +69,11 @@ class TenantInstanceApiTest extends HohenheimTestBase {
     private static Integer instanceAId;
     private static Integer instanceBId;
     private static Integer instanceCId;
+    private static Integer instanceGeneratedId;
     private static Integer unapprovedTemplateId;
+
+    /** The attribution token the generated fixture carries; any owned tier's would do. */
+    private static final String GENERATED_SOURCE = "site";
 
     private static String keyManageA;
     private static String keyCreateA;
@@ -74,6 +81,7 @@ class TenantInstanceApiTest extends HohenheimTestBase {
     private static String keySnapshotsA;
     private static String keyConsoleC;
     private static String keyViewC;
+    private static String keyFilesA;
     private static String sessionA;
 
     /** The token instance C's command substitutes, so a written variable IS what runs. */
@@ -89,6 +97,14 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         instanceAId = instance(PREFIX + "alpha");
         instanceBId = instance(PREFIX + "bravo");
         instanceCId = instanceRunning(PREFIX + "charlie", "sleep {{" + PWN_KEY + "}}");
+        // A product-tier-generated instance with a HAND-GRANTED files.read: the only way
+        // an operator can point the file lane at a lowered site/database container, and
+        // the one docs/paas-api.md says the automation API never lists or drives.
+        instanceGeneratedId = generatedInstance(PREFIX + "generated");
+        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceGeneratedId,
+            HohenheimAccess.FILES_READ, true);
+        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+            HohenheimAccess.FILES_READ, true);
         RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.MANAGE, true);
         RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
@@ -131,6 +147,10 @@ class TenantInstanceApiTest extends HohenheimTestBase {
             List.of(consoleScope, configScope), null).plaintext();
         keyViewC = ApiKeyService.create(tenantViewId, PREFIX + "c-view",
             List.of(viewScope, consoleScope, configScope), null).plaintext();
+        keyFilesA = ApiKeyService.create(tenantAId, PREFIX + "a-files",
+            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.FILES_READ),
+                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.FILES_WRITE),
+                manageScope), null).plaintext();
 
         Session session = Zenit.getSessionStore().create();
         session.set(AuthKeys.USER_ID, tenantAId.longValue());
@@ -155,9 +175,13 @@ class TenantInstanceApiTest extends HohenheimTestBase {
             variables.find().where(InstanceVariableModel.INSTANCE_ID.eq(instanceId)).delete();
         }
         Model instances = Models.get(InstanceModel.class);
-        for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
-            instances.delete(row.get(InstanceModel.ID));
-        }
+        // The generated fixture is read-only OUTSIDE a system scope by design, so the
+        // teardown enters the same sweep scope a product tier's own delete uses.
+        GeneratedRows.sweeping(GENERATED_SOURCE, () -> {
+            for (Row row : instances.find().where(InstanceModel.NAME.startsWith(PREFIX)).all()) {
+                instances.delete(row.get(InstanceModel.ID));
+            }
+        });
         Model templates = Models.get(InstanceTemplateModel.class);
         for (Row row : templates.find().where(InstanceTemplateModel.NAME.startsWith(PREFIX)).all()) {
             templates.delete(row.get(InstanceTemplateModel.ID));
@@ -177,6 +201,18 @@ class TenantInstanceApiTest extends HohenheimTestBase {
 
     private static int instance(String name) {
         return instanceRunning(name, "sleep 300");
+    }
+
+    /**
+     * An instance a PRODUCT TIER lowered: the shape the automation API must never
+     * address. Written through the real attribution scope rather than a fenced column
+     * poke, so the fixture is what production makes.
+     */
+    private static int generatedInstance(String name) {
+        int[] id = new int[1];
+        OwnedInstances.inScopeUnchecked(GENERATED_SOURCE, SiteModel.MODEL_ID, 424242,
+            () -> id[0] = instanceRunning(name, "sleep 300"));
+        return id[0];
     }
 
     private static int instanceRunning(String name, String command) {
@@ -439,6 +475,74 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         assertThat(refusedImageAny)
             .as("step 4: a non-delegable capability can never enter a key scope")
             .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /**
+     * COUNTERFACTUAL: the v1 FILE lane excludes product-tier-generated instances exactly
+     * like the instance lane does.
+     *
+     * docs/paas-api.md says the automation API "never lists or drives" an instance a
+     * product tier lowered, and {@code InstanceApi} enforces that with
+     * {@code GENERATED_BY.isNull()} on both its list and its detail resolver. The file
+     * lane's own resolver filtered {@code deleted_at} ALONE, so it was the one v1 route
+     * that could address a site's or a managed database's container. Latent rather than
+     * live -- {@code files.read} has no {@code impliedBy} and no grant-planting path
+     * puts it on a generated row -- but an operator can hand-grant it, and this fixture
+     * is exactly that operator.
+     */
+    @Test
+    @Order(6)
+    void theFileLaneCannotAddressAProductTierGeneratedInstance() throws Exception {
+        int absentId = 900_000_002;
+        String filesRoute = "/api/v1/instances/" + instanceGeneratedId + "/files";
+
+        // 1. The fixture really is what the claim is about: a live row carrying a
+        //    product-tier attribution, and a real files.read grant on it.
+        Row generated = Models.get(InstanceModel.class).findById(instanceGeneratedId);
+        assertThat((String) generated.get(InstanceModel.GENERATED_BY))
+            .as("step 1: the fixture carries a product-tier attribution")
+            .isEqualTo(GENERATED_SOURCE);
+        assertThat((Object) generated.get(InstanceModel.DELETED_AT))
+            .as("step 1: and it is live, so deleted_at is not what refuses below").isNull();
+
+        // 2. THE ATTACK: list the generated instance's files with a key whose owner was
+        //    hand-granted files.read on it. Absent and out-of-scope are ONE answer on
+        //    this API, so the response must be byte-identical to a nonexistent id's.
+        HttpResponse<String> listed = keyGet(keyFilesA, filesRoute);
+        HttpResponse<String> absent = keyGet(keyFilesA,
+            "/api/v1/instances/" + absentId + "/files");
+        assertThat(listed.statusCode())
+            .as("step 2: the file lane does not address a generated instance")
+            .isEqualTo(404);
+        assertThat(listed.body())
+            .as("step 2: and its answer is indistinguishable from an id that never existed")
+            .isEqualTo(absent.body());
+
+        // 3. Every verb of the lane, not only the list -- a resolver fixed on one route
+        //    and not the others is the shape this whole item is about.
+        assertThat(keyGet(keyFilesA, filesRoute + "/content?path=/data/x").statusCode())
+            .as("step 3: reading a file is refused the same way").isEqualTo(404);
+        assertThat(keyPost(keyFilesA, filesRoute + "/content", "path=/data/x&content=owned")
+                .statusCode())
+            .as("step 3: writing one is refused the same way").isEqualTo(404);
+        assertThat(keyPost(keyFilesA, filesRoute + "/action", "action=mkdir&path=/data/x")
+                .statusCode())
+            .as("step 3: and so is every mutating action").isEqualTo(404);
+
+        // 4. The sibling instance lane already answered this way; the two now agree.
+        assertThat(keyGet(keyFilesA, "/api/v1/instances/" + instanceGeneratedId).statusCode())
+            .as("step 4: the instance lane's own answer, which the file lane now matches")
+            .isEqualTo(404);
+
+        // 5. POSITIVE ANCHOR: the SAME key, the SAME capability, on a NON-generated
+        //    instance of the same tenant gets past the visibility gate. Without this the
+        //    journey would pass on a file lane that answers 404 to everything.
+        HttpResponse<String> own = keyGet(keyFilesA, "/api/v1/instances/" + instanceAId + "/files");
+        assertThat(own.statusCode())
+            .as("step 5: a standalone instance the tenant holds files.read on is VISIBLE"
+                + " (what it answers past the gate is the driver's business, not this"
+                + " gate's) -- so step 2 measured generated_by and nothing else")
+            .isNotEqualTo(404);
     }
 
     /**

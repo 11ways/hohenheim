@@ -239,6 +239,13 @@ public final class InstanceFileEndpoints {
      * ONE 404, and a session principal is refused outright (the HTML routes are not the
      * automation API -- that is what makes csrfExempt safe here).
      *
+     * AIDEV-NOTE: the {@code GENERATED_BY.isNull()} clause is the SAME scope
+     * {@code InstanceApi.visibleInstances}/{@code visibleInstance} apply, and it must stay
+     * in step with them. docs/paas-api.md says the automation API "never lists or drives"
+     * a product-tier-generated instance; without this clause the file lane was the one
+     * v1 route that could address one (latent -- files.read has no impliedBy and nothing
+     * plants it on a generated row -- but an operator can hand-grant it).
+     *
      * @return the row, or null when the response has already been ended
      */
     private static @Nullable Row apiInstance(@NonNull Conduit conduit) {
@@ -251,6 +258,7 @@ public final class InstanceFileEndpoints {
         Row row = instanceId == null ? null : Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
+            .where(InstanceModel.GENERATED_BY.isNull())
             .first();
         // Visibility rides files.read: an id whose files the caller may not even LIST must
         // read as nonexistent, not as forbidden.
