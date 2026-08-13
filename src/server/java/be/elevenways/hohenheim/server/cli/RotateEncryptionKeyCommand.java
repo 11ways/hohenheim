@@ -26,8 +26,6 @@ public final class RotateEncryptionKeyCommand implements OfflineCommand {
 
     @Override
     public void run(@NonNull OfflineCommandContext context) {
-        EncryptionKeyLane.requireSoleFlag(context, EncryptionKeyLane.ROTATE);
-
         String minted = FieldEncryption.requireKeyring().rotate();
         context.print("Rotated the field-encryption keyring; the new active key is " + minted
             + " -- NOTHING already stored is safer yet. Run " + EncryptionKeyLane.REENCRYPT

@@ -13,8 +13,10 @@ import be.elevenways.zenit.auth.server.SetPasswordOfflineCommand;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.server.cli.HistorySecretSurveyCommand;
 import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.cli.OfflineCommands;
+import be.elevenways.zenit.server.cli.PurgeHistorySecretsCommand;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -168,32 +170,48 @@ class OfflineCommandLaneTest {
             .isNotSameAs(beforeLane)
             .isSameAs(HohenheimDatabase.datasource());
 
-        // 5. An ambiguous key-rotation invocation is REFUSED, never silently narrowed. The
-        //    framework runs exactly one command per invocation and picks it in discovery
-        //    order, so without this guard a rotate+re-encrypt pair would perform an
-        //    arbitrary half and report success -- and the operator would then retire a key
-        //    that is still decrypting live rows.
+        // 5. An ambiguous invocation is REFUSED, never silently narrowed -- and the refusal
+        //    is now the FRAMEWORK's, taken before any command's run() is entered. Dispatch
+        //    performs exactly one command chosen in discovery order, so without it a
+        //    rotate+re-encrypt pair would perform an arbitrary half and report success, and
+        //    the operator would then retire a key that is still decrypting live rows.
+        //    hohenheim's own per-command guards are DELETED: whichever command wins discovery
+        //    decides, so one unguarded command (zenit-auth's --set-password) reopened the hole
+        //    for every other, and a consumer could not close that from its own side.
         assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
                 EncryptionKeyLane.ROTATE, EncryptionKeyLane.REENCRYPT}, line -> { }))
             .as("step 5: two key-rotation steps in one invocation must refuse")
             .isInstanceOf(OfflineCommandException.class)
-            .hasMessageContaining("only ONE key-rotation step runs per invocation");
+            .hasMessageContaining("Exactly ONE runs per invocation")
+            .hasMessageContaining(EncryptionKeyLane.ROTATE)
+            .hasMessageContaining(EncryptionKeyLane.REENCRYPT);
 
-        // 5b. The SAME trap one level up, and the reason the guard had to stop being
-        //     per-lane: a pair that spans two lanes is picked apart by the very same
-        //     discovery-order dispatch, and the lane-local STEPS list cannot see a flag
-        //     that is not one of its four. Whichever of these two wins discovery, the
-        //     invocation is refused instead of half-performed.
+        // 5b. The SAME trap across lanes, which is why a per-lane guard was never enough:
+        //     a pair spanning two lanes is picked apart by the very same discovery-order
+        //     dispatch. Whichever of these wins discovery, the invocation is refused.
         assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
                 PurgeHistorySecretsCommand.FLAG, EncryptionKeyLane.ROTATE}, line -> { }))
             .as("step 5b: two commands from DIFFERENT lanes must refuse just as loudly")
             .isInstanceOf(OfflineCommandException.class)
-            .hasMessageContaining("Exactly ONE offline command runs per invocation");
+            .hasMessageContaining("Exactly ONE runs per invocation");
         assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
                 HistorySecretSurveyCommand.FLAG, PurgeHistorySecretsCommand.FLAG}, line -> { }))
             .as("step 5b: survey plus purge is ambiguous and must never silently pick one")
             .isInstanceOf(OfflineCommandException.class)
-            .hasMessageContaining("Exactly ONE offline command runs per invocation");
+            .hasMessageContaining("Exactly ONE runs per invocation");
+
+        // 5c. The gap a consumer could NOT close: --set-password never guarded anything, so
+        //     if it won discovery the companion silently vanished. The framework refusal is
+        //     the only thing that can cover it, and it does.
+        assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
+                SetPasswordOfflineCommand.FLAG,
+                SetPasswordOfflineCommand.EMAIL_OPTION, EMAIL,
+                SetPasswordOfflineCommand.PASSWORD_OPTION, CHOSEN,
+                BackupControlPlaneCommand.FLAG}, line -> { }))
+            .as("step 5c: an unguarded framework command must be covered too")
+            .isInstanceOf(OfflineCommandException.class)
+            .hasMessageContaining("Exactly ONE runs per invocation")
+            .hasMessageContaining(SetPasswordOfflineCommand.FLAG);
 
         // 6. An option value is REQUIRED where the flag needs one, and the refusal names
         //    the flag instead of running against nothing.
