@@ -13,7 +13,6 @@ import be.elevenways.hohenheim.server.instance.IncusVmKind;
 import be.elevenways.hohenheim.server.instance.NetworkBandwidth;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
-import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -219,10 +218,11 @@ class NetworkBandwidthTest extends HohenheimTestBase {
     }
 
     private static InstanceSpec spec(String handle, Integer limitMbit) {
-        return new InstanceSpec(handle, "alpine/3.22", null, Map.of(), Map.of(), null,
-            ResourceLimits.none(), new ContainerHardening.Profile("fake", List.of()),
-            OwnerLabels.of(InstanceModel.MODEL_ID, Math.abs(handle.hashCode())), null, null,
-            ImageOrigin.CATALOG, false, true, Map.of(), null, limitMbit);
+        return InstanceSpec.builder(handle, "alpine/3.22", ResourceLimits.none(),
+                new ContainerHardening.Profile("fake", List.of()),
+                OwnerLabels.of(InstanceModel.MODEL_ID, Math.abs(handle.hashCode())))
+            .networkLimitMbit(limitMbit)
+            .build();
     }
 
     @SuppressWarnings("unchecked")

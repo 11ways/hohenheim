@@ -721,11 +721,11 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         @Override
         public @NonNull InstanceSpec specFor(int instanceId,
                                              @NonNull Map<String, Object> settings) {
-            return new InstanceSpec("devsurf-instance-" + instanceId,
-                String.valueOf(settings.getOrDefault("image", "fake/image")), null,
-                Map.of(), Map.of(), null, ResourceLimits.none(),
+            return InstanceSpec.builder("devsurf-instance-" + instanceId,
+                String.valueOf(settings.getOrDefault("image", "fake/image")),
+                ResourceLimits.none(),
                 new ContainerHardening.Profile("fake", List.of()),
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId)).build();
         }
 
         /** Test kinds declare a footprint like any other: the interface has no default. */

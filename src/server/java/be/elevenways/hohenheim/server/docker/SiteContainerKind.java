@@ -195,10 +195,14 @@ public final class SiteContainerKind implements InstanceKindHandler {
             ? new PortPublication(number.intValue(), PortPublication.TCP, false, null, null)
             : null;
 
-        return new InstanceSpec(handle, imageRef, cmd,
-            EnvVars.toMap(settings.get("environment_variables")), volumes,
-            publication, ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
-            HARDENING, OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+        return InstanceSpec.builder(handle, imageRef,
+                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
+                HARDENING, OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+            .command(cmd)
+            .env(EnvVars.toMap(settings.get("environment_variables")))
+            .volumes(volumes)
+            .publication(publication)
+            .build();
     }
 
     /**

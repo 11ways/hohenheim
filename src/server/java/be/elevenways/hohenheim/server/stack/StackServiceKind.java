@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.HealthCheck;
-import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
@@ -275,14 +274,17 @@ public final class StackServiceKind implements InstanceKindHandler {
             intOr(settings.get("health_retries"), 5),
             intOr(settings.get("health_start_period_seconds"), 0));
 
-        return new InstanceSpec(handle, str(settings.get("image")),
-            command.isEmpty() ? null : command,
-            EnvVars.toMap(settings.get("environment_variables")), volumes,
-            publicationsOf(settings, name),
-            ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
-            resolvedHardening(name, capabilities),
-            OwnerLabels.of(InstanceModel.MODEL_ID, instanceId),
-            null, null, ImageOrigin.CATALOG, false, true, tmpfs, health, null, null);
+        return InstanceSpec.builder(handle, str(settings.get("image")),
+                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
+                resolvedHardening(name, capabilities),
+                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+            .command(command.isEmpty() ? null : command)
+            .env(EnvVars.toMap(settings.get("environment_variables")))
+            .volumes(volumes)
+            .publications(publicationsOf(settings, name))
+            .tmpfs(tmpfs)
+            .healthCheck(health)
+            .build();
     }
 
     /**

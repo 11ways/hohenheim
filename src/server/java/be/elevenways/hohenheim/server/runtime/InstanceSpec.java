@@ -86,115 +86,147 @@ public record InstanceSpec(@NonNull String handle,
                            @Nullable Integer rootDiskGb,
                            @Nullable Integer networkLimitMbit) {
 
-    /** The pre-VM shape: no cloud-init, no pinned fingerprint, catalog origin, no agent claim. */
-    public InstanceSpec(@NonNull String handle,
-                        @NonNull String image,
-                        @Nullable List<String> command,
-                        @NonNull Map<String, String> env,
-                        @NonNull Map<String, String> volumes,
-                        @Nullable PortPublication publication,
+    /**
+     * The one way a kind declares a workload: the five components nothing may omit as
+     * arguments, everything else named at the call site.
+     *
+     * AIDEV-NOTE: this REPLACED a ladder of five positional convenience constructors
+     * (2026-08-13). They differed only in arity, so adding a component to the record
+     * silently re-pointed any call site one argument short at a SHORTER overload: the
+     * 17-arg "widest single publication" shape and the 18-arg canonical one differed
+     * only in {@code PortPublication} vs {@code List<PortPublication>}, and
+     * StackServiceKind bound to the wrong one on the write that introduced
+     * {@code networkLimitMbit}. A builder has no arity, so that class of mis-binding
+     * cannot be written.
+     *
+     * The five REQUIRED arguments are deliberate and must stay arguments: {@code handle}
+     * and {@code image} identify the workload, {@code limits} is what capacity books,
+     * {@code ownerLabels} is the attribution that must land at create time, and
+     * {@code hardening} is the isolation profile the record docblock requires be declared
+     * "so a new kind cannot inherit isolation by accident" -- a defaulted builder setter
+     * would hand exactly that accident back.
+     */
+    public static @NonNull Builder builder(@NonNull String handle,
+                                           @NonNull String image,
+                                           @NonNull ResourceLimits limits,
+                                           ContainerHardening.@NonNull Profile hardening,
+                                           @NonNull Map<String, String> ownerLabels) {
+        return new Builder(handle, image, limits, hardening, ownerLabels);
+    }
+
+    /** Names every optional component of a spec; see {@link #builder}. */
+    public static final class Builder {
+
+        private final @NonNull String handle;
+        private final @NonNull String image;
+        private final @NonNull ResourceLimits limits;
+        private final ContainerHardening.@NonNull Profile hardening;
+        private final @NonNull Map<String, String> ownerLabels;
+
+        private @Nullable List<String> command;
+        private @NonNull Map<String, String> env = Map.of();
+        private @NonNull Map<String, String> volumes = Map.of();
+        private @NonNull List<PortPublication> publications = List.of();
+        private @Nullable String cloudInitUserData;
+        private @Nullable String imageFingerprint;
+        private @NonNull ImageOrigin imageOrigin = ImageOrigin.CATALOG;
+        private boolean secureBoot;
+        private boolean guestAgent = true;
+        private @NonNull Map<String, Long> tmpfs = Map.of();
+        private @Nullable HealthCheck healthCheck;
+        private @Nullable Integer rootDiskGb;
+        private @Nullable Integer networkLimitMbit;
+
+        private Builder(@NonNull String handle, @NonNull String image,
                         @NonNull ResourceLimits limits,
                         ContainerHardening.@NonNull Profile hardening,
                         @NonNull Map<String, String> ownerLabels) {
-        this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
-            ownerLabels, null, null, ImageOrigin.CATALOG, false, true, Map.of(), null, null,
-            null);
-    }
+            this.handle = handle;
+            this.image = image;
+            this.limits = limits;
+            this.hardening = hardening;
+            this.ownerLabels = ownerLabels;
+        }
 
-    /** The pre-tmpfs shape: everything declared, no RAM-backed scratch mount. */
-    public InstanceSpec(@NonNull String handle,
-                        @NonNull String image,
-                        @Nullable List<String> command,
-                        @NonNull Map<String, String> env,
-                        @NonNull Map<String, String> volumes,
-                        @Nullable PortPublication publication,
-                        @NonNull ResourceLimits limits,
-                        ContainerHardening.@NonNull Profile hardening,
-                        @NonNull Map<String, String> ownerLabels,
-                        @Nullable String cloudInitUserData,
-                        @Nullable String imageFingerprint,
-                        @NonNull ImageOrigin imageOrigin,
-                        boolean secureBoot,
-                        boolean guestAgent) {
-        this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
-            ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
-            guestAgent, Map.of(), null, null, null);
-    }
+        /** @param command null keeps the image's own default */
+        public @NonNull Builder command(@Nullable List<String> command) {
+            this.command = command;
+            return this;
+        }
 
-    /** The pre-root-disk shape: everything declared, root inherited from the image. */
-    public InstanceSpec(@NonNull String handle,
-                        @NonNull String image,
-                        @Nullable List<String> command,
-                        @NonNull Map<String, String> env,
-                        @NonNull Map<String, String> volumes,
-                        @Nullable PortPublication publication,
-                        @NonNull ResourceLimits limits,
-                        ContainerHardening.@NonNull Profile hardening,
-                        @NonNull Map<String, String> ownerLabels,
-                        @Nullable String cloudInitUserData,
-                        @Nullable String imageFingerprint,
-                        @NonNull ImageOrigin imageOrigin,
-                        boolean secureBoot,
-                        boolean guestAgent,
-                        @NonNull Map<String, Long> tmpfs) {
-        this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
-            ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
-            guestAgent, tmpfs, null, null, null);
-    }
+        public @NonNull Builder env(@NonNull Map<String, String> env) {
+            this.env = env;
+            return this;
+        }
 
-    /** The pre-healthcheck shape: everything declared, no runtime-evaluated health gate. */
-    public InstanceSpec(@NonNull String handle,
-                        @NonNull String image,
-                        @Nullable List<String> command,
-                        @NonNull Map<String, String> env,
-                        @NonNull Map<String, String> volumes,
-                        @Nullable PortPublication publication,
-                        @NonNull ResourceLimits limits,
-                        ContainerHardening.@NonNull Profile hardening,
-                        @NonNull Map<String, String> ownerLabels,
-                        @Nullable String cloudInitUserData,
-                        @Nullable String imageFingerprint,
-                        @NonNull ImageOrigin imageOrigin,
-                        boolean secureBoot,
-                        boolean guestAgent,
-                        @NonNull Map<String, Long> tmpfs,
-                        @Nullable Integer rootDiskGb) {
-        this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
-            ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
-            guestAgent, tmpfs, null, rootDiskGb, null);
-    }
+        public @NonNull Builder volumes(@NonNull Map<String, String> volumes) {
+            this.volumes = volumes;
+            return this;
+        }
 
-    /**
-     * The widest SINGLE-PUBLICATION shape: everything a kind can declare, including the
-     * bandwidth ceiling, with at most one port publication.
-     *
-     * AIDEV-NOTE: the convenience ladder above it exists so a kind names only what it has
-     * an answer for. Watch the ARITY when adding a component: this overload and the
-     * canonical constructor differ only in the publication argument, so a call site that
-     * passes a {@code List} must pass every component or it silently binds here and fails
-     * on the list type (which is exactly what happened to StackServiceKind on the write
-     * that introduced networkLimitMbit).
-     */
-    public InstanceSpec(@NonNull String handle,
-                        @NonNull String image,
-                        @Nullable List<String> command,
-                        @NonNull Map<String, String> env,
-                        @NonNull Map<String, String> volumes,
-                        @Nullable PortPublication publication,
-                        @NonNull ResourceLimits limits,
-                        ContainerHardening.@NonNull Profile hardening,
-                        @NonNull Map<String, String> ownerLabels,
-                        @Nullable String cloudInitUserData,
-                        @Nullable String imageFingerprint,
-                        @NonNull ImageOrigin imageOrigin,
-                        boolean secureBoot,
-                        boolean guestAgent,
-                        @NonNull Map<String, Long> tmpfs,
-                        @Nullable Integer rootDiskGb,
-                        @Nullable Integer networkLimitMbit) {
-        this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
-            ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
-            guestAgent, tmpfs, null, rootDiskGb, networkLimitMbit);
+        /** The single-publication shape every one-port tier declares; null means none. */
+        public @NonNull Builder publication(@Nullable PortPublication publication) {
+            this.publications = listOf(publication);
+            return this;
+        }
+
+        public @NonNull Builder publications(@NonNull List<PortPublication> publications) {
+            this.publications = List.copyOf(publications);
+            return this;
+        }
+
+        public @NonNull Builder cloudInitUserData(@Nullable String cloudInitUserData) {
+            this.cloudInitUserData = cloudInitUserData;
+            return this;
+        }
+
+        public @NonNull Builder imageFingerprint(@Nullable String imageFingerprint) {
+            this.imageFingerprint = imageFingerprint;
+            return this;
+        }
+
+        public @NonNull Builder imageOrigin(@NonNull ImageOrigin imageOrigin) {
+            this.imageOrigin = imageOrigin;
+            return this;
+        }
+
+        public @NonNull Builder secureBoot(boolean secureBoot) {
+            this.secureBoot = secureBoot;
+            return this;
+        }
+
+        public @NonNull Builder guestAgent(boolean guestAgent) {
+            this.guestAgent = guestAgent;
+            return this;
+        }
+
+        public @NonNull Builder tmpfs(@NonNull Map<String, Long> tmpfs) {
+            this.tmpfs = tmpfs;
+            return this;
+        }
+
+        public @NonNull Builder healthCheck(@Nullable HealthCheck healthCheck) {
+            this.healthCheck = healthCheck;
+            return this;
+        }
+
+        public @NonNull Builder rootDiskGb(@Nullable Integer rootDiskGb) {
+            this.rootDiskGb = rootDiskGb;
+            return this;
+        }
+
+        public @NonNull Builder networkLimitMbit(@Nullable Integer networkLimitMbit) {
+            this.networkLimitMbit = networkLimitMbit;
+            return this;
+        }
+
+        public @NonNull InstanceSpec build() {
+            return new InstanceSpec(this.handle, this.image, this.command, this.env,
+                this.volumes, this.publications, this.limits, this.hardening,
+                this.ownerLabels, this.cloudInitUserData, this.imageFingerprint,
+                this.imageOrigin, this.secureBoot, this.guestAgent, this.tmpfs,
+                this.healthCheck, this.rootDiskGb, this.networkLimitMbit);
+        }
     }
 
     /**

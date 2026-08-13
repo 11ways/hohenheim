@@ -205,11 +205,16 @@ public final class IncusVmKind implements InstanceKindHandler {
         // into a guest's init -- cloud-init is the provisioning lane), no named
         // volumes (attached disks are instance_devices rows), no port publication
         // (a VM is an addressable system) -- each absence is structural.
-        return new InstanceSpec(handle, image, null, Map.of(), Map.of(), null,
-            ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)), VM,
-            OwnerLabels.of(InstanceModel.MODEL_ID, instanceId), cloudInit, null,
-            imageOrigin, secureBoot, guestAgent, Map.of(),
-            RootDisk.declaredGb(settings), NetworkBandwidth.declaredMbit(settings));
+        return InstanceSpec.builder(handle, image,
+                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)), VM,
+                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+            .cloudInitUserData(cloudInit)
+            .imageOrigin(imageOrigin)
+            .secureBoot(secureBoot)
+            .guestAgent(guestAgent)
+            .rootDiskGb(RootDisk.declaredGb(settings))
+            .networkLimitMbit(NetworkBandwidth.declaredMbit(settings))
+            .build();
     }
 
     /**

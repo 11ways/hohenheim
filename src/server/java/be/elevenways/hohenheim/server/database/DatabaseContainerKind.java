@@ -165,12 +165,15 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
         PortPublication publication =
             new PortPublication(engine.port, PortPublication.TCP, false, null, null);
 
-        return new InstanceSpec(handle, image, cmd,
-            EnvVars.toMap(settings.get("environment_variables")), volumes,
-            publication, ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
-            engine.hardening(), OwnerLabels.of(InstanceModel.MODEL_ID, instanceId),
-            null, null, be.elevenways.hohenheim.server.runtime.ImageOrigin.CATALOG,
-            false, true, tmpfs);
+        return InstanceSpec.builder(handle, image,
+                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
+                engine.hardening(), OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+            .command(cmd)
+            .env(EnvVars.toMap(settings.get("environment_variables")))
+            .volumes(volumes)
+            .publication(publication)
+            .tmpfs(tmpfs)
+            .build();
     }
 
     /**

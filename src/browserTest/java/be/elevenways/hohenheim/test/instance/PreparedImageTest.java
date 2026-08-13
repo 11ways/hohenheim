@@ -258,10 +258,14 @@ class PreparedImageTest extends HohenheimTestBase {
     private static InstanceSpec spec(String handle, String image, ImageOrigin origin,
                                      boolean secureBoot, boolean guestAgent,
                                      String fingerprint) {
-        return new InstanceSpec(handle, image, null, Map.of(), Map.of(), null,
-            ResourceLimits.none(), new ContainerHardening.Profile("fake", List.of()),
-            OwnerLabels.of(InstanceModel.MODEL_ID, handle.hashCode()), null, fingerprint,
-            origin, secureBoot, guestAgent);
+        return InstanceSpec.builder(handle, image, ResourceLimits.none(),
+                new ContainerHardening.Profile("fake", List.of()),
+                OwnerLabels.of(InstanceModel.MODEL_ID, handle.hashCode()))
+            .imageFingerprint(fingerprint)
+            .imageOrigin(origin)
+            .secureBoot(secureBoot)
+            .guestAgent(guestAgent)
+            .build();
     }
 
     private static Map<String, Object> settingsOf(String image, String origin) {
