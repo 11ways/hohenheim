@@ -31,7 +31,10 @@ public class M041_CreateSpamserviceInstallation extends HohenheimMigration {
         // but a migration that CREATES a table can never be replayed: MigrationBuilder.createTable
         // has no IF NOT EXISTS, so a replay dies on the CREATE above and the INSERT is never
         // reached. Guarding it would only have moved this migration's recorded checksum for an
-        // unreachable benefit. If createTable ever grows an ifNotExists option, guard both together.
+        // unreachable benefit. That "if createTable ever grows an ifNotExists option" is now
+        // SETTLED and the answer is no: createTable's own docblock records why the flag would be
+        // a silent-success report over a table of unknown shape rather than idempotency. Nothing
+        // here changes.
         schema.execute("INSERT INTO spamservice_installations (id, enabled, port, max_heap_mb)"
             + " VALUES (1, FALSE, 8095, 512)");
     }
