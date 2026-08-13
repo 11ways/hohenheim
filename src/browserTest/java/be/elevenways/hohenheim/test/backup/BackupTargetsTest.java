@@ -41,16 +41,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * The target seam's contracts against real destinations: the filesystem target on a
- * real directory, and the SSH target against a real sshd on loopback (REAL transport,
- * SIMULATED failure domain -- one machine cannot prove two; LiveOffHostBackupTest is
- * where the second machine is real). Staging-then-commit is the load-bearing
- * behavior: nothing under the committed key until every byte landed.
+ * The target seam's contract against a REAL SSH DESTINATION: a real sshd on loopback
+ * (real transport, simulated failure domain -- one machine cannot prove two;
+ * LiveOffHostBackupTest is where the second machine is real). Staging-then-commit is the
+ * load-bearing behavior: nothing under the committed key until every byte landed.
  *
- * The SSH half doubles as the trust proof, because an ssh target now addresses a HOST
- * RECORD and inherits its ceremony: the same fixture is walked through unpinned,
+ * The journey doubles as the trust proof, because an ssh target addresses a HOST RECORD
+ * and inherits its ceremony: one fixture is walked through unpinned,
  * pinned-but-unconfirmed, healthy, quarantined and host-key-changed, so every refusal
  * has the working case standing beside it.
+ *
+ * AIDEV-NOTE: the filesystem half of this class moved to FilesystemBackupTargetTest on
+ * 2026-08-13. @Tag("slow") is a CLASS property, so the sshd this journey needs was
+ * evicting a temp-directory check from the default lane for nothing. Add a hermetic
+ * target assertion THERE, not here.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class BackupTargetsTest {
@@ -118,38 +122,6 @@ class BackupTargetsTest {
         Path file = tmp.resolve("payload.bin");
         Files.write(file, content.getBytes(StandardCharsets.UTF_8));
         return file;
-    }
-
-    @Test
-    void filesystemTargetStoresVerifiesRetrievesAndDeletes() throws IOException {
-        BackupTarget target = new FilesystemBackupTarget(tmp.resolve("store"));
-        Path file = payload("artifact-bytes");
-
-        // 1. Health + store + committed visibility.
-        target.healthCheck();
-        target.store("instance-1/a.hib", file);
-        assertThat(target.exists("instance-1/a.hib"))
-            .as("step 1: committed key exists after store").isTrue();
-        assertThat(Files.exists(tmp.resolve("store/instance-1/a.hib.part")))
-            .as("step 1: no staging debris survives a clean store").isFalse();
-
-        // 2. The stored sha is computed from the TARGET's own bytes.
-        String sha = target.storedSha256("instance-1/a.hib");
-        assertThat(sha).as("step 2: sha256 shape").matches("[0-9a-f]{64}");
-
-        // 3. Retrieve round-trips.
-        Path back = tmp.resolve("back.bin");
-        target.retrieve("instance-1/a.hib", back);
-        assertThat(Files.readString(back)).as("step 3: retrieved bytes").isEqualTo("artifact-bytes");
-
-        // 4. Delete removes committed AND staging names.
-        target.delete("instance-1/a.hib");
-        assertThat(target.exists("instance-1/a.hib")).as("step 4: gone after delete").isFalse();
-
-        // 5. Traversal refusal: a key cannot escape the root.
-        Throwable escape = catchThrowable(() -> target.store("../escape.hib", file));
-        assertThat(escape).as("step 5: traversal keys are refused")
-            .isInstanceOf(IOException.class).hasMessageContaining("escapes");
     }
 
     /**

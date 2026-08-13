@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.sitetype.SiteHandlers;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.cms.common.CmsSettings;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.ContentSecurityPolicies;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -40,9 +39,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * in the stored process log via the managed child's stdout, and must reach the
  * admin's browser as inert escaped text under the scoped admin CSP.
  *
- * Also pins the hohenheim-side CSP/bootstrap invariants: hohenheim's own panels
- * (/admin, /manage) carry the strict admin CSP, an unclaimed public path does not,
- * and the admin shell bootstraps exactly once with no inline onload handler.
+ * AIDEV-NOTE: this class also carried the hohenheim CSP/bootstrap pins until 2026-08-13.
+ * They moved to HohenheimPanelCspTest because they need neither node nor a proxy, and a
+ * @Tag("slow") is a CLASS property -- keeping them here kept the workspace's only
+ * /_hawkeye/boot.js count out of the default lane. Anything added here inherits the tag,
+ * so a hermetic assertion belongs in that class, not this one.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class ProclogProxyIngressTest extends HohenheimTestBase {
@@ -119,15 +120,6 @@ class ProclogProxyIngressTest extends HohenheimTestBase {
             socket.getOutputStream().flush();
             return new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         }
-    }
-
-    private String adminGetBody(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
     }
 
     private HttpResponse<String> adminGet(String path) throws Exception {
@@ -282,45 +274,5 @@ class ProclogProxyIngressTest extends HohenheimTestBase {
             Row site = siteModel.findById(siteId);
             if (site != null) siteModel.delete(site);
         }
-    }
-
-    /**
-     * Hohenheim-side CSP + bootstrap pins. The generic mechanism (CSP liveness, injected
-     * script/img blocked) is pinned by zenit-cms CspPanelBrowserTest and the auth families
-     * by zenit-auth AuthFlowIntegrationTest; this pins that HOHENHEIM's own panels claim the
-     * policy and that the shell bootstraps exactly once.
-     */
-    @Test
-    void hohenheimPanelsCarryTheAdminCspAndBootstrapExactlyOnce() throws Exception {
-        String expected = CmsSettings.VALUES.getValue(CmsSettings.CSP);
-        assertThat(expected).as("the admin CSP default forbids inline script")
-            .contains("script-src 'self'");
-
-        // 1. Hohenheim's own panels (/admin, /manage) carry the scoped admin CSP.
-        for (String path : List.of("/admin", "/admin/sites", "/manage")) {
-            assertThat(adminGet(path).headers().firstValue("Content-Security-Policy").orElse(null))
-                .as("panel route " + path + " carries the admin CSP").isEqualTo(expected);
-        }
-
-        // 2. An unclaimed public path gets NO CMS CSP (the global default stays opt-in).
-        assertThat(adminGet("/definitely-not-a-hohenheim-panel")
-                .headers().firstValue("Content-Security-Policy"))
-            .as("an unclaimed path carries no admin CSP").isEmpty();
-
-        // 3. The admin shell bootstraps exactly once: one bundle boot script, no inline
-        //    onload="main()" (the pre-fix shape that dies silently under the strict CSP).
-        String adminHtml = adminGetBody("/admin/sites");
-        assertThat(countOccurrences(adminHtml, "/_hawkeye/boot.js"))
-            .as("exactly one CSP-safe bootstrap script").isEqualTo(1);
-        assertThat(adminHtml).as("no inline onload bootstrap handler survives")
-            .doesNotContain("onload=");
-    }
-
-    private static int countOccurrences(String haystack, String needle) {
-        int count = 0;
-        for (int i = haystack.indexOf(needle); i >= 0; i = haystack.indexOf(needle, i + needle.length())) {
-            count++;
-        }
-        return count;
     }
 }
