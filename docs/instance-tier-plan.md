@@ -2728,6 +2728,42 @@ shape) is confirmable during the phase. Do not start Phase 3 with 7 or 8 open.
   Hohenheim materializes the policy into Docker/Incus networking plus nftables
   and reconciles drift. The public-backend-is-unreachable gate in Phase 5 must
   follow from this mechanism, not an ad-hoc Minecraft rule.
+  - **BANDWIDTH LIMITS -- LANDED 2026-08-13 on Incus, STRUCK on Docker.** The
+    clause's own qualifier ("where the runtime supports them") is load-bearing
+    and the two runtimes answer differently, so they are recorded separately.
+    - **Incus: shipped.** `NetworkBandwidth` (settings key `network_limit_mbit`,
+      declared by `IncusContainerKind` and `IncusVmKind` only) rides
+      `InstanceSpec.networkLimitMbit` onto `limits.ingress` / `limits.egress` of
+      every NIC `IncusNetworkPolicy` writes -- the primary one and every extra
+      NIC, because a second interface without the cap is a hole in it exactly as
+      a second interface without the ACL is. The declaration is the *capability
+      declaration*, the `RootDisk` precedent: a kind that cannot enforce a rate
+      does not offer the number. Blast radius on a workload that declares
+      nothing is zero -- no key is written and the read-back check returns
+      immediately -- and a workload that DID declare one gets a read-back that
+      refuses when the daemon accepted the value and dropped it.
+    - **Docker: struck, same reason as the root disk.** There is no HostConfig
+      key for bandwidth. Shaping means a `tc` qdisc on a veth the daemon creates
+      and re-creates, on an interface hohenheim does not own, so the identical
+      declaration would enforce on nothing while reporting success.
+      `DockerInstanceRuntime.create` refuses a spec carrying one by name.
+    - **The defect this closes was worse than a missing feature.** `isManagedKey`
+      claims the whole `limits.` config namespace and `putDefinition` rewrites the
+      managed NIC device wholesale, so an operator who hand-set a rate had it
+      erased on the next converge with no workaround anywhere. Both are correct
+      behaviours (the rewrite is what repairs a dropped ACL); what was missing
+      was a product spelling for the operator to declare it through. There now is
+      one, and the converge re-asserts the operator's own number.
+  - **CONNECTION limits -- STRUCK 2026-08-13 on both runtimes, with a reason.**
+    Neither runtime has one natively: Incus network ACLs have no connection-count
+    rule and Docker has no equivalent at all. The only expression left is an
+    nftables `ct count`, and on an Incus host that means a hohenheim-owned rule
+    beside `table inet incus` -- the exact arrangement `IncusNetworkPolicy` was
+    written to avoid, because incusd rewrites its own ruleset on every network
+    reload and would flush ours. A connection cap that survives until the next
+    `incus network` operation is a limit that stops enforcing without telling
+    anyone, which is strictly worse than not having one. Revisit only if the
+    daemon grows a native control.
 - **One fenced controller owns each host mutation.** A process-local worker lane
   is not enough once role-separated/control-plane installs share a database.
   Host-controller leases carry monotonically increasing fencing tokens; every

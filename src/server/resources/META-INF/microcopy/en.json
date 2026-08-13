@@ -1891,16 +1891,10 @@
     "text": "Overrides the global Let's Encrypt account email for this certificate.",
     "scope": "certificate_request"
   },
-  "request": [
-    {
-      "text": "Request certificate",
-      "scope": "certificate_request"
-    },
-    {
-      "text": "Request",
-      "scope": "capability"
-    }
-  ],
+  "request": {
+    "text": "Request certificate",
+    "scope": "certificate_request"
+  },
   "any": {
     "text": "Any (IP or Basic Auth)",
     "scope": "access_satisfy"
@@ -7074,6 +7068,16 @@
     "text": "NIC",
     "scope": "instance_device"
   },
+  "network_limit_mbit": [
+    {
+      "text": "Network limit",
+      "scope": "field"
+    },
+    {
+      "text": "Bandwidth ceiling for every NIC of this workload. Leave blank for unshaped.",
+      "scope": "help"
+    }
+  ],
   "root_disk_gb": [
     {
       "text": "Root disk",

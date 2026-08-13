@@ -1891,16 +1891,10 @@
     "text": "Overschrijft het globale Let's Encrypt-accountadres voor dit certificaat.",
     "scope": "certificate_request"
   },
-  "request": [
-    {
-      "text": "Certificaat aanvragen",
-      "scope": "certificate_request"
-    },
-    {
-      "text": "Aanvragen",
-      "scope": "capability"
-    }
-  ],
+  "request": {
+    "text": "Certificaat aanvragen",
+    "scope": "certificate_request"
+  },
   "any": {
     "text": "Eén van beide (IP of Basic Auth)",
     "scope": "access_satisfy"
@@ -7074,6 +7068,16 @@
     "text": "NIC",
     "scope": "instance_device"
   },
+  "network_limit_mbit": [
+    {
+      "text": "Netwerklimiet",
+      "scope": "field"
+    },
+    {
+      "text": "Bandbreedteplafond voor elke NIC van deze werklast. Laat leeg voor onbeperkt.",
+      "scope": "help"
+    }
+  ],
   "root_disk_gb": [
     {
       "text": "Rootschijf",

@@ -61,6 +61,11 @@ import java.util.Map;
  *                      refuses BY NAME (the cloud-init shape): accepting a number it
  *                      would ignore is a paper limit, which is worse than the gap,
  *                      because it reports success while enforcing nothing.
+ * @param networkLimitMbit the DECLARED bandwidth ceiling of the workload's NICs in
+ *                      Mbit/s, or null to leave the wire unshaped. Same contract as
+ *                      {@code rootDiskGb} and for the same reason: a driver with no
+ *                      per-workload rate limiter refuses BY NAME rather than accepting a
+ *                      number it cannot enforce (see {@code NetworkBandwidth}).
  */
 public record InstanceSpec(@NonNull String handle,
                            @NonNull String image,
@@ -78,7 +83,8 @@ public record InstanceSpec(@NonNull String handle,
                            boolean guestAgent,
                            @NonNull Map<String, Long> tmpfs,
                            @Nullable HealthCheck healthCheck,
-                           @Nullable Integer rootDiskGb) {
+                           @Nullable Integer rootDiskGb,
+                           @Nullable Integer networkLimitMbit) {
 
     /** The pre-VM shape: no cloud-init, no pinned fingerprint, catalog origin, no agent claim. */
     public InstanceSpec(@NonNull String handle,
@@ -91,7 +97,8 @@ public record InstanceSpec(@NonNull String handle,
                         ContainerHardening.@NonNull Profile hardening,
                         @NonNull Map<String, String> ownerLabels) {
         this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
-            ownerLabels, null, null, ImageOrigin.CATALOG, false, true, Map.of(), null, null);
+            ownerLabels, null, null, ImageOrigin.CATALOG, false, true, Map.of(), null, null,
+            null);
     }
 
     /** The pre-tmpfs shape: everything declared, no RAM-backed scratch mount. */
@@ -111,7 +118,7 @@ public record InstanceSpec(@NonNull String handle,
                         boolean guestAgent) {
         this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
             ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
-            guestAgent, Map.of(), null, null);
+            guestAgent, Map.of(), null, null, null);
     }
 
     /** The pre-root-disk shape: everything declared, root inherited from the image. */
@@ -132,7 +139,7 @@ public record InstanceSpec(@NonNull String handle,
                         @NonNull Map<String, Long> tmpfs) {
         this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
             ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
-            guestAgent, tmpfs, null, null);
+            guestAgent, tmpfs, null, null, null);
     }
 
     /** The pre-healthcheck shape: everything declared, no runtime-evaluated health gate. */
@@ -154,7 +161,40 @@ public record InstanceSpec(@NonNull String handle,
                         @Nullable Integer rootDiskGb) {
         this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
             ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
-            guestAgent, tmpfs, null, rootDiskGb);
+            guestAgent, tmpfs, null, rootDiskGb, null);
+    }
+
+    /**
+     * The widest SINGLE-PUBLICATION shape: everything a kind can declare, including the
+     * bandwidth ceiling, with at most one port publication.
+     *
+     * AIDEV-NOTE: the convenience ladder above it exists so a kind names only what it has
+     * an answer for. Watch the ARITY when adding a component: this overload and the
+     * canonical constructor differ only in the publication argument, so a call site that
+     * passes a {@code List} must pass every component or it silently binds here and fails
+     * on the list type (which is exactly what happened to StackServiceKind on the write
+     * that introduced networkLimitMbit).
+     */
+    public InstanceSpec(@NonNull String handle,
+                        @NonNull String image,
+                        @Nullable List<String> command,
+                        @NonNull Map<String, String> env,
+                        @NonNull Map<String, String> volumes,
+                        @Nullable PortPublication publication,
+                        @NonNull ResourceLimits limits,
+                        ContainerHardening.@NonNull Profile hardening,
+                        @NonNull Map<String, String> ownerLabels,
+                        @Nullable String cloudInitUserData,
+                        @Nullable String imageFingerprint,
+                        @NonNull ImageOrigin imageOrigin,
+                        boolean secureBoot,
+                        boolean guestAgent,
+                        @NonNull Map<String, Long> tmpfs,
+                        @Nullable Integer rootDiskGb,
+                        @Nullable Integer networkLimitMbit) {
+        this(handle, image, command, env, volumes, listOf(publication), limits, hardening,
+            ownerLabels, cloudInitUserData, imageFingerprint, imageOrigin, secureBoot,
+            guestAgent, tmpfs, null, rootDiskGb, networkLimitMbit);
     }
 
     /**
@@ -182,7 +222,8 @@ public record InstanceSpec(@NonNull String handle,
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
             List.copyOf(claimed), this.limits, this.hardening,
             this.ownerLabels, this.cloudInitUserData, this.imageFingerprint, this.imageOrigin,
-            this.secureBoot, this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb);
+            this.secureBoot, this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
+            this.networkLimitMbit);
     }
 
     /** A copy carrying the record's pinned resolved image identity. */
@@ -190,7 +231,8 @@ public record InstanceSpec(@NonNull String handle,
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
             this.publications, this.limits, this.hardening, this.ownerLabels,
             this.cloudInitUserData, fingerprint, this.imageOrigin, this.secureBoot,
-            this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb);
+            this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
+            this.networkLimitMbit);
     }
 
     private static @NonNull List<PortPublication> listOf(@Nullable PortPublication one) {

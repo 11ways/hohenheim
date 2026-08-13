@@ -26,6 +26,7 @@ import java.util.Map;
 final class FakeIncusTransport implements IncusTransport {
 
     final Map<String, Object> aclStore = new LinkedHashMap<>();
+    final Map<String, Object> networkStore = new LinkedHashMap<>();
     final Map<String, String> imageAliases = new LinkedHashMap<>();
     final Map<String, Map<String, Object>> instances = new LinkedHashMap<>();
 
@@ -76,6 +77,22 @@ final class FakeIncusTransport implements IncusTransport {
             this.aclStore.put(path.substring("/1.0/network-acls/".length()), body);
             return sync(body);
         }
+        // The managed EXTRA-NIC bridge. A real daemon auto-assigns subnets and NAT for
+        // an empty config and reports the result as managed, which is exactly what
+        // ensureExtraNetwork read-back-verifies -- so the fake answers with a plausible
+        // assignment rather than echoing the empty config it was sent, which would fail
+        // the verification on the FAKE instead of on anything the driver did.
+        if ("GET".equals(method) && path.startsWith("/1.0/networks/")) {
+            Object stored = this.networkStore.get(path.substring("/1.0/networks/".length()));
+            return stored == null ? notFound("Network not found") : sync(stored);
+        }
+        if ("POST".equals(method) && path.equals("/1.0/networks")) {
+            Map<String, Object> body = new LinkedHashMap<>(parse(jsonBody));
+            body.put("managed", true);
+            body.put("config", Map.of("ipv4.address", "10.181.7.1/24", "ipv4.nat", "true"));
+            this.networkStore.put(String.valueOf(body.get("name")), body);
+            return sync(body);
+        }
         if ("GET".equals(method) && path.startsWith("/1.0/images/aliases/")) {
             String alias = path.substring("/1.0/images/aliases/".length());
             String fingerprint = this.imageAliases.get(alias);
@@ -100,9 +117,17 @@ final class FakeIncusTransport implements IncusTransport {
             return async();
         }
         if ("PUT".equals(method) && path.startsWith("/1.0/instances/")) {
+            // MERGE, never replace: a real daemon's PUT rewrites the MUTABLE definition
+            // (config, devices, profiles, description) and leaves the immutable identity
+            // -- notably `type` -- exactly where it was. Replacing the stored map dropped
+            // it, so the SECOND converge of one instance read type=null and the driver's
+            // flavour guard refused a workload it had itself just written.
             Map<String, Object> body = parse(jsonBody);
             String name = path.substring("/1.0/instances/".length());
-            this.instances.put(name, new LinkedHashMap<>(body));
+            Map<String, Object> stored = new LinkedHashMap<>(
+                this.instances.getOrDefault(name, Map.of()));
+            stored.putAll(body);
+            this.instances.put(name, stored);
             return async();
         }
         if ("GET".equals(method) && path.startsWith("/1.0/instances/")

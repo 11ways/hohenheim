@@ -150,6 +150,30 @@ public final class IncusNetworkPolicy {
      */
     public @NonNull Map<String, Object> nicDevice(@NonNull String inheritedNetwork,
                                                   @NonNull Egress egress) {
+        return nicDevice(inheritedNetwork, egress, null);
+    }
+
+    /**
+     * The same device, carrying the workload's DECLARED bandwidth ceiling.
+     *
+     * AIDEV-NOTE: the rate rides the NIC DEVICE, not the instance config, which is why
+     * {@code IncusInstanceRuntime.isManagedKey} (a CONFIG-key predicate) never covered it
+     * -- what erased a hand-set {@code limits.ingress} was this map being rewritten
+     * wholesale on every converge. That rewrite is correct and stays: it is what repairs
+     * an ACL an operator dropped. The fix is that the rate is now DECLARED through the
+     * product, so the converge re-asserts the operator's own number instead of losing it.
+     *
+     * Both directions are written explicitly rather than the {@code limits.max} shorthand:
+     * the read-back check compares the exact keys it wrote, and asymmetric shaping is a
+     * one-field change from here.
+     *
+     * @param limitMbit the ceiling in Mbit/s, or null to leave the wire unshaped -- in
+     *                  which case NO limit key is written at all, so an existing workload
+     *                  that declares nothing is byte-identical to what it was
+     */
+    public @NonNull Map<String, Object> nicDevice(@NonNull String inheritedNetwork,
+                                                  @NonNull Egress egress,
+                                                  @Nullable Integer limitMbit) {
         Map<String, Object> device = new LinkedHashMap<>();
         device.put("type", "nic");
         device.put("network", inheritedNetwork);
@@ -160,7 +184,52 @@ public final class IncusNetworkPolicy {
         device.put("security.acls.default.ingress.action", "allow");
         device.put("security.acls.default.egress.action",
             egress == Egress.NONE ? "drop" : "allow");
+        if (limitMbit != null && limitMbit > 0) {
+            device.put("limits.ingress", rate(limitMbit));
+            device.put("limits.egress", rate(limitMbit));
+        }
         return device;
+    }
+
+    /** The daemon's spelling of a rate; kept here so the writer and the verifier agree. */
+    public static @NonNull String rate(int limitMbit) {
+        return limitMbit + "Mbit";
+    }
+
+    /**
+     * Require every NIC of the instance to carry the DECLARED bandwidth ceiling.
+     *
+     * AIDEV-NOTE: this runs ONLY for a workload that declared one, which bounds its blast
+     * radius to opted-in workloads: a spec with no limit writes no key and is never
+     * checked, so no existing deploy can start failing on it. For one that DID declare,
+     * a daemon that accepted the PUT and dropped the key is a paper limit, and a paper
+     * limit is worse than the gap -- the same stance {@code verifyRootDiskDeclared} takes
+     * one file over.
+     *
+     * @throws IOException naming the first NIC whose rate is not what was declared
+     */
+    public void verifyBandwidth(@NonNull String handle, @NonNull Map<String, Object> instance,
+                                @Nullable Integer limitMbit) throws IOException {
+        if (limitMbit == null || limitMbit <= 0
+                || !(instance.get("devices") instanceof Map<?, ?> devices)) {
+            return;
+        }
+        String want = rate(limitMbit);
+        for (Map.Entry<?, ?> entry : devices.entrySet()) {
+            if (!(entry.getValue() instanceof Map<?, ?> device)
+                    || !"nic".equals(String.valueOf(device.get("type")))) {
+                continue;
+            }
+            for (String key : List.of("limits.ingress", "limits.egress")) {
+                if (!want.equals(String.valueOf(device.get(key)))) {
+                    throw new IOException("REFUSED to run '" + handle + "': its NIC '"
+                        + entry.getKey() + "' declares a " + want + " bandwidth ceiling but"
+                        + " the daemon carries " + key + "=" + device.get(key) + ". The"
+                        + " limit was accepted and not applied, which is a cap that shapes"
+                        + " nothing while reporting success.");
+                }
+            }
+        }
     }
 
     /**
@@ -227,7 +296,22 @@ public final class IncusNetworkPolicy {
 
     /** The device map of one EXTRA NIC on the shared secondary bridge, ACL attached. */
     public @NonNull Map<String, Object> extraNicDevice(@NonNull Egress egress) {
-        return nicDevice(extraNetwork(), egress);
+        return extraNicDevice(egress, null);
+    }
+
+    /**
+     * The same, carrying the workload's declared ceiling.
+     *
+     * AIDEV-NOTE: an extra NIC gets the SAME cap as the primary for the reason
+     * {@link #verifyAllNics} gives about the ACL: a second interface without the
+     * workload's own limit is a hole in the boundary the first one enforces -- attach one
+     * and the cap is gone. The ceiling is therefore per-NIC and a workload with two NICs
+     * can push twice the declared rate; that is a deliberate simplification (Incus has no
+     * per-instance aggregate shaper) and extra NICs are an operator act, not a tenant one.
+     */
+    public @NonNull Map<String, Object> extraNicDevice(@NonNull Egress egress,
+                                                       @Nullable Integer limitMbit) {
+        return nicDevice(extraNetwork(), egress, limitMbit);
     }
 
     /**
