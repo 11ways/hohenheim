@@ -32,6 +32,8 @@ public final class ListControlPlaneBackupsCommand implements OfflineCommand {
 
     @Override
     public void run(@NonNull OfflineCommandContext context) {
+        SoleOfflineFlag.require(context, FLAG);
+
         List<String> keys;
         try {
             keys = ControlPlaneBackups.listBackups();

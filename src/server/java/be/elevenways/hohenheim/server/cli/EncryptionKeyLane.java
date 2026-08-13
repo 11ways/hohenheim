@@ -27,6 +27,11 @@ import java.util.List;
  * a completed one from the outside, and the operator would retire a key that is still
  * decrypting live rows. A loud refusal is the only safe reading of an ambiguous invocation.
  *
+ * AIDEV-NOTE: the lane-local {@link #STEPS} check keeps its ORDERING advice, but it is no
+ * longer the whole guard: it can only see its own four flags, and the same silent-success pair
+ * can span lanes ({@code --rotate-encryption-key --purge-history-secrets}). The registry-wide
+ * {@link SoleOfflineFlag} runs after it and covers every discovered command, later ones too.
+ *
  * @author Jelle De Loecker
  * @since 0.7.0
  */
@@ -54,6 +59,7 @@ final class EncryptionKeyLane {
             }
         }
         if (others.isEmpty()) {
+            SoleOfflineFlag.require(context, flag);
             return;
         }
         throw new OfflineCommandException("REFUSED: " + flag + " was requested together with "
