@@ -1,36 +1,18 @@
 package be.elevenways.hohenheim.test.migration;
 
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.migration.HohenheimMigration;
-import be.elevenways.hohenheim.migration.M017_CreateServers;
-import be.elevenways.hohenheim.migration.M026_MigrateAuditLogToActivity;
-import be.elevenways.hohenheim.migration.M042_CreateStacks;
-import be.elevenways.hohenheim.migration.M043_StackUniqueKeys;
-import be.elevenways.hohenheim.migration.M051_PortLedgerAndHostFks;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
-import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
-import be.elevenways.zenit.common.orm.datasource.ColumnType;
+import be.elevenways.hohenheim.migration.InitialMigration;
 import be.elevenways.zenit.common.orm.migration.Migration;
-import be.elevenways.zenit.common.orm.migration.MigrationBuilder;
-import be.elevenways.zenit.common.orm.migration.MigrationDirection;
-import be.elevenways.zenit.common.orm.migration.operation.AddColumnOperation;
-import be.elevenways.zenit.common.orm.migration.operation.MigrationOperation;
 import be.elevenways.zenit.common.orm.migration.MigrationResult;
 import be.elevenways.zenit.common.orm.migration.MigrationRunnerResult;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.migration.MigrationChecksum;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.setting.DryFileSource;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -40,54 +22,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The migration set as an upgrade contract: a fresh install migrates and re-migrates cleanly,
- * every ALTER-only migration survives being re-applied to a schema that already has its columns,
- * a database carrying duplicate stack rows still boots, and every shipped migration's
- * structural checksum stays pinned (M042 doubly so).
+ * The install contract of the ONE hohenheim migration: a fresh database migrates,
+ * re-migrates and passes strict integrity; the schema it produced really carries the
+ * constraints the code relies on; and down() undoes it completely enough that up() can
+ * rebuild it.
+ *
+ * AIDEV-NOTE: there is deliberately no golden checksum ledger any more. It existed to
+ * catch an edit to an ALREADY-SHIPPED migration, which was the right guard while the
+ * schema grew by appending M003..M092. Hohenheim has no installations, so editing this
+ * one migration in place IS the sanctioned way to change the schema (see
+ * InitialMigration's own note) -- a pinned digest would fail on every legitimate change
+ * and teach people to regenerate it without reading, which is worse than not having it.
  */
 class MigrationIntegrityTest {
-
-    /**
-     * M042's structural checksum as recorded before its model-derived
-     * {@code createSchemaTableFor} calls were replaced with literal DDL (2026-07-29).
-     * The checksum is a SHA-256 over every operation's canonical signature -- table names,
-     * per-column type/nullable/unique/pk/auto/default/length/precision/references, index names
-     * and columns -- so an unchanged value IS the proof that the frozen DDL is equivalent.
-     * It must never change again: a sub-schema change gets a NEW migration.
-     */
-    private static final String M042_FROZEN_CHECKSUM =
-        "cd499511042cc811111f668ee815a9e1548861bd486aec244548c3ddb67397b4";
-
-    /**
-     * Every hohenheim migration whose {@code up()} is nothing but ALTER TABLE ADD COLUMN, so
-     * re-applying it to an already-migrated schema must be a clean no-op. Migrations that also
-     * CREATE tables or indexes are excluded: those are not re-runnable and never claimed to be.
-     *
-     * @return the ALTER-only subset of the runner's own discovery, so a new migration is
-     *         covered automatically instead of rotting out of a hand-maintained list
-     */
-    // AIDEV-NOTE: Scoped to be.elevenways.hohenheim on purpose: zenit's own
-    // M002_AddSystemTaskBootClaim and M002_AddActivityRecordTitle are also ADD-COLUMN-only
-    // but lack .ifNotExists(), so their replay posture is upstream's contract, not this
-    // repo's. up() only RECORDS operations into a fresh builder (the MigrationChecksum
-    // pattern); nothing executes here.
-    private static List<Supplier<Migration>> alterOnlyMigrations() {
-        List<Supplier<Migration>> result = new ArrayList<>();
-        for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
-            Migration migration = supplier.get();
-            if (!migration.getClass().getName().startsWith("be.elevenways.hohenheim.")) {
-                continue;
-            }
-            MigrationBuilder recorded = new MigrationBuilder();
-            migration.up(recorded);
-            List<MigrationOperation> operations = recorded.getOperations();
-            if (!operations.isEmpty()
-                    && operations.stream().allMatch(op -> op instanceof AddColumnOperation)) {
-                result.add(supplier);
-            }
-        }
-        return result;
-    }
 
     @Test
     void aFreshInstallMigratesReMigratesAndPassesStrictIntegrity() throws Exception {
@@ -100,38 +47,165 @@ class MigrationIntegrityTest {
             .isTrue();
         assertThat(first.getAppliedCount()).as("a fresh install applies migrations").isPositive();
 
-        // 2. The frozen M042 DDL really did create the three SchemaField child tables.
+        // 2. The table-stored SchemaField child tables really exist with their full column
+        //    sets: they are the shape most easily lost when folding a chain into one create.
         assertThat(columnsOf(datasource, "SELECT name FROM pragma_table_info('stack_services_mounts')"))
-            .as("frozen mounts child table")
+            .as("mounts child table")
             .containsExactly("id", "stack_service_id", "order_key", "type", "name",
                 "container_path", "external_name", "created_at", "updated_at");
         assertThat(columnsOf(datasource, "SELECT name FROM pragma_table_info('stack_services_ports')"))
-            .as("frozen ports child table")
+            .as("ports child table")
             .containsExactly("id", "stack_service_id", "order_key", "container_port", "host_port",
                 "protocol", "host_ip", "created_at", "updated_at");
         assertThat(columnsOf(datasource, "SELECT name FROM pragma_table_info('stack_services_depends_on')"))
-            .as("frozen depends_on child table")
+            .as("depends_on child table")
             .containsExactly("id", "stack_service_id", "order_key", "service", "condition",
                 "created_at", "updated_at");
 
-        // 3. The guarded singleton insert produced exactly one stub row.
-        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM spamservice_installations"))
-            .as("spamservice singleton stub").isEqualTo(1L);
-
-        // 4. Migrating again is a clean no-op: the history table already covers every version.
+        // 3. Migrating again is a clean no-op: the history table already covers every version.
         MigrationRunnerResult second = new MigrationRunner(datasource).migrate();
         assertThat(second.isSuccess()).as("second migrate must not fail").isTrue();
         assertThat(second.getAppliedCount()).as("second migrate applies nothing").isZero();
 
-        // 5. A fresh install has zero integrity findings, so the SHIPPED posture boots green.
+        // 4. A fresh install has zero integrity findings, so the SHIPPED posture boots green.
         //    Pinned explicitly so the guarantee survives an ambient settings change.
         withIntegrityMode("fail", () -> {
-            MigrationRunnerResult strict = new MigrationRunner(datasource)
-                .acknowledgeMissingMigrationVersions(
-                    HohenheimDatabase.RETIRED_MIGRATION_VERSIONS.toArray(new String[0]))
-                .migrate();
+            MigrationRunnerResult strict = new MigrationRunner(datasource).migrate();
             assertThat(strict.isSuccess()).as("strict migrate on a clean install").isTrue();
         });
+    }
+
+    /**
+     * The uniqueness the storage layer -- not application code -- must enforce, including the
+     * two constraints folded in with the consolidation (a backup target's name and a DNS
+     * record's dyndns credential were only indexed, never constrained).
+     */
+    @Test
+    void theSchemaRefusesTheDuplicatesTheCodeAssumesCannotExist() throws Exception {
+        SqliteDatasource datasource = emptyDatabase("uniques");
+        new MigrationRunner(datasource).migrate().requireSuccess();
+
+        // 1. A site slug is the public identity of a site.
+        datasource.rawUpdate("INSERT INTO sites (id, name, slug) VALUES (1, 'A', 'shared')");
+        assertThatThrownBy(() -> datasource.rawUpdate(
+                "INSERT INTO sites (id, name, slug) VALUES (2, 'B', 'shared')"))
+            .as("step 1: two sites may not share a slug");
+
+        // 2. A service name is unique WITHIN its stack, not globally.
+        datasource.rawUpdate("INSERT INTO stacks (id, name) VALUES (1, 'app')");
+        datasource.rawUpdate("INSERT INTO stacks (id, name) VALUES (2, 'other')");
+        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (1, 1, 'web')");
+        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (2, 2, 'web')");
+        assertThatThrownBy(() -> datasource.rawUpdate(
+                "INSERT INTO stack_services (id, stack_id, name) VALUES (3, 1, 'web')"))
+            .as("step 2: one stack may not hold two services of one name");
+
+        // 3. Backup target names: every backup row and schedule refers to a target by NAME,
+        //    so two targets sharing one would make every reference ambiguous.
+        datasource.rawUpdate("INSERT INTO backup_targets (id, name, kind) VALUES (1, 'nightly', 'local')");
+        assertThatThrownBy(() -> datasource.rawUpdate(
+                "INSERT INTO backup_targets (id, name, kind) VALUES (2, 'nightly', 's3')"))
+            .as("step 3: two backup targets may not share a name");
+
+        // 4. Dyndns credentials: the resolver takes the first row it finds for a record, so
+        //    a second credential per record would silently decide which token authenticates.
+        datasource.rawUpdate("INSERT INTO dns_zones (id, origin) VALUES (1, 'z.test')");
+        datasource.rawUpdate("INSERT INTO dns_records (id, zone_id, name) VALUES (1, 1, 'home')");
+        datasource.rawUpdate(
+            "INSERT INTO dns_dyndns_credentials (id, record_id, token_digest) VALUES (1, 1, 'a')");
+        assertThatThrownBy(() -> datasource.rawUpdate(
+                "INSERT INTO dns_dyndns_credentials (id, record_id, token_digest) VALUES (2, 1, 'b')"))
+            .as("step 4: a DNS record may not hold two dyndns credentials");
+    }
+
+    /**
+     * The backup-target references really are DECLARED as foreign keys, and really do
+     * refuse once enforcement is switched on.
+     *
+     * AIDEV-NOTE: read what this proves and what it does not. BackupTargetModel's
+     * before-remove hook is SELECT-count-then-DELETE and therefore raceable; the natural
+     * durable answer is the constraint below. It is declared -- but SQLite enforces
+     * foreign keys PER CONNECTION and hohenheim's control-plane URL does not set
+     * {@code ?foreign_keys=on} (the same finding ServerModel's refuseRemovalWhileOwned
+     * note records), so at runtime today the hook is the enforcement and the constraint is
+     * documentation. This test switches the pragma on for its OWN connection precisely so
+     * the declaration cannot silently rot before that decision is taken: the day
+     * enforcement is turned on control-plane-wide, this is already proven to bite.
+     */
+    @Test
+    void theBackupTargetReferencesAreRealForeignKeysAndRefuseWhenEnforced() throws Exception {
+        // Enforcement is declared in the URL, never by a PRAGMA statement: the datasource
+        // hands out a connection per call from a pool, so a pragma run on one borrowed
+        // connection would silently not apply to the next statement.
+        SqliteDatasource datasource = enforcingDatabase("target-fk");
+        new MigrationRunner(datasource).migrate().requireSuccess();
+
+        // 1. BOTH reference lanes are declared: an instance's chosen destination and a
+        //    backup row's target. A guard that only knew one of them would be half a guard.
+        assertThat(columnsOf(datasource,
+                "SELECT \"table\" AS name FROM pragma_foreign_key_list('instance_backups')"))
+            .as("step 1: instance_backups.target_id references the targets table")
+            .contains("backup_targets");
+        assertThat(columnsOf(datasource,
+                "SELECT \"table\" AS name FROM pragma_foreign_key_list('instances')"))
+            .as("step 1: and so does instances.backup_target_id")
+            .contains("backup_targets");
+
+        // 2. The BACKUP-ROW lane really refuses -- this is the racing writer's row, the one
+        //    the count-then-delete window cannot see.
+        datasource.rawUpdate("INSERT INTO backup_targets (id, name, kind) VALUES (1, 'off-host', 'ssh')");
+        datasource.rawUpdate("INSERT INTO instances (id, name, kind) VALUES (1, 'workload', 'k')");
+        datasource.rawUpdate("INSERT INTO instance_backups (id, instance_id, target_id, status)"
+            + " VALUES (1, 1, 1, 'complete')");
+        assertThatThrownBy(() -> datasource.rawUpdate("DELETE FROM backup_targets WHERE id = 1"))
+            .as("step 2: the engine refuses to strand a backup row, race or no race");
+
+        // 3. The INSTANCE-DESTINATION lane refuses on its own, with no backup row at all.
+        datasource.rawUpdate("DELETE FROM instance_backups WHERE id = 1");
+        datasource.rawUpdate("UPDATE instances SET backup_target_id = 1 WHERE id = 1");
+        assertThatThrownBy(() -> datasource.rawUpdate("DELETE FROM backup_targets WHERE id = 1"))
+            .as("step 3: an instance still pointing at the target blocks the delete too");
+
+        // 4. And with nothing pointing at it the delete succeeds, so steps 2 and 3 refused
+        //    for the reference and not because the row was undeletable.
+        datasource.rawUpdate("UPDATE instances SET backup_target_id = NULL WHERE id = 1");
+        datasource.rawUpdate("DELETE FROM backup_targets WHERE id = 1");
+        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM backup_targets"))
+            .as("step 4: an unreferenced target deletes normally").isZero();
+    }
+
+    /**
+     * down() must drop everything up() created: an incomplete down leaves a table behind
+     * that the next up() then fails to create, which is the only way to find out.
+     */
+    @Test
+    void theSchemaRollsBackCompletelyAndRebuilds() throws Exception {
+        SqliteDatasource datasource = emptyDatabase("roundtrip");
+        List<Supplier<Migration>> only = List.of(InitialMigration::new);
+
+        // 1. Build the whole schema on its own; it depends on nothing outside itself.
+        MigrationRunner runner = new MigrationRunner(datasource, only);
+        assertThat(runner.migrate().isSuccess()).as("step 1: the schema builds").isTrue();
+        long created = scalar(datasource,
+            "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            + " AND name NOT LIKE 'zenit_%'");
+        assertThat(created).as("step 1: the schema is not empty").isGreaterThan(50L);
+
+        // 2. Rolling back leaves nothing of it behind.
+        assertThat(new MigrationRunner(datasource, only).rollback().isSuccess())
+            .as("step 2: the schema rolls back").isTrue();
+        assertThat(scalar(datasource,
+            "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            + " AND name NOT LIKE 'zenit_%'"))
+            .as("step 2: down() dropped every table up() created").isZero();
+
+        // 3. And it rebuilds identically, which a partial down() could not survive.
+        assertThat(new MigrationRunner(datasource, only).migrate().isSuccess())
+            .as("step 3: the schema rebuilds").isTrue();
+        assertThat(scalar(datasource,
+            "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            + " AND name NOT LIKE 'zenit_%'"))
+            .as("step 3: the rebuilt schema has the same tables").isEqualTo(created);
     }
 
     @Test
@@ -156,450 +230,32 @@ class MigrationIntegrityTest {
     }
 
     @Test
-    void alterOnlyMigrationsReApplyToADivergentInstall() throws Exception {
-        SqliteDatasource datasource = emptyDatabase("divergent");
-
-        // 1. The derived list really derives: 14 ALTER-only migrations existed when the
-        //    hand-list was replaced (2026-07-29), and migrations are never deleted, so a
-        //    smaller set means the derivation itself broke.
-        List<Supplier<Migration>> alterOnly = alterOnlyMigrations();
-        assertThat(alterOnly)
-            .as("the derived ALTER-only migration set")
-            .hasSizeGreaterThanOrEqualTo(14);
-
-        // 2. Bring the database fully up to date the normal way.
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        // ONE database per test class: the controller identity (and therefore every
-        // daemon resource name) resolves through the CURRENT datasource, and a Db scope
-        // is thread-local -- so a second, unregistered database would hand any
-        // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
-
-        // 3. Lose the history rows of every ALTER-only migration while keeping the schema: the
-        //    state an operator lands in after restoring a populated database into a fresh install,
-        //    or after hand-repairing zenit_migrations.
-        for (Supplier<Migration> supplier : alterOnly) {
-            datasource.rawUpdate("DELETE FROM zenit_migrations WHERE version = ?",
-                supplier.get().getVersion());
-        }
-
-        // 4. Under the SHIPPED posture that history is out of order (old versions pending
-        //    behind applied newer ones), so the boot is REFUSED. Replaying a hand-repaired
-        //    history is an operator decision, never something the framework does silently.
-        assertThatThrownBy(() -> new MigrationRunner(datasource).migrate())
-            .as("a divergent history must not replay itself under the shipped fail posture")
-            .hasMessageContaining("out of order");
-
-        // 5. Once the operator declares that downgrade, the replay runs -- and replays exactly
-        //    those versions. Without .ifNotExists() the first one dies on "duplicate column
-        //    name" and the whole batch stops.
-        withIntegrityMode("warn", () -> {
-            MigrationRunnerResult replay = new MigrationRunner(datasource).migrate();
-            assertThat(replay.isSuccess())
-                .as("replaying migrations onto an existing schema: %s", failureDetail(replay))
-                .isTrue();
-            assertThat(replay.getAppliedCount())
-                .as("every deleted version was replayed")
-                .isEqualTo(alterOnly.size());
-        });
-
-        // 6. The replay was a pure no-op: the data those tables already held is untouched.
-        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM spamservice_installations"))
-            .as("a replay never rewrites data").isEqualTo(1L);
-    }
-
-    @Test
-    void duplicateStackRowsAreHealedInsteadOfBrickingBoot() throws Exception {
-        SqliteDatasource datasource = emptyDatabase("duplicates");
-
-        // 1. Only M042: the pre-M043 state an existing install would be in. Migration mechanics
-        //    is the one documented exemption from the auto-discovery rule.
-        new MigrationRunner(datasource, List.of(M042_CreateStacks::new)).migrate().requireSuccess();
-
-        // 2. Plant exactly the data that used to kill boot: three services sharing a name inside
-        //    one stack, and two files sharing a container path inside one service.
-        datasource.rawUpdate("INSERT INTO stacks (id, name) VALUES (1, 'app')");
-        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (1, 1, 'web')");
-        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (2, 1, 'web')");
-        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (3, 1, 'web')");
-        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (4, 2, 'web')");
-        datasource.rawUpdate(
-            "INSERT INTO stack_files (id, stack_service_id, container_path) VALUES (1, 1, '/etc/app.conf')");
-        datasource.rawUpdate(
-            "INSERT INTO stack_files (id, stack_service_id, container_path) VALUES (2, 1, '/etc/app.conf')");
-
-        // 3. M043 now heals rather than aborting, so the batch completes and the control plane boots.
-        MigrationRunnerResult result = new MigrationRunner(datasource,
-            List.of(M042_CreateStacks::new, M043_StackUniqueKeys::new)).migrate();
-        assertThat(result.isSuccess())
-            .as("M043 must survive pre-existing duplicates: %s", failureDetail(result))
-            .isTrue();
-
-        // 4. Nothing was deleted, the lowest id kept its name, and the losers were renamed by id.
-        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM stack_services"))
-            .as("healing never drops rows").isEqualTo(4L);
-        assertThat(nameOfService(datasource, 1)).as("lowest id keeps its name").isEqualTo("web");
-        assertThat(nameOfService(datasource, 2)).isEqualTo("web__dup2");
-        assertThat(nameOfService(datasource, 3)).isEqualTo("web__dup3");
-        assertThat(nameOfService(datasource, 4))
-            .as("a same name in another stack is not a duplicate").isEqualTo("web");
-        assertThat(pathOfFile(datasource, 1)).isEqualTo("/etc/app.conf");
-        assertThat(pathOfFile(datasource, 2)).isEqualTo("/etc/app.conf__dup2");
-
-        // 5. The constraint the healing exists to allow is really in place afterwards.
-        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'index'"
-                + " AND name = 'stack_services_stack_id_name_unique'"))
-            .as("the unique index was created after healing").isEqualTo(1L);
-        assertThatThrownBy(() -> datasource.rawUpdate(
-                "INSERT INTO stack_services (id, stack_id, name) VALUES (5, 1, 'web')"))
-            .as("a fresh duplicate is now refused by the database");
-    }
-
-    @Test
-    void retiredMigrationVersionsAreAcknowledgedInsteadOfBlockingBoot() throws Exception {
-        SqliteDatasource datasource = emptyDatabase("retired");
-        new MigrationRunner(datasource).migrate().requireSuccess();
-
-        // 1. Replay the real situation: history rows whose migration class no longer exists.
-        Instant now = Instant.now();
-        for (String version : HohenheimDatabase.RETIRED_MIGRATION_VERSIONS) {
-            datasource.recordMigration(version, "retired " + version, MigrationDirection.UP, now, now);
-        }
-
-        withIntegrityMode("fail", () -> {
-            // 2. Unacknowledged, those rows are fatal under the shipped posture: the boot
-            //    refuses rather than logging a finding nobody reads.
-            assertThatThrownBy(() -> new MigrationRunner(datasource).migrate())
-                .as("an unacknowledged retired version is a strict-mode finding")
-                .hasMessageContaining("2026_03_31_000001");
-
-            // 3. Acknowledged the way HohenheimDatabase does it, the same database migrates.
-            MigrationRunnerResult acknowledged = new MigrationRunner(datasource)
-                .acknowledgeMissingMigrationVersions(
-                    HohenheimDatabase.RETIRED_MIGRATION_VERSIONS.toArray(new String[0]))
-                .migrate();
-            assertThat(acknowledged.isSuccess())
-                .as("acknowledging retired versions clears the finding: %s",
-                    failureDetail(acknowledged))
-                .isTrue();
-        });
-    }
-
-    @Test
-    void everyShippedMigrationChecksumStaysPinned() throws Exception {
-        // 1. Compute the structural checksum of every discovered hohenheim migration.
-        List<Migration> migrations = new ArrayList<>();
-        for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
-            Migration migration = supplier.get();
-            // AIDEV-NOTE: the prefix is the REPO, not one package. Filtering on
-            // be.elevenways.hohenheim.migration silently excluded every migration in
-            // be.elevenways.hohenheim.server.migration -- M045 shipped uncovered, and the
-            // golden file jumped straight from M044 to M046 without anything noticing.
-            if (migration.getClass().getName().startsWith("be.elevenways.hohenheim.")) {
-                migrations.add(migration);
-            }
-        }
-        migrations.sort(java.util.Comparator.comparing(Migration::getVersion));
-        assertThat(migrations).as("discovery finds the shipped migrations").isNotEmpty();
-
-        StringBuilder computed = new StringBuilder();
-        for (Migration migration : migrations) {
-            computed.append(migration.getVersion())
-                .append(' ').append(migration.getClass().getSimpleName())
-                .append(' ').append(MigrationChecksum.compute(migration))
-                .append('\n');
-        }
-
-        // 2. The golden file pins them all: an edit-after-apply anywhere in the set fails here,
-        //    not on the live install's integrity check.
-        String golden;
-        try (var stream = MigrationIntegrityTest.class.getResourceAsStream("/migration-checksums.txt")) {
-            assertThat(stream).as("src/browserTest/resources/migration-checksums.txt exists").isNotNull();
-            golden = new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
-                .replace("\r\n", "\n");
-        }
-        assertThat(computed.toString())
-            .as("Shipped migration checksums are pinned in src/browserTest/resources/"
-                + "migration-checksums.txt. A NEW migration appends its own line (copy it from "
-                + "the computed content below). A CHANGED line means an applied migration was "
-                + "edited after it shipped -- write a new migration instead; never retro-edit "
-                + "the pinned line. A MISSING migration must also be appended to "
-                + "HohenheimDatabase.RETIRED_MIGRATION_VERSIONS in the same commit. "
-                + "Computed content:\n%s", computed)
-            .isEqualTo(golden);
-    }
-
-    /**
-     * M051's two heals against a legacy-spelled database: every host spelling folds onto
-     * ONE servers.id, unknown names get a visible placeholder row instead of a silent
-     * redirect to local, and the declared stack ports land in the ledger with the lowest
-     * service id winning a contested tuple.
-     */
-    @Test
-    void hostSpellingsAndDeclaredPortsAreHealedOntoTheLedger() throws Exception {
-        SqliteDatasource datasource = emptyDatabase("hostheal");
-
-        // 1. The pre-M051 state: servers + stack tables, plus the two legacy-spelled
-        //    tables M051 alters (fixture DDL: migration mechanics, the documented
-        //    exemption from auto-discovery).
-        new MigrationRunner(datasource, List.of(M017_CreateServers::new, M042_CreateStacks::new,
-            MigrationIntegrityTest::legacyHostTables)).migrate().requireSuccess();
-
-        // 2. Plant every legacy spelling of "this machine" plus one unknown remote:
-        //    blank, "local" and a registry-key spelling must become ONE host.
-        datasource.rawUpdate("INSERT INTO stacks (id, name, server_name) VALUES (1, 'a', '')");
-        datasource.rawUpdate("INSERT INTO stacks (id, name, server_name) VALUES (2, 'b', 'local')");
-        datasource.rawUpdate(
-            "INSERT INTO stacks (id, name, server_name) VALUES (3, 'c', 'hohenheim:edge-9')");
-        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (1, 1, 'w1')");
-        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (2, 2, 'w2')");
-        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name) VALUES (3, 3, 'w3')");
-        // Service 1 and 2 contest ONE local tuple ('' vs 0.0.0.0 are the same bind);
-        // service 3 declares the same port on the OTHER host -- a different tuple.
-        datasource.rawUpdate("INSERT INTO stack_services_ports (stack_service_id, order_key,"
-            + " container_port, host_port, protocol, host_ip) VALUES (1, 1024, 80, 8400, 'tcp', '')");
-        datasource.rawUpdate("INSERT INTO stack_services_ports (stack_service_id, order_key,"
-            + " container_port, host_port, protocol, host_ip) VALUES (2, 1024, 80, 8400, 'tcp', '0.0.0.0')");
-        datasource.rawUpdate("INSERT INTO stack_services_ports (stack_service_id, order_key,"
-            + " container_port, host_port, protocol, host_ip) VALUES (3, 1024, 80, 8400, 'tcp', '')");
-        datasource.rawUpdate("INSERT INTO managed_databases (id, name) VALUES (1, 'plaindb')");
-        datasource.rawUpdate("INSERT INTO sites (id, site_type, settings)"
-            + " VALUES (1, 'docker', '{\"server\":\"hohenheim:edge-9\"}')");
-
-        // 3. M051 heals rather than aborting.
-        MigrationRunnerResult result = new MigrationRunner(datasource,
-            List.of(M017_CreateServers::new, M042_CreateStacks::new,
-                MigrationIntegrityTest::legacyHostTables, M051_PortLedgerAndHostFks::new)).migrate();
-        assertThat(result.isSuccess())
-            .as("M051 must survive legacy spellings: %s", failureDetail(result))
-            .isTrue();
-
-        // 4. ONE local host: blank and "local" resolved to the SAME server id, the
-        //    unknown remote got a visible placeholder row, and server_name is gone.
-        long localId = ((Number) datasource.rawQuery(
-            "SELECT id FROM servers WHERE name = 'local'").get(0).get("id")).longValue();
-        long edgeId = ((Number) datasource.rawQuery(
-            "SELECT id FROM servers WHERE name = 'edge-9' AND mode = 'ssh'").get(0).get("id")).longValue();
-        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM stacks WHERE server_id = " + localId))
-            .as("'' and 'local' fold onto ONE local host").isEqualTo(2L);
-        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM stacks WHERE server_id = " + edgeId))
-            .as("the unknown remote is a real (placeholder) row, not a silent local").isEqualTo(1L);
-        assertThat(columnsOf(datasource, "SELECT name FROM pragma_table_info('stacks')"))
-            .as("the legacy spelling column is gone").doesNotContain("server_name");
-        assertThat(scalar(datasource,
-            "SELECT COUNT(*) AS c FROM managed_databases WHERE server_id = " + localId))
-            .as("a NULL database server_name is the local host").isEqualTo(1L);
-        assertThat(String.valueOf(datasource.rawQuery(
-                "SELECT settings FROM sites WHERE id = 1").get(0).get("settings")))
-            .as("the docker site's settings key was rewritten to the id registry key")
-            .contains("hohenheim:" + edgeId);
-
-        // 5. The ledger holds exactly TWO claims for :8400 -- one per host -- and the
-        //    contested local tuple went to the LOWEST service id.
-        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM port_allocations WHERE port = 8400"))
-            .as("one claim per host for the contested port").isEqualTo(2L);
-        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM port_allocations"
-                + " WHERE server_id = " + localId + " AND owner_id = 1"))
-            .as("the lowest service id kept the local claim").isEqualTo(1L);
-        assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM port_allocations"
-                + " WHERE server_id = " + edgeId + " AND owner_id = 3"))
-            .as("the other host's identical port is its own tuple").isEqualTo(1L);
-    }
-
-    /**
-     * Fixture DDL: the pre-M051 shape of the two tables M051 alters that M042 does not
-     * create. ANONYMOUS on purpose -- a named public nested Migration would be picked up
-     * by auto-discovery and applied to every real database.
-     */
-    private static Migration legacyHostTables() {
-        return new Migration("2026_08_02_999999", "Legacy host-spelling fixture tables") {
-            @Override
-            public void up(MigrationBuilder schema) {
-                schema.createTable("managed_databases", table -> {
-                    table.id();
-                    table.string("name", 128);
-                    table.addColumn("server_name", ColumnType.STRING,
-                        col -> col.maxLength(128).nullable(true));
-                });
-                schema.createTable("sites", table -> {
-                    table.id();
-                    table.string("site_type", 64);
-                    table.json("settings");
-                });
-            }
-
-            @Override
-            public void down(MigrationBuilder schema) {
-                schema.dropTable("sites");
-                schema.dropTable("managed_databases");
-            }
-        };
-    }
-
-    @Test
-    void everyHohenheimMigrationDeclaresTheOneHohenheimStream() {
-        // The migrations span TWO packages (common migration/ + server migration/) but are
-        // ONE curated M001..M072 timeline. A second version stream would silently drop
-        // same-stream out-of-order detection between the halves, so fragmenting must fail
-        // HERE, not go unnoticed the next time a migration file moves packages.
-        List<String> offStream = new ArrayList<>();
-        int hohenheimMigrations = 0;
+    void hohenheimShipsExactlyOneMigrationAndItDeclaresTheStream() {
+        // The consolidation's standing invariant: a second hohenheim migration means someone
+        // appended an incremental change instead of editing InitialMigration, which is what
+        // the no-installations doctrine forbids.
+        List<String> found = new ArrayList<>();
         for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
             Migration migration = supplier.get();
             if (!migration.getClass().getName().startsWith("be.elevenways.hohenheim.")) {
                 continue;
             }
-            hohenheimMigrations++;
-            if (!HohenheimMigration.STREAM.equals(migration.getVersionStream())) {
-                offStream.add(migration.getClass().getName() + " -> " + migration.getVersionStream());
-            }
+            found.add(migration.getClass().getSimpleName() + " stream=" + migration.getVersionStream());
         }
-        assertThat(hohenheimMigrations)
-            .as("discovery must see the whole shipped set (68 when this pin was written)")
-            .isGreaterThanOrEqualTo(68);
-        assertThat(offStream)
-            .as("every hohenheim migration must declare HohenheimMigration.STREAM; a second "
-                + "stream fragments out-of-order drift detection")
-            .isEmpty();
-    }
-
-    /**
-     * The two declared supersessions (starfleet, upgraded 2026-08-10) re-derived instead
-     * of trusted: M026's superseded digest is the CURRENT operations under the token-era
-     * grammar (97f5788..a47a4d3 stamped "ifnotexists" into add_column signatures), so the
-     * operations themselves are provably identical; M043's is a replica of the pre-heal
-     * revision, whose add_index lines are asserted IDENTICAL to today's -- the schema the
-     * two revisions create is the same, only assertUnique became the rename heal.
-     */
-    @Test
-    void declaredSupersededChecksumsAreTheAppliedRevisionsDigests() throws Exception {
-        // 1. M026: reconstruct the token-era digest from the CURRENT canonical text.
-        M026_MigrateAuditLogToActivity m026 = new M026_MigrateAuditLogToActivity();
-        StringBuilder tokenEra = new StringBuilder();
-        for (String line : MigrationChecksum.canonicalText(m026).split("\n", -1)) {
-            if (tokenEra.length() > 0) {
-                tokenEra.append('\n');
-            }
-            // Both add_column operations carry ifNotExists, which the token-era grammar
-            // stamped as a trailing signature part.
-            tokenEra.append(line.startsWith("add_column:") ? line + "|ifnotexists" : line);
-        }
-        assertThat(m026.getSupersededChecksums())
-            .as("M026's declared superseded checksum must be the token-era digest of the"
-                + " CURRENT operations -- anything else means the body itself changed")
-            .containsExactly(sha256Hex(tokenEra.toString()));
-
-        // 2. M043: replica of the pre-heal revision (af6518e9~1).
-        Migration preHeal = new Migration("2026_07_27_000043", "Unique keys for stack services and files") {
-            @Override
-            public void up(MigrationBuilder schema) {
-                schema.assertUnique("stack_services", "stack_id", "name");
-                schema.alterTable("stack_services", table -> table.unique("stack_id", "name"));
-                schema.assertUnique("stack_files", "stack_service_id", "container_path");
-                schema.alterTable("stack_files", table -> table.unique("stack_service_id", "container_path"));
-            }
-
-            @Override
-            public void down(MigrationBuilder schema) {
-            }
-        };
-        M043_StackUniqueKeys m043 = new M043_StackUniqueKeys();
-        assertThat(m043.getSupersededChecksums())
-            .as("M043's declared superseded checksum must be the pre-heal revision's digest")
-            .containsExactly(MigrationChecksum.compute(preHeal));
-
-        // 3. Schema equivalence: BOTH revisions create exactly the same indexes.
-        assertThat(indexLines(preHeal))
-            .as("the pre-heal and healed M043 must create identical unique indexes")
-            .isEqualTo(indexLines(m043));
-    }
-
-    private static List<String> indexLines(Migration migration) {
-        return MigrationChecksum.canonicalText(migration).lines()
-            .filter(line -> line.startsWith("add_index:")).toList();
-    }
-
-    private static String sha256Hex(String input) throws Exception {
-        byte[] hash = MessageDigest.getInstance("SHA-256")
-            .digest(input.getBytes(StandardCharsets.UTF_8));
-        StringBuilder hex = new StringBuilder(hash.length * 2);
-        for (byte b : hash) {
-            hex.append(String.format("%02x", b));
-        }
-        return hex.toString();
-    }
-
-    /**
-     * The populated-upgrade path fresh-install tests cannot see: a LIVE site row whose
-     * security_report_token is still PLAINTEXT (the pre-M047 state) must survive the
-     * whole migration chain under the shipped fail posture. Pre-fix, M045's backfill
-     * hydrated the live SiteModel and aborted half-migrated with "Stored value of
-     * encrypted field 'security_report_token' is not an encrypted envelope" -- the
-     * 2026-08-10 starfleet outage. The era-frozen LegacySite read in RouteClaims.backfill
-     * is what makes this complete.
-     */
-    @Test
-    void aPopulatedInstallUpgradesAcrossTheEncryptionFlip() throws Exception {
-        SqliteDatasource datasource = emptyDatabase("populated");
-        FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
-            Files.createTempDirectory("hh-populated-upgrade").resolve("keys.dry")));
-        try {
-            // 1. Migrate to the pre-M045 era only: the schema a populated install had.
-            List<Supplier<Migration>> preM045 = new ArrayList<>();
-            for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
-                if (supplier.get().getVersion().compareTo("2026_07_30_000045") < 0) {
-                    preM045.add(supplier);
-                }
-            }
-            new MigrationRunner(datasource, preM045).migrate().requireSuccess();
-
-            // 2. Real data in YESTERDAY's field semantics: a live site with a plaintext
-            //    report token, two domains contesting one route plus a distinct one.
-            datasource.rawUpdate("INSERT INTO sites (id, name, slug, site_type, enabled,"
-                + " security_report_token) VALUES (1, 'Live', 'live', 'static', 1, 'PLAIN-token')");
-            datasource.rawUpdate(
-                "INSERT INTO site_domains (id, site_id, hostname) VALUES (1, 1, 'app.example.test')");
-            datasource.rawUpdate(
-                "INSERT INTO site_domains (id, site_id, hostname) VALUES (2, 1, 'app.example.test')");
-            datasource.rawUpdate(
-                "INSERT INTO site_domains (id, site_id, hostname) VALUES (3, 1, 'other.example.test')");
-
-            // 3. The upgrade: everything from M045 on, under the SHIPPED posture.
-            withIntegrityMode("fail", () ->
-                new MigrationRunner(datasource).migrate().requireSuccess());
-
-            // 4. M045's backfill really arbitrated: the lowest id claimed the contested
-            //    route, the duplicate stayed unclaimed, the distinct route claimed too.
-            assertThat(datasource.rawQuery(
-                    "SELECT live_route_key FROM site_domains WHERE id = 1").get(0).get("live_route_key"))
-                .as("step 4: the lowest contested id must hold a claim").isNotNull();
-            assertThat(datasource.rawQuery(
-                    "SELECT live_route_key FROM site_domains WHERE id = 2").get(0).get("live_route_key"))
-                .as("step 4: the contested duplicate must stay unclaimed").isNull();
-            assertThat(datasource.rawQuery(
-                    "SELECT live_route_key FROM site_domains WHERE id = 3").get(0).get("live_route_key"))
-                .as("step 4: the distinct route must hold its own claim").isNotNull();
-
-            // 5. M047 healed the plaintext into an envelope in the same batch.
-            assertThat(String.valueOf(datasource.rawQuery(
-                    "SELECT security_report_token FROM sites WHERE id = 1").get(0)
-                    .get("security_report_token")))
-                .as("step 5: the plaintext token must be an envelope after the upgrade")
-                .startsWith("zenc$");
-        } finally {
-            FieldEncryption.installKeyring(null);
-        }
-    }
-
-    @Test
-    void m042StaysFrozen() {
-        assertThat(MigrationChecksum.compute(new M042_CreateStacks()))
-            .as("M042 is an applied migration: its structure must never move again. If this "
-                + "fails because a stack sub-schema changed, write a NEW migration instead.")
-            .isEqualTo(M042_FROZEN_CHECKSUM);
+        assertThat(found)
+            .as("hohenheim ships ONE migration; a schema change EDITS it, never appends")
+            .containsExactly("InitialMigration stream=" + HohenheimMigration.STREAM);
     }
 
     // -- helpers --------------------------------------------------------------
+
+    /** {@link #emptyDatabase} with SQLite foreign-key enforcement switched on per connection. */
+    private static SqliteDatasource enforcingDatabase(String label) throws Exception {
+        File db = File.createTempFile("hohenheim-migration-" + label, ".db");
+        db.delete();
+        db.deleteOnExit();
+        return new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath() + "?foreign_keys=on");
+    }
 
     private static SqliteDatasource emptyDatabase(String label) throws Exception {
         File db = File.createTempFile("hohenheim-migration-" + label, ".db");
@@ -610,8 +266,7 @@ class MigrationIntegrityTest {
 
     /**
      * Run a body under a temporary {@code database.migration_integrity} mode. Package-visible
-     * so a fixture that DELIBERATELY builds an out-of-order install (EncryptedSecretsAtRest's
-     * heal test skips one migration on purpose) does not need a second copy.
+     * so any fixture that deliberately builds an unusual install does not need a second copy.
      */
     static void withIntegrityMode(String mode, Runnable body) {
         String previous = ServerSettings.VALUES.getValue(ServerSettings.Database.MIGRATION_INTEGRITY);
@@ -632,25 +287,9 @@ class MigrationIntegrityTest {
         return ((Number) datasource.rawQuery(sql).get(0).get("c")).longValue();
     }
 
-    private static String nameOfService(SqliteDatasource datasource, int id) {
-        return String.valueOf(datasource
-            .rawQuery("SELECT name FROM stack_services WHERE id = ?", id).get(0).get("name"));
-    }
-
-    private static String pathOfFile(SqliteDatasource datasource, int id) {
-        return String.valueOf(datasource
-            .rawQuery("SELECT container_path FROM stack_files WHERE id = ?", id)
-            .get(0).get("container_path"));
-    }
-
     private static String failureDetail(MigrationRunnerResult result) {
         MigrationResult failure = result.getFirstFailure();
-        return failure == null ? "no failure recorded" : messageOf(failure);
-    }
-
-    private static String messageOf(MigrationResult result) {
-        Throwable error = result.getError();
-        return result.getVersion() + ": " + result.getMessage()
-            + (error == null ? "" : " / " + error);
+        return failure == null ? "no failure recorded" : failure.getVersion() + ": "
+            + failure.getMessage() + (failure.getError() == null ? "" : " / " + failure.getError());
     }
 }

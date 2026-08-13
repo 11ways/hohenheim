@@ -174,6 +174,15 @@ public final class ControlPlaneBackups {
      *         message lists the targets that DO exist, because a typo must not read like a
      *         product that has no backups
      */
+    // AIDEV-NOTE: resolution is BY NAME and is deterministic only because
+    // backup_targets.name carries the backup_targets_name_unique index (InitialMigration).
+    // The chain never constrained it, so two targets could legitimately share a name and
+    // this .first() picked whichever the store happened to return -- silently uploading the
+    // control-plane archive (master keys in the clear) to an arbitrary one of them, while
+    // BackupTargetModel's delete refusal protected the other. The name is KEPT rather than
+    // swapped for a record id: it is what an operator writes into a settings file and reads
+    // back on the dashboard, and the unique index makes it a real identity. If that index
+    // ever goes, this must become an id.
     public static @NonNull BackupTarget requireDestination() {
         String name = destinationName();
         Row row = Models.get(BackupTargetModel.class).find()

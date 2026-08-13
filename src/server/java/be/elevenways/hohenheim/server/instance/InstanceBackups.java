@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
+import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
@@ -41,7 +42,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -299,6 +299,25 @@ public final class InstanceBackups {
     }
 
     /**
+     * The FIRST gate of every restore-to-new entry point, so a tenant learns nothing
+     * beyond the refusal itself.
+     *
+     * Restore-to-new CREATES an instance, and it does so outside the creation funnel
+     * (InstanceTemplates.createFromTemplate): no create authority, no placement
+     * decision, no creator grant, and an image taken from the archive's manifest
+     * rather than an approved template. Every one of those is a tenant-facing gate,
+     * so this path is OPERATOR-ONLY until it routes through the funnel -- refused
+     * loudly rather than quietly producing a record its creator cannot even see.
+     *
+     * @throws Violations when the write originates from a tenant
+     */
+    private static void refuseTenantRestore() {
+        if (TenantWrites.isTenantOriginated()) {
+            throw Violations.ofForm(violationText("backup_restore_operator_only"));
+        }
+    }
+
+    /**
      * Restore a completed backup to a NEW instance: verify everything (target sha,
      * GCM authentication, per-payload checksums, kind, admission, capacity) BEFORE
      * creating anything, then run the full create story -- record save (quota
@@ -312,6 +331,10 @@ public final class InstanceBackups {
      */
     public @NonNull Restored restoreToNew(int backupId, @Nullable String newName,
                                           @Nullable Object serverSpelling) {
+        // BEFORE resolving anything: a tenant must learn only that this lane is
+        // operator-only. Resolving the target first made a broken target answer
+        // backup_target_missing instead, which is a probe into control-plane state.
+        refuseTenantRestore();
         Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
         if (backup == null || !InstanceBackupModel.STATUS_COMPLETE.equals(
                 backup.get(InstanceBackupModel.STATUS))) {
@@ -327,15 +350,7 @@ public final class InstanceBackups {
     public @NonNull Restored restoreToNew(@NonNull Row backup, @NonNull BackupTarget target,
                                           @Nullable String newName,
                                           @Nullable Object serverSpelling) {
-        // Restore-to-new CREATES an instance, and it does so outside the creation funnel
-        // (InstanceTemplates.createFromTemplate): no create authority, no placement
-        // decision, no creator grant, and an image taken from the archive's manifest
-        // rather than an approved template. Every one of those is a tenant-facing gate,
-        // so this path is OPERATOR-ONLY until it routes through the funnel -- refused
-        // loudly rather than quietly producing a record its creator cannot even see.
-        if (TenantWrites.isTenantOriginated()) {
-            throw Violations.ofForm(violationText("backup_restore_operator_only"));
-        }
+        refuseTenantRestore();
         if (!InstanceBackupModel.STATUS_COMPLETE.equals(
                 backup.get(InstanceBackupModel.STATUS))) {
             throw Violations.ofForm(violationText("backup_not_restorable")
@@ -585,8 +600,6 @@ public final class InstanceBackups {
      * the evidence still names what may survive remotely.
      */
     public static void recoverInterrupted() {
-        Instant processStart = Instant.ofEpochMilli(
-            ManagementFactory.getRuntimeMXBean().getStartTime());
         List<Row> stuck = Models.get(InstanceBackupModel.class).find()
             .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_UPLOADING))
             .all();
@@ -595,7 +608,7 @@ public final class InstanceBackups {
             if (written == null) {
                 written = row.get(InstanceBackupModel.CREATED_AT);
             }
-            if (written != null && !written.isBefore(processStart)) {
+            if (BootSettle.writtenByThisProcess(written)) {
                 continue;   // written by THIS process: a live upload, not a corpse
             }
             Object id = row.get(InstanceBackupModel.ID);

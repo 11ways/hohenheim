@@ -594,10 +594,10 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             .as("step 4: the form lane answers with its error redirect -- not a login"
                 + " bounce (401/403 or /login) and not a CSRF rejection")
             .isIn(302, 303);
-        assertThat(errorOf(forged))
-            .as("step 4: and the refusal it carries is the CAPABILITY one, by the text"
+        assertThat(refusalKeyOf(forged))
+            .as("step 4: and the refusal it carries is the CAPABILITY one, by the key"
                 + " only requireOperationCapability produces")
-            .isEqualTo("You are not allowed to perform this action on this instance");
+            .isEqualTo("instance_not_permitted");
 
         // 5. POSITIVE ANCHOR: grant files.write and the SAME request stops producing that
         //    refusal. Without this, step 4 would pass on an endpoint that refuses
@@ -608,10 +608,10 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         try {
             HttpResponse<String> permitted = tenantPost(
                 "/instances/" + instanceAId + "/files/action", forgedBody);
-            assertThat(errorOf(permitted))
+            assertThat(refusalKeyOf(permitted))
                 .as("step 5: with files.write the capability gate is behind us, so step 4"
                     + " measured the gate and not the daemon, the CSRF token or the route")
-                .isNotEqualTo("You are not allowed to perform this action on this instance");
+                .isNotEqualTo("instance_not_permitted");
         } finally {
             RecordGrants.revoke("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
                 HohenheimAccess.FILES_WRITE);
@@ -619,22 +619,18 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
         // 6. And the revoke really took: the refusal is back, so no later journey in this
         //    ordered class inherits a write grant this one minted.
-        assertThat(errorOf(tenantPost("/instances/" + instanceAId + "/files/action", forgedBody)))
+        assertThat(refusalKeyOf(tenantPost("/instances/" + instanceAId + "/files/action", forgedBody)))
             .as("step 6: the borrowed capability was handed back")
-            .isEqualTo("You are not allowed to perform this action on this instance");
+            .isEqualTo("instance_not_permitted");
     }
 
-    /** The {@code error=} message the files lane redirects with, decoded; "" when absent. */
-    private static String errorOf(HttpResponse<String> response) {
-        String location = response.headers().firstValue("Location").orElse("");
-        int marker = location.indexOf("error=");
-        if (marker < 0) {
-            return "";
-        }
-        String encoded = location.substring(marker + "error=".length());
-        int next = encoded.indexOf('&');
-        return java.net.URLDecoder.decode(next < 0 ? encoded : encoded.substring(0, next),
-            java.nio.charset.StandardCharsets.UTF_8);
+    /**
+     * The microcopy KEY of the refusal the files lane stashed for the tenant; "" when
+     * it stashed none. The refusal rides the session flash, never the redirect URL.
+     */
+    private static String refusalKeyOf(HttpResponse<String> response) {
+        var flash = popFlash(sessionA);
+        return flash == null ? "" : flash.message().key();
     }
     /**
      * The Phase 5b introduction gate: a template SCRIPT enters the system only through

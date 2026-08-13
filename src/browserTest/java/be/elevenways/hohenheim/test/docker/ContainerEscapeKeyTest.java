@@ -105,6 +105,72 @@ class ContainerEscapeKeyTest {
             .hasMessageContaining("HostConfig.ReadonlyRootfs");
         assertThat(transport.lastCreateBody)
             .as("step 4: and nothing reached the daemon under STRICT either").isNull();
+
+        // 5. THE CASE FOLD. Docker unmarshals HostConfig with Go's encoding/json, which
+        //    prefers an exact field match but ACCEPTS a case-insensitive one -- so
+        //    "privileged" and "capAdd" are honoured by the daemon exactly like their
+        //    canonical spellings. A case-sensitive guard therefore sees an unknown key and
+        //    waves the escape straight through. Every owned key is probed in two
+        //    non-canonical spellings.
+        for (String key : ContainerHardening.ESCAPE_KEYS) {
+            for (String spelling : java.util.List.of(key.toLowerCase(java.util.Locale.ROOT),
+                    Character.toLowerCase(key.charAt(0)) + key.substring(1))) {
+                if (spelling.equals(key)) {
+                    continue;
+                }
+                Map<String, Object> carrying = spec();
+                carrying.put("HostConfig",
+                    new LinkedHashMap<>(Map.of(spelling, SMUGGLED.get(key))));
+                transport.lastCreateBody = null;
+                assertThatThrownBy(() -> docker.createContainer("escape-fold",
+                        carrying, DockerContainerKind.HARDENING))
+                    .as("step 5: HostConfig." + spelling + " is the SAME field to the daemon"
+                        + " as " + key + ", so the funnel must refuse it too")
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("HostConfig." + key);
+                assertThat(transport.lastCreateBody)
+                    .as("step 5: STATE -- the mixed-case " + spelling + " must not have"
+                        + " reached the daemon")
+                    .isNull();
+            }
+        }
+
+        // 6. The same fold covers the namespace keys and their VALUES ("HOST" is the same
+        //    string to the daemon's mode parser), and the bind-mount refusal, whose Type
+        //    and Source members are decoded by the same case-insensitive unmarshaller.
+        Map<String, Object> lowercaseNamespace = spec();
+        lowercaseNamespace.put("HostConfig",
+            new LinkedHashMap<>(Map.of("networkMode", "HOST")));
+        transport.lastCreateBody = null;
+        assertThatThrownBy(() -> docker.createContainer("escape-ns", lowercaseNamespace,
+                DockerContainerKind.HARDENING))
+            .as("step 6: a lowercase networkMode carrying an uppercase HOST is still a"
+                + " host-namespace share")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("HostConfig.NetworkMode");
+
+        Map<String, Object> joiningNamespace = spec();
+        joiningNamespace.put("HostConfig",
+            new LinkedHashMap<>(Map.of("pidMode", "Container:abc123")));
+        assertThatThrownBy(() -> docker.createContainer("escape-join", joiningNamespace,
+                DockerContainerKind.HARDENING))
+            .as("step 6: and a capitalised Container: prefix still joins another"
+                + " container's namespace")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("HostConfig.PidMode");
+
+        Map<String, Object> lowercaseMounts = spec();
+        lowercaseMounts.put("HostConfig", new LinkedHashMap<>(Map.of(
+            "mounts", java.util.List.of(Map.of("type", "Bind", "source", "/")))));
+        transport.lastCreateBody = null;
+        assertThatThrownBy(() -> docker.createContainer("escape-mount", lowercaseMounts,
+                DockerContainerKind.HARDENING))
+            .as("step 6: a lowercase mounts entry with a capitalised Bind type is the same"
+                + " host bind to the daemon")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("bind mount");
+        assertThat(transport.lastCreateBody)
+            .as("step 6: STATE -- no folded escape reached the daemon at all").isNull();
     }
 
     private static Map<String, Object> smuggled() {

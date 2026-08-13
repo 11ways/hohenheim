@@ -15,7 +15,9 @@ import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.flash.FlashToast;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -165,7 +167,12 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .findFirst().orElseThrow();
         assertThat(stranger.eligible()).as("step 3: an un-admitted host is not eligible")
             .isFalse();
-        assertThat(stranger.refusal()).as("step 3: and carries a named refusal").isNotNull();
+        assertThat(stranger.refusal()).as("step 3: and carries a refusal at all").isNotNull();
+        assertThat(stranger.refusal().key())
+            .withFailMessage("step 3: the survey must carry the ADMISSION authority's own"
+                + " refusal for an un-admitted host, never a generic ineligible (found"
+                + " '%s')", stranger.refusal().key())
+            .isEqualTo("host_not_admitted");
 
         // 4. The UNADDRESSABLE host (SSH mode, no pinned key): client construction
         //    fails closed, and pre-fix (2026-08-12, found by the full suite over
@@ -229,26 +236,86 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
     }
 
     /**
-     * A refused submit is an ERROR, never a success toast: migrating onto the host the
-     * workload already runs on is refused by name and the record does not move.
+     * A refused submit is an ERROR flash NAMING the refusal, never a success toast -- and
+     * the two refusals it can meet (the same host, an ineligible other host) are told
+     * apart by the name each carries, not by a status code both shapes share.
+     *
+     * The flash is read out of the SESSION rather than off the redirect's landing page:
+     * the session bucket IS what this lane produces, so asserting it keeps the
+     * refusal-vs-success distinction under test independently of the rendering half
+     * (which zenitcms:record-tabs now performs for every app-owned subpage).
      */
     @Test
     @Order(4)
     void arefusedSubmitSurfacesTheRefusalInsteadOfASuccessToast() throws Exception {
         int localHost = ServerModel.localServerId();
-        HttpResponse<String> refused = adminPost(migrateUrl(),
-            "target_server_id=" + localHost);
-        assertThat(refused.statusCode())
-            .as("step 1: the submit is answered (redirect with a flash)").isIn(200, 302, 303);
 
+        // 1. The host the workload ALREADY runs on: refused by its own name, as an ERROR.
+        //    A success toast here would carry migrated_toast at level SUCCESS, so the two
+        //    outcomes can no longer look alike to this test.
+        HttpResponse<String> sameHost = adminPost(migrateUrl(),
+            "target_server_id=" + localHost);
+        assertThat(sameHost.statusCode())
+            .withFailMessage("step 1: the refused submit must answer with the lane's"
+                + " post-redirect-get, never an error page (HTTP %s)", sameHost.statusCode())
+            .isIn(302, 303);
+        FlashToast sameHostFlash = popFlash();
+        assertThat(sameHostFlash)
+            .withFailMessage("step 1: the refused submit stashed no flash at all -- the"
+                + " operator would see the page reload as if the move had happened")
+            .isNotNull();
+        assertThat(sameHostFlash.level())
+            .withFailMessage("step 1: a refused migration reported level %s -- anything"
+                + " but ERROR reads as a success", sameHostFlash.level())
+            .isEqualTo(CmsActionResult.Toast.Level.ERROR);
+        assertThat(sameHostFlash.message().key())
+            .withFailMessage("step 1: the flash must NAME the refusal (found '%s')",
+                sameHostFlash.message().key())
+            .isEqualTo("migrate_same_host");
+
+        // 2. A DIFFERENT host, one the survey already called ineligible: the record must
+        //    not move. Submitting the current host could never prove that -- "did not
+        //    move" is true there even on a silent success.
+        assertThat(new InstanceMigrations().destinationsFor(instanceId).stream()
+                .anyMatch(candidate -> candidate.serverId() == strangerHostId
+                    && !candidate.eligible()))
+            .as("step 2: the stranger host is a genuine OTHER destination, and ineligible")
+            .isTrue();
+        HttpResponse<String> other = adminPost(migrateUrl(),
+            "target_server_id=" + strangerHostId);
+        assertThat(other.statusCode())
+            .withFailMessage("step 2: the refused submit must answer with the lane's"
+                + " post-redirect-get (HTTP %s)", other.statusCode())
+            .isIn(302, 303);
+        FlashToast otherFlash = popFlash();
+        assertThat(otherFlash).as("step 2: the second refusal stashed a flash too").isNotNull();
+        assertThat(otherFlash.level())
+            .as("step 2: also as an ERROR").isEqualTo(CmsActionResult.Toast.Level.ERROR);
+        assertThat(otherFlash.message().key())
+            .withFailMessage("step 2: and named as the ADMISSION refusal, so the operator"
+                + " learns what to fix (found '%s')", otherFlash.message().key())
+            .isEqualTo("host_not_admitted");
+
+        // 3. THE STATE: the record still names the host it started on -- a move onto the
+        //    stranger would have written its id here.
         Row after = Models.get(InstanceModel.class).findById(instanceId);
         assertThat(ServerModel.canonicalServerId(after.get(InstanceModel.SERVER_ID)))
-            .withFailMessage("step 2: a refused migration moved the record anyway")
+            .withFailMessage("step 3: a refused migration moved the record onto the"
+                + " ineligible host anyway")
             .isEqualTo(localHost);
+        assertThat((Object) after.get(InstanceModel.MIGRATE_TARGET_ID))
+            .withFailMessage("step 3: a refused migration left a migration window open")
+            .isNull();
         assertThat((String) after.get(InstanceModel.STATUS))
-            .withFailMessage("step 2: a refused migration left the record mid-flight")
+            .withFailMessage("step 3: a refused migration left the record mid-flight")
             .isEqualTo(InstanceModel.STATUS_STOPPED);
     }
+
+    /**
+     * Pop the admin session's pending CMS flash, exactly as the next untabbed page render
+     * would: these requests carry no hawkeye tab id, so they land in the untabbed bucket.
+     */
+
 
     /**
      * THE ADMIN-ONLY GATE. A delegated tenant holding {@code manage} on this very

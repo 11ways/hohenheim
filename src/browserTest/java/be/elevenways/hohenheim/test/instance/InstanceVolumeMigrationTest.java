@@ -411,9 +411,13 @@ class InstanceVolumeMigrationTest {
 
     private static void assertRefusal(Runnable action, String key, String description) {
         assertThat(catchThrowable(action::run))
-            .as(description)
+            .as(description + " -- as a Violations refusal, never a raw failure")
             .isInstanceOfSatisfying(Violations.class, violations ->
-                assertThat(violations.all()).anySatisfy(violation ->
-                    assertThat(violation.message().key()).isEqualTo(key)));
+                assertThat(violations.all())
+                    .as(description + " -- named '" + key + "', never a generic no")
+                    .anySatisfy(violation ->
+                        assertThat(violation.message().key())
+                            .as(description + " -- the refusal key")
+                            .isEqualTo(key)));
     }
 }

@@ -49,9 +49,6 @@ public final class DatabaseRestorePage implements RecordScopedPage<Row> {
         vars.put("restoreUrl", HohenheimEndpoints.DATABASES_RESTORE
             .with(HohenheimEndpoints.DATABASE_NAME, name).toUrl());
         vars.put("recordId", record.get(DatabaseModel.ID));
-        String error = conduit.getQueryParam("error");
-        vars.put("error", error != null ? error : "");
-        vars.put("restored", "1".equals(conduit.getQueryParam("restored")));
         vars.put("usedBy", usedBy(record.get(DatabaseModel.ID)));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/database-restore"), vars);

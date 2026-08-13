@@ -2812,7 +2812,18 @@ shape) is confirmable during the phase. Do not start Phase 3 with 7 or 8 open.
     plus `LogConfig` json-file with operator-tunable
     `security.container_log_max_size_mb` x `security.container_log_max_files`;
     both keys are `ESCAPE_KEYS` entries, so a caller can neither raise nor
-    remove them). **EPHEMERAL (root) DISK is STRUCK for the Docker tier, not
+    remove them). **Both of those are DOCKER-TIER, and the amendment as first
+    written overstated them as "every managed container".** That funnel is the
+    Docker create call; Incus instances never pass through it. The pids cap has
+    an Incus spelling that is simply not wired today; the LOG cap has no Incus
+    counterpart and needs none, because the exposure differs in kind: an Incus
+    guest writes its logs inside its OWN filesystem, which the Incus tier bounds
+    with the declarable root-disk cap (`IncusContainerKind.ROOT_DISK_GB` -> the
+    root device's `size`), whereas a Docker json-file log lives on the shared
+    docker root. The honest residue: a root-disk cap left blank inherits the pool
+    default, so the Incus bound is declarable rather than unconditional. No Incus
+    knob was invented to make the original sentence true.
+    **EPHEMERAL (root) DISK is STRUCK for the Docker tier, not
     pending.** Three independent reasons, each sufficient: the tier is
     *undeclarable* (`DockerContainerKind.SETTINGS_SCHEMA` declares image, tag,
     command, port/protocol/exposure, host port, env, volumes, memory and cpu --
@@ -6133,6 +6144,12 @@ Each names its home and its first consumer.
     repair cheap now and expensive later.
   - Unrelated but found: 7 browserTest classes hand-list migrations, violating
     the auto-discovery hard rule. Not release-blocking; fix opportunistically.
+
+  SUPERSEDED (2026-08-13): the M003..M092 chain was consolidated into ONE
+  `InitialMigration`, so every class name and constant below is history. There is
+  no `RETIRED_MIGRATION_VERSIONS` constant and no checksum golden file any more,
+  and the integrity posture is the framework default (`fail`). See
+  `docs/migration-consolidation-2026-08-13.md`.
 
   STATUS (2026-07-29): the CODE half of this workstream LANDED. What changed:
   - `M043` heals instead of asserting: duplicate `(stack_id, name)` /

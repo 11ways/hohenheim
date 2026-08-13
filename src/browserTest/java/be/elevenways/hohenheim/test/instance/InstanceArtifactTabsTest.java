@@ -1,14 +1,18 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManageInstanceBackupResource;
+import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -18,6 +22,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
+import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -32,6 +37,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Per-instance Snapshots and Backups tabs: a SCOPED VIEW of the panel-wide resources,
@@ -50,6 +56,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
     private static Integer snapshotId;
     private static Integer backupId;
     private static String consoleSession;
+    private static Integer consoleUserId;
 
     @BeforeAll
     static void seed() {
@@ -91,7 +98,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         user.set(UserModel.CREATED_AT, Instant.now());
         user.set(UserModel.UPDATED_AT, Instant.now());
         AuthModels.users().save(user);
-        int consoleUserId = user.get(UserModel.ID);
+        consoleUserId = user.get(UserModel.ID);
         RecordGrants.grant("user", consoleUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.CONSOLE, true);
 
@@ -184,16 +191,53 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
 
     /**
      * Restore-to-new stays OPERATOR-ONLY; building a per-instance view did not quietly
-     * widen it.
+     * widen it. The AUTHORITY is what this proves -- a surface probe alone would pass on
+     * a restore-to-new added as a subpage or a bulk action.
      */
     @Test
     @Order(3)
-    void restoreToNewStaysOffTheDelegatedSurface() {
+    void restoreToNewRefusesTheTenantAndStaysOffTheDelegatedSurface() {
+        // 1. A resolvable target, so the tenant call reaches the authority instead of
+        //    dying on an unresolvable one -- the refusal must be the OPERATOR gate.
+        Row target = Models.get(BackupTargetModel.class).createEmptyRow();
+        target.set(BackupTargetModel.NAME, "artifact-tab-target");
+        target.set(BackupTargetModel.KIND, "hohenheim:filesystem");
+        target.set(BackupTargetModel.SETTINGS,
+            Map.of("path", System.getProperty("java.io.tmpdir")));
+        Models.get(BackupTargetModel.class).save(target);
+        Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
+        backup.set(InstanceBackupModel.TARGET_ID, target.get(BackupTargetModel.ID));
+        Models.get(InstanceBackupModel.class).save(backup);
+
+        // 2. THE CLAIM: the delegate drives restore-to-new directly, bypassing every
+        //    surface -- the authority refuses it BY NAME. Restore-to-new creates an
+        //    instance outside the creation funnel: no create authority, no placement
+        //    decision, no creator grant.
+        long instancesBefore = Models.get(InstanceModel.class).find().count();
+        Throwable[] thrown = new Throwable[1];
+        TenantConduits.as(new UserPrincipal(consoleUserId, "Console Only"),
+            () -> thrown[0] = catchThrowable(() ->
+                new InstanceBackups().restoreToNew(backupId, "not-yours", null)));
+        assertThat(thrown[0])
+            .withFailMessage("step 2: a tenant-originated restore-to-new was not refused"
+                + " by the authority -- the missing row action would be the ONLY thing"
+                + " standing between a delegate and an off-funnel instance")
+            .isInstanceOf(Violations.class);
+        assertThat(((Violations) thrown[0]).all())
+            .as("step 2: and the refusal is the operator-only one, not an incidental"
+                + " failure that happens to look like a gate")
+            .anyMatch(violation ->
+                violation.message().key().equals("backup_restore_operator_only"));
+        assertThat(Models.get(InstanceModel.class).find().count())
+            .as("step 2: STATE -- the refused restore created nothing")
+            .isEqualTo(instancesBefore);
+
+        // 3. Secondary anchor: the delegated resource offers no row action either, so the
+        //    tenant is never shown a button that could only fail.
         assertThat(new ManageInstanceBackupResource().rowActions())
-            .withFailMessage("the delegated backup resource declares a row action --"
-                + " restore-to-new creates an instance outside the creation funnel and"
-                + " InstanceBackups.restoreToNew refuses a tenant-originated call, so a"
-                + " rendered button here could only fail")
+            .withFailMessage("step 3: the delegated backup resource declares a row action;"
+                + " restore-to-new is refused underneath it, so a rendered button here"
+                + " could only fail")
             .isEmpty();
     }
 

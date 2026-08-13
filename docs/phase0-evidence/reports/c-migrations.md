@@ -1,5 +1,10 @@
 All seven issues implemented, proven with observed pre-fix failures, and committed per repo (nothing pushed).
 
+> SUPERSEDED (2026-08-13): the migration chain this report audits no longer exists.
+> M003..M092 were folded into one `InitialMigration`; every class name, the golden
+> checksum file and `RETIRED_MIGRATION_VERSIONS` are history. Kept as the dated
+> evidence it is. See `docs/migration-consolidation-2026-08-13.md`.
+
 ---
 
 ```text

@@ -226,6 +226,66 @@ class HostPostureAcknowledgementTest {
                 .as("step 6: and placement refuses again, by the same name")
                 .isEqualTo("host_posture_unacknowledged");
 
+            // 6b. THE PARTIAL SAVE, which is the shape every real posture change has. A CMS
+            //     update carries only the keys it changed, so a save staging posture ALONE
+            //     reached the eraser with no acknowledged_posture on the row at all: it read
+            //     null, returned early, and silently did nothing on exactly the write it
+            //     exists for. (The step-6 full-row save masked it -- findById loads every
+            //     column.) The gate still refused the mismatched pair, so nothing was ever
+            //     wrongly granted; what was open is the away-and-back resurrection.
+            Accountability.runAs(new Accountability("user:7", "Ada Operator",
+                    "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
+                () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
+            assertThat(ServerModel.postureAcknowledged(servers.findById(hostId)))
+                .as("step 6b precondition: the host is acknowledged again")
+                .isTrue();
+
+            Row partial = servers.createEmptyRow();
+            partial.set(ServerModel.ID, hostId);
+            partial.set(ServerModel.POSTURE, ServerModel.POSTURE_DEDICATED);
+            servers.save(partial);
+            assertThat((String) servers.findById(hostId).get(ServerModel.ACKNOWLEDGED_POSTURE))
+                .as("step 6b: a save staging ONLY the posture must still erase the"
+                    + " acknowledgement")
+                .isNull();
+            assertThat((String) servers.findById(hostId).get(ServerModel.ACKNOWLEDGED_BY))
+                .as("step 6b: and erase the whole record of it, not just the posture column")
+                .isNull();
+
+            Row back = servers.createEmptyRow();
+            back.set(ServerModel.ID, hostId);
+            back.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+            servers.save(back);
+            assertThat(ServerModel.postureAcknowledged(servers.findById(hostId)))
+                .as("step 6b: so going away and coming back through partial saves does not"
+                    + " resurrect it either")
+                .isFalse();
+
+            // 6c. And the hook does NOT fire on a save that never touches the posture: an
+            //     eraser that ran on every write would wipe acknowledgements at random.
+            Accountability.runAs(new Accountability("user:7", "Ada Operator",
+                    "203.0.113.9", "test-agent", Accountability.ORIGIN_WEB),
+                () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
+            Row unrelated = servers.createEmptyRow();
+            unrelated.set(ServerModel.ID, hostId);
+            unrelated.set(ServerModel.LAST_SEEN_AT, Instant.now());
+            servers.save(unrelated);
+            assertThat(ServerModel.postureAcknowledged(servers.findById(hostId)))
+                .as("step 6c: a partial save that never stages the posture leaves the"
+                    + " acknowledgement alone")
+                .isTrue();
+
+            // Hand step 7 the state step 6 used to leave it: unacknowledged, on the
+            // shared-container posture. record() refuses an already-acknowledged host.
+            Row clear = servers.createEmptyRow();
+            clear.set(ServerModel.ID, hostId);
+            clear.set(ServerModel.POSTURE, ServerModel.POSTURE_DEDICATED);
+            servers.save(clear);
+            Row shared = servers.createEmptyRow();
+            shared.set(ServerModel.ID, hostId);
+            shared.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+            servers.save(shared);
+
             // 7. INVALIDATOR TWO: a warning-version bump goes stale WITHOUT touching the
             //    row. Simulated by storing an older version -- the arithmetic is the same
             //    one a real bump performs, and it needs no write to invalidate.

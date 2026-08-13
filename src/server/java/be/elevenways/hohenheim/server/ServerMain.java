@@ -277,8 +277,7 @@ public class ServerMain {
      */
     public static boolean runCommandLineOnly(String[] args) {
         if (ServerZenitRuntime.runMigrationsIfRequested(args,
-                ServerMain::openDatabaseForCommandLine,
-                HohenheimDatabase::acknowledgeRetiredVersions)) {
+                ServerMain::openDatabaseForCommandLine)) {
             return true;
         }
 

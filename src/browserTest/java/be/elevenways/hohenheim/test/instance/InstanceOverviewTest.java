@@ -3,8 +3,10 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.MethodOrderer;
@@ -93,21 +95,52 @@ class InstanceOverviewTest extends HohenheimTestBase {
     }
 
     /**
-     * RESTART is one verb through the service, and it is the SAME composition the
-     * scheduled power action runs.
+     * RESTART is one verb through the service, and the confirmation the resource declares
+     * travels onto this page with it.
      */
     @Test
     @Order(2)
-    void restartIsOfferedAsOneActionThroughTheService() throws Exception {
+    void restartIsOfferedAsOneConfirmedActionThroughTheService() throws Exception {
         HttpResponse<String> page = get(overviewUrl());
+
+        // 1. The action is projected onto the page, through the standard invoke lane.
         assertThat(page.body())
             .withFailMessage("step 1: no restart action exists -- an operator would have"
                 + " to press stop and then deploy by hand")
             .contains("/action/restart_instance");
 
-        // 2. And the confirmation travels with it (it stops a running workload).
-        assertThat(page.body()).as("step 2: the restart action is confirmed")
-            .contains("restart_instance");
+        // 2. THE CONFIRMATION, asserted on the declaration the page renders rather than on
+        //    a substring of step 1: a restart stops a running workload, so the affordance
+        //    must ask first. (Pre-fix this step asserted contains("restart_instance"),
+        //    which is a substring of step 1's own target and could never fail.)
+        RowAction.Invoke<Row> restart = restartAction();
+        assertThat(restart.confirmation())
+            .withFailMessage("step 2: the restart action declares no confirmation, so the"
+                + " rendered button stops a running workload on a single click")
+            .isNotNull();
+        assertThat(restart.confirmation().body().key())
+            .as("step 2: and the dialog asks the restart question by name")
+            .isEqualTo("restart_confirm");
+
+        // 3. And the projection onto THIS page keeps it: the rendered control carries the
+        //    declared confirmation, not just the target URL. It rides the markup as the
+        //    microcopy KEY (the CmsConfirm directive resolves the copy client-side), so
+        //    the key is what a server-rendered body can be asked for.
+        assertThat(page.body())
+            .withFailMessage("step 3: the rendered restart control does not carry the"
+                + " confirmation the resource declared")
+            .contains("restart_confirm");
+    }
+
+    /** The declared restart row action, which the overview page projects. */
+    private static RowAction.Invoke<Row> restartAction() {
+        for (RowAction<Row> action : new InstanceResource().rowActions()) {
+            if (action instanceof RowAction.Invoke<Row> invoke
+                    && "restart_instance".equals(invoke.id().getPath())) {
+                return invoke;
+            }
+        }
+        throw new AssertionError("InstanceResource declares no restart_instance action");
     }
 
     /**
@@ -183,15 +216,19 @@ class InstanceOverviewTest extends HohenheimTestBase {
                 .contains("data-endpoint-port=\"25565\"");
 
             // 2. The host declares no public IP in this harness, so the page says so
-            //    rather than printing a reachable-looking localhost.
+            //    rather than printing a reachable-looking localhost. The precondition is
+            //    PINNED, never branched on: a harness host that ever gained a public IPv4
+            //    would silently stop testing the no-address rendering altogether.
             Row server = Models.get(ServerModel.class).findById(localHost);
             String declared = server.get(ServerModel.PUBLIC_IPV4);
-            if (declared == null || declared.isBlank()) {
-                assertThat(page.body())
-                    .withFailMessage("step 2: a port was rendered with no address and no"
-                        + " statement that the host declares none")
-                    .contains("data-endpoint-noaddress");
-            }
+            assertThat(declared == null ? "" : declared.strip())
+                .withFailMessage("step 2: the fixture host must declare NO public IPv4 for"
+                    + " the no-address rendering to be under test (found '%s')", declared)
+                .isEmpty();
+            assertThat(page.body())
+                .withFailMessage("step 2: a port was rendered with no address and no"
+                    + " statement that the host declares none")
+                .contains("data-endpoint-noaddress");
 
             // 3. Declare one: the address now joins the port.
             server.set(ServerModel.PUBLIC_IPV4, "203.0.113.7");

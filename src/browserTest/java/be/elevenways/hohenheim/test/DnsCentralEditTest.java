@@ -214,7 +214,12 @@ class DnsCentralEditTest extends HohenheimTestBase {
         var created = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
             "name=api&type=CNAME&value=owned.example.&ttl=&priority=&weight=&port=&enabled=true");
         assertThat(created.statusCode()).isEqualTo(302);
-        assertThat(created.headers().firstValue("Location").orElse("")).contains("saved=1");
+        assertThat(created.headers().firstValue("Location").orElse(""))
+            .describedAs("the confirmation rides the session flash, so the URL stays clean")
+            .doesNotContain("saved");
+        var savedFlash = popFlash();
+        assertThat(savedFlash).describedAs("the save stashes a confirmation flash").isNotNull();
+        assertThat(savedFlash.message().key()).isEqualTo("edit_saved");
 
         StubCall createCall = stub.calls.get(stub.calls.size() - 1);
         assertThat(createCall.method()).isEqualTo("POST");
@@ -228,13 +233,17 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.body = "";
         var updated = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
             "record_id=6&name=api&type=CNAME&value=other.example.&enabled=true");
-        assertThat(updated.headers().firstValue("Location").orElse("")).contains("saved=1");
+        assertThat(updated.headers().firstValue("Location").orElse("")).doesNotContain("saved");
+        assertThat(popFlash()).isNotNull()
+            .extracting(flash -> flash.message().key()).isEqualTo("edit_saved");
         assertThat(stub.calls.get(0).path()).isEqualTo("/api/dns/zones/central.example/records/6");
 
         stub.calls.clear();
         var deleted = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
             "action=delete&record_id=6");
-        assertThat(deleted.headers().firstValue("Location").orElse("")).contains("saved=1");
+        assertThat(deleted.headers().firstValue("Location").orElse("")).doesNotContain("saved");
+        assertThat(popFlash()).isNotNull()
+            .extracting(flash -> flash.message().key()).isEqualTo("edit_saved");
         assertThat(stub.calls.get(0).path()).isEqualTo("/api/dns/zones/central.example/records/6/delete");
 
         stub.body = "{\"records\":[{\"name\":\"missing-id\",\"type\":\"A\",\"value\":\"192.0.2.1\",\"enabled\":true}]}";
@@ -281,9 +290,13 @@ class DnsCentralEditTest extends HohenheimTestBase {
         var refused = postForm("/admin/dns-zones/" + zoneId + "/remote-records",
             "name=www&type=A&value=198.51.100.9&enabled=true");
         String location = refused.headers().firstValue("Location").orElse("");
-        assertThat(location).contains("error=");
-        assertThat(java.net.URLDecoder.decode(location, StandardCharsets.UTF_8))
-            .doesNotContain("dns_record_duplicate"); // resolved text, not the raw key
+        assertThat(location)
+            .describedAs("the refusal rides the session flash, never the URL")
+            .doesNotContain("error=");
+        // The violation KEY round-trips: both instances ship the same catalogs, so the
+        // toast resolves in the reader's own locale rather than the peer's.
+        assertThat(popFlash()).isNotNull()
+            .extracting(flash -> flash.message().key()).isEqualTo("dns_record_duplicate");
 
         // An unreachable owner degrades the tab to the read-only replica view.
         stub.close();

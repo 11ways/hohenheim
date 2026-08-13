@@ -17,6 +17,12 @@
 <section class="cms-resource-form-page">
     <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
 
+    {#- App-owned PanelPage: it does not render zenitcms:record-tabs, so it
+       renders the pending flash toast itself. -#}
+    {% render "zenitcms:flash-toast" var:flashMessage=Cms.flashMessage()
+                                     var:flashVariant=Cms.flashVariant()
+                                     var:flashDuration=Cms.flashDuration() %}
+
     {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
 
     {% if manualToken != "" %}

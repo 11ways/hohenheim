@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.validator.Range;
+import be.elevenways.zenit.server.orm.seed.Seeds;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -25,12 +26,26 @@ class SpamserviceInstallationModelTest {
         HohenheimTestRuntime.ensureBooted();
     }
 
+    /**
+     * The stub is SEEDED, not migrated (it moved out of M041 with the 2026-08-13 migration
+     * consolidation), and it is created here explicitly because a shared runtime may have
+     * booted -- and therefore run the SEED stage -- against a DIFFERENT database than the
+     * private one this class just swapped in.
+     */
     @Test
-    void migrationCreatesTheDisabledFixedSingleton() {
+    void theSeederCreatesTheDisabledFixedSingletonExactlyOnce() {
+        Seeds.run(HohenheimDatabase.datasource(), new SpamserviceInstallationSeeder());
+        // Re-running must not produce a twin: ensure() is create-if-missing, never an insert.
+        Seeds.run(HohenheimDatabase.datasource(), new SpamserviceInstallationSeeder());
+
         assertThat(Models.get(SpamserviceInstallationModel.class).find().count()).isOne();
         assertThat(Models.get(SpamserviceInstallationModel.class).installation())
             .extracting(row -> row.get(SpamserviceInstallationModel.ID))
             .isEqualTo(SpamserviceInstallationModel.SINGLETON_ID);
+        assertThat(Models.get(SpamserviceInstallationModel.class).installation()
+                .get(SpamserviceInstallationModel.ENABLED))
+            .as("a seeded installation starts disabled")
+            .isEqualTo(false);
     }
 
     @Test

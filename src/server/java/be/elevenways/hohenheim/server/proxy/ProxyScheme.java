@@ -107,6 +107,35 @@ public final class ProxyScheme {
     }
 
     /**
+     * Whether the public HTTP front is a Unix socket bridged to a loopback TCP port, in
+     * which case an authenticated fronting proxy is the ONLY source of client identity.
+     */
+    private static volatile boolean socketFrontMode;
+
+    /**
+     * Declare (or withdraw) socket front mode; owned by the listener that binds the socket.
+     *
+     * AIDEV-NOTE: this is what makes {@code proxy.trusted_proxy_keys} LIVE for the socket
+     * topology instead of start-time-only. The listener refuses to START without keys, but
+     * the setting is editable while it serves: clearing it used to leave the socket front
+     * happily serving with every client degraded to 127.0.0.1 (bans inert, denied_ips
+     * fail-open, allowed_ips refusing everyone, threat scoring blaming loopback). The
+     * refusal therefore had to become per-request, and per-request it also closes the
+     * bigger hole: the bridge's loopback TCP port is reachable by ANY local account, so an
+     * unauthenticated request arriving there is an identity forgery, not a degraded client.
+     * Marking the setting restartRequired would have been the wrong tool -- key REVOCATION
+     * has to take effect immediately, which a restart hint cannot promise.
+     */
+    public static void setSocketFrontMode(boolean enabled) {
+        socketFrontMode = enabled;
+    }
+
+    /** @return true when this exchange must be REFUSED for lack of a trusted-proxy key */
+    public static boolean lacksRequiredProxyKey(@NonNull HttpServerExchange exchange) {
+        return socketFrontMode && !isTrustedRemoteProxy(exchange);
+    }
+
+    /**
      * AIDEV-NOTE: re-parsed when the setting VALUE changes, never on a timer -- a TTL leaves
      * a window in which a revoked key still authenticates, and it made the key set depend on
      * wall-clock timing rather than configuration.

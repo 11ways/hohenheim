@@ -70,6 +70,36 @@ public class BackupTargetModel extends Model {
      * with only junk rows undeletable for nothing. UPLOADING and COMPLETE rows do count
      * -- those are (or are becoming) restorable artifacts.
      *
+     * AIDEV-NOTE: THIS HOOK IS THE ENFORCEMENT, and it has a KNOWN RACE. It is
+     * SELECT-count-then-DELETE, so a backup that starts between the count and the delete
+     * slips past it -- an inherent window no ordering of these two statements removes.
+     *
+     * The obvious answer, "the foreign key is the real guard", is NOT true here today, and
+     * writing it down as if it were would be worse than the race. {@code InitialMigration}
+     * does declare {@code instance_backups.target_id} and {@code instances.backup_target_id}
+     * as action-less references to {@code backup_targets(id)} -- but SQLite enforces
+     * foreign keys PER CONNECTION via {@code ?foreign_keys=on}, and hohenheim's control-plane
+     * URL (HohenheimDatabase.openDatasource) does not set it, so the constraint is
+     * documentation at runtime. This is the same finding ServerModel's
+     * refuseRemovalWhileOwned note records for the M051 host FKs; the two share one open
+     * decision (turn enforcement on control-plane-wide, which touches every delete path in
+     * the app), and this hook must not be weakened on the assumption that it was taken.
+     * MigrationIntegrityTest proves the DECLARATION is real and enforceable by switching the
+     * pragma on for its own connection.
+     *
+     * Row locking is deliberately not used to close the window either: this hook runs on
+     * delete paths with no ambient transaction to hold locks in, and on SQLite
+     * {@code forUpdate()} is a no-op. What this hook adds beyond the refusal itself is the
+     * ERROR: it names the target, counts the backups and instances that hold it, and says
+     * repair-do-not-delete, at the point of decision.
+     *
+     * AIDEV-NOTE: the control-plane comparison is by NAME because the setting stores a
+     * name, and that is only deterministic because {@code backup_targets.name} carries the
+     * {@code backup_targets_name_unique} index (InitialMigration). Before it, two targets
+     * could share a name, {@code ControlPlaneBackups.requireDestination} resolved whichever
+     * the store returned first, and this refusal protected an arbitrary one of them. Do not
+     * drop that index without moving the setting to an id.
+     *
      * @throws Violations {@code backup_target_in_use} or
      *                    {@code backup_target_control_plane}
      */

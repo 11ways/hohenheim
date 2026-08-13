@@ -21,53 +21,26 @@ import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
-import be.elevenways.hohenheim.server.sitetype.ResponseMutator;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
-import be.elevenways.hohenheim.server.sitetype.UpstreamProtocol;
-import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.hohenheim.server.tls.AcmeService;
-import be.elevenways.hohenheim.server.tls.UpstreamTrust;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.auth.server.PasswordHasher;
 import be.elevenways.zenit.common.session.SessionStore;
-import io.undertow.client.ClientCallback;
-import io.undertow.client.ClientConnection;
-import io.undertow.client.UndertowClient;
-import io.undertow.protocols.ssl.UndertowXnioSsl;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
-import io.undertow.server.ServerConnection;
-import io.undertow.server.handlers.proxy.ProxyCallback;
-import io.undertow.server.handlers.proxy.ProxyClient;
-import io.undertow.server.handlers.proxy.ProxyConnection;
 import io.undertow.server.handlers.proxy.ProxyHandler;
 import io.undertow.server.handlers.ResponseCodeHandler;
-import io.undertow.UndertowOptions;
-import io.undertow.util.HeaderMap;
 import io.undertow.util.Headers;
 import io.undertow.util.AttachmentKey;
 import io.undertow.util.HttpString;
-import org.xnio.IoUtils;
-import org.xnio.OptionMap;
-import org.xnio.Xnio;
-import org.xnio.ssl.XnioSsl;
+import io.undertow.util.StatusCodes;
 
-import java.io.IOException;
 import java.net.InetAddress;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -86,13 +59,9 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -100,59 +69,15 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * Routes incoming proxy requests to site-type handlers based on hostname matching.
  * Handles loop detection, request header injection, HSTS, force-SSL, custom headers,
  * path-based routing, default site fallback, and IP reputation tracking.
+ *
+ * <p>The pipeline's stages live in package collaborators: {@link RouteResolver} selects the
+ * route, {@link AccessListGate} enforces the access list, {@link ForwardingHeaders} rewrites
+ * the upstream request, {@link ResponseMutations} rewrites the response and
+ * {@link UpstreamProxyClient} dials the backend.
  */
 public class SiteDispatcher implements HttpHandler {
 
-    private static final HttpString X_PROXIED_BY = new HttpString("X-Proxied-By");
-    private static final HttpString X_FORWARDED_FOR = new HttpString("X-Forwarded-For");
-    private static final HttpString X_FORWARDED_HOST = new HttpString("X-Forwarded-Host");
-    private static final HttpString X_FORWARDED_PROTO = ProxyScheme.X_FORWARDED_PROTO;
-    private static final HttpString X_REAL_IP = new HttpString("X-Real-IP");
     private static final HttpString STRICT_TRANSPORT_SECURITY = new HttpString("Strict-Transport-Security");
-
-    // Trusted-remote-proxy authentication, owned by ProxyScheme. Deliberately distinct from
-    // the managed-process control key on ManagedProcessSiteHandler: that one authorizes
-    // process-control actions, this one authorizes client-IP and proto propagation.
-    private static final HttpString X_HOHENHEIM_KEY = ProxyScheme.X_HOHENHEIM_KEY;
-
-    // AIDEV-NOTE: the client-asserted forwarding family that hohenheim does NOT own. The four
-    // it does own (X-Forwarded-Proto/Host, X-Real-IP, X-Forwarded-For) are regenerated below
-    // from its own X-Hohenheim-Key-authenticated decision; every other spelling that conveys
-    // the same client-origin trust (RFC 7239 Forwarded, the X-Forwarded-* aliases, the CDN
-    // client-IP headers, the IIS URL-rewrite pair) is STRIPPED unconditionally -- trusted peer
-    // or not, since none is part of hohenheim's federation contract. This is a deny-list by
-    // deliberate design: a general reverse proxy must pass arbitrary application headers
-    // verbatim (a tenant app defines its own request headers), so an allow-list would silently
-    // break tenants; the honest boundary is to enumerate the trust-conveying family and drop it.
-    // The residual risk (a future vendor header not listed) is inherent to any reverse proxy and
-    // is why this list is ONE named constant the test enumerates -- adding one is a one-line edit.
-    private static final HttpString[] STRIPPED_FORWARDING_HEADERS = {
-        new HttpString("Forwarded"),
-        new HttpString("X-Forwarded-Server"),
-        new HttpString("X-Forwarded-Port"),
-        new HttpString("X-Forwarded-Prefix"),
-        new HttpString("X-Forwarded-Scheme"),
-        new HttpString("X-Forwarded-Ssl"),
-        new HttpString("True-Client-IP"),
-        new HttpString("CF-Connecting-IP"),
-        new HttpString("X-Client-IP"),
-        new HttpString("X-Original-URL"),
-        new HttpString("X-Rewrite-URL"),
-    };
-
-    // AIDEV-NOTE: hop-by-hop request headers that must never be forwarded to an upstream
-    // (RFC 7230 6.1). Transfer-Encoding and Upgrade are deliberately absent: Undertow owns the
-    // upstream wire framing and the WebSocket tunnel, and the websocket_upgrade gate governs
-    // Upgrade. Connection is handled separately in sanitizeHopByHopHeaders (its tokens name
-    // further headers to drop, and it must survive an upgrade so Undertow can still tunnel).
-    private static final HttpString[] HOP_BY_HOP_HEADERS = {
-        Headers.KEEP_ALIVE,
-        new HttpString("TE"),
-        new HttpString("Trailer"),
-        new HttpString("Proxy-Connection"),
-        Headers.PROXY_AUTHENTICATE,
-        Headers.PROXY_AUTHORIZATION,
-    };
 
     private final String instanceId = UUID.randomUUID().toString().substring(0, 8);
 
@@ -187,54 +112,12 @@ public class SiteDispatcher implements HttpHandler {
         }
     }
 
-    /**
-     * Immutable snapshot of all route tables. Swapped atomically via volatile reference
-     * so concurrent requests never see a partially-loaded state. A hostname maps to a LIST
-     * of entries (one per configured path prefix); selection picks the longest matching path.
-     */
-    private static final class RouteTable {
-        final Map<String, List<RouteEntry>> exactRoutes;
-        final List<WildcardRoute> wildcardRoutes;
-        final List<RegexRoute> regexRoutes;
-        final TlsPassthroughRoutes.Snapshot tlsRoutes;
-        final Set<SiteRequestHandler> ownedHandlers;
-        final Set<SiteAuthGate> ownedGates;
-        final ConcurrentHashMap<String, CachedRegexMatches> regexMatchCache = new ConcurrentHashMap<>();
-        final ConcurrentHashMap<String, Long> negativeCache = new ConcurrentHashMap<>();
-        final AtomicInteger users = new AtomicInteger();
-        final AtomicBoolean destructionStarted = new AtomicBoolean();
-        volatile boolean retired;
-
-        RouteTable(Map<String, List<RouteEntry>> exact, List<WildcardRoute> wildcard,
-                   List<RegexRoute> regex, TlsPassthroughRoutes.Snapshot tlsRoutes,
-                   Set<SiteRequestHandler> ownedHandlers, Set<SiteAuthGate> ownedGates) {
-            this.exactRoutes = exact;
-            this.wildcardRoutes = wildcard;
-            this.regexRoutes = regex;
-            this.tlsRoutes = tlsRoutes;
-            this.ownedHandlers = ownedHandlers;
-            this.ownedGates = ownedGates;
-        }
-    }
-
     private final TlsPassthroughRoutes tlsPassthroughRoutes = new TlsPassthroughRoutes();
     private final Object generationLock = new Object();
     private volatile RouteTable routes = new RouteTable(
         Map.of(), List.of(), List.of(), TlsPassthroughRoutes.emptySnapshot(), Set.of(), Set.of());
 
-    // Negative cache for hostnames that don't match any route.
-    private static final long NEGATIVE_CACHE_TTL_MS = 5 * 60 * 1000;
-    private static final int NEGATIVE_CACHE_MAX = 5000;
-
-    private static final long REGEX_CACHE_TTL_MS = 5 * 60 * 1000;
-    // AIDEV-NOTE: the positive regex cache is capped like its negativeCache sibling. Its TTL
-    // only evicts on RE-READ, so a spray of distinct Host values that each match a broad
-    // operator regex ('.*') would otherwise grow it without bound; at the cap it stops caching
-    // and falls back to computeRegexMatches per request (correct, just uncached), exactly the
-    // negativeCache stance.
-    private static final int REGEX_CACHE_MAX = 5000;
     private static final HttpString HOST = Headers.HOST;
-    private static final Pattern NAMED_GROUP_PATTERN = Pattern.compile("\\(\\?<([a-zA-Z][a-zA-Z0-9_]*)>");
 
     // Threat scoring (hostname-scanning ban tracking; shared with the local
     // SecurityEvents sink so this instance's own events count too) and access logging.
@@ -250,7 +133,7 @@ public class SiteDispatcher implements HttpHandler {
 
     // Proxy handlers per request-timeout value (ProxyHandler fixes maxRequestTime at build
     // time). Sites share one client; a handful of distinct timeouts at most.
-    private final DispatchingProxyClient proxyClient;
+    private final UpstreamProxyClient proxyClient;
     private final ConcurrentHashMap<Integer, ProxyHandler> proxyHandlers = new ConcurrentHashMap<>();
 
     private final ScheduledExecutorService delayScheduler;
@@ -263,120 +146,6 @@ public class SiteDispatcher implements HttpHandler {
     private final SessionStore proxySessionStore;
 
     private volatile boolean httpsAvailable;
-
-    /**
-     * A route entry combines the site handler with domain-level configuration.
-     */
-    private static final class RouteEntry {
-        final SiteRequestHandler handler;
-        final String siteName;
-        final @Nullable String hostPattern;
-        final String path;
-        final boolean stripPath;
-        final boolean forceSsl;
-        final int requestDelayMs;
-        final int requestTimeoutMs;
-        final boolean hstsEnabled;
-        final boolean hstsSubdomains;
-        final List<HeaderRule> customHeaders;
-        final List<HeaderRule> responseHeaders;
-        final List<String> listenOnAddresses;
-
-        // Per-site auth provider gate (identity-level; null when the site has no provider).
-        final @Nullable SiteAuthGate authGate;
-        final @Nullable String authProviderName;
-
-        // Access list enforcement
-        final boolean hasAccessList;
-        final String[] allowedIps;
-        final String[] deniedIps;
-        final String basicAuthUser;
-        final String basicAuthPass;
-        final String accessListSatisfy;
-
-        RouteEntry(SiteRequestHandler handler, String siteName, Row domain, Row accessList,
-                   Map<String, Object> siteSettings, @Nullable SiteAuthGate authGate,
-                   @Nullable String authProviderName) {
-            this.handler = handler;
-            this.siteName = siteName;
-            this.hostPattern = domain != null ? domain.get(SiteDomainModel.HOSTNAME) : null;
-            this.authGate = authGate;
-            this.authProviderName = authProviderName;
-
-            this.path = normalizeRoutePath(domain != null ? domain.get(SiteDomainModel.PATH) : null);
-            this.stripPath = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.STRIP_PATH));
-            this.forceSsl = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL));
-            this.requestDelayMs = parsePositiveInt(siteSettings != null ? siteSettings.get("delay") : null);
-            this.requestTimeoutMs = parseRequestTimeout(
-                siteSettings != null ? siteSettings.get("request_timeout") : null);
-            this.hstsEnabled = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_ENABLED));
-            this.hstsSubdomains = domain != null && Boolean.TRUE.equals(domain.get(SiteDomainModel.HSTS_SUBDOMAINS));
-            this.customHeaders = parseHeaderRules(domain != null ? domain.get(SiteDomainModel.CUSTOM_HEADERS) : null);
-            this.responseHeaders = parseHeaderRules(domain != null ? domain.get(SiteDomainModel.RESPONSE_HEADERS) : null);
-            this.listenOnAddresses = ListenerAddressMatcher.parse(
-                domain != null ? domain.get(SiteDomainModel.LISTEN_ON) : null);
-
-            this.hasAccessList = accessList != null;
-            if (accessList != null) {
-                // AIDEV-NOTE: a NULL/blank satisfy column must never disable the list.
-                // hasAccessList() used to be "satisfy != null", so one nullable column
-                // switched off ALL of the control (allowed/denied IPs AND basic auth).
-                // The ROW is the operator's statement that this site is guarded; an
-                // absent satisfy just defaults to the model/DB default ("any").
-                String satisfy = accessList.get(AccessListModel.SATISFY);
-                this.accessListSatisfy = satisfy != null && !satisfy.isBlank()
-                    ? satisfy : AccessListModel.SATISFY_ANY;
-                this.basicAuthUser = accessList.get(AccessListModel.BASIC_AUTH_USER);
-                this.basicAuthPass = accessList.get(AccessListModel.BASIC_AUTH_PASS);
-                String allowed = accessList.get(AccessListModel.ALLOWED_IPS);
-                this.allowedIps = allowed != null ? allowed.split("\\s+") : null;
-                String denied = accessList.get(AccessListModel.DENIED_IPS);
-                this.deniedIps = denied != null ? denied.split("\\s+") : null;
-            } else {
-                this.accessListSatisfy = null;
-                this.basicAuthUser = null;
-                this.basicAuthPass = null;
-                this.allowedIps = null;
-                this.deniedIps = null;
-            }
-        }
-
-        boolean hasAccessList() {
-            return hasAccessList;
-        }
-
-        /**
-         * Prefix match with segment boundaries: /api matches /api and /api/x, never /apix.
-         */
-        boolean matchesPath(String requestPath) {
-            if (path == null) return true;
-            return requestPath.equals(path) || requestPath.startsWith(path + "/");
-        }
-
-        int pathLength() {
-            return path == null ? 0 : path.length();
-        }
-
-        boolean acceptsListener(String listenerIp) {
-            return ListenerAddressMatcher.matches(listenOnAddresses, listenerIp);
-        }
-    }
-
-    private record HeaderRule(String name, String value) {}
-
-    /** A glob hostname route with its pattern compiled once at load time. */
-    private record WildcardRoute(Pattern pattern, RouteEntry entry) {}
-
-    private record RegexRoute(String hostnamePattern, Pattern pattern, List<String> namedGroups,
-                              RouteEntry entry) {}
-
-    /** All regex routes whose pattern matched this hostname, with their capture groups. */
-    private record CachedRegexMatches(List<RouteMatch> matches, long cachedAt) {}
-
-    private record RouteMatch(RouteEntry entry, Map<String, String> groups) {}
-
-    /** hostnameKnown distinguishes wrong-path 404s from true domain misses. */
-    private record Resolution(@Nullable RouteMatch match, boolean hostnameKnown) {}
 
     public SiteDispatcher(AcmeService acmeService, SessionStore proxySessionStore) {
         this.acmeService = acmeService;
@@ -391,7 +160,7 @@ public class SiteDispatcher implements HttpHandler {
             thread.setDaemon(true);
             return thread;
         });
-        this.proxyClient = new DispatchingProxyClient();
+        this.proxyClient = new UpstreamProxyClient();
     }
 
     /**
@@ -589,10 +358,10 @@ public class SiteDispatcher implements HttpHandler {
 
                 switch (kind) {
                     case SiteDomainModel.MATCH_REGEX -> {
-                        Pattern pattern = compileHostnameRegex(hostname);
+                        Pattern pattern = RouteResolver.compileHostnameRegex(hostname);
                         if (pattern != null) {
                             newRegex.add(new RegexRoute(hostname, pattern,
-                                extractNamedGroups(hostname), entry));
+                                RouteResolver.extractNamedGroups(hostname), entry));
                             siteRouteAdded = true;
                         }
                     }
@@ -674,6 +443,23 @@ public class SiteDispatcher implements HttpHandler {
         // this pipeline strips X-Hohenheim-Key and rewrites X-Forwarded-Proto further down.
         ProxyScheme.resolve(exchange);
 
+        // AIDEV-NOTE: SOCKET FRONT MODE FAILS CLOSED, ahead of every other check including
+        // ACME. The AF_UNIX peer has no address and the bridge registers no identity, so a
+        // request that did not authenticate as the fronting proxy has NO client identity at
+        // all -- and silently degrading it to the socket peer means 127.0.0.1, under which
+        // bans are inert, denied_ips fail-open, allowed_ips refuses everyone and threat
+        // scoring blames loopback. It is not merely degraded either: the bridge's loopback
+        // TCP port is reachable by any local account on the host, so an unauthenticated
+        // request there is a deliberate identity forgery. Refuse instead of trusting, and
+        // read the key set LIVE so clearing proxy.trusted_proxy_keys closes the front
+        // rather than quietly widening it.
+        if (ProxyScheme.lacksRequiredProxyKey(exchange)) {
+            exchange.setStatusCode(StatusCodes.FORBIDDEN);
+            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
+            exchange.getResponseSender().send("Forbidden");
+            return;
+        }
+
         // AIDEV-NOTE: a proxy-level refusal of an ambiguously framed message (both Content-Length
         // and Transfer-Encoding, RFC 7230 3.3.3) was tried here and REMOVED as redundant: this
         // server's Undertow HttpRequestParser already answers 400 and never invokes this handler
@@ -717,7 +503,7 @@ public class SiteDispatcher implements HttpHandler {
         }
 
         // --- Loop detection ---
-        String existingProxiedBy = exchange.getRequestHeaders().getFirst(X_PROXIED_BY);
+        String existingProxiedBy = exchange.getRequestHeaders().getFirst(ForwardingHeaders.X_PROXIED_BY);
         if (existingProxiedBy != null && existingProxiedBy.contains(instanceId)) {
             exchange.setStatusCode(508);
             exchange.getResponseSender().send("Loop Detected");
@@ -746,7 +532,7 @@ public class SiteDispatcher implements HttpHandler {
             }
             next.proceed();
         });
-        Resolution resolution = resolveEntry(exchange, hostname, generation);
+        RouteResolution resolution = RouteResolver.resolve(exchange, hostname, generation);
         RouteMatch match = resolution.match();
         RouteEntry entry = match != null ? match.entry() : null;
 
@@ -862,7 +648,7 @@ public class SiteDispatcher implements HttpHandler {
         ResolvedClientIp.attach(exchange, clientIp);
 
         // --- Access list enforcement ---
-        if (entry.hasAccessList() && !checkAccessList(exchange, entry, clientIp)) {
+        if (entry.hasAccessList() && !AccessListGate.allows(exchange, entry, clientIp)) {
             return;
         }
 
@@ -886,61 +672,10 @@ public class SiteDispatcher implements HttpHandler {
             }
         }
 
-        // --- Inject proxy headers ---
-        HeaderMap requestHeaders = exchange.getRequestHeaders();
-        requestHeaders.put(X_PROXIED_BY, instanceId);
+        // --- Inject proxy headers (custom rules, hop-by-hop hygiene, trust boundary) ---
+        ForwardingHeaders.applyRequestHeaders(exchange, entry, instanceId, hostname, clientIp);
 
-        String sourceIp = exchange.getSourceAddress().getAddress().getHostAddress();
-        boolean trustedRemoteProxy = isTrustedRemoteProxy(exchange);
-        String trustedForwardedFor = trustedRemoteProxy
-            ? requestHeaders.getFirst(X_FORWARDED_FOR)
-            : null;
-        String trustedForwardedHost = trustedRemoteProxy
-            ? requestHeaders.getFirst(X_FORWARDED_HOST)
-            : null;
-
-        // --- Custom upstream request headers ---
-        if (!entry.customHeaders.isEmpty()) {
-            for (HeaderRule header : entry.customHeaders) {
-                HttpString headerName = new HttpString(header.name());
-                if (header.value() == null || header.value().isBlank()) {
-                    requestHeaders.remove(headerName);
-                } else {
-                    requestHeaders.put(headerName, header.value());
-                }
-            }
-        }
-
-        // These headers form one trust boundary and must be canonicalized after custom rules.
-        // Undertow's reuseXForwarded behavior then appends the connected peer to the sanitized
-        // chain, preserving only a chain authenticated by X-Hohenheim-Key.
-        // AIDEV-NOTE: this strip happens BEFORE dispatchToRoute, so the managed-process
-        // control API (ManagedProcessSiteHandler's X-Hohenheim-Key branch) is unreachable
-        // through this listener today. Moving the strip later would make a privileged
-        // endpoint publicly reachable -- a deliberate decision, never a side effect.
-        requestHeaders.remove(X_HOHENHEIM_KEY);
-
-        // Hop-by-hop hygiene, then strip the client-asserted forwarding family we do not own.
-        // Both happen after custom rules and before the four canonical values are regenerated,
-        // so an operator rule cannot re-introduce a spoofable trust header on the forward path.
-        sanitizeHopByHopHeaders(requestHeaders);
-        for (HttpString stripped : STRIPPED_FORWARDING_HEADERS) {
-            requestHeaders.remove(stripped);
-        }
-
-        requestHeaders.put(X_FORWARDED_PROTO, ProxyScheme.effectiveScheme(exchange));
-        requestHeaders.put(X_FORWARDED_HOST,
-            trustedForwardedHost != null && !trustedForwardedHost.isBlank()
-                ? trustedForwardedHost : hostname);
-        requestHeaders.put(X_REAL_IP, clientIp);
-        requestHeaders.remove(X_FORWARDED_FOR);
-        if (trustedRemoteProxy && trustedForwardedFor != null) {
-            requestHeaders.put(X_FORWARDED_FOR, trustedForwardedFor);
-        } else if (trustedRemoteProxy && !clientIp.equals(sourceIp)) {
-            requestHeaders.put(X_FORWARDED_FOR, clientIp);
-        }
-
-        // RFC 6797 §7.2: HSTS header MUST NOT be emitted over non-secure transport.
+        // RFC 6797 7.2: HSTS header MUST NOT be emitted over non-secure transport.
         if (entry.hstsEnabled && ProxyScheme.isEffectivelyHttps(exchange)) {
             String hstsValue = "max-age=31536000";
             if (entry.hstsSubdomains) hstsValue += "; includeSubDomains";
@@ -964,9 +699,6 @@ public class SiteDispatcher implements HttpHandler {
             exchange.getResponseSender().send(deny.body());
         }
     }
-
-    private static final AttachmentKey<UpstreamTarget> UPSTREAM_URI =
-        AttachmentKey.create(UpstreamTarget.class);
 
     /** Named + numbered regex-host capture groups from the active route, if any. */
     public static final AttachmentKey<Map<String, String>> MATCHED_GROUPS =
@@ -1000,477 +732,22 @@ public class SiteDispatcher implements HttpHandler {
         return Hostnames.fromHostHeader(exchange.getRequestHeaders().getFirst(HOST));
     }
 
-    private Resolution resolveEntry(HttpServerExchange exchange, String hostname, RouteTable rt) {
-        if (hostname.isEmpty()) return new Resolution(null, false);
-
-        String listenerIp = extractListenerAddress(exchange);
-        String cacheKey = hostname + "|" + (listenerIp != null ? listenerIp : "");
-        String requestPath = exchange.getRelativePath();
-
-        // Check negative cache
-        Long cachedAt = rt.negativeCache.get(cacheKey);
-        if (cachedAt != null) {
-            if (System.currentTimeMillis() - cachedAt < NEGATIVE_CACHE_TTL_MS) {
-                return new Resolution(null, false);
-            }
-            rt.negativeCache.remove(cacheKey);
-        }
-
-        boolean hostnameKnown = false;
-
-        // 1. Exact match: bucket is pre-sorted longest path first
-        List<RouteEntry> bucket = rt.exactRoutes.get(hostname);
-        if (bucket != null) {
-            for (RouteEntry entry : bucket) {
-                if (!entry.acceptsListener(listenerIp)) continue;
-                hostnameKnown = true;
-                if (entry.matchesPath(requestPath)) {
-                    return new Resolution(new RouteMatch(entry, null), true);
-                }
-            }
-        }
-
-        // 2. Wildcard match: collect every matching route, pick the longest path
-        RouteEntry bestWildcard = null;
-        for (WildcardRoute wildcardRoute : rt.wildcardRoutes) {
-            RouteEntry entry = wildcardRoute.entry();
-            if (!entry.acceptsListener(listenerIp)) continue;
-            if (!wildcardRoute.pattern().matcher(hostname).matches()) continue;
-            hostnameKnown = true;
-            if (!entry.matchesPath(requestPath)) continue;
-            if (bestWildcard == null || entry.pathLength() > bestWildcard.pathLength()) {
-                bestWildcard = entry;
-            }
-        }
-        if (bestWildcard != null) {
-            return new Resolution(new RouteMatch(bestWildcard, null), true);
-        }
-
-        // 3. Regex match: hostname-level positive cache holds ALL matching routes,
-        //    path selection stays per-request.
-        List<RouteMatch> regexMatches = null;
-        CachedRegexMatches cached = rt.regexMatchCache.get(cacheKey);
-        if (cached != null) {
-            if (System.currentTimeMillis() - cached.cachedAt() < REGEX_CACHE_TTL_MS) {
-                regexMatches = cached.matches();
-            } else {
-                rt.regexMatchCache.remove(cacheKey);
-            }
-        }
-        if (regexMatches == null) {
-            regexMatches = computeRegexMatches(rt, hostname, listenerIp);
-            if (!regexMatches.isEmpty() && rt.regexMatchCache.size() < REGEX_CACHE_MAX) {
-                rt.regexMatchCache.put(cacheKey,
-                    new CachedRegexMatches(regexMatches, System.currentTimeMillis()));
-            }
-        }
-        if (!regexMatches.isEmpty()) {
-            hostnameKnown = true;
-            RouteMatch bestRegex = null;
-            for (RouteMatch candidate : regexMatches) {
-                if (!candidate.entry().matchesPath(requestPath)) continue;
-                if (bestRegex == null
-                        || candidate.entry().pathLength() > bestRegex.entry().pathLength()) {
-                    bestRegex = candidate;
-                }
-            }
-            if (bestRegex != null) {
-                return new Resolution(bestRegex, true);
-            }
-        }
-
-        // 4. No match. Only a fully unknown hostname is negative-cached: a known
-        //    hostname with a non-matching path must keep re-checking other paths.
-        if (!hostnameKnown && rt.negativeCache.size() < NEGATIVE_CACHE_MAX) {
-            rt.negativeCache.put(cacheKey, System.currentTimeMillis());
-        }
-        return new Resolution(null, hostnameKnown);
-    }
-
-    /** Every regex route matching this hostname + listener, with capture groups extracted. */
-    private List<RouteMatch> computeRegexMatches(RouteTable rt, String hostname, String listenerIp) {
-        if (rt.regexRoutes.isEmpty() || isSuspiciousRegexHostname(hostname)) {
-            return List.of();
-        }
-
-        List<RouteMatch> matches = new ArrayList<>();
-        int hostnameDots = countChar(hostname, '.');
-        for (RegexRoute regexRoute : rt.regexRoutes) {
-            if (!regexRoute.entry().acceptsListener(listenerIp)) {
-                continue;
-            }
-
-            // A hostname with more dots than the pattern accounts for means the
-            // regex is being probed with extra subdomain levels — too broad a match.
-            if (countChar(regexRoute.hostnamePattern(), '.') + 1 < hostnameDots) {
-                continue;
-            }
-
-            Matcher matcher = regexRoute.pattern().matcher(hostname);
-            if (matcher.matches()) {
-                Map<String, String> groups = extractRegexGroups(matcher, regexRoute.namedGroups());
-                // Brute-force protection (faithful to the Node original): a dotted
-                // "project" capture means the pattern swallowed a subdomain boundary.
-                String project = groups != null ? groups.get("project") : null;
-                if (project != null && project.indexOf('.') > -1) {
-                    return List.of();
-                }
-                matches.add(new RouteMatch(regexRoute.entry(), groups));
-            }
-        }
-        return List.copyOf(matches);
-    }
-
-    /**
-     * Hostnames that only ever appear in brute-force probes never match a
-     * regex route (faithful to the Node original's guards): git/gitlab
-     * subdomains, doubled/garbled www levels, and "notexist" scanners.
-     * Label-anchored on purpose: plain substring checks tripped the git guard
-     * for names like {@code digit.example.com}.
-     */
+    /** Public seam over {@link RouteResolver#isSuspiciousRegexHostname}. */
     public static boolean isSuspiciousRegexHostname(String hostname) {
-        return hasLabel(hostname, "git")
-            || hasLabel(hostname, "gitlab")
-            || hostname.contains("www.www.")
-            || hostname.contains("notexist")
-            || hasLabel(hostname, "www") && !hostname.startsWith("www.")
-            || hostname.contains("wwww");
+        return RouteResolver.isSuspiciousRegexHostname(hostname);
     }
 
-    /** Whether the hostname contains this exact dot-separated label. */
-    private static boolean hasLabel(String hostname, String label) {
-        return hostname.equals(label)
-            || hostname.startsWith(label + ".")
-            || hostname.endsWith("." + label)
-            || hostname.contains("." + label + ".");
-    }
-
-    /**
-     * Strip hop-by-hop request headers before forwarding: honour {@code Connection: <token>} by
-     * dropping every client-named header, then remove the fixed hop-by-hop set. Connection and
-     * Upgrade themselves survive a genuine upgrade request so Undertow can still tunnel it.
-     */
-    private static void sanitizeHopByHopHeaders(HeaderMap headers) {
-        boolean upgrade = isUpgradeRequest(headers);
-        for (String token : connectionTokens(headers)) {
-            if (token.equalsIgnoreCase("close") || token.equalsIgnoreCase("keep-alive")
-                    || token.equalsIgnoreCase("upgrade")) {
-                continue;
-            }
-            headers.remove(new HttpString(token));
-        }
-        for (HttpString hop : HOP_BY_HOP_HEADERS) {
-            headers.remove(hop);
-        }
-        if (!upgrade) {
-            headers.remove(Headers.CONNECTION);
-        }
-    }
-
-    /** A request is an upgrade only when both Upgrade and a {@code Connection: upgrade} token are present. */
-    private static boolean isUpgradeRequest(HeaderMap headers) {
-        if (!headers.contains(Headers.UPGRADE)) {
-            return false;
-        }
-        for (String token : connectionTokens(headers)) {
-            if (token.equalsIgnoreCase("upgrade")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** Comma-split, trimmed tokens from every Connection header value on the exchange. */
-    private static List<String> connectionTokens(HeaderMap headers) {
-        List<String> values = headers.get(Headers.CONNECTION);
-        if (values == null || values.isEmpty()) {
-            return List.of();
-        }
-        List<String> tokens = new ArrayList<>();
-        for (String value : values) {
-            for (String part : value.split(",")) {
-                String token = part.trim();
-                if (!token.isEmpty()) {
-                    tokens.add(token);
-                }
-            }
-        }
-        return tokens;
-    }
-
-    private static int countChar(String value, char c) {
-        int count = 0;
-        for (int i = 0; i < value.length(); i++) {
-            if (value.charAt(i) == c) count++;
-        }
-        return count;
-    }
-
-    /**
-     * Check the access list. Returns true if the request is allowed, false if blocked.
-     * When blocked, the response (401 or 403) is already sent.
-     */
-    private boolean checkAccessList(HttpServerExchange exchange, RouteEntry entry, String clientIp) {
-        boolean ipAllowed = checkIpAccess(entry, clientIp);
-        boolean authPassed = checkBasicAuth(exchange, entry);
-
-        boolean hasIpRules = entry.allowedIps != null || entry.deniedIps != null;
-        boolean hasAuth = entry.basicAuthUser != null;
-
-        if ("all".equals(entry.accessListSatisfy)) {
-            // Both must pass (if configured)
-            if (hasIpRules && !ipAllowed) {
-                exchange.setStatusCode(403);
-                exchange.getResponseSender().send("Forbidden");
-                return false;
-            }
-            if (hasAuth && !authPassed) {
-                sendAuthChallenge(exchange, entry);
-                return false;
-            }
-        } else {
-            // "any": pass if either passes (or if only one is configured)
-            if (hasIpRules && hasAuth) {
-                if (!ipAllowed && !authPassed) {
-                    sendAuthChallenge(exchange, entry);
-                    return false;
-                }
-            } else if (hasIpRules && !ipAllowed) {
-                exchange.setStatusCode(403);
-                exchange.getResponseSender().send("Forbidden");
-                return false;
-            } else if (hasAuth && !authPassed) {
-                sendAuthChallenge(exchange, entry);
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private boolean checkIpAccess(RouteEntry entry, String clientIp) {
-        // Deny takes priority
-        if (entry.deniedIps != null) {
-            for (String denied : entry.deniedIps) {
-                if (matchesIp(clientIp, denied)) return false;
-            }
-        }
-        // If allow list exists, IP must be in it
-        if (entry.allowedIps != null) {
-            for (String allowed : entry.allowedIps) {
-                if (matchesIp(clientIp, allowed)) return true;
-            }
-            return false; // Not in allow list
-        }
-        return true; // No allow list = allow all
-    }
-
-    private boolean matchesIp(String clientIp, String rule) {
-        if (rule == null || rule.isEmpty()) return false;
-
-        if (rule.contains("/")) {
-            // CIDR notation
-            try {
-                String[] parts = rule.split("/");
-                byte[] ruleAddr = InetAddress.getByName(parts[0]).getAddress();
-                byte[] clientAddr = InetAddress.getByName(clientIp).getAddress();
-                int prefixLen = Integer.parseInt(parts[1]);
-
-                if (ruleAddr.length != clientAddr.length) return false;
-
-                int fullBytes = prefixLen / 8;
-                int remainBits = prefixLen % 8;
-
-                for (int i = 0; i < fullBytes; i++) {
-                    if (ruleAddr[i] != clientAddr[i]) return false;
-                }
-                if (remainBits > 0) {
-                    int mask = 0xFF << (8 - remainBits);
-                    if ((ruleAddr[fullBytes] & mask) != (clientAddr[fullBytes] & mask)) return false;
-                }
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
-        }
-
-        return clientIp.equals(rule);
-    }
-
-    private boolean checkBasicAuth(HttpServerExchange exchange, RouteEntry entry) {
-        if (entry.basicAuthUser == null) return true;
-
-        String authHeader = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
-        if (authHeader == null || !authHeader.startsWith("Basic ")) return false;
-
-        try {
-            String decoded = new String(Base64.getDecoder().decode(authHeader.substring(6)));
-            int colon = decoded.indexOf(':');
-            if (colon < 0) return false;
-            String user = decoded.substring(0, colon);
-            String pass = decoded.substring(colon + 1);
-            boolean passwordMatches = verifyBasicAuthPassword(pass, entry.basicAuthPass, entry.siteName);
-            return MessageDigest.isEqual(
-                    entry.basicAuthUser.getBytes(StandardCharsets.UTF_8),
-                    user.getBytes(StandardCharsets.UTF_8))
-                && passwordMatches;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /**
-     * @return true only when the stored value is an argon2 hash that verifies the presented
-     *         password; any other non-null stored value is refused LOUDLY, never compared
-     */
-    // AIDEV-NOTE: this used to fall back to a constant-time PLAINTEXT compare for stored
-    // values without the $argon2 prefix -- security theater that silently accepted an
-    // unhashed column. AccessListResource hashes on every save and nothing was ever deployed,
-    // so a non-argon2 stored value is operator/data corruption and must fail closed and loud.
+    /** Test seam over {@link AccessListGate#verifyBasicAuthPassword}. */
     static boolean verifyBasicAuthPassword(String presented, String stored, String siteName) {
-        if (stored == null) {
-            return false;
-        }
-        if (!stored.startsWith("$argon2")) {
-            Blast.log("SiteDispatcher: stored basic-auth password for site", siteName,
-                "is not an argon2 hash; refusing authentication. Re-save the access list to hash it.");
-            return false;
-        }
-        return PasswordHasher.verify(presented, stored);
-    }
-
-    private void sendAuthChallenge(HttpServerExchange exchange, RouteEntry entry) {
-        String realm = entry.siteName != null && !entry.siteName.isBlank()
-            ? entry.siteName.replace("\"", "")
-            : "Restricted";
-        exchange.setStatusCode(401);
-        exchange.getResponseHeaders().put(new HttpString("WWW-Authenticate"), "Basic realm=\"" + realm + "\"");
-        exchange.getResponseSender().send("Unauthorized");
-    }
-
-    private Pattern compileHostnameRegex(String hostname) {
-        if (hostname == null || hostname.isBlank()) {
-            return null;
-        }
-
-        try {
-            return HostnameRegex.compile(hostname);
-        } catch (Exception e) {
-            Blast.log("SiteDispatcher: invalid regex hostname", hostname, "-", e.getMessage());
-            return null;
-        }
-    }
-
-    /** Default absolute request lifetime for proxied exchanges. */
-    static final int DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-
-    /**
-     * request_timeout site setting in seconds: absent/negative = 30s default,
-     * 0 = unlimited (streaming/gRPC/WebSocket sites).
-     */
-    private static int parseRequestTimeout(Object value) {
-        if (value instanceof Number number) {
-            int seconds = number.intValue();
-            if (seconds == 0) return -1;
-            if (seconds > 0) return seconds * 1000;
-        }
-        return DEFAULT_REQUEST_TIMEOUT_MS;
-    }
-
-    private static int parsePositiveInt(Object value) {
-        if (value instanceof Integer integer && integer > 0) {
-            return integer;
-        }
-
-        if (value instanceof Number number) {
-            int intValue = number.intValue();
-            return Math.max(intValue, 0);
-        }
-
-        return 0;
-    }
-
-    private static List<HeaderRule> parseHeaderRules(Object value) {
-        if (value == null) {
-            return List.of();
-        }
-
-        List<HeaderRule> result = new ArrayList<>();
-
-        if (value instanceof Map<?, ?> map) {
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                if (entry.getKey() != null) {
-                    result.add(new HeaderRule(String.valueOf(entry.getKey()),
-                        entry.getValue() != null ? String.valueOf(entry.getValue()) : ""));
-                }
-            }
-        } else if (value instanceof List<?> list) {
-            for (Object item : list) {
-                if (item instanceof Map<?, ?> map) {
-                    Object name = map.get("name");
-                    if (name != null && !String.valueOf(name).isBlank()) {
-                        Object headerValue = map.get("value");
-                        result.add(new HeaderRule(String.valueOf(name),
-                            headerValue != null ? String.valueOf(headerValue) : ""));
-                    }
-                }
-            }
-        }
-
-        return List.copyOf(result);
-    }
-
-    private static Map<String, String> extractRegexGroups(Matcher matcher, List<String> namedGroups) {
-        Map<String, String> groups = new HashMap<>();
-        for (int i = 1; i <= matcher.groupCount(); i++) {
-            String value = matcher.group(i);
-            if (value != null) {
-                groups.put(String.valueOf(i), value);
-            }
-        }
-
-        for (String name : namedGroups) {
-            try {
-                String value = matcher.group(name);
-                if (value != null) {
-                    groups.put(name, value);
-                }
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
-
-        return groups.isEmpty() ? Map.of() : Map.copyOf(groups);
-    }
-
-    private static List<String> extractNamedGroups(String patternSource) {
-        if (patternSource == null || patternSource.isBlank()) {
-            return List.of();
-        }
-
-        Matcher matcher = NAMED_GROUP_PATTERN.matcher(patternSource);
-        List<String> result = new ArrayList<>();
-        while (matcher.find()) {
-            result.add(matcher.group(1));
-        }
-        return List.copyOf(result);
-    }
-
-
-
-    private String extractListenerAddress(HttpServerExchange exchange) {
-        InetSocketAddress address = exchange.getDestinationAddress();
-        if (address == null) {
-            address = exchange.getConnection().getLocalAddress(InetSocketAddress.class);
-        }
-        return address != null && address.getAddress() != null ? address.getAddress().getHostAddress() : null;
+        return AccessListGate.verifyBasicAuthPassword(presented, stored, siteName);
     }
 
     private void dispatchToRoute(RouteEntry entry, HttpServerExchange exchange) {
-        exchange.addResponseCommitListener(ex -> applyResponseMutations(entry, ex));
+        exchange.addResponseCommitListener(ex -> ResponseMutations.apply(entry, ex));
 
         ProxyHandler timedProxyHandler = proxyHandlerFor(entry.requestTimeoutMs);
         Runnable dispatch = () -> entry.handler.handleRequest(exchange, upstream -> {
-            exchange.putAttachment(UPSTREAM_URI, upstream);
+            exchange.putAttachment(UpstreamProxyClient.UPSTREAM_URI, upstream);
             // Only the proxy path may commit early: ProxyHandler copies the upstream status
             // and headers before it acquires the response channel, so a flush can never
             // publish a half-built response. Handlers that build their OWN response (a
@@ -1495,92 +772,6 @@ public class SiteDispatcher implements HttpHandler {
                 exchange.dispatch(dispatch);
             }
         }, entry.requestDelayMs, TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Applied just before response headers commit: domain response-header rules, upstream
-     * Location rewrite, then the handler's optional {@link ResponseMutator} seam.
-     */
-    private void applyResponseMutations(RouteEntry entry, HttpServerExchange exchange) {
-        HeaderMap headers = exchange.getResponseHeaders();
-
-        for (HeaderRule rule : entry.responseHeaders) {
-            HttpString name = new HttpString(rule.name());
-            if (rule.value() == null || rule.value().isBlank()) {
-                headers.remove(name);
-            } else {
-                headers.put(name, rule.value());
-            }
-        }
-
-        UpstreamTarget upstream = exchange.getAttachment(UPSTREAM_URI);
-        if (upstream != null && Boolean.TRUE.equals(exchange.getAttachment(REWRITE_LOCATION))) {
-            String location = headers.getFirst(Headers.LOCATION);
-            if (location != null) {
-                String rewritten = rewriteLocation(location, upstream.uri(), exchange);
-                if (rewritten != null) {
-                    headers.put(Headers.LOCATION, rewritten);
-                }
-            }
-        }
-
-        ResponseMutator mutator = entry.handler.mutateResponse(exchange);
-        if (mutator != null) {
-            mutator.mutate(exchange);
-        }
-    }
-
-    /**
-     * Rewrite an upstream redirect to the public scheme + authority so backend host:port never
-     * leaks. Only absolute Locations whose host:port match the upstream are touched.
-     *
-     * AIDEV-NOTE: The public authority comes from the live request's Host header, NOT the route's
-     * configured hostname -- wildcard/regex routes match many hostnames and the pattern itself
-     * would produce a broken URL.
-     *
-     * @return the rewritten Location, or null when no rewrite applies
-     */
-    private static String rewriteLocation(String location, URI upstream, HttpServerExchange exchange) {
-        URI parsed;
-        try {
-            parsed = new URI(location);
-        } catch (URISyntaxException e) {
-            return null;
-        }
-
-        // Relative redirects never leak the backend.
-        if (!parsed.isAbsolute() || parsed.getHost() == null) {
-            return null;
-        }
-        if (!parsed.getHost().equalsIgnoreCase(upstream.getHost())
-                || effectivePort(parsed) != effectivePort(upstream)) {
-            return null;
-        }
-
-        String authority = exchange.getRequestHeaders().getFirst(HOST);
-        if (authority == null || authority.isBlank()) {
-            return null;
-        }
-
-        StringBuilder rewritten = new StringBuilder(ProxyScheme.effectiveScheme(exchange))
-            .append("://").append(authority);
-        if (parsed.getRawPath() != null) {
-            rewritten.append(parsed.getRawPath());
-        }
-        if (parsed.getRawQuery() != null) {
-            rewritten.append('?').append(parsed.getRawQuery());
-        }
-        if (parsed.getRawFragment() != null) {
-            rewritten.append('#').append(parsed.getRawFragment());
-        }
-        return rewritten.toString();
-    }
-
-    private static int effectivePort(URI uri) {
-        if (uri.getPort() != -1) {
-            return uri.getPort();
-        }
-        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 
     /**
@@ -1707,7 +898,7 @@ public class SiteDispatcher implements HttpHandler {
     private String getClientIp(HttpServerExchange exchange) {
         String sourceIp = exchange.getSourceAddress().getAddress().getHostAddress();
         if (isTrustedRemoteProxy(exchange)) {
-            String realIp = exchange.getRequestHeaders().getFirst(X_REAL_IP);
+            String realIp = exchange.getRequestHeaders().getFirst(ForwardingHeaders.X_REAL_IP);
             byte[] address = IpLiterals.parse(realIp != null ? realIp.trim() : null);
             if (address != null) {
                 try {
@@ -1736,144 +927,9 @@ public class SiteDispatcher implements HttpHandler {
         return BanService.INSTANCE.isBanned(ip);
     }
 
-    // -----------------------------------------------------------------------
-    // Proxy forwarding
-    // -----------------------------------------------------------------------
-
-    /**
-     * Test-only override for the trusted upstream SSL context, so HTTPS-upstream tests can
-     * trust their own self-signed authority without weakening production validation.
-     */
-    private static volatile SSLContext trustedSslContextOverride;
-
+    /** Test seam over {@link UpstreamProxyClient}'s trusted upstream SSL context. */
     public static void overrideTrustedUpstreamSslContextForTests(SSLContext context) {
-        trustedSslContextOverride = context;
-    }
-
-    private class DispatchingProxyClient implements ProxyClient {
-
-        private final UndertowClient client = UndertowClient.getInstance();
-        private final XnioSsl insecureSsl = createInsecureSsl();
-        private final XnioSsl trustedSsl = createTrustedSsl();
-
-        @Override
-        public ProxyTarget findTarget(HttpServerExchange exchange) {
-            UpstreamTarget target = exchange.getAttachment(UPSTREAM_URI);
-            return target != null ? new SimpleTarget(target) : null;
-        }
-
-        @Override
-        public void getConnection(ProxyTarget target, HttpServerExchange exchange,
-                                  ProxyCallback<ProxyConnection> callback,
-                                  long timeout, TimeUnit timeUnit) {
-            SimpleTarget simpleTarget = (SimpleTarget) target;
-            UpstreamTarget upstreamTarget = simpleTarget.target;
-            URI uri = dialUri(upstreamTarget);
-            XnioSsl ssl = sslFor(upstreamTarget);
-
-            // AIDEV-NOTE: Undertow's https/h2 providers force JDK endpoint identification
-            // (the SAN hostname check) unless the caller overrides the option -- so
-            // ignore_certificates must disable it too, or a trust-all context still
-            // rejects certs whose SAN doesn't match the dial host.
-            OptionMap connectOptions = upstreamTarget.ignoreCertificates()
-                ? OptionMap.create(UndertowOptions.ENDPOINT_IDENTIFICATION_ALGORITHM, "")
-                : OptionMap.EMPTY;
-
-            client.connect(new ClientCallback<ClientConnection>() {
-                @Override
-                public void completed(ClientConnection connection) {
-                    ServerConnection serverConn = exchange.getConnection();
-                    serverConn.addCloseListener(sc -> IoUtils.safeClose(connection));
-
-                    String path = uri.getPath();
-                    if (path == null || path.isEmpty()) path = "/";
-
-                    // Streaming adapter: captures response trailers (e.g. grpc-status) that
-                    // the stock Undertow h2 client drops, and commits the upstream request
-                    // headers without waiting for a request body. Applied to EVERY upstream
-                    // connection so no protocol combination is left out.
-                    callback.completed(exchange, new ProxyConnection(
-                        new StreamingProxyClientConnection(connection), path));
-                }
-
-                @Override
-                public void failed(IOException e) {
-                    callback.failed(exchange);
-                }
-            }, uri, exchange.getIoThread(), ssl,
-               exchange.getConnection().getByteBufferPool(),
-               connectOptions);
-        }
-
-        /**
-         * The URI to hand Undertow's client, with the scheme mapped to the wire protocol:
-         * h2c-prior (prior-knowledge cleartext HTTP/2) or h2 (ALPN) for H2 upstreams.
-         */
-        private URI dialUri(UpstreamTarget target) {
-            URI uri = target.uri();
-            String dialScheme = target.protocol().dialScheme(uri.getScheme());
-            if (dialScheme.equals(uri.getScheme())) {
-                return uri;
-            }
-            try {
-                return new URI(dialScheme, uri.getUserInfo(), uri.getHost(), uri.getPort(),
-                    uri.getPath(), uri.getQuery(), uri.getFragment());
-            } catch (URISyntaxException e) {
-                return uri;
-            }
-        }
-
-        /**
-         * TLS upstreams always get an SSL provider; Undertow rejects an https/h2 dial with a
-         * null XnioSsl outright, so "no ssl" is only correct for cleartext upstreams.
-         */
-        private @Nullable XnioSsl sslFor(UpstreamTarget target) {
-            if (!"https".equalsIgnoreCase(target.uri().getScheme())) {
-                return null;
-            }
-            if (target.ignoreCertificates()) {
-                return insecureSsl;
-            }
-            SSLContext override = trustedSslContextOverride;
-            if (override != null) {
-                return new UndertowXnioSsl(Xnio.getInstance(), OptionMap.EMPTY, override);
-            }
-            return trustedSsl;
-        }
-
-        private XnioSsl createTrustedSsl() {
-            return new UndertowXnioSsl(Xnio.getInstance(), OptionMap.EMPTY,
-                UpstreamTrust.defaultContext());
-        }
-
-        private XnioSsl createInsecureSsl() {
-            try {
-                SSLContext context = SSLContext.getInstance("TLS");
-                context.init(null, new TrustManager[]{new X509TrustManager() {
-                    @Override
-                    public X509Certificate[] getAcceptedIssuers() {
-                        return new X509Certificate[0];
-                    }
-
-                    @Override
-                    public void checkClientTrusted(X509Certificate[] chain, String authType) {
-                    }
-
-                    @Override
-                    public void checkServerTrusted(X509Certificate[] chain, String authType) {
-                    }
-                }}, new SecureRandom());
-
-                return new UndertowXnioSsl(Xnio.getInstance(), OptionMap.EMPTY, context);
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to initialize insecure proxy SSL", e);
-            }
-        }
-    }
-
-    private static final class SimpleTarget implements ProxyClient.ProxyTarget {
-        final UpstreamTarget target;
-        SimpleTarget(UpstreamTarget target) { this.target = target; }
+        UpstreamProxyClient.overrideTrustedUpstreamSslContextForTests(context);
     }
 
     // -----------------------------------------------------------------------

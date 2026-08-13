@@ -3,16 +3,16 @@ package be.elevenways.hohenheim;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 
 /**
- * THE declared vocabulary of Hohenheim's query parameters -- the prefill values a CMS
- * create form is opened with, the selection state a record subpage carries, and the
- * error text a redirect hands back.
+ * THE declared vocabulary of Hohenheim's query parameters: the prefill values a CMS
+ * create form is opened with and the selection state a record subpage carries.
  *
- * AIDEV-NOTE: these exist because a query parameter is the ONLY part of a link that
- * {@code CmsRoutes} cannot express: its builders return the {@code RouteTarget}
- * interface, which has no {@code with(...)}. A site that needs "a CMS route plus one
- * extra parameter" composes off {@code CmsEndpoints} and binds one of these instead of
- * concatenating {@code "?site_id=" + id} -- hand-built URLs are forbidden outright, and
- * a parameter that is not part of the route renders as an encoded query parameter.
+ * AIDEV-NOTE: every one of these is addressable page STATE -- it belongs in a URL a
+ * reader can bookmark and share. NOTIFICATIONS do not: the seven error/saved/restored/
+ * imported/skipped/exit/output parameters that used to live here were deleted because
+ * they put operator-facing text (and command output) into logged, shareable URLs. Use
+ * {@code HohenheimFlash} for an outcome message and a session stash for page content.
+ * A CMS route plus one of these is {@code CmsRoutes.x(...).with(PARAM, value)} --
+ * never a concatenated {@code "?site_id=" + id}.
  */
 public final class HohenheimParams {
 
@@ -92,41 +92,6 @@ public final class HohenheimParams {
     /** The remote DNS record the secondary-zone editor opens ({@code new} for a fresh one). */
     public static final ParameterDefinition<String> REMOTE_RECORD =
         ParameterDefinition.builder(String.class).name("record")
-            .stringResolver(value -> value).build();
-
-    /** Error text a refusing handler hands back to the page it redirects to. */
-    public static final ParameterDefinition<String> ERROR_TEXT =
-        ParameterDefinition.builder(String.class).name("error")
-            .stringResolver(value -> value).build();
-
-    /** How many records a zone-file import wrote, echoed back to the zone-file tab. */
-    public static final ParameterDefinition<Integer> IMPORTED_COUNT =
-        ParameterDefinition.builder(Integer.class).name("imported")
-            .stringResolver(Integer::parseInt).build();
-
-    /** The records a zone-file import skipped, echoed back to the zone-file tab. */
-    public static final ParameterDefinition<String> SKIPPED_RECORDS =
-        ParameterDefinition.builder(String.class).name("skipped")
-            .stringResolver(value -> value).build();
-
-    /** Set by a successful remote-record save so the tab can confirm it. */
-    public static final ParameterDefinition<String> SAVED_FLAG =
-        ParameterDefinition.builder(String.class).name("saved")
-            .stringResolver(value -> value).build();
-
-    /** Set by a successful database restore so the tab can confirm it. */
-    public static final ParameterDefinition<String> RESTORED_FLAG =
-        ParameterDefinition.builder(String.class).name("restored")
-            .stringResolver(value -> value).build();
-
-    /** The exit code an exec run reports back to the Exec tab. */
-    public static final ParameterDefinition<Integer> EXEC_EXIT =
-        ParameterDefinition.builder(Integer.class).name("exit")
-            .stringResolver(Integer::parseInt).build();
-
-    /** The captured output an exec run reports back to the Exec tab. */
-    public static final ParameterDefinition<String> EXEC_OUTPUT =
-        ParameterDefinition.builder(String.class).name("output")
             .stringResolver(value -> value).build();
 
     /** The manual-DNS challenge token the certificate request page resumes with. */

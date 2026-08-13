@@ -13,8 +13,6 @@
 {% declare notice: String = "" %}
 {% declare editRecord: DnsRecordFormView = null %}
 {% declare recordTypes: List %}
-{% declare error: String = "" %}
-{% declare saved: Boolean = false %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -36,8 +34,6 @@
     <pl-alert variant="default">{{ t("edits_forwarded", scope: "dns_remote", peer: peerName) }}</pl-alert>
     {% /if %}
     {% if notice != "" %}<pl-alert variant="warning">{{ notice }}</pl-alert>{% /if %}
-    {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
-    {% if saved %}<pl-alert variant="default">{{ t("edit_saved", scope: "dns_remote") }}</pl-alert>{% /if %}
 
     {% if editRecord %}
     {% let editType = editRecord.type %}

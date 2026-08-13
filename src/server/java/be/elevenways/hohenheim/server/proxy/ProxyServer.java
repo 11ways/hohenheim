@@ -210,6 +210,15 @@ public class ProxyServer {
         // threat scoring blames loopback. The ONLY source of client identity in this
         // topology is the fronting proxy's X-Hohenheim-Key + X-Real-IP headers, so that
         // contract must be configured before this front may serve.
+        //
+        // AIDEV-NOTE: this start-time refusal is the LOUD half only; it is not the
+        // enforcement. proxy.trusted_proxy_keys is live-editable, so clearing it while the
+        // socket front serves used to leave exactly the degraded topology this refusal
+        // exists to prevent. The enforcing half is per-request and lives in the dispatcher
+        // (ProxyScheme.setSocketFrontMode below, lacksRequiredProxyKey at the top of
+        // SiteDispatcher.handleRequest): in socket mode a request with no valid key is
+        // REFUSED rather than trusted as loopback, which also closes the local-account
+        // bypass through the bridge's loopback TCP port.
         if (socketMode && !hasTrustedProxyKeys()) {
             httpState = State.FAILED;
             recordHttpRestartFailure();
@@ -247,6 +256,10 @@ public class ProxyServer {
             } else {
                 publicHttpAddress = undertowAddress;
             }
+            // Set from the topology actually bound, in EVERY branch: a listener that fell
+            // back from a socket front to a plain TCP one must not keep the refusal armed,
+            // and one that became a socket front must not miss it.
+            ProxyScheme.setSocketFrontMode(socketMode);
             httpState = State.RUNNING;
             httpFailureReason = null;
             noteHttpListenerHealthy();
@@ -657,6 +670,9 @@ public class ProxyServer {
     }
 
     private void stopHttpResources() {
+        // Withdrawn before anything else: a stopped socket front must not leave the
+        // per-request refusal armed for a plain TCP listener that replaces it.
+        ProxyScheme.setSocketFrontMode(false);
         for (PublicTcpListener listener : httpFrontListeners) {
             listener.close();
         }

@@ -32,8 +32,14 @@ public class SpamserviceInstallationModel extends Model {
     public static final IntegerField PORT = SCHEMA.addField(
         IntegerField.builder().name("port").defaultValue(8095)
             .validator(Range.of(MIN_PORT, MAX_PORT)).build());
+    // AIDEV-NOTE: deliberately NOT .required(). The requirement is CONDITIONAL -- only an
+    // ENABLED installation needs a system user, and that is enforced where it is knowable
+    // (SpamserviceManager's installation store refuses to start without a resolvable user).
+    // Declaring it unconditionally made the shipped singleton stub, which by definition has
+    // no user yet, unrepresentable through the validating save path: it could only ever be
+    // written by the raw INSERT that used to sit in M041.
     public static final IntegerField SYSTEM_USER_ID = SCHEMA.addField(
-        IntegerField.builder().name("system_user_id").required().build());
+        IntegerField.builder().name("system_user_id").build());
     public static final IntegerField MAX_HEAP_MB = SCHEMA.addField(
         IntegerField.builder().name("max_heap_mb").defaultValue(512)
             .validator(Range.of(MIN_HEAP_SIZE_MB, MAX_HEAP_SIZE_MB)).build());

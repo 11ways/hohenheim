@@ -104,6 +104,31 @@ public final class HostLeases {
                 + " cleanup is the winner's job."));
     }
 
+    /**
+     * Release ONE held host lease, if this controller holds it.
+     *
+     * AIDEV-NOTE: the counterpart {@link #requireFence} never had, and boot recovery is
+     * why it now exists. Every other acquisition is an operation this controller is about
+     * to keep driving, so holding for the process lifetime is correct; a settle sweep is
+     * the one caller that takes a lease purely to look at somebody else's leftovers, and
+     * keeping that one fences the rightful controller out of the host until this process
+     * exits. See {@code BootSettle.underBorrowedHostLease}.
+     *
+     * @return true when a hold was released here
+     */
+    public boolean release(int serverId) {
+        Hold hold = this.held.remove(serverId);
+        if (hold == null) {
+            return false;
+        }
+        try {
+            hold.lease().release();
+        } catch (RuntimeException ignored) {
+            // The row (or its whole database) may already be gone; the lease expires anyway.
+        }
+        return true;
+    }
+
     /** Release every held host lease (shutdown). */
     public void releaseAll() {
         for (Integer serverId : this.held.keySet()) {

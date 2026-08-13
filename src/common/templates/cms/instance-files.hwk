@@ -12,7 +12,6 @@
 {% declare canWrite: Boolean = false %}
 {% declare supported: Boolean = true %}
 {% declare maxFileBytes: Long = 0 %}
-{% declare error: String = "" %}
 {% declare editPath: String = "" %}
 {% declare editContent: String = "" %}
 {% declare actionTarget: RouteTarget %}
@@ -43,9 +42,6 @@
     </pl-empty-state>
     {% /if %}
 
-    {% if error != "" %}
-        <pl-alert variant="destructive">{{ error }}</pl-alert>
-    {% /if %}
 
     {% if volumes %}
         <pl-breadcrumb>

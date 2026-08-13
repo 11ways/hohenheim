@@ -40,11 +40,12 @@ public final class CertificateRequestPage extends PanelPage {
     @Override
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext accessContext) {
         Map<String, Object> vars = new HashMap<>();
-        String error = conduit.getQueryParam("error");
         vars.put("title", Microcopy.of("request_certificate")
             .withFilter("scope", "certificate_request")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
-        vars.put("error", error != null ? error : "");
+        // Render-time condition only (an expired manual challenge); redirect outcomes
+        // ride the session flash, never a query parameter.
+        vars.put("error", "");
         vars.put("dnsHookConfigured", CommandDnsTxtPublisher.isConfigured());
         var dnsServer = ServerMain.getDnsServer();
         vars.put("internalDnsAvailable", dnsServer != null && dnsServer.isRunning()

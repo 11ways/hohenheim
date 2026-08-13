@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
+import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.cms.InstanceFilesPage;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -270,33 +271,33 @@ public final class InstanceFileEndpoints {
         return row;
     }
 
-    /** The Files tab URL, carrying the directory and (optionally) a refusal to render. */
+    /**
+     * The Files tab URL for a directory, stashing any refusal as a flash toast first.
+     *
+     * AIDEV-NOTE: the destination is USUALLY the submitted _return, which ReturnTarget
+     * hands back as an already-sanitized String -- there is no endpoint left to bind
+     * path= onto, hence the append. The FALLBACK is built from the typed route. The
+     * refusal does NOT ride the URL: it is a notification, so it rides the session
+     * flash (the seven query parameters that used to carry outcomes are deleted).
+     */
     private static @NonNull String filesUrl(@NonNull Conduit conduit, int instanceId,
                                             @NonNull String directory,
                                             @Nullable Violations refused) {
-        // AIDEV-NOTE: the destination is USUALLY the submitted _return, which
-        // ReturnTarget hands back as an already-sanitized String -- there is no endpoint
-        // left to bind path=/error= onto, hence the append below. The FALLBACK is built
-        // from the typed route, never from a literal.
+        if (refused != null) {
+            HohenheimFlash.error(conduit, messageOf(refused));
+        }
         String base = ReturnTarget.or(ReturnTarget.read(conduit),
             CmsRoutes.subpage("admin", "instances", instanceId,
                 InstanceFilesPage.SLUG).toUrl());
-        StringBuilder url = new StringBuilder(base);
-        url.append(base.contains("?") ? '&' : '?').append("path=").append(encode(directory));
-        if (refused != null) {
-            url.append("&error=").append(encode(messageOf(conduit, refused)));
-        }
-        return url.toString();
+        return base + (base.contains("?") ? '&' : '?') + "path=" + encode(directory);
     }
 
-    /** The refusal text as the caller's locale renders it -- never a raw exception string. */
-    private static @NonNull String messageOf(@NonNull Conduit conduit,
-                                             @NonNull Violations violations) {
+    /** The refusal's own message, so it keeps its localized text. */
+    private static @NonNull Microcopy messageOf(@NonNull Violations violations) {
         List<Violation> all = violations.all();
-        if (all.isEmpty()) {
-            return String.valueOf(violations.getMessage());
-        }
-        return all.get(0).message().resolve(conduit.getLocales(), conduit.getMessageResolver());
+        return all.isEmpty()
+            ? Microcopy.of("refused").withFilter("scope", "violations")
+            : all.get(0).message();
     }
 
     /** 422 carrying the violation's MACHINE KEY, matching the rest of the v1 surface. */
@@ -306,7 +307,8 @@ public final class InstanceFileEndpoints {
         List<Violation> all = violations.all();
         String code = all.isEmpty() ? "REFUSED" : all.get(0).message().key();
         return (ActionResult<Object>) (ActionResult<?>) new ErrorResult(
-            ErrorResponse.of(422, code, messageOf(conduit, violations)));
+            ErrorResponse.of(422, code,
+                messageOf(violations).resolve(conduit.getLocales(), conduit.getMessageResolver())));
     }
 
     private static @NonNull String parentOf(@NonNull String path) {

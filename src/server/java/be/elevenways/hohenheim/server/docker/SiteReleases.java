@@ -7,9 +7,11 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -581,13 +583,48 @@ public final class SiteReleases {
                 answered.add(candidateId);
             }
             try {
-                SiteInstances.inScopeUnchecked(siteId, () -> recoverOne(siteId, op));
+                // The borrowed-lease discipline BootSettle documents: recoverOne stops,
+                // destroys and redeploys through InstanceService, each of which takes the
+                // host's fence -- so an unguarded sweep would seize (and hold for this
+                // process's lifetime) the lease of every host a stuck release sits on, and
+                // would act on an operation a rival controller is still driving. A host
+                // another controller holds is skipped: the release is that controller's.
+                Integer serverId = releaseHostOf(op);
+                Runnable recover = () ->
+                    SiteInstances.inScopeUnchecked(siteId, () -> recoverOne(siteId, op));
+                if (serverId == null) {
+                    recover.run();
+                } else {
+                    BootSettle.underBorrowedHostLease(HostLeases.production(), serverId,
+                        recover);
+                }
             } catch (RuntimeException e) {
                 Blast.log("RELEASE: recovery of operation",
                     op.get(ReleaseOperationModel.ID), "failed -", reasonOf(e));
             }
         }
         sweepOrphanCandidates(answered);
+    }
+
+    /**
+     * The host a stuck release operation's workloads live on: the candidate's, else the
+     * retired one's. Null when neither instance row is resolvable, in which case there is
+     * no lease to borrow and the recovery has no daemon work to fence.
+     */
+    private static @Nullable Integer releaseHostOf(@NonNull Row op) {
+        for (Integer instanceId : new Integer[] {
+                op.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID),
+                op.get(ReleaseOperationModel.RETIRED_INSTANCE_ID)}) {
+            if (instanceId == null) {
+                continue;
+            }
+            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            Integer serverId = instance != null ? instance.get(InstanceModel.SERVER_ID) : null;
+            if (serverId != null) {
+                return serverId;
+            }
+        }
+        return null;
     }
 
     private static void recoverOne(int siteId, @NonNull Row op) {

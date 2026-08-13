@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
+import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.sitetype.types.ProxySiteType;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -30,6 +31,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -514,7 +516,7 @@ public final class TenantWrites {
      * Columns the write pipeline DERIVES, plus the one column that has its OWN
      * capability-aware gate.
      *
-     * AIDEV-NOTE: {@code settings} is deliberately NOT frozen here. It carries the
+     * AIDEV-NOTE: {@code settings} is not frozen as a COLUMN here. It carries the
      * image facts, and {@link be.elevenways.hohenheim.server.instance.InstanceImagePolicy}
      * is the purpose-built gate over exactly those -- including the sanctioned
      * {@code image_any} override on the record. Freezing the column outright made
@@ -522,6 +524,17 @@ public final class TenantWrites {
      * ({@code image_requires_capability}) with a blunt one, which is a gate doing
      * LESS than the one it shadowed. A tenant reaching this column at all still had
      * to pass the {@code config} check above.
+     *
+     * AIDEV-NOTE: what the column-level exemption used to mean, wrongly, was that the
+     * OTHER settings members had no gate at all -- the image policy judges image, tag and
+     * image_origin and nothing else, so a direct tenant POST could move
+     * {@code settings.privileged}, which IncusContainerKind lowers straight onto an Incus
+     * {@code security.privileged} container (threat-model boundary 1). The CMS form not
+     * offering the field is a UX affordance, never a gate, which is this whole class's
+     * premise. {@link #checkInstanceSettingsWrite} is therefore the per-KEY twin of the
+     * frozen-column rule: everything outside
+     * {@code InstanceImagePolicy.JUDGED_SETTINGS_KEYS} is frozen exactly like a frozen
+     * column, and the image keys stay the image policy's business alone.
      */
     private static final Set<String> INSTANCE_DERIVED = Set.of(
         InstanceModel.ID.getName(),
@@ -574,6 +587,46 @@ public final class TenantWrites {
             }
             if (!Objects.equals(row.get(name), stored.get(name))) {
                 throw Violations.ofField(name, row.get(name),
+                    CmsSupport.violationText("tenant_field_frozen"));
+            }
+        }
+
+        checkInstanceSettingsWrite(row, stored);
+    }
+
+    /**
+     * The per-KEY half of the frozen-column rule over {@code settings}: a tenant may move
+     * only the members {@code InstanceImagePolicy} judges, and every other member is as
+     * frozen as a frozen column.
+     *
+     * AIDEV-NOTE: the settings SCHEMA is per-KIND (IncusContainerKind declares
+     * {@code privileged}, the Docker kinds do not), so this walks the keys actually
+     * present on either side rather than a model schema -- a kind-specific escape hatch
+     * must not become writable just because InstanceModel's own schema cannot name it.
+     * Comparison is by value, so a form echoing an unchanged member back is not a change,
+     * exactly like the column loop above.
+     *
+     * @throws Violations {@code tenant_field_frozen} on {@code settings.<key>}
+     */
+    private static void checkInstanceSettingsWrite(@NonNull Row row, @NonNull Row stored) {
+        String column = InstanceModel.SETTINGS.getName();
+        if (!row.has(column)) {
+            return;
+        }
+        Map<?, ?> staged = row.get(column) instanceof Map<?, ?> map ? map : Map.of();
+        Map<?, ?> current = stored.get(column) instanceof Map<?, ?> map ? map : Map.of();
+
+        Set<Object> keys = new LinkedHashSet<>();
+        keys.addAll(staged.keySet());
+        keys.addAll(current.keySet());
+
+        for (Object key : keys) {
+            String name = String.valueOf(key);
+            if (InstanceImagePolicy.JUDGED_SETTINGS_KEYS.contains(name)) {
+                continue;
+            }
+            if (!Objects.equals(staged.get(key), current.get(key))) {
+                throw Violations.ofField(column + "." + name, staged.get(key),
                     CmsSupport.violationText("tenant_field_frozen"));
             }
         }

@@ -8,8 +8,6 @@
 {% declare dbPassword: String %}
 {% declare dbName: String %}
 {% declare restoreUrl: String %}
-{% declare error: String = "" %}
-{% declare restored: Boolean = false %}
 {% declare usedBy: List = null %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
@@ -22,13 +20,6 @@
     </header>
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
-
-    {% if restored %}
-    <pl-alert variant="success">{{ t("restored", scope: "database_tab", name: dbName) }}</pl-alert>
-    {% /if %}
-    {% if error != "" %}
-    <pl-alert variant="destructive">{{ error }}</pl-alert>
-    {% /if %}
 
     <pl-card>
         <pl-card-header>

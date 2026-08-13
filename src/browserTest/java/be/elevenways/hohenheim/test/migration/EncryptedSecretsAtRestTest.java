@@ -10,12 +10,9 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
-import be.elevenways.hohenheim.server.migration.M047_EncryptRecoverableSecrets;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.field.Field;
-import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
@@ -29,17 +26,14 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.nio.file.Files;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The at-rest contract for every recoverable secret: the column holds a {@code zenc$}
  * envelope, never the plaintext, and the model API still round-trips the real value.
- * Also proves the M047 heal converts pre-encryption plaintext and is re-runnable.
  */
 class EncryptedSecretsAtRestTest {
 
@@ -70,8 +64,7 @@ class EncryptedSecretsAtRestTest {
     void everyRecoverableSecretIsCiphertextAtRestAndRoundTrips() throws Exception {
         SqliteDatasource datasource = emptyDatabase("at-rest");
 
-        // 1. A fresh install migrates cleanly, including M047's (empty) heal and
-        //    zenit's keyring marker table.
+        // 1. A fresh install migrates cleanly, zenit's keyring marker table included.
         new MigrationRunner(datasource).migrate().requireSuccess();
         // ONE database per test class: the controller identity (and therefore every
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
@@ -140,10 +133,12 @@ class EncryptedSecretsAtRestTest {
             site.set(SiteModel.SECURITY_REPORT_TOKEN, REPORT_TOKEN);
             sites.save(site);
 
-            // M041 seeds the spamservice singleton stub; update it in place.
+            // The singleton stub is SEEDED (SpamserviceInstallationSeeder), and a bare
+            // migrate never runs the SEED boot stage -- so create it the way the seeder does.
             Model spamservice = Models.get(SpamserviceInstallationModel.class);
-            Row installation = spamservice.find().first();
-            assertThat(installation).as("step 3: the M041 singleton stub exists").isNotNull();
+            Row installation = spamservice.createEmptyRow();
+            installation.set(SpamserviceInstallationModel.ID,
+                SpamserviceInstallationModel.SINGLETON_ID);
             installation.set(SpamserviceInstallationModel.SYSTEM_USER_ID, 1000);
             installation.set(SpamserviceInstallationModel.CONTROLLER_KEY, CONTROLLER);
             spamservice.save(installation);
@@ -231,68 +226,6 @@ class EncryptedSecretsAtRestTest {
             .as("step 6: git repository url (may embed user:TOKEN@) is secret").isTrue();
     }
 
-    @Test
-    void healConvertsPreExistingPlaintextAndIsReRunnable() throws Exception {
-        SqliteDatasource datasource = emptyDatabase("heal");
-
-        // 1. Migrate everything EXCEPT M047: the pre-flip schema a populated install has.
-        List<Supplier<Migration>> withoutHeal = new ArrayList<>();
-        for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
-            if (!(supplier.get() instanceof M047_EncryptRecoverableSecrets)) {
-                withoutHeal.add(supplier);
-            }
-        }
-        new MigrationRunner(datasource, withoutHeal).migrate().requireSuccess();
-
-        // 2. Plant plaintext rows raw, exactly what a pre-encryption install holds.
-        datasource.rawUpdate("INSERT INTO certificates (id, private_key_pem) VALUES (1, ?)", "PLAIN-cert");
-        datasource.rawUpdate("INSERT INTO dns_zones (id, origin, dnssec_private_key) VALUES (1, 'z.test', ?)", "PLAIN-dnssec");
-        datasource.rawUpdate("INSERT INTO dns_peers (id, name, tsig_secret, api_key) VALUES (1, 'p', ?, ?)", "PLAIN-tsig", "PLAIN-peer-key");
-        datasource.rawUpdate("INSERT INTO managed_databases (id, db_password) VALUES (1, ?)", "PLAIN-db-pass");
-        datasource.rawUpdate("INSERT INTO notification_channels (id, name, url) VALUES (1, 'hook', ?)", "https://hooks.example.com/PLAIN-hook");
-        datasource.rawUpdate("INSERT INTO sites (id, name, slug, security_report_token) VALUES (1, 's', 's', ?)", "PLAIN-report");
-        datasource.rawUpdate("UPDATE spamservice_installations SET controller_key = ?", "PLAIN-controller");
-        datasource.rawUpdate("INSERT INTO stacks (id, name) VALUES (1, 'st')");
-        datasource.rawUpdate("INSERT INTO stack_services (id, stack_id, name, environment) VALUES (1, 1, 'web', ?)",
-            "{\"A\":\"PLAIN-env\"}");
-
-        // 3. The full migrate applies ONLY M047, and its heal encrypts every column.
-        //    AIDEV-NOTE: integrity is relaxed to "warn" for this one call because step 1
-        //    built an out-of-order install ON PURPOSE -- every migration after M047 is
-        //    already recorded while M047 is still pending, which is exactly the shipped
-        //    integrity check's out-of-order finding. Under the default "fail" posture this
-        //    fixture cannot migrate at all, and the heal it exists to exercise never runs.
-        MigrationIntegrityTest.withIntegrityMode("warn",
-            () -> new MigrationRunner(datasource).migrate().requireSuccess());
-        List<String> envelopes = allEnvelopes(datasource);
-        assertThat(envelopes).as("step 3: nine healed envelopes").hasSize(9);
-        for (String envelope : envelopes) {
-            assertThat(envelope).as("step 3: healed value is an envelope").startsWith("zenc$");
-            assertThat(envelope).as("step 3: healed value hides the plaintext").doesNotContain("PLAIN-");
-        }
-
-        // 4. The healed values are readable AND correct through the (now encrypted) model API.
-        Db.run(datasource, () -> {
-            assertThat((String) Models.get(CertificateModel.class).findById(1)
-                .get(CertificateModel.PRIVATE_KEY_PEM))
-                .as("step 4: healed certificate key decrypts").isEqualTo("PLAIN-cert");
-            assertThat((String) Models.get(SiteModel.class).findById(1)
-                .get(SiteModel.SECURITY_REPORT_TOKEN))
-                .as("step 4: healed report token decrypts").isEqualTo("PLAIN-report");
-            Map<String, String> env = Models.get(StackServiceModel.class).findById(1)
-                .get(StackServiceModel.ENVIRONMENT);
-            assertThat(env).as("step 4: healed environment map decrypts")
-                .containsEntry("A", "PLAIN-env");
-        });
-
-        // 5. Re-running the heal is a no-op: every envelope string stays IDENTICAL,
-        //    proving the zenc$ prefix check really short-circuits.
-        M047_EncryptRecoverableSecrets.healAll(datasource);
-        assertThat(allEnvelopes(datasource))
-            .as("step 5: a re-run rewrites nothing")
-            .containsExactlyElementsOf(envelopes);
-    }
-
     // -- helpers --------------------------------------------------------------
 
     private static void assertCiphertext(SqliteDatasource datasource, String table, String column,
@@ -307,19 +240,6 @@ class EncryptedSecretsAtRestTest {
             assertThat(stored).as("step 4: %s.%s never leaks the plaintext", table, column)
                 .doesNotContain(plaintextProbe);
         }
-    }
-
-    /** The nine healed column values, in the stable TARGETS order. */
-    private static List<String> allEnvelopes(SqliteDatasource datasource) {
-        List<String> result = new ArrayList<>();
-        for (M047_EncryptRecoverableSecrets.Target target : M047_EncryptRecoverableSecrets.TARGETS) {
-            Field<?, ?> field = target.field();
-            for (Row row : datasource.rawQuery("SELECT " + field.getName() + " FROM " + target.table()
-                    + " WHERE " + field.getName() + " IS NOT NULL ORDER BY id")) {
-                result.add(String.valueOf(row.get(field.getName())));
-            }
-        }
-        return result;
     }
 
     private static long scalar(SqliteDatasource datasource, String sql) {

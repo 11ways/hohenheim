@@ -2825,10 +2825,6 @@
     "text": "Imported {$count} records.",
     "scope": "dns_zone"
   },
-  "import_skipped": {
-    "text": "Skipped: {$lines}",
-    "scope": "dns_zone"
-  },
   "import_empty": {
     "text": "Paste zone-file text before importing",
     "scope": "dns_zone"
@@ -8099,5 +8095,49 @@
   "ack_missing": {
     "text": "Not accepted",
     "scope": "server_overview"
+  },
+  "import_partial": {
+    "text": "Imported {$count} records; skipped: {$skipped}",
+    "scope": "dns_zone"
+  },
+  "import_failed": {
+    "text": "Import failed: {$reason}",
+    "scope": "dns_zone"
+  },
+  "peer_call_failed": {
+    "text": "The owning peer refused the change: {$reason}",
+    "scope": "dns_remote"
+  },
+  "dump_required": {
+    "text": "Pick a dump file to restore.",
+    "scope": "database_tab"
+  },
+  "restore_unsupported": {
+    "text": "'{$name}' does not support restore.",
+    "scope": "database_tab"
+  },
+  "restore_failed": {
+    "text": "Restore of '{$name}' failed; see the server log for details.",
+    "scope": "database_tab"
+  },
+  "no_handler": {
+    "text": "This site has no running process handler; it is either disabled or failed to start. Check the site's status for the reason.",
+    "scope": "site_process"
+  },
+  "role_disabled": {
+    "text": "This node does not run managed processes (roles.processes is off), so it has no process to act on for this site.",
+    "scope": "site_process"
+  },
+  "start_failed": {
+    "text": "The process did not start; check this site's process log.",
+    "scope": "site_process"
+  },
+  "gone": {
+    "text": "Process {$pid} is no longer running.",
+    "scope": "site_process"
+  },
+  "refused": {
+    "text": "The request was refused.",
+    "scope": "violations"
   }
 }

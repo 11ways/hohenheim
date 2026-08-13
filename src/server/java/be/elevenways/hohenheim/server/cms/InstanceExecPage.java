@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimParams;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
-import be.elevenways.zenit.common.routing.BoundEndpoint;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceExec;
@@ -61,12 +60,10 @@ public final class InstanceExecPage implements RecordScopedPage<Row> {
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("instanceId", instance.get(InstanceModel.ID));
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status));
-        String error = conduit.getQueryParam("error");
-        String output = conduit.getQueryParam("output");
-        String exit = conduit.getQueryParam("exit");
-        vars.put("execError", error == null ? "" : error);
-        vars.put("execOutput", output == null ? "" : output);
-        vars.put("execExit", exit == null ? "" : exit);
+        InstanceExecResults.Run run = InstanceExecResults.pop(conduit,
+            instance.get(InstanceModel.ID));
+        vars.put("execOutput", run == null ? "" : run.output());
+        vars.put("execExit", run == null ? "" : run.exitCode());
         vars.put("returnUrl", ReturnTarget.capture(conduit));
         // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
         // ReturnTarget is server-only, so the common template cannot reach it.
@@ -96,24 +93,24 @@ public final class InstanceExecPage implements RecordScopedPage<Row> {
         int instanceId = instance.get(InstanceModel.ID);
 
         // AIDEV-NOTE: this tab renders under /admin AND /manage, so the destination is
-        // built from the HOSTING panel rather than from conduit.getPath(). Composed off
-        // CmsEndpoints because it is a CMS route PLUS query parameters, and CmsRoutes
-        // returns the RouteTarget interface, which has no with(...).
-        BoundEndpoint<Map<String, Object>> back = CmsEndpoints.RECORD_SUBPAGE
-            .with(CmsEndpoints.PANEL_PARAM, CmsSupport.panelSlug(conduit))
-            .with(CmsEndpoints.RESOURCE_PARAM, "instances")
-            .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
-            .with(CmsEndpoints.SUBPAGE_PARAM, SLUG);
+        // built from the HOSTING panel rather than from conduit.getPath().
+        RouteTarget back = CmsRoutes.subpage(CmsSupport.panelSlug(conduit),
+            "instances", instanceId, SLUG);
         try {
             InstanceExec.Run run = new InstanceExec().run(instanceId, command);
-            // CmsActionResult.redirect is Uri-typed, so the typed target renders here.
-            return CmsActionResult.redirect(new Uri(back
-                .with(HohenheimParams.EXEC_EXIT, run.exitCode())
-                .with(HohenheimParams.EXEC_OUTPUT, run.output()).toUrl()));
+            // Output is page CONTENT, so it rides the session, never the URL.
+            InstanceExecResults.stash(conduit, instanceId, run.exitCode(), run.output());
+            return CmsActionResult.redirect(new Uri(back.toUrl()));
         } catch (Violations refused) {
-            // NEVER a silent swallow: the page renders ?error= verbatim.
-            return CmsActionResult.redirect(new Uri(back.with(HohenheimParams.ERROR_TEXT,
-                String.valueOf(refused.getMessage())).toUrl()));
+            // NEVER a silent swallow: the refusal becomes the page's error toast.
+            return CmsActionResult.errorToast(violationMessage(refused));
         }
+    }
+
+    /** The first violation's own message, so a refusal keeps its localized text. */
+    private static @NonNull Microcopy violationMessage(@NonNull Violations violations) {
+        return violations.all().isEmpty()
+            ? Microcopy.of("refused").withFilter("scope", "violations")
+            : violations.all().get(0).message();
     }
 }

@@ -33,8 +33,6 @@ public final class InstanceTemplateImportPage extends PanelPage {
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", Microcopy.of("import").withFilter("scope", "instance_template")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
-        String error = conduit.getQueryParam("error");
-        vars.put("error", error != null ? error : "");
         vars.put("catalogApps", CommunityScripts.catalogApps());
         vars.put("catalogRevision", CommunityScripts.catalogRevision());
         vars.put("templatesTarget", CmsRoutes.list("admin", "instance-templates"));

@@ -80,7 +80,11 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
                 "/databases/" + name + "/restore", "dump", name + ".sql", dump);
             assertThat(response.statusCode()).isEqualTo(302);
             assertThat(response.headers().firstValue("Location").orElse(""))
-                .contains("restored=1");
+                .describedAs("the confirmation rides the session flash, so the URL stays clean")
+                .doesNotContain("restored");
+            var restoredFlash = popFlash();
+            assertThat(restoredFlash).describedAs("the restore stashes a confirmation").isNotNull();
+            assertThat(restoredFlash.message().key()).isEqualTo("restored");
 
             DockerClient.ExecResult result = docker.exec(container,
                 List.of("psql", "-U", "appuser", "-d", "appdb", "-tAc", "SELECT x FROM things"),

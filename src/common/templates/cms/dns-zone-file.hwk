@@ -5,10 +5,7 @@
 {% declare origin: String %}
 {% declare zoneText: String %}
 {% declare dsRecord: String = "" %}
-{% declare error: String = "" %}
-{% declare imported: String = "" %}
 {% declare importTarget: RouteTarget %}
-{% declare skipped: String = "" %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -21,9 +18,6 @@
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
-    {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
-    {% if imported != "" %}<pl-alert variant="default">{{ t("import_done", scope: "dns_zone", count: imported) }}</pl-alert>{% /if %}
-    {% if skipped != "" %}<pl-alert variant="warning">{{ t("import_skipped", scope: "dns_zone", lines: skipped) }}</pl-alert>{% /if %}
 
     {% if dsRecord != "" %}
     <pl-card>

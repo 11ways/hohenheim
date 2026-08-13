@@ -16,6 +16,7 @@ import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.auth.server.GrantService;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -172,9 +173,21 @@ class SitesManageAllTest extends HohenheimTestBase {
 
             // 1c. THE SURFACES: the panel is reachable and the LIST actually renders a site
             //     nobody granted this holder.
-            assertThat(holderGet("/manage").statusCode())
-                .as("step 1c: the panel is eligible on manage_all alone")
-                .isIn(200, 302, 303);
+            //     The panel is FOLLOWED to its landing page: a bare isIn(200,302,303) was
+            //     satisfied by a redirect to the login form, which is the exact failure
+            //     this step exists to catch.
+            HttpResponse<String> panel = holderGetFollowingRedirects("/manage");
+            assertThat(panel.statusCode())
+                .withFailMessage("step 1c: the panel must open on manage_all alone"
+                    + " (HTTP %s at %s)", panel.statusCode(), panel.uri())
+                .isEqualTo(200);
+            assertThat(panel.uri().getPath())
+                .withFailMessage("step 1c: the panel must LAND inside /manage, never on a"
+                    + " login or setup page (landed on %s)", panel.uri())
+                .startsWith("/manage");
+            assertThat(panel.body())
+                .as("step 1c: and the panel it landed on offers its sites section")
+                .contains("/manage/sites");
             HttpResponse<String> list = holderGet(
                 "/manage/sites?q=" + encoded("name = \"ManageAll Beta\""));
             assertThat(list.statusCode())
@@ -248,10 +261,23 @@ class SitesManageAllTest extends HohenheimTestBase {
                     HohenheimAccess.CREDENTIALS))
                 .as("step 3: and a managed database's credentials")
                 .isFalse();
-            assertThat(holderGet("/manage/instances").body())
+            // The STATUS comes first on both: a 403 page contains no record name either,
+            // so an absence asserted without it passes on a closed surface too.
+            HttpResponse<String> instances = holderGet("/manage/instances");
+            assertThat(instances.statusCode())
+                .withFailMessage("step 3: the instances list must ANSWER for this holder,"
+                    + " or the absence below is a refusal page rather than an empty list"
+                    + " (HTTP %s)", instances.statusCode())
+                .isEqualTo(200);
+            assertThat(instances.body())
                 .as("step 3: the instances list names no instance")
                 .doesNotContain("manageall-instance");
-            assertThat(holderGet("/manage/databases").body())
+            HttpResponse<String> databases = holderGet("/manage/databases");
+            assertThat(databases.statusCode())
+                .withFailMessage("step 3: the databases list must answer too (HTTP %s)",
+                    databases.statusCode())
+                .isEqualTo(200);
+            assertThat(databases.body())
                 .as("step 3: nor the databases list a database")
                 .doesNotContain("manageall-database");
 
@@ -276,6 +302,58 @@ class SitesManageAllTest extends HohenheimTestBase {
                 .satisfies(refused -> assertThat(refusalTargets((Violations) refused))
                     .as("step 4b: refused for DELEGABILITY, not for the boundary permission")
                     .contains("grant_delegate"));
+
+            // 5. THE OTHER LANE, and the one step 4 could not see. Non-delegability lives
+            //    on the PERMISSION side, and the RECORD-GRANT editor never asks about it --
+            //    it asks about a CAPABILITY. So a holder of manage_all plus the panel gate
+            //    passed the per-record boundary on EVERY site (the type-level row answers
+            //    "allowed" for all of them) and could mint a peer's per-site `manage` grant
+            //    installation-wide from /manage/sites/{id}/access: the same spread step 4b
+            //    refuses, through a door that never checked.
+            GrantService.createDirectGrant("user", holderId, MANAGE_ACCESS, true);
+            AccessContext everySite = holderContext();
+            assertThat(everySite.capabilityDecision(SiteModel.MODEL_ID, alphaSiteId,
+                    HohenheimAccess.MANAGE))
+                .as("step 5: the holder's authority over the site is REAL and unchanged")
+                .isEqualTo(RecordCapabilityDecision.TYPE_LEVEL);
+            assertThatThrownBy(() -> GrantAdministration.requireAuthorizedRecordDiff(
+                    everySite, SiteModel.MODEL_ID, alphaSiteId, "access",
+                    List.of(new GrantAdministration.RecordGrantChange(
+                        "user", peerId, HohenheimAccess.MANAGE, true))))
+                .as("step 5: but blanket authority over sites is not authority to hand one out")
+                .isInstanceOf(Violations.class)
+                .satisfies(refused -> assertThat(refusalTargets((Violations) refused))
+                    .as("step 5: refused at the per-record BOUNDARY")
+                    .contains("record_boundary"));
+            assertThat(HohenheimAccess.canManageSite(TestAccessContexts.contextFor(
+                    new UserPrincipal(peerId, "Peer")), alphaSiteId))
+                .as("step 5: STATE -- the peer was given nothing")
+                .isFalse();
+            assertThat(GrantAdministration.holdsAnyDelegableCapability(everySite,
+                    SiteModel.MODEL_ID, betaSiteId))
+                .as("step 5: and the access page does not offer itself on any site either")
+                .isFalse();
+
+            // 6. THE CONTROL, so step 5 is a narrowing and not a shutdown: a RECORD-LEVEL
+            //    manage holder still delegates manage on the site it actually holds. That
+            //    is the delegation this lane exists for and it is untouched.
+            Integer ownerId = user("manage-all-owner@hohenheim.local", "Site Owner");
+            RecordGrants.grant("user", ownerId, SiteModel.MODEL_ID, alphaSiteId,
+                HohenheimAccess.MANAGE, true);
+            AccessContext owner = TestAccessContexts.contextFor(
+                new UserPrincipal(ownerId, "Site Owner"));
+            assertThat(GrantAdministration.requireAuthorizedRecordDiff(
+                    owner, SiteModel.MODEL_ID, alphaSiteId, "access",
+                    List.of(new GrantAdministration.RecordGrantChange(
+                        "user", peerId, HohenheimAccess.MANAGE, true))))
+                .as("step 6: a record-level manage holder may still delegate on its own site")
+                .hasSize(1);
+            assertThatThrownBy(() -> GrantAdministration.requireAuthorizedRecordDiff(
+                    owner, SiteModel.MODEL_ID, betaSiteId, "access",
+                    List.of(new GrantAdministration.RecordGrantChange(
+                        "user", peerId, HohenheimAccess.MANAGE, true))))
+                .as("step 6: and only there -- the boundary is still per record")
+                .isInstanceOf(Violations.class);
         } finally {
             deleteGrants(holderId, MANAGE_ALL, MANAGE_ACCESS, DELEGABLE_CONTROL,
                 AuthEndpoints.PERM_GRANTS_MANAGE.value());
@@ -328,6 +406,17 @@ class SitesManageAllTest extends HohenheimTestBase {
 
     private static String encoded(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    /** The same request, followed to its landing page, so a redirect proves where it went. */
+    private HttpResponse<String> holderGetFollowingRedirects(String path) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NORMAL).build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + holderSession)
+            .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> holderGet(String path) throws Exception {

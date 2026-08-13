@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.task.SuperviseProxyListeners;
+import be.elevenways.zenit.common.task.DefaultTaskContext;
 import be.elevenways.zenit.comms.CommsChannels;
 import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.comms.server.CommsDispatcher;
@@ -140,7 +142,9 @@ class ProxyListenerSupervisionTest {
                 assertThat(newSurface)
                     .as("step 2: the listener item fires on listener state alone")
                     .hasSize(1);
-                assertThat(newSurface.get(0).severity()).isEqualTo("error");
+                assertThat(newSurface.get(0).severity())
+                    .as("step 2: and it is an ERROR, not a note an operator can scroll past")
+                    .isEqualTo("error");
             } finally {
                 ServerMain.adoptProxyServer(null);
             }
@@ -261,6 +265,67 @@ class ProxyListenerSupervisionTest {
         } finally {
             httpProxy.stop();
         }
+    }
+
+    /**
+     * The WIRING, which the healing tests above cannot see: the minutely
+     * {@link SuperviseProxyListeners} task must reach the live proxy through
+     * {@code ServerMain}, or it records a successful run having supervised nothing.
+     */
+    @Test
+    @Timeout(60)
+    void theMinutelyTaskReachesTheAdoptedProxyAndHealsIt() {
+        // Step 1: an HTTP listener that failed to start (privileged port), attempt 1 armed.
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
+        AtomicLong clock = new AtomicLong(System.currentTimeMillis());
+        ProxyServer taskProxy = new ProxyServer();
+        taskProxy.setClockForTesting(clock::get);
+        taskProxy.start();
+        try {
+            assertThat(taskProxy.getHttpState())
+                .as("step 1: HTTP failed to start, so there is something to heal")
+                .isEqualTo(ProxyServer.State.FAILED);
+            long due = taskProxy.getHttpNextRestartAttemptAtForTesting();
+
+            // Step 2: the restart would now succeed, and the retry is due -- but with no
+            // proxy adopted the task supervises NOTHING. This is the executor's null
+            // branch, and a run that reports success while doing nothing is exactly what
+            // made the wiring invisible to the bootstrap test.
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+            clock.set(due);
+            ServerMain.adoptProxyServer(null);
+            runSupervisionTask();
+            assertThat(taskProxy.getHttpState())
+                .as("step 2: with no adopted proxy the task cannot heal anything")
+                .isEqualTo(ProxyServer.State.FAILED);
+            assertThat(taskProxy.getHttpRestartAttemptsForTesting())
+                .as("step 2: and it attempted no restart at all")
+                .isEqualTo(1);
+
+            // Step 3: the SAME task, with the proxy ServerMain holds in production, heals
+            // the listener -- so the schedule's executor really is joined to the proxy.
+            ServerMain.adoptProxyServer(taskProxy);
+            runSupervisionTask();
+            assertThat(taskProxy.getHttpState())
+                .withFailMessage("step 3: the minutely task did not reach the adopted"
+                    + " proxy -- the schedule exists but supervises nothing (state %s)",
+                    taskProxy.getHttpState())
+                .isEqualTo(ProxyServer.State.RUNNING);
+            assertThat(taskProxy.getHttpRestartAttemptsForTesting())
+                .as("step 3: and the healed listener reset its restart bookkeeping")
+                .isZero();
+        } finally {
+            ServerMain.adoptProxyServer(null);
+            taskProxy.stop();
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
+        }
+    }
+
+    /** Run the scheduled task exactly as the task service does: its own executor. */
+    private static void runSupervisionTask() {
+        SuperviseProxyListeners task = new SuperviseProxyListeners();
+        task.executor(new DefaultTaskContext(task));
     }
 
     /** The try-with-resources scope ends before step 5; rebind a clock the proxy already uses. */
