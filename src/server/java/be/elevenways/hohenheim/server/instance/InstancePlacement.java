@@ -53,10 +53,23 @@ import java.util.Map;
  * operator memory. In the gate it binds every lane, and this class keeps consulting the
  * gate rather than re-stating it.
  *
- * Selection among the survivors is FEWEST BOOKED MEMORY, lowest id as the tie-break: a
+ * Selection among the survivors is MOST REMAINING HEADROOM, lowest id as the tie-break: a
  * host with 128 GB and two small workloads outranks one with 4 GB and one large VM, which
  * a count of rows could never express. It is still deterministic, so a placement is
  * reproducible and testable, and never a function of anything the caller sent.
+ *
+ * CORRECTED 2026-08-13, and the worked example above is why. The score used to be FEWEST
+ * BOOKED MEMORY -- the instance bucket alone, compared across hosts -- which answers a
+ * different question from the one the example asks in two independent ways. It is
+ * BUDGET-BLIND: a 4 GB host holding nothing scores 0 and outranks a 128 GB host holding
+ * 1 GB, so the example's own 128 GB machine loses to any idle small one. And it is blind
+ * to the OTHER TIER: managed child processes book into ProcessCapacity's bucket, so a
+ * 32 GB host with 24 GB of managed children also scores 0 and outranks a host with real
+ * room. Nothing ever overspent -- the eligibility CEILING has always been
+ * {@link InstanceCapacity#bookableMbOn} and is unchanged -- but the fleet was packed onto
+ * whichever machine happened to hold the fewest instance megabytes. The score is now the
+ * same subtraction the ceiling and the {@code no_placement_capacity} refusal already
+ * report: {@code bookable - booked}, maximised.
  *
  * AIDEV-NOTE: the owner label compared on a dedicated host is the QUOTA BUCKET, which
  * is the packed manage-subject set the create charged. It is deliberately the same
@@ -173,7 +186,7 @@ public final class InstancePlacement {
     public static int chooseForBucket(@NonNull String bucket, @NonNull Workload workload,
                                       @Nullable Integer excludeServerId) {
         Integer chosen = null;
-        long chosenLoad = Long.MAX_VALUE;
+        long chosenFreeMb = Long.MIN_VALUE;
         // Distinguishing "nothing accepts this workload" from "everything is full" is the
         // whole difference between an operator admitting a host and an operator finding
         // one that already refused for another reason.
@@ -220,14 +233,20 @@ public final class InstancePlacement {
             // write then refused host_capacity_reached by name.
             long bookable = InstanceCapacity.bookableMbOn(serverId, budget);
             long booked = InstanceCapacity.bookedMbOn(serverId);
-            if (booked + footprint > bookable) {
+            long free = bookable - booked;
+            if (footprint > free) {
                 somethingWasFull = true;
-                largestFreeMb = Math.max(largestFreeMb, bookable - booked);
+                largestFreeMb = Math.max(largestFreeMb, free);
                 continue;
             }
-            if (booked < chosenLoad) {
+            // AIDEV-NOTE: the SAME `free` the refusal above quotes and the write judges
+            // against, maximised -- never `booked` on its own, which is budget-blind and
+            // blind to the managed-process tier (see the class docblock's 2026-08-13
+            // correction). The comparison is strict, and the walk is ordered by id ASC,
+            // which is what makes the lowest id the tie-break without a second clause.
+            if (free > chosenFreeMb) {
                 chosen = serverId;
-                chosenLoad = booked;
+                chosenFreeMb = free;
             }
         }
 
