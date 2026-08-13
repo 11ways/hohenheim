@@ -89,6 +89,23 @@ public class HohenheimDatabase {
     }
 
     /**
+     * Closes the opened datasource; idempotent, so an offline command may close it EARLY
+     * and the dispatcher's own finally block can still close unconditionally.
+     *
+     * AIDEV-NOTE: the reference is deliberately kept rather than nulled. Every offline
+     * command reaches the database through {@link #datasource()} (ControlPlaneBackups does),
+     * and the pre-existing shape after a CLI invocation was exactly "closed, still
+     * referenced, process about to exit". Nulling it would turn that into an NPE instead
+     * of the driver's own "closed" refusal, which says less.
+     */
+    public static void closeDatasource() {
+        SqlDatasource open = datasource;
+        if (open != null) {
+            open.close();
+        }
+    }
+
+    /**
      * Refuses any non-SQLite engine before a datasource exists.
      *
      * @throws IllegalStateException when the resolved engine is not SQLite

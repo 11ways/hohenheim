@@ -3,9 +3,9 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.cli.OfflineBoot;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
-import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
@@ -47,14 +47,10 @@ import be.elevenways.zenit.auth.server.identity.AutoProvisioningSink;
 import be.elevenways.zenit.auth.server.identity.IdentityProviderRegistry;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusIdentityProvider;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.ServerZenitRuntime;
-import be.elevenways.zenit.server.orm.crypto.EncryptionRekey;
-import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
-import be.elevenways.zenit.server.setting.ServerSettings;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
-
-import java.util.List;
 
 /**
  * Server entry point for Hohenheim.
@@ -66,95 +62,7 @@ public class ServerMain {
     private static SecondaryZoneService secondaryZoneService;
 
     public static void main(String[] args) {
-        // Migrate-only invocation (zenit-dev's migration step): settings +
-        // datasource + migrations, then exit WITHOUT booting any server.
-        // Without this early path the migration step used to boot a full
-        // server (both listeners) that only a kill -9 timeout stopped.
-        // AIDEV-NOTE: it must run through ServerZenitRuntime, not HohenheimDatabase.init():
-        // the framework prints the sentinels zenit-dev's migration preflight reads. A
-        // hand-rolled branch printed neither, so every successful run was reported as
-        // "exited without proving completion" and the server never started.
-        // Backup/restore-only invocations for control-plane recovery archives (database +
-        // keyring as one verified unit), exiting WITHOUT booting. Restore is OFFLINE BY
-        // DESIGN -- it replaces the SQLite file, so it must never run while a server has it
-        // open; the archive is fully checksum-verified before either half is touched. Both
-        // load the zenit settings chain too, so a database.encryption.key_file override in
-        // settings/local.dry is honored exactly like a real boot.
-        if (args != null) {
-            List<String> argList = java.util.Arrays.asList(args);
-
-            if (argList.contains("--backup-control-plane")) {
-                HohenheimSettingsFiles.load();
-                ServerSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
-                var datasource = HohenheimDatabase.openDatasource();
-                try {
-                    ControlPlaneBackups.backupNow();
-                } catch (java.io.IOException error) {
-                    throw new java.io.UncheckedIOException("Control-plane backup failed", error);
-                } finally {
-                    datasource.close();
-                }
-                return;
-            }
-
-            int restoreFlag = argList.indexOf("--restore-control-plane");
-            if (restoreFlag >= 0) {
-                if (restoreFlag + 1 >= args.length) {
-                    throw new IllegalArgumentException(
-                        "--restore-control-plane needs the archive path (or the key of an"
-                        + " archive on the configured backup target) as its next argument");
-                }
-                HohenheimSettingsFiles.load();
-                ServerSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
-                String pointer = args[restoreFlag + 1];
-                java.nio.file.Path local = java.nio.file.Path.of(pointer);
-                if (java.nio.file.Files.isRegularFile(local)) {
-                    ControlPlaneBackups.restore(local);
-                    return;
-                }
-                // Not a local file: it is a key on the target. Resolving the target needs the
-                // backup_targets table, so the database is opened READ-ONLY-in-spirit here --
-                // the restore itself still replaces the file only after the archive verified.
-                var restoreSource = HohenheimDatabase.openDatasource();
-                try {
-                    ControlPlaneBackups.restoreFromTarget(pointer);
-                } catch (java.io.IOException error) {
-                    throw new java.io.UncheckedIOException(
-                        "Control-plane restore from target failed", error);
-                } finally {
-                    restoreSource.close();
-                }
-                return;
-            }
-
-            if (argList.contains("--list-control-plane-backups")) {
-                HohenheimSettingsFiles.load();
-                ServerSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
-                var listSource = HohenheimDatabase.openDatasource();
-                try {
-                    for (String key : ControlPlaneBackups.listBackups()) {
-                        Blast.log("control-plane archive:", key);
-                    }
-                } catch (java.io.IOException error) {
-                    throw new java.io.UncheckedIOException(
-                        "Cannot list control-plane backups", error);
-                } finally {
-                    listSource.close();
-                }
-                return;
-            }
-
-            if (runEncryptionKeyCommand(argList)) {
-                return;
-            }
-        }
-
-        if (args != null && java.util.Arrays.asList(args).contains("--run-migrations")) {
-            HohenheimSettingsFiles.load();
-            HohenheimAccess.declareGrantableModels();
-            ServerZenitRuntime.runMigrationsIfRequested(args,
-                HohenheimDatabase::openDatasource,
-                HohenheimDatabase::acknowledgeRetiredVersions);
+        if (runCommandLineOnly(args)) {
             return;
         }
 
@@ -341,62 +249,55 @@ public class ServerMain {
     }
 
     /**
-     * The operator lane for the three halves of a key rotation, each its own deliberate step.
+     * Every command-line-only lane, in dispatch order; nothing here boots a server.
      *
-     * They are separate arguments on purpose: rotating is instant, re-encrypting walks every
-     * encrypted row and may be re-run after a crash, and retiring is irreversible. One
-     * "--rotate-everything" would hide the only step that can destroy data behind the two that
-     * cannot. Every one of them exits without booting a server.
+     * Migrate-only invocation (zenit-dev's migration step): settings + datasource +
+     * migrations, then exit WITHOUT booting any server. Without this early path the
+     * migration step used to boot a full server (both listeners) that only a kill -9
+     * timeout stopped.
      *
-     * @return whether one of the commands ran (the caller must then stop)
+     * AIDEV-NOTE: migrations must run through ServerZenitRuntime, not
+     * HohenheimDatabase.init(): the framework prints the sentinels zenit-dev's migration
+     * preflight reads. A hand-rolled branch printed neither, so every successful run was
+     * reported as "exited without proving completion" and the server never started.
+     *
+     * AIDEV-NOTE: the flag SCAN is the framework's too, and that is why there is no
+     * `args.contains("--run-migrations")` guard around that call any more. The entry point
+     * also owns --repair-migration-checksums, so the hand-rolled guard silently hid that
+     * lane on this host; the call itself returns false without opening anything when
+     * neither flag is present, and the supplier is lazy.
+     *
+     * AIDEV-NOTE: this is a METHOD rather than inline main() code so a test can drive the
+     * real dispatch without booting the world. The wiring is the thing that was missing --
+     * the framework registry, its command and their tests all existed while no application
+     * called them -- so it needs a test of its own, and one that goes through main() cannot
+     * be written safely.
+     *
+     * @return true when a command ran and {@code main} must stop
      */
-    private static boolean runEncryptionKeyCommand(@NonNull List<String> argList) {
-        boolean rotate = argList.contains("--rotate-encryption-key");
-        boolean reencrypt = argList.contains("--reencrypt-secrets");
-        boolean survey = argList.contains("--encryption-key-survey");
-        int retireFlag = argList.indexOf("--retire-encryption-key");
-        if (!rotate && !reencrypt && !survey && retireFlag < 0) {
-            return false;
-        }
-        if (retireFlag >= 0 && retireFlag + 1 >= argList.size()) {
-            throw new IllegalArgumentException(
-                "--retire-encryption-key needs the key id as its next argument");
+    public static boolean runCommandLineOnly(String[] args) {
+        if (ServerZenitRuntime.runMigrationsIfRequested(args,
+                ServerMain::openDatabaseForCommandLine,
+                HohenheimDatabase::acknowledgeRetiredVersions)) {
+            return true;
         }
 
+        // The break-glass lane: control-plane archives, field-encryption key rotation and
+        // zenit-auth's --set-password all run here with the datasource open and no HTTP
+        // boot; --offline-help lists everything discovered.
+        return OfflineBoot.runIfRequested(args);
+    }
+
+    /**
+     * Settings, grant declarations and the datasource for a CLI-only invocation.
+     *
+     * The framework's migration entry point closes what this returns, and it is only
+     * invoked when a migration flag is actually present -- a normal boot opens nothing here.
+     */
+    private static @NonNull SqlDatasource openDatabaseForCommandLine() {
         HohenheimSettingsFiles.load();
-        ServerSettings.VALUES.loadFrom(ServerZenitRuntime.defaultSettingsSources());
         HohenheimAccess.declareGrantableModels();
-        var datasource = HohenheimDatabase.openDatasource();
-        try {
-            if (rotate) {
-                String minted = FieldEncryption.requireKeyring().rotate();
-                Blast.log("Rotated the field-encryption keyring; the new active key is", minted,
-                    "-- NOTHING already stored is safer yet. Run --reencrypt-secrets, then"
-                    + " --retire-encryption-key <old id>");
-            }
-            if (reencrypt) {
-                EncryptionRekey.Report report = EncryptionRekey.reencrypt(datasource);
-                Blast.log("Re-encrypted under key", report.activeKeyId() + ":",
-                    report.rowsRewritten(), "of", report.rowsScanned(),
-                    "rows rewritten across", report.models().size(), "models");
-            }
-            if (survey || reencrypt) {
-                EncryptionRekey.Survey result = EncryptionRekey.survey(datasource);
-                for (var entry : result.valuesByKeyId().entrySet()) {
-                    Blast.log("field-encryption key", entry.getKey() + ":", entry.getValue(),
-                        "stored value(s) still read under it");
-                }
-            }
-            if (retireFlag >= 0) {
-                String keyId = argList.get(retireFlag + 1);
-                EncryptionRekey.retire(keyId);
-                Blast.log("Retired field-encryption key", keyId,
-                    "-- it can no longer decrypt anything, and nothing needed it");
-            }
-        } finally {
-            datasource.close();
-        }
-        return true;
+        return HohenheimDatabase.openDatasource();
     }
 
     /** A skipped role must never be silent: name the role and what did not start. */
