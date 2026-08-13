@@ -59,6 +59,12 @@ class PaasApiTest extends HohenheimTestBase {
     private static final String PLANTED_ENV_SECRET = "paas-env-s3cr3t-value";
     private static final String PLANTED_SECRET_VALUE = "paas-hunter2-secret";
 
+    /** A key the unadopted instance declares for ITSELF, so a landed write has to override it. */
+    private static final String OVERRIDE_KEY = VAR_PREFIX + "OVERRIDE";
+    private static final String INSTANCE_OWN_VALUE = "instance-own-value";
+    private static final String ATTACKER_VALUE = "attacker-injected-value";
+    private static final String ADMIN_VALUE = "admin-authored-value";
+
     private static Integer tenantAId;
     private static Integer tenantBId;
 
@@ -79,6 +85,7 @@ class PaasApiTest extends HohenheimTestBase {
     private static String keyPaasA;
     private static String keyPaasB;
     private static String keyNarrowA;
+    private static String keyAdmin;
     private static String sessionA;
 
     @BeforeAll
@@ -127,6 +134,14 @@ class PaasApiTest extends HohenheimTestBase {
         // touches below must answer as if the owner's grants did not exist.
         keyNarrowA = ApiKeyService.create(tenantAId, PREFIX + "a-narrow",
             List.of("shortlink.*"), null).plaintext();
+        // The surface that OWNS the environment editor: a key carrying the panel
+        // permission EnvironmentVariableResource lives behind, and no capability scope
+        // at all -- the environment lane must answer to the panel, not to instance
+        // vocabulary the environment tier has no record capability for.
+        keyAdmin = ApiKeyService.create(
+            AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local"))
+                .first().get(UserModel.ID),
+            PREFIX + "admin", List.of("hohenheim.*"), null).plaintext();
 
         Session session = Zenit.getSessionStore().create();
         session.set(AuthKeys.USER_ID, tenantAId.longValue());
@@ -476,14 +491,16 @@ class PaasApiTest extends HohenheimTestBase {
         assertThat(noKey.statusCode()).as("step 4: missing key is 422").isEqualTo(422);
         assertThat(noKey.body()).as("step 4: named").contains("variable_key_required");
 
-        // 5. The environment lane rides the SAME mechanism and the same masking: a
-        //    member sets a secret on the environment, reads back only its existence.
+        // 5. The environment lane rides the SAME mechanism and the same masking -- for
+        //    the admin surface that owns it (see theEnvironmentLaneIsNoWiderThanItsAdminUi
+        //    for why a project member is refused): a secret is set on the environment and
+        //    reads back as existence only.
         String envBase = "/api/v1/environments/" + environmentId + "/variables";
-        HttpResponse<String> envSet = keyPost(keyPaasA, envBase,
+        HttpResponse<String> envSet = keyPost(keyAdmin, envBase,
             "key=" + VAR_PREFIX + "ENV&kind=secret&value=" + PLANTED_SECRET_VALUE);
-        assertThat(envSet.statusCode()).as("step 5: member's env secret accepted")
+        assertThat(envSet.statusCode()).as("step 5: env secret accepted")
             .isEqualTo(200);
-        HttpResponse<String> envListed = keyGet(keyPaasA, envBase);
+        HttpResponse<String> envListed = keyGet(keyAdmin, envBase);
         assertThat(envListed.body()).as("step 5: listed by key, value withheld")
             .contains(VAR_PREFIX + "ENV").doesNotContain(PLANTED_SECRET_VALUE);
         assertThat(new InstanceVariables().valuesForEnvironment(environmentId))
@@ -536,5 +553,106 @@ class PaasApiTest extends HohenheimTestBase {
         assertThat(keyGet(keyNarrowA,
                 "/api/v1/sites/" + siteAId + "/builds/" + buildOfAId + "/log").statusCode())
             .as("step 3: build logs likewise").isEqualTo(404);
+    }
+
+    /**
+     * The environment-variable lane is exactly as wide as the admin UI that owns it:
+     * project membership plus a scope token is not authority over the instances an
+     * environment value lands in.
+     */
+    @Test
+    @Order(6)
+    void theEnvironmentLaneIsNoWiderThanItsAdminUi() throws Exception {
+        // 1. Reaching the vulnerable state takes the DRIFT path, not a direct write:
+        //    ProjectGuards' beforeValidate hook refuses an instance whose manage-subject
+        //    set is not exactly the environment's project group, so an unadopted
+        //    instance cannot be placed into an environment in one move. It is grouped
+        //    while the project owns it...
+        Row project = Models.get(ProjectModel.class).findById(projectOneId);
+        int projectGroupId = project.get(ProjectModel.GROUP_ID);
+        Row unadopted = Models.get(InstanceModel.class).createEmptyRow();
+        unadopted.set(InstanceModel.NAME, PREFIX + "unadopted");
+        unadopted.set(InstanceModel.KIND, "hohenheim:docker_container");
+        unadopted.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
+            "image", "alpine", "tag", "latest",
+            "environment_variables", Map.of(OVERRIDE_KEY, INSTANCE_OWN_VALUE))));
+        unadopted.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        Models.get(InstanceModel.class).save(unadopted);
+        int unadoptedId = unadopted.get(InstanceModel.ID);
+        RecordGrants.grant("group", projectGroupId, InstanceModel.MODEL_ID, unadoptedId,
+            HohenheimAccess.MANAGE, true);
+        unadopted.set(InstanceModel.ENVIRONMENT_ID, environmentId);
+        Models.get(InstanceModel.class).save(unadopted);
+
+        // 2. ...and the ownership is then moved away WITHOUT touching the instance row,
+        //    which no hook re-validates: the grouping outlives the grant that justified
+        //    it. Tenant A is still a project member but now cannot even SEE the
+        //    instance -- the ordinary flow would have left it holding MANAGE.
+        RecordGrants.revoke("group", projectGroupId, InstanceModel.MODEL_ID, unadoptedId,
+            HohenheimAccess.MANAGE);
+        String envBase = "/api/v1/environments/" + environmentId + "/variables";
+        assertThat(Models.get(InstanceModel.class).findById(unadoptedId)
+                .get(InstanceModel.ENVIRONMENT_ID))
+            .as("step 2: the revoke left the instance grouped in the environment")
+            .isEqualTo(environmentId);
+        assertThat(keyGet(keyPaasA, "/api/v1/instances/" + unadoptedId).statusCode())
+            .as("step 2: the writer holds no record capability on the affected instance")
+            .isEqualTo(404);
+
+        // 3. THE ATTACK: a member holding the instance-manage SCOPE TOKEN writes an
+        //    environment value. A scope token narrows a key, it never grants authority,
+        //    and membership is grant-derived -- neither one is a capability over the
+        //    instances the value reaches, so the lane refuses uniformly.
+        HttpResponse<String> attack = keyPost(keyPaasA, envBase,
+            "key=" + OVERRIDE_KEY + "&value=" + ATTACKER_VALUE);
+        assertThat(attack.statusCode())
+            .as("step 3: membership plus a scope token cannot author environment values")
+            .isEqualTo(404);
+        assertThat(attack.body()).as("step 3: and no environment is confirmed to exist")
+            .doesNotContain(String.valueOf(environmentId));
+
+        // 4. The refusal is REAL, not a status code: the instance's resolved deploy
+        //    environment still carries its own value. An environment row wins over the
+        //    instance's own environment_variables entry, so a landed write would have
+        //    changed what this workload runs with.
+        assertThat(resolvedEnvironmentOf(unadoptedId))
+            .as("step 4: the unadopted instance's own value survives the refusal")
+            .containsEntry(OVERRIDE_KEY, INSTANCE_OWN_VALUE);
+
+        // 5. Admin-only is not dead: the same write from a key carrying the panel's own
+        //    permission lands, and NOW the environment row overrides the instance's own
+        //    entry -- the live effect the tenant lane was handing out for free.
+        HttpResponse<String> byAdmin = keyPost(keyAdmin, envBase,
+            "key=" + OVERRIDE_KEY + "&value=" + ADMIN_VALUE);
+        assertThat(byAdmin.statusCode())
+            .as("step 5: the surface that owns the editor still writes").isEqualTo(200);
+        assertThat(resolvedEnvironmentOf(unadoptedId))
+            .as("step 5: and an environment row DOES override the instance's own entry")
+            .containsEntry(OVERRIDE_KEY, ADMIN_VALUE);
+
+        // 6. Reads answer to the same gate: the member cannot enumerate the values it
+        //    may not author, so the refusal is not a write-only fig leaf.
+        assertThat(keyGet(keyPaasA, envBase).statusCode())
+            .as("step 6: the member's read is refused with the same uniform 404")
+            .isEqualTo(404);
+        assertThat(keyGet(keyAdmin, envBase).body())
+            .as("step 6: while the admin lane reads its own value back")
+            .contains(OVERRIDE_KEY);
+    }
+
+    /** The deploy-facing environment of one instance: variables applied over settings. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> resolvedEnvironmentOf(int instanceId) {
+        Object stored = Models.get(InstanceModel.class)
+            .findById(instanceId).get(InstanceModel.SETTINGS);
+        Map<String, Object> settings = stored instanceof Map<?, ?> map
+            ? (Map<String, Object>) map : Map.of();
+        InstanceVariables variables = new InstanceVariables();
+        Object environment = variables
+            .applyToSettings(settings, variables.valuesFor(instanceId), Map.<String, String>of())
+            .get("environment_variables");
+        assertThat(environment).as("the resolved settings carry an environment map")
+            .isInstanceOf(Map.class);
+        return (Map<String, Object>) environment;
     }
 }

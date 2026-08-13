@@ -82,7 +82,7 @@ returned). Say so when delegating; the grant UI does not.
 | GET | `/api/v1/instances/{id}/variables` | Variables; secret VALUES are never returned |
 | POST | `/api/v1/instances/{id}/variables` | `key`, `value`, `kind=plain|secret` (default plain) |
 | POST | `/api/v1/instances/{id}/variables/delete` | `key=...` |
-| GET/POST | `/api/v1/environments/{id}/variables[/delete]` | Same shape; requires project membership plus instance-manage scope |
+| GET/POST | `/api/v1/environments/{id}/variables[/delete]` | Same shape, but ADMIN-ONLY (`hohenheim.admin.access`, as narrowed by the key's scopes) -- see Environment variables below |
 
 Also present (older lanes, admin-permission-gated): `/api/sites`,
 `/api/sites/{id}/deploy`, `/api/dns/...`, and the instance file API under
@@ -98,6 +98,46 @@ worth keeping when this line is rewritten: the path always travels as the `path`
 QUERY PARAMETER, never as a route segment (a segment would be split and
 reassembled, and a second decode is how a normalized traversal slips in), and
 the lane carries its own read rate limit.
+
+## Environment variables are admin-only
+
+**CORRECTED 2026-08-13: this lane used to require "project membership plus
+instance-manage scope", and both the sentence and the code were wrong.**
+Membership is grant-derived and a capability scope token only NARROWS a key --
+neither one is authority over a record. An environment value is not scoped to
+the environment: `InstanceVariables.valuesFor` folds it in as the deploy
+baseline of every instance grouped under it, and it OVERRIDES that instance's
+own `environment_variables` entry. So the old gate let a project member author
+what a workload runs with on instances it held no capability over, which is the
+one thing this document's opening promise forbids.
+
+It is now gated on `HohenheimAccess.isAdmin` -- the very permission
+(`hohenheim.admin.access`) that guards `HohenheimPanel`, where the only
+environment-variable UI, `EnvironmentVariableResource`, is registered. That is
+the promise read literally: `ManagePanel` offers no environment peer at all (its
+project tier is a deliberately read-only tenant projection), so ANY tenant write
+here would be a wider door than the UI by construction. Reads answer to the same
+gate, because a lane you may not author is not one you may enumerate either.
+
+Being admin-only is not theater against a narrowed key: `PermissionResolver`
+intersects a key's dotted permission scopes with its owner's authority, so an
+admin's key scoped `cap:hohenheim:instance#manage` is refused here exactly like
+a tenant's.
+
+Why not a per-instance capability walk instead, which would have given tenants a
+real environment lane? Because "the affected instances" cannot be bounded: an
+environment value applies to every instance grouped under it *including ones
+added after the write*, and a fresh environment has none at all, so the walk
+would be vacuous precisely where it needs to bite. `ProjectGuards` keeps
+grouping and ownership equal at each instance write (an instance may only sit in
+an environment whose project owns it), which is why the ordinary flow never
+exposed this -- but a grant revoked afterwards moves ownership without
+re-validating the grouping, and that drift is what the counterfactual in
+`PaasApiTest.theEnvironmentLaneIsNoWiderThanItsAdminUi` reproduces.
+
+Per-project environment variables for tenants therefore remain UNBUILT rather
+than half-built; when they land they need a tenant UI and an ownership rule for
+late-joining instances, not a widened API gate.
 
 ## Secrets are write-only
 
@@ -139,7 +179,7 @@ hoh vars instance 3                   # secrets show "(set)", never the value
 hoh vars instance 3 set KEY value
 hoh vars instance 3 set TOKEN --secret   # value prompted hidden, off argv
 hoh vars instance 3 unset KEY
-hoh vars env 5 set KEY value          # environment (deploy baseline) values
+hoh vars env 5 set KEY value          # environment (deploy baseline) values, ADMIN-ONLY
 ```
 
 `--json` prints the raw API response of any read. Tests: `node tools/hoh.test.js`

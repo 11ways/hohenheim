@@ -154,9 +154,16 @@ public final class InstanceVariables {
      * a grant-matrix column carrying authority config already covers.
      *
      * AIDEV-NOTE: ENVIRONMENT-owned values (instanceId null) are deliberately NOT gated
-     * here. They hang off a project, not an instance, and there is no instance capability
-     * to ask about; PaasApi.visibleEnvironment (project membership AND an API key covering
-     * the instance vocabulary) is their gate, and EnvironmentVariableResource is admin-only.
+     * here, and that is a statement about THIS method, not a hole: they hang off a
+     * project, so there is no instance capability for a service-level gate to ask about.
+     * Their gate is PaasApi.visibleEnvironment, which is now ADMIN-ONLY -- the same
+     * permission EnvironmentVariableResource's panel demands. This note previously said
+     * that gate was "project membership AND an API key covering the instance vocabulary";
+     * it was, and that was the defect: membership is grant-derived and a scope token only
+     * narrows a key, so neither is authority over the instances an environment value
+     * reaches through {@link #valuesFor}. Do not reintroduce a per-instance walk here --
+     * the affected set is unbounded (instances join an environment after the write) and
+     * empty for a fresh environment, so it is vacuous exactly where it must bite.
      *
      * @throws Violations {@code instance_not_permitted}
      */

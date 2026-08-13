@@ -783,7 +783,8 @@ public final class TenantWrites {
      *
      * AIDEV-NOTE: ENVIRONMENT-owned rows (a null instance owner) pass here. They belong to
      * a project, hold no instance capability to ask about, and are gated by
-     * PaasApi.visibleEnvironment; EnvironmentVariableResource is admin-only. Do not
+     * PaasApi.visibleEnvironment -- which is now ADMIN-ONLY, the same permission
+     * EnvironmentVariableResource's panel demands, so both surfaces finally agree. Do not
      * "helpfully" refuse them -- that would break the shipped project env lane while
      * protecting nothing this hook can decide.
      *
