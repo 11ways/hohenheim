@@ -36,17 +36,18 @@ import java.util.Set;
  * {@code config} to make the two agree would DELETE the deliberate reading above -- a
  * delegate would stop being able to see that a disk exists on an instance it may view.
  *
- * AIDEV-NOTE: what is NOT closed, stated so it is not mistaken for an oversight. A
- * view-only delegate is still SHOWN the synthesized edit/delete row affordances, whose
- * every POST is refused by {@code requireOperationCapability(instanceId, CONFIG)}
- * ({@code InstanceDeviceSurfaceTest.aViewOnlyDelegateIsShownTheDevicesAndCanChangeNoneOfThem}
- * pins the refusals AND the state, so nothing is exploitable -- it is a UX wart, and on
- * the detach button a destructive-looking one). It cannot be closed HERE: zenit-cms gates
- * those affordances on the TYPE-level {@code updatePermission()}/{@code deletePermission()}
- * ({@code ResourceListPageRenderer}), and the record-aware overloads that do exist take a
- * record but no {@code AccessContext}, so neither can express "this principal holds CONFIG
- * on THIS device's instance". Closing it needs a per-record, per-principal write predicate
- * in zenit-cms; it is a framework gap, not a hohenheim one.
+ * AIDEV-NOTE: CLOSED 2026-08-13, and the note is kept because the SHAPE is worth
+ * recognising again. A view-only delegate used to be shown the synthesized edit/delete row
+ * affordances -- every POST refused by {@code requireOperationCapability(instanceId,
+ * CONFIG)}, so nothing was exploitable, but the destructive detach button lied about what
+ * the viewer could do. It could not be closed here: zenit-cms gated those affordances on
+ * the TYPE-level {@code updatePermission()}/{@code deletePermission()}, and a Permission is
+ * a NAME, so no overload of it could ever say "this principal holds CONFIG on THIS device's
+ * instance". The framework gained the missing shape ({@code Resource.updatableBy} /
+ * {@code deletableBy}, a boolean over record + AccessContext), and
+ * {@code InstanceDeviceResource} answers it with the same capability the mutators demand.
+ * The lesson: when an affordance can only refuse, check whether the gate can even be
+ * EXPRESSED before assuming the surface is at fault.
  */
 public final class ManageInstanceDeviceResource extends InstanceDeviceResource {
 
