@@ -71,8 +71,15 @@ public final class HohenheimAccess {
     /** Mint and hold a DNS record's dyndns update token. */
     public static final String DYNDNS = "dyndns";
 
-    /** Order or renew a certificate for names the holder already answers for. */
-    public static final String REQUEST = "request";
+    // AIDEV-NOTE: there is deliberately no `request` capability on CertificateModel.
+    // One was registered here until 2026-08-13 and NOTHING ever read it: authority to
+    // order a certificate is decided by NAME COVERAGE in CertificateAuthority.authorize
+    // (every requested name must be covered by a live domain row of a site the caller
+    // holds `manage` on), which is a different question from a per-certificate grant --
+    // the certificate the grant would sit on does not exist yet when the request is
+    // made. Because zenit-auth's RecordAccessPage draws one grant column per REGISTERED
+    // capability, the registration alone put a `request` checkbox in front of operators
+    // that granted nothing while reporting success. Do not re-add it without a reader.
 
     /**
      * Attach to the instance's OWN primary process: the read-only console stream, the
@@ -409,19 +416,17 @@ public final class HohenheimAccess {
                 .admin(HohenheimPanel.ACCESS));
 
         RecordGrants.declareGrantable(GrantableModel.of(CertificateModel.MODEL_ID));
+        // AIDEV-NOTE: VIEW is the WHOLE certificate vocabulary, and that is a decision.
+        // Key EXPORT and certificate UPLOAD are not capabilities at all -- hohenheim
+        // terminates TLS itself so a tenant never needs the key, and an uploaded
+        // certificate is unverified authority over a name. ORDERING is not one either:
+        // see the note beside DYNDNS for why the struck `request` capability could never
+        // have been the authority CertificateAuthority already decides by name coverage.
         KnownCapabilities.register(CertificateModel.MODEL_ID,
             KnownCapability.of(VIEW)
                 .label(Microcopy.of("view").withFilter("scope", "capability"))
                 .asDelegable()
-                .asOwnerImplied(),
-            // Not owner-implied: having ordered one certificate is not authority to order the
-            // next. Key EXPORT and certificate UPLOAD are not capabilities at all -- hohenheim
-            // terminates TLS itself so a tenant never needs the key, and an uploaded
-            // certificate is unverified authority over a name.
-            KnownCapability.of(REQUEST)
-                .label(Microcopy.of("request").withFilter("scope", "capability"))
-                .elevated()
-                .asDelegable());
+                .asOwnerImplied());
         RecordGrantCapabilityChecker.declareRules(CertificateModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)

@@ -14,6 +14,7 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.KnownCapabilities;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
@@ -126,9 +127,50 @@ class CertificateAuthorityTest extends HohenheimTestBase {
             .isNull();
     }
 
-    /** A name served by a site the caller cannot manage is refused, and creates no order. */
+    /**
+     * The certificate GRANT VOCABULARY offers only what something reads.
+     *
+     * zenit-auth's RecordAccessPage draws one grant column per registered
+     * {@code KnownCapability}, so registering a capability nothing consults ships an
+     * operator a checkbox that reports success and grants nothing. A {@code request}
+     * capability was registered here and never read once: ordering authority is
+     * {@link CertificateAuthority#authorize}'s name-coverage walk, which decides against
+     * the SITE's {@code manage} grants because the certificate the per-record grant would
+     * sit on does not exist yet when the request is made.
+     */
     @Test
     @Order(2)
+    void theCertificateVocabularyOffersOnlyTheCapabilityThatIsActuallyRead() {
+        // 1. THE STRUCK ONE: `request` is not a certificate capability, so no grant
+        //    column for it is drawn and no operator can tick a box that does nothing.
+        assertThat(KnownCapabilities.get(CertificateModel.MODEL_ID, "request"))
+            .describedAs("step 1: `request` must not be a registered certificate"
+                + " capability -- nothing reads it, and RecordAccessPage would render a"
+                + " grant control that silently grants nothing")
+            .isNull();
+
+        // 2. POSITIVE ANCHOR: `view` IS registered, because the /manage certificate
+        //    scope really does consult it -- so step 1 is about an unread capability
+        //    and not about the vocabulary being empty.
+        assertThat(KnownCapabilities.get(CertificateModel.MODEL_ID, HohenheimAccess.VIEW))
+            .describedAs("step 2: `view` stays, and it is the whole vocabulary")
+            .isNotNull();
+        assertThat(KnownCapabilities.isDelegable(CertificateModel.MODEL_ID, HohenheimAccess.VIEW))
+            .describedAs("step 2: and an operator really can hand it out, which is what"
+                + " makes step 1 about an UNREAD capability rather than an empty registry")
+            .isTrue();
+
+        // 3. AUTHORITY IS STILL DECIDED -- by coverage, on the site. Removing the
+        //    registration took away an affordance, never a gate.
+        assertThatThrownBy(() -> CertificateAuthority.authorize(
+                CertificateAuthority.Requester.SYSTEM, List.of("nothing-covers." + ZONE)))
+            .describedAs("step 3: ordering authority is name coverage, and it still refuses")
+            .isInstanceOf(CertificateAuthority.Refused.class);
+    }
+
+    /** A name served by a site the caller cannot manage is refused, and creates no order. */
+    @Test
+    @Order(3)
     void aNameServedByAnUnmanagedSiteIsRefused() {
         String foreign = "foreign." + ZONE;
 
@@ -153,7 +195,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
      * sibling host.
      */
     @Test
-    @Order(3)
+    @Order(4)
     void aWildcardRequestNeedsAWildcardClaim() {
         assertThatThrownBy(() -> CertificateAuthority.authorize(tenant, List.of("*." + ZONE)))
             .isInstanceOf(CertificateAuthority.Refused.class)
@@ -169,7 +211,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
 
     /** The legitimate lane opens: the owner's own hostname authorizes and the order starts. */
     @Test
-    @Order(4)
+    @Order(5)
     void theSiteOwnerGetsThroughForItsOwnHostname() {
         String owned = "owned." + ZONE;
 
@@ -207,7 +249,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
      * re-granted site heals itself on the next sweep).
      */
     @Test
-    @Order(5)
+    @Order(6)
     void revokingTheGrantStopsTheRenewal() {
         var certModel = Models.get(CertificateModel.class);
         Row cert = certModel.createEmptyRow();
