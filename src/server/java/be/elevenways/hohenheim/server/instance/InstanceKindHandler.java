@@ -88,6 +88,28 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
+     * Whether this kind's driver can attach and detach devices -- the DECLARED twin of
+     * the runtime's {@code DeviceAttachSupport} interface, for surfaces that must know
+     * before a daemon exists to ask.
+     *
+     * AIDEV-NOTE: a declaration rather than an {@code instanceof} because the only way to
+     * ask the runtime is {@link #runtimeFor}, which BUILDS a daemon client for a named
+     * host -- an unreachable or not-yet-chosen host would then decide whether a tab
+     * renders. The enforcement stays where it was ({@code InstanceDevices.requireSupport}
+     * refuses {@code devices_unsupported} on the real runtime); this exists so a surface
+     * can hide what a kind can only ever refuse. The two agreeing is what
+     * {@code InstanceDeviceSurfaceTest} asserts on the Docker tier: tab absent AND the
+     * write refused, one journey.
+     *
+     * AIDEV-NOTE: the default is FALSE, matching the {@code isolation()} stance -- a kind
+     * that forgets to declare hides an affordance rather than offering one its driver
+     * cannot honour.
+     */
+    default boolean supportsDevices() {
+        return false;
+    }
+
+    /**
      * The memory (MB) a record of these settings is ADMITTED AS when they declare no
      * {@code memory_limit_mb} -- the host-capacity denominator, and the cgroup/VM cap the
      * driver then actually applies.

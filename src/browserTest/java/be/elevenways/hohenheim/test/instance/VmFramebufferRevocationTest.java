@@ -104,6 +104,74 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
         }
     }
 
+    /**
+     * The REAL floor of the framebuffer console, which the test above cannot see.
+     *
+     * That one grants and revokes MANAGE, and MANAGE implies CONSOLE, so it passes
+     * whichever of the two verbs the handler asks for -- it pinned nothing after the
+     * commit that split the instance capability into enforced verbs, and four docblocks
+     * went on claiming MANAGE while the code checked CONSOLE. A CONSOLE-ONLY grantee is
+     * what distinguishes the two: they reach the framebuffer (intended -- a rescue console
+     * is exactly what CONSOLE is for), and a holder of the wider-audience VIEW verb does
+     * not.
+     */
+    @Test
+    void consoleAloneOpensTheFramebufferAndViewAloneDoesNot() throws Exception {
+        int consoleUserId = user("fb-console-only");
+        int viewUserId = user("fb-view-only");
+        int instanceId = runningVm("fb-console-only-vm");
+        WS_INSTANCE_ID.set(instanceId);
+        RecordGrants.grant("user", consoleUserId, InstanceModel.MODEL_ID, instanceId,
+            HohenheimAccess.CONSOLE, true);
+        RecordGrants.grant("user", viewUserId, InstanceModel.MODEL_ID, instanceId,
+            HohenheimAccess.VIEW, true);
+
+        RecordingClient consoleClient = new RecordingClient();
+        WebSocket consoleSocket = connect(sessionFor(consoleUserId), consoleClient);
+        try {
+            // 1. THE FLOOR: console and nothing else. No manage grant exists for this
+            //    user, so a handler still asking for manage would close this socket.
+            assertThat(consoleClient.binaryArrived.await(5, TimeUnit.SECONDS))
+                .as("step 1: a CONSOLE-only grantee receives framebuffer frames")
+                .isTrue();
+            assertThat(consoleClient.lastBinary.get()).isNotNull().isNotEmpty();
+
+            // 2. Input too -- the framebuffer is a two-way rescue console, and a read-only
+            //    half would be a different (and useless) thing to have proven.
+            consoleSocket.sendText("{\"t\":\"k\",\"c\":\"KeyB\",\"d\":true}", true).join();
+            awaitTrue(() -> WS_SOURCE.keys.contains("KeyB:true"));
+            assertThat(WS_SOURCE.keys).contains("KeyB:true");
+
+            // 3. THE OTHER SIDE, so step 1 is a floor and not "any grant will do": VIEW is
+            //    the widest instance verb (every other one implies it) and it does NOT
+            //    reach the guest's screen and keyboard.
+            RecordingClient viewClient = new RecordingClient();
+            WebSocket viewSocket = connect(sessionFor(viewUserId), viewClient);
+            try {
+                assertThat(viewClient.closed.await(5, TimeUnit.SECONDS))
+                    .as("step 3: a VIEW-only grantee is closed off the framebuffer")
+                    .isTrue();
+                assertThat(viewClient.closeCode.get())
+                    .as("step 3: with the policy-violation code, the refusal signal")
+                    .isEqualTo(1008);
+                assertThat(viewClient.lastBinary.get())
+                    .as("step 3: and never received a single frame of the guest's screen")
+                    .isNull();
+            } finally {
+                viewSocket.abort();
+            }
+        } finally {
+            consoleSocket.abort();
+            RecordGrants.revoke("user", consoleUserId, InstanceModel.MODEL_ID, instanceId,
+                HohenheimAccess.CONSOLE);
+            RecordGrants.revoke("user", viewUserId, InstanceModel.MODEL_ID, instanceId,
+                HohenheimAccess.VIEW);
+            Models.get(InstanceModel.class).delete(instanceId);
+            AuthModels.users().delete(consoleUserId);
+            AuthModels.users().delete(viewUserId);
+        }
+    }
+
     // -----------------------------------------------------------------------
 
     private WebSocket connect(String sessionToken, RecordingClient client) {

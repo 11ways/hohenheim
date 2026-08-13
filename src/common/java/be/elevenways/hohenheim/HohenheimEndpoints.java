@@ -930,7 +930,9 @@ public class HohenheimEndpoints {
      * go through {@link #INSTANCE_CONSOLE_COMMAND}, never raw keystrokes: a non-TTY
      * container echoes nothing, so keystroke input would be invisible typing).
      * Authorization is the handshake's requiresLogin plus the handler's per-record
-     * manage check, revalidated mid-session.
+     * CONSOLE check ({@code InstanceConsoles}), revalidated mid-session. Not manage:
+     * console is its own enforced verb since the capability split, and manage merely
+     * implies it.
      */
     public static final WebSocketEndpoint INSTANCE_CONSOLE = WebSocketEndpoint.builder()
         .identifier(Identifier.of("hohenheim", "instance_console"))

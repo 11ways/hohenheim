@@ -283,6 +283,27 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 1: and no row was written for a driver that could never honour it")
             .isEmpty();
 
+        // 1b. The SURFACE must agree with that refusal instead of advertising against it.
+        //     A Docker instance used to render the Devices tab plus Add-disk and Add-NIC
+        //     buttons whose every POST could only ever answer devices_unsupported -- an
+        //     affordance that can only refuse, which reads as a broken product rather than
+        //     as a tier without the feature. The tab now hides AND 404s by kind, and this
+        //     assertion sits beside the refusal on purpose: the DECLARATION
+        //     (InstanceKindHandler.supportsDevices) and the ENFORCEMENT
+        //     (InstanceDevices.requireSupport) are pinned as one answer, not two.
+        HttpResponse<String> dockerTab =
+            get("/admin/instances/" + dockerId + "/page/devices");
+        assertThat(dockerTab.statusCode())
+            .as("step 1b: the devices tab of a Docker instance does not exist")
+            .isEqualTo(404);
+        HttpResponse<String> dockerRecord = get("/admin/instances/" + dockerId);
+        assertThat(dockerRecord.statusCode())
+            .as("step 1b: while the record itself opens fine -- the tab is what is gone")
+            .isEqualTo(200);
+        assertThat(dockerRecord.body())
+            .as("step 1b: and its tab strip offers no devices link either")
+            .doesNotContain("/instances/" + dockerId + "/page/devices");
+
         // 2. Over quota: the named refusal, no row, nothing spent.
         this.previousDiskCap = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Quota.MAX_DISK_GB_PER_OWNER);
@@ -562,6 +583,9 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 
         @Override public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
+
+        /** Its runtime really does implement DeviceAttachSupport, so it declares it. */
+        @Override public boolean supportsDevices() { return true; }
 
         @Override
         public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {

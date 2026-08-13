@@ -115,6 +115,10 @@ public final class IncusContainerKind implements InstanceKindHandler {
     @Override
     public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
 
+    /** IncusInstanceRuntime implements DeviceAttachSupport; the Docker driver does not. */
+    @Override
+    public boolean supportsDevices() { return true; }
+
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
         // Incus system containers are the tenant tier: OPEN egress (the workload fetches

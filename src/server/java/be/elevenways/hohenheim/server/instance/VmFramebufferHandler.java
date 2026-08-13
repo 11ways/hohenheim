@@ -28,11 +28,20 @@ import java.util.Map;
  * is exactly why a guest-side protocol cannot substitute for it.
  *
  * AIDEV-NOTE: authorization has TWO layers and neither is bespoke. The handshake's
- * requiresLogin already refused anonymous with 401; the per-record MANAGE capability
+ * requiresLogin already refused anonymous with 401; the per-record CONSOLE capability
  * needs the route param, so it runs in onOpen (1008 on refusal). Mid-session, core's
  * default-on revalidator calls {@link #revalidate()} every interval and closes the
- * socket 1008 the instant MANAGE stops holding -- a revoked grant, a disabled account or
+ * socket 1008 the instant CONSOLE stops holding -- a revoked grant, a disabled account or
  * a logout disconnects an OPEN console, it is not merely refused on next connect.
+ *
+ * AIDEV-NOTE: the verb is CONSOLE, not MANAGE, and this note used to say MANAGE at both
+ * points above -- drift left behind by the commit that split the instance capability into
+ * enforced verbs. Nobody gained authority (CONSOLE is {@code impliedBy(MANAGE)}, so every
+ * manage holder still reaches this), but the real floor is one verb LOWER than the prose
+ * claimed: a CONSOLE-only grantee reaches the framebuffer. That is the intended reading of
+ * the split -- a rescue console is exactly what CONSOLE is for -- and it is what
+ * {@code VmFramebufferRevocationTest}'s CONSOLE-only journey pins, because a test that
+ * grants MANAGE passes whichever verb the handler asks for.
  *
  * AIDEV-NOTE: frames are SNAPSHOTS, not per-region SPICE draws. qemu GLZ-compresses every
  * display image regardless of the client's compression preference (verified live on
