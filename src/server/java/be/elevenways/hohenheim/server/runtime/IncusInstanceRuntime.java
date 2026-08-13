@@ -169,7 +169,8 @@ public final class IncusInstanceRuntime
         // never at the point where a tenant container is already running unisolated.
         this.policy.ensureIsolationAcl();
         stampPresence();
-        Map<String, Object> nic = this.policy.nicDevice(managedNetworkName(), this.egress);
+        Map<String, Object> nic = this.policy.nicDevice(managedNetworkName(), this.egress,
+            spec.networkLimitMbit());
 
         // AIDEV-NOTE: converge, never replace. A system container's persistent state
         // IS its rootfs, so the Docker driver's replace-on-create semantic would be
@@ -190,7 +191,7 @@ public final class IncusInstanceRuntime
                     + " explicitly before changing its flavour.");
             }
             converge(spec, existing, nic);
-            verifyIsolated(spec.handle());
+            verifyIsolated(spec);
             // A root-size change on an EXISTING workload is never folded into the
             // converge PUT: a running grow is accepted and not performed (see
             // RootDiskSizeSupport), so it goes through the stopped-only path, which
@@ -244,7 +245,7 @@ public final class IncusInstanceRuntime
         definition.put("devices", devices);
         definition.put("profiles", List.of("default"));
         this.incus.createInstance(definition);
-        verifyIsolated(spec.handle());
+        verifyIsolated(spec);
         verifyRootDiskDeclared(spec);
         return spec.handle();
     }
@@ -375,6 +376,21 @@ public final class IncusInstanceRuntime
     }
 
     /**
+     * Isolation AND the declared bandwidth ceiling, read back from the same instance
+     * document -- one GET, so the rate check costs nothing on top of the ACL check.
+     *
+     * AIDEV-NOTE: a spec that declares NO ceiling behaves exactly as before; the rate half
+     * returns immediately. That bound is deliberate (see IncusNetworkPolicy.verifyBandwidth):
+     * shipping a read-back that could refuse a deploy is only acceptable while it cannot
+     * refuse one that did not ask for the feature.
+     */
+    private void verifyIsolated(@NonNull InstanceSpec spec) throws IOException {
+        Map<String, Object> instance = this.incus.instance(spec.handle());
+        this.policy.verifyAllNics(spec.handle(), instance, this.egress);
+        this.policy.verifyBandwidth(spec.handle(), instance, spec.networkLimitMbit());
+    }
+
+    /**
      * The managed network the default profile's NIC inherits (incusbr0). The device
      * override must name it, or Incus refuses a NIC with an ACL but no network.
      */
@@ -416,6 +432,17 @@ public final class IncusInstanceRuntime
         }
     }
 
+    /**
+     * AIDEV-NOTE: this is a CONFIG-key predicate and the {@code limits.} clause therefore
+     * covers {@code limits.memory} / {@code limits.cpu} / {@code limits.cpu.allowance} --
+     * the instance-config namespace. The BANDWIDTH ceiling is not in it: Incus expresses a
+     * rate as {@code limits.ingress} / {@code limits.egress} on the NIC DEVICE, which this
+     * driver owns through {@code IncusNetworkPolicy.nicDevice} and rewrites wholesale on
+     * every converge. Both namespaces are driver-owned on purpose, and both are now
+     * DECLARABLE through the product (memory/cpu as ResourceLimits, the rate as
+     * NetworkBandwidth) -- a driver-owned key with no product spelling is the shape that
+     * makes a converge look like it is eating an operator's configuration.
+     */
     private static boolean isManagedKey(@NonNull String key) {
         return key.startsWith(USER_PREFIX) || key.startsWith("environment.")
             || key.startsWith("limits.") || key.startsWith("cloud-init.")
@@ -960,8 +987,8 @@ public final class IncusInstanceRuntime
         this.policy.ensureIsolationAcl();
         stampPresence();
         replaceDefinition(spec.handle(), existing, config,
-            this.policy.nicDevice(managedNetworkName(), this.egress));
-        verifyIsolated(spec.handle());
+            this.policy.nicDevice(managedNetworkName(), this.egress, spec.networkLimitMbit()));
+        verifyIsolated(spec);
     }
 
     @Override
@@ -1070,8 +1097,9 @@ public final class IncusInstanceRuntime
         this.policy.ensureExtraNetwork();
         stampPresence();
         Map<String, Object> instance = this.incus.instance(spec.handle());
-        putDevice(spec.handle(), instance, deviceName, this.policy.extraNicDevice(this.egress));
-        verifyIsolated(spec.handle());
+        putDevice(spec.handle(), instance, deviceName,
+            this.policy.extraNicDevice(this.egress, spec.networkLimitMbit()));
+        verifyIsolated(spec);
     }
 
     @Override

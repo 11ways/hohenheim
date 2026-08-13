@@ -99,6 +99,12 @@ public final class IncusVmKind implements InstanceKindHandler {
     public static final IntegerField ROOT_DISK_GB = RootDisk.addTo(SETTINGS_SCHEMA);
 
     /**
+     * The guest's bandwidth ceiling in Mbit/s; blank leaves the wire unshaped. Enforced
+     * by the daemon on every NIC the workload carries (see {@link NetworkBandwidth}).
+     */
+    public static final IntegerField NETWORK_LIMIT_MBIT = NetworkBandwidth.addTo(SETTINGS_SCHEMA);
+
+    /**
      * The closed set of image origins. The keys come from {@link ImageOrigin} itself --
      * a second spelling of "catalog"/"prepared" here would be a parallel vocabulary the
      * driver and the form could drift apart on.
@@ -203,7 +209,7 @@ public final class IncusVmKind implements InstanceKindHandler {
             ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)), VM,
             OwnerLabels.of(InstanceModel.MODEL_ID, instanceId), cloudInit, null,
             imageOrigin, secureBoot, guestAgent, Map.of(),
-            RootDisk.declaredGb(settings));
+            RootDisk.declaredGb(settings), NetworkBandwidth.declaredMbit(settings));
     }
 
     /**

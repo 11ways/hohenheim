@@ -108,6 +108,18 @@ public final class DockerInstanceRuntime
                 + "'; a per-container root-disk quota is an incus capability. Docker"
                 + " would accept the size and enforce nothing.");
         }
+        if (spec.networkLimitMbit() != null) {
+            // The honest refusal, the root-disk shape exactly. Docker's API has no
+            // bandwidth key at all: shaping a container's traffic means a tc qdisc on the
+            // veth the daemon created, on an interface the daemon re-makes on every
+            // restart and re-attach, so hohenheim would be maintaining a limit it does
+            // not own against a party that does. Accepting the number and shaping nothing
+            // is the paper limit the whole knob exists to avoid.
+            throw new IOException("The docker driver cannot deliver the "
+                + spec.networkLimitMbit() + " Mbit/s network limit declared for '"
+                + spec.handle() + "'; a per-workload bandwidth ceiling is an incus"
+                + " capability. Docker has no such control and would shape nothing.");
+        }
         if (spec.imageOrigin() == ImageOrigin.PREPARED) {
             // The honest refusal, same shape as the cloud-init one: Docker has no image
             // store of the prepared kind, so treating the alias as a docker image

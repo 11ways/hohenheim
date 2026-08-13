@@ -282,7 +282,7 @@ public final class StackServiceKind implements InstanceKindHandler {
             ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
             resolvedHardening(name, capabilities),
             OwnerLabels.of(InstanceModel.MODEL_ID, instanceId),
-            null, null, ImageOrigin.CATALOG, false, true, tmpfs, health, null);
+            null, null, ImageOrigin.CATALOG, false, true, tmpfs, health, null, null);
     }
 
     /**

@@ -78,6 +78,13 @@ public final class IncusContainerKind implements InstanceKindHandler {
     public static final IntegerField ROOT_DISK_GB = RootDisk.addTo(SETTINGS_SCHEMA);
 
     /**
+     * The container's bandwidth ceiling in Mbit/s; blank leaves the wire unshaped. Only
+     * the Incus kinds offer it, because only Incus has a per-NIC rate limiter to hand it
+     * to (see {@link NetworkBandwidth}).
+     */
+    public static final IntegerField NETWORK_LIMIT_MBIT = NetworkBandwidth.addTo(SETTINGS_SCHEMA);
+
+    /**
      * ADMIN-DECLARED escape hatch, unprivileged is the default: a privileged system
      * container's root is meaningfully closer to the HOST's root (threat model
      * boundary 1), and the help text says so in as many words. The instance settings
@@ -144,7 +151,8 @@ public final class IncusContainerKind implements InstanceKindHandler {
             privileged ? PRIVILEGED : UNPRIVILEGED,
             OwnerLabels.of(InstanceModel.MODEL_ID, instanceId), null, null,
             ImageOrigin.CATALOG, false, true,
-            Map.of(), RootDisk.declaredGb(settings));
+            Map.of(), RootDisk.declaredGb(settings),
+            NetworkBandwidth.declaredMbit(settings));
     }
 
     /** A system container shares the host kernel: its floor is its userland, not a guest OS. */
