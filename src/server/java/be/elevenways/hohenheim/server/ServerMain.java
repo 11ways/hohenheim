@@ -338,6 +338,14 @@ public class ServerMain {
             KnownPermission.of(
                 "hohenheim.manage.access",
                 Microcopy.of("hohenheim_manage_access").withFilter("scope", "permission")),
+            // Every-site authority WITHOUT the admin permission (the walk's type-level row on
+            // SiteModel). NON-DELEGABLE on the auth.grants.manage precedent: a holder of
+            // every-site authority minting peers is exactly the spread containment exists to
+            // prevent, and an admin -- who bypasses containment anyway -- is who grants it.
+            KnownPermission.of(
+                HohenheimAccess.SITES_MANAGE_ALL.value(),
+                Microcopy.of("hohenheim_sites_manage_all").withFilter("scope", "permission"))
+                .nonDelegable(),
             // Tenant self-service creation: eligibility only. It provisions a workload on
             // an operator's iron, and the per-owner quota is what bounds how many.
             KnownPermission.of(

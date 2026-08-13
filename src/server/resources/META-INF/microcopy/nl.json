@@ -3541,6 +3541,10 @@
     "text": "Toegang tot het gedelegeerde sitebeheerpaneel",
     "scope": "permission"
   },
+  "hohenheim_sites_manage_all": {
+    "text": "Alle sites beheren",
+    "scope": "permission"
+  },
   "manage": {
     "text": "Beheren",
     "scope": "capability"

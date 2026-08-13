@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.GrantModel;
@@ -13,14 +12,8 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.api.ResponseCarrier;
-import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.result.ActionResult;
-import be.elevenways.zenit.common.routing.BodyDefinition;
-import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.RecordCapabilityDecision;
@@ -31,7 +24,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -208,91 +200,8 @@ class CapabilityWalkTest extends HohenheimTestBase {
         }
     }
 
-    /**
-     * A production-shaped context for a bare principal: the conduit stub carries
-     * the principal attribute and AccessContext.of resolves the INSTALLED
-     * permission checker, so these assertions exercise the same wiring a real
-     * request does.
-     */
+    /** @see TestAccessContexts#contextFor -- a FRESH conduit per call, memo included. */
     private static AccessContext contextFor(Principal principal) {
-        StubConduit conduit = new StubConduit();
-        conduit.setAttribute(ConduitAttributes.PRINCIPAL, principal);
-        return AccessContext.of(conduit);
-    }
-
-    /** Attribute-only Conduit; every request-flavored method throws. */
-    private static final class StubConduit implements Conduit {
-
-        private final Map<IdentifierKey<?>, Object> attributes = new HashMap<>();
-
-        @Override
-        @SuppressWarnings("unchecked")
-        public <T> T getAttribute(IdentifierKey<T> key) {
-            return (T) this.attributes.get(key);
-        }
-
-        @Override
-        public <T> void setAttribute(IdentifierKey<T> key, T value) {
-            if (value == null) {
-                this.attributes.remove(key);
-            } else {
-                this.attributes.put(key, value);
-            }
-        }
-
-        @Override
-        public ResponseCarrier getResponseCarrier() {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public <T> T getParameter(ParameterDefinition<T> parameter) {
-            throw new UnsupportedOperationException("stub carries no request");
-        }
-
-        @Override
-        public <T> T getBody(BodyDefinition<T> definition) {
-            throw new UnsupportedOperationException("stub carries no request");
-        }
-
-        @Override
-        public boolean isHawkeyeRequest() {
-            return false;
-        }
-
-        @Override
-        public void enableStreamingResponse() {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public void notFound() {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public void forbidden() {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public void badRequest() {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public void badRequest(String message) {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public <T> ActionResult<T> softRedirect(String url) {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
-
-        @Override
-        public <T> ActionResult<T> hardRedirect(String url) {
-            throw new UnsupportedOperationException("stub carries no response");
-        }
+        return TestAccessContexts.contextFor(principal);
     }
 }

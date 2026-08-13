@@ -136,10 +136,16 @@ public final class ManageInstanceResource extends InstanceResource {
             InstanceOverviewPage.SLUG).toUrl();
     }
 
-    /** NAV-ONLY (zero granted instances hide the empty list); the route stays scoped. */
+    /**
+     * NAV-ONLY (zero granted instances hide the empty list); the route stays scoped.
+     *
+     * AIDEV-NOTE: reachesAny, not "ids.isEmpty()" -- the walk's whole-model rows (the admin
+     * bypass here) cover records that carry no grant, so an id set answers "nothing" for a
+     * subject who reaches everything. The admin disjunct is gone with it: the walk answers
+     * that row itself, without a query.
+     */
     @Override
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
-        return HohenheimAccess.isAdmin(access)
-            || !HohenheimAccess.instanceIdsWith(access, HohenheimAccess.VIEW).isEmpty();
+        return HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID, HohenheimAccess.VIEW);
     }
 }

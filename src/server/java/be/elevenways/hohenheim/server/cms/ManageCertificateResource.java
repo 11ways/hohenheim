@@ -99,12 +99,15 @@ public final class ManageCertificateResource extends CertificateResource {
             RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));
     }
 
-    /** NAV-ONLY; the route itself stays scoped by accessFunction. */
+    /**
+     * NAV-ONLY; the route itself stays scoped by accessFunction. Any logged-in principal may
+     * have REQUESTED a certificate (the walk's owner row), so the entry stays offered to one.
+     */
     @Override
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
         return HohenheimAccess.isAdmin(access)
             || access.principalId() != null
-            || !HohenheimAccess.grantedRecordIds(access, CertificateModel.MODEL_ID,
-                HohenheimAccess.VIEW).isEmpty();
+            || HohenheimAccess.reachesAny(access, CertificateModel.MODEL_ID,
+                HohenheimAccess.VIEW);
     }
 }
