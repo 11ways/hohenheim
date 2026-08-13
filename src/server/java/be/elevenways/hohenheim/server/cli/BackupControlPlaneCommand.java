@@ -39,6 +39,8 @@ public final class BackupControlPlaneCommand implements OfflineCommand {
 
     @Override
     public void run(@NonNull OfflineCommandContext context) {
+        SoleOfflineFlag.require(context, FLAG);
+
         ControlPlaneBackups.Archive archive;
         try {
             archive = ControlPlaneBackups.backupNow();

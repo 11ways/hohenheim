@@ -121,7 +121,9 @@ class OfflineCommandLaneTest {
             .contains(EncryptionKeyLane.ROTATE)
             .contains(EncryptionKeyLane.REENCRYPT)
             .contains(EncryptionKeyLane.SURVEY)
-            .contains(EncryptionKeyLane.RETIRE);
+            .contains(EncryptionKeyLane.RETIRE)
+            .contains(HistorySecretSurveyCommand.FLAG)
+            .contains(PurgeHistorySecretsCommand.FLAG);
 
         // 3. THE recovery path this whole lane exists for: an installation whose only
         //    administrator password is lost, with no HTTP server and no mail lane.
@@ -176,6 +178,22 @@ class OfflineCommandLaneTest {
             .as("step 5: two key-rotation steps in one invocation must refuse")
             .isInstanceOf(OfflineCommandException.class)
             .hasMessageContaining("only ONE key-rotation step runs per invocation");
+
+        // 5b. The SAME trap one level up, and the reason the guard had to stop being
+        //     per-lane: a pair that spans two lanes is picked apart by the very same
+        //     discovery-order dispatch, and the lane-local STEPS list cannot see a flag
+        //     that is not one of its four. Whichever of these two wins discovery, the
+        //     invocation is refused instead of half-performed.
+        assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
+                PurgeHistorySecretsCommand.FLAG, EncryptionKeyLane.ROTATE}, line -> { }))
+            .as("step 5b: two commands from DIFFERENT lanes must refuse just as loudly")
+            .isInstanceOf(OfflineCommandException.class)
+            .hasMessageContaining("Exactly ONE offline command runs per invocation");
+        assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
+                HistorySecretSurveyCommand.FLAG, PurgeHistorySecretsCommand.FLAG}, line -> { }))
+            .as("step 5b: survey plus purge is ambiguous and must never silently pick one")
+            .isInstanceOf(OfflineCommandException.class)
+            .hasMessageContaining("Exactly ONE offline command runs per invocation");
 
         // 6. An option value is REQUIRED where the flag needs one, and the refusal names
         //    the flag instead of running against nothing.
