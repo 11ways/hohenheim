@@ -28,8 +28,6 @@ public final class ReencryptSecretsCommand implements OfflineCommand {
 
     @Override
     public void run(@NonNull OfflineCommandContext context) {
-        EncryptionKeyLane.requireSoleFlag(context, EncryptionKeyLane.REENCRYPT);
-
         EncryptionRekey.Report report = EncryptionRekey.reencrypt(HohenheimDatabase.datasource());
         context.print("Re-encrypted under key " + report.activeKeyId() + ": "
             + report.rowsRewritten() + " of " + report.rowsScanned() + " rows rewritten across "

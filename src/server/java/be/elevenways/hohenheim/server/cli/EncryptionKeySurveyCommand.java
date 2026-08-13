@@ -26,8 +26,6 @@ public final class EncryptionKeySurveyCommand implements OfflineCommand {
 
     @Override
     public void run(@NonNull OfflineCommandContext context) {
-        EncryptionKeyLane.requireSoleFlag(context, EncryptionKeyLane.SURVEY);
-
         EncryptionKeyLane.printSurvey(context);
     }
 }

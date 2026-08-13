@@ -47,8 +47,6 @@ public final class RestoreControlPlaneCommand implements OfflineCommand {
 
     @Override
     public void run(@NonNull OfflineCommandContext context) {
-        SoleOfflineFlag.require(context, FLAG);
-
         String pointer = context.require(FLAG);
 
         if (isLocalFile(pointer)) {

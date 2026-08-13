@@ -2,35 +2,29 @@ package be.elevenways.hohenheim.server.cli;
 
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.zenit.server.cli.OfflineCommandContext;
-import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.orm.crypto.EncryptionRekey;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
- * What the three halves of a field-encryption key rotation share, and the guard that keeps
- * them one deliberate step each.
+ * What the three halves of a field-encryption key rotation share.
  *
  * They are separate commands on purpose: rotating is instant, re-encrypting walks every
  * encrypted row and may be re-run after a crash, and retiring is irreversible. One
  * "--rotate-everything" would hide the only step that can destroy data behind the two that
  * cannot. Every one of them exits without booting a server.
  *
- * AIDEV-NOTE: {@link #requireSoleFlag} exists because the migration onto the OfflineCommand
- * registry changed one thing about the old hand-rolled helper: that helper ran EVERY flag
- * present in one invocation, while {@code OfflineCommands} dispatches exactly ONE command
- * and picks it in classpath DISCOVERY order. Without this guard,
- * {@code --rotate-encryption-key --reencrypt-secrets} would silently perform an arbitrary
- * one of the two and report success -- a rotation with no re-encryption looks identical to
- * a completed one from the outside, and the operator would retire a key that is still
- * decrypting live rows. A loud refusal is the only safe reading of an ambiguous invocation.
- *
- * AIDEV-NOTE: the lane-local {@link #STEPS} check keeps its ORDERING advice, but it is no
- * longer the whole guard: it can only see its own four flags, and the same silent-success pair
- * can span lanes ({@code --rotate-encryption-key --purge-history-secrets}). The registry-wide
- * {@link SoleOfflineFlag} runs after it and covers every discovered command, later ones too.
+ * AIDEV-NOTE: TOMBSTONE. This lane used to carry its own {@code requireSoleFlag} guard, and
+ * so did every other hohenheim command (a shared {@code SoleOfflineFlag}), because
+ * {@code OfflineCommands} dispatched exactly ONE command chosen in classpath DISCOVERY order
+ * -- so {@code --rotate-encryption-key --reencrypt-secrets} performed an arbitrary one of the
+ * two and reported success, after which an operator would retire a key still decrypting live
+ * rows. Both guards are DELETED because zenit's {@code OfflineCommands.requireSoleCommand}
+ * now refuses a multi-command invocation before any command's run() is entered: a per-command
+ * guard could never be the real fix (whichever command wins discovery decides, and zenit-auth's
+ * --set-password guarded nothing), and a guard that can no longer be reached is untestable
+ * code that reads as the thing protecting you. Do not reintroduce one here. The ORDERING
+ * advice the old message carried now lives where an operator actually reads it: each command's
+ * describe(), which is what {@code --offline-help} prints.
  *
  * @author Jelle De Loecker
  * @since 0.7.0
@@ -42,30 +36,7 @@ final class EncryptionKeyLane {
     static final String SURVEY = "--encryption-key-survey";
     static final String RETIRE = "--retire-encryption-key";
 
-    private static final List<String> STEPS = List.of(ROTATE, REENCRYPT, SURVEY, RETIRE);
-
     private EncryptionKeyLane() {
-    }
-
-    /**
-     * @throws OfflineCommandException when another key-rotation step was requested in the
-     *         same invocation, naming every one of them
-     */
-    static void requireSoleFlag(@NonNull OfflineCommandContext context, @NonNull String flag) {
-        List<String> others = new ArrayList<>();
-        for (String step : STEPS) {
-            if (!step.equals(flag) && context.has(step)) {
-                others.add(step);
-            }
-        }
-        if (others.isEmpty()) {
-            SoleOfflineFlag.require(context, flag);
-            return;
-        }
-        throw new OfflineCommandException("REFUSED: " + flag + " was requested together with "
-            + String.join(" and ", others) + ", and only ONE key-rotation step runs per"
-            + " invocation. Run them one at a time, in order: " + ROTATE + ", then "
-            + REENCRYPT + ", then " + RETIRE + " <old key id>.");
     }
 
     /** Prints how many stored values still read under each key; the proof retiring is safe. */

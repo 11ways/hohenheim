@@ -27,8 +27,6 @@ public final class RetireEncryptionKeyCommand implements OfflineCommand {
 
     @Override
     public void run(@NonNull OfflineCommandContext context) {
-        EncryptionKeyLane.requireSoleFlag(context, EncryptionKeyLane.RETIRE);
-
         String keyId = context.require(EncryptionKeyLane.RETIRE);
         EncryptionRekey.retire(keyId);
         context.print("Retired field-encryption key " + keyId
