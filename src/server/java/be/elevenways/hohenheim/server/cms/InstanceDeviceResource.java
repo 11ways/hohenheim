@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -99,6 +100,35 @@ public class InstanceDeviceResource extends RowResource {
     public @Nullable ResourceParent<Row> parent() {
         return ResourceParent.<Row>of("instances",
             InstanceDeviceResource::instanceIdOf).tab("devices");
+    }
+
+    /**
+     * Resize and detach both demand {@code CONFIG} on the device's OWN instance, so the
+     * affordances that lead to them are offered on exactly that answer.
+     *
+     * AIDEV-NOTE: this is the SAME question {@link InstanceDevices} asks as the first
+     * statement of every mutator -- asked once more, earlier, so the surface stops
+     * offering what the funnel will refuse. It cannot be a permission: authority here
+     * lives on a RELATED record (a per-instance grant), and a Permission is a name, which
+     * is why the affordances hung on the type-level updatePermission/deletePermission and
+     * a view-only delegate was shown a detach button that could only 422. Read stays
+     * WIDER on purpose (ManageInstanceDeviceResource scopes the list to {@code view}):
+     * seeing that a disk exists on an instance you may view is not authority to change
+     * it, and narrowing the read to match would delete that deliberate reading.
+     */
+    @Override
+    public boolean updatableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return super.updatableBy(record, accessContext) && holdsConfig(record, accessContext);
+    }
+
+    @Override
+    public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return super.deletableBy(record, accessContext) && holdsConfig(record, accessContext);
+    }
+
+    private static boolean holdsConfig(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return HohenheimAccess.hasInstanceCapability(accessContext, instanceIdOf(record),
+            HohenheimAccess.CONFIG);
     }
 
     /**

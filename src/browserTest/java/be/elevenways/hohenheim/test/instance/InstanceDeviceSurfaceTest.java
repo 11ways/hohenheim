@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.cms.ManageInstanceDeviceResource;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -16,17 +17,20 @@ import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -540,6 +544,72 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 5: and the volume is gone at the daemon, so the gate refused"
                 + " AUTHORITY in step 3 and nothing else")
             .isEmpty();
+    }
+
+    /**
+     * The affordance half of the journey above: the /manage device surface must OFFER
+     * edit and detach exactly to the principals whose POST it would accept.
+     *
+     * This is the other end of the same defect. Everything was already refused correctly,
+     * but the list gated its synthesized edit link and its destructive detach button on
+     * the TYPE-level update/delete permission, which is a NAME and therefore blind to
+     * "does this principal hold CONFIG on THIS device's instance". A view-only delegate
+     * was shown a detach button that could only 422. zenit-cms grew
+     * {@code updatableBy}/{@code deletableBy} for it and this resource answers them with
+     * the very capability {@code InstanceDevices} demands.
+     */
+    @Test
+    void theDeviceSurfaceOffersWritesOnlyToPrincipalsWhoseWritesWouldLand() throws Exception {
+        int instanceId = deviceCapableInstance("devsurf-affordance");
+        String device = NAME_PREFIX + "affordance-disk";
+        assertThat(apiPost("/api/v1/instances/" + instanceId + "/devices",
+                "type=disk&name=" + device + "&size_gb=4").statusCode())
+            .as("step 1: the fixture disk was attached").isEqualTo(200);
+        Row row = deviceRows(instanceId).get(0);
+
+        ManageInstanceDeviceResource resource = new ManageInstanceDeviceResource();
+        AccessContext viewer = AccessContext.of(TenantConduits.stubFor(
+            new UserPrincipal(viewerId, "Device Surface Viewer")));
+        AccessContext operator = AccessContext.of(TenantConduits.stubFor(
+            new UserPrincipal(tenantId, "Device Surface Tenant")));
+
+        // 2. THE PREMISE, again: view-only really can SEE this device, so an absent
+        //    affordance below is a WRITE decision and not the row being invisible.
+        RecordGrants.grant("user", viewerId, InstanceModel.MODEL_ID, instanceId,
+            HohenheimAccess.VIEW, true);
+        assertThat(resource.accessFunction().decide(viewer).isDenied())
+            .as("step 2: the view delegate's read scope is an allow, not a deny")
+            .isFalse();
+        assertThat(HohenheimAccess.hasInstanceCapability(viewer, instanceId,
+                HohenheimAccess.VIEW))
+            .as("step 2: and it really holds view on this instance").isTrue();
+
+        // 3. The affordances are WITHHELD from it -- both of them, and the destructive
+        //    one is the whole point: a detach button deletes a tenant's volume.
+        assertThat(resource.updatableBy(row, viewer))
+            .as("step 3: a view-only delegate is offered no edit affordance").isFalse();
+        assertThat(resource.deletableBy(row, viewer))
+            .as("step 3: nor a detach button that could only be refused").isFalse();
+
+        // 4. And they are OFFERED to the config holder, so step 3 measured AUTHORITY and
+        //    not a surface that refuses everyone -- the way an untested gate rots.
+        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, instanceId,
+            HohenheimAccess.CONFIG, true);
+        assertThat(resource.updatableBy(row, operator))
+            .as("step 4: a config holder keeps its edit affordance").isTrue();
+        assertThat(resource.deletableBy(row, operator))
+            .as("step 4: and its detach button").isTrue();
+
+        // 5. Revoking the capability takes the affordances away again, so the answer
+        //    tracks the live grant graph rather than anything cached at wiring time.
+        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, instanceId,
+            HohenheimAccess.CONFIG, false);
+        AccessContext revoked = AccessContext.of(TenantConduits.stubFor(
+            new UserPrincipal(tenantId, "Device Surface Tenant")));
+        assertThat(resource.updatableBy(row, revoked))
+            .as("step 5: a revoked capability withdraws the edit affordance").isFalse();
+        assertThat(resource.deletableBy(row, revoked))
+            .as("step 5: and the detach button").isFalse();
     }
 
     // -- transport --------------------------------------------------------------
