@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
-import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -19,9 +18,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteHandlers;
 import be.elevenways.hohenheim.server.sitetype.types.DockerSiteType;
 import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.protoblast.common.util.BlastString;
-import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -504,10 +501,28 @@ public final class PaasApi {
 
     /**
      * Resolve the route's environment for this key, uniform 404 otherwise: the caller
-     * must be an admin or a MEMBER of the owning project (the same membership walk
-     * project creates ride), and the key's scopes must cover the instance vocabulary --
-     * environment values become instance env at deploy, so a key that may not manage
-     * instances has no business reading their deploy baseline.
+     * must hold the very permission the environment editor lives behind
+     * ({@code HohenheimPanel.ACCESS}, which is what {@link HohenheimAccess#isAdmin}
+     * asks), and the environment must hang off a real project.
+     *
+     * AIDEV-NOTE: admin-only because the UI is. EnvironmentVariableResource is
+     * registered on HohenheimPanel alone, and ManagePanel offers NO environment peer at
+     * all -- its project tier is deliberately a read-only projection -- so ANY tenant
+     * write here is by construction a wider door than the admin UI, which is the one
+     * thing docs/paas-api.md promises this surface never is. The predecessor asked for
+     * project membership plus a {@code cap:hohenheim:instance#manage} token, and neither
+     * is authority: membership is grant-derived, and a scope token only NARROWS a key,
+     * it never grants. An environment value is folded in as the deploy baseline for
+     * every instance grouped under it and OVERRIDES that instance's own
+     * {@code environment_variables} entry, so the old gate let a member author what a
+     * workload runs with on instances it held nothing over. ProjectGuards keeps
+     * grouping and ownership equal AT THE INSTANCE WRITE, which is why the ordinary
+     * flow never showed this -- but a grant revoked afterwards moves ownership without
+     * re-validating the grouping, and that drift is reachable. A per-instance
+     * capability walk was rejected as the fix: the affected set is unbounded (an
+     * instance can join the environment after the write) and empty for a fresh
+     * environment, so it would be vacuous exactly where it needs to bite. Pinned by
+     * PaasApiTest.theEnvironmentLaneIsNoWiderThanItsAdminUi.
      *
      * @return the row, or null when the response has already been ended
      */
@@ -523,19 +538,11 @@ public final class PaasApi {
             : environment.get(EnvironmentModel.PROJECT_ID);
         Row project = projectId == null ? null
             : Models.get(ProjectModel.class).findById(projectId);
-        boolean admin = HohenheimAccess.isAdmin(ctx);
-        if (project == null
-                || (!admin && !coversInstanceVocabulary(conduit))
-                || !Projects.mayCreateInto(ctx, project)) {
+        if (project == null || !HohenheimAccess.isAdmin(ctx)) {
             conduit.notFound();
             return null;
         }
         return environment;
-    }
-
-    private static boolean coversInstanceVocabulary(@NonNull Conduit conduit) {
-        return conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal key
-            && key.coversCapability(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE);
     }
 
     // -- plumbing -------------------------------------------------------------

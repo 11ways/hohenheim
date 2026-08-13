@@ -4733,7 +4733,12 @@ network, quota, ownership, secret and durable-operation mechanisms.
   console tail (`InstanceConsoles.tail`, named `logs_unavailable` refusal,
   never an empty success), and variables over the ONE `instance_variables`
   mechanism for instances AND environments -- secrets are WRITE-ONLY over the
-  API (`has_value` only; the projection mutation fails PaasApiTest). One
+  API (`has_value` only; the projection mutation fails PaasApiTest).
+  CORRECTED 2026-08-13: the ENVIRONMENT half of that variable lane shipped
+  gated on membership plus an instance scope token, neither of which is
+  authority over the instances an environment value reaches; it is now
+  admin-only, matching the admin-only `EnvironmentVariableResource` that is its
+  sole UI. Environments still have no tenant surface (see above). One
   uniform 404 everywhere, including child records of another site. Rollback
   demands no server-side phrase ON PURPOSE (ConfirmationSpec is a client
   interlock; a server phrase here would be theater the HTML lane lacks) -- the
