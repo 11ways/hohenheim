@@ -159,9 +159,6 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         vars.put("recordsTabTarget", CmsRoutes.subpage("admin", "dns-zones", zoneId, "records"));
         vars.put("remoteFormTarget", HohenheimEndpoints.DNS_REMOTE_RECORD
             .with(HohenheimEndpoints.ZONE_ID, zoneId));
-        String error = conduit.getQueryParam("error");
-        vars.put("error", error != null ? error : "");
-        vars.put("saved", conduit.getQueryParam("saved") != null);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-remote-records"), vars);
     }

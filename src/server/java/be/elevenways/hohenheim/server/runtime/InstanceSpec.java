@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -85,6 +87,28 @@ public record InstanceSpec(@NonNull String handle,
                            @Nullable HealthCheck healthCheck,
                            @Nullable Integer rootDiskGb,
                            @Nullable Integer networkLimitMbit) {
+
+    /**
+     * Every collection component is defensively copied, so a caller that keeps mutating the
+     * map it handed over cannot change a spec a driver already accepted.
+     *
+     * AIDEV-NOTE: the map copies are order-preserving unmodifiable {@link LinkedHashMap}s
+     * rather than {@code Map.copyOf}, because {@code env} is DECLARED ordered (the record
+     * docblock) and Map.copyOf randomizes iteration order -- an env list is rendered
+     * positionally into the daemon payload.
+     */
+    public InstanceSpec {
+        command = command == null ? null : List.copyOf(command);
+        env = copyOrdered(env);
+        volumes = copyOrdered(volumes);
+        publications = List.copyOf(publications);
+        ownerLabels = copyOrdered(ownerLabels);
+        tmpfs = copyOrdered(tmpfs);
+    }
+
+    private static <V> @NonNull Map<String, V> copyOrdered(@NonNull Map<String, V> values) {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(values));
+    }
 
     /**
      * The one way a kind declares a workload: the five components nothing may omit as

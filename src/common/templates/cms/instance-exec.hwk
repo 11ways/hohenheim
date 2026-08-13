@@ -6,7 +6,6 @@
 {% declare instanceName: String %}
 {% declare instanceId: Integer %}
 {% declare running: Boolean = false %}
-{% declare execError: String = "" %}
 {% declare execOutput: String = "" %}
 {% declare execExit: String = "" %}
 {% declare returnUrl: String = "" %}
@@ -25,10 +24,6 @@
         </header>
 
         {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
-
-        {% if execError != "" %}
-            <pl-alert variant="destructive">{{ execError }}</pl-alert>
-        {% /if %}
 
         {% if running %}
             <pl-card>

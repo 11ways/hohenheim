@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
@@ -33,7 +34,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -121,7 +121,18 @@ public final class InstanceService {
         InstanceOperationGuard.requireOperable(resolved.row());
         InstanceOperationGuard.requireInstalled(resolved.row());
         long fence = this.leases.requireFence(resolved.serverId());
-        if (resolved.handler().tenantAuthored()) {
+        // AIDEV-NOTE: the gate asks whether the WORKLOAD is tenant-attributed, never
+        // whether the KIND is tenant-authored, and the difference was a real hole. A
+        // managed database's engine, a site's release container and a stack service are
+        // operator-AUTHORED kinds that a TENANT owns through the product record above
+        // them (OwnedInstances.isTenantAttributed reads that ownership from grants). They
+        // are posture-checked once, at placement, and gating the redeploy on
+        // tenantAuthored() meant they were never checked again -- so a host whose posture
+        // regressed, whose shared-kernel acknowledgement was withdrawn or whose kernel
+        // lane stopped proving itself kept taking tenant workloads back. An
+        // operator-OWNED workload still skips it, which is the exemption the flag was for.
+        if (resolved.handler().tenantAuthored()
+                || OwnedInstances.isTenantAttributed(resolved.row())) {
             HostAdmission.requireInstancePlacement(resolved.serverId(),
                 resolved.handler().isolation(),
                 resolved.row().get(InstanceModel.QUOTA_BUCKET));
@@ -513,10 +524,17 @@ public final class InstanceService {
      * status written before this process existed belongs to a dead controller and one
      * this process wrote is a live operation and untouchable
      * ({@code InstanceOperationGuard.stamp} assigns UPDATED_AT for exactly this read).
+     *
+     * AIDEV-NOTE: the clock is the SECOND guard; the host lease is the first. The query is
+     * scoped only by status, so on a multi-process deployment it also returns rows another
+     * controller is working on right now -- and that controller's clock is not ours, so the
+     * process-start comparison would happily read its live capture as a corpse. Every row
+     * is therefore settled through {@code BootSettle.underBorrowedHostLease}: a host a
+     * rival holds is skipped (its work is its own to settle) and a host taken purely to
+     * settle is handed straight back, instead of {@code settleInterrupted -> requireFence}
+     * seizing it for this process's lifetime and fencing the rightful controller out.
      */
     public static void recoverInterrupted() {
-        Instant processStart = Instant.ofEpochMilli(
-            ManagementFactory.getRuntimeMXBean().getStartTime());
         List<Row> stuck = Models.get(InstanceModel.class).find()
             .where(InstanceModel.DELETED_AT.isNull())
             .where(Criteria.or(
@@ -532,15 +550,23 @@ public final class InstanceService {
             if (written == null) {
                 written = row.get(InstanceModel.CREATED_AT);
             }
-            if (written != null && !written.isBefore(processStart)) {
+            if (BootSettle.writtenByThisProcess(written)) {
                 continue;   // written by THIS process: a live operation, not a corpse
             }
             int id = row.get(InstanceModel.ID);
+            Integer serverId = row.get(InstanceModel.SERVER_ID);
             try {
-                if (!service.settleInterrupted(id)) {
-                    Blast.log("INSTANCE: could not settle interrupted",
-                        row.get(InstanceModel.STATUS), "state of", id,
-                        "- the daemon did not answer; retried at the next boot");
+                Runnable settle = () -> {
+                    if (!service.settleInterrupted(id)) {
+                        Blast.log("INSTANCE: could not settle interrupted",
+                            row.get(InstanceModel.STATUS), "state of", id,
+                            "- the daemon did not answer; retried at the next boot");
+                    }
+                };
+                if (serverId == null) {
+                    settle.run();   // hostless row: no lease to borrow, nothing to fence
+                } else {
+                    BootSettle.underBorrowedHostLease(service.leases(), serverId, settle);
                 }
             } catch (RuntimeException error) {
                 Blast.log("INSTANCE: settling interrupted state of", id,

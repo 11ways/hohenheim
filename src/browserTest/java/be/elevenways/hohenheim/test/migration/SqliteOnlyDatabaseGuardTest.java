@@ -9,9 +9,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Boot refuses any non-SQLite database.url/engine: the migration history contains
- * SQLite-only raw SQL (M025 json_type, M043 || concatenation), so another engine
- * would fail or silently corrupt data instead of merely underperforming.
+ * Boot refuses any non-SQLite database.url/engine: the route-claim registry's overlap
+ * refusal rides SQLite's single-writer transaction serialization, so another engine
+ * would silently hand two sites the same hostname instead of merely underperforming.
  */
 class SqliteOnlyDatabaseGuardTest {
 
@@ -29,17 +29,17 @@ class SqliteOnlyDatabaseGuardTest {
                 .as("a postgres database.url must be refused at boot")
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("POSTGRES")
-                .hasMessageContaining("SQLite-only raw SQL")
-                .hasMessageContaining("M043");
+                .hasMessageContaining("single-writer")
+                .hasMessageContaining("RouteClaims");
 
-            // 2. MySQL, the engine where || silently corrupts names, is refused the same way.
+            // 2. MySQL, a concurrent-writer engine, is refused the same way.
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL,
                 "jdbc:mysql://localhost/hohenheim");
             assertThatThrownBy(HohenheimDatabase::init)
                 .as("a mysql database.url must be refused at boot")
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("MYSQL")
-                .hasMessageContaining("corrupt");
+                .hasMessageContaining("hostname");
 
             // 3. An explicit engine override cannot smuggle a non-SQLite engine past the guard.
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.URL, "");

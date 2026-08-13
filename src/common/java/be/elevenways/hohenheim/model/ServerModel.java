@@ -429,13 +429,27 @@ public class ServerModel extends Model {
      * without this hook, though, flipping a host to dedicated and back to
      * shared_container would resurrect the old acknowledgement with no human involved.
      * Two layers on purpose: the predicate is the gate, this is the eraser.
+     *
+     * AIDEV-NOTE: both sides are read STAGED-ELSE-STORED, which is the whole point of the
+     * fix on 2026-08-13. A partial update carries only the keys it changes, so a save that
+     * stages posture ALONE -- the ordinary shape of "change the posture", and what every
+     * CMS update produces -- arrived here with no acknowledged_posture on the row at all;
+     * the hook read null, returned early, and the eraser silently did nothing on exactly
+     * the write it exists for. The gate ({@link #postureAcknowledged}) still refused the
+     * mismatched pair, so nothing was ever wrongly granted, but the away-and-back
+     * resurrection this layer exists to prevent was fully open. Reading the stored row
+     * costs one lookup on posture writes only: when POSTURE is not staged the posture
+     * cannot have moved, so there is nothing to erase and nothing to load.
      */
     private static void clearAcknowledgementOnPostureChange(@NonNull SaveToDatasource context) {
         Row row = context.getRow();
-        if (row == null) {
+        if (row == null || !row.has(POSTURE.getName())) {
             return;
         }
-        String acknowledged = row.get(ACKNOWLEDGED_POSTURE);
+        Row stored = storedRowOf(row);
+        String acknowledged = row.has(ACKNOWLEDGED_POSTURE.getName())
+            ? row.get(ACKNOWLEDGED_POSTURE)
+            : (stored != null ? stored.get(ACKNOWLEDGED_POSTURE) : null);
         if (acknowledged == null || acknowledged.equals(row.get(POSTURE))) {
             return;
         }
@@ -444,6 +458,15 @@ public class ServerModel extends Model {
         row.set(ACKNOWLEDGED_AT, null);
         row.set(ACKNOWLEDGED_BY, null);
         row.set(ACKNOWLEDGED_BY_LABEL, null);
+    }
+
+    /** The persisted row behind a staged one, or null on a create (or an unreadable store). */
+    private static @Nullable Row storedRowOf(@NonNull Row row) {
+        if (!row.has(ID.getName())) {
+            return null;
+        }
+        Object id = row.get(ID);
+        return id == null ? null : Models.get(ServerModel.class).findById(id);
     }
 
     /** Trim a staged address; a blank submit folds to null (the "none declared" state). */

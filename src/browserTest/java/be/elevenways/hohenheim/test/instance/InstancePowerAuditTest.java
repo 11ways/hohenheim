@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -20,6 +21,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
@@ -31,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Power accountability as a daemon-free journey: the SAME operation must be answerable
@@ -104,6 +107,85 @@ class InstancePowerAuditTest {
     private static Accountability operator(String id) {
         return new Accountability(id, "Operator " + id, "10.0.0.1", "junit",
             Accountability.ORIGIN_WEB);
+    }
+
+    /**
+     * {@code InstanceService.restart} driven directly: it IS stop-then-deploy, and a
+     * deploy that fails after the stop landed leaves the record in the state deploy's own
+     * failure policy stamps -- there is no restart-shaped compensation.
+     *
+     * AIDEV-NOTE: written 2026-08-13 because restart() had ZERO test callers -- the only
+     * coverage was a CMS page asserting the button's URL rendered. The failure half is
+     * simulated through the service's own beforeOutcomeWrite seam: the hook fires inside
+     * the stop, right before its outcome write, and hands the workload to a foreign owner
+     * so the following create() refuses it exactly as a taken-over container would.
+     */
+    @Test
+    void restartIsStopThenDeployAndAFailedDeployLeavesTheRecordInError() {
+        Db.run(datasource, () -> {
+            // 1. A running workload: the state a restart is asked for from.
+            int id = instanceRecord("audit-restart");
+            InstanceService service = new InstanceService();
+            Accountability.runAs(operator("9"), () -> service.deploy(id));
+            String handle = FakeNativeDaemons.handleOf(id);
+            assertThat(FakeNativeDaemons.daemonOf(hostId).get(handle).running)
+                .as("step 1: the workload runs before the restart").isTrue();
+            assertThat((String) Models.get(InstanceModel.class).findById(id)
+                    .get(InstanceModel.STATUS))
+                .as("step 1: and the record says so").isEqualTo(InstanceModel.STATUS_RUNNING);
+
+            // 2. ONE verb: restart stops and deploys again, and BOTH halves are recorded
+            //    -- the composition is the service's, so the audit trail shows the pair
+            //    rather than a single unexplained "restarted" row nobody can reconcile.
+            Accountability.runAs(operator("9"), () -> service.restart(id));
+            assertThat(activityFor(id, InstanceService.ACTIVITY_STOP_ACTION))
+                .as("step 2: the restart's stop half is recorded")
+                .hasSize(1);
+            assertThat(activityFor(id, InstanceService.ACTIVITY_DEPLOY_ACTION))
+                .as("step 2: and its deploy half, beside the initial deploy")
+                .hasSize(2);
+            assertThat(FakeNativeDaemons.daemonOf(hostId).get(handle).running)
+                .as("step 2: the workload is running again after the restart").isTrue();
+            assertThat((String) Models.get(InstanceModel.class).findById(id)
+                    .get(InstanceModel.STATUS))
+                .as("step 2: and the record settled RUNNING, never mid-flight")
+                .isEqualTo(InstanceModel.STATUS_RUNNING);
+
+            // 3. THE FAILURE HALF: the stop succeeds, the deploy cannot. restart() adds no
+            //    compensation of its own, so the record carries deploy's own verdict.
+            boolean[] stolen = {false};
+            InstanceService sabotaged = new InstanceService(HostLeases.production(), () -> {
+                if (stolen[0]) {
+                    return;
+                }
+                stolen[0] = true;   // fires inside the stop, before its outcome write
+                FakeNativeDaemons.daemonOf(hostId).get(handle).ownerId = "999999999";
+            });
+            Throwable refused = catchThrowable(
+                () -> Accountability.runAs(operator("9"), () -> sabotaged.restart(id)));
+            assertThat(refused)
+                .as("step 3: a restart whose deploy fails refuses by name, never silently")
+                .isInstanceOfSatisfying(Violations.class, violations ->
+                    assertThat(violations.all())
+                        .as("step 3: named as the DEPLOY failure it is")
+                        .anySatisfy(violation -> assertThat(violation.message().key())
+                            .isEqualTo("instance_deploy_failed")));
+            assertThat((String) Models.get(InstanceModel.class).findById(id)
+                    .get(InstanceModel.STATUS))
+                .withFailMessage("step 3: a half-completed restart must leave the record in"
+                    + " deploy's own error state -- anything else (stopped, running) reads"
+                    + " as an outcome nobody produced")
+                .isEqualTo(InstanceModel.STATUS_ERROR);
+            assertThat(activityFor(id, InstanceService.ACTIVITY_STOP_ACTION))
+                .as("step 3: the stop half that DID land is still recorded")
+                .hasSize(2);
+            assertThat(activityFor(id, InstanceService.ACTIVITY_DEPLOY_ACTION))
+                .as("step 3: and the failed deploy recorded nothing -- only settled"
+                    + " operations are answerable")
+                .hasSize(2);
+
+            FakeNativeDaemons.daemonOf(hostId).remove(handle);
+        });
     }
 
     @Test

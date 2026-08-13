@@ -72,7 +72,6 @@ public final class InstanceConsolePage implements RecordScopedPage<Row>, Termina
         String stopCommand = template != null
             ? template.get(InstanceTemplateModel.STOP_COMMAND) : null;
 
-        String error = conduit.getQueryParam("error");
         Map<String, Object> vars = new HashMap<>();
         this.addStoredLogs(conduit, vars, instanceId);
         vars.put("title", instance.get(InstanceModel.NAME));
@@ -82,7 +81,6 @@ public final class InstanceConsolePage implements RecordScopedPage<Row>, Termina
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status)
             || InstanceModel.STATUS_STARTING.equals(status));
         vars.put("stopCommand", stopCommand == null ? "" : stopCommand);
-        vars.put("commandError", error == null ? "" : error);
         vars.put("returnUrl", ReturnTarget.capture(conduit));
         // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
         // ReturnTarget is server-only, so the common template cannot reach it.

@@ -87,8 +87,6 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
             HohenheimAccess.FILES_WRITE));
         vars.put("maxFileBytes", InstanceFiles.maxFileBytes());
 
-        String error = conduit.getQueryParam("error");
-        vars.put("error", error == null ? "" : error);
         vars.put("entries", List.of());
         vars.put("crumbs", List.of());
         vars.put("volumes", List.of());

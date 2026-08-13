@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
+import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
@@ -24,7 +25,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -440,8 +440,6 @@ public final class InstanceSnapshots {
      * the evidence, and after this sweep it once again holds no payload.
      */
     public void recoverInterrupted() {
-        Instant processStart = Instant.ofEpochMilli(
-            ManagementFactory.getRuntimeMXBean().getStartTime());
         List<Row> failed = Models.get(InstanceSnapshotModel.class).find()
             .where(InstanceSnapshotModel.STATUS.eq(InstanceSnapshotModel.STATUS_FAILED))
             .all();
@@ -450,7 +448,7 @@ public final class InstanceSnapshots {
             if (written == null) {
                 written = row.get(InstanceSnapshotModel.CREATED_AT);
             }
-            if (written != null && !written.isBefore(processStart)) {
+            if (BootSettle.writtenByThisProcess(written)) {
                 continue;   // written by THIS process: a capture in flight, not a corpse
             }
             Object id = row.get(InstanceSnapshotModel.ID);

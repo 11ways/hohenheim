@@ -939,7 +939,7 @@ public abstract class ManagedProcessSiteHandler implements SiteRequestHandler, P
         // Control-API requests: a request carrying BOTH headers is claiming the
         // control API, so it is answered here and never proxied on -- a wrong key
         // is an authentication failure, not ordinary traffic to hand upstream.
-        // AIDEV-NOTE: SiteDispatcher.continueAfterAuth strips X-Hohenheim-Key
+        // AIDEV-NOTE: ForwardingHeaders.applyRequestHeaders strips X-Hohenheim-Key
         // before dispatching, so this branch is currently unreachable through the
         // public proxy listener. The admission policy is hardened anyway: whoever
         // makes it reachable again must not also have to rediscover that the check

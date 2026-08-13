@@ -179,7 +179,7 @@ public final class DynamicDnsService {
     /**
      * Applies a dyndns2 update.
      *
-     * @param presentedToken the token from HTTP Basic auth (or the token query param)
+     * @param presentedToken the token from HTTP Basic auth, the ONLY lane that carries one
      * @param hostname       the optional dyndns2 {@code hostname} param; when present it must match the record's FQDN
      * @param myip           the optional dyndns2 {@code myip} param; when absent the caller IP is used
      * @param callerIp       the trusted-proxy-resolved client IP

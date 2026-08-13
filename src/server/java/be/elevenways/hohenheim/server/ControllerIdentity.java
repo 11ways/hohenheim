@@ -58,6 +58,14 @@ public final class ControllerIdentity {
      *                               caller can never fall back to an unscoped name
      */
     public static synchronized @NonNull String token() {
+        // AIDEV-NOTE: model singletons register in the generated BlastAutoLoadInit's
+        // <clinit>, which nothing here would otherwise have triggered. This used to work by
+        // ACCIDENT: HohenheimDatabase.init ran a migration chain whose members called
+        // Blast.slog, and loading Blast is what ran the index -- so consolidating the chain
+        // into one Blast-free migration turned the very next line into "No Model instance
+        // registered for ControllerIdentityModel" on a cold JVM. Never rely on someone
+        // else having touched Blast first.
+        Blast.ensureAutoLoaded();
         ControllerIdentityModel model;
         Datasource datasource;
         try {

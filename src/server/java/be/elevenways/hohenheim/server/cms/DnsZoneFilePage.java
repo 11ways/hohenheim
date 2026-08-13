@@ -47,12 +47,6 @@ public final class DnsZoneFilePage implements RecordScopedPage<Row> {
         DSRecord ds = Boolean.TRUE.equals(zone.get(DnsZoneModel.DNSSEC_ENABLED))
             ? DnsSecMaterial.dsRecord(zone) : null;
         vars.put("dsRecord", ds != null ? ds.toString() : "");
-        String error = conduit.getQueryParam("error");
-        vars.put("error", error != null ? error : "");
-        String imported = conduit.getQueryParam("imported");
-        vars.put("imported", imported != null ? imported : "");
-        String skipped = conduit.getQueryParam("skipped");
-        vars.put("skipped", skipped != null ? skipped : "");
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-file"), vars);
     }

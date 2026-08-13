@@ -13,18 +13,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The dyndns token lookup is an AUTHENTICATION path that runs on every router poll, so
- * the digest column must be indexed rather than fully scanned. Since M091 the digest
- * lives in its own {@code dns_dyndns_credentials} table: this journey pins that the
- * migrated schema stores an index over its {@code token_digest} column, that SQLite's
- * planner really uses it, and that M046's now-pointless index on the dropped
- * {@code dns_records.dyndns_token} column is gone.
+ * the digest column must be indexed rather than fully scanned. The digest lives in its
+ * own {@code dns_dyndns_credentials} table: this journey pins that the migrated schema
+ * stores an index over its {@code token_digest} column and that SQLite's planner really
+ * uses it.
  *
  * @author Jelle De Loecker
  */
 class DyndnsTokenIndexTest {
-
-    /** The name M046 declared and M091 drops alongside the column it covered. */
-    private static final String OLD_INDEX_NAME = "dns_records_dyndns_token_index";
 
     @Test
     void theDyndnsTokenLookupRidesADeclaredIndex() throws Exception {
@@ -56,15 +52,6 @@ class DyndnsTokenIndexTest {
         assertThat(plan)
             .as("step 2: the token lookup must ride an index, plan was: " + plan)
             .contains("USING INDEX");
-
-        // 3. The doomed column's index died with it: M091 dropped M046's index BEFORE
-        //    dropping dyndns_token (SQLite refuses dropping an indexed column).
-        List<Row> old = datasource.rawQuery(
-            "SELECT name AS n FROM sqlite_master WHERE type = ? AND name = ?",
-            "index", OLD_INDEX_NAME);
-        assertThat(old)
-            .as("step 3: the M046 index on the dropped column must be gone")
-            .isEmpty();
     }
 
     /** SQLite's own plan text for a statement, joined into one line. */

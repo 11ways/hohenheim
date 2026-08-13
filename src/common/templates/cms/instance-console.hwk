@@ -7,7 +7,6 @@
 {% declare status: String %}
 {% declare running: Boolean = false %}
 {% declare stopCommand: String = "" %}
-{% declare commandError: String = "" %}
 {% declare returnUrl: String = "" %}
 {#- ReturnTarget.PARAM, supplied by the page: ReturnTarget lives in zenit's SERVER
     source set, so a common template cannot reach the constant (nor its
@@ -29,10 +28,6 @@
         </header>
 
         {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
-
-        {% if commandError != "" %}
-            <pl-alert variant="destructive">{{ commandError }}</pl-alert>
-        {% /if %}
 
         {% if running %}
             <pl-card>

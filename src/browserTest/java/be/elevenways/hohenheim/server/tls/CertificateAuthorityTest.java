@@ -115,10 +115,16 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         assertThat(response.statusCode())
             .describedAs("the request form answers with its error redirect")
             .isIn(302, 303);
-        assertThat(java.net.URLDecoder.decode(
-                response.headers().firstValue("location").orElse(""), "UTF-8"))
+        // The refusal rides the SESSION flash, never the redirect URL.
+        var refusal = popFlash();
+        assertThat(refusal)
+            .describedAs("a refused request must stash a flash naming the refusal")
+            .isNotNull();
+        assertThat(refusal.message().key())
             .describedAs("the refusal names the serving half, not a generic failure")
-            .contains("does not serve")
+            .isEqualTo("hostname_not_served");
+        assertThat(String.valueOf(refusal.message().args().asMap().get("hostnames")))
+            .describedAs("the refusal names the hostname it is about")
             .contains(unserved);
 
         // 3. STATE, not just status: no certificate order exists for that name.

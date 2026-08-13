@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -336,19 +337,24 @@ public final class InstanceMigrations {
         // collision hazard and refuses the whole migration; an OURS leftover is a
         // previous attempt's debris (the record still points at the source, which
         // holds the authoritative data) and is removed before the fresh import.
-        try {
-            WorkloadClaim claim = ((WorkloadAttribution) targetRuntime)
-                .claimOf(resolved.spec());
-            if (claim == WorkloadClaim.FOREIGN) {
-                throw Violations.ofForm(violationText("migrate_destination_occupied")
-                    .withArg("name", nameOf(resolved.row()))
-                    .withArg("server", targetName));
+        // AIDEV-NOTE: only the volume transport DEMANDS attribution on both ends; the
+        // native one does not, so a native-only destination has no claim to answer and
+        // simply skips the pre-flight (the same reading `settle` takes -- an
+        // unattributed target counts as ABSENT there).
+        if (targetRuntime instanceof WorkloadAttribution targetAttribution) {
+            try {
+                WorkloadClaim claim = targetAttribution.claimOf(resolved.spec());
+                if (claim == WorkloadClaim.FOREIGN) {
+                    throw Violations.ofForm(violationText("migrate_destination_occupied")
+                        .withArg("name", nameOf(resolved.row()))
+                        .withArg("server", targetName));
+                }
+                if (claim == WorkloadClaim.OURS) {
+                    removeMigrationCopy(targetRuntime, resolved);
+                }
+            } catch (IOException unreachable) {
+                throw refusal("instance_migrate_failed", resolved.row(), unreachable);
             }
-            if (claim == WorkloadClaim.OURS) {
-                removeMigrationCopy(targetRuntime, resolved);
-            }
-        } catch (IOException unreachable) {
-            throw refusal("instance_migrate_failed", resolved.row(), unreachable);
         }
 
         // The destination's MEMORY headroom, and the last refusal before anything moves:
@@ -541,10 +547,23 @@ public final class InstanceMigrations {
         InstanceMigrations migrations = new InstanceMigrations();
         for (Row row : stuck) {
             int id = row.get(InstanceModel.ID);
+            Integer serverId = row.get(InstanceModel.SERVER_ID);
             try {
-                if (!migrations.settle(id)) {
-                    Blast.log("MIGRATE: could not settle interrupted migration of",
-                        id, "- a daemon did not answer; retried at the next boot");
+                // The same borrowed-lease discipline InstanceService.recoverInterrupted
+                // documents: settle() takes the SOURCE host's fence, so an unguarded sweep
+                // would seize (and keep) the lease of every host a stuck record sits on --
+                // including hosts a rival controller is actively driving.
+                Runnable settle = () -> {
+                    if (!migrations.settle(id)) {
+                        Blast.log("MIGRATE: could not settle interrupted migration of",
+                            id, "- a daemon did not answer; retried at the next boot");
+                    }
+                };
+                if (serverId == null) {
+                    settle.run();
+                } else {
+                    BootSettle.underBorrowedHostLease(
+                        migrations.instances.leases(), serverId, settle);
                 }
             } catch (RuntimeException error) {
                 Blast.log("MIGRATE: settling interrupted migration of", id,
@@ -693,7 +712,7 @@ public final class InstanceMigrations {
                                              @NonNull InstanceRuntime targetRuntime) {
         if (resolved.runtime() instanceof NativeSnapshotSupport sourceNative
                 && targetRuntime instanceof NativeSnapshotSupport targetNative) {
-            return new NativeTransport(resolved, sourceNative, targetNative, targetRuntime);
+            return new NativeTransport(resolved, sourceNative, targetNative);
         }
         if (resolved.runtime() instanceof VolumeSnapshotSupport sourceVolumes
                 && resolved.runtime() instanceof WorkloadAttribution
@@ -710,16 +729,13 @@ public final class InstanceMigrations {
         private final @NonNull Resolved resolved;
         private final @NonNull NativeSnapshotSupport source;
         private final @NonNull NativeSnapshotSupport target;
-        private final @NonNull InstanceRuntime targetRuntime;
         private @Nullable Path export;
 
         NativeTransport(@NonNull Resolved resolved, @NonNull NativeSnapshotSupport source,
-                        @NonNull NativeSnapshotSupport target,
-                        @NonNull InstanceRuntime targetRuntime) {
+                        @NonNull NativeSnapshotSupport target) {
             this.resolved = resolved;
             this.source = source;
             this.target = target;
-            this.targetRuntime = targetRuntime;
         }
 
         @Override

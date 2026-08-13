@@ -2,18 +2,11 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.field.BooleanField;
-import be.elevenways.zenit.common.orm.field.DateTimeField;
-import be.elevenways.zenit.common.orm.field.Field;
-import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -42,7 +35,7 @@ import java.util.Set;
  * but-not-equal claims spell DIFFERENT keys, so no unique index can refuse them, only the
  * serialized scan can; that is the WHOLE guarantee, and it is why the scan may never move
  * out of the write transaction. The UNIQUE index on this
- * column (M045_SiteDomainRouteClaims) stays as the equality backstop: identical keys are
+ * column stays as the equality backstop: identical keys are
  * refused by storage itself even if a future writer bypasses the transaction discipline.
  * Route-claim transactions must stay well under SQLite's 5s busy_timeout or queued rivals
  * fail with SQLITE_BUSY. The scans also produce the specific, localized refusal an
@@ -250,78 +243,5 @@ public final class RouteClaims {
     private static @NonNull String partOf(@NonNull String key, int index) {
         String[] parts = key.split(SEPARATOR, -1);
         return index < parts.length ? parts[index] : "";
-    }
-
-    /**
-     * Stamp the claims of every live site's domain rows against an EXPLICIT datasource,
-     * for the migration backfill: the lowest-id row of a contested route keeps the claim
-     * and the losers stay unclaimed.
-     *
-     * @return the number of rows left unclaimed because an earlier row already held their route
-     */
-    public static int backfill(@NonNull Datasource datasource) {
-        // Fresh instances, not Models.get: a migration may run long before the model
-        // singletons are registered (the zenit-auth M007 heal shape).
-        // AIDEV-NOTE: sites are read through an ERA-FROZEN shape (the M051 LegacyServer
-        // trap), never the live SiteModel. SiteModel.SECURITY_REPORT_TOKEN later became
-        // .encrypted(), and hydrating a live SiteModel row THROWS on any value written
-        // before that -- from inside row hydration, so no caller can catch it usefully.
-        // The plaintext heal is M047, which sorts AFTER this migration (M045), so a
-        // populated install upgrading across that range aborted here with "Stored value
-        // of encrypted field 'security_report_token' is not an encrypted envelope"
-        // (starfleet, 2026-08-10). Only id/enabled/deleted_at are needed for liveness;
-        // the ROUTE KEY is still spelled by keyOf() below, so the one-authority rule
-        // this class exists to enforce is untouched.
-        Model sites = new LegacySite();
-        Model domains = new SiteDomainModel();
-        Map<Integer, Row> sitesById = new HashMap<>();
-        for (Row site : sites.find().on(datasource).all()) {
-            sitesById.put(site.get(LegacySite.ID), site);
-        }
-        Set<String> claimed = new HashSet<>();
-        int released = 0;
-        for (Row domain : domains.find().on(datasource)
-                .orderBy(SiteDomainModel.ID, SortOrder.ASC).all()) {
-            if (!isLiveLegacy(sitesById.get(domain.get(SiteDomainModel.SITE_ID)))) {
-                continue;
-            }
-            String key = keyOf(domain);
-            if (!claimed.add(key)) {
-                // The dispatcher already resolved this route FIRST-WINS, so the loser was
-                // never reachable; leaving it unclaimed changes nothing an operator can
-                // observe, and its next edit is refused with the real conflict message.
-                released++;
-                continue;
-            }
-            domains.find().on(datasource).where(SiteDomainModel.ID.eq(domain.get(SiteDomainModel.ID)))
-                .assign(SiteDomainModel.LIVE_ROUTE_KEY, key)
-                .updateAll();
-        }
-        return released;
-    }
-
-    /** {@link #isLive} against the era-frozen shape; same definition, frozen columns. */
-    private static boolean isLiveLegacy(@Nullable Row site) {
-        return site != null
-            && Boolean.TRUE.equals(site.get(LegacySite.ENABLED))
-            && site.get(LegacySite.DELETED_AT) == null;
-    }
-
-    /**
-     * The M045-era site shape: the three columns liveness needs and nothing else, so the
-     * backfill never hydrates a column whose live declaration has drifted since.
-     */
-    private static final class LegacySite extends Model {
-        static final Schema SCHEMA = new Schema();
-        static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-        static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").build());
-        static final DateTimeField DELETED_AT = SCHEMA.addField(
-            DateTimeField.builder().name("deleted_at").build());
-
-        @Override public Identifier getModelId() { return Identifier.of("hohenheim", "m045_site"); }
-        @Override public Field<?, ?> getPrimaryKeyField() { return ID; }
-        @Override public String getModelName() { return "M045Site"; }
-        @Override public String getTableName() { return "sites"; }
-        @Override public Schema getSchema() { return SCHEMA; }
     }
 }

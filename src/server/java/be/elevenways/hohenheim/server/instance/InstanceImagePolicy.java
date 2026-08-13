@@ -15,6 +15,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * THE image gate of the threat model: templates are the DEFAULT source of instance
@@ -34,6 +35,20 @@ import java.util.Objects;
  * instance would be refused for an image fact the rename never touched.
  */
 public final class InstanceImagePolicy {
+
+    /**
+     * The {@code settings} members this gate judges, and therefore the ONLY ones a tenant
+     * write may move at all.
+     *
+     * AIDEV-NOTE: exported because {@code TenantWrites.checkInstanceWrite} freezes the rest
+     * of the column against it. The two must name the same set or one of them is wrong: a
+     * key this gate does not judge and TenantWrites does not freeze is a key with NO
+     * authority check on it (that was {@code privileged}, which lowers straight onto an
+     * Incus {@code security.privileged} container). Adding a member here without teaching
+     * {@link #check} to judge it re-opens exactly that hole.
+     */
+    public static final Set<String> JUDGED_SETTINGS_KEYS =
+        Set.of("image", "tag", "image_origin");
 
     private static volatile boolean installed;
 

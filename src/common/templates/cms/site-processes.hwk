@@ -15,7 +15,6 @@
     source set, so a common template cannot reach the constant (nor its
     Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
 {% declare returnParam: String %}
-{% declare error: String = "" %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
@@ -28,7 +27,6 @@
 
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
-    {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
 
     {% if isManaged %}
     <pl-card>

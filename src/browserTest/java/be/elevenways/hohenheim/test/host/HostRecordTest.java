@@ -159,7 +159,7 @@ class HostRecordTest {
 
     /** A probe failure is a TYPED, STORED outcome that also blocks admission. */
     @Test
-    void probeFailuresAreTypedAndStoredAndTheListNeverProbes() {
+    void probeFailuresAreTypedAndStoredAndBlockAdmission() {
         Db.run(datasource, () -> {
             ServerService servers = new ServerService();
             servers.add("edge-dark", "nobody@edge-dark.hohenheim-test.invalid");

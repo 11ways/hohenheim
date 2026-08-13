@@ -2825,10 +2825,6 @@
     "text": "{$count} records geimporteerd.",
     "scope": "dns_zone"
   },
-  "import_skipped": {
-    "text": "Overgeslagen: {$lines}",
-    "scope": "dns_zone"
-  },
   "import_empty": {
     "text": "Plak eerst zonebestand-tekst voor het importeren",
     "scope": "dns_zone"
@@ -8099,5 +8095,49 @@
   "ack_missing": {
     "text": "Niet aanvaard",
     "scope": "server_overview"
+  },
+  "import_partial": {
+    "text": "{$count} records geimporteerd; overgeslagen: {$skipped}",
+    "scope": "dns_zone"
+  },
+  "import_failed": {
+    "text": "Import mislukt: {$reason}",
+    "scope": "dns_zone"
+  },
+  "peer_call_failed": {
+    "text": "De eigenaar-peer weigerde de wijziging: {$reason}",
+    "scope": "dns_remote"
+  },
+  "dump_required": {
+    "text": "Kies een dumpbestand om terug te zetten.",
+    "scope": "database_tab"
+  },
+  "restore_unsupported": {
+    "text": "'{$name}' ondersteunt geen herstel.",
+    "scope": "database_tab"
+  },
+  "restore_failed": {
+    "text": "Herstel van '{$name}' is mislukt; bekijk het serverlog voor details.",
+    "scope": "database_tab"
+  },
+  "no_handler": {
+    "text": "Deze site heeft geen draaiende procesbeheerder; ze is uitgeschakeld of niet opgestart. Bekijk de status van de site voor de reden.",
+    "scope": "site_process"
+  },
+  "role_disabled": {
+    "text": "Deze node draait geen beheerde processen (roles.processes staat uit) en heeft dus geen proces voor deze site.",
+    "scope": "site_process"
+  },
+  "start_failed": {
+    "text": "Het proces is niet gestart; bekijk het proceslog van deze site.",
+    "scope": "site_process"
+  },
+  "gone": {
+    "text": "Proces {$pid} draait niet meer.",
+    "scope": "site_process"
+  },
+  "refused": {
+    "text": "De aanvraag werd geweigerd.",
+    "scope": "violations"
   }
 }

@@ -134,6 +134,27 @@ and the admin select and validation both read `ALL`, so no test edit is owed. To
 test one end-to-end: inline `CommsDispatcher` + `webhook://default` + a local
 `HttpServer`, per `CertExpiryAlertTest`.
 
+## Migrations
+
+Hohenheim ships exactly ONE migration:
+`src/common/java/be/elevenways/hohenheim/migration/InitialMigration.java`. It
+creates the final schema directly. The M003..M092 chain was folded into it on
+2026-08-13 (`docs/migration-consolidation-2026-08-13.md` carries the
+schema-diff proof); older docs in `docs/` still cite `M0xx` class names as
+provenance for when something landed, and those citations are history, not
+files you will find.
+
+- A schema change EDITS `InitialMigration` in place. Never append a second
+  migration -- `MigrationIntegrityTest` fails the build if one appears.
+- There are no installations, so there is nothing to migrate FROM. Never write
+  a backfill, a heal, or a data step.
+- `database.migration_integrity` is `fail`, so a dev database that predates
+  your edit refuses to boot. Delete and recreate it; never downgrade the
+  setting to `warn` or `off`.
+- Default records are the `Seeder` SPI's job (SEED boot stage), never an
+  INSERT in the migration -- `SpamserviceInstallationSeeder` and
+  `LocalServerSeeder` are the examples.
+
 ## Conventions
 
 - Follow the Hawkeye skill for `.hwk` templates; follow the Zenit skill for endpoints, models, migrations, settings.

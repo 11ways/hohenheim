@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -12,6 +13,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * THE substrate every product tier that OWNS instances shares: the GeneratedRows
@@ -123,5 +125,57 @@ public final class OwnedInstances {
     public static @Nullable Row soleOwnedBy(@NonNull Identifier model, int recordId) {
         List<Row> owned = ownedBy(model, recordId);
         return owned.isEmpty() ? null : owned.get(0);
+    }
+
+    /**
+     * THE stored-row answer to "whose workload is this": the manage-grant subjects of the
+     * OWNING product record when the row carries an attribution, else of the instance
+     * record itself. The empty set is the operator.
+     *
+     * AIDEV-NOTE: the stored twin of {@code InstanceQuota.creationOwnerOf}, which asks the
+     * same question about a write in flight (from the ambient GeneratedRows attribution)
+     * rather than about a record that exists. Two derivations of "who owns this workload"
+     * that could disagree is exactly what the QUOTA_BUCKET note warns about, so this one
+     * reads GRANTS, never the charged bucket -- a bucket is bookkeeping, and grants added
+     * after create move ownership without moving it.
+     *
+     * @return the manage subjects, or null when grants are unreadable (callers fail closed)
+     */
+    public static @Nullable Set<String> ownerSubjectsOf(@NonNull Row instance) {
+        String ownerModel = instance.get(InstanceModel.GENERATED_FOR_MODEL);
+        Integer ownerId = instance.get(InstanceModel.GENERATED_FOR_ID);
+        if (ownerModel != null && ownerId != null) {
+            Identifier model = Identifier.tryParse(ownerModel);
+            if (model != null) {
+                return HohenheimAccess.manageSubjectsOf(model, ownerId);
+            }
+        }
+        Integer id = instance.get(InstanceModel.ID);
+        if (id == null) {
+            return Set.of();
+        }
+        return HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, id);
+    }
+
+    /**
+     * Whether this workload answers to a TENANT rather than to the operator -- the
+     * question every posture and placement gate is actually about.
+     *
+     * AIDEV-NOTE: this is NOT {@code handler.tenantAuthored()}, and the difference is the
+     * defect it was written for. tenantAuthored is a property of the KIND (may a tenant
+     * write this record at all); a database engine, a site release container and a stack
+     * service are all operator-authored kinds that a TENANT owns through the product
+     * record above them. Gating the deploy-time posture check on the kind meant those
+     * workloads were posture-checked once at placement and never again -- so a host whose
+     * posture regressed, or whose shared-kernel acknowledgement was withdrawn, kept
+     * redeploying tenant workloads onto itself. The posture doctrine is about the RISK a
+     * tenant is exposed to, which the authoring tier does not change.
+     *
+     * Fails CLOSED: unreadable grants count as tenant-attributed, so an unreadable answer
+     * runs the gate rather than skipping it.
+     */
+    public static boolean isTenantAttributed(@NonNull Row instance) {
+        Set<String> owner = ownerSubjectsOf(instance);
+        return owner == null || !owner.isEmpty();
     }
 }

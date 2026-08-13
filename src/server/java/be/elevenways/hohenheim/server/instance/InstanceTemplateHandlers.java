@@ -3,8 +3,8 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
-import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.server.cms.HohenheimFlash;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.InstanceFromTemplatePage;
@@ -23,7 +23,6 @@ import be.elevenways.zenit.server.http.RedirectResult;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +72,7 @@ public final class InstanceTemplateHandlers {
                         "imported", "vendored catalog: " + catalogApp);
                     return redirect(CmsRoutes.detail(ADMIN, TEMPLATES_SLUG, templateId));
                 } catch (Violations violations) {
-                    return importErrorText(conduit, firstMessage(conduit, violations));
+                    return importErrorText(conduit, firstMessage(violations));
                 }
             }
             String document = submittedString(form, "document");
@@ -87,7 +86,7 @@ public final class InstanceTemplateHandlers {
                     "imported", source.isEmpty() ? "paste" : source);
                 return redirect(CmsRoutes.detail(ADMIN, TEMPLATES_SLUG, templateId));
             } catch (Violations violations) {
-                return importErrorText(conduit, firstMessage(conduit, violations));
+                return importErrorText(conduit, firstMessage(violations));
             }
         });
 
@@ -136,28 +135,22 @@ public final class InstanceTemplateHandlers {
 
     // -- plumbing -------------------------------------------------------------
 
-    private static String firstMessage(Conduit conduit, Violations violations) {
+    /** The first violation's own message, so a refusal keeps its localized text. */
+    private static Microcopy firstMessage(Violations violations) {
         var all = violations.all();
-        if (all.isEmpty()) {
-            return "";
-        }
-        return all.get(0).message().resolve(conduit.getLocales(), conduit.getMessageResolver());
+        return all.isEmpty()
+            ? Microcopy.of("refused").withFilter("scope", "violations")
+            : all.get(0).message();
     }
 
     private static ActionResult<Object> importError(Conduit conduit, String key) {
         return importErrorText(conduit,
-            be.elevenways.protoblast.common.i18n.Microcopy.of(key)
-                .withFilter("scope", "violations")
-                .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+            Microcopy.of(key).withFilter("scope", "violations"));
     }
 
-    private static ActionResult<Object> importErrorText(Conduit conduit, String message) {
-        // A CMS route PLUS a query parameter: composed off CmsEndpoints, since CmsRoutes
-        // returns the RouteTarget interface (no with(...)).
-        return redirect(CmsEndpoints.LIST
-            .with(CmsEndpoints.PANEL_PARAM, ADMIN)
-            .with(CmsEndpoints.RESOURCE_PARAM, "instance-templates-import")
-            .with(HohenheimParams.ERROR_TEXT, message));
+    private static ActionResult<Object> importErrorText(Conduit conduit, Microcopy message) {
+        HohenheimFlash.error(conduit, message);
+        return redirect(CmsRoutes.list(ADMIN, "instance-templates-import"));
     }
 
     private static String submittedString(Map<String, Object> values, String name) {

@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -352,13 +353,25 @@ public final class ContainerHardening {
     }
 
     /**
-     * The bounded logging every managed container is stamped with.
+     * The bounded logging every managed DOCKER container is stamped with.
      *
      * AIDEV-NOTE: an unrotated log is a TENANT-DRIVEN host-availability failure, which is
      * why the cap lives in this funnel and not at a call site: a workload that prints in a
      * loop fills the host's disk, and the daemon's own default for the json-file driver is
      * one file with no maximum size at all. Every managed container therefore gets
      * {@code max-size} x {@code max-file} as a hard ceiling on what it can occupy.
+     *
+     * AIDEV-NOTE: DOCKER-TIER ONLY, and the original claim ("every managed container's log
+     * at the create funnel", commit c78f295e) was wider than this class can reach. This is
+     * the Docker create funnel; INCUS instances (containers and VMs) never pass through it
+     * and get no LogConfig equivalent, because they do not have the exposure it closes: an
+     * Incus guest's own logs are written inside the INSTANCE's filesystem, which the Incus
+     * tier bounds with its declarable root-disk cap ({@code IncusContainerKind.ROOT_DISK_GB}
+     * -> the root device's {@code size}, a real pool/qgroup limit), so a workload printing
+     * in a loop fills its own quota rather than the shared host disk the way a Docker
+     * json-file log does. What is NOT claimed here: a root-disk cap left blank inherits the
+     * pool default, so the Incus bound is DECLARABLE rather than unconditional. No knob was
+     * invented to make the sentence true -- the sentence was narrowed to what is enforced.
      *
      * AIDEV-NOTE: the DRIVER is stamped too, not just its options, and that is deliberate
      * rather than incidental. Only {@code json-file} and {@code local} answer
@@ -392,9 +405,20 @@ public final class ContainerHardening {
         return configured != null && configured > 0 ? configured : DEFAULT_LOG_MAX_FILES;
     }
 
+    /**
+     * AIDEV-NOTE: every lookup below is CASE-FOLDED, and that is load-bearing rather than
+     * defensive. The daemon unmarshals HostConfig with Go's encoding/json, whose field
+     * matching "prefers an exact match but also accepts a case-insensitive one" -- so
+     * {@code "privileged"}, {@code "capAdd"} and {@code "binds"} are all honoured by
+     * Docker while a case-SENSITIVE guard sees three keys it has never heard of and waves
+     * them through. The same fold applies to the namespace keys, to {@code Mounts} and to
+     * a mount entry's own {@code Type}/{@code Source} members, because Go decodes those
+     * structs the same way. Never compare a caller-supplied HostConfig key with equals().
+     */
     private static void refuseEscapes(Map<String, Object> hostConfig) {
+        Map<String, Object> folded = caseFolded(hostConfig);
         for (String key : ESCAPE_KEYS) {
-            if (hostConfig.containsKey(key)) {
+            if (folded.containsKey(fold(key))) {
                 throw new IllegalArgumentException("REFUSED to create container: HostConfig."
                     + key + " is owned by ContainerHardening and may not be set by a caller."
                     + " A workload that needs a capability declares a ContainerHardening.Profile;"
@@ -402,13 +426,13 @@ public final class ContainerHardening {
             }
         }
         for (String key : NAMESPACE_KEYS) {
-            Object value = hostConfig.get(key);
-            if ("host".equals(value)) {
+            Object value = folded.get(fold(key));
+            if (value instanceof String text && text.equalsIgnoreCase("host")) {
                 throw new IllegalArgumentException("REFUSED to create container: HostConfig."
                     + key + " = \"host\" shares a host namespace with the container, which is a"
                     + " container escape by definition.");
             }
-            if (value instanceof String text && text.startsWith(JOIN_CONTAINER)) {
+            if (value instanceof String text && fold(text).startsWith(JOIN_CONTAINER)) {
                 throw new IllegalArgumentException("REFUSED to create container: HostConfig."
                     + key + " = \"" + text + "\" joins another container's namespace, which"
                     + " inherits that container's isolation instead of having any of its own"
@@ -416,15 +440,39 @@ public final class ContainerHardening {
                     + " own private network and no per-workload policy applies to it).");
             }
         }
-        if (hostConfig.get("Mounts") instanceof List<?> mounts) {
+        if (folded.get(fold("Mounts")) instanceof List<?> mounts) {
             for (Object mount : mounts) {
-                if (mount instanceof Map<?, ?> entry && "bind".equals(entry.get("Type"))) {
+                if (!(mount instanceof Map<?, ?> entry)) {
+                    continue;
+                }
+                Map<String, Object> foldedMount = caseFolded(entry);
+                Object type = foldedMount.get(fold("Type"));
+                if (type instanceof String text && text.equalsIgnoreCase("bind")) {
                     throw new IllegalArgumentException("REFUSED to create container: a bind mount"
-                        + " of host path '" + entry.get("Source") + "' is not an isolation boundary"
-                        + " (a bind of the Docker socket is root on the host). Use a named volume"
-                        + " or a tmpfs.");
+                        + " of host path '" + foldedMount.get(fold("Source")) + "' is not an"
+                        + " isolation boundary (a bind of the Docker socket is root on the host)."
+                        + " Use a named volume or a tmpfs.");
                 }
             }
         }
+    }
+
+    /**
+     * A case-folded view of a caller-supplied map, matching how Go's encoding/json resolves
+     * a JSON member onto a struct field.
+     *
+     * @return the entries keyed by {@link #fold}ed name; a duplicate fold keeps the FIRST
+     *         entry, which is the one Go's exact-match preference would also pick when one
+     *         of the two is spelled canonically
+     */
+    private static @NonNull Map<String, Object> caseFolded(@NonNull Map<?, ?> source) {
+        Map<String, Object> folded = new LinkedHashMap<>();
+        source.forEach((key, value) -> folded.putIfAbsent(fold(String.valueOf(key)), value));
+        return folded;
+    }
+
+    /** ROOT-locale lowercasing; a locale-sensitive fold would turn "PidsLimit" into a Turkish miss. */
+    private static @NonNull String fold(@NonNull String value) {
+        return value.toLowerCase(Locale.ROOT);
     }
 }

@@ -48,6 +48,9 @@ import java.util.Map;
  */
 abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
 
+    /** How many of the newest artifacts this scoped tab renders; the full list lives on the resource. */
+    private static final int RECENT_LIMIT = 50;
+
     private final RowResource resource;
     private final ActionStateTranslator actions = new ActionStateTranslator();
 
@@ -95,10 +98,14 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
         String panel = CmsSupport.panelSlug(conduit);
         String pageUrl = CmsRoutes.subpage(panel, "instances", instanceId, this.slug()).toUrl();
 
+        // The newest page only: the panel-wide resource paginates, and this scoped view
+        // must not turn into an unbounded load of every artifact an instance ever made.
         List<InstanceArtifactView> rows = new ArrayList<>();
         for (Row artifact : this.resource.model().find()
                 .where(this.instanceIdField().eq(instanceId))
-                .orderBy(this.createdAtField(), SortOrder.DESC).all()) {
+                .orderBy(this.createdAtField(), SortOrder.DESC)
+                .limit(RECENT_LIMIT)
+                .all()) {
             Object artifactId = artifact.get(this.resource.model().getPrimaryKeyField());
             rows.add(new InstanceArtifactView(
                 artifactId instanceof Integer id ? id : 0,

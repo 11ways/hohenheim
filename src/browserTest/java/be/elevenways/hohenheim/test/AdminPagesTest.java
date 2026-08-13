@@ -330,16 +330,18 @@ class AdminPagesTest extends HohenheimTestBase {
         var response = post("/admin/certificates-request",
             "nice_name=wildcard&domains=*.example.test&challenge_type=http&dns_mode=manual");
         assertThat(response.statusCode()).isIn(302, 303);
-        assertThat(response.headers().firstValue("Location").orElse(""))
-            .contains("Wildcard").contains("DNS-01");
+        var wildcardRefusal = popFlash();
+        assertThat(wildcardRefusal).describedAs("the refusal rides the session flash").isNotNull();
+        assertThat(wildcardRefusal.message().key()).isEqualTo("wildcard_requires_dns");
 
         // Every repeated domain value is kept, so the wildcard is still seen.
         response = post("/admin/certificates-request",
             "nice_name=wildcard&domains=&domains=example.test&domains=*.example.test"
                 + "&challenge_type=http&dns_mode=manual");
         assertThat(response.statusCode()).isIn(302, 303);
-        assertThat(response.headers().firstValue("Location").orElse(""))
-            .contains("Wildcard").contains("DNS-01");
+        var repeatedRefusal = popFlash();
+        assertThat(repeatedRefusal).describedAs("the refusal rides the session flash").isNotNull();
+        assertThat(repeatedRefusal.message().key()).isEqualTo("wildcard_requires_dns");
 
         post("/admin/certificates/new",
             "nice_name=my-bad-cert&certificate_pem=NOT-A-PEM-BODY&private_key_pem=NOT-A-KEY");

@@ -374,10 +374,16 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
             "_return=" + java.net.URLEncoder.encode(processTarget, java.nio.charset.StandardCharsets.UTF_8));
         assertThat(processReturn.statusCode()).isIn(302, 303);
         assertThat(processReturn.headers().firstValue("Location"))
-            .as("a start that could not run returns to the submitted page WITH a reason")
+            .as("a start that could not run returns to the submitted page")
             .get(org.assertj.core.api.InstanceOfAssertFactories.STRING)
-            .startsWith(processTarget + "?error=")
-            .contains("no+running+process+handler");
+            .isEqualTo(processTarget);
+        var startRefusal = popFlash();
+        assertThat(startRefusal)
+            .as("a start that could not run says WHY -- this used to be a silent reload")
+            .isNotNull();
+        assertThat(startRefusal.message().key())
+            .as("the reason names the missing handler")
+            .isEqualTo("no_handler");
 
         var forgedProcess = postAction("/sites/" + siteId + "/processes/start",
             "_return=" + java.net.URLEncoder.encode("//evil.example/phish", java.nio.charset.StandardCharsets.UTF_8));
@@ -385,7 +391,10 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat(forgedProcess.headers().firstValue("Location"))
             .as("and a forged return target still falls back to the admin page")
             .get(org.assertj.core.api.InstanceOfAssertFactories.STRING)
-            .startsWith("/admin/sites/" + siteId + "/page/processes?error=")
+            .isEqualTo("/admin/sites/" + siteId + "/page/processes")
             .doesNotContain("evil.example");
+        assertThat(popFlash())
+            .as("the fallback still carries the reason")
+            .isNotNull();
     }
 }

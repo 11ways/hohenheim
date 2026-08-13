@@ -102,9 +102,9 @@ class SocketFrontModeTest {
             .as("step 2: socket mode with keys configured starts")
             .isEqualTo(ProxyServer.State.RUNNING);
 
-        String served = unixRequest(sock, "front.sock.test", "/");
+        String served = unixRequest(sock, "front.sock.test", "/", "X-Hohenheim-Key: " + KEY);
         assertThat(served)
-            .as("step 2: a request through the socket front is served")
+            .as("step 2: an AUTHENTICATED request through the socket front is served")
             .contains("200").contains("socket-front-ok");
 
         // Step 3: the fronting proxy's forwarded identity drives ban enforcement.
@@ -124,6 +124,34 @@ class SocketFrontModeTest {
         } finally {
             BanService.INSTANCE.lift(ban, "test");
         }
+
+        // Step 4: PER-REQUEST ENFORCEMENT. An unauthenticated request is REFUSED, never
+        // silently degraded to the socket peer's 127.0.0.1 -- the bridge's loopback TCP
+        // port is reachable by any local account, so accepting one is an ACL bypass.
+        // (Pre-fix counterfactual: both of these were served as trusted loopback.)
+        assertThat(unixRequest(sock, "front.sock.test", "/"))
+            .as("step 4: a request with NO X-Hohenheim-Key is refused")
+            .contains("403").doesNotContain("socket-front-ok");
+        assertThat(unixRequest(sock, "front.sock.test", "/", "X-Hohenheim-Key: wrong-key",
+                "X-Real-IP: 203.0.113.99"))
+            .as("step 4: and a request with a WRONG key cannot state a client IP either")
+            .contains("403").doesNotContain("socket-front-ok");
+
+        // Step 5: the setting is LIVE, and clearing it fails CLOSED. proxy.trusted_proxy_keys
+        // is editable while the front serves; before the per-request half existed, clearing
+        // it left the listener running with every client degraded to loopback.
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of());
+        assertThat(unixRequest(sock, "front.sock.test", "/", "X-Hohenheim-Key: " + KEY))
+            .as("step 5: with the key set cleared, the previously valid key no longer opens"
+                + " the front -- the socket listener fails closed instead of degrading")
+            .contains("403").doesNotContain("socket-front-ok");
+
+        // Step 6: and restoring the keys restores service, so the gate tracks the setting
+        // in both directions rather than latching.
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, List.of(KEY));
+        assertThat(unixRequest(sock, "front.sock.test", "/", "X-Hohenheim-Key: " + KEY))
+            .as("step 6: restoring the key set restores the authenticated front")
+            .contains("200").contains("socket-front-ok");
     }
 
     private static String unixRequest(Path socket, String host, String path,
