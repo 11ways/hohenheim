@@ -137,10 +137,12 @@ public final class ManageDatabaseResource extends DatabaseResource {
         return List.of(new ManageDatabaseCredentialsPage());
     }
 
-    /** NAV-ONLY (zero granted databases hide the empty list); the route stays scoped. */
+    /**
+     * NAV-ONLY (zero granted databases hide the empty list); the route stays scoped.
+     * reachesAny, because an id set cannot express every-record authority.
+     */
     @Override
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
-        return HohenheimAccess.isAdmin(access)
-            || !HohenheimAccess.databaseIdsWith(access, HohenheimAccess.VIEW).isEmpty();
+        return HohenheimAccess.reachesAny(access, DatabaseModel.MODEL_ID, HohenheimAccess.VIEW);
     }
 }

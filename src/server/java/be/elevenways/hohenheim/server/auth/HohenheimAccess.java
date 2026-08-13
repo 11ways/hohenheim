@@ -26,7 +26,7 @@ import be.elevenways.zenit.common.security.KnownCapability;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.RecordCapabilityRules;
-import be.elevenways.zenit.common.security.WebSocketAuthenticator;
+import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -39,7 +39,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
 /**
  * THE per-record access policy funnel. Sites still use a SINGLE capability string
@@ -51,8 +50,16 @@ import java.util.function.Predicate;
  * Per-record decisions ride the framework's fixed precedence walk
  * ({@code RecordCapabilities}) through the rules declared in
  * {@link #declareGrantableModels}: {@code hohenheim.admin.access} is the admin
- * bypass and an EXPLICIT denial of {@code hohenheim.manage.access} (the gate)
- * kills every record grant.
+ * bypass, an EXPLICIT denial of {@code hohenheim.manage.access} (the gate)
+ * kills every record grant, and on SITES ONLY {@link #SITES_MANAGE_ALL} is the
+ * type-level row.
+ *
+ * The walk answers in TWO shapes and this class exposes both: by record
+ * ({@link #canManageSite} and friends) and set-wise ({@link #capabilityScope},
+ * {@link #reachesAny}, {@link #grantScope}). Anything asking "which records" or
+ * "any records at all" must take the set-wise face -- an id set cannot express
+ * every-record authority, and {@link #grantedRecordIds} now REFUSES to pretend
+ * otherwise.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.2.0
@@ -161,6 +168,27 @@ public final class HohenheimAccess {
      */
     public static final Permission INSTANCES_CREATE = Permission.of("hohenheim.instances.create");
 
+    /**
+     * Type-level authority over EVERY site: {@link #MANAGE} on all of them, WITHOUT
+     * {@code hohenheim.admin.access}. It rides the walk's type-level row, which sits behind
+     * the gate-denial row, so an explicit denial of {@link ManagePanel#ACCESS} still kills it
+     * -- and behind the admin row, so it grants strictly less than the admin permission.
+     *
+     * AIDEV-NOTE: declared on SiteModel and NOWHERE ELSE, and that is a policy decision the
+     * mechanism cannot make. {@code RecordCapabilityRules.typeLevelPermission} is per MODEL,
+     * not per capability: holding it confers EVERY capability in that model's vocabulary.
+     * Sites have exactly one ({@link #MANAGE}), so the two readings coincide. On
+     * InstanceModel they would not -- its vocabulary carries {@link #EXEC} and
+     * {@link #IMAGE_ANY}, both deliberately admin-only and non-delegable -- so an
+     * instances-wide equivalent needs per-capability narrowing in the framework FIRST. Do not
+     * copy this declaration onto another model without it.
+     *
+     * Registered NON-DELEGABLE (ServerMain.installAuthBaselines), following the
+     * {@code auth.grants.manage} precedent: a holder of every-site authority minting peers is
+     * exactly the spread containment exists to prevent, and admins bypass containment anyway.
+     */
+    public static final Permission SITES_MANAGE_ALL = Permission.of("hohenheim.sites.manage_all");
+
     private HohenheimAccess() {
     }
 
@@ -196,7 +224,10 @@ public final class HohenheimAccess {
         RecordGrantCapabilityChecker.declareRules(SiteModel.MODEL_ID,
             RecordCapabilityRules.create()
                 .gate(ManagePanel.ACCESS)
-                .admin(HohenheimPanel.ACCESS));
+                .admin(HohenheimPanel.ACCESS)
+                // Every-site authority without the admin permission; see SITES_MANAGE_ALL for
+                // why this line belongs on THIS model and on no other one here.
+                .typeLevel(SITES_MANAGE_ALL));
 
         // AIDEV-NOTE: DnsZoneModel, DnsPeerModel and DnsZonePeerModel declare NO vocabulary
         // and are NOT grantable, PERMANENTLY and by decision (docs/instance-tier-plan.md,
@@ -788,9 +819,8 @@ public final class HohenheimAccess {
 
     /**
      * THE managed-site scoping shape, shared by every source and resource whose rows hang
-     * off a site: admins are unconstrained, a principal with no managed sites matches
-     * NOTHING, and everyone else gets the criteria {@code forManagedIds} spells over the
-     * confirmed id set.
+     * off a site: an ALL scope is unconstrained, a NONE scope matches NOTHING, and a
+     * confirmed set gets the criteria {@code forManagedIds} spells over it.
      *
      * AIDEV-NOTE: one definition on purpose. Three hand-rolled copies (site, domain,
      * certificate) is how one of them ends up missing the anonymous branch or answering
@@ -798,7 +828,7 @@ public final class HohenheimAccess {
      *
      * @param model          the model being scoped, for its {@code matchNone()}
      * @param forManagedIds  builds the criteria from the confirmed managed-site ids
-     * @return null for admins (no extra constraint), else a criteria
+     * @return null for an unconstrained scope, else a criteria
      */
     public static @Nullable Criteria managedSiteScope(@NonNull AccessContext ctx,
                                                       @NonNull Model model,
@@ -807,9 +837,17 @@ public final class HohenheimAccess {
     }
 
     /**
-     * The generalized shape of {@link #managedSiteScope}: admins are unconstrained, an
-     * anonymous or grant-less principal matches NOTHING, and everyone else gets the criteria
-     * {@code forGrantedIds} spells over the walk-confirmed record ids.
+     * The generalized shape of {@link #managedSiteScope}: the framework's tri-state answer,
+     * translated into a criteria. ALL means no extra constraint, NONE matches nothing, and a
+     * confirmed SET gets the criteria {@code forGrantedIds} spells over it.
+     *
+     * AIDEV-NOTE: there are deliberately no {@code isAdmin} or {@code isAnonymous} branches
+     * here anymore, and re-adding either would be a SECOND spelling of the walk's own
+     * whole-model rows. The scope already answers ALL for the admin bypass and for
+     * {@link #SITES_MANAGE_ALL}, and NONE for anonymous, for a model with no declared policy
+     * and for an EXPLICIT gate denial -- and that last one is the reason the order matters:
+     * gate denial precedes the type-level row, so a denied subject holding manage_all must
+     * enumerate nothing. Spelling the prefix by hand here is how the two would drift.
      *
      * @param model the model being SCOPED (its {@code matchNone()}), which is not necessarily
      *        the model the capability is held on -- domains scope by their parent site
@@ -819,22 +857,93 @@ public final class HohenheimAccess {
                                                 @NonNull Identifier capabilityModel,
                                                 @NonNull String capability,
                                                 @NonNull Function<Set<Integer>, Criteria> forGrantedIds) {
-        if (isAdmin(ctx)) {
+        RecordCapabilityScope scope = capabilityScope(ctx, capabilityModel, capability);
+        if (scope.isAll()) {
             return null;
         }
-        if (ctx.isAnonymous()) {
+        if (scope.isNone()) {
             return model.matchNone();
         }
-        Set<Integer> ids = grantedRecordIds(ctx, capabilityModel, capability);
-        return ids.isEmpty() ? model.matchNone() : forGrantedIds.apply(ids);
+        return forGrantedIds.apply(intIds(scope.recordIds()));
     }
 
-    /** Request-scoped memo of the confirmed id sets, keyed by model + capability. */
-    private static final IdentifierKey<Map<String, Set<Integer>>> GRANTED_RECORD_IDS =
-        IdentifierKey.of("hohenheim", "granted_record_ids");
+    /** Request-scoped memo of the walk's set-wise answers, keyed by model + capability. */
+    private static final IdentifierKey<Map<String, RecordCapabilityScope>> CAPABILITY_SCOPES =
+        IdentifierKey.of("hohenheim", "capability_scopes");
+
+    /**
+     * WHICH records of {@code model} the context holds {@code capability} on, as the
+     * framework's tri-state (ALL / NONE / a confirmed SET) -- THE set-wise question every
+     * scope criteria, panel probe and nav probe here asks.
+     *
+     * AIDEV-NOTE: never an id set, and never {@code isAdmin || hasPermission(typeLevel)}.
+     * Authority from a whole-model row (the admin bypass, {@link #SITES_MANAGE_ALL}) covers
+     * records that carry no grant at all, so a grant-store enumeration answers EMPTY for it
+     * -- which reads as "nothing" and silently empties every list while the by-id checks keep
+     * answering yes. The hand-rolled candidates-plus-confirm loop that used to live here
+     * could not express ALL at all.
+     *
+     * Memoized per REQUEST on the conduit (the PermissionResolver WALK_CACHE idiom): panel
+     * eligibility, scope criteria and the nav probes all ask per render, and grants written
+     * mid-request stay next-request-effective. Conduit-less contexts run the walk fresh.
+     *
+     * AIDEV-NOTE: the memo is a MAP keyed by model+capability, not one attribute per set. One
+     * attribute per set is how the second consumer (dns records) quietly ends up outside the
+     * budget the first consumer's test pinned.
+     */
+    @NonNull
+    public static RecordCapabilityScope capabilityScope(@NonNull AccessContext ctx,
+                                                        @NonNull Identifier model,
+                                                        @NonNull String capability) {
+        String key = model + "#" + capability;
+        Conduit conduit = ctx.conduit();
+        if (conduit == null) {
+            return ctx.capabilityScope(model, capability);
+        }
+
+        Map<String, RecordCapabilityScope> cache = conduit.getAttribute(CAPABILITY_SCOPES);
+        if (cache == null) {
+            cache = new HashMap<>();
+            try {
+                conduit.setAttribute(CAPABILITY_SCOPES, cache);
+            } catch (UnsupportedOperationException attributeless) {
+                // A conduit without attribute storage just pays the walk each call.
+            }
+        }
+
+        RecordCapabilityScope cached = cache.get(key);
+        if (cached != null) {
+            return cached;
+        }
+
+        RecordCapabilityScope scope = ctx.capabilityScope(model, capability);
+        cache.put(key, scope);
+        return scope;
+    }
+
+    /**
+     * THE "does this subject reach anything" question, for panel eligibility and NAV-ONLY
+     * probes.
+     *
+     * AIDEV-NOTE: never {@code grantedRecordIds(...).isEmpty()}. That spelling cannot see an
+     * ALL scope, so it answers "reaches nothing" for exactly the subjects who reach
+     * everything -- panel hidden, resource invisible, list empty -- while their by-id checks
+     * keep passing. It is also the spelling that now THROWS on such a scope.
+     */
+    public static boolean reachesAny(@NonNull AccessContext ctx, @NonNull Identifier model,
+                                     @NonNull String capability) {
+        return !capabilityScope(ctx, model, capability).isNone();
+    }
+
+    /** Whether the context manages at least one site, an every-site scope included. */
+    public static boolean managesAnySite(@NonNull AccessContext ctx) {
+        return reachesAny(ctx, SiteModel.MODEL_ID, MANAGE);
+    }
 
     /**
      * Every site id the context holds {@link #MANAGE} on.
+     *
+     * @throws IllegalStateException on an every-site scope; see {@link #grantedRecordIds}
      */
     @NonNull
     public static Set<Integer> managedSiteIds(@NonNull AccessContext ctx) {
@@ -842,48 +951,19 @@ public final class HohenheimAccess {
     }
 
     /**
-     * Every record id of {@code model} the context holds {@code capability} on, for feeding
-     * scope criteria (the walk decides per record and offers no enumeration, so candidates
-     * come from the grant store and each one is CONFIRMED through the walk -- which
-     * re-applies admin bypass and gate denial).
+     * Every record id of {@code model} the context holds {@code capability} on, for feeding a
+     * criteria that must name them.
      *
-     * Memoized per REQUEST on the conduit (the PermissionResolver WALK_CACHE idiom): panel
-     * eligibility, scope criteria and the nav probes all ask per render, and grants written
-     * mid-request stay next-request-effective. Conduit-less contexts run the enumeration
-     * fresh.
-     *
-     * AIDEV-NOTE: the memo is a MAP keyed by model+capability, not one attribute per set. One
-     * attribute per set is how the second consumer (dns records) quietly ends up outside the
-     * budget the first consumer's test pinned.
+     * @throws IllegalStateException when the scope is ALL, which enumerates nothing -- the
+     *         framework refuses to answer that as a set rather than quietly denying every
+     *         record. A caller reaching this on a model where a whole-model row can decide
+     *         wants {@link #reachesAny} or {@link #capabilityScope} instead.
      */
     @NonNull
     public static Set<Integer> grantedRecordIds(@NonNull AccessContext ctx,
                                                 @NonNull Identifier model,
                                                 @NonNull String capability) {
-        String key = model + "#" + capability;
-        Conduit conduit = ctx.conduit();
-        if (conduit == null) {
-            return enumerateGrantedIds(ctx, model, capability);
-        }
-
-        Map<String, Set<Integer>> cache = conduit.getAttribute(GRANTED_RECORD_IDS);
-        if (cache == null) {
-            cache = new HashMap<>();
-            try {
-                conduit.setAttribute(GRANTED_RECORD_IDS, cache);
-            } catch (UnsupportedOperationException attributeless) {
-                // A conduit without attribute storage just pays the walk each call.
-            }
-        }
-
-        Set<Integer> cached = cache.get(key);
-        if (cached != null) {
-            return cached;
-        }
-
-        Set<Integer> ids = enumerateGrantedIds(ctx, model, capability);
-        cache.put(key, ids);
-        return ids;
+        return intIds(capabilityScope(ctx, model, capability).recordIds());
     }
 
     /**
@@ -899,51 +979,46 @@ public final class HohenheimAccess {
      */
     public static void forgetGrantedRecordIds(@NonNull AccessContext ctx) {
         Conduit conduit = ctx.conduit();
-        Map<String, Set<Integer>> cache = conduit == null ? null
-            : conduit.getAttribute(GRANTED_RECORD_IDS);
+        Map<String, RecordCapabilityScope> cache = conduit == null ? null
+            : conduit.getAttribute(CAPABILITY_SCOPES);
         if (cache != null) {
             cache.clear();
         }
     }
 
-    private static @NonNull Set<Integer> enumerateGrantedIds(@NonNull AccessContext ctx,
-                                                             @NonNull Identifier model,
-                                                             @NonNull String capability) {
-        return confirmedRecordIds(ctx.principal(), model, capability,
-            id -> ctx.hasCapability(model, id, capability));
+    /**
+     * The principal-only face of {@link #capabilityScope(AccessContext, Identifier, String)},
+     * for the conduit-less callers. The installed WebSocket authenticator is the sanctioned
+     * principal-only path and rides the SAME walk, whole-model rows included -- which is why
+     * this replaced a hand-rolled candidates-plus-confirm loop that could only ever answer
+     * with a set.
+     */
+    @NonNull
+    public static RecordCapabilityScope capabilityScope(@NonNull Principal principal,
+                                                        @NonNull Identifier model,
+                                                        @NonNull String capability) {
+        return Zenit.getWebSocketAuthenticator().capabilityScope(principal, model, capability);
     }
 
     /**
-     * Principal-only enumeration for conduit-less contexts, confirmed through
-     * the same walk via the installed WebSocket authenticator.
+     * Every site id the principal holds {@link #MANAGE} on, for conduit-less contexts.
+     *
+     * @throws IllegalStateException on an every-site scope; ask
+     *         {@link #capabilityScope(Principal, Identifier, String)} where one is possible
      */
     @NonNull
     public static Set<Integer> managedSiteIds(@NonNull Principal principal) {
-        WebSocketAuthenticator authenticator = Zenit.getWebSocketAuthenticator();
-        return confirmedRecordIds(principal, SiteModel.MODEL_ID, MANAGE,
-            id -> authenticator.hasCapability(principal, SiteModel.MODEL_ID, id, MANAGE));
+        return intIds(capabilityScope(principal, SiteModel.MODEL_ID, MANAGE).recordIds());
     }
 
-    /**
-     * @return the grant-derived candidate ids the walk confirms (unparseable ids skipped)
-     */
-    @NonNull
-    private static Set<Integer> confirmedRecordIds(@NonNull Principal principal,
-                                                   @NonNull Identifier model,
-                                                   @NonNull String capability,
-                                                   @NonNull Predicate<String> confirmedByWalk) {
-        if (principal.isAnonymous()) {
-            return Set.of();
-        }
-        Set<Integer> ids = new HashSet<>();
-        for (String raw : RecordGrants.recordIds(principal, model, capability)) {
-            if (!confirmedByWalk.test(raw)) {
-                continue;
-            }
+    /** The walk keys records by their stringified id; every model scoped here keys on an int. */
+    private static @NonNull Set<Integer> intIds(@NonNull Set<String> recordIds) {
+        Set<Integer> ids = new LinkedHashSet<>();
+        for (String raw : recordIds) {
             try {
                 ids.add(Integer.parseInt(raw));
             } catch (NumberFormatException ignored) {
-                // Grants store record ids as strings; these models all key on an integer.
+                // A grant may key on any string; a non-numeric one matches no row here.
             }
         }
         return ids;

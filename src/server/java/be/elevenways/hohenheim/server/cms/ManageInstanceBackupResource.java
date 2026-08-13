@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.InstanceBackupModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
@@ -55,9 +56,10 @@ public final class ManageInstanceBackupResource extends InstanceBackupResource {
         return List.of();
     }
 
+    /** NAV-ONLY; reachesAny, because an id set cannot express every-record authority. */
     @Override
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
-        return HohenheimAccess.isAdmin(access)
-            || !HohenheimAccess.instanceIdsWith(access, HohenheimAccess.BACKUPS).isEmpty();
+        return HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID,
+            HohenheimAccess.BACKUPS);
     }
 }

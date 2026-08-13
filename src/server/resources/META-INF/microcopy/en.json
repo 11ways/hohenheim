@@ -3541,6 +3541,10 @@
     "text": "Access the delegated site-management panel",
     "scope": "permission"
   },
+  "hohenheim_sites_manage_all": {
+    "text": "Manage all sites",
+    "scope": "permission"
+  },
   "manage": {
     "text": "Manage",
     "scope": "capability"

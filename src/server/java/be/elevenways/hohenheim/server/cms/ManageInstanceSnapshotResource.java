@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -47,9 +48,10 @@ public final class ManageInstanceSnapshotResource extends InstanceSnapshotResour
         };
     }
 
+    /** NAV-ONLY; reachesAny, because an id set cannot express every-record authority. */
     @Override
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
-        return HohenheimAccess.isAdmin(access)
-            || !HohenheimAccess.instanceIdsWith(access, HohenheimAccess.SNAPSHOTS).isEmpty();
+        return HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID,
+            HohenheimAccess.SNAPSHOTS);
     }
 }

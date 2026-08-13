@@ -180,12 +180,16 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
             RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));
     }
 
-    /** NAV-ONLY; the route itself stays scoped by accessFunction. */
+    /**
+     * NAV-ONLY; the route itself stays scoped by accessFunction.
+     *
+     * AIDEV-NOTE: reachesAny, never "ids.isEmpty()" -- an id set cannot express every-record
+     * authority, so the set spelling hid this peer from an every-site holder (and threw once
+     * the walk started saying ALL out loud).
+     */
     @Override
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
-        return HohenheimAccess.isAdmin(access)
-            || !HohenheimAccess.managedSiteIds(access).isEmpty()
-            || !HohenheimAccess.grantedRecordIds(access, DnsRecordModel.MODEL_ID,
-                HohenheimAccess.VIEW).isEmpty();
+        return HohenheimAccess.managesAnySite(access)
+            || HohenheimAccess.reachesAny(access, DnsRecordModel.MODEL_ID, HohenheimAccess.VIEW);
     }
 }

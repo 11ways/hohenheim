@@ -35,6 +35,7 @@ import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.PermissionChecker;
+import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -116,13 +117,18 @@ public final class ManagePanel extends Panel {
             // pure instance tenant (a game-server renter who owns no website) out of
             // the very panel built for them: 403 at /manage with a live manage grant
             // in hand. Every model this panel projects belongs in this disjunction.
+            //
+            // AIDEV-NOTE: each record-capability term asks reachesAny, never
+            // "ids.isEmpty()". An id set cannot express every-record authority, so the
+            // set spelling answered "reaches nothing" for a hohenheim.sites.manage_all
+            // holder and 403'd them out of the panel their permission exists for.
             AccessContext ctx = RecordSourceGate.accessContextOf(conduit);
-            return !HohenheimAccess.managedSiteIds(ctx).isEmpty()
-                || !HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.VIEW).isEmpty()
+            return HohenheimAccess.managesAnySite(ctx)
+                || HohenheimAccess.reachesAny(ctx, InstanceModel.MODEL_ID, HohenheimAccess.VIEW)
                 // DATABASES join the disjunction for the same reason instances did: a
                 // tenant who rents only a database holds no site or instance grant and
                 // would be 403'd out of the panel that now projects their database.
-                || !HohenheimAccess.databaseIdsWith(ctx, HohenheimAccess.VIEW).isEmpty()
+                || HohenheimAccess.reachesAny(ctx, DatabaseModel.MODEL_ID, HohenheimAccess.VIEW)
                 // PROJECTS join the disjunction for the reason stated above: a member of
                 // a project that owns nothing yet holds no site or instance grant, and
                 // would be 403'd out of the panel that now projects their project.
@@ -367,17 +373,29 @@ public final class ManagePanel extends Panel {
             : new CompositeCriteria(CompositeOperator.OR, reachable.toArray(new Criteria[0]));
     }
 
-    /** One {@code zone_id = z AND name IN (...)} clause per zone holding a managed hostname. */
+    /**
+     * One {@code zone_id = z AND name IN (...)} clause per zone holding a managed hostname.
+     *
+     * AIDEV-NOTE: the site scope is read as a TRI-STATE, not as an id set. An every-site
+     * holder (hohenheim.sites.manage_all) reaches every domain row, and asking for ids there
+     * throws by design -- so the domain query drops its site filter instead of being handed
+     * an empty set that would have silently produced no clauses at all.
+     */
     private static @NonNull List<Criteria> zoneScopedNameCriteria(@NonNull AccessContext ctx) {
-        Set<Integer> managed = HohenheimAccess.managedSiteIds(ctx);
-        if (managed.isEmpty()) {
+        RecordCapabilityScope sites = HohenheimAccess.capabilityScope(ctx, SiteModel.MODEL_ID,
+            HohenheimAccess.MANAGE);
+        if (sites.isNone()) {
             return List.of();
         }
 
         HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
         Set<String> hostnames = new LinkedHashSet<>();
-        for (Row domain : Models.get(SiteDomainModel.class).find()
-                .where(SiteDomainModel.SITE_ID.in(managed)).all()) {
+        var domains = Models.get(SiteDomainModel.class).find();
+        if (!sites.isAll()) {
+            domains.where(SiteDomainModel.SITE_ID.in(
+                HohenheimAccess.managedSiteIds(ctx)));
+        }
+        for (Row domain : domains.all()) {
             String hostname = domain.get(SiteDomainModel.HOSTNAME);
             if (hostname == null || hostname.isBlank()
                     || !SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))) {
@@ -485,11 +503,14 @@ public final class ManagePanel extends Panel {
     }
 
     /**
-     * NAV-ONLY scope probe shared by the /manage peers: admins always have
-     * scope; everyone else needs at least one walk-confirmed managed site.
-     * Cheap per render thanks to the conduit-scoped managedSiteIds memo.
+     * NAV-ONLY scope probe shared by the /manage peers: whether the walk reaches ANY site.
+     *
+     * AIDEV-NOTE: no {@code isAdmin} disjunct anymore -- the walk's own admin-bypass row
+     * already answers ALL for one, and the type-level row answers ALL for an every-site
+     * holder that a hand-written admin check would have missed. Cheap per render thanks to
+     * the conduit-scoped scope memo, and free for an admin (a whole-model row runs no query).
      */
     static boolean hasManageScope(@NonNull AccessContext ctx) {
-        return HohenheimAccess.isAdmin(ctx) || !HohenheimAccess.managedSiteIds(ctx).isEmpty();
+        return HohenheimAccess.managesAnySite(ctx);
     }
 }
