@@ -184,9 +184,31 @@ public final class IncusKernelIsolation {
     }
 
     /**
+     * The daemon named no live host interface for a workload it is running.
+     *
+     * AIDEV-NOTE: its own type because it is NOT an unreadable kernel, and conflating the
+     * two is what let a real hole go unjudged. An unreadable kernel is the host REFUSING TO
+     * ANSWER, which is never evidence of a leak and never grounds to stop anything. This is
+     * the daemon ANSWERING, with an answer that cannot be true of a running workload: incus
+     * keeps the host interface name in {@code volatile.<nic>.host_name}, and the very
+     * teardown race this whole verifier exists for is one that leaves that key stale or
+     * absent while a tap is still attached in the kernel. So the guest can be on the wire,
+     * reaching its peers, while the sweep declines to judge it -- silently, forever, every
+     * five minutes. Treated as a DIVERGENCE, it gets the same repair-then-contain walk as
+     * any other: the device reload rebuilds the NIC and the accounting with it, and a
+     * workload the daemon still cannot name afterwards is stopped like any unisolatable one.
+     */
+    public static final class NoLiveInterface extends IOException {
+        NoLiveInterface(@NonNull String message) {
+            super(message);
+        }
+    }
+
+    /**
      * Read the kernel and report which tenant-range rules are missing for the workload's
      * CURRENT taps.
      *
+     * @throws NoLiveInterface when the daemon names no live interface for the workload
      * @throws IOException when no kernel lane exists, or nft cannot be read -- an
      *                     unreadable kernel is never a pass
      */
@@ -201,9 +223,9 @@ public final class IncusKernelIsolation {
         }
         List<String> taps = liveTaps(handle);
         if (taps.isEmpty()) {
-            throw new IOException("REFUSED to report on '" + handle + "': the daemon names no"
-                + " live host interface for any of its NICs, so there is nothing to check the"
-                + " kernel against. A running workload always has one.");
+            throw new NoLiveInterface("REFUSED to report on '" + handle + "': the daemon names"
+                + " no live host interface for any of its NICs, so there is nothing to check"
+                + " the kernel against. A running workload always has one.");
         }
         NftRunner.Result listed = nft.run(List.of("list", "table", "bridge", TABLE), null);
         if (!listed.ok()) {
@@ -238,12 +260,24 @@ public final class IncusKernelIsolation {
      * The third is what ships. The shared ACL stays -- the coupling was in the LEVER, not
      * in sharing the policy object -- so nothing about the isolation semantics changes.
      *
+     * AIDEV-NOTE: a {@link NoLiveInterface} from the FIRST inspect is a divergence to
+     * repair, not a refusal to pass on: the daemon lost the accounting for a NIC it is
+     * running, and the device reload below is exactly what rebuilds it. From the SECOND
+     * inspect the same signal IS the refusal -- it escapes as the IOException that tells
+     * the caller to stop the workload -- because a guest the daemon still cannot name after
+     * a reload is one whose isolation can never be verified while it stays on the wire.
+     *
      * @throws IOException when the kernel still diverges after the repair; the caller
      *                     decides what happens to the workload
      */
     public void enforce(@NonNull String handle) throws IOException {
-        Divergence first = inspect(handle);
-        if (first.enforced()) {
+        Divergence first;
+        try {
+            first = inspect(handle);
+        } catch (NoLiveInterface unnamed) {
+            first = null;
+        }
+        if (first != null && first.enforced()) {
             return;
         }
         reapply(handle);

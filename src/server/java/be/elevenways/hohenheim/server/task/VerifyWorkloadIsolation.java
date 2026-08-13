@@ -119,13 +119,36 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         return STATIC_DESCRIPTION;
     }
 
+    /** How this sweep names itself to an operator, in alerts and in the failure it throws. */
+    public static final String SWEEP = "Workload isolation";
+
     @Override
     public void executor(TaskContext ctx) {
-        for (HostOutcome outcome : sweep()) {
+        report(sweep()).publish();
+    }
+
+    /**
+     * Translate one sweep's outcomes into what an operator must be told.
+     *
+     * AIDEV-NOTE: the split is structural, never a string match on the error text. An
+     * UNVERIFIABLE host is one whose kernel we could not read at all (enforcement switched
+     * off, no Docker client) -- nothing was stopped and nothing is claimed, so it rides the
+     * transition-only tier. On a VERIFIABLE host the sweep DID read the kernel, so anything
+     * left in errors() is a workload it could not verify or could not repair while its
+     * neighbours keep running, and contained() means one was actually cut off: both are the
+     * security-consequential half and alert every run. Parsing the messages to tell them
+     * apart would re-couple this to wording that changes.
+     *
+     * @return the findings, publishable by the caller
+     */
+    public static @NonNull IsolationFindings report(@NonNull List<HostOutcome> outcomes) {
+        IsolationFindings findings = new IsolationFindings(SWEEP);
+        for (HostOutcome outcome : outcomes) {
             if (!outcome.verifiable()) {
                 Blast.log("WORKLOAD ISOLATION:", outcome.server(),
                     "cannot be kernel-verified; its workloads' isolation is UNCONFIRMED:",
                     outcome.errors());
+                findings.unconfirmed(outcome.server(), outcome.errors());
                 continue;
             }
             if (!outcome.repaired().isEmpty() || !outcome.contained().isEmpty()
@@ -134,7 +157,13 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
                     outcome.enforced().size(), ", repaired", outcome.repaired(),
                     ", CONTAINED", outcome.contained(), ", errors", outcome.errors());
             }
+            List<String> escalations = new ArrayList<>(outcome.contained());
+            escalations.addAll(outcome.errors());
+            if (!escalations.isEmpty()) {
+                findings.escalated(outcome.server(), escalations);
+            }
         }
+        return findings;
     }
 
     /** Sweep every non-Incus host's workloads plus this controller's processes. */
