@@ -268,11 +268,39 @@ cannot state which boundary it defends, it is not ready to build.
      tenant, unless the operator explicitly accepts the risk per host.
    - Concretely for Phase 3: the Docker driver runs tenant containers with
      `--cap-drop=ALL` plus a minimal add-back set, `--security-opt=no-new-privileges`,
-     a seccomp profile, read-only rootfs where the template allows, no host
+     a seccomp profile, ~~read-only rootfs where the template allows~~ (STRUCK
+     2026-08-13, see below), no host
      bind mounts (the stack tier already forbids these -- reuse), user-ns
      remap on for tenant-owned instances. Incus (Phase 4) gets unprivileged
      containers by default; privileged containers are an admin-only template
      flag with a stated warning.
+   - **READ-ONLY ROOTFS -- STRUCK 2026-08-13, not deferred.** Four of the five
+     controls above are live at the single funnel (`ContainerHardening`, applied
+     inside `DockerClient.createContainer`, which has no overload without a
+     `Profile`): drop-ALL, `no-new-privileges`, the bind-mount refusal, and a
+     seccomp profile verified from inside the running container. The fifth is
+     refused on the merits, and the refusal is the same one this plan already
+     recorded for `NET_BIND_SERVICE`: **a knob nobody can turn on is theater.**
+     The clause is conditional ("where the template allows") and no template in
+     this tier allows it -- these are arbitrary published images whose entrypoints
+     chown their data directory, write pid files and unpack assets into the
+     rootfs, so `ReadonlyRootfs: true` refuses to start the ordinary workload
+     rather than confining a hostile one. There is also nothing left for it to
+     defend that is not already defended: the rootfs holds no host material
+     (bind mounts are refused), a compromised tenant already owns everything in
+     its own container, and cross-tenant containment is the archive API's
+     per-container scope plus the per-workload network policy, none of which a
+     writable root weakens.
+     What WAS a real defect is that the omission was recorded nowhere and the key
+     was not owned: `ReadonlyRootfs` was neither set nor in `ESCAPE_KEYS`, so a
+     later caller could have passed it through the funnel and produced a workload
+     the tier's own lifecycle (config staging, log capture, in-place app update)
+     cannot service, with the single-funnel doctrine noticing nothing. It is an
+     `ESCAPE_KEYS` entry as of 2026-08-13 -- the `LogConfig` precedent: on the
+     list because the POLICY OWNS THE KEY, not because setting it is an escape --
+     so re-opening this decision means editing that list on purpose.
+     Still open from this bullet, unchanged: daemon-level `userns-remap`, which
+     lives in `daemon.json` and belongs to the host preflight.
 
 2. **Control plane <- guest workload.** The IPC channel, the shared cache, the
    port allocator, the metrics stream. A guest must not be able to read or
