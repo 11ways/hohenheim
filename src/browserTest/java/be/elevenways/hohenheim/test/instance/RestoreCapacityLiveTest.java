@@ -59,6 +59,19 @@ class RestoreCapacityLiveTest {
         HohenheimTestRuntime.ensureBooted();
     }
 
+    /**
+     * AIDEV-NOTE: this journey used to prove "the refusal quotes the real measurement" by
+     * probing the pool, calling {@code require} (which probes AGAIN) and demanding the two
+     * figures be BYTE-IDENTICAL. That is only true on a disk nothing else touches: in the
+     * parallel live lane another test's cleanup freed ~315 MB between the two reads and the
+     * step failed, while the same test passed in isolation. The claim was never wrong, the
+     * MEASUREMENT SHAPE was -- one assertion was quietly covering two different facts.
+     * They are now separated, and neither can drift: step 3 INJECTS the one measurement
+     * into {@link RestoreCapacity#judge} (the decision half is pure, so byte-equality is
+     * exact by construction) and step 4 bounds {@code require}'s quote by probes taken on
+     * BOTH sides of it (the wiring half, tolerant only of movement the pool really made).
+     * Do NOT re-collapse them into one {@code require} call with an equality assertion.
+     */
     @Test
     void theRealPoolIsMeasuredAndTheHeadroomIsJudgedAgainstIt() {
         Db.run(datasource, () -> {
@@ -84,8 +97,10 @@ class RestoreCapacityLiveTest {
                 // 3. Asking for exactly what is free REFUSES: the 1.2x extraction
                 //    headroom is judged against the measured figure, so the boundary
                 //    case is decided by real data rather than by a chosen constant.
+                //    The figure measured in step 1 is INJECTED rather than re-probed --
+                //    see the note above the method for why re-probing was wrong.
                 Throwable exact = catchThrowable(
-                    () -> RestoreCapacity.require(serverId, available));
+                    () -> RestoreCapacity.judge(serverId, available, available));
                 assertThat(exact)
                     .as("step 3: a restore the size of the free space is refused")
                     .isInstanceOf(Violations.class);
@@ -93,21 +108,36 @@ class RestoreCapacityLiveTest {
                 assertThat(refusal.message().key())
                     .as("step 3: by name").isEqualTo("restore_capacity");
                 assertThat(String.valueOf(refusal.message().args().get("available")))
-                    .as("step 3: quoting the figure the daemon actually reported")
+                    .as("step 3: quoting the very figure it judged, to the byte -- a"
+                        + " refusal that reports a number it did not decide on is a"
+                        + " refusal an operator cannot act on")
                     .isEqualTo(String.valueOf(available));
                 assertThat(Long.parseLong(
                         String.valueOf(refusal.message().args().get("needed"))))
                     .as("step 3: against a need that includes the headroom")
                     .isGreaterThan(available);
 
-                // 4. And an absurd payload is refused the same way, so the gate is not
-                //    only sensitive at the boundary.
+                // 4. THE WIRING, which step 3 deliberately no longer covers: the figure
+                //    `require` puts in its refusal comes from the LIVE PROBE. An absurd
+                //    payload is used so the refusal cannot fail to fire whatever the pool
+                //    is doing, and the quote is bounded by probes taken on both sides of
+                //    the call -- the only movement tolerated is movement that really
+                //    happened, so a zero, a constant, the `needed` figure or the
+                //    CONTROLLER's own filesystem still fails here.
+                long before = RestoreCapacity.availableBytesOn(serverId);
                 Throwable absurd = catchThrowable(
                     () -> RestoreCapacity.require(serverId, 1_000_000_000_000_000L));
+                long after = RestoreCapacity.availableBytesOn(serverId);
                 assertThat(absurd).as("step 4: a petabyte restore is refused")
                     .isInstanceOf(Violations.class);
-                assertThat(firstRefusal((Violations) absurd).message().key())
+                Violation absurdRefusal = firstRefusal((Violations) absurd);
+                assertThat(absurdRefusal.message().key())
                     .as("step 4: by the same name").isEqualTo("restore_capacity");
+                assertThat(Long.parseLong(
+                        String.valueOf(absurdRefusal.message().args().get("available"))))
+                    .as("step 4: quoting a figure the pool really held while the refusal"
+                        + " was built, so the probe is what reaches the operator")
+                    .isBetween(Math.min(before, after), Math.max(before, after));
             } finally {
                 if (certificateFingerprint != null) {
                     try {
