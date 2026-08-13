@@ -81,13 +81,28 @@ public class VerifyIncusIsolation extends ScheduledTask {
         return STATIC_DESCRIPTION;
     }
 
+    /** How this sweep names itself to an operator, in alerts and in the failure it throws. */
+    public static final String SWEEP = "Incus workload isolation";
+
     @Override
     public void executor(TaskContext ctx) {
-        for (HostOutcome outcome : sweep()) {
+        report(sweep()).publish();
+    }
+
+    /**
+     * Translate one sweep's outcomes into what an operator must be told; see
+     * {@link VerifyWorkloadIsolation#report} for why the split is structural.
+     *
+     * @return the findings, publishable by the caller
+     */
+    public static @NonNull IsolationFindings report(@NonNull List<HostOutcome> outcomes) {
+        IsolationFindings findings = new IsolationFindings(SWEEP);
+        for (HostOutcome outcome : outcomes) {
             if (!outcome.verifiable()) {
                 Blast.log("INCUS ISOLATION:", outcome.server(),
                     "cannot be kernel-verified (no nft lane to the daemon's host);"
                         + " its workloads' isolation is UNCONFIRMED");
+                findings.unconfirmed(outcome.server(), outcome.errors());
                 continue;
             }
             if (!outcome.repaired().isEmpty() || !outcome.stopped().isEmpty()
@@ -96,7 +111,13 @@ public class VerifyIncusIsolation extends ScheduledTask {
                     outcome.enforced().size(), ", repaired", outcome.repaired(),
                     ", STOPPED", outcome.stopped(), ", errors", outcome.errors());
             }
+            List<String> escalations = new ArrayList<>(outcome.stopped());
+            escalations.addAll(outcome.errors());
+            if (!escalations.isEmpty()) {
+                findings.escalated(outcome.server(), escalations);
+            }
         }
+        return findings;
     }
 
     /**
@@ -157,6 +178,15 @@ public class VerifyIncusIsolation extends ScheduledTask {
             boolean diverged;
             try {
                 diverged = !isolation.inspect(handle).enforced();
+            } catch (IncusKernelIsolation.NoLiveInterface unnamed) {
+                // NOT an unreadable kernel: the daemon ANSWERED, and its answer is
+                // impossible for a workload it is running. Left in the errors bucket this
+                // was indistinguishable from a host refusing to answer -- no repair, no
+                // stop, and no way for anyone to tell the two apart -- while the guest can
+                // still be on the wire through a tap whose NAME the daemon merely lost.
+                // It joins the ordinary repair-then-contain walk below; enforce() reloads
+                // the device, and a workload still unnameable afterwards is stopped.
+                diverged = true;
             } catch (IOException unreadable) {
                 errors.add(handle + ": " + unreadable.getMessage());
                 continue;

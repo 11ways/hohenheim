@@ -24,11 +24,17 @@ public final class NotificationEvents {
     public static final String SPAMSERVICE_RECOVERED = "spamservice_recovered";
     /** ProxyServer supervision raises this ONCE per outage, after a supervised retry also failed. */
     public static final String PROXY_LISTENER_DOWN = "proxy_listener_down";
+    /**
+     * Either isolation sweep found a workload it had to CONTAIN, could not repair, or could
+     * not confirm. One event for both tiers: an operator subscribes to "my tenants may not
+     * be isolated from each other", not to a per-runtime sweep.
+     */
+    public static final String WORKLOAD_ISOLATION = "workload_isolation";
 
     public static final List<String> ALL = List.of(
         CERT_RENEWAL_FAILED, CERT_EXPIRING, DEPLOY_FAILED, BACKUP_FAILED, PROCESS_CRASH_LOOP,
         INSTANCE_CRASH_LOOP, STACK_HEALTH, HOST_UNREACHABLE, AUTO_BAN_BUDGET_EXHAUSTED,
-        SPAMSERVICE_OUTAGE, SPAMSERVICE_RECOVERED, PROXY_LISTENER_DOWN);
+        SPAMSERVICE_OUTAGE, SPAMSERVICE_RECOVERED, PROXY_LISTENER_DOWN, WORKLOAD_ISOLATION);
 
     private NotificationEvents() {}
 
