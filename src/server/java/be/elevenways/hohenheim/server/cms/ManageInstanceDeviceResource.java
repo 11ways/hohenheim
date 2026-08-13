@@ -19,9 +19,12 @@ import java.util.Set;
  *
  * AIDEV-NOTE: the base resource's accessFunction does not scope by owner, which is
  * correct in an admin-gated panel and a cross-tenant leak in a delegated one. Every
- * WRITE already re-asks InstanceDevices (which demands manage on the instance), but a
- * READ would have listed every tenant's disk names and sizes -- the same half-gate
- * ManageInstanceScheduleResource was created to close.
+ * WRITE already re-asks InstanceDevices (which demands CONFIG on the instance -- the
+ * enforced verb, manage merely implies it; this note said "manage" until the capability
+ * split's prose drift was swept), but a READ would have listed every tenant's disk names
+ * and sizes -- the same half-gate ManageInstanceScheduleResource was created to close.
+ * The read scope below is deliberately the WIDER {@code view}: seeing that a device
+ * exists on an instance you may view is not the authority to change it.
  */
 public final class ManageInstanceDeviceResource extends InstanceDeviceResource {
 

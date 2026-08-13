@@ -4,6 +4,8 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -35,6 +37,25 @@ public final class InstanceDevicesPage implements RecordScopedPage<Row> {
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_device"); }
     @Override public @NonNull String slug() { return "devices"; }
     @Override public @NonNull Icon icon() { return Icon.of("hard-drive"); }
+
+    /**
+     * Kinds whose driver can attach devices only; the tab hides AND 404s for the rest.
+     *
+     * AIDEV-NOTE: the InstanceFramebufferPage shape, for the same reason. Without it a
+     * DOCKER instance rendered this tab plus Add-disk and Add-NIC buttons whose every POST
+     * could only ever answer {@code devices_unsupported} -- DockerInstanceRuntime does not
+     * implement {@code DeviceAttachSupport} and {@code InstanceDevices.requireSupport}
+     * refuses before anything else runs. An affordance that can only refuse is worse than
+     * an absent one: it reads as a broken product rather than as a tier that does not have
+     * the feature. The predicate is DECLARED on the kind
+     * ({@code InstanceKindHandler.supportsDevices}) rather than spelled as a kind list
+     * here, so a later kind answers for itself.
+     */
+    @Override
+    public boolean visibleFor(@NonNull Row record) {
+        InstanceKindHandler handler = InstanceKinds.getHandler(record.get(InstanceModel.KIND));
+        return handler != null && handler.supportsDevices();
+    }
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit,

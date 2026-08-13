@@ -162,6 +162,10 @@ public final class IncusVmKind implements InstanceKindHandler {
     @Override
     public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
 
+    /** IncusInstanceRuntime implements DeviceAttachSupport; the Docker driver does not. */
+    @Override
+    public boolean supportsDevices() { return true; }
+
     /**
      * The one kind that answers anything but {@code SHARED_KERNEL}: a hypervisor boundary
      * is what this kind IS, per the class docblock's "the one workload flavour rated
