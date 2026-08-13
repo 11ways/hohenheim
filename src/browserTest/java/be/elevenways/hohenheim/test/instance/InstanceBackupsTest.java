@@ -1,50 +1,36 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.BackupTargetModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
-import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
-import be.elevenways.hohenheim.server.host.HostPreflight;
-import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.SqliteDatasource;
-import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
-import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -61,11 +47,19 @@ import static org.assertj.core.api.Assertions.fail;
  * daemon, so ssh-target semantics, real transfer interruption and true thread-level
  * interleaving of two captures stay with the live suites; the "same second" here is two
  * sequential captures inside one wall-clock second, not two racing threads.
+ *
+ * AIDEV-NOTE: this class was @Tag("slow") until 2026-08-13 for ONE of its eight
+ * journeys -- the retention-over-an-undeletable-artifact case, which needs a filesystem
+ * that can refuse a delete and therefore a non-root process, a {@code LiveLane} need.
+ * The slow tag is a CLASS property, so that one gate was keeping seven hermetic journeys
+ * out of the default lane. It now lives in
+ * {@link InstanceBackupRetentionRefusalTest}; both classes install the SAME
+ * {@link BackupLaneFixture}. Anything added here that needs a live capability belongs
+ * there instead -- moving the tag back would cost the default lane the other seven again.
  */
-@Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceBackupsTest {
 
-    private static SqliteDatasource datasource;
+    private static SqlDatasource datasource;
     private static int hostId;
     private static Path targetRoot;
     private static int targetId;
@@ -73,44 +67,17 @@ class InstanceBackupsTest {
 
     @BeforeAll
     static void setUp() throws Exception {
-        File db = File.createTempFile("hohenheim-instance-backups-test", ".db");
-        db.delete();
-        db.deleteOnExit();
-        datasource = new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-        new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
-        // The lite boot skips ServerMain's grant declarations, and they must land
-        // BEFORE the boot stages (the WorkloadIdentityTest rule: zenit-auth's
-        // record-access registry is a MODULES-stage snapshot).
-        HohenheimTestRuntime.declareAccessModelsOnce();
-        HohenheimTestRuntime.ensureBooted();
-
-        Path staging = Files.createTempDirectory("hohenheim-backup-staging");
-        staging.toFile().deleteOnExit();
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STAGING_PATH,
-            staging.toAbsolutePath().toString());
-        targetRoot = Files.createTempDirectory("hohenheim-backup-target");
-        targetRoot.toFile().deleteOnExit();
-        target = new FilesystemBackupTarget(targetRoot);
-        FieldEncryption.installKeyring(EncryptionKeyring.loadOrCreate(
-            staging.resolve("test-ring.keys")));
-
-        FakeNativeDaemons.register();
-        Db.run(datasource, () -> {
-            hostId = incusHost("backup-test-host");
-            Row record = Models.get(BackupTargetModel.class).createEmptyRow();
-            record.set(BackupTargetModel.NAME, "backup-test-target");
-            record.set(BackupTargetModel.KIND, "hohenheim:filesystem");
-            record.set(BackupTargetModel.SETTINGS,
-                Map.of("path", targetRoot.toAbsolutePath().toString()));
-            Models.get(BackupTargetModel.class).save(record);
-            targetId = record.get(BackupTargetModel.ID);
-        });
+        BackupLaneFixture fixture = BackupLaneFixture.install();
+        datasource = fixture.datasource;
+        hostId = fixture.hostId;
+        targetRoot = fixture.targetRoot;
+        targetId = fixture.targetId;
+        target = fixture.target;
     }
 
     @AfterAll
     static void tearDown() {
-        FieldEncryption.installKeyring(null);
+        BackupLaneFixture.uninstall();
     }
 
     /**
@@ -243,80 +210,6 @@ class InstanceBackupsTest {
                 .as("step 3: the operator's refusal still names the missing target")
                 .isEqualTo("backup_target_missing ");
 
-            service.destroy(instanceId);
-        });
-    }
-
-    /**
-     * Retention over an artifact the target refuses to release: the row must SURVIVE
-     * (the snapshot lanes' rule -- a row deleted while its payload survives is a prune
-     * reporting success for work it did not do), and the next sweep retries.
-     */
-    @Test
-    void retentionKeepsTheRowOfAnArtifactTheTargetCouldNotDelete() throws IOException {
-        // A denied directory is the only honest way to make a real filesystem refuse,
-        // and root is denied nothing -- a DECLARED host need, reported when unmet.
-        Path probe = Files.createTempDirectory("hohenheim-backup-perm-probe");
-        Files.writeString(probe.resolve("child"), "x");
-        Files.setPosixFilePermissions(probe, PosixFilePermissions.fromString("r-xr-xr-x"));
-        boolean canBeRefused;
-        try {
-            Files.delete(probe.resolve("child"));
-            canBeRefused = false;
-        } catch (IOException refused) {
-            canBeRefused = true;
-        }
-        Files.setPosixFilePermissions(probe, PosixFilePermissions.fromString("rwxr-xr-x"));
-        Files.deleteIfExists(probe.resolve("child"));
-        Files.deleteIfExists(probe);
-        LiveLane.require(LiveLane.Need.UNPRIVILEGED_FS, canBeRefused,
-            "this process can delete anything (running as root): a refused artifact"
-                + " removal cannot be produced here");
-
-        Db.run(datasource, () -> {
-            InstanceService service = new InstanceService();
-            InstanceBackups backups = new InstanceBackups();
-            int instanceId = instanceRecord("backup-stuck-prune", hostId);
-            service.deploy(instanceId);
-
-            // 1. Two completed backups, retention 1: the older one's artifact is made
-            //    undeletable by denying writes on its directory.
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
-            int older = backups.backupNow(instanceId, targetId, target);
-            int newer = backups.backupNow(instanceId, targetId, target);
-            Path olderArtifact = targetRoot.resolve(remoteKeyOf(older));
-            assertThat(Files.isRegularFile(olderArtifact))
-                .as("step 1: the older backup really committed an artifact").isTrue();
-            Path artifactDir = olderArtifact.getParent();
-            denyWrites(artifactDir);
-            try {
-                // 2. The prune cannot remove the artifact, so the ROW stays: what
-                //    remains is still named by a record a later sweep can act on.
-                HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 1);
-                backups.pruneForRetention(instanceId);
-                assertThat(Map.of(
-                        "row", String.valueOf(
-                            Models.get(InstanceBackupModel.class).findById(older) != null),
-                        "artifact", String.valueOf(Files.isRegularFile(olderArtifact))))
-                    .as("step 2: an artifact the target could not delete KEEPS its row")
-                    .isEqualTo(Map.of("row", "true", "artifact", "true"));
-            } finally {
-                allowWrites(artifactDir);
-            }
-
-            // 3. Once the target lets go the very next sweep removes both: the row was
-            //    kept for a retry, not kept forever.
-            backups.pruneForRetention(instanceId);
-            assertThat(Map.of(
-                    "row", String.valueOf(
-                        Models.get(InstanceBackupModel.class).findById(older) != null),
-                    "artifact", String.valueOf(Files.exists(olderArtifact))))
-                .as("step 3: the retry sweep removed the row AND the artifact")
-                .isEqualTo(Map.of("row", "false", "artifact", "false"));
-            assertThat(Models.get(InstanceBackupModel.class).findById(newer))
-                .as("step 3: the newest backup was never touched").isNotNull();
-
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
             service.destroy(instanceId);
         });
     }
@@ -687,15 +580,7 @@ class InstanceBackupsTest {
     // -- fixtures -------------------------------------------------------------
 
     private static String remoteKeyOf(int backupId) {
-        Row row = Models.get(InstanceBackupModel.class).findById(backupId);
-        assertThat(row).as("backup row %s exists", backupId).isNotNull();
-        String key = row.get(InstanceBackupModel.REMOTE_KEY);
-        assertThat(key).as("backup row %s carries a remote key", backupId).isNotBlank();
-        assertThat(key)
-            .as("the controller token still leads the key (two CONTROLLERS sharing a"
-                + " target was the first collision, and it must stay fixed)")
-            .startsWith(ControllerIdentity.token() + "/");
-        return key;
+        return BackupLaneFixture.remoteKeyOf(backupId);
     }
 
     private static String violationKeys(Throwable thrown) {
@@ -718,47 +603,7 @@ class InstanceBackupsTest {
         return user.get(UserModel.ID);
     }
 
-    private static void denyWrites(Path directory) {
-        try {
-            Files.setPosixFilePermissions(directory,
-                PosixFilePermissions.fromString("r-xr-xr-x"));
-        } catch (IOException failed) {
-            throw new IllegalStateException(failed);
-        }
-    }
-
-    private static void allowWrites(Path directory) {
-        try {
-            Files.setPosixFilePermissions(directory,
-                PosixFilePermissions.fromString("rwxr-xr-x"));
-        } catch (IOException failed) {
-            throw new IllegalStateException(failed);
-        }
-    }
-
-    private static int incusHost(String name) {
-        Row row = Models.get(ServerModel.class).createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-        Models.get(ServerModel.class).save(row);
-        HostFixtures.acknowledgePosture(row);
-        HostPreflight.store(name, new HostPreflight.Report(List.of(
-            new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
-            new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
-                HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
-        return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
-    }
-
     private static int instanceRecord(String name, int serverId) {
-        Row row = Models.get(InstanceModel.class).createEmptyRow();
-        row.set(InstanceModel.NAME, name);
-        row.set(InstanceModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
-        row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
-        row.set(InstanceModel.SERVER_ID, serverId);
-        Models.get(InstanceModel.class).save(row);
-        return row.get(InstanceModel.ID);
+        return BackupLaneFixture.instanceRecord(name, serverId);
     }
 }

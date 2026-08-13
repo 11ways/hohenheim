@@ -9,7 +9,7 @@
             "DockerReclaimTest", "DockerReconcilerTest", "DockerSiteHandlerTest",
             "DockerStreamingTest", "EngineMemoryCeilingTest", "EnvInjectionFlowTest",
             "HostFencingTest", "HostKeyPinningTest", "HostPreflightTest",
-            "InstanceBackupsTest", "InstanceNetworkIsolationTest",
+            "InstanceBackupRetentionRefusalTest", "InstanceNetworkIsolationTest",
             "InstanceSnapshotRetentionTest", "ManagedDatabaseTest",
             "ManagedNodeSocketTest", "OrphanActionsTest", "ProcessCapacityTest",
             "ProcessConfinementTest", "ProcessNetworkIsolationTest",
