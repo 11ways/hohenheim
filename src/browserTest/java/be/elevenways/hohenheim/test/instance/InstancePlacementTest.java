@@ -249,12 +249,19 @@ class InstancePlacementTest {
     /**
      * The eligible set and the score, in one walk: only an admitted, tenant-accepting,
      * runtime-matching host with a PROVEN memory budget qualifies; among those the one
-     * carrying the least booked memory wins; a tie goes to the lowest id; a workload that
+     * with the most REMAINING HEADROOM wins; a tie goes to the lowest id; a workload that
      * fits nowhere is a capacity refusal that says so; and an empty set is a NAMED refusal
      * rather than a silent fall back to the local daemon.
+     *
+     * AIDEV-NOTE: every host here is measured at the SAME budget and carries no managed
+     * processes, so booked-ascending and headroom-descending agree throughout -- which is
+     * exactly why this journey could not catch the budget-blind score it was written
+     * against. The two cases that separate them live in
+     * {@link #theScoreIsRemainingHeadroomNotTheInstanceBucketAlone}; do not fold them in
+     * here, the equal-budget fixture is what makes the ELIGIBILITY steps readable.
      */
     @Test
-    void theChooserScoresBookedMemoryAndRefusesByNameWithTheReasonThatApplies() {
+    void theChooserScoresFreeHeadroomAndRefusesByNameWithTheReasonThatApplies() {
         Db.run(datasource, () -> {
             // 1. No eligible host at all: named refusal, never a default.
             int blocked = host("blocked", ServerModel.ADMISSION_BLOCKED,
@@ -285,7 +292,7 @@ class InstancePlacementTest {
                 .as("step 3: the emptier host wins")
                 .isEqualTo(beta);
 
-            // 4. THE SCORE IS BOOKED MEMORY, NOT A COUNT OF ROWS. Alpha now carries THREE
+            // 4. THE SCORE IS MEGABYTES, NOT A COUNT OF ROWS. Alpha now carries THREE
             //    workloads totalling 768 MB; beta carries ONE of 1024 MB. A count-based
             //    score picks beta and is wrong about which host has room.
             liveInstanceOn(alpha, BUCKET, 128);
@@ -296,7 +303,7 @@ class InstancePlacementTest {
             assertThat(InstanceCapacity.bookedMbOn(beta))
                 .as("step 4: beta carries one row of 1024 MB").isEqualTo(1024);
             assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), null))
-                .as("step 4: the host with the least BOOKED MEMORY wins, even though it"
+                .as("step 4: the host with the most FREE MEMORY wins, even though it"
                     + " carries three times as many workloads")
                 .isEqualTo(alpha);
 
@@ -366,6 +373,85 @@ class InstancePlacementTest {
     }
 
     /**
+     * WHICH host wins when two of them could both take the workload: the one with the
+     * most room left, never the one holding the fewest instance megabytes.
+     *
+     * AIDEV-NOTE: this is the journey the previous score could not survive, and it needs
+     * TWO hosts to say anything at all -- the managed-process journey below uses one, so
+     * it pins the CEILING and can discriminate no tie-break whatever. Both pairs below
+     * are built so the workload fits on BOTH candidates: the assertion is then purely
+     * about ranking, and a step that fails is a score regression rather than an
+     * eligibility one. Steps 2 and 4 are the ones that fail under `fewest booked`.
+     */
+    @Test
+    void theScoreIsRemainingHeadroomNotTheInstanceBucketAlone() {
+        Db.run(datasource, () -> {
+            // 1. PAIR ONE, the class docblock's own worked example: a big host carrying
+            //    something against a small host carrying nothing. Both fit a 256 MB
+            //    workload, so eligibility cannot be what decides.
+            int small = host("score-small", ServerModel.ADMISSION_ADMITTED,
+                ServerModel.POSTURE_SHARED_CONTAINER, 1024L);
+            int large = host("score-large", ServerModel.ADMISSION_ADMITTED,
+                ServerModel.POSTURE_SHARED_CONTAINER, 8192L);
+            liveInstanceOn(large, BUCKET, 512);
+            assertThat(Map.of(
+                    "small", InstanceCapacity.bookedMbOn(small),
+                    "large", InstanceCapacity.bookedMbOn(large)))
+                .as("step 1: the SMALL host is the one holding fewer booked megabytes")
+                .isEqualTo(Map.of("small", 0L, "large", 512L));
+
+            // 2. THE SCORE KNOWS HOW BIG A HOST IS. 8192 - 512 = 7680 MB of room beats
+            //    1024 - 0 = 1024, so the busy big machine wins. A `fewest booked` score
+            //    reads 0 against 512 and packs the fleet onto the 1 GB box.
+            assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), null))
+                .as("step 2: 7680 MB of headroom outranks 1024 MB, even though the winner"
+                    + " is the only one of the two carrying a workload at all")
+                .isEqualTo(large);
+
+            // 3. PAIR TWO, the OTHER tier. The managed-process bucket is not the instance
+            //    bucket, so a host can read as empty here and have almost nothing left.
+            //    Both of these are measured at 4096 MB, so budget cannot be what decides.
+            int childHeavy = host("score-children", ServerModel.ADMISSION_ADMITTED,
+                ServerModel.POSTURE_SHARED_CONTAINER, 4096L);
+            int instanceHeavy = host("score-instances", ServerModel.ADMISSION_ADMITTED,
+                ServerModel.POSTURE_SHARED_CONTAINER, 4096L);
+            ProcessCapacity.reserve(childHeavy, 3584);
+            try {
+                liveInstanceOn(instanceHeavy, BUCKET, 512);
+                assertThat(InstanceCapacity.bookedMbOn(childHeavy))
+                    .as("step 3: the child-heavy host's INSTANCE bucket is empty")
+                    .isZero();
+                assertThat(Map.of(
+                        "children", InstanceCapacity.bookableMbOn(childHeavy, 4096L)
+                            - InstanceCapacity.bookedMbOn(childHeavy),
+                        "instances", InstanceCapacity.bookableMbOn(instanceHeavy, 4096L)
+                            - InstanceCapacity.bookedMbOn(instanceHeavy)))
+                    .as("step 3: while it has 512 MB left and its sibling has 3584")
+                    .isEqualTo(Map.of("children", 512L, "instances", 3584L));
+
+                // 4. So the score must read the SAME subtraction the ceiling does. Both
+                //    hosts fit a 256 MB workload; the one with real room takes it.
+                //    Excluding the pair-one winner keeps this about pair two.
+                assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), large))
+                    .as("step 4: a host whose budget the managed-process tier has eaten"
+                        + " must not read as the emptiest machine in the fleet")
+                    .isEqualTo(instanceHeavy);
+            } finally {
+                ProcessCapacity.release(childHeavy, 3584);
+            }
+
+            // 5. TIE-BREAK, unchanged and still the lowest id: with the child bookings
+            //    released both 4096 MB hosts have equal headroom only after the instance
+            //    the sibling carries is accounted for, so the tie is made explicit by
+            //    giving the child-heavy host the same 512 MB of instances.
+            liveInstanceOn(childHeavy, BUCKET, 512);
+            assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), large))
+                .as("step 5: equal headroom goes to the lowest id, deterministically")
+                .isEqualTo(Math.min(childHeavy, instanceHeavy));
+        });
+    }
+
+    /**
      * The chooser and the write judge against ONE denominator, so a host running managed
      * child processes cannot be chosen for a workload its own write then refuses.
      *
@@ -374,6 +460,11 @@ class InstancePlacementTest {
      * from the budget, chooseForBucket compared against the bare budget. Both now call
      * InstanceCapacity.bookableMbOn; a step that fails here means someone re-spelled the
      * subtraction at one of the two call sites.
+     *
+     * AIDEV-NOTE: ONE host, deliberately -- this is the CEILING, and a single candidate is
+     * the clearest way to ask "does the chooser offer what the write refuses". It can
+     * therefore discriminate no ranking at all; the score lives in
+     * {@link #theScoreIsRemainingHeadroomNotTheInstanceBucketAlone}.
      */
     @Test
     void theChooserSubtractsManagedProcessBookingsExactlyLikeTheWriteDoes() {
