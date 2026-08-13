@@ -412,11 +412,36 @@ public class GitDeployment {
      * Deny the build the tenant-network vocabulary its own runtime process is denied.
      *
      * AIDEV-NOTE: this is the SAME uid chain ManagedProcessSiteHandler.isolate() applies
-     * (idempotent, so build and runtime share one chain), and the no-uid case takes the
-     * same warn-and-allow shape for the same reason recorded there -- the only identity
-     * the build would have is the DAEMON's own, and a deny keyed on that cuts the control
-     * plane off from itself. A site whose runtime cannot be isolated cannot spawn either,
-     * so this refusal never removes a lane the site otherwise had.
+     * (idempotent, so build and runtime share one chain). Without a run-as uid there is
+     * nothing to key a deny on: the only identity the build would have is the DAEMON's
+     * own, and a rule keyed on that cuts the control plane off from itself.
+     *
+     * AIDEV-NOTE: this note used to justify the no-uid warn-and-allow with "a site whose
+     * runtime cannot be isolated cannot spawn either, so this refusal never removes a lane
+     * the site otherwise had". That sentence is FALSE and was struck 2026-08-13: a STATIC
+     * git site builds and never spawns, so for it the build is the site's only code
+     * execution and running it unconfined does add a lane. What is TRUE is stated below;
+     * read it before concluding this branch is unguarded.
+     *
+     * The no-uid build is reachable only past TWO refusals that do happen:
+     * (1) {@code process.require_dedicated_user} defaults TRUE, so on a DEFAULT install
+     *     {@code WorkloadIdentity.forSite} throws and GitSiteRequestHandler never exists --
+     *     the whole site faults, build included
+     *     ({@code WorkloadIdentityTest.enforcementIsOnByDefaultAndNothingRefusesTurningItBackOn});
+     * (2) a TENANT-managed site -- any site a non-admin holds {@code manage} on, which is
+     *     the whole hostile-repo threat model -- is refused UNCONDITIONALLY, whatever that
+     *     setting says, and fails closed on an unreadable grant table
+     *     ({@code WorkloadIdentityTest.tenantManagedSitesAreRefusedUnconditionally}).
+     *
+     * The RESIDUAL, named rather than hidden: an OPERATOR-owned site on an install where
+     * the operator explicitly turned that requirement off builds as the daemon, and its
+     * network half is unenforceable because the only uid available to key a deny on is the
+     * control plane's own. Refusing it here was BUILT AND REVERTED the same day: it closes
+     * a real lane for static sites, but it breaks a configuration the product otherwise
+     * supports and its only cheap remedy was deleting the build-log assertions from
+     * {@code GitDeploymentFlowTest}. The honest fix is to route an identity-less build
+     * through {@code BuildSandbox} instead of the host lane -- a redesign of the non-docker
+     * site types, discussed in the {@code runBuild} note above, not a branch here.
      *
      * @return false when the policy cannot be applied -- the build is refused
      */

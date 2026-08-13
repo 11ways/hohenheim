@@ -5,6 +5,9 @@ import be.elevenways.hohenheim.server.ProcessConfinement;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.ProcessNetworkPolicy;
+import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
+import be.elevenways.hohenheim.server.sitetype.types.CommandSiteType;
+import be.elevenways.hohenheim.server.sitetype.types.StaticSiteType;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -24,10 +27,89 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Covers Git command validation, output draining, and process-group cleanup. */
 class GitDeploymentTest {
 
+    /** A real site type, so fixtures carry the shape a deployment actually gets. */
+    private static final SiteTypeHandler SPAWNING_TYPE = new CommandSiteType();
+
+    /** Builds but never spawns: the type whose unconfined build is a lane of its own. */
+    private static final SiteTypeHandler STATIC_TYPE = new StaticSiteType();
+
     /** nft chain and table names are controller-namespaced, so isolation needs an identity. */
     @BeforeAll
     static void controllerIdentity() {
         HohenheimTestRuntime.ensureDatasource();
+    }
+
+    /**
+     * The IDENTITY-LESS build, pinned as the DOCUMENTED RESIDUAL it is rather than as a
+     * refusal that does not happen.
+     *
+     * The exposure is real: a repository's own build content (a postinstall script, a
+     * Makefile rule) executes as the Hohenheim daemon, and no per-uid deny can be keyed on
+     * the control plane's own identity. Refusing it here for a STATIC site -- the case
+     * where the build is the site's ONLY code execution, so the "its runtime is equally
+     * exposed anyway" argument has nothing to point at -- was built and reverted the same
+     * day; see {@code GitDeployment.isolateBuild}'s note for the trade-off and the real
+     * fix. What is asserted here is what the code DOES: the build runs, and it says so.
+     *
+     * The refusals that DO happen are one layer up and are pinned by
+     * {@code WorkloadIdentityTest}: enforcement is on by DEFAULT (so no site reaches this
+     * at all on a default install) and TENANT-managed sites are refused unconditionally
+     * whatever the setting says (so the hostile-repo threat model never reaches it either).
+     */
+    @Test
+    void anIdentityLessBuildRunsUnconfinedAndSaysSoInTheDeployLog() throws Exception {
+        Path siteDir = Files.createTempDirectory("hohenheim-build-no-identity");
+        Path ranMarker = siteDir.resolve("build-ran.txt");
+        String command = "printf 'x' > '" + ranMarker + "'; echo build-ran";
+
+        // 1. A site type whose RUNTIME shares the absent identity: the build runs, and the
+        //    deploy log an operator reads names the exposure and the action.
+        GitDeployment spawning = new GitDeployment(9407, null, SPAWNING_TYPE, Map.of(), Map.of(),
+            repository("https://example.test/project.git"), siteDir.toFile(), null);
+        assertThat(spawning.runBuild(siteDir.toFile(), command))
+            .as("step 1: with the dedicated-user requirement turned off, the build runs")
+            .isTrue();
+        assertThat(spawning.getLog())
+            .as("step 1: and the operator is told, out loud, that it is not isolated")
+            .contains("NOT network-isolated")
+            .contains("Configure a system user");
+        assertThat(Files.exists(ranMarker)).as("step 1: the build really ran").isTrue();
+
+        // 2. A STATIC site -- which never spawns, so this build is its whole execution --
+        //    is treated IDENTICALLY today. This assertion is the residual, written down: if
+        //    a later wave closes it, this step is what will fail and point at the decision.
+        Files.delete(ranMarker);
+        GitDeployment staticSite = new GitDeployment(9408, null, STATIC_TYPE, Map.of(), Map.of(),
+            repository("https://example.test/project.git"), siteDir.toFile(), null);
+        assertThat(staticSite.runBuild(siteDir.toFile(), command))
+            .as("step 2: RESIDUAL -- a site that never spawns still runs repo content as"
+                + " the daemon; GitDeployment.isolateBuild records why and what the fix is")
+            .isTrue();
+        assertThat(staticSite.getLog())
+            .as("step 2: with the same warning, so it is never silent")
+            .contains("NOT network-isolated");
+
+        // 3. The moment there IS an identity, the deny policy is applied and keyed on it --
+        //    so the gap is exactly "no uid to key on", not "isolation is optional here".
+        RecordingNft recording = new RecordingNft();
+        SystemUsers.RunAsUser runAs = new SystemUsers.RunAsUser("site-9408", 4408, null,
+            siteDir.toString());
+        ProcessNetworkPolicy.overrideForTest(new ProcessNetworkPolicy(recording,
+            () -> true, Path.of("/etc/resolv.conf")));
+        try {
+            GitDeployment identified = new GitDeployment(9408, null, STATIC_TYPE, Map.of(),
+                Map.of(), repository("https://example.test/project.git"), siteDir.toFile(),
+                runAs);
+            identified.runBuild(siteDir.toFile(), command);
+            assertThat(identified.getLog())
+                .as("step 3: with an identity to confine, isolation is not the refusal")
+                .doesNotContain("Build refused");
+            assertThat(String.join("\n", recording.rulesets))
+                .as("step 3: and the deny policy is keyed on THAT uid")
+                .contains("out_uid_4408");
+        } finally {
+            ProcessNetworkPolicy.overrideForTest(null);
+        }
     }
 
     @Test
@@ -133,7 +215,7 @@ class GitDeploymentTest {
         Path siteDir = Files.createTempDirectory("hohenheim-build-timeout");
         Path childPidFile = siteDir.resolve("child.pid");
         Map<String, Object> sourceSettings = Map.of("build_timeout", 1);
-        GitDeployment deployment = new GitDeployment(9401, null, null, Map.of(), sourceSettings,
+        GitDeployment deployment = new GitDeployment(9401, null, SPAWNING_TYPE, Map.of(), sourceSettings,
             repository("https://example.test/project.git"), siteDir.toFile(), null);
         String command = noisyCommand(childPidFile);
 
@@ -154,7 +236,7 @@ class GitDeploymentTest {
     @Test
     void secretBearingBuildCommandIsNeverCapturedInDeploymentLog() throws Exception {
         Path siteDir = Files.createTempDirectory("hohenheim-build-command-secret");
-        GitDeployment deployment = new GitDeployment(9402, null, null, Map.of(), Map.of(),
+        GitDeployment deployment = new GitDeployment(9402, null, SPAWNING_TYPE, Map.of(), Map.of(),
             repository("https://example.test/project.git"), siteDir.toFile(), null);
         String secret = "build-command-secret-9402";
         String command = "printf '%s\\n' 'operator-safe output' "
@@ -198,7 +280,7 @@ class GitDeploymentTest {
 
         // 1. The legitimate build still succeeds (the positive anchor) and its environment
         //    carries the build-time variable and NOT the site's runtime secret.
-        GitDeployment deployment = new GitDeployment(9403, null, null, typeSettings,
+        GitDeployment deployment = new GitDeployment(9403, null, SPAWNING_TYPE, typeSettings,
             sourceSettings, repository("https://example.test/project.git"), siteDir.toFile(),
             null);
         assertThat(deployment.runBuild(siteDir.toFile(), dumpEnvironment))
@@ -222,7 +304,7 @@ class GitDeploymentTest {
         ProcessConfinement.overrideForTest(new ProcessConfinement.Availability(
             ProcessConfinement.Mode.NONE, "no systemd on this host (test override)"));
         try {
-            GitDeployment unconfined = new GitDeployment(9404, null, null, typeSettings,
+            GitDeployment unconfined = new GitDeployment(9404, null, SPAWNING_TYPE, typeSettings,
                 sourceSettings, repository("https://example.test/project.git"),
                 siteDir.toFile(), null);
             assertThat(unconfined.runBuild(siteDir.toFile(), dumpEnvironment))
@@ -246,7 +328,7 @@ class GitDeploymentTest {
         ProcessNetworkPolicy.overrideForTest(new ProcessNetworkPolicy(recording,
             () -> false, Path.of("/etc/resolv.conf")));
         try {
-            GitDeployment unisolated = new GitDeployment(9405, null, null, typeSettings,
+            GitDeployment unisolated = new GitDeployment(9405, null, SPAWNING_TYPE, typeSettings,
                 sourceSettings, repository("https://example.test/project.git"),
                 siteDir.toFile(), runAs);
             assertThat(unisolated.runBuild(siteDir.toFile(), dumpEnvironment))
@@ -269,7 +351,7 @@ class GitDeploymentTest {
         ProcessNetworkPolicy.overrideForTest(new ProcessNetworkPolicy(recording,
             () -> true, Path.of("/etc/resolv.conf")));
         try {
-            GitDeployment isolated = new GitDeployment(9405, null, null, typeSettings,
+            GitDeployment isolated = new GitDeployment(9405, null, SPAWNING_TYPE, typeSettings,
                 sourceSettings, repository("https://example.test/project.git"),
                 siteDir.toFile(), runAs);
             isolated.runBuild(siteDir.toFile(), dumpEnvironment);
@@ -299,7 +381,7 @@ class GitDeploymentTest {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Builds.TIMEOUT_SECONDS, 10);
         try {
             // A site asking for ten minutes on a host that allows ten seconds.
-            GitDeployment deployment = new GitDeployment(9406, null, null, Map.of(),
+            GitDeployment deployment = new GitDeployment(9406, null, SPAWNING_TYPE, Map.of(),
                 Map.of("build_timeout", 600),
                 repository("https://example.test/project.git"), siteDir.toFile(), null);
 
