@@ -82,6 +82,15 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     private static Integer tenantId;
     private static String tenantKey;
 
+    /**
+     * A SECOND delegate holding only {@code view} on the same instances, with a key whose
+     * scopes deliberately include {@code config} its owner does not hold on any record --
+     * so key narrowing can never be the thing that refuses and the RECORD-capability gate
+     * is what the authorization journey measures.
+     */
+    private static Integer viewerId;
+    private static String viewerKey;
+
     /** An admitted INCUS host, because the fake device kind declares that runtime. */
     private static Integer hostId;
 
@@ -112,6 +121,19 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         tenantId = user.get(UserModel.ID);
         tenantKey = ApiKeyService.create(tenantId, NAME_PREFIX + "key",
             List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE)),
+            null).plaintext();
+
+        Row viewer = AuthModels.users().createEmptyRow();
+        viewer.set(UserModel.EMAIL, "devsurf-viewer@surface.test");
+        viewer.set(UserModel.DISPLAY_NAME, "Device Surface Viewer");
+        viewer.set(UserModel.ENABLED, true);
+        viewer.set(UserModel.CREATED_AT, Instant.now());
+        viewer.set(UserModel.UPDATED_AT, Instant.now());
+        AuthModels.users().save(viewer);
+        viewerId = viewer.get(UserModel.ID);
+        viewerKey = ApiKeyService.create(viewerId, NAME_PREFIX + "viewer-key",
+            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.VIEW),
+                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.CONFIG)),
             null).plaintext();
     }
 
@@ -427,6 +449,99 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 5: and no row minted for it").isEmpty();
     }
 
+    /**
+     * AUTHORIZATION, which is the lane the refusal journey above does NOT cover: a
+     * delegate who can SEE an instance but does not hold {@code config} cannot touch its
+     * devices -- and the one that matters most is DETACH, which deletes a backing volume
+     * at the daemon.
+     *
+     * AIDEV-NOTE: written 2026-08-13 because there was none, while
+     * docs/proxmox-use-inventory.md claimed the surface test asserted "every refusal lane
+     * (capability, quota, daemon)". Step 1 of
+     * {@link #everyRefusalIsNamedAndLeavesNoPartialDeviceRow} is {@code devices_unsupported},
+     * which is a DRIVER capability on a docker kind -- not an authorization decision -- so
+     * {@code requireOperationCapability(instanceId, CONFIG)} at InstanceDevices :53/:89/
+     * :129/:161 had zero coverage. Nothing was exploitable (the check is present at all
+     * four mutators); this is regression risk, and the surface makes it real:
+     * ManageInstanceDeviceResource scopes its READ predicate to {@code view}, so a
+     * view-only delegate really is shown the device list and the edit route, and the
+     * mutator gate is the only thing between it and a deleted volume.
+     */
+    @Test
+    void aViewOnlyDelegateIsShownTheDevicesAndCanChangeNoneOfThem() throws Exception {
+        int instanceId = deviceCapableInstance("devsurf-authz");
+        String handle = handleOf(instanceId);
+        String device = NAME_PREFIX + "authz-disk";
+
+        // 1. The operator-tier holder attaches a real disk, so every refusal below has
+        //    something to actually destroy.
+        assertThat(apiPost("/api/v1/instances/" + instanceId + "/devices",
+                "type=disk&name=" + device + "&size_gb=4").statusCode())
+            .as("step 1: the fixture disk was attached").isEqualTo(200);
+        assertThat(DAEMON.get(handle).disks.get(device))
+            .as("step 1: and the daemon really holds it at 4 GB").isEqualTo(4);
+
+        // 2. THE PREMISE: a VIEW-only delegate can SEE the instance and its devices.
+        //    Without this the refusals below would be indistinguishable from the
+        //    no-existence-oracle 404 the foreign-instance journey already pins.
+        RecordGrants.grant("user", viewerId, InstanceModel.MODEL_ID, instanceId,
+            HohenheimAccess.VIEW, true);
+        HttpResponse<String> listed = keyGet(viewerKey,
+            "/api/v1/instances/" + instanceId + "/devices");
+        assertThat(listed.statusCode())
+            .as("step 2: a view delegate really can list this instance's devices")
+            .isEqualTo(200);
+        assertThat(listed.body())
+            .as("step 2: naming the very device it must not be able to remove")
+            .contains(device);
+
+        // 3. THE ATTACK, all four mutators. Each is refused by the CAPABILITY gate's own
+        //    named violation -- not 404 (the record is visible), not devices_unsupported
+        //    (the driver carries devices), not a quota key.
+        record Attempt(String route, String body, String what) {}
+        for (Attempt attempt : List.of(
+                new Attempt("/devices", "type=disk&name=" + NAME_PREFIX + "steal&size_gb=1",
+                    "attaching a disk"),
+                new Attempt("/devices", "type=nic&name=" + NAME_PREFIX + "stealnic",
+                    "attaching a NIC"),
+                new Attempt("/devices/resize", "name=" + device + "&size_gb=99",
+                    "resizing someone else's disk"),
+                new Attempt("/devices/detach", "name=" + device,
+                    "DETACHING it, which deletes the backing volume"))) {
+            HttpResponse<String> refused = keyPost(viewerKey,
+                "/api/v1/instances/" + instanceId + attempt.route(), attempt.body());
+            assertThat(refused.statusCode())
+                .as("step 3: " + attempt.what() + " is refused, typed")
+                .isEqualTo(422);
+            assertThat(refused.body())
+                .as("step 3: " + attempt.what() + " is refused BY THE CAPABILITY GATE,"
+                    + " named -- a bare 422 cannot tell config from quota or from a"
+                    + " driver that has no devices")
+                .contains("instance_not_permitted");
+        }
+
+        // 4. STATE, not just status: nothing moved. A refusal that already wrote the row
+        //    or already spoke to the daemon would pass every assertion above.
+        assertThat(DAEMON.get(handle).disks)
+            .as("step 4: the daemon still holds exactly the original volume, unresized")
+            .isEqualTo(Map.of(device, 4));
+        assertThat(DAEMON.get(handle).nics)
+            .as("step 4: and no NIC was attached").isEmpty();
+        assertThat(deviceRows(instanceId))
+            .as("step 4: with exactly the one row the operator created").hasSize(1);
+
+        // 5. POSITIVE ANCHOR: the SAME detach through a holder of the capability lands,
+        //    at the daemon. Without it, step 3 would pass on a device lane that refuses
+        //    everyone -- which is precisely how an untested gate rots into a broken one.
+        assertThat(apiPost("/api/v1/instances/" + instanceId + "/devices/detach",
+                "name=" + device).statusCode())
+            .as("step 5: the config holder's detach is accepted").isEqualTo(200);
+        assertThat(DAEMON.get(handle).disks)
+            .as("step 5: and the volume is gone at the daemon, so the gate refused"
+                + " AUTHORITY in step 3 and nothing else")
+            .isEmpty();
+    }
+
     // -- transport --------------------------------------------------------------
 
     private HttpResponse<String> get(String path) throws Exception {
@@ -454,9 +569,20 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     }
 
     private HttpResponse<String> apiPost(String path, String body) throws Exception {
+        return keyPost(tenantKey, path, body);
+    }
+
+    private HttpResponse<String> keyGet(String key, String path) throws Exception {
         return send(HttpRequest.newBuilder()
             .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("X-Api-Key", tenantKey)
+            .header("X-Api-Key", key)
+            .GET());
+    }
+
+    private HttpResponse<String> keyPost(String key, String path, String body) throws Exception {
+        return send(HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
+            .header("X-Api-Key", key)
             .header("Content-Type", "application/x-www-form-urlencoded")
             .POST(HttpRequest.BodyPublishers.ofString(body)));
     }

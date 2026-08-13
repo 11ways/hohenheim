@@ -193,11 +193,27 @@ failed outright. `Resource.verifiesScopeBeforeMutating()` (default false) lets a
 resource that refuses out-of-scope callers BEFORE its first write opt out of the
 wrapper; `InstanceDeviceResource` declares it.
 
-- **[test]** `InstanceDeviceSurfaceTest` -- 3 journeys, all RAN 2026-08-06: the tab
-  attaches/resizes/detaches AT THE FAKE DAEMON (not merely in a row), every refusal
-  lane (capability, quota, daemon) is named and leaves NO device row and an
-  untouched ledger, and the API lane drives the same devices with the
+- **[test]** `InstanceDeviceSurfaceTest` -- 4 journeys: the tab
+  attaches/resizes/detaches AT THE FAKE DAEMON (not merely in a row), three refusal
+  lanes (DRIVER capability, quota, daemon) are named and leave NO device row and an
+  untouched ledger, the AUTHORIZATION lane refuses all four mutators for a delegate
+  who can see the instance, and the API lane drives the same devices with the
   no-existence-oracle rule intact.
+  **CORRECTED 2026-08-13.** This row said "every refusal lane (capability, quota,
+  daemon)" and the capability it meant was `devices_unsupported` -- a DRIVER
+  capability asserted against a docker kind, not an authorization decision. The
+  authorization gate itself (`requireOperationCapability(instanceId, CONFIG)` at
+  `InstanceDevices.java:53`, `:89`, `:129`, `:161`) had **zero coverage**: no step
+  drove a caller who could see the instance and lacked `CONFIG`. Nothing was
+  exploitable -- the check is present at all four mutators -- but it was the only
+  barrier between a `view`-only delegate and a deleted backing volume, and
+  `ManageInstanceDeviceResource` deliberately scopes its READ predicate to `view`,
+  so such a delegate really is shown the device list and the edit route.
+  `aViewOnlyDelegateIsShownTheDevicesAndCanChangeNoneOfThem` now drives it: a real
+  second delegate with a `view` grant and a key carrying `config` its owner does not
+  hold (so key narrowing cannot be the refuser), all four mutators refused 422
+  `instance_not_permitted`, the daemon's volume unchanged and unresized, and the
+  same detach through a `config` holder landing as the positive anchor.
 
 **Still open in this row:** the root-disk size knob (below), and there is no
 single "migrate this device" or reorder affordance (devices are not ordered).
