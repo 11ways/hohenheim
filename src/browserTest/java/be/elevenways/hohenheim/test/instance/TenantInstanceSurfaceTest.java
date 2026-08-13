@@ -575,13 +575,66 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             .doesNotContain("value=\"mkdir\"")
             .doesNotContain("value=\"rename\"");
 
-        // 4. The action endpoint answers a hand-rolled POST through the SERVICE gate: the
-        //    absent form is a courtesy, the capability check is the authority.
-        HttpResponse<String> forged = tenantPost("/instances/" + instanceAId + "/files/action",
-            "action=mkdir&path=/data/forged&directory=/data");
+        // 4. THE ATTACK: a hand-rolled POST straight at the action endpoint, with a valid
+        //    session and a valid CSRF token, from a holder of files.read and NOT
+        //    files.write. The absent form is a courtesy; the SERVICE gate is the authority.
+        //
+        //    AIDEV-NOTE: the assertion is on the refusal's own TEXT, and that is the whole
+        //    point of this step. It asserted `isIn(200, 302, 303)` until 2026-08-13, which
+        //    three different refusers all satisfy -- CSRF at weight 25, zenit-auth's
+        //    path-baseline middleware at weight 30 (it answers HTML without consulting
+        //    Accept) and authorization at 50 -- and which a SUCCESSFUL mkdir satisfies too.
+        //    Worse, step 1 of this very journey establishes the instance is not running,
+        //    so the mkdir could not have landed whatever the gate did: the old assertion
+        //    could not fail.
+        String forgedBody = "action=mkdir&path=/data/forged&directory=/data";
+        HttpResponse<String> forged = tenantPost(
+            "/instances/" + instanceAId + "/files/action", forgedBody);
         assertThat(forged.statusCode())
-            .as("step 4: a hand-rolled POST is answered, not accepted silently")
-            .isIn(200, 302, 303);
+            .as("step 4: the form lane answers with its error redirect -- not a login"
+                + " bounce (401/403 or /login) and not a CSRF rejection")
+            .isIn(302, 303);
+        assertThat(errorOf(forged))
+            .as("step 4: and the refusal it carries is the CAPABILITY one, by the text"
+                + " only requireOperationCapability produces")
+            .isEqualTo("You are not allowed to perform this action on this instance");
+
+        // 5. POSITIVE ANCHOR: grant files.write and the SAME request stops producing that
+        //    refusal. Without this, step 4 would pass on an endpoint that refuses
+        //    everything -- what follows is the undeployed workload's own answer, which is
+        //    a different refusal and none of this step's business.
+        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+            HohenheimAccess.FILES_WRITE, true);
+        try {
+            HttpResponse<String> permitted = tenantPost(
+                "/instances/" + instanceAId + "/files/action", forgedBody);
+            assertThat(errorOf(permitted))
+                .as("step 5: with files.write the capability gate is behind us, so step 4"
+                    + " measured the gate and not the daemon, the CSRF token or the route")
+                .isNotEqualTo("You are not allowed to perform this action on this instance");
+        } finally {
+            RecordGrants.revoke("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+                HohenheimAccess.FILES_WRITE);
+        }
+
+        // 6. And the revoke really took: the refusal is back, so no later journey in this
+        //    ordered class inherits a write grant this one minted.
+        assertThat(errorOf(tenantPost("/instances/" + instanceAId + "/files/action", forgedBody)))
+            .as("step 6: the borrowed capability was handed back")
+            .isEqualTo("You are not allowed to perform this action on this instance");
+    }
+
+    /** The {@code error=} message the files lane redirects with, decoded; "" when absent. */
+    private static String errorOf(HttpResponse<String> response) {
+        String location = response.headers().firstValue("Location").orElse("");
+        int marker = location.indexOf("error=");
+        if (marker < 0) {
+            return "";
+        }
+        String encoded = location.substring(marker + "error=".length());
+        int next = encoded.indexOf('&');
+        return java.net.URLDecoder.decode(next < 0 ? encoded : encoded.substring(0, next),
+            java.nio.charset.StandardCharsets.UTF_8);
     }
     /**
      * The Phase 5b introduction gate: a template SCRIPT enters the system only through
