@@ -250,7 +250,10 @@ public class GitDeployment {
      * LIKE THE TIER IT BELONGS TO, rather than being routed through BuildSandbox. The
      * evidence for that choice: (1) BuildSandbox produces a docker IMAGE from a declared
      * builder image, and these site types declare no image and need the checkout's FILES
-     * back in the slot -- routing them there is a redesign of the types, not a fix; (2) the
+     * back in the slot -- routing them there is a redesign of the types, not a fix (its
+     * {@code runPhase} CAN run arbitrary argv and collect a directory, so the missing
+     * piece is the IMAGE and the host Docker dependency, not the plumbing; re-checked
+     * 2026-08-13, see the isolateBuild note for the full weighing); (2) the
      * command is OPERATOR-authored, never tenant-authored (ManageSiteResource.fieldBindings
      * hands a delegated tenant name/enabled/description only, and the API has no
      * source_settings write), which is the same trust class as CommandSiteType's command,
@@ -439,9 +442,31 @@ public class GitDeployment {
      * control plane's own. Refusing it here was BUILT AND REVERTED the same day: it closes
      * a real lane for static sites, but it breaks a configuration the product otherwise
      * supports and its only cheap remedy was deleting the build-log assertions from
-     * {@code GitDeploymentFlowTest}. The honest fix is to route an identity-less build
-     * through {@code BuildSandbox} instead of the host lane -- a redesign of the non-docker
-     * site types, discussed in the {@code runBuild} note above, not a branch here.
+     * {@code GitDeploymentFlowTest}.
+     *
+     * AIDEV-NOTE: this note used to end "the honest fix is to route an identity-less build
+     * through BuildSandbox", which CONTRADICTED the {@code runBuild} note thirty lines
+     * above that argues the same routing is a redesign and not a fix. Investigated and
+     * settled 2026-08-13, in favour of {@code runBuild}: read that note, this branch is
+     * where the residual LIVES but not where it gets closed. Three candidates were weighed
+     * and all three are worse than the documented residual. BuildSandbox: its
+     * {@code runPhase} really can run arbitrary argv and read a directory back, so the
+     * shape exists, but there is no image to run an operator's {@code build_command} IN
+     * ({@code builds.builder_image} is a daemonless image BUILDER, not a toolchain), a
+     * per-site build image cannot be defaulted, and building a node site's native addons
+     * against a container's libc and then running them under the HOST node is a broken
+     * deploy rather than an isolated one -- and it would make Docker a hard dependency of
+     * the deliberately Docker-free tier, so a Docker-less host would refuse the build,
+     * which is the reverted refusal wearing a different hat. systemd {@code IPAddressDeny}
+     * on the scope this build ALREADY gets: MEASURED 2026-08-13 to be silently ignored in
+     * a USER scope ({@code systemd-run --user --scope -p IPAddressDeny=any} still reached
+     * 1.1.1.1:80), and a user manager is the ordinary non-root deployment
+     * ({@link ProcessConfinement}), so it would claim a boundary it does not have. An nft
+     * chain keyed on the build's cgroup instead of a uid: {@code socket cgroupv2} resolves
+     * the path to a cgroup id when the RULE IS ADDED, and {@code systemd-run --scope}
+     * execs immediately, so it needs a two-phase spawn -- and with no passwordless
+     * {@code sudo nft} on a dev host it could only ever be proven against the
+     * {@code RecordingNft} fake, which is not proof.
      *
      * @return false when the policy cannot be applied -- the build is refused
      */
