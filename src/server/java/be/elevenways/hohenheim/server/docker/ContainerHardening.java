@@ -190,11 +190,25 @@ public final class ContainerHardening {
      * privilege escape -- it is here for the OTHER reason the list exists: the policy owns
      * the key, so no caller can hand back the unbounded default (or a driver whose output
      * the console lane cannot read) by setting it.
+     *
+     * AIDEV-NOTE: {@code ReadonlyRootfs} joined it on 2026-08-13, and it is the RECORD of
+     * a decision rather than a new control. The Phase 3 threat-model clause lists
+     * "read-only rootfs WHERE THE TEMPLATE ALLOWS" among the Docker hardening controls,
+     * and this policy deliberately does not set it: it runs arbitrary published images,
+     * whose entrypoints chown their data directory, write pid files and unpack assets into
+     * the rootfs, so a read-only root would refuse to start the ordinary workload instead
+     * of confining a hostile one -- and a knob nobody can turn on is theater, the same
+     * verdict {@code NET_BIND_SERVICE} got beside it. What was missing was not the control
+     * but the DECISION: the key was neither set nor owned, so a later caller could have
+     * passed it straight through the funnel and given itself a workload the tier's own
+     * lifecycle (config staging, log capture, in-place app update) cannot service. It is
+     * owned now, so re-opening the question means editing THIS list on purpose. The
+     * clause's own copy of the verdict lives at docs/instance-tier-plan.md.
      */
     public static final List<String> ESCAPE_KEYS = List.of(
         "Privileged", "CapAdd", "CapDrop", "SecurityOpt", "PidsLimit", "UsernsMode",
         "Devices", "DeviceCgroupRules", "DeviceRequests", "CgroupParent", "Sysctls",
-        "Binds", "ReadonlyPaths", "MaskedPaths", "LogConfig");
+        "Binds", "ReadonlyPaths", "MaskedPaths", "ReadonlyRootfs", "LogConfig");
 
     /**
      * HostConfig namespace-sharing keys: "host" defeats the container boundary outright,
