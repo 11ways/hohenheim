@@ -213,16 +213,8 @@ public final class InstanceMigrations {
             return violationText("migrate_publication_present")
                 .withArg("name", nameOf(resolved.row()));
         }
-        try {
-            HostAdmission.requireInstancePlacement(serverId, resolved.handler().isolation(),
-                resolved.row().get(InstanceModel.QUOTA_BUCKET));
-        } catch (Violations refused) {
-            List<Violation> all = refused.all();
-            return all.isEmpty()
-                ? violationText("host_not_admitted").withArg("name", name)
-                : all.get(0).message();
-        }
-        return null;
+        return HostAdmission.instancePlacementRefusal(serverId, resolved.handler().isolation(),
+            resolved.row().get(InstanceModel.QUOTA_BUCKET));
     }
 
     private static int clampInt(long value) {

@@ -121,18 +121,9 @@ public final class InstanceService {
         InstanceOperationGuard.requireOperable(resolved.row());
         InstanceOperationGuard.requireInstalled(resolved.row());
         long fence = this.leases.requireFence(resolved.serverId());
-        // AIDEV-NOTE: the gate asks whether the WORKLOAD is tenant-attributed, never
-        // whether the KIND is tenant-authored, and the difference was a real hole. A
-        // managed database's engine, a site's release container and a stack service are
-        // operator-AUTHORED kinds that a TENANT owns through the product record above
-        // them (OwnedInstances.isTenantAttributed reads that ownership from grants). They
-        // are posture-checked once, at placement, and gating the redeploy on
-        // tenantAuthored() meant they were never checked again -- so a host whose posture
-        // regressed, whose shared-kernel acknowledgement was withdrawn or whose kernel
-        // lane stopped proving itself kept taking tenant workloads back. An
-        // operator-OWNED workload still skips it, which is the exemption the flag was for.
-        if (resolved.handler().tenantAuthored()
-                || OwnedInstances.isTenantAttributed(resolved.row())) {
+        // The predicate (and the reasoning behind it) lives on OwnedInstances.isPlacementGated,
+        // so the instance overview can explain this refusal by asking the SAME question.
+        if (OwnedInstances.isPlacementGated(resolved.handler(), resolved.row())) {
             HostAdmission.requireInstancePlacement(resolved.serverId(),
                 resolved.handler().isolation(),
                 resolved.row().get(InstanceModel.QUOTA_BUCKET));

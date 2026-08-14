@@ -6,15 +6,18 @@ import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 /**
  * The placement gate the host record exists for: NEW tenant-authored workloads
@@ -50,6 +53,27 @@ public final class HostAdmission {
     public static void requireInstancePlacement(int serverId,
                                                 @NonNull WorkloadIsolation isolation,
                                                 @Nullable String ownerBucket) {
+        try {
+            placementChecks(serverId, isolation, ownerBucket);
+        } catch (Violations refused) {
+            // AIDEV-NOTE: EVERY refusal below interpolates the host's NAME, and a tenant
+            // reaches this gate by clicking Deploy on their own instance -- the /manage
+            // surface blanks the host everywhere else precisely because it is operator
+            // inventory. The substitution sits at the ONE gate rather than at each caller
+            // so a future caller cannot forget it, and instancePlacementRefusal inherits it.
+            // The question is about the PRINCIPAL (isTenantOriginated), not about the panel:
+            // an admin reading /manage is not a tenant, and the PAGE makes that projection
+            // separately by surface. Same withholding as InstanceBackups.backupNow.
+            if (TenantWrites.isTenantOriginated()) {
+                throw Violations.ofForm(violation("instance_placement_blocked"));
+            }
+            throw refused;
+        }
+    }
+
+    private static void placementChecks(int serverId,
+                                        @NonNull WorkloadIsolation isolation,
+                                        @Nullable String ownerBucket) {
         Row server = Models.get(ServerModel.class).findById(serverId);
         if (server == null) {
             throw Violations.ofForm(violation("host_not_admitted")
@@ -355,6 +379,32 @@ public final class HostAdmission {
         if (!Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK))) {
             throw Violations.ofForm(violation("admit_needs_preflight")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
+        }
+    }
+
+    /**
+     * The AFFORDANCE twin of {@link #requireInstancePlacement}: the same question, asked
+     * without throwing, so a page can STATE why a deploy will be refused instead of leaving
+     * the operator to discover it by clicking.
+     *
+     * AIDEV-NOTE: this CALLS the gate, it is not a copy of it -- a refusal added to
+     * requireInstancePlacement therefore reaches every explaining surface for free, and this
+     * method must never grow a branch of its own. Same rule as
+     * InstancePlacement.acceptsTenantWorkload, which is now one of its callers.
+     *
+     * @return the first refusal's message, or null when placement is allowed
+     */
+    public static @Nullable Microcopy instancePlacementRefusal(int serverId,
+                                                               @NonNull WorkloadIsolation isolation,
+                                                               @Nullable String ownerBucket) {
+        try {
+            requireInstancePlacement(serverId, isolation, ownerBucket);
+            return null;
+        } catch (Violations refused) {
+            List<Violation> all = refused.all();
+            return all.isEmpty()
+                ? violation("host_not_admitted").withArg("name", String.valueOf(serverId))
+                : all.get(0).message();
         }
     }
 

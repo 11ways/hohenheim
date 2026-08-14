@@ -295,9 +295,12 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         //    the capability gate itself refuses. The distinct keys are the evidence.
         Throwable own = catchThrowable(() ->
             TenantConduits.as(principalA, () -> new InstanceService().deploy(alphaId)));
+        // instance_placement_blocked, not host_not_admitted: the placement gate withholds
+        // the host's NAME from a tenant-originated call (HostAdmission's substitution).
+        // What this step proves is unchanged -- the refusal moved PAST the capability gate.
         assertThat(violationKeys(own))
             .as("step 4: the member passes the capability gate via the GROUP grant")
-            .contains("host_not_admitted")
+            .contains("instance_placement_blocked")
             .doesNotContain("instance_not_permitted");
         Throwable foreignAct = catchThrowable(() ->
             TenantConduits.as(principalA, () -> new InstanceService().deploy(gammaId)));

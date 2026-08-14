@@ -11,6 +11,7 @@
 {% declare hostName: String = "" %}
 {% declare hostTarget: RouteTarget = null %}
 {% declare installError: String = "" %}
+{% declare deployBlocker: InstanceBlockerView = null %}
 {% declare disk: InstanceDiskView %}
 {% declare endpoints: List<InstanceEndpointView> %}
 {% declare actions: InstanceActionsView %}
@@ -51,6 +52,18 @@
                 <pl-icon name="circle-exclamation"></pl-icon>
                 {{ t("install_error", scope: "instance_overview") }}: {{ installError }}
             </p>
+            {% /if %}
+            {#- The DECLARED precondition that will refuse the next deploy, stated where the
+                operator already is. Deploy stays offered on purpose: the button is what
+                proves the explanation is about a host, not about their own authority. -#}
+            {% if deployBlocker != null && deployBlocker.blocked %}
+            <pl-alert variant="warning" data-deploy-blocked="1">
+                <pl-alert-title>{{ t("deploy_blocked", scope: "instance_overview") }}</pl-alert-title>
+                {{ deployBlocker.reason }}
+                {% if deployBlocker.hostLinkable && hostTarget != null %}
+                <a use:Zenit.route={% hostTarget %}>{{ t("deploy_blocked_fix", scope: "instance_overview", host: hostName) }}</a>
+                {% /if %}
+            </pl-alert>
             {% /if %}
             <div class="hh-state-actions" data-instance-actions="1">
                 {% if actions.deploy != null %}{% render "zenitcms:action/invoke" var:action=actions.deploy %}{% /if %}
