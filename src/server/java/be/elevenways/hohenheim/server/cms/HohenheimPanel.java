@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
@@ -31,7 +32,11 @@ import java.util.List;
  */
 public final class HohenheimPanel extends Panel {
 
-    public static final Permission ACCESS = Permission.of("hohenheim.admin.access");
+    /**
+     * THE admin permission, aliased from the common constant so the two faces (common
+     * sources, server panel) can never spell it differently.
+     */
+    public static final Permission ACCESS = HohenheimSources.ADMIN_ACCESS;
 
     /** Proxy configuration group: sites, certificates, access control. */
     public static final NavGroup PROXY_GROUP =
