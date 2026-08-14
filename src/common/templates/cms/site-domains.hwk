@@ -10,6 +10,8 @@
 {% declare canRequestCert: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
+{% declare flashVariant: String = "default" %}
+{% declare flashDuration: Integer = 0 %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
 {% block "main" %}
@@ -22,6 +24,7 @@
         {% if canEditDomains %}<pl-button variant="primary" use:Zenit.route={% addDomainTarget %} id="add-domain-link">{{ t("add_domain", scope: "site_domains") }}</pl-button>{% /if %}
     </header>
 
+    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
     {% if domains %}

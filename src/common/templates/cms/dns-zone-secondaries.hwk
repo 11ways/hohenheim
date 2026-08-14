@@ -6,6 +6,8 @@
 {% declare attachPeerTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
+{% declare flashVariant: String = "default" %}
+{% declare flashDuration: Integer = 0 %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
 {% block "main" %}
@@ -15,6 +17,7 @@
         <pl-button variant="primary" use:Zenit.route={% attachPeerTarget %} id="attach-secondary-link">{{ t("attach", scope: "dns_secondaries") }}</pl-button>
     </header>
 
+    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
     {% if links %}

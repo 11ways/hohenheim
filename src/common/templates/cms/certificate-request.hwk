@@ -11,17 +11,17 @@
 {% declare startOverTarget: RouteTarget %}
 {% declare certificatesTarget: RouteTarget %}
 {% declare flashMessage: Microcopy = null %}
+{% declare flashVariant: String = "default" %}
+{% declare flashDuration: Integer = 0 %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
 {% block "main" %}
 <section class="cms-resource-form-page">
     <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
 
-    {#- App-owned PanelPage: it does not render zenitcms:record-tabs, so it
-       renders the pending flash toast itself. -#}
-    {% render "zenitcms:flash-toast" var:flashMessage=Cms.flashMessage()
-                                     var:flashVariant=Cms.flashVariant()
-                                     var:flashDuration=Cms.flashDuration() %}
+    {#- The toast rides the template vars the dispatch injects; the ambient
+       Cms.flash*() channel is retired (invisible in client renders). -#}
+    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
 
     {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
 

@@ -2,6 +2,8 @@
     lands unapproved; approval is a separate operator act on the catalog list. -#}
 {% declare title: String %}
 {% declare flashMessage: Microcopy = null %}
+{% declare flashVariant: String = "default" %}
+{% declare flashDuration: Integer = 0 %}
 {% declare catalogApps: List<String> = null %}
 {% declare catalogRevision: String = "" %}
 {% declare templatesTarget: RouteTarget %}
@@ -11,11 +13,9 @@
 <section class="cms-resource-form-page">
     <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
 
-    {#- App-owned PanelPage: it does not render zenitcms:record-tabs, so it
-       renders the pending flash toast itself. -#}
-    {% render "zenitcms:flash-toast" var:flashMessage=Cms.flashMessage()
-                                     var:flashVariant=Cms.flashVariant()
-                                     var:flashDuration=Cms.flashDuration() %}
+    {#- The toast rides the template vars the dispatch injects; the ambient
+       Cms.flash*() channel is retired (invisible in client renders). -#}
+    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
 
     <pl-alert variant="warning">{{ t("approval_note", scope: "template_import") }}</pl-alert>
 

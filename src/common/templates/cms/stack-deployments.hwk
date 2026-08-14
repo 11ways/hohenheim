@@ -6,6 +6,8 @@
 {% declare recordTabs: List<RecordTabState> %}
 {% declare timeWording: RelativeTimeWording %}
 {% declare flashMessage: Microcopy = null %}
+{% declare flashVariant: String = "default" %}
+{% declare flashDuration: Integer = 0 %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
 {% block "main" %}
@@ -14,6 +16,7 @@
         <h1>{{ stackName }}</h1>
     </header>
 
+    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
     {% if deployments %}
