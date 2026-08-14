@@ -7554,6 +7554,10 @@
       "scope": "instance_device"
     },
     {
+      "text": "{$name} - Install media",
+      "scope": "server_media"
+    },
+    {
       "text": "{$name} - Schedules",
       "scope": "instance_schedule"
     },

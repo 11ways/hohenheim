@@ -471,6 +471,31 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             Models.get(ServerModel.class).delete(dockerId);
         }
 
+        // 2b. An UN-ENROLLED https Incus host renders the tab with the trust refusal
+        //     as its named load error instead of 500ing: client CONSTRUCTION refusals
+        //     (no pinned certificate) ride the same lane as an unreachable daemon.
+        //     Found live on the first walkthrough of this page.
+        Row unenrolled = Models.get(ServerModel.class).createEmptyRow();
+        unenrolled.set(ServerModel.NAME, PREFIX + "unenrolled");
+        unenrolled.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
+        unenrolled.set(ServerModel.MODE, ServerModel.MODE_SSH);
+        unenrolled.set(ServerModel.SSH_TARGET, "root@unenrolled.test");
+        unenrolled.set(ServerModel.INCUS_URL, "https://unenrolled.test:8443");
+        Models.get(ServerModel.class).save(unenrolled);
+        Integer unenrolledId = unenrolled.get(ServerModel.ID);
+        try {
+            var trustRefused = adminGet("/admin/servers/" + unenrolledId
+                + "/page/install-media");
+            assertThat(trustRefused.statusCode())
+                .as("step 2b: an un-enrolled host's media tab renders (200), never 500s")
+                .isEqualTo(200);
+            assertThat(trustRefused.body())
+                .as("step 2b: and states the trust refusal by name")
+                .contains("no pinned Incus server certificate");
+        } finally {
+            Models.get(ServerModel.class).delete(unenrolledId);
+        }
+
         // 3. The fetch endpoint refuses a NON-admin outright (the endpoint declares
         //    the admin permission), so media provenance stays an operator act.
         TestSession tenant = sessionFor(tenantId);
