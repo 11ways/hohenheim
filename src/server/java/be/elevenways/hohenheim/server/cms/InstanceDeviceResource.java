@@ -117,16 +117,7 @@ public class InstanceDeviceResource extends RowResource {
      * it, and narrowing the read to match would delete that deliberate reading.
      */
     @Override
-    public boolean updatableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return super.updatableBy(record, accessContext) && holdsConfig(record, accessContext);
-    }
-
-    @Override
-    public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return super.deletableBy(record, accessContext) && holdsConfig(record, accessContext);
-    }
-
-    private static boolean holdsConfig(@NonNull Row record, @NonNull AccessContext accessContext) {
+    public boolean writableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
         return HohenheimAccess.hasInstanceCapability(accessContext, instanceIdOf(record),
             HohenheimAccess.CONFIG);
     }
