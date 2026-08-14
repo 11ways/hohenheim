@@ -1,0 +1,38 @@
+{# The readiness checklist: the ordered steps between a fresh install and a running
+   workload. Each step's state is DERIVED from the same gate the deploy lane asks, and a
+   blocked step carries that gate's own refusal, so this can never disagree with what
+   pressing Deploy would do. The dashboard omits the whole band once every step is done. #}
+{% declare widget: WidgetInstance %}
+{% declare data: List<OnboardingStep> %}
+
+<div class="widget widget-onboarding hh-onboarding" data-onboarding-steps={% "" + (data != null ? data.size() : 0) %}>
+    <h3 class="widget-heading">{{ t("checklist_title", scope: "onboarding_checklist") }}</h3>
+    <p class="hh-onboarding-lead">{{ t("checklist_description", scope: "onboarding_checklist") }}</p>
+    {% if data %}
+    <ol class="hh-onboarding-list">
+        {% each data as step %}
+        <li class="hh-onboarding-step" data-state={% step.state %}>
+            <span class="hh-onboarding-marker">
+                {% if step.state == "done" %}
+                <pl-icon name="circle-check" size="sm"></pl-icon>
+                {% else %}
+                <pl-icon name={% step.icon %} size="sm"></pl-icon>
+                {% /if %}
+            </span>
+            <span class="hh-onboarding-body">
+                <span class="hh-onboarding-title">{{ step.title }}</span>
+                {% if step.detail != null %}
+                <span class="hh-onboarding-detail">{{ step.detail }}</span>
+                {% /if %}
+            </span>
+            {% if step.target != null && step.state != "done" %}
+            <a class="hh-onboarding-action" use:Zenit.route={% step.target %}>
+                {{ t("checklist_open", scope: "onboarding_checklist") }}
+                <pl-icon name="chevron-right" size="sm"></pl-icon>
+            </a>
+            {% /if %}
+        </li>
+        {% /each %}
+    </ol>
+    {% /if %}
+</div>

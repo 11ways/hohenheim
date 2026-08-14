@@ -4867,6 +4867,10 @@
     "text": "Host {$name} is niet toegelaten voor plaatsing; voer eerst preflight uit en laat hem toe",
     "scope": "violations"
   },
+  "instance_placement_blocked": {
+    "text": "Deze instantie kan nu niet gestart worden. De host neemt geen nieuwe workloads aan; je beheerder moet dit oplossen.",
+    "scope": "violations"
+  },
   "host_posture_refuses": {
     "text": "Host {$name} heeft een trusted-only houding en weigert tenant-instanties",
     "scope": "violations"
@@ -8084,6 +8088,62 @@
   },
   "install_error": {
     "text": "Installatiefout",
+    "scope": "instance_overview"
+  },
+  "checklist_title": {
+    "text": "Krijg je eerste workload draaiend",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_description": {
+    "text": "Elke stap controleert zichzelf. Dit verdwijnt zodra alles draait.",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_open": {
+    "text": "Openen",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_host": {
+    "text": "Voeg een host toe",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_host_detail": {
+    "text": "Een host is de machine waarop je workloads draaien.",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_admit": {
+    "text": "Laat de host workloads aannemen",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_admit_detail": {
+    "text": "Voer de preflight uit en laat hem toe.",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_create_instance": {
+    "text": "Maak een instantie",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_create_instance_detail": {
+    "text": "Kies een soort en een sjabloon; het formulier leidt je verder.",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_deploy": {
+    "text": "Deploy hem",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_deploy_detail": {
+    "text": "Deploy start de workload op zijn host.",
+    "scope": "onboarding_checklist"
+  },
+  "deploy_blocked": {
+    "text": "Deze instantie kan nog niet starten",
+    "scope": "instance_overview"
+  },
+  "deploy_blocked_fix": {
+    "text": "Los dit op bij host {$host}",
+    "scope": "instance_overview"
+  },
+  "deploy_blocked_delegated": {
+    "text": "De host neemt op dit moment geen nieuwe workloads aan. Je beheerder moet dit oplossen.",
     "scope": "instance_overview"
   },
   "used": {

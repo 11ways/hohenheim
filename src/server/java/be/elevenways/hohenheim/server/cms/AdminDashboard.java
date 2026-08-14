@@ -1,26 +1,28 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionWidget;
+import be.elevenways.hohenheim.OnboardingChecklistWidget;
+import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.OnboardingWidget;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
+import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.protoblast.common.i18n.Locale;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.DashboardPanelPeer;
-import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.widget.common.WidgetInstance;
-import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.common.orm.query.rules.Rule;
 import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
 import be.elevenways.zenit.common.orm.query.rules.RuleOperator;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.setting.ContentLocales;
+import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.widget.common.WidgetInstance;
+import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.ChartWidget;
 import be.elevenways.zenit.widget.common.builtin.ColumnsWidget;
 import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
@@ -28,10 +30,10 @@ import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.StatWidget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.util.List;
-import java.util.Map;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The /admin landing dashboard: entity-count stat tiles plus the most
@@ -71,6 +73,17 @@ public final class AdminDashboard extends DashboardPanelPeer {
                 "link", CmsRoutes.list(ADMIN, "bans").toUrl()))));
 
         List<WidgetInstance> widgets = new ArrayList<>();
+
+        // The readiness checklist leads, and RETIRES ITSELF: no dismissed flag, it is simply
+        // absent once every step is done. Before this the only onboarding was the site CTA,
+        // and nothing anywhere said a host must be preflighted and admitted before any
+        // instance can deploy -- so the first session's natural arc (create -> deploy ->
+        // silence) had no visible way forward.
+        List<OnboardingStep> onboarding = OnboardingCollector.collect();
+        if (OnboardingCollector.hasWork(onboarding)) {
+            widgets.add(section(new WidgetInstance(OnboardingChecklistWidget.ID, Map.of())
+                .withData(onboarding)));
+        }
         if (proxy && Models.get(SiteModel.class).findActive().isEmpty()) {
             widgets.add(section(new WidgetInstance(OnboardingWidget.ID, Map.of())));
         }
@@ -81,13 +94,11 @@ public final class AdminDashboard extends DashboardPanelPeer {
         }
         if (firewall) {
             widgets.add(section(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 2), securityStats)));
-            widgets.add(section(new WidgetInstance(ChartWidget.ID, Map.of(
-                "title", localized("bans_created_30d", "dashboard"),
-                "source", "hohenheim.ban",
-                "date_field", "created_at",
-                "days", 30,
-                "type", "area",
-                "label", localized("plural", "ban")))));
+            // AIDEV-NOTE: the 30-day bans chart used to live here and is deliberately gone.
+            // On any fleet that is not under attack it is an all-zero series, i.e. ~450px of
+            // flat line above the content an operator opened the page for. The count itself
+            // stays, as the tile right above. If the trend is wanted, it belongs on the
+            // firewall operator's own overview page, which they open on purpose.
         }
         widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
                 "title", localized("recent_activity", "dashboard"),
