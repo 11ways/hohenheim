@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -91,6 +92,36 @@ public class InstanceDatabaseResource extends RowResource {
     public @Nullable ResourceParent<Row> parent() {
         return ResourceParent.<Row>of("instances",
             row -> row.get(InstanceDatabaseModel.INSTANCE_ID)).tab("databases");
+    }
+
+    /**
+     * Edit and delete both ride {@code TenantWrites.requireInstanceLinkAuthority}'s
+     * two-sided rule (instance {@code config} plus database {@code manage}), so the
+     * synthesized affordances are offered on exactly that answer -- the
+     * {@link InstanceDeviceResource} shape: the delegated peer's read scope is the
+     * wider {@code view}, and without this a view-only delegate was shown Edit/Delete
+     * buttons the write pipeline could only refuse. The boolean twin, never a second
+     * authority: the pipeline hook stays the gate.
+     */
+    @Override
+    public boolean updatableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return super.updatableBy(record, accessContext) && holdsLinkAuthority(record, accessContext);
+    }
+
+    @Override
+    public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return super.deletableBy(record, accessContext) && holdsLinkAuthority(record, accessContext);
+    }
+
+    private static boolean holdsLinkAuthority(@NonNull Row record,
+                                              @NonNull AccessContext accessContext) {
+        Integer instanceId = record.get(InstanceDatabaseModel.INSTANCE_ID);
+        Integer databaseId = record.get(InstanceDatabaseModel.DATABASE_ID);
+        return instanceId != null && databaseId != null
+            && HohenheimAccess.hasInstanceCapability(accessContext, instanceId,
+                HohenheimAccess.CONFIG)
+            && HohenheimAccess.hasDatabaseCapability(accessContext, databaseId,
+                HohenheimAccess.MANAGE);
     }
 
     /** The instance's Databases tab links here with ?instance_id= so the pick is preselected. */
