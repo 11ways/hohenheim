@@ -90,15 +90,8 @@ public class DnsRecordResource extends RowResource {
      * delegate was shown buttons the write pipeline could only refuse.
      */
     @Override
-    public boolean updatableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return super.updatableBy(record, accessContext)
-            && TenantWrites.mayAuthorRecord(accessContext, record);
-    }
-
-    @Override
-    public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return super.deletableBy(record, accessContext)
-            && TenantWrites.mayAuthorRecord(accessContext, record);
+    public boolean writableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return TenantWrites.mayAuthorRecord(accessContext, record);
     }
 
     /** The zone's Records tab links here with ?zone_id= so the pick is preselected. */

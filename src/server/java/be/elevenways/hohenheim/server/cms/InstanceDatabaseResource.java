@@ -104,17 +104,7 @@ public class InstanceDatabaseResource extends RowResource {
      * authority: the pipeline hook stays the gate.
      */
     @Override
-    public boolean updatableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return super.updatableBy(record, accessContext) && holdsLinkAuthority(record, accessContext);
-    }
-
-    @Override
-    public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return super.deletableBy(record, accessContext) && holdsLinkAuthority(record, accessContext);
-    }
-
-    private static boolean holdsLinkAuthority(@NonNull Row record,
-                                              @NonNull AccessContext accessContext) {
+    public boolean writableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
         Integer instanceId = record.get(InstanceDatabaseModel.INSTANCE_ID);
         Integer databaseId = record.get(InstanceDatabaseModel.DATABASE_ID);
         return instanceId != null && databaseId != null
