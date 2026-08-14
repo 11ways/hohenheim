@@ -202,6 +202,10 @@ public final class TemplatePortability {
                 violationText("instance_kind_unknown").withArg("kind", kind));
         }
 
+        // Registered is not the same question as authorable: an imported document must not
+        // land a kind the create form deliberately no longer offers.
+        InstanceKinds.requireAuthorable(kind);
+
         List<Map<String, Object>> variables = entryList(body.get("variables"));
         for (Map<String, Object> variable : variables) {
             String key = str(variable.get("key"));
