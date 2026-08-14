@@ -52,7 +52,10 @@ public class GitProviderModel extends Model {
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
         .value(KIND_GITHUB, v -> v.displayName("GitHub").icon("github").color("info"))
         .value(KIND_GITLAB, v -> v.displayName("GitLab").icon("gitlab").color("warning"))
-        .value(KIND_GITEA, v -> v.displayName("Gitea").icon("gitea").color("success"))
+        // AIDEV-NOTE: the generic Git mark, not a Gitea mark -- FontAwesome ships none, and the
+        // name "gitea" resolved to the missing-icon placeholder here for as long as this row
+        // existed. The displayName beside it already says which forge this is.
+        .value(KIND_GITEA, v -> v.displayName("Gitea").icon("git-alt").color("success"))
         .defaultValue(KIND_GITHUB)
         .label(HohenheimFormCopy.label("provider_kind"))
         .help(HohenheimFormCopy.help("provider_kind"))

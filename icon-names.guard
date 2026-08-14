@@ -1,0 +1,10 @@
+Presence of this file opts the project into the protoblast plugin's checkIconNames and
+checkIconNameTemplates compile gates (every literal icon name must be one plumage's
+IconRegistry bundles -- an unbundled name renders the missing-icon placeholder and nothing
+else ever objects; see CheckIconNamesTask).
+
+Opted in 2026-08-14, after a UX walkthrough found 57 distinct unbundled names in this repo
+rendering as empty squares across the sidebar, the dashboard tiles and the record tabs. The
+guard is the reason that cannot recur silently; it is NOT retroactive proof, so a name it
+cannot see (a token-position literal, a name built through a constant, a dynamic argument)
+still has to be checked by eye.
