@@ -202,7 +202,7 @@ public final class GeneratedRows {
         }
         return model.executeFindQuery(new QueryContext(
             queryContext.getCriteria(), List.of(), null, null, List.of(), null,
-            queryContext.getRelatedFilters(), queryContext.getLocaleChain(),
+            queryContext.getLocaleChain(),
             queryContext.isAcrossLocales(), true, true, queryContext.getHints()));
     }
 
