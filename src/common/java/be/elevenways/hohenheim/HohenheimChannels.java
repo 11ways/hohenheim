@@ -12,10 +12,11 @@ public final class HohenheimChannels {
 
     /**
      * Live per-instance resource samples (docker stats). openData is the instance id; the
-     * server handler decides admission from the per-record {@code manage} capability, which
-     * is why the channel itself only declares {@code loginRequired} -- a record capability
-     * is not a permission and a flat one here would either lock tenants out or hand them
-     * every instance.
+     * server handler decides admission from the per-record {@code view} capability (live
+     * stats are observation, the same verb the page carrying the chart is scoped by),
+     * which is why the channel itself only declares {@code loginRequired} -- a record
+     * capability is not a permission and a flat one here would either lock tenants out or
+     * hand them every instance.
      */
     public static final Channel<Object, Object> INSTANCE_STATS = Channel.builder()
         .identifier(Identifier.of("hohenheim", "instance_stats"))

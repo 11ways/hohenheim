@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.cli.OfflineBoot;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
@@ -331,11 +332,20 @@ public class ServerMain {
         AuthRegistry.baseline("/", AuthRequirement.requiresLogin());
         // declareGrantableModels() already ran, before the migrations -- see main().
         KnownPermissions.register("hohenheim",
+            // NON-DELEGABLE for the same reason SITES_MANAGE_ALL below is, and a fortiori:
+            // admin.access is strictly GREATER authority, and GrantAdministration bypasses
+            // containment only for the WILDCARD, so without this line a non-wildcard
+            // admin.access holder with auth.grants.manage could mint peer admins -- the
+            // exact spread the sibling declaration exists to prevent. Lateral rather than
+            // an escalation, but the rationale must hold for both or for neither.
+            // (zenit-auth's own auth.admin.access is not declared non-delegable either;
+            // that is an ecosystem decision raised upstream, not something to patch here.)
             KnownPermission.of(
                 HohenheimPanel.ACCESS.value(),
-                Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission")),
+                Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission"))
+                .nonDelegable(),
             KnownPermission.of(
-                "hohenheim.manage.access",
+                ManagePanel.ACCESS.value(),
                 Microcopy.of("hohenheim_manage_access").withFilter("scope", "permission")),
             // Every-site authority WITHOUT the admin permission (the walk's type-level row on
             // SiteModel). NON-DELEGABLE on the auth.grants.manage precedent: a holder of

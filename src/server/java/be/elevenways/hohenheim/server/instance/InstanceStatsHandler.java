@@ -31,7 +31,7 @@ import java.util.function.Consumer;
  */
 public final class InstanceStatsHandler implements ChannelHandler<Object, Object> {
 
-    /** How often a live link's manage capability is re-decided. */
+    /** How often a live link's view capability is re-decided. */
     private static final long REVALIDATION_INTERVAL_MS = 15_000;
 
     private final @NonNull ServerChannelLink<Object, Object> link;
