@@ -55,6 +55,7 @@ public class InstanceDeviceResource extends RowResource {
         .add(InstanceDeviceModel.TYPE)
         .add(InstanceDeviceModel.NAME)
         .add(InstanceDeviceModel.SIZE_GB)
+        .add(InstanceDeviceModel.SOURCE_MEDIA)
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -62,6 +63,7 @@ public class InstanceDeviceResource extends RowResource {
         .column(ColumnSpec.fromField(InstanceDeviceModel.INSTANCE_ID).build())
         .column(ColumnSpec.fromField(InstanceDeviceModel.TYPE).filterable().build())
         .column(ColumnSpec.fromField(InstanceDeviceModel.SIZE_GB).build())
+        .column(ColumnSpec.fromField(InstanceDeviceModel.SOURCE_MEDIA).build())
         .column(ColumnSpec.fromField(InstanceDeviceModel.CREATED_AT).build())
         .build();
 
@@ -148,7 +150,8 @@ public class InstanceDeviceResource extends RowResource {
         }
         String type = conduit.getQueryParam("type");
         if (InstanceDeviceModel.TYPE_DISK.equals(type)
-                || InstanceDeviceModel.TYPE_NIC.equals(type)) {
+                || InstanceDeviceModel.TYPE_NIC.equals(type)
+                || InstanceDeviceModel.TYPE_CDROM.equals(type)) {
             values.put("type", type);
         }
         return Map.copyOf(values);
@@ -165,6 +168,9 @@ public class InstanceDeviceResource extends RowResource {
             this.devices.attachDisk(instanceId, name, sizeOf(coerced));
         } else if (InstanceDeviceModel.TYPE_NIC.equals(type)) {
             this.devices.attachNic(instanceId, name);
+        } else if (InstanceDeviceModel.TYPE_CDROM.equals(type)) {
+            this.devices.attachCdrom(instanceId, name,
+                String.valueOf(coerced.getOrDefault("source_media", "")).trim());
         } else {
             throw Violations.ofField("type", type,
                 CmsSupport.violationText("device_type_unknown"));
@@ -204,6 +210,16 @@ public class InstanceDeviceResource extends RowResource {
                 || instanceId != requireInstance(coerced.get("instance_id"))) {
             throw Violations.ofField("type", coerced.get("type"),
                 CmsSupport.violationText("device_retype_unsupported"));
+        }
+        String storedMedia = existing.get(InstanceDeviceModel.SOURCE_MEDIA);
+        Object submittedMedia = coerced.get("source_media");
+        if (submittedMedia != null && !String.valueOf(submittedMedia).trim().isEmpty()
+                && !String.valueOf(submittedMedia).trim().equals(
+                    storedMedia == null ? "" : storedMedia)) {
+            // Swapping media is detach-and-attach at the daemon; an in-place edit would
+            // report success while the old ISO stayed in the drive until the next deploy.
+            throw Violations.ofField("source_media", submittedMedia,
+                CmsSupport.violationText("device_media_change_unsupported"));
         }
         if (!InstanceDeviceModel.TYPE_DISK.equals(type)) {
             throw Violations.ofForm(CmsSupport.violationText("device_resize_not_a_disk"));

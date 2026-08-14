@@ -24,7 +24,16 @@ public enum ImageOrigin {
      * general "prepared template" category (Windows via a Microsoft-signed prepared
      * image is one instance of this, not a special case in the driver).
      */
-    PREPARED("prepared");
+    PREPARED("prepared"),
+
+    /**
+     * No image at all: the workload is created EMPTY ({@code source.type=none}) and an
+     * operator installs its OS interactively from attached install media (a cdrom
+     * device over a daemon-side ISO volume, see {@code InstanceDevices.attachCdrom}).
+     * VM-only by contract -- a system container shares the host kernel and has no
+     * firmware to boot media with; the driver refuses the combination by name.
+     */
+    INSTALL_MEDIA("install_media");
 
     private final @NonNull String key;
 

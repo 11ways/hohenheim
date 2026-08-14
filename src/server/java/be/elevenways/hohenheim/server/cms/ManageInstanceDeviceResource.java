@@ -3,7 +3,14 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.OptionSource;
+import be.elevenways.zenit.common.edit.Select;
+
+import java.util.List;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
@@ -51,9 +58,32 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public final class ManageInstanceDeviceResource extends InstanceDeviceResource {
 
+    /**
+     * The tenant form offers DISK and NIC only: install media (cdrom) is operator-only
+     * ({@code InstanceDevices.attachCdrom} refuses a tenant with the uniform refusal),
+     * and offering the option here would be an affordance that can only refuse. Coercion
+     * runs against THIS spec, so a hand-posted {@code type=cdrom} is refused by the
+     * select itself -- hide AND enforce, one declaration.
+     */
+    private final FormSpec tenantFormSpec = FormSpec.builder()
+        .add(InstanceDeviceModel.INSTANCE_ID)
+        .add(Select.of(InstanceDeviceModel.TYPE).options(OptionSource.of(List.of(
+            FieldOption.of(InstanceDeviceModel.TYPE_DISK,
+                Microcopy.of("disk").withFilter("scope", "instance_device")),
+            FieldOption.of(InstanceDeviceModel.TYPE_NIC,
+                Microcopy.of("nic").withFilter("scope", "instance_device"))))).build())
+        .add(InstanceDeviceModel.NAME)
+        .add(InstanceDeviceModel.SIZE_GB)
+        .build();
+
     @Override
     public @NonNull Identifier id() {
         return Identifier.of("hohenheim", "manage_instance_device");
+    }
+
+    @Override
+    public @NonNull FormSpec formSpec() {
+        return this.tenantFormSpec;
     }
 
     @Override

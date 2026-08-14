@@ -6,6 +6,7 @@
 {% declare devices: List %}
 {% declare addDiskTarget: RouteTarget = null %}
 {% declare addNicTarget: RouteTarget = null %}
+{% declare addMediaTarget: RouteTarget = null %}
 {% declare canEdit: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
@@ -18,6 +19,9 @@
         {% if canEdit %}
         <pl-button variant="primary" use:Zenit.route={% addDiskTarget %} id="add-disk-link">{{ t("add_disk", scope: "instance_device") }}</pl-button>
         <pl-button use:Zenit.route={% addNicTarget %} id="add-nic-link">{{ t("add_nic", scope: "instance_device") }}</pl-button>
+        {% /if %}
+        {% if addMediaTarget %}
+        <pl-button use:Zenit.route={% addMediaTarget %} id="add-media-link">{{ t("add_media", scope: "instance_device") }}</pl-button>
         {% /if %}
     </header>
 
@@ -37,11 +41,13 @@
                 <pl-table-cell>
                     {% if device.get("disk") == true %}
                     <pl-badge variant={% "default" %}>{{ t("disk", scope: "instance_device") }}</pl-badge>
+                    {% else %}{% if device.get("cdrom") == true %}
+                    <pl-badge variant={% "default" %}>{{ t("cdrom", scope: "instance_device") }}</pl-badge>
                     {% else %}
                     <pl-badge variant={% "secondary" %}>{{ t("nic", scope: "instance_device") }}</pl-badge>
-                    {% /if %}
+                    {% /if %}{% /if %}
                 </pl-table-cell>
-                <pl-table-cell>{% if device.get("disk") == true %}{{ device.get("sizeGb") }}{% else %}-{% /if %}</pl-table-cell>
+                <pl-table-cell>{% if device.get("disk") == true %}{{ device.get("sizeGb") }}{% else %}{% if device.get("cdrom") == true %}{{ device.get("sourceMedia") }}{% else %}-{% /if %}{% /if %}</pl-table-cell>
             </pl-table-row>
             {% /each %}
         </pl-table-body>

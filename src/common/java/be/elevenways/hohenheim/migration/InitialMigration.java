@@ -1237,6 +1237,8 @@ public class InitialMigration extends HohenheimMigration {
                 column -> column.nullable(true).maxLength(63));
             table.addColumn("size_gb", ColumnType.INTEGER,
                 column -> column.nullable(true));
+            table.addColumn("source_media", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(191));
             table.addColumn("quota_bucket", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(191));
             table.timestamps();

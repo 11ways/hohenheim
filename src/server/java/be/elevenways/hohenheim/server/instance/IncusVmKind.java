@@ -117,6 +117,9 @@ public final class IncusVmKind implements InstanceKindHandler {
             .value(ImageOrigin.PREPARED.key(), v -> v.displayName("Prepared template")
                 .icon("hard-drive")
                 .label(Microcopy.of("prepared").withFilter("scope", "image_origin")))
+            .value(ImageOrigin.INSTALL_MEDIA.key(), v -> v.displayName("Install media (empty VM)")
+                .icon("compact-disc")
+                .label(Microcopy.of("install_media").withFilter("scope", "image_origin")))
             .defaultValue(ImageOrigin.CATALOG.key())
             .label(HohenheimFormCopy.label("image_origin"))
             .help(HohenheimFormCopy.help("image_origin")).build());
@@ -171,6 +174,14 @@ public final class IncusVmKind implements InstanceKindHandler {
     /** IncusInstanceRuntime implements DeviceAttachSupport; the Docker driver does not. */
     @Override
     public boolean supportsDevices() { return true; }
+
+    /** The one kind with firmware to boot an ISO: the driver's ensureCdrom is VM-only. */
+    @Override
+    public boolean supportsInstallMedia() { return true; }
+
+    /** IncusInstanceRuntime implements ImagePublishSupport (incus publish). */
+    @Override
+    public boolean supportsTemplateCapture() { return true; }
 
     /**
      * The one kind that answers anything but {@code SHARED_KERNEL}: a hypervisor boundary
@@ -232,6 +243,16 @@ public final class IncusVmKind implements InstanceKindHandler {
     public void requirePlaceableOn(@NonNull String serverName,
                                    @NonNull Map<String, Object> settings) {
         requirePreparedImageOn(serverName, settings, IncusWorkloadType.VIRTUAL_MACHINE);
+    }
+
+    /**
+     * An {@code install_media} VM is created EMPTY and installed interactively from an
+     * attached ISO -- the one origin whose settings legitimately carry no image at all.
+     */
+    @Override
+    public boolean allowsBlankImage(@NonNull Map<String, Object> settings) {
+        return ImageOrigin.fromKey(settings.get("image_origin") instanceof String key
+            ? key : null) == ImageOrigin.INSTALL_MEDIA;
     }
 
     /**

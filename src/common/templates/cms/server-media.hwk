@@ -1,0 +1,78 @@
+{#- Install media tab on an Incus host: the ISO volumes of its managed pool, a
+    fetch-from-URL form and per-medium delete forms. -#}
+{% declare title: String %}
+{% declare serverName: String %}
+{% declare media: List %}
+{% declare loadError: String = null %}
+{% declare fetchTarget: RouteTarget %}
+{% declare deleteTarget: RouteTarget %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-form-page">
+    <header class="cms-resource-list-header">
+        <h1>{{ title }}</h1>
+    </header>
+
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if loadError %}
+    <pl-alert variant="destructive">{{ t("load_error", scope: "server_media", reason: loadError) }}</pl-alert>
+    {% /if %}
+
+    {% if media %}
+    <pl-table id="media-table">
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("name", scope: "field") }}</pl-table-head>
+            <pl-table-head>{{ t("description", scope: "field") }}</pl-table-head>
+            <pl-table-head></pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each media as index, medium %}
+            <pl-table-row>
+                <pl-table-cell>{{ medium.get("name") }}</pl-table-cell>
+                <pl-table-cell>{{ medium.get("description") }}</pl-table-cell>
+                <pl-table-cell>
+                    <form use:Zenit.form={% deleteTarget %} use:CmsConfirm.destructive={% t("delete_confirm", scope: "server_media") %}>
+                        <input type="hidden" name="name" value={% medium.get("name") %}>
+                        <pl-button variant={% "destructive" %} type={% "submit" %} size="sm">{{ t("delete", scope: "server_media") }}</pl-button>
+                    </form>
+                </pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    {% if loadError == null %}
+    <pl-empty-state icon="compact-disc">
+        <pl-empty-state-title>{{ t("empty", scope: "server_media") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("empty_description", scope: "server_media") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+    {% /if %}
+
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("fetch_title", scope: "server_media") }}</pl-card-title>
+            <pl-card-description>{{ t("fetch_description", scope: "server_media") }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <form use:Zenit.form={% fetchTarget %} id="media-fetch-form">
+                <pl-field>
+                    <pl-label target="media-name">{{ t("name", scope: "field") }}</pl-label>
+                    <pl-input inputId="media-name" name="name" required></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="media-url">{{ t("url", scope: "server_media") }}</pl-label>
+                    <pl-input inputId="media-url" name="url" type="url" required></pl-input>
+                </pl-field>
+                <div class="cms-form-actions">
+                    <pl-button variant={% "primary" %} type={% "submit" %}>{{ t("fetch", scope: "server_media") }}</pl-button>
+                </div>
+            </form>
+        </pl-card-content>
+    </pl-card>
+</section>
+{% /block %}

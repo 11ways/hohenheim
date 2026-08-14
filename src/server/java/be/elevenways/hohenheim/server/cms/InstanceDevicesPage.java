@@ -73,6 +73,9 @@ public final class InstanceDevicesPage implements RecordScopedPage<Row> {
             entry.put("disk", InstanceDeviceModel.TYPE_DISK.equals(
                 device.get(InstanceDeviceModel.TYPE)));
             entry.put("sizeGb", device.get(InstanceDeviceModel.SIZE_GB));
+            entry.put("cdrom", InstanceDeviceModel.TYPE_CDROM.equals(
+                device.get(InstanceDeviceModel.TYPE)));
+            entry.put("sourceMedia", device.get(InstanceDeviceModel.SOURCE_MEDIA));
             entry.put("editTarget", CmsRoutes.detail(panel, "instance-devices",
                 device.get(InstanceDeviceModel.ID)));
             devices.add(entry);
@@ -98,6 +101,14 @@ public final class InstanceDevicesPage implements RecordScopedPage<Row> {
             ? newDeviceTarget(panel, InstanceDeviceModel.TYPE_DISK, instanceId) : null);
         vars.put("addNicTarget", canEdit
             ? newDeviceTarget(panel, InstanceDeviceModel.TYPE_NIC, instanceId) : null);
+        // Install media is OPERATOR-ONLY (InstanceDevices.attachCdrom refuses a tenant
+        // with the uniform refusal) and VM-only -- both gates repeated here so the
+        // affordance is offered exactly where the funnel would accept it.
+        InstanceKindHandler handler = InstanceKinds.getHandler(instance.get(InstanceModel.KIND));
+        boolean canAttachMedia = handler != null && handler.supportsInstallMedia()
+            && HohenheimAccess.isAdmin(accessContext);
+        vars.put("addMediaTarget", canAttachMedia
+            ? newDeviceTarget(panel, InstanceDeviceModel.TYPE_CDROM, instanceId) : null);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-devices"), vars);
     }

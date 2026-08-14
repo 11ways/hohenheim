@@ -160,6 +160,7 @@ public final class ServerResource extends RowResource {
     public @NonNull List<RecordScopedPage<Row>> subpages() {
         List<RecordScopedPage<Row>> pages = new ArrayList<>();
         pages.add(new ServerOverviewPage(this));
+        pages.add(new ServerMediaPage());
         pages.addAll(this.frameworkSubpages());
         return pages;
     }

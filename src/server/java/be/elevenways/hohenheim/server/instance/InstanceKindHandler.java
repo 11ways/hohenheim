@@ -110,6 +110,40 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
+     * Whether this kind's workloads can boot attached install media (an ISO as a
+     * CD-ROM device) -- the declared twin of the driver's own VM-only refusal in
+     * {@code ensureCdrom}, for surfaces that must know before a daemon exists to ask
+     * (the {@link #supportsDevices()} stance, same reasons, same default).
+     */
+    default boolean supportsInstallMedia() {
+        return false;
+    }
+
+    /**
+     * Whether a STOPPED workload of this kind can be published as a prepared image
+     * (template capture) -- the declared twin of the runtime's
+     * {@code ImagePublishSupport}, for the row action that must know before a daemon
+     * exists to ask (the {@link #supportsDevices()} stance, same default).
+     */
+    default boolean supportsTemplateCapture() {
+        return false;
+    }
+
+    /**
+     * Whether these settings declare a workload that needs NO image reference at all
+     * (the {@code install_media} origin: an empty VM an operator installs from an
+     * attached ISO). The resolve path's blank-image refusal steps aside exactly here
+     * and nowhere else.
+     *
+     * AIDEV-NOTE: default FALSE for the same reason as {@link #supportsDevices()} -- a
+     * kind that forgets to declare keeps the refusal, it never silently accepts an
+     * imageless record.
+     */
+    default boolean allowsBlankImage(@NonNull Map<String, Object> settings) {
+        return false;
+    }
+
+    /**
      * The memory (MB) a record of these settings is ADMITTED AS when they declare no
      * {@code memory_limit_mb} -- the host-capacity denominator, and the cgroup/VM cap the
      * driver then actually applies.

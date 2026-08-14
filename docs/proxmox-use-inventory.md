@@ -1053,8 +1053,10 @@ revisit first.
 
 Verified by grep: no `gpu`, no `unix-char`, no `unix-block`, no device
 passthrough of any kind (the `passthrough` hits in `src/` are all TLS SNI
-passthrough in the proxy). The device vocabulary is closed at two values, disk
-and nic (`InstanceDeviceModel.TYPE_DISK` / `TYPE_NIC`).
+passthrough in the proxy). The device vocabulary held two values, disk and nic
+(`InstanceDeviceModel.TYPE_DISK` / `TYPE_NIC`); on 2026-08-14 it gained a third
+(`TYPE_CDROM`, item 16), proving the growth path this paragraph's last sentence
+predicted -- passthrough would be the fourth, same shape.
 
 Rejected because we do not currently run a workload that needs it, and because
 passthrough is the one device class that is NOT safe to hand a hostile tenant:
@@ -1065,18 +1067,68 @@ device type -- the extension point exists.
 
 ## 16. ISO install
 
-**REJECTED, consistent with the phase body ("no in-panel OS install initially").**
+**IMPLEMENTED 2026-08-14, operator-only, VMs only. The 2026-08-12 verdict below is
+kept as the record of the rejection and of why it was reversed.**
 
+The owner falsified the rejection's premise ("we don't run interactive installs"):
+mounting an ISO as a CD and installing interactively is a required Proxmox
+replacement path for VMs. Containers keep the image/template inventory unchanged.
+What landed:
+
+- **Media storage, per host** (`server/instance/InstallMedia.java` + the server
+  record's Install media tab, `ServerMediaPage` / `ServerMediaHandlers`): ISOs are
+  fetched from an operator-supplied URL, streamed into the host's own managed pool
+  as ISO volumes (`IncusClient.importIsoVolume`, the `incus storage volume import
+  --type=iso` lane), listed live from daemon truth and deletable -- refused by name
+  while any cdrom row still references one. Per-host exactly like prepared images.
+- **A third device type** (`InstanceDeviceModel.TYPE_CDROM` + `source_media`):
+  attaches an ISO volume as a CD-ROM through the same `InstanceDevices` funnel and
+  `DeviceAttachSupport.ensureCdrom`. Charges NO quota (shared operator media);
+  detach never deletes the volume. OPERATOR-ONLY
+  (`HohenheimAccess.requireOperatorOperation`, the tier's uniform refusal), and the
+  tenant /manage device form neither offers nor accepts the type.
+- **Empty-VM creation** (`ImageOrigin.INSTALL_MEDIA`): a VM whose settings declare
+  the origin creates from `source.type=none` with no image anywhere; the blank-image
+  refusal steps aside exactly there (`InstanceKindHandler.allowsBlankImage`).
+  Container flavours refuse by name.
+- **Boot order is ENCODED, not a knob**: the driver stamps the media at
+  `boot.priority=5` and raises the root disk to `10`, the
+  prepare-windows-template step-5 finding (a CD booted first re-enters the
+  installer after the first-phase reboot).
+- The interactive console this depends on already existed (the VGA framebuffer,
+  item 9's rescue lane).
+
+Tests: `InstallMediaSurfaceTest` (7 journeys: empty-VM source map, container
+refusal, resolve's blank-image gate, cdrom boot-order at the daemon, operator-only
+attach with zero quota charge, tenant form hide-AND-refuse, media tab gating +
+in-use delete refusal). Tenant policy (`InstanceImagePolicy`) is untouched: an
+install_media origin is only ever tenant-authorized through an approved template
+declaring it, which no operator is expected to approve.
+
+The return direction also landed: **instance -> template capture**
+(`InstanceTemplateCapture`, the `capture_template` row action) publishes a STOPPED
+instance's state as a prepared image (`ImagePublishSupport` /
+`IncusClient.publishImage`) and mints an UNAPPROVED template whose settings clone
+the instance's with `image=<alias>`, `image_origin=prepared`. The template is
+host-pinned in effect (a published image lives in ONE daemon's store; the
+prepared-alias placement preflight refuses other hosts by name) and the `source`
+column records the provenance. VM kind only for now: the container kind declares
+no `image_origin` in its settings schema, so capture there would mint a template
+its own create path misreads -- the AIDEV-NOTE in `IncusContainerKind` names the
+wiring that has to land first. This closes the loop the old verdict called
+"template-once/clone-many": install from ISO once, capture, clone many.
+
+The ORIGINAL 2026-08-12 verdict, for the record:
+
+**REJECTED, consistent with the phase body ("no in-panel OS install initially").**
 Verified by grep: no `cdrom` device, no `boot.priority`, no ISO upload surface.
 Guests come from images only. The substitute is PREPARED templates (item 2), and
 the operator-side procedure for producing one -- including the four findings that
-each cost a boot cycle -- is `docs/prepare-windows-template.md`.
-
-This is a real reduction in operator freedom compared to Proxmox and it is
-accepted: an in-panel ISO installer means accepting operator-supplied bootable
-media, an interactive install console as a REQUIRED path rather than a rescue
-hatch, and boot-order editing. Template-once/clone-many is the shape we actually
-operate.
+each cost a boot cycle -- is `docs/prepare-windows-template.md`. This is a real
+reduction in operator freedom compared to Proxmox and it is accepted: an in-panel
+ISO installer means accepting operator-supplied bootable media, an interactive
+install console as a REQUIRED path rather than a rescue hatch, and boot-order
+editing. Template-once/clone-many is the shape we actually operate.
 
 ---
 
@@ -1227,3 +1279,10 @@ which is the right answer for the fleet we run and the wrong answer for someone 
 needs any of them. "An operator cannot add a disk or a NIC from the panel" and
 "placement does not know how big a host is" were the other two sentences here and
 no longer are.
+
+**NARROWED 2026-08-14: strike "ISO install" from that sentence.** The owner
+reopened item 16's verdict and the wave landed (media storage per host, the
+cdrom device type, empty-VM creation, encoded boot order, instance-to-template
+capture -- see item 16's superseding block). What remains rejected of that list:
+clustering, HA, live migration, and passthrough (item 15, still deferred with its
+landing shape recorded).

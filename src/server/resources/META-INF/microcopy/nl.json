@@ -1173,6 +1173,10 @@
     {
       "text": "Nog niets vastgelegd",
       "scope": "instance_artifacts"
+    },
+    {
+      "text": "Geen installatiemedia",
+      "scope": "server_media"
     }
   ],
   "empty_description": [
@@ -1207,6 +1211,10 @@
     {
       "text": "Koppel een gegevensschijf of een extra netwerkinterface aan deze instantie.",
       "scope": "instance_device"
+    },
+    {
+      "text": "Haal hieronder een ISO op om die als installatiemedia aan de virtuele machines van deze host te kunnen koppelen.",
+      "scope": "server_media"
     }
   ],
   "engine": [
@@ -3119,10 +3127,16 @@
       "scope": "attention_detail"
     }
   ],
-  "url": {
-    "text": "URL",
-    "scope": "dev_sessions"
-  },
+  "url": [
+    {
+      "text": "URL",
+      "scope": "dev_sessions"
+    },
+    {
+      "text": "ISO-URL",
+      "scope": "server_media"
+    }
+  ],
   "connected_since": {
     "text": "Verbonden sinds",
     "scope": "dev_sessions"
@@ -3345,6 +3359,10 @@
     {
       "text": "Dit project verwijderen? De ledengroep en toegangsrechten verdwijnen mee. Een project dat nog records of omgevingen bezit wordt geweigerd.",
       "scope": "project"
+    },
+    {
+      "text": "Dit ISO-volume van de host verwijderen? Instanties die er niet meer naar verwijzen merken er niets van.",
+      "scope": "server_media"
     }
   ],
   "priority": {
@@ -6346,10 +6364,16 @@
     "text": "Een niveau omhoog",
     "scope": "instance_files"
   },
-  "delete": {
-    "text": "Verwijderen",
-    "scope": "instance_files"
-  },
+  "delete": [
+    {
+      "text": "Verwijderen",
+      "scope": "instance_files"
+    },
+    {
+      "text": "Verwijderen",
+      "scope": "server_media"
+    }
+  ],
   "save": {
     "text": "Opslaan",
     "scope": "instance_files"
@@ -7006,6 +7030,10 @@
     "text": "Voorbereid sjabloon",
     "scope": "image_origin"
   },
+  "install_media": {
+    "text": "Installatiemedia (lege VM)",
+    "scope": "image_origin"
+  },
   "secure_boot": [
     {
       "text": "Secure Boot",
@@ -7068,6 +7096,20 @@
     "text": "NIC",
     "scope": "instance_device"
   },
+  "cdrom": {
+    "text": "Installatiemedia",
+    "scope": "instance_device"
+  },
+  "device_source_media": [
+    {
+      "text": "Installatiemedia (ISO-volume)",
+      "scope": "field"
+    },
+    {
+      "text": "Naam van een ISO-volume dat op de host van de instantie is gepubliceerd (zie het tabblad Installatiemedia van het serverrecord). Alleen installatiemedia-apparaten gebruiken dit.",
+      "scope": "help"
+    }
+  ],
   "network_limit_mbit": [
     {
       "text": "Netwerklimiet",
@@ -7228,12 +7270,56 @@
     "text": "Klik op het scherm om toetsenbordinvoer op te vangen; invoer gaat naar de VM.",
     "scope": "instance_framebuffer"
   },
+  "capture_template": {
+    "text": "Vastleggen als sjabloon",
+    "scope": "instance"
+  },
+  "capture_template_hint": {
+    "text": "Publiceer de huidige staat van deze gestopte instantie als voorbereide image en maak er een niet-goedgekeurd sjabloon van",
+    "scope": "instance"
+  },
+  "capture_template_confirm": {
+    "text": "De huidige schijfstaat van deze instantie als voorbereide image op zijn host publiceren en er een sjabloon van maken? Een grote schijf publiceren kan enkele minuten duren.",
+    "scope": "instance"
+  },
+  "tab": {
+    "text": "Installatiemedia",
+    "scope": "server_media"
+  },
+  "load_error": {
+    "text": "De host antwoordde niet: {$reason}",
+    "scope": "server_media"
+  },
+  "fetch_title": {
+    "text": "Een ISO ophalen",
+    "scope": "server_media"
+  },
+  "fetch_description": {
+    "text": "Downloadt de ISO van de URL en importeert die in de opslagpool van deze host als ISO-volume.",
+    "scope": "server_media"
+  },
+  "fetch": {
+    "text": "Ophalen",
+    "scope": "server_media"
+  },
+  "media_fetched": {
+    "text": "Media '{$name}' is nu beschikbaar op deze host",
+    "scope": "server_media"
+  },
+  "media_deleted": {
+    "text": "Media '{$name}' is verwijderd",
+    "scope": "server_media"
+  },
   "add_disk": {
     "text": "Schijf aankoppelen",
     "scope": "instance_device"
   },
   "add_nic": {
     "text": "NIC aankoppelen",
+    "scope": "instance_device"
+  },
+  "add_media": {
+    "text": "Installatiemedia aankoppelen",
     "scope": "instance_device"
   },
   "detach": {
@@ -7245,7 +7331,51 @@
     "scope": "instance_device"
   },
   "device_type_unknown": {
-    "text": "'{$type}' is geen apparaattype (disk of nic)",
+    "text": "'{$type}' is geen apparaattype (disk, nic of cdrom)",
+    "scope": "violations"
+  },
+  "device_media_required": {
+    "text": "Een installatiemedia-apparaat moet een ISO-volume benoemen",
+    "scope": "violations"
+  },
+  "device_media_change_unsupported": {
+    "text": "Installatiemedia kan niet ter plekke gewisseld worden; koppel dit apparaat af en koppel het andere medium aan",
+    "scope": "violations"
+  },
+  "media_name_invalid": {
+    "text": "'{$name}' is geen geldige medianaam (kleine letters, cijfers, punten, streepjes)",
+    "scope": "violations"
+  },
+  "media_url_invalid": {
+    "text": "De media-URL moet een gewone http(s)-URL zijn",
+    "scope": "violations"
+  },
+  "media_exists": {
+    "text": "Media '{$media}' bestaat al op deze host",
+    "scope": "violations"
+  },
+  "media_fetch_failed": {
+    "text": "Ophalen van media '{$media}' is mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "media_in_use": {
+    "text": "Media '{$media}' is aangekoppeld aan: {$instances}. Koppel het daar eerst af.",
+    "scope": "violations"
+  },
+  "media_delete_failed": {
+    "text": "Verwijderen van media '{$media}' is mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "template_capture_unsupported": {
+    "text": "Instantie '{$name}' kan op zijn runtime niet als sjabloon vastgelegd worden",
+    "scope": "violations"
+  },
+  "template_capture_requires_stopped": {
+    "text": "Instantie '{$name}' moet gestopt zijn voor die als sjabloon vastgelegd kan worden",
+    "scope": "violations"
+  },
+  "template_capture_failed": {
+    "text": "Vastleggen van instantie '{$name}' is mislukt: {$reason}",
     "scope": "violations"
   },
   "device_rename_unsupported": {

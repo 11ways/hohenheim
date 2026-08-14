@@ -146,6 +146,39 @@ public class IncusClient {
         }
     }
 
+    /**
+     * Publish one STOPPED instance's current state as an image under {@code alias}
+     * (the {@code incus publish} lane) and return the published fingerprint.
+     *
+     * The alias rides the create body, so a crash between image and alias cannot leave
+     * an unaddressable image; an existing same-named alias is the daemon's own refusal,
+     * verbatim -- never silently repointed.
+     */
+    public @NonNull String publishImage(@NonNull String instance, @NonNull String alias,
+                                        @Nullable String description) throws IOException {
+        Map<String, Object> source = new LinkedHashMap<>();
+        source.put("type", "instance");
+        source.put("name", instance);
+        Map<String, Object> definition = new LinkedHashMap<>();
+        definition.put("source", source);
+        definition.put("aliases", List.of(Map.of("name", alias,
+            "description", description == null ? "" : description)));
+        definition.put("compression_algorithm", "zstd");
+        if (description != null && !description.isBlank()) {
+            definition.put("properties", Map.of("description", description));
+        }
+        // Publishing squashes and compresses a whole rootfs; it takes minutes, not the
+        // default deadline.
+        waitOperation(asyncOperation("POST", "/1.0/images", Json.stringify(definition),
+            DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
+        String fingerprint = imageFingerprintForAlias(alias);
+        if (fingerprint == null) {
+            throw new IOException("Incus publish of '" + instance + "' completed but"
+                + " alias '" + alias + "' does not resolve in the daemon's image store");
+        }
+        return fingerprint;
+    }
+
     // -- instances ------------------------------------------------------------
 
     /** The instance's definition ({@code GET /1.0/instances/{name}}). */
@@ -535,6 +568,35 @@ public class IncusClient {
                 return null;
             }
             throw e;
+        }
+    }
+
+    /** All custom volumes of one pool, recursed to full objects. */
+    @SuppressWarnings("unchecked")
+    public @NonNull List<Map<String, Object>> customVolumes(@NonNull String pool)
+            throws IOException {
+        return (List<Map<String, Object>>) (List<?>) listOf(syncPayload("GET",
+            "/1.0/storage-pools/" + pool + "/volumes/custom?recursion=1", null,
+            DEFAULT_TIMEOUT_MS));
+    }
+
+    /**
+     * Import a local ISO file as a custom ISO volume named {@code name} (the
+     * {@code incus storage volume import --type=iso} lane): the file STREAMS from disk,
+     * never through controller memory, and the operation is waited to completion.
+     */
+    public void importIsoVolume(@NonNull String pool, @NonNull String name,
+                                @NonNull Path isoFile) throws IOException {
+        Http11.Raw raw = this.transport.exchangeUpload("POST",
+            "/1.0/storage-pools/" + pool + "/volumes/custom", isoFile,
+            "application/octet-stream",
+            Map.of("X-Incus-Name", name, "X-Incus-Type", "iso"),
+            LONG_OP_TIMEOUT_MS);
+        Map<String, Object> envelope = envelopeOf(raw);
+        if ("async".equals(envelope.get("type"))
+                && envelope.get("operation") instanceof String operation
+                && !operation.isEmpty()) {
+            waitOperation(operation, LONG_OP_TIMEOUT_MS);
         }
     }
 

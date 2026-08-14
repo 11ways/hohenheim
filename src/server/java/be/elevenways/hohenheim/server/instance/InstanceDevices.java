@@ -151,6 +151,43 @@ public final class InstanceDevices {
     }
 
     /**
+     * Attach an operator-published install-media ISO as a CD-ROM device. OPERATOR-ONLY:
+     * media provenance is arbitrary bootable code, so a tenant delegate -- CONFIG
+     * included -- is refused with the tier's uniform refusal. Charges no quota; the
+     * driver owns the boot-order policy (root above media).
+     *
+     * @throws Violations {@code instance_not_permitted}, {@code devices_unsupported},
+     *         {@code device_exists}, {@code device_attach_failed}, plus the model's
+     *         name/media invariants
+     */
+    public void attachCdrom(int instanceId, @NonNull String name, @NonNull String mediaVolume) {
+        HohenheimAccess.requireOperatorOperation();
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        Resolved resolved = this.instances.resolve(instanceId);
+        InstanceOperationGuard.requireOperable(resolved.row());
+        DeviceAttachSupport support = requireSupport(resolved);
+        this.instances.leases().requireFence(resolved.serverId());
+        requireAbsentRow(instanceId, name);
+
+        Row row = Models.get(InstanceDeviceModel.class).createEmptyRow();
+        row.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
+        row.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_CDROM);
+        row.set(InstanceDeviceModel.NAME, name);
+        row.set(InstanceDeviceModel.SOURCE_MEDIA, mediaVolume);
+        Models.get(InstanceDeviceModel.class).save(row);
+
+        if (workloadAbsent(resolved)) {
+            return;   // desired state recorded; deploy's reconcile attaches it
+        }
+        try {
+            support.ensureCdrom(resolved.spec(), name, mediaVolume);
+        } catch (IOException e) {
+            Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID));
+            throw refusal("device_attach_failed", resolved.row(), name, e);
+        }
+    }
+
+    /**
      * Detach one device: daemon first (device removed, disk volume deleted VERIFIED),
      * row second -- an unreachable daemon keeps the row AND its reservation, because
      * the disk still exists.
@@ -204,9 +241,13 @@ public final class InstanceDevices {
         DeviceAttachSupport support = requireSupport(resolved);
         for (Row row : rows) {
             String name = row.get(InstanceDeviceModel.NAME);
-            if (InstanceDeviceModel.TYPE_DISK.equals(row.get(InstanceDeviceModel.TYPE))) {
+            String type = row.get(InstanceDeviceModel.TYPE);
+            if (InstanceDeviceModel.TYPE_DISK.equals(type)) {
                 Integer size = row.get(InstanceDeviceModel.SIZE_GB);
                 support.ensureDisk(resolved.spec(), name, size == null ? 1 : size);
+            } else if (InstanceDeviceModel.TYPE_CDROM.equals(type)) {
+                String media = row.get(InstanceDeviceModel.SOURCE_MEDIA);
+                support.ensureCdrom(resolved.spec(), name, media == null ? "" : media);
             } else {
                 support.ensureNic(resolved.spec(), name);
             }

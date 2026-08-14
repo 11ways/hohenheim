@@ -48,6 +48,23 @@ public interface DeviceAttachSupport {
     void ensureNic(@NonNull InstanceSpec spec, @NonNull String deviceName) throws IOException;
 
     /**
+     * Ensure the named install-media ISO volume is attached as a CD-ROM device under
+     * {@code deviceName}, read-back verified. The media volume is OPERATOR-published
+     * shared state: attaching references it, detaching ({@link #removeDevice} with
+     * {@code hasVolume=false}) never deletes it.
+     *
+     * The implementation also owns the learned boot-order policy (the
+     * prepare-windows-template findings): the workload's own root disk keeps the HIGHER
+     * boot priority, so a blank disk falls through to the CD and the moment the OS makes
+     * the disk bootable the installer stops being re-entered from the media.
+     *
+     * @throws IOException when the daemon refuses, the media volume is absent on this
+     *                     host, or the workload flavour cannot boot media (containers)
+     */
+    void ensureCdrom(@NonNull InstanceSpec spec, @NonNull String deviceName,
+                     @NonNull String mediaVolume) throws IOException;
+
+    /**
      * Detach one device and delete its backing volume when one exists, VERIFIED:
      * confirmed removed or observed absent, the destroy contract.
      *
