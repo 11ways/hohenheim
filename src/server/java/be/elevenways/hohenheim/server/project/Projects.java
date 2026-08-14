@@ -270,13 +270,27 @@ public final class Projects {
             }
             String type = grant.get(RecordGrantModel.SUBJECT_TYPE);
             Integer id = grant.get(RecordGrantModel.SUBJECT_ID);
-            if (subject.equals(type + ":" + id)) {
+            // The project's own row survives only when it is an ALLOW (provenance
+            // intact). A stored DENY must be revoked like any other row: a deny is
+            // STICKY (grant(true) over one is a documented silent no-op), so keeping
+            // it would report adoption while the project cannot manage the record.
+            if (subject.equals(type + ":" + id)
+                    && Boolean.TRUE.equals(grant.get(RecordGrantModel.VALUE))) {
                 continue;
             }
             RecordGrants.revoke(type, id, model, recordId, HohenheimAccess.MANAGE);
         }
         Integer groupId = project.get(ProjectModel.GROUP_ID);
-        RecordGrants.grant("group", groupId, model, recordId, HohenheimAccess.MANAGE, true);
+        Row planted = RecordGrants.grant("group", groupId, model, recordId,
+            HohenheimAccess.MANAGE, true);
+        // grant() reports a refused allow by RETURNING the winning deny row rather
+        // than throwing (the raced-deny contract). Adoption moved ownership above, so
+        // finishing without the manage grant would strand the record with NO manage
+        // holder -- that must be loud, never a silent success.
+        if (!Boolean.TRUE.equals(planted.get(RecordGrantModel.VALUE))) {
+            throw new IllegalStateException("project adoption could not plant the manage"
+                + " grant on " + model + "#" + recordId + ": a deny landed concurrently");
+        }
     }
 
     // -- group lifecycle (called by ProjectGuards hooks) ----------------------
