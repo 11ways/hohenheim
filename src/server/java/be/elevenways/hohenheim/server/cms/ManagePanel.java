@@ -141,7 +141,11 @@ public final class ManagePanel extends Panel {
 
     @Override
     public @NonNull List<PanelPeer> buildPeers() {
-        return List.of(new ManageSiteResource(), new ManageDomainResource(),
+        // The dashboard FIRST: the panel-index rule redirects /manage to the first
+        // accessible DashboardPanelPeer, so the landing is a real page (what needs
+        // attention, then the principal's instances), never a contentless card grid.
+        return List.of(new ManageDashboard(),
+            new ManageSiteResource(), new ManageDomainResource(),
             new ManageDnsRecordResource(), new ManageCertificateResource(),
             // The instance tier's tenant projection. Every one of these is scoped by a
             // walk-confirmed record capability, and the two schedule peers plus the

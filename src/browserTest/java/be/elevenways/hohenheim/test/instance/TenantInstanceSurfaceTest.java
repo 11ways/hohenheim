@@ -203,6 +203,20 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             .as("step 1: an instance-only grant makes /manage reachable")
             .isIn(200, 302, 303);
 
+        // 1b. The landing DASHBOARD: tenant A's placement-blocked instance is an
+        //     attention item -- named, HOST-FREE -- and tenant B's never appears.
+        HttpResponse<String> dash = tenantGet("/manage/dashboard");
+        assertThat(dash.statusCode()).as("step 1b: the dashboard renders").isEqualTo(200);
+        assertThat(dash.body())
+            .as("step 1b: the blocked instance is surfaced by name")
+            .contains(PREFIX + "alpha");
+        assertThat(dash.body())
+            .as("step 1b: another tenant's instance never appears on the dashboard")
+            .doesNotContain(PREFIX + "bravo");
+        assertThat(dash.body())
+            .as("step 1b: no placement refusal key leaks host inventory")
+            .doesNotContain("host_not_admitted");
+
         // 2. The list CONTENT is the assertion, not the status: a leak here is a name
         //    in the body, and a status-only check would pass while leaking.
         HttpResponse<String> list = tenantGet("/manage/instances");

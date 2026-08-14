@@ -1707,7 +1707,7 @@
       "scope": "settings"
     },
     {
-      "text": "Sitebeheer",
+      "text": "Jouw diensten",
       "scope": "manage"
     },
     {
@@ -2181,9 +2181,27 @@
       "scope": "instance_device"
     }
   ],
-  "dashboard": {
-    "text": "Dashboard",
-    "scope": "admin"
+  "dashboard": [
+    {
+      "text": "Dashboard",
+      "scope": "admin"
+    },
+    {
+      "text": "Overzicht",
+      "scope": "manage"
+    }
+  ],
+  "blocked_instance": {
+    "text": "{$instance} kan nog niet uitgerold worden",
+    "scope": "manage_dashboard"
+  },
+  "blocked_instance_detail": {
+    "text": "Een voorwaarde buiten jouw controle is niet vervuld. Open de instance voor wat je zelf kan doen, of contacteer je beheerder.",
+    "scope": "manage_dashboard"
+  },
+  "your_instances": {
+    "text": "Jouw instances",
+    "scope": "manage_dashboard"
   },
   "download": [
     {

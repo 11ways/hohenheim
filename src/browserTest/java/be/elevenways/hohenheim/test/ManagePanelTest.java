@@ -361,12 +361,17 @@ class ManagePanelTest extends HohenheimTestBase {
         // The independently administered panel grant remains untouched.
         assertThat(GrantService.listDirectGrants("user", operatorId))
             .anyMatch(grant -> "hohenheim.manage.access".equals(grant.get(GrantModel.PERMISSION)));
-        assertThat(operatorGet("/manage").statusCode()).isIn(200, 302, 303);
+        // The panel stays reachable, and its landing is the manage DASHBOARD now
+        // (the first accessible DashboardPanelPeer wins the index), so /manage
+        // redirects there rather than rendering a card grid.
+        HttpResponse<String> landing = operatorGet("/manage");
+        assertThat(landing.statusCode()).isIn(302, 303);
+        assertThat(landing.headers().firstValue("Location")).hasValue("/manage/dashboard");
 
         // NAV-ONLY hiding: the panel grant without any site keeps /manage
         // reachable, but the zero-in-scope Sites/Domains entries leave the nav
-        // and the panel index...
-        HttpResponse<String> emptyPanel = operatorGet("/manage");
+        // of the dashboard landing...
+        HttpResponse<String> emptyPanel = operatorGet("/manage/dashboard");
         assertThat(emptyPanel.statusCode()).isEqualTo(200);
         assertThat(emptyPanel.body()).doesNotContain("href=\"/manage/sites\"");
         assertThat(emptyPanel.body()).doesNotContain("href=\"/manage/domains\"");

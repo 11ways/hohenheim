@@ -1707,7 +1707,7 @@
       "scope": "settings"
     },
     {
-      "text": "Site management",
+      "text": "Your services",
       "scope": "manage"
     },
     {
@@ -2181,9 +2181,27 @@
       "scope": "instance_device"
     }
   ],
-  "dashboard": {
-    "text": "Dashboard",
-    "scope": "admin"
+  "dashboard": [
+    {
+      "text": "Dashboard",
+      "scope": "admin"
+    },
+    {
+      "text": "Overview",
+      "scope": "manage"
+    }
+  ],
+  "blocked_instance": {
+    "text": "{$instance} cannot deploy yet",
+    "scope": "manage_dashboard"
+  },
+  "blocked_instance_detail": {
+    "text": "A precondition outside your control is not met. Open the instance for what you can do, or contact your operator.",
+    "scope": "manage_dashboard"
+  },
+  "your_instances": {
+    "text": "Your instances",
+    "scope": "manage_dashboard"
   },
   "download": [
     {
