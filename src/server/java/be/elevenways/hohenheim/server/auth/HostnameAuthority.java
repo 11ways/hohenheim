@@ -3,7 +3,9 @@ package be.elevenways.hohenheim.server.auth;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
+import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -53,6 +55,39 @@ public final class HostnameAuthority {
                 sitesById.put(site.get(SiteModel.ID), site);
             }
             return new Snapshot(domains, sitesById);
+        }
+
+        /** Request-scoped memo of {@link #load}, keyed on the conduit. */
+        private static final IdentifierKey<Snapshot> MEMO =
+            IdentifierKey.of("hohenheim", "hostname_authority_snapshot");
+
+        /**
+         * The READ-DECISION variant of {@link #load}: one snapshot per request, so a
+         * per-row consumer (a list's updatableBy/deletableBy affordances) pays the two
+         * table loads once instead of per row.
+         *
+         * AIDEV-NOTE: affordance and scope reads ONLY -- the WRITE lanes
+         * (requireRecordAuthority, the delete hook) keep calling {@link #load} fresh, so
+         * a domain moved mid-request can never be authorized against its old owner. The
+         * memo makes the offered affordance at worst one request staler than the gate,
+         * which is the same staleness the walk memo in HohenheimAccess already accepts.
+         */
+        public static @NonNull Snapshot memoized(@NonNull AccessContext ctx) {
+            Conduit conduit = ctx.conduit();
+            if (conduit == null) {
+                return load();
+            }
+            Snapshot cached = conduit.getAttribute(MEMO);
+            if (cached != null) {
+                return cached;
+            }
+            Snapshot snapshot = load();
+            try {
+                conduit.setAttribute(MEMO, snapshot);
+            } catch (UnsupportedOperationException attributeless) {
+                // A conduit without attribute storage just pays the load each call.
+            }
+            return snapshot;
         }
 
         /** @return the site a domain row hangs off, or null when it is gone */
