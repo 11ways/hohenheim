@@ -1028,7 +1028,9 @@ public final class TenantWrites {
                 && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.EDIT)) {
             return true;
         }
-        return HostnameAuthority.canManage(HostnameAuthority.Snapshot.load(), ctx,
+        // memoized, not load(): this runs per LIST ROW through updatableBy/deletableBy,
+        // and a fresh load is two full table scans. The write lanes stay fresh.
+        return HostnameAuthority.canManage(HostnameAuthority.Snapshot.memoized(ctx), ctx,
             fqdnOf(stored, stored));
     }
 
