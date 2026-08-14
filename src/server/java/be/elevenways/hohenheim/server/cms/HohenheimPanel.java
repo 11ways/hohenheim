@@ -38,26 +38,32 @@ public final class HohenheimPanel extends Panel {
      */
     public static final Permission ACCESS = HohenheimSources.ADMIN_ACCESS;
 
+    // AIDEV-NOTE: sidebar order is these weights, ASCENDING (PanelNav.sections). It is
+    // ordered by WHAT THIS PRODUCT IS FOR, not alphabetically and not by module: Compute
+    // and Proxy are the daily surfaces, Infrastructure supports them, and Security --
+    // eleven items, eight of them contributed by the spamservice module -- is a background
+    // concern that used to open the sidebar and push Compute below the fold on a 1440x900
+    // screen. Do not re-weight a group ANOTHER module declares by re-declaring its id here:
+    // NavGroup.equals is id-only and PanelNav keeps the first instance it sees, so the
+    // winner would depend on peer declaration order.
+
+    /** Compute group: the container/VM management surface -- instances, templates,
+     *  quotas, snapshots, backups, backup targets, game domains. Servers and reconcile
+     *  findings stay in Infrastructure deliberately (host inventory, not workloads). */
+    public static final NavGroup COMPUTE_GROUP =
+        NavGroup.of("compute", Microcopy.of("compute").withFilter("scope", "nav"), 150, Icon.of("cubes"));
+
     /** Proxy configuration group: sites, certificates, access control. */
     public static final NavGroup PROXY_GROUP =
-        NavGroup.of("proxy", Microcopy.of("proxy").withFilter("scope", "nav"), 300, Icon.of("globe"));
+        NavGroup.of("proxy", Microcopy.of("proxy").withFilter("scope", "nav"), 200, Icon.of("globe"));
 
     /** Infrastructure group: databases, servers, notifications. */
     public static final NavGroup INFRA_GROUP =
-        NavGroup.of("infra", Microcopy.of("infra").withFilter("scope", "nav"), 200, Icon.of("server"));
+        NavGroup.of("infra", Microcopy.of("infra").withFilter("scope", "nav"), 250, Icon.of("server"));
 
-    /**
-     * Compute group: the container/VM management surface -- instances, templates,
-     * quotas, snapshots, backups, backup targets, game domains. Weight sorts ASCENDING
-     * (PanelNav), so 180 lands it before Infrastructure; Servers and reconcile findings
-     * stay in Infrastructure deliberately (host inventory, not workloads).
-     */
-    public static final NavGroup COMPUTE_GROUP =
-        NavGroup.of("compute", Microcopy.of("compute").withFilter("scope", "nav"), 180, Icon.of("cubes"));
-
-    /** Security group: IP bans. */
+    /** Security group: IP bans, plus the spamservice module's own peers. */
     public static final NavGroup SECURITY_GROUP =
-        NavGroup.of("security", Microcopy.of("security").withFilter("scope", "nav"), 150, Icon.of("shield-halved"));
+        NavGroup.of("security", Microcopy.of("security").withFilter("scope", "nav"), 800, Icon.of("shield-halved"));
 
     public HohenheimPanel() {
         super(Identifier.of("hohenheim", "admin"), "admin", Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
