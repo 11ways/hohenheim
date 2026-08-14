@@ -222,7 +222,16 @@ public final class InstallMedia {
             throw new IOException("Host '" + server.get(ServerModel.NAME)
                 + "' is not an Incus host; install media is an Incus capability");
         }
-        return this.servers.incusClientFor(server.get(ServerModel.NAME));
+        try {
+            return this.servers.incusClientFor(server.get(ServerModel.NAME));
+        } catch (IllegalStateException refused) {
+            // Client CONSTRUCTION refusals (HostKeys.HostTrustException: no pinned
+            // certificate yet) are named facts about the host, not page failures --
+            // fold them onto the IOException lane every caller already renders
+            // (the tab's load_error, the handlers' flash). Found live: an
+            // un-enrolled Incus host 500'd its own media tab.
+            throw new IOException(refused.getMessage(), refused);
+        }
     }
 
     private static void requireName(@NonNull String name) {
