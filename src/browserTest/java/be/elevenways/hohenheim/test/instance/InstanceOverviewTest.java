@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -250,6 +251,70 @@ class InstanceOverviewTest extends HohenheimTestBase {
         assertThat(get(overviewUrl()).body())
             .as("step 4: no claim renders an explicit empty state")
             .contains("<pl-empty-state");
+    }
+
+    /**
+     * A refused deploy leaves a DURABLE explanation on the record, not a one-shot toast.
+     *
+     * AIDEV-NOTE: step 4 is the whole point and is the assertion a flash toast can never
+     * satisfy -- the session bucket is emptied by the read, so a reload, a second operator
+     * or the same operator tomorrow used to get nothing at all. Before this, the overview
+     * of an instance whose host was not admitted was byte-identical to one whose host was
+     * fine: state "Created", Deploy offered, no reason anywhere.
+     */
+    @Test
+    @Order(5)
+    void aBlockedHostIsStatedOnTheOverviewAndNotOnlyToasted() throws Exception {
+        var servers = Models.get(ServerModel.class);
+        int serverId = ServerModel.localServerId();
+        Row server = servers.findById(serverId);
+        String admissionBefore = server.get(ServerModel.ADMISSION);
+
+        try {
+            // 1. THE NEGATIVE ANCHOR: a FULLY placeable host, so the page says nothing
+            //    about blockers. Without this the next step cannot distinguish "explains
+            //    the block" from "always shows a warning" -- and admission alone is not
+            //    enough: the gate also asks for identity, posture, preflight and contact.
+            HostFixtures.admitLocal();
+            assertThat(get(overviewUrl()).body())
+                .as("step 1: an admitted host produces no blocker banner")
+                .doesNotContain("data-deploy-blocked");
+
+            // 2. Block the host and change NOTHING else.
+            server = servers.findById(serverId);
+            server.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+            servers.save(server);
+
+            String blocked = get(overviewUrl()).body();
+            assertThat(blocked)
+                .withFailMessage("step 2: the overview does not state the blocking condition,"
+                    + " so the only explanation is the toast that follows the click")
+                .contains("data-deploy-blocked");
+
+            // 3. It points at the host whose preflight/admit fixes it -- an explanation
+            //    with no lever is only half an answer.
+            assertThat(blocked)
+                .as("step 3: and links to the host that must be fixed")
+                .contains("/admin/servers/" + serverId + "/page/overview");
+
+            // 4. Deploy is STILL offered: keep-and-explain, pinned against a later
+            //    well-meaning hide. The button is what proves the refusal is about the
+            //    host rather than about the operator's own authority.
+            assertThat(blocked)
+                .as("step 4: the deploy control is still offered")
+                .contains("/action/deploy_instance");
+
+            // 5. THE DURABILITY: ask again, with no action in between. A toast is gone by
+            //    now; this must not be.
+            assertThat(get(overviewUrl()).body())
+                .withFailMessage("step 5: the explanation did not survive a second render --"
+                    + " it is action-scoped after all, which is the defect being fixed")
+                .contains("data-deploy-blocked");
+        } finally {
+            Row restore = servers.findById(serverId);
+            restore.set(ServerModel.ADMISSION, admissionBefore);
+            servers.save(restore);
+        }
     }
 
     // -- plumbing -----------------------------------------------------------------

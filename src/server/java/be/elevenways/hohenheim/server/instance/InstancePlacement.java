@@ -281,12 +281,7 @@ public final class InstancePlacement {
      */
     private static boolean acceptsTenantWorkload(int serverId, @NonNull String bucket,
                                                  @NonNull Workload workload) {
-        try {
-            HostAdmission.requireInstancePlacement(serverId, workload.isolation(), bucket);
-        } catch (Violations refused) {
-            return false;
-        }
-        return true;
+        return HostAdmission.instancePlacementRefusal(serverId, workload.isolation(), bucket) == null;
     }
 
     /**

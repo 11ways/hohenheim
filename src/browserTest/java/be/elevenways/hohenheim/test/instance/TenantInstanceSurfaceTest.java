@@ -288,10 +288,17 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         //    capability check passed rather than that nothing ran.
         Throwable withGrant = catchThrowable(() ->
             TenantConduits.as(principalA, () -> new InstanceService().deploy(instanceAId)));
+        // instance_placement_blocked, not host_not_admitted: the placement gate withholds
+        // the host's NAME from a tenant-originated call. What this step proves is unchanged
+        // -- the refusal moved PAST the capability gate to the next one.
         assertThat(violationKeys(withGrant))
             .as("step 1: a manage holder passes the capability gate and meets host admission")
-            .contains("host_not_admitted")
+            .contains("instance_placement_blocked")
             .doesNotContain("instance_not_permitted");
+        assertThat(violationKeys(withGrant))
+            .as("step 1: and NOT the host-naming key -- that one interpolates the machine's"
+                + " name, which is operator inventory this tier withholds from a tenant")
+            .doesNotContain("host_not_admitted");
 
         // 2. Revoke, then act again with NOTHING else changed: the refusal moves to the
         //    capability gate. Rendering already happened in step 1 of the previous test;
@@ -316,7 +323,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             TenantConduits.as(principalA, () -> new InstanceService().deploy(instanceAId)));
         assertThat(violationKeys(restored))
             .as("step 4: re-granting restores the pre-revocation refusal exactly")
-            .contains("host_not_admitted");
+            .contains("instance_placement_blocked");
     }
 
     /** Snapshot and backup answer to their OWN capabilities, not to manage. */
