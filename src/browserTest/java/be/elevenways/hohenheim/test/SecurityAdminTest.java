@@ -94,17 +94,20 @@ class SecurityAdminTest extends HohenheimTestBase {
         assertThat(lifted.get(BanModel.LIFTED_BY)).isNotNull();
     }
 
-    /** The dashboard's security band: the active-bans stat and the bans-created chart. */
+    /** The dashboard's security band: the active-bans stat, and NO 30-day chart. */
     @Test
     @Order(2)
-    void dashboardShowsTheBanStatAndBansChart() {
+    void dashboardShowsTheBanStatAndNotTheBansChart() {
         navigateToApp("/admin/dashboard");
         waitForHydration();
         assertThat(page.locator("a.widget-stat-link[href='/admin/bans']").count()).isEqualTo(1);
         // The deleted security-events surface is gone from the dashboard.
         assertThat(page.locator("a.widget-stat-link[href='/admin/security-events']").count())
             .isZero();
-        // The bans-created chart renders over the hohenheim.ban source.
-        assertThat(page.locator(".widget-chart pl-chart").count()).isGreaterThanOrEqualTo(1);
+        // The 30-day bans chart was REMOVED from the landing dashboard on purpose: on any
+        // fleet that is not under attack it is an all-zero series drawn as ~450px of flat
+        // line, above the content the operator opened the page for. The count stays as the
+        // tile asserted above. See the AIDEV-NOTE in AdminDashboard.widgets().
+        assertThat(page.locator(".widget-chart pl-chart").count()).isZero();
     }
 }

@@ -4867,6 +4867,10 @@
     "text": "Host {$name} is not admitted for placement; run preflight and admit it first",
     "scope": "violations"
   },
+  "instance_placement_blocked": {
+    "text": "This instance cannot be started right now. Its host is not accepting new workloads; your operator has to clear this.",
+    "scope": "violations"
+  },
   "host_posture_refuses": {
     "text": "Host {$name} declares a trusted-only posture and refuses tenant instances",
     "scope": "violations"
@@ -8084,6 +8088,62 @@
   },
   "install_error": {
     "text": "Install error",
+    "scope": "instance_overview"
+  },
+  "checklist_title": {
+    "text": "Get your first workload running",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_description": {
+    "text": "Each step checks itself. This disappears once the fleet is running.",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_open": {
+    "text": "Open",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_host": {
+    "text": "Enrol a host",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_host_detail": {
+    "text": "A host is the machine your workloads run on.",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_admit": {
+    "text": "Let the host accept workloads",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_admit_detail": {
+    "text": "Run its preflight, then admit it.",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_create_instance": {
+    "text": "Create an instance",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_create_instance_detail": {
+    "text": "Pick a kind and a template; the form guides the rest.",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_deploy": {
+    "text": "Deploy it",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_deploy_detail": {
+    "text": "Deploy starts the workload on its host.",
+    "scope": "onboarding_checklist"
+  },
+  "deploy_blocked": {
+    "text": "This instance cannot start yet",
+    "scope": "instance_overview"
+  },
+  "deploy_blocked_fix": {
+    "text": "Fix this on host {$host}",
+    "scope": "instance_overview"
+  },
+  "deploy_blocked_delegated": {
+    "text": "Its host is not accepting new workloads right now. Your operator has to clear this.",
     "scope": "instance_overview"
   },
   "used": {
