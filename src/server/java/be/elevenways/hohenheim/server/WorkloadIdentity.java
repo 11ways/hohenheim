@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.protoblast.common.Blast;
@@ -164,7 +165,7 @@ public final class WorkloadIdentity {
     static boolean isTenantManaged(int siteId) {
         try {
             for (Row grant : RecordGrants.listForRecord(SiteModel.MODEL_ID, siteId)) {
-                if ("manage".equals(grant.get(RecordGrantModel.CAPABILITY))
+                if (HohenheimAccess.MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))
                         && Boolean.TRUE.equals(grant.get(RecordGrantModel.VALUE))) {
                     return true;
                 }

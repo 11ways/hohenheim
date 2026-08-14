@@ -8,7 +8,6 @@ import be.elevenways.zenit.common.routing.EndpointRoute;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RateLimitPolicy;
 import be.elevenways.zenit.common.routing.WebSocketEndpoint;
-import be.elevenways.zenit.common.security.Permission;
 
 import java.time.Duration;
 
@@ -185,7 +184,7 @@ public class HohenheimEndpoints {
         .identifier(Identifier.of("hohenheim", "certificates_request"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("admin").addDelimiter().addStatic("certificates-request").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(LE_REQUEST_LIMIT)
         .build();
 
@@ -209,14 +208,14 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("admin").addDelimiter().addStatic("instance-templates").addDelimiter()
             .addParameter(TEMPLATE_ID).addDelimiter().addStatic("export").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
 
     public static final Endpoint<Object> INSTANCE_TEMPLATES_IMPORT = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "instance_templates_import"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("admin").addDelimiter().addStatic("instance-templates-import").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
 
     /**
@@ -269,7 +268,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("admin").addDelimiter().addStatic("git-providers").addDelimiter()
             .addParameter(PROVIDER_ID).addDelimiter().addStatic("repositories").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PROVIDER_BROWSE_LIMIT)
         .build();
 
@@ -278,7 +277,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("admin").addDelimiter().addStatic("git-providers").addDelimiter()
             .addParameter(PROVIDER_ID).addDelimiter().addStatic("branches").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(PROVIDER_BROWSE_LIMIT)
         .build();
 
@@ -288,7 +287,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("admin").addDelimiter().addStatic("dns-zones").addDelimiter()
             .addParameter(ZONE_ID).addDelimiter().addStatic("zonefile").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
 
     // --- Certificate PEM bundle download ---
@@ -310,7 +309,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("certificates").addDelimiter().addParameter(CERT_ID)
             .addDelimiter().addStatic("download").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .requiresInteractiveLogin()
         .rateLimit(DOWNLOAD_LIMIT)
         .build();
@@ -335,7 +334,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
             .addDelimiter().addStatic("restore").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(DATABASE_IO_LIMIT)
         .build();
 
@@ -393,7 +392,7 @@ public class HohenheimEndpoints {
         .identifier(Identifier.of("hohenheim", "api_sites"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("sites").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
 
     /** csrfExempt is safe: the handler refuses non-API-key principals, so an ambient session cookie can never act here. */
@@ -403,7 +402,7 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("sites")
             .addDelimiter().addParameter(SITE_ID)
             .addDelimiter().addStatic("deploy").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .csrfExempt()
         .rateLimit(DEPLOY_LIMIT)
         .build();
@@ -844,7 +843,7 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
             .addDelimiter().addParameter(DNS_ORIGIN)
             .addDelimiter().addStatic("records").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
 
     /** csrfExempt is safe: the handlers refuse non-API-key principals, so an ambient session cookie can never act here. */
@@ -854,7 +853,7 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
             .addDelimiter().addParameter(DNS_ORIGIN)
             .addDelimiter().addStatic("records").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .csrfExempt()
         .build();
 
@@ -864,7 +863,7 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("dns").addDelimiter().addStatic("zones")
             .addDelimiter().addParameter(DNS_ORIGIN)
             .addDelimiter().addStatic("records").addDelimiter().addParameter(DNS_RECORD_ID).build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .csrfExempt()
         .build();
 
@@ -875,7 +874,7 @@ public class HohenheimEndpoints {
             .addDelimiter().addParameter(DNS_ORIGIN)
             .addDelimiter().addStatic("records").addDelimiter().addParameter(DNS_RECORD_ID)
             .addDelimiter().addStatic("delete").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .csrfExempt()
         .build();
 
@@ -886,7 +885,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("admin").addDelimiter().addStatic("dns-zones").addDelimiter()
             .addParameter(ZONE_ID).addDelimiter().addStatic("remote-records").build())
-        .requiresPermission(Permission.of("hohenheim.admin.access"))
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
 
     // --- Dynamic DNS (dyndns2 update protocol; public, token in HTTP Basic auth) ---
@@ -947,7 +946,8 @@ public class HohenheimEndpoints {
     /**
      * VM framebuffer rescue console: server-captured VGA snapshots down (binary frames),
      * keyboard/mouse input up (DRY frames). requiresLogin at the handshake plus the
-     * handler's per-record MANAGE check, revalidated mid-session (revoked = 1008).
+     * handler's per-record CONSOLE check (see VmFramebufferHandler's note on the verb),
+     * revalidated mid-session (revoked = 1008).
      */
     public static final WebSocketEndpoint VM_FRAMEBUFFER = WebSocketEndpoint.builder()
         .identifier(Identifier.of("hohenheim", "vm_framebuffer"))
@@ -959,12 +959,19 @@ public class HohenheimEndpoints {
         .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
         .build();
 
-    /** One console command line to a running instance (the console tab's form). */
+    /**
+     * One console command line to a running instance (the console tab's form). The
+     * handler demands per-record CONSOLE; requiresLogin is declared EXPLICITLY even
+     * though the baseline("/") catch-all already implies it -- every other endpoint in
+     * this file states its handshake requirement, and relying on the catch-all made
+     * this the one declaration a reader could not audit in place.
+     */
     public static final Endpoint<Object> INSTANCE_CONSOLE_COMMAND = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "instance_console_command"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
             .addDelimiter().addStatic("console").addDelimiter().addStatic("command").build())
+        .requiresLogin()
         .build();
 
     // --- Dev-tunnel registration (remote dev servers; token-authenticated in-band) ---
