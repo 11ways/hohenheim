@@ -20,7 +20,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSource;
@@ -307,34 +306,21 @@ public final class ManagePanel extends Panel {
             .build());
     }
 
-    /** @return null for admins, else the devices of instances the principal manages */
+    /** @return null for an unconstrained scope, else the devices of viewable instances */
     static @Nullable Criteria instanceDeviceScope(@NonNull AccessContext ctx) {
-        if (HohenheimAccess.isAdmin(ctx)) {
-            return null;
-        }
-        QueryPredicate predicate = ManageInstanceDeviceResource.decide(ctx).predicate();
-        return predicate != null ? predicate.criteria()
-            : Models.get(InstanceDeviceModel.class).matchNone();
+        return HohenheimAccess.grantScope(ctx, Models.get(InstanceDeviceModel.class),
+            InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDeviceModel.INSTANCE_ID::in);
     }
 
-    /** @return null for admins, else the attachments of instances the principal manages */
+    /** @return null for an unconstrained scope, else the attachments of viewable instances */
     static @Nullable Criteria instanceDatabaseScope(@NonNull AccessContext ctx) {
-        if (HohenheimAccess.isAdmin(ctx)) {
-            return null;
-        }
-        QueryPredicate predicate = ManageInstanceDatabaseResource.decide(ctx).predicate();
-        return predicate != null ? predicate.criteria()
-            : Models.get(InstanceDatabaseModel.class).matchNone();
+        return HohenheimAccess.grantScope(ctx, Models.get(InstanceDatabaseModel.class),
+            InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDatabaseModel.INSTANCE_ID::in);
     }
 
-    /** @return null for admins, else the schedules of instances the principal manages */
+    /** @return null for an unconstrained scope, else the schedules of viewable instances */
     static @Nullable Criteria recordScheduleScope(@NonNull AccessContext ctx) {
-        if (HohenheimAccess.isAdmin(ctx)) {
-            return null;
-        }
-        QueryPredicate predicate = ManageInstanceScheduleResource.decide(ctx).predicate();
-        return predicate != null ? predicate.criteria()
-            : Models.get(RecordScheduleModel.class).matchNone();
+        return ManageInstanceScheduleResource.scopeCriteria(ctx);
     }
 
     /**
@@ -434,8 +420,19 @@ public final class ManagePanel extends Panel {
     }
 
     /**
-     * The certificates a principal may read: the ones it REQUESTED (the walk's owner row,
-     * enumerated) plus the ones explicitly granted {@code view}.
+     * The certificates a principal may read: exactly the rows the walk confirms
+     * {@code view} on -- the ones it REQUESTED arrive through the walk's own owner row
+     * (CertificateModel declares {@code ownedBy(requested_by_user_id)} and VIEW is
+     * owner-implied), the rest through explicit grants.
+     *
+     * AIDEV-NOTE: no hand-written {@code REQUESTED_BY_USER_ID.eq(principalId)} disjunct
+     * beside the walk. That was a SECOND spelling of the owner row, and a WIDER one:
+     * the walk's version also demands the credential's scope cover the capability
+     * (Principal.coversCapability -- see the framework note on why a scope-narrowed API
+     * key must not inherit owner-implied capabilities) and sits behind the gate-denial
+     * row. The hand-written disjunct consulted neither, so a narrowed API key could
+     * enumerate every certificate its owning user ever requested. Same lesson as
+     * Projects.coversOwnedVocabulary, one tier over.
      *
      * AIDEV-NOTE: deliberately NOT "every certificate covering a managed domain", which the
      * superseded AIDEV-TODO in HohenheimSources proposed. Coverage is authority to REQUEST a
@@ -446,30 +443,8 @@ public final class ManagePanel extends Panel {
      * @return null for admins, else a criteria matching only the walk-reachable rows
      */
     static @Nullable Criteria certificateScope(@NonNull AccessContext ctx) {
-        Model model = Models.get(CertificateModel.class);
-        if (HohenheimAccess.isAdmin(ctx)) {
-            return null;
-        }
-        if (ctx.isAnonymous()) {
-            return model.matchNone();
-        }
-
-        List<Criteria> reachable = new ArrayList<>();
-        Long principalId = ctx.principalId();
-        if (principalId != null) {
-            reachable.add(CertificateModel.REQUESTED_BY_USER_ID.eq(principalId.intValue()));
-        }
-        Set<Integer> granted = HohenheimAccess.grantedRecordIds(ctx, CertificateModel.MODEL_ID,
-            HohenheimAccess.VIEW);
-        if (!granted.isEmpty()) {
-            reachable.add(CertificateModel.ID.in(granted));
-        }
-
-        if (reachable.isEmpty()) {
-            return model.matchNone();
-        }
-        return reachable.size() == 1 ? reachable.get(0)
-            : new CompositeCriteria(CompositeOperator.OR, reachable.toArray(new Criteria[0]));
+        return HohenheimAccess.grantScope(ctx, Models.get(CertificateModel.class),
+            CertificateModel.MODEL_ID, HohenheimAccess.VIEW, CertificateModel.ID::in);
     }
 
     /**
