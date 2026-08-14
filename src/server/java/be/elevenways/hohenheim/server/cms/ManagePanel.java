@@ -26,7 +26,6 @@ import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
@@ -334,26 +333,31 @@ public final class ManagePanel extends Panel {
      * criteria over stored owner labels, and widening it to "any label a wildcard could
      * cover" would need a scan of dns_records to build a query over dns_records.
      *
-     * @return null for admins, else a criteria that never widens past the two sets
+     * @return null for an unconstrained walk scope, else a criteria that never widens
+     *         past the two sets
      */
     static @Nullable Criteria dnsRecordScope(@NonNull AccessContext ctx) {
-        Model model = Models.get(DnsRecordModel.class);
-        if (HohenheimAccess.isAdmin(ctx)) {
+        // The walk's tri-state instead of hand-written isAdmin/isAnonymous branches:
+        // ALL (the admin row -- DnsRecordModel declares no type-level) is the
+        // unconstrained answer, and an anonymous context already scopes to NONE here
+        // AND contributes no hostname clauses below, so both prefixes were second
+        // spellings of rows the walk owns. The composite itself cannot fold onto
+        // grantScope: the derived-hostname half is not a grant question.
+        RecordCapabilityScope granted = HohenheimAccess.capabilityScope(ctx,
+            DnsRecordModel.MODEL_ID, HohenheimAccess.VIEW);
+        if (granted.isAll()) {
             return null;
-        }
-        if (ctx.isAnonymous()) {
-            return model.matchNone();
         }
 
         List<Criteria> reachable = new ArrayList<>(zoneScopedNameCriteria(ctx));
-        Set<Integer> granted = HohenheimAccess.grantedRecordIds(ctx, DnsRecordModel.MODEL_ID,
-            HohenheimAccess.VIEW);
-        if (!granted.isEmpty()) {
-            reachable.add(DnsRecordModel.ID.in(granted));
+        Set<Integer> grantedIds = HohenheimAccess.grantedRecordIds(ctx,
+            DnsRecordModel.MODEL_ID, HohenheimAccess.VIEW);
+        if (!grantedIds.isEmpty()) {
+            reachable.add(DnsRecordModel.ID.in(grantedIds));
         }
 
         if (reachable.isEmpty()) {
-            return model.matchNone();
+            return Models.get(DnsRecordModel.class).matchNone();
         }
         return reachable.size() == 1 ? reachable.get(0)
             : new CompositeCriteria(CompositeOperator.OR, reachable.toArray(new Criteria[0]));
@@ -448,8 +452,9 @@ public final class ManagePanel extends Panel {
     }
 
     /**
-     * @return null for admins (no extra constraint), an impossible criteria
-     *         for principals without grants, else {@code ID IN (managed ids)}
+     * @return null for an unconstrained scope (the admin row, an every-site holder),
+     *         an impossible criteria for principals without grants, else
+     *         {@code ID IN (managed ids)}
      */
     static @Nullable Criteria siteScope(@NonNull AccessContext ctx) {
         return HohenheimAccess.managedSiteScope(ctx, Models.get(SiteModel.class), SiteModel.ID::in);
