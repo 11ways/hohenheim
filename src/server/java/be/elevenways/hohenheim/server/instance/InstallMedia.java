@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.protoblast.common.Blast;
@@ -224,12 +225,13 @@ public final class InstallMedia {
         }
         try {
             return this.servers.incusClientFor(server.get(ServerModel.NAME));
-        } catch (IllegalStateException refused) {
-            // Client CONSTRUCTION refusals (HostKeys.HostTrustException: no pinned
-            // certificate yet) are named facts about the host, not page failures --
-            // fold them onto the IOException lane every caller already renders
-            // (the tab's load_error, the handlers' flash). Found live: an
-            // un-enrolled Incus host 500'd its own media tab.
+        } catch (HostKeys.HostTrustException refused) {
+            // Client CONSTRUCTION refusals (no pinned certificate yet) are named
+            // facts about the host, not page failures -- fold them onto the
+            // IOException lane every caller already renders (the tab's load_error,
+            // the handlers' flash). Found live: an un-enrolled Incus host 500'd
+            // its own media tab. Deliberately NOT catch(IllegalStateException):
+            // any other ISE here is a programming error that must surface.
             throw new IOException(refused.getMessage(), refused);
         }
     }

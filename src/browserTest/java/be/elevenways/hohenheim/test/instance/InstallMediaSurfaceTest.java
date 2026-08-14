@@ -345,10 +345,30 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             .as("step 3: the same tenant's disk attach works")
             .containsEntry(PREFIX + "disk", 2);
 
-        // 4. Detach removes the cdrom at the daemon and its row.
+        // 4. DETACH symmetry: the same CONFIG-holding tenant may not eject the
+        //    operator's install medium either (mid-install, say) -- same uniform
+        //    refusal, row and daemon device untouched.
+        Throwable ejectRefused = catchThrowableInTenantScope(() ->
+            devices.detach(instanceId, PREFIX + "install"));
+        assertThat(ejectRefused)
+            .as("step 4: a CONFIG-holding tenant may not detach install media")
+            .isInstanceOf(Violations.class)
+            .hasMessageContaining("instance_not_permitted");
+        assertThat(DAEMON.get(handle).cdroms)
+            .as("step 4: the daemon still holds the cdrom")
+            .containsEntry(PREFIX + "install", "win-iso");
+
+        // 5. The tenant CAN detach its own disk -- step 4 measured the cdrom
+        //    gate, not a broken tenant detach lane.
+        TenantConduits.as(new UserPrincipal(tenantId, "Media Surface Tenant"), () ->
+            devices.detach(instanceId, PREFIX + "disk"));
+        assertThat(DAEMON.get(handle).disks)
+            .as("step 5: the tenant's own disk detaches fine").isEmpty();
+
+        // 6. Operator detach removes the cdrom at the daemon and its row.
         devices.detach(instanceId, PREFIX + "install");
         assertThat(DAEMON.get(handle).cdroms)
-            .as("step 4: the daemon cdrom is gone").isEmpty();
+            .as("step 6: the daemon cdrom is gone").isEmpty();
     }
 
     /** The tenant device form neither OFFERS cdrom nor ACCEPTS a hand-posted one. */

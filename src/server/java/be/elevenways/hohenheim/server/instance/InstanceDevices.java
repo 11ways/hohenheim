@@ -206,6 +206,13 @@ public final class InstanceDevices {
             throw Violations.ofField("name", name, violationText("device_not_found")
                 .withArg("device", name));
         }
+        // Symmetry with attachCdrom: install media is an OPERATOR device end to
+        // end, so a CONFIG-holding tenant must not be able to eject it either
+        // (mid-install, say). The refusal is the tier's uniform one -- checked
+        // AFTER the row load so the funnel stays the authority, not the form.
+        if (InstanceDeviceModel.TYPE_CDROM.equals(row.get(InstanceDeviceModel.TYPE))) {
+            HohenheimAccess.requireOperatorOperation();
+        }
         boolean disk = InstanceDeviceModel.TYPE_DISK.equals(row.get(InstanceDeviceModel.TYPE));
         try {
             support.removeDevice(resolved.spec(), name, disk);
