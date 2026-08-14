@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -42,20 +43,41 @@ public final class ManageInstanceScheduleResource extends InstanceScheduleResour
 
     /** Shared with the steps resource, which scopes through its parent schedule. */
     static @NonNull AccessDecision decide(@NonNull AccessContext ctx) {
-        Criteria instanceSchedules = RecordScheduleModel.MODEL.eq(InstanceModel.MODEL_ID.toString());
-        if (HohenheimAccess.isAdmin(ctx)) {
-            return AccessDecision.allow(QueryPredicate.of(instanceSchedules));
-        }
-        Set<Integer> managed = HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.VIEW);
-        if (managed.isEmpty()) {
+        Criteria scope = scopeCriteria(ctx);
+        if (scope == null) {
             return AccessDecision.allow(QueryPredicate.of(
-                Models.get(RecordScheduleModel.class).matchNone()));
+                RecordScheduleModel.MODEL.eq(InstanceModel.MODEL_ID.toString())));
         }
+        return AccessDecision.allow(QueryPredicate.of(scope));
+    }
+
+    /**
+     * The walk's tri-state through {@code grantScope}, never a hand-rolled
+     * isAdmin-plus-id-set prefix: an id set cannot express a whole-model row, and the
+     * enumeration THROWS on one the moment instances grow a type-level permission.
+     * Shared with {@link ManagePanel#recordScheduleScope}, the SAME policy on the
+     * record-source face.
+     *
+     * @return null for an unconstrained scope (constrain to instance schedules yourself
+     *         where the surface demands it), else a criteria over instance schedules
+     */
+    static @Nullable Criteria scopeCriteria(@NonNull AccessContext ctx) {
+        Criteria scope = HohenheimAccess.grantScope(ctx, Models.get(RecordScheduleModel.class),
+            InstanceModel.MODEL_ID, HohenheimAccess.VIEW,
+            ManageInstanceScheduleResource::recordIdIn);
+        if (scope == null) {
+            return null;
+        }
+        return new CompositeCriteria(CompositeOperator.AND,
+            RecordScheduleModel.MODEL.eq(InstanceModel.MODEL_ID.toString()), scope);
+    }
+
+    /** Record schedules key their target polymorphically, so the id set folds to strings. */
+    private static @NonNull Criteria recordIdIn(@NonNull Set<Integer> instanceIds) {
         Set<String> ids = new LinkedHashSet<>();
-        for (Integer id : managed) {
+        for (Integer id : instanceIds) {
             ids.add(String.valueOf(id));
         }
-        return AccessDecision.allow(QueryPredicate.of(new CompositeCriteria(CompositeOperator.AND,
-            instanceSchedules, RecordScheduleModel.RECORD_ID.in(ids))));
+        return RecordScheduleModel.RECORD_ID.in(ids);
     }
 }

@@ -9,10 +9,9 @@ import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
-
-import java.util.Set;
 
 /**
  * The /manage view over snapshots: the snapshots of instances the principal holds
@@ -32,19 +31,19 @@ public final class ManageInstanceSnapshotResource extends InstanceSnapshotResour
         return Identifier.of("hohenheim", "manage_instance_snapshot");
     }
 
+    /**
+     * The walk's tri-state through {@code grantScope}, never a hand-rolled
+     * isAdmin-plus-id-set prefix: an id set cannot express a whole-model row, and the
+     * enumeration THROWS on one the moment instances grow a type-level permission.
+     */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
         return ctx -> {
-            if (HohenheimAccess.isAdmin(ctx)) {
-                return AccessDecision.allowAll();
-            }
-            Set<Integer> instances = HohenheimAccess.instanceIdsWith(ctx, HohenheimAccess.SNAPSHOTS);
-            if (instances.isEmpty()) {
-                return AccessDecision.allow(QueryPredicate.of(
-                    Models.get(InstanceSnapshotModel.class).matchNone()));
-            }
-            return AccessDecision.allow(QueryPredicate.of(
-                InstanceSnapshotModel.INSTANCE_ID.in(instances)));
+            Criteria scope = HohenheimAccess.grantScope(ctx,
+                Models.get(InstanceSnapshotModel.class), InstanceModel.MODEL_ID,
+                HohenheimAccess.SNAPSHOTS, InstanceSnapshotModel.INSTANCE_ID::in);
+            return scope == null ? AccessDecision.allowAll()
+                : AccessDecision.allow(QueryPredicate.of(scope));
         };
     }
 
