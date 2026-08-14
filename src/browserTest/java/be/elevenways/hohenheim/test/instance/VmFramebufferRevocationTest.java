@@ -73,7 +73,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
         WS_INSTANCE_ID.set(instanceId);
         RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
-        String token = sessionFor(userId);
+        String token = sessionFor(userId).token();
 
         RecordingClient client = new RecordingClient();
         WebSocket ws = connect(token, client);
@@ -127,7 +127,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
             HohenheimAccess.VIEW, true);
 
         RecordingClient consoleClient = new RecordingClient();
-        WebSocket consoleSocket = connect(sessionFor(consoleUserId), consoleClient);
+        WebSocket consoleSocket = connect(sessionFor(consoleUserId).token(), consoleClient);
         try {
             // 1. THE FLOOR: console and nothing else. No manage grant exists for this
             //    user, so a handler still asking for manage would close this socket.
@@ -146,7 +146,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
             //    the widest instance verb (every other one implies it) and it does NOT
             //    reach the guest's screen and keyboard.
             RecordingClient viewClient = new RecordingClient();
-            WebSocket viewSocket = connect(sessionFor(viewUserId), viewClient);
+            WebSocket viewSocket = connect(sessionFor(viewUserId).token(), viewClient);
             try {
                 assertThat(viewClient.closed.await(5, TimeUnit.SECONDS))
                     .as("step 3: a VIEW-only grantee is closed off the framebuffer")
@@ -209,13 +209,6 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
         instances.save(row);
         return row.get(InstanceModel.ID);
-    }
-
-    private static String sessionFor(int userId) {
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, (long) userId);
-        Zenit.getSessionStore().save(session);
-        return session.token().secret();
     }
 
     private static void cleanup(int userId, int instanceId) {

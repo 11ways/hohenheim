@@ -25,10 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SiteDatabaseAdminTest extends HohenheimTestBase {
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> postForm(String path, String body) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)

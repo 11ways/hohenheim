@@ -145,10 +145,6 @@ class CertificateDownloadCredentialTest extends HohenheimTestBase {
 
     // -- fixtures -------------------------------------------------------------
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> keyGet(String path) throws Exception {
         return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
             .send(HttpRequest.newBuilder()

@@ -161,26 +161,12 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         return row.get(InstanceTemplateModel.ID);
     }
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> tenantGet(String path) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER).build();
         return client.send(HttpRequest.newBuilder()
             .uri(URI.create(baseUrl() + path))
             .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionA)
-            .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
-    /** The harness OPERATOR's session, for the positive anchor a projection test needs. */
-    private HttpResponse<String> adminGet(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
             .build(), HttpResponse.BodyHandlers.ofString());
     }
 

@@ -31,10 +31,6 @@ class SecretFieldsTest extends HohenheimTestBase {
     private static final String ACCESS_KEY = "proteus-access-key-9f8e7d6c";
     private static final String SITE_SECRET = "site-webhook-secret-a1b2c3d4";
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> postForm(String path, String body) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)

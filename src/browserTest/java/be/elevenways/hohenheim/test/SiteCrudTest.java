@@ -20,10 +20,6 @@ import static org.assertj.core.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SiteCrudTest extends HohenheimTestBase {
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> post(String path, String body) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)

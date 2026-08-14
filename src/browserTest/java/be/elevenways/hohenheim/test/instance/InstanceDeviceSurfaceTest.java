@@ -642,21 +642,6 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         return keyPost(tenantKey, path, body);
     }
 
-    private HttpResponse<String> keyGet(String key, String path) throws Exception {
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("X-Api-Key", key)
-            .GET());
-    }
-
-    private HttpResponse<String> keyPost(String key, String path, String body) throws Exception {
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("X-Api-Key", key)
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .POST(HttpRequest.BodyPublishers.ofString(body)));
-    }
-
     private static HttpResponse<String> send(HttpRequest.Builder builder) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER).build();

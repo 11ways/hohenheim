@@ -29,10 +29,6 @@ class SecretFieldFormTest extends HohenheimTestBase {
 
     private static final String STORED_KEY = "peer-api-key-original-value";
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> get(String path) throws Exception {
         return client().send(HttpRequest.newBuilder()
             .uri(URI.create(baseUrl() + path))

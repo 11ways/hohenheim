@@ -415,10 +415,6 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         return "/admin/instances/" + instanceId + "/page/migrate";
     }
 
-    private HttpResponse<String> adminGet(String path) throws Exception {
-        return get(path, sessionToken);
-    }
-
     private HttpResponse<String> adminPost(String path, String body) throws Exception {
         return post(path, body, sessionToken, csrfToken);
     }

@@ -67,7 +67,7 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
-        String token = sessionFor(userId);
+        String token = sessionFor(userId).token();
 
         InstanceService service = new InstanceService();
         WebSocket ws = null;
@@ -157,13 +157,6 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
         row.set(InstanceModel.SERVER_ID, hostId);
         instances.save(row);
         return row.get(InstanceModel.ID);
-    }
-
-    private static String sessionFor(int userId) {
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, (long) userId);
-        Zenit.getSessionStore().save(session);
-        return session.token().secret();
     }
 
     /** Records the first binary frame and the close code. */

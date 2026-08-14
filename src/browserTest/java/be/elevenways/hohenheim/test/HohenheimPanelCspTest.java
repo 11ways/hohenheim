@@ -59,16 +59,6 @@ class HohenheimPanelCspTest extends HohenheimTestBase {
             .doesNotContain("onload=");
     }
 
-    private HttpResponse<String> adminGet(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
     private static int countOccurrences(String haystack, String needle) {
         int count = 0;
         for (int i = haystack.indexOf(needle); i >= 0; i = haystack.indexOf(needle, i + needle.length())) {
