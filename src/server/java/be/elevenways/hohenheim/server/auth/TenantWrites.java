@@ -1004,6 +1004,34 @@ public final class TenantWrites {
             CmsSupport.violationText("tenant_record_not_authorized"));
     }
 
+    /**
+     * The affordance twin of {@link #requireRecordAuthority} and the record delete hook:
+     * whether Edit/Delete on this STORED record can ever succeed for this context. A
+     * BOOLEAN for {@code updatableBy}/{@code deletableBy}, never a gate -- the hooks stay
+     * the enforcement -- and it lives here so the offered affordance and the refusing
+     * lane are one derivation. Mirrors the lanes exactly: an operator passes (the hooks
+     * only run tenant-originated), a tenant needs a tenant-authorable TYPE plus either
+     * the per-record {@code edit} grant or hostname authority over the stored FQDN.
+     */
+    public static boolean mayAuthorRecord(@NonNull AccessContext ctx, @NonNull Row stored) {
+        if (HohenheimAccess.isAdmin(ctx)) {
+            return true;
+        }
+        if (ctx.isAnonymous()) {
+            return false;
+        }
+        if (!RECORD_TYPES.contains(String.valueOf(stored.get(DnsRecordModel.TYPE)))) {
+            return false;
+        }
+        Object recordId = stored.get(DnsRecordModel.ID);
+        if (recordId != null
+                && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.EDIT)) {
+            return true;
+        }
+        return HostnameAuthority.canManage(HostnameAuthority.Snapshot.load(), ctx,
+            fqdnOf(stored, stored));
+    }
+
     private static void refuseForeignRecordType(@Nullable Object type) {
         String text = type != null ? String.valueOf(type) : "";
         if (!RECORD_TYPES.contains(text)) {

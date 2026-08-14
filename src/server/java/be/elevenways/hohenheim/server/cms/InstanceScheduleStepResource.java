@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -83,6 +84,34 @@ public class InstanceScheduleStepResource extends RowResource {
             }
         }
         return Map.copyOf(values);
+    }
+
+    /**
+     * Edit and delete both demand {@code CONFIG} on the parent schedule's instance
+     * (delete enforces exactly that via {@link InstanceScheduleResource#requireManage};
+     * an edit additionally demands the chosen ACTION's own capability inside
+     * {@link #authorize}), so the synthesized affordances are offered on the shared
+     * floor of those gates instead of lying to a view-only delegate. The
+     * {@link InstanceDeviceResource} shape.
+     */
+    @Override
+    public boolean updatableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return super.updatableBy(record, accessContext) && holdsConfig(record, accessContext);
+    }
+
+    @Override
+    public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return super.deletableBy(record, accessContext) && holdsConfig(record, accessContext);
+    }
+
+    private static boolean holdsConfig(@NonNull Row record, @NonNull AccessContext accessContext) {
+        Row schedule = loadSchedule(record.get(RecordScheduleStepModel.SCHEDULE_ID));
+        if (schedule == null) {
+            return false;
+        }
+        return HohenheimAccess.hasInstanceCapability(accessContext,
+            InstanceScheduleResource.parseInstanceId(schedule.get(RecordScheduleModel.RECORD_ID)),
+            HohenheimAccess.CONFIG);
     }
 
     @Override

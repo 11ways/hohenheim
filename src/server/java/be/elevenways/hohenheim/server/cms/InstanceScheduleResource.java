@@ -121,6 +121,29 @@ public class InstanceScheduleResource extends RowResource {
         super.updateRow(existing, values, accessContext);
     }
 
+    /**
+     * Edit and delete both demand {@code CONFIG} on the schedule's target instance
+     * (the same question {@link #requireManage} enforces on every write), so the
+     * synthesized affordances are offered on exactly that answer -- the
+     * {@link InstanceDeviceResource} shape: read stays the WIDER {@code view} on the
+     * delegated peer, and without this a view-only delegate was shown Edit/Delete
+     * buttons the pipeline could only refuse.
+     */
+    @Override
+    public boolean updatableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return super.updatableBy(record, accessContext) && holdsConfig(record, accessContext);
+    }
+
+    @Override
+    public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return super.deletableBy(record, accessContext) && holdsConfig(record, accessContext);
+    }
+
+    private static boolean holdsConfig(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return HohenheimAccess.hasInstanceCapability(accessContext,
+            parseInstanceId(record.get(RecordScheduleModel.RECORD_ID)), HohenheimAccess.CONFIG);
+    }
+
     /** Delete removes the chain and its run history with the schedule. */
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
@@ -133,11 +156,20 @@ public class InstanceScheduleResource extends RowResource {
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
+        // Firing the chain off-schedule is shaping WHEN it runs, so it demands the same
+        // CONFIG the schedule's own edits do -- visibleFor hides the button from a
+        // view-only delegate AND refuses a direct POST (the dispatcher re-checks it on
+        // invoke), and the handler asks once more because visibility alone is not a gate:
+        // runNow itself authorizes execution against the stored run_as, never the invoker.
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "run_schedule"))
             .label(Microcopy.of("run_now").withFilter("scope", "instance_schedule"))
             .icon(Icon.of("play"))
-            .visibleFor((row, ctx) -> Boolean.TRUE.equals(row.get(RecordScheduleModel.ENABLED)))
+            .visibleFor((row, ctx) -> Boolean.TRUE.equals(row.get(RecordScheduleModel.ENABLED))
+                && HohenheimAccess.hasInstanceCapability(ctx,
+                    parseInstanceId(row.get(RecordScheduleModel.RECORD_ID)),
+                    HohenheimAccess.CONFIG))
             .handler((row, ctx) -> {
+                requireManage(ctx.access(), parseInstanceId(row.get(RecordScheduleModel.RECORD_ID)));
                 Row run = recordSchedules().runNow(row.get(RecordScheduleModel.ID));
                 String status = run != null ? run.get(RecordScheduleRunModel.STATUS) : "busy";
                 return CmsActionResult.refreshWithToast(
@@ -191,11 +223,13 @@ public class InstanceScheduleResource extends RowResource {
         return values;
     }
 
-    /** A schedule declares what runs unattended, so authoring one is a CONFIG act. */
+    /**
+     * A schedule declares what runs unattended, so authoring one is a CONFIG act.
+     * No isAdmin prefix: the walk's own admin row already answers for operators.
+     */
     static void requireManage(@NonNull AccessContext accessContext, int instanceId) {
-        if (HohenheimAccess.isAdmin(accessContext)
-                || HohenheimAccess.hasInstanceCapability(
-                    accessContext, instanceId, HohenheimAccess.CONFIG)) {
+        if (HohenheimAccess.hasInstanceCapability(
+                accessContext, instanceId, HohenheimAccess.CONFIG)) {
             return;
         }
         throw Violations.ofForm(CmsSupport.violationText("schedule_not_allowed"));

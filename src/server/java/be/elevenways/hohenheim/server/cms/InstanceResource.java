@@ -125,6 +125,27 @@ public class InstanceResource extends RowResource {
     @Override public @NonNull Icon icon() { return Icon.of("cube"); }
 
     /**
+     * An instance UPDATE demands {@code CONFIG} on the record
+     * ({@code TenantWrites.checkInstanceWrite}), so the synthesized Edit affordance and
+     * the detail form's Save are offered on exactly that answer -- the
+     * {@link InstanceDeviceResource} shape: {@link ManageInstanceResource} reads by the
+     * wider {@code view}, and without this a view-only delegate was shown an editor
+     * whose every save the pipeline could only refuse. The boolean twin of the gate,
+     * never a second authority.
+     */
+    @Override
+    public boolean updatableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return super.updatableBy(record, accessContext)
+            && HohenheimAccess.hasInstanceCapability(accessContext,
+                idOf(record), HohenheimAccess.CONFIG);
+    }
+
+    private static int idOf(@NonNull Row record) {
+        Integer id = record.get(InstanceModel.ID);
+        return id != null ? id : -1;
+    }
+
+    /**
      * Delete IS the verified destroy: container removed (or observed absent) and port
      * claims released before the record is soft-deleted; an unreachable daemon is a
      * NAMED refusal ({@link InstanceService#destroy}) that keeps the record. Volumes

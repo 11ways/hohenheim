@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.IncusVmKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -33,10 +34,19 @@ public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("display"); }
 
-    /** VM instances only; a container has no framebuffer, so the tab hides AND 404s. */
+    /**
+     * VM instances only (a container has no framebuffer), AND only for a principal
+     * holding CONSOLE on THIS record -- the same verb the socket's handshake demands
+     * (VmFramebufferHandler), asked here so the tab stops being offered to a view-only
+     * delegate whose every connect the socket could only 1008. The
+     * {@link InstanceConsolePage} shape; zenit-cms 404s an unoffered slug, so this
+     * gates the route as well as the nav.
+     */
     @Override
-    public boolean visibleFor(@NonNull Row record) {
-        return IncusVmKind.ID.toString().equals(record.get(InstanceModel.KIND));
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return IncusVmKind.ID.toString().equals(record.get(InstanceModel.KIND))
+            && HohenheimAccess.hasInstanceCapability(accessContext,
+                record.get(InstanceModel.ID), HohenheimAccess.CONSOLE);
     }
 
     @Override

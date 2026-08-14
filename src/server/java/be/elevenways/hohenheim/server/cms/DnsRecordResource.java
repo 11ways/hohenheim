@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -79,6 +80,26 @@ public class DnsRecordResource extends RowResource {
     @Override public int navOrder() { return 31; }
     @Override public @NonNull Icon icon() { return Icon.of("list-ul"); }
     @Override public boolean showInNav() { return false; }
+
+    /**
+     * Edit and delete ride {@code TenantWrites}' record lanes (per-record {@code edit}
+     * grant OR hostname authority, tenant-authorable types only), so the synthesized
+     * affordances are offered on exactly that answer -- the
+     * {@link InstanceDeviceResource} shape: {@link ManageDnsRecordResource}'s read scope
+     * is wider ({@code view} grants and derived hostnames), and without this a view-only
+     * delegate was shown buttons the write pipeline could only refuse.
+     */
+    @Override
+    public boolean updatableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return super.updatableBy(record, accessContext)
+            && TenantWrites.mayAuthorRecord(accessContext, record);
+    }
+
+    @Override
+    public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return super.deletableBy(record, accessContext)
+            && TenantWrites.mayAuthorRecord(accessContext, record);
+    }
 
     /** The zone's Records tab links here with ?zone_id= so the pick is preselected. */
     @Override

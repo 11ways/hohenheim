@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.Secrets;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -166,6 +167,22 @@ public class DatabaseResource extends RowResource {
         // handed its id back as the new record's.
         return rowKey(this.databaseService.createAsync(name, engine,
             image.isEmpty() ? null : image, user, password, database, ephemeral, server, limits));
+    }
+
+    /**
+     * A database DELETE demands {@code destroy} on the record (the model's
+     * before-remove hook in {@code TenantWrites}), so the synthesized Delete affordance
+     * is offered on exactly that answer -- the {@link InstanceDeviceResource} shape:
+     * {@link ManageDatabaseResource} reads by the wider {@code view}, and without this
+     * a view-only delegate was shown a destroy button the pipeline could only refuse.
+     * No updatableBy twin: {@link #updatable()} is false, the record is immutable.
+     */
+    @Override
+    public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        Integer id = record.get(DatabaseModel.ID);
+        return super.deletableBy(record, accessContext) && id != null
+            && HohenheimAccess.hasDatabaseCapability(accessContext, id,
+                HohenheimAccess.DESTROY);
     }
 
     /**
