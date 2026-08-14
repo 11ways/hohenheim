@@ -5,9 +5,10 @@ import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.instance.CommunityScripts;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
@@ -23,8 +24,11 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.OptionSource;
+import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteTarget;
@@ -47,7 +51,14 @@ public class InstanceTemplateResource extends RowResource {
     private final FormSpec formSpec = FormSpec.builder()
         .add(InstanceTemplateModel.NAME)
         .add(InstanceTemplateModel.DESCRIPTION)
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceTemplateModel.KIND))
+        // A template of a generated-only kind is the same lying affordance one level
+        // removed: every create from it lands on the OwnedInstances refusal. Same
+        // derivation as the instance picker (see the AIDEV-NOTE in InstanceResource).
+        .add(Select.of(InstanceTemplateModel.KIND)
+            .options(OptionSource.supplied(InstanceKinds::authorableOptions))
+            .clearable(!Boolean.TRUE.equals(
+                InstanceTemplateModel.KIND.getAttribute(FieldAttributes.REQUIRED)))
+            .build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceTemplateModel.SETTINGS))
         .add(InstanceTemplateModel.VERSION)
         .add(InstanceTemplateModel.INSTALL_IMAGE)

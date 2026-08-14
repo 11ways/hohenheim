@@ -17,6 +17,9 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplateCapture;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.access.AccessDecision;
+import be.elevenways.zenit.cms.common.access.AccessFunction;
+import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -28,15 +31,15 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
-import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
+import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
@@ -67,7 +70,18 @@ public class InstanceResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(InstanceModel.NAME)
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.KIND))
+        // AIDEV-NOTE: the derived entry offers EVERY registered kind, three of which the
+        // OwnedInstances write guard can only refuse -- the affordance-that-can-only-refuse
+        // shape the device surface documents. Supplied (never a resolved list): registry
+        // entries arrive via BlastAutoLoadInit after class-load and tests REPLACE entries at
+        // runtime, and a Supplied source still resolves on the context-free coercion path,
+        // which is what makes a hand-posted generated-only kind fail at the form layer too.
+        // This narrows SELECTION only; every label path reads EnumField.getValues() and
+        // still sees all six, so existing generated rows keep rendering their kind.
+        .add(Select.of(InstanceModel.KIND)
+            .options(OptionSource.supplied(InstanceKinds::authorableOptions))
+            .clearable(!Boolean.TRUE.equals(InstanceModel.KIND.getAttribute(FieldAttributes.REQUIRED)))
+            .build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
         .add(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID).build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))

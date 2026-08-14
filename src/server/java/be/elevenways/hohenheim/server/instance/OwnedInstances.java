@@ -60,18 +60,10 @@ public final class OwnedInstances {
             if (row == null || GeneratedRows.inSystemScope()) {
                 return;
             }
-            String kind = row.get(InstanceModel.KIND);
-            InstanceKindHandler handler = kind == null ? null : InstanceKinds.getHandler(kind);
-            if (handler != null && handler.generatedOnly()) {
-                // getLabel(), never getDisplayName(): the display name is an English
-                // literal and this sentence is translated, so the raw name would render
-                // a half-Dutch refusal. A Microcopy ARGUMENT resolves in the reader's
-                // locale (protoblast MessageEvaluator).
-                throw Violations.ofField(InstanceModel.KIND.getName(), kind,
-                    Microcopy.of("instance_kind_owner_managed")
-                        .withFilter("scope", "violations")
-                        .withArg("kind", handler.getLabel()));
-            }
+            // The refusal itself lives in InstanceKinds, beside the OFFER derived from the
+            // same generatedOnly() declaration -- this hook is the authoritative gate but
+            // deliberately not a second copy of the rule.
+            InstanceKinds.requireAuthorable(row.get(InstanceModel.KIND));
         });
     }
 
@@ -177,5 +169,27 @@ public final class OwnedInstances {
     public static boolean isTenantAttributed(@NonNull Row instance) {
         Set<String> owner = ownerSubjectsOf(instance);
         return owner == null || !owner.isEmpty();
+    }
+
+    /**
+     * Whether deploying this workload runs the host placement gate.
+     *
+     * AIDEV-NOTE: the gate asks whether the WORKLOAD is tenant-attributed, never whether
+     * the KIND is tenant-authored, and the difference was a real hole. A managed database's
+     * engine, a site's release container and a stack service are operator-AUTHORED kinds
+     * that a TENANT owns through the product record above them ({@link #isTenantAttributed}
+     * reads that ownership from grants). They are posture-checked once, at placement, and
+     * gating the redeploy on tenantAuthored() meant they were never checked again -- so a
+     * host whose posture regressed, whose shared-kernel acknowledgement was withdrawn or
+     * whose kernel lane stopped proving itself kept taking tenant workloads back. An
+     * operator-OWNED workload still skips it, which is the exemption the flag was for.
+     *
+     * It lives here rather than on the kind SPI so the grants dependency stays out of it,
+     * and it is shared so the deploy lane and the page EXPLAINING that lane cannot disagree
+     * about which workloads are even gated.
+     */
+    public static boolean isPlacementGated(@NonNull InstanceKindHandler handler,
+                                           @NonNull Row instance) {
+        return handler.tenantAuthored() || isTenantAttributed(instance);
     }
 }
