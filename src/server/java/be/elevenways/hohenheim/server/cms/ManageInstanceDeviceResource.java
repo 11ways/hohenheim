@@ -3,14 +3,17 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.orm.field.EnumField;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
@@ -59,22 +62,45 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 public final class ManageInstanceDeviceResource extends InstanceDeviceResource {
 
     /**
-     * The tenant form offers DISK and NIC only: install media (cdrom) is operator-only
-     * ({@code InstanceDevices.attachCdrom} refuses a tenant with the uniform refusal),
-     * and offering the option here would be an affordance that can only refuse. Coercion
-     * runs against THIS spec, so a hand-posted {@code type=cdrom} is refused by the
-     * select itself -- hide AND enforce, one declaration.
+     * The tenant form's type options DERIVE from the model's own TYPE vocabulary
+     * minus the operator-only cdrom ({@code InstanceDevices.attachCdrom} refuses a
+     * tenant with the uniform refusal; offering it here would be an affordance that
+     * can only refuse). One declaration: a fourth tenant-attachable type appears the
+     * day the model declares it, instead of silently refusing through a hand-kept
+     * copy of this list. Coercion runs against THIS spec, so a hand-posted
+     * {@code type=cdrom} is refused by the select itself -- hide AND enforce.
      */
     private final FormSpec tenantFormSpec = FormSpec.builder()
         .add(InstanceDeviceModel.INSTANCE_ID)
-        .add(Select.of(InstanceDeviceModel.TYPE).options(OptionSource.of(List.of(
-            FieldOption.of(InstanceDeviceModel.TYPE_DISK,
-                Microcopy.of("disk").withFilter("scope", "instance_device")),
-            FieldOption.of(InstanceDeviceModel.TYPE_NIC,
-                Microcopy.of("nic").withFilter("scope", "instance_device"))))).build())
+        .add(Select.of(InstanceDeviceModel.TYPE)
+            .options(OptionSource.of(tenantTypeOptions())).build())
         .add(InstanceDeviceModel.NAME)
         .add(InstanceDeviceModel.SIZE_GB)
         .build();
+
+    private static @NonNull List<FieldOption<String>> tenantTypeOptions() {
+        List<FieldOption<String>> options = new ArrayList<>();
+        for (Map.Entry<String, EnumField.EnumValue> value
+                : InstanceDeviceModel.TYPE.getValues().entrySet()) {
+            if (InstanceDeviceModel.TYPE_CDROM.equals(value.getKey())) {
+                continue;
+            }
+            options.add(FieldOption.of(value.getKey(), value.getValue().getLabel()));
+        }
+        return options;
+    }
+
+    /**
+     * A cdrom row's detach is an OPERATOR act (the funnel refuses it with the
+     * uniform tier refusal), so the tenant surface must not offer the button.
+     */
+    @Override
+    public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        if (InstanceDeviceModel.TYPE_CDROM.equals(record.get(InstanceDeviceModel.TYPE))) {
+            return false;
+        }
+        return super.deletableBy(record, accessContext);
+    }
 
     @Override
     public @NonNull Identifier id() {
