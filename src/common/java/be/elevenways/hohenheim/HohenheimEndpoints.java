@@ -69,6 +69,11 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
+    public static final ParameterDefinition<Integer> SERVER_ID = ParameterDefinition.builder(Integer.class)
+        .name("serverId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     public static final ParameterDefinition<Integer> PROJECT_ID = ParameterDefinition.builder(Integer.class)
         .name("projectId")
         .stringResolver(Integer::parseInt)
@@ -334,6 +339,31 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("databases").addDelimiter().addParameter(DATABASE_NAME)
             .addDelimiter().addStatic("restore").build())
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .rateLimit(DATABASE_IO_LIMIT)
+        .build();
+
+    // --- Install media on an Incus host (forms on the server Install media tab) ---
+
+    /**
+     * Fetch an ISO from an operator-supplied URL into the host's own image pool as an
+     * ISO volume. Admin permission because media provenance is arbitrary bootable code
+     * and the fetch makes the CONTROLLER an outbound HTTP client of an arbitrary origin.
+     */
+    public static final Endpoint<Object> SERVERS_MEDIA_FETCH = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "servers_media_fetch"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
+            .addDelimiter().addStatic("media").addDelimiter().addStatic("fetch").build())
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .rateLimit(DATABASE_IO_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> SERVERS_MEDIA_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "servers_media_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
+            .addDelimiter().addStatic("media").addDelimiter().addStatic("delete").build())
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .rateLimit(DATABASE_IO_LIMIT)
         .build();

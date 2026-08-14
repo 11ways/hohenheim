@@ -30,6 +30,12 @@ final class FakeIncusTransport implements IncusTransport {
     final Map<String, String> imageAliases = new LinkedHashMap<>();
     final Map<String, Map<String, Object>> instances = new LinkedHashMap<>();
 
+    /** Custom volumes of the fake's one pool (default-pool), keyed by volume name. */
+    final Map<String, Map<String, Object>> customVolumes = new LinkedHashMap<>();
+
+    /** The last alias a POST /1.0/images publish carried, for assertions. */
+    String lastPublishedAlias;
+
     /** What GET /state answers for every instance; the resize gate reads this. */
     String instanceStatus = "Stopped";
 
@@ -92,6 +98,39 @@ final class FakeIncusTransport implements IncusTransport {
             body.put("config", Map.of("ipv4.address", "10.181.7.1/24", "ipv4.nat", "true"));
             this.networkStore.put(String.valueOf(body.get("name")), body);
             return sync(body);
+        }
+        if ("GET".equals(method) && path.equals("/1.0/storage-pools/default-pool/volumes/custom")) {
+            return sync(List.copyOf(this.customVolumes.values()));
+        }
+        if (path.startsWith("/1.0/storage-pools/default-pool/volumes/custom/")) {
+            String name = path.substring("/1.0/storage-pools/default-pool/volumes/custom/".length());
+            if ("GET".equals(method)) {
+                Map<String, Object> volume = this.customVolumes.get(name);
+                return volume == null ? notFound("Storage volume not found") : sync(volume);
+            }
+            if ("DELETE".equals(method)) {
+                return this.customVolumes.remove(name) == null
+                    ? notFound("Storage volume not found") : sync(Map.of());
+            }
+        }
+        if ("POST".equals(method) && path.equals("/1.0/storage-pools/default-pool/volumes/custom")) {
+            Map<String, Object> body = new LinkedHashMap<>(parse(jsonBody));
+            body.putIfAbsent("content_type", "block");
+            this.customVolumes.put(String.valueOf(body.get("name")), body);
+            return sync(body);
+        }
+        if ("POST".equals(method) && path.equals("/1.0/images")) {
+            // The publish lane: source type=instance + an alias list. The alias resolves
+            // afterwards, exactly like a real daemon's post-publish store.
+            Map<String, Object> body = parse(jsonBody);
+            String alias = body.get("aliases") instanceof List<?> aliases && !aliases.isEmpty()
+                && aliases.get(0) instanceof Map<?, ?> first
+                ? String.valueOf(first.get("name")) : null;
+            if (alias != null) {
+                this.lastPublishedAlias = alias;
+                this.imageAliases.put(alias, "fp-published-" + alias);
+            }
+            return async();
         }
         if ("GET".equals(method) && path.startsWith("/1.0/images/aliases/")) {
             String alias = path.substring("/1.0/images/aliases/".length());
@@ -196,7 +235,21 @@ final class FakeIncusTransport implements IncusTransport {
     public Http11.Raw exchangeUpload(String method, String pathAndQuery, Path bodyFile,
                                      String contentType, Map<String, String> extraHeaders,
                                      long timeoutMs) {
-        throw new UnsupportedOperationException("not exercised by this journey");
+        // The ISO import lane: a streamed POST onto the custom-volume collection with
+        // the name/type headers, exactly the wire shape IncusClient.importIsoVolume
+        // sends. Anything else stays a loud gap.
+        if ("POST".equals(method)
+                && pathAndQuery.equals("/1.0/storage-pools/default-pool/volumes/custom")
+                && extraHeaders != null && "iso".equals(extraHeaders.get("X-Incus-Type"))) {
+            String name = extraHeaders.get("X-Incus-Name");
+            Map<String, Object> volume = new LinkedHashMap<>();
+            volume.put("name", name);
+            volume.put("content_type", "iso");
+            this.customVolumes.put(name, volume);
+            return async();
+        }
+        throw new UnsupportedOperationException("not exercised by this journey: "
+            + method + " " + pathAndQuery);
     }
 
     @Override

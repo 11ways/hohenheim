@@ -50,7 +50,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public final class IncusInstanceRuntime
         implements InstanceRuntime, ConsoleStreamSupport, NativeSnapshotSupport,
         InstallSupport, AppUpdateSupport, DeviceAttachSupport, RootDiskSizeSupport,
-        RootDiskUsageSupport, ExecSupport {
+        RootDiskUsageSupport, ExecSupport, ImagePublishSupport {
 
     @Override
     public ExecSupport.@NonNull ExecOutcome runExec(@NonNull InstanceSpec spec,
@@ -210,20 +210,32 @@ public final class IncusInstanceRuntime
         // Pin honesty: an ABSENT workload with a recorded resolved fingerprint is
         // recreated from THAT image, never by re-resolving the mutable alias.
         Map<String, Object> source = new LinkedHashMap<>();
-        source.put("type", "image");
         boolean pinned = spec.imageFingerprint() != null && !spec.imageFingerprint().isBlank();
-        if (spec.imageOrigin() == ImageOrigin.PREPARED) {
-            // No protocol/server: the daemon resolves this in its OWN image store, never
-            // fetched from anywhere.
-            requirePreparedImagePresent(spec.image(), spec.imageOrigin(), pinned);
+        if (spec.imageOrigin() == ImageOrigin.INSTALL_MEDIA) {
+            // An EMPTY workload: no image anywhere, the OS arrives interactively from
+            // attached install media. VM-only -- a system container shares the host
+            // kernel and has no firmware to boot an ISO with.
+            if (this.type != IncusWorkloadType.VIRTUAL_MACHINE) {
+                throw new IOException("REFUSED to create '" + spec.handle() + "': the"
+                    + " install_media origin declares an empty VM installed from an ISO,"
+                    + " and a " + this.type.apiType() + " cannot boot install media.");
+            }
+            source.put("type", "none");
         } else {
-            source.put("protocol", "simplestreams");
-            source.put("server", IMAGE_SERVER);
-        }
-        if (pinned) {
-            source.put("fingerprint", spec.imageFingerprint());
-        } else {
-            source.put("alias", spec.image());
+            source.put("type", "image");
+            if (spec.imageOrigin() == ImageOrigin.PREPARED) {
+                // No protocol/server: the daemon resolves this in its OWN image store,
+                // never fetched from anywhere.
+                requirePreparedImagePresent(spec.image(), spec.imageOrigin(), pinned);
+            } else {
+                source.put("protocol", "simplestreams");
+                source.put("server", IMAGE_SERVER);
+            }
+            if (pinned) {
+                source.put("fingerprint", spec.imageFingerprint());
+            } else {
+                source.put("alias", spec.image());
+            }
         }
 
         Map<String, Object> definition = new LinkedHashMap<>();
@@ -1023,6 +1035,25 @@ public final class IncusInstanceRuntime
         return new ImageIdentity(spec.image(), id);
     }
 
+    // -- ImagePublishSupport --------------------------------------------------
+
+    /**
+     * @throws IOException for a RUNNING or absent workload: publishing a live rootfs
+     *         would capture a torn filesystem, and Incus's own refusal for that case is
+     *         less specific than the state this driver can already read
+     */
+    @Override
+    public @NonNull String publishImage(@NonNull InstanceSpec spec, @NonNull String alias,
+                                        @Nullable String description) throws IOException {
+        ContainerState state = status(spec.handle()).state();
+        if (state != ContainerState.STOPPED) {
+            throw new IOException("REFUSED to publish '" + spec.handle() + "' as an image:"
+                + " the workload is " + state + " and only a STOPPED workload captures a"
+                + " consistent filesystem. Stop it first.");
+        }
+        return this.incus.publishImage(spec.handle(), alias, description);
+    }
+
     // -- DeviceAttachSupport --------------------------------------------------
 
     /** The daemon-side custom-volume name of one device (handle-scoped, collision-free). */
@@ -1100,6 +1131,72 @@ public final class IncusInstanceRuntime
         putDevice(spec.handle(), instance, deviceName,
             this.policy.extraNicDevice(this.egress, spec.networkLimitMbit()));
         verifyIsolated(spec);
+    }
+
+    /** Boot priority of the workload's own root disk while install media is attached. */
+    static final String ROOT_BOOT_PRIORITY = "10";
+
+    /** Boot priority of an attached install-media CD-ROM (below the root disk's). */
+    static final String CDROM_BOOT_PRIORITY = "5";
+
+    /**
+     * AIDEV-NOTE: the boot-order policy is ENCODED here, not exposed as a knob, and the
+     * numbers are the measured ones from docs/prepare-windows-template.md step 5: the
+     * firmware only lists a CD that carries a boot.priority, and the DISK must hold the
+     * HIGHER one -- while it is blank the firmware falls through to the CD, and the
+     * moment the OS makes it bootable the installer stops being re-entered from the
+     * media (booting the CD first again after the first-phase reboot strands Windows
+     * Setup on its "started an upgrade" question, a full boot cycle to discover).
+     */
+    @Override
+    public void ensureCdrom(@NonNull InstanceSpec spec, @NonNull String deviceName,
+                            @NonNull String mediaVolume) throws IOException {
+        if (this.type != IncusWorkloadType.VIRTUAL_MACHINE) {
+            throw new IOException("Instance '" + spec.handle() + "' is a "
+                + this.type.apiType() + "; only a virtual machine can boot install media");
+        }
+        String pool = managedPoolName();
+        Map<String, Object> media = this.incus.customVolume(pool, mediaVolume);
+        if (media == null) {
+            throw new IOException("Install media volume '" + mediaVolume + "' does not"
+                + " exist on pool '" + pool + "' of this host; import the ISO on this"
+                + " host first (the media surface on the server record).");
+        }
+        if (!"iso".equals(media.get("content_type"))) {
+            throw new IOException("Volume '" + mediaVolume + "' on pool '" + pool
+                + "' is not an ISO volume (content_type "
+                + media.get("content_type") + "); refusing to attach it as install media");
+        }
+        Map<String, Object> instance = this.incus.instance(spec.handle());
+        Map<String, Object> cdrom = new LinkedHashMap<>();
+        cdrom.put("type", "disk");
+        cdrom.put("pool", pool);
+        cdrom.put("source", mediaVolume);
+        cdrom.put("boot.priority", CDROM_BOOT_PRIORITY);
+        putDevice(spec.handle(), instance, deviceName, cdrom);
+        ensureRootBootPriority(spec.handle());
+        requireDevicePresent(spec.handle(), deviceName);
+    }
+
+    /** Stamp the root disk's boot priority ABOVE the media's (see ensureCdrom's note). */
+    private void ensureRootBootPriority(@NonNull String handle) throws IOException {
+        Map<String, Object> instance = this.incus.instance(handle);
+        Map<String, Object> root = new LinkedHashMap<>();
+        if (instance.get("devices") instanceof Map<?, ?> devices
+                && devices.get(ROOT_DEVICE) instanceof Map<?, ?> existing) {
+            existing.forEach((key, value) -> root.put(String.valueOf(key), value));
+        } else {
+            // No instance-level root override yet (the profile's root applies): mint the
+            // minimal one so the priority has a device to ride on.
+            root.put("type", "disk");
+            root.put("path", "/");
+            root.put("pool", managedPoolName());
+        }
+        if (ROOT_BOOT_PRIORITY.equals(root.get("boot.priority"))) {
+            return;
+        }
+        root.put("boot.priority", ROOT_BOOT_PRIORITY);
+        putDevice(handle, instance, ROOT_DEVICE, root);
     }
 
     @Override
@@ -1261,7 +1358,17 @@ public final class IncusInstanceRuntime
      * places custom volumes in, never a guess.
      */
     private @NonNull String managedPoolName() throws IOException {
-        Object devices = this.incus.profile("default").get("devices");
+        return managedPoolNameOf(this.incus);
+    }
+
+    /**
+     * Static twin of {@link #managedPoolName()} for host-scoped callers with only a
+     * client (the install-media surface): ONE authority on which pool is ours, so the
+     * media lane and the device lane can never place volumes in different pools.
+     */
+    public static @NonNull String managedPoolNameOf(@NonNull IncusClient incus)
+            throws IOException {
+        Object devices = incus.profile("default").get("devices");
         if (devices instanceof Map<?, ?> map && map.get("root") instanceof Map<?, ?> root
                 && root.get("pool") instanceof String pool && !pool.isBlank()) {
             return pool;

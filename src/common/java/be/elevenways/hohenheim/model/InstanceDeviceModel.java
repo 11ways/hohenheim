@@ -14,8 +14,9 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.validation.Violations;
 
 /**
- * One attached instance device: an extra disk (a daemon-side custom volume) or an
- * extra NIC. The row is the DESIRED state the deploy reconciles onto the daemon;
+ * One attached instance device: an extra disk (a daemon-side custom volume), an
+ * extra NIC, or an install-media CD-ROM over an operator-published ISO volume.
+ * The row is the DESIRED state the deploy reconciles onto the daemon;
  * its reservation in the core ledger is charged by the beforeWrite hook adjacent
  * to this row's write (the InstanceModel.QUOTA_BUCKET shape), so two racing
  * attaches cannot both spend the last slot.
@@ -32,6 +33,13 @@ public class InstanceDeviceModel extends Model {
     public static final String TYPE_DISK = "disk";
     public static final String TYPE_NIC = "nic";
 
+    /**
+     * An install-media CD-ROM: references an OPERATOR-published ISO volume on the
+     * instance's host by name ({@link #SOURCE_MEDIA}). Charges no quota (the media is
+     * shared operator state, not tenant storage) and detaching never deletes the volume.
+     */
+    public static final String TYPE_CDROM = "cdrom";
+
     /** Device names become daemon device/volume names; keep them tight and portable. */
     private static final String NAME_PATTERN = "[a-z][a-z0-9-]{0,30}";
 
@@ -45,6 +53,8 @@ public class InstanceDeviceModel extends Model {
             .label(Microcopy.of("disk").withFilter("scope", "instance_device")))
         .value(TYPE_NIC, v -> v.displayName("NIC").icon("network-wired")
             .label(Microcopy.of("nic").withFilter("scope", "instance_device")))
+        .value(TYPE_CDROM, v -> v.displayName("Install media").icon("compact-disc")
+            .label(Microcopy.of("cdrom").withFilter("scope", "instance_device")))
         .build());
 
     // User data (a device name), never localized.
@@ -56,6 +66,13 @@ public class InstanceDeviceModel extends Model {
     public static final IntegerField SIZE_GB = SCHEMA.addField(
         IntegerField.builder().name("size_gb")
             .label(HohenheimFormCopy.label("device_size_gb"))
+            .build());
+
+    /** The host-side ISO volume name a cdrom row attaches; null for disks and NICs. */
+    public static final StringField SOURCE_MEDIA = SCHEMA.addField(
+        StringField.builder().name("source_media")
+            .label(HohenheimFormCopy.label("device_source_media"))
+            .help(HohenheimFormCopy.help("device_source_media"))
             .build());
 
     /** The ledger bucket this row's reservation was charged to (reserve hook stamps it). */
@@ -81,6 +98,17 @@ public class InstanceDeviceModel extends Model {
                     throw Violations.ofField("name", name,
                         Microcopy.of("device_name_invalid").withFilter("scope", "violations")
                             .withArg("name", String.valueOf(name)));
+                }
+            }
+            // A cdrom write that CARRIES the type must name its ISO volume: a mediumless
+            // CD-ROM device has nothing to attach and would only fail at the daemon with
+            // a worse name.
+            if (row.has(TYPE.getName()) && TYPE_CDROM.equals(row.get(TYPE.getName()))) {
+                String media = row.has(SOURCE_MEDIA.getName())
+                    ? row.get(SOURCE_MEDIA) : null;
+                if (media == null || media.isBlank()) {
+                    throw Violations.ofField("source_media", media,
+                        Microcopy.of("device_media_required").withFilter("scope", "violations"));
                 }
             }
             // A disk write that CARRIES the type must carry a real size (a sizeless

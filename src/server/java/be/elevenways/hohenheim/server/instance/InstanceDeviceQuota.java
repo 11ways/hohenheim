@@ -111,16 +111,20 @@ public final class InstanceDeviceQuota {
 
     private static void reserveCreate(@NonNull Row row) {
         String pack = ownerPackOf(row.get(InstanceDeviceModel.INSTANCE_ID));
-        boolean disk = InstanceDeviceModel.TYPE_DISK.equals(row.get(InstanceDeviceModel.TYPE.getName()));
-        if (disk) {
+        String type = String.valueOf(row.get(InstanceDeviceModel.TYPE.getName()));
+        if (InstanceDeviceModel.TYPE_DISK.equals(type)) {
             Integer size = row.get(InstanceDeviceModel.SIZE_GB);
             long amount = size == null ? 0 : size;
             reserve(diskBucketOf(pack), amount, diskLimitFor(pack), "disk_quota_reached");
             row.set(InstanceDeviceModel.QUOTA_BUCKET, diskBucketOf(pack));
-        } else {
+        } else if (InstanceDeviceModel.TYPE_NIC.equals(type)) {
             reserve(nicBucketOf(pack), 1, nicLimitFor(pack), "nic_quota_reached");
             row.set(InstanceDeviceModel.QUOTA_BUCKET, nicBucketOf(pack));
         }
+        // A cdrom row charges NOTHING: it references shared operator media, allocates no
+        // tenant storage, and is operator-attached by the funnel -- a NIC-slot charge
+        // here (the old else-branch shape) would spend a tenant's NIC quota on a device
+        // that is not one.
     }
 
     /** A size update charges/releases the DELTA against the STAMPED bucket. */
@@ -223,7 +227,11 @@ public final class InstanceDeviceQuota {
         }
         List<Doomed> doomed = new ArrayList<>();
         for (Row row : builder.all()) {
-            boolean disk = InstanceDeviceModel.TYPE_DISK.equals(row.get(InstanceDeviceModel.TYPE));
+            String type = row.get(InstanceDeviceModel.TYPE);
+            if (InstanceDeviceModel.TYPE_CDROM.equals(type)) {
+                continue;   // charged nothing at create, so releases nothing here
+            }
+            boolean disk = InstanceDeviceModel.TYPE_DISK.equals(type);
             Integer size = row.get(InstanceDeviceModel.SIZE_GB);
             long amount = disk ? (size == null ? 0 : size) : 1;
             if (amount > 0) {

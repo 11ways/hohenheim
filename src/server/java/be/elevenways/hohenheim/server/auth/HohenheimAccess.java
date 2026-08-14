@@ -695,6 +695,27 @@ public final class HohenheimAccess {
     }
 
     /**
+     * THE operator gate of an instance-tier act no delegation reaches (install-media
+     * attach, template capture): a tenant-originated caller must hold the ADMIN
+     * permission, and the refusal is the tier's uniform one -- naming "operators only"
+     * would tell a delegate the act exists specifically above them. System work (the
+     * {@link #requireOperationCapability} contract) passes untouched, including its
+     * documented default-allow debt.
+     *
+     * @throws Violations {@code instance_not_permitted}
+     */
+    public static void requireOperatorOperation() {
+        if (!TenantWrites.isTenantOriginated()) {
+            return;
+        }
+        AccessContext ctx = TenantWrites.acting();
+        if (ctx == null || ctx.isAnonymous() || !isAdmin(ctx)) {
+            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
+                .withFilter("scope", "violations"));
+        }
+    }
+
+    /**
      * Whether the context holds {@code capability} on the managed database -- the SAME
      * precedence walk every other tier rides, over the database vocabulary.
      */

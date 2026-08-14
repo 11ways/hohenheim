@@ -1173,6 +1173,10 @@
     {
       "text": "Nothing captured yet",
       "scope": "instance_artifacts"
+    },
+    {
+      "text": "No install media",
+      "scope": "server_media"
     }
   ],
   "empty_description": [
@@ -1207,6 +1211,10 @@
     {
       "text": "Attach a data disk or an extra network interface to this instance.",
       "scope": "instance_device"
+    },
+    {
+      "text": "Fetch an ISO below to make it attachable as install media on this host's virtual machines.",
+      "scope": "server_media"
     }
   ],
   "engine": [
@@ -3119,10 +3127,16 @@
       "scope": "attention_detail"
     }
   ],
-  "url": {
-    "text": "URL",
-    "scope": "dev_sessions"
-  },
+  "url": [
+    {
+      "text": "URL",
+      "scope": "dev_sessions"
+    },
+    {
+      "text": "ISO URL",
+      "scope": "server_media"
+    }
+  ],
   "connected_since": {
     "text": "Connected since",
     "scope": "dev_sessions"
@@ -3345,6 +3359,10 @@
     {
       "text": "Delete this project? Its membership group and access grants are removed with it. A project still owning records or environments is refused.",
       "scope": "project"
+    },
+    {
+      "text": "Delete this ISO volume from the host? Instances no longer referencing it are unaffected.",
+      "scope": "server_media"
     }
   ],
   "priority": {
@@ -6346,10 +6364,16 @@
     "text": "Up one level",
     "scope": "instance_files"
   },
-  "delete": {
-    "text": "Delete",
-    "scope": "instance_files"
-  },
+  "delete": [
+    {
+      "text": "Delete",
+      "scope": "instance_files"
+    },
+    {
+      "text": "Delete",
+      "scope": "server_media"
+    }
+  ],
   "save": {
     "text": "Save",
     "scope": "instance_files"
@@ -7006,6 +7030,10 @@
     "text": "Prepared template",
     "scope": "image_origin"
   },
+  "install_media": {
+    "text": "Install media (empty VM)",
+    "scope": "image_origin"
+  },
   "secure_boot": [
     {
       "text": "Secure Boot",
@@ -7068,6 +7096,20 @@
     "text": "NIC",
     "scope": "instance_device"
   },
+  "cdrom": {
+    "text": "Install media",
+    "scope": "instance_device"
+  },
+  "device_source_media": [
+    {
+      "text": "Install media (ISO volume)",
+      "scope": "field"
+    },
+    {
+      "text": "Name of an ISO volume published on the instance's host (see the server record's Install media tab). Only install-media devices use it.",
+      "scope": "help"
+    }
+  ],
   "network_limit_mbit": [
     {
       "text": "Network limit",
@@ -7228,12 +7270,56 @@
     "text": "Click the screen to capture keyboard input; input is sent to the VM.",
     "scope": "instance_framebuffer"
   },
+  "capture_template": {
+    "text": "Capture as template",
+    "scope": "instance"
+  },
+  "capture_template_hint": {
+    "text": "Publish this stopped instance's current state as a prepared image and create an unapproved template from it",
+    "scope": "instance"
+  },
+  "capture_template_confirm": {
+    "text": "Publish this instance's current disk state as a prepared image on its host and create a template from it? Publishing a large disk can take several minutes.",
+    "scope": "instance"
+  },
+  "tab": {
+    "text": "Install media",
+    "scope": "server_media"
+  },
+  "load_error": {
+    "text": "The host did not answer: {$reason}",
+    "scope": "server_media"
+  },
+  "fetch_title": {
+    "text": "Fetch an ISO",
+    "scope": "server_media"
+  },
+  "fetch_description": {
+    "text": "Downloads the ISO from the URL and imports it into this host's storage pool as an ISO volume.",
+    "scope": "server_media"
+  },
+  "fetch": {
+    "text": "Fetch",
+    "scope": "server_media"
+  },
+  "media_fetched": {
+    "text": "Media '{$name}' is now available on this host",
+    "scope": "server_media"
+  },
+  "media_deleted": {
+    "text": "Media '{$name}' was deleted",
+    "scope": "server_media"
+  },
   "add_disk": {
     "text": "Attach disk",
     "scope": "instance_device"
   },
   "add_nic": {
     "text": "Attach NIC",
+    "scope": "instance_device"
+  },
+  "add_media": {
+    "text": "Attach install media",
     "scope": "instance_device"
   },
   "detach": {
@@ -7245,7 +7331,51 @@
     "scope": "instance_device"
   },
   "device_type_unknown": {
-    "text": "'{$type}' is not a device type (disk or nic)",
+    "text": "'{$type}' is not a device type (disk, nic or cdrom)",
+    "scope": "violations"
+  },
+  "device_media_required": {
+    "text": "An install-media device must name an ISO volume",
+    "scope": "violations"
+  },
+  "device_media_change_unsupported": {
+    "text": "Install media cannot be swapped in place; detach this device and attach the other medium",
+    "scope": "violations"
+  },
+  "media_name_invalid": {
+    "text": "'{$name}' is not a valid media name (lowercase letters, digits, dots, dashes)",
+    "scope": "violations"
+  },
+  "media_url_invalid": {
+    "text": "The media URL must be a plain http(s) URL",
+    "scope": "violations"
+  },
+  "media_exists": {
+    "text": "Media '{$media}' already exists on this host",
+    "scope": "violations"
+  },
+  "media_fetch_failed": {
+    "text": "Fetching media '{$media}' failed: {$reason}",
+    "scope": "violations"
+  },
+  "media_in_use": {
+    "text": "Media '{$media}' is attached to: {$instances}. Detach it there first.",
+    "scope": "violations"
+  },
+  "media_delete_failed": {
+    "text": "Deleting media '{$media}' failed: {$reason}",
+    "scope": "violations"
+  },
+  "template_capture_unsupported": {
+    "text": "Instance '{$name}' cannot be captured as a template on its runtime",
+    "scope": "violations"
+  },
+  "template_capture_requires_stopped": {
+    "text": "Instance '{$name}' must be stopped before it can be captured as a template",
+    "scope": "violations"
+  },
+  "template_capture_failed": {
+    "text": "Capturing instance '{$name}' failed: {$reason}",
     "scope": "violations"
   },
   "device_rename_unsupported": {

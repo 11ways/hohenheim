@@ -9,8 +9,11 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
+import be.elevenways.hohenheim.server.instance.InstanceTemplateCapture;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -170,6 +173,7 @@ public class InstanceResource extends RowResource {
         actions.add(this.appUpdateAction());
         actions.add(this.snapshotAction());
         actions.add(this.backupAction());
+        actions.add(this.captureTemplateAction());
         actions.add(this.migrateAction());
         return actions;
     }
@@ -369,6 +373,43 @@ public class InstanceResource extends RowResource {
                         .withArg("name", row.get(InstanceModel.NAME)));
             })
             .build();
+    }
+
+    /**
+     * Publish this STOPPED instance's state as a prepared template (unapproved), then
+     * open the minted template's form. OPERATOR-ONLY and deliberately NOT inherited as
+     * an offer by /manage principals: capture mints catalog authority, and the service
+     * re-refuses a tenant with the uniform refusal
+     * ({@link InstanceTemplateCapture}).
+     */
+    private @NonNull RowAction<Row> captureTemplateAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "capture_template"))
+            .label(Microcopy.of("capture_template").withFilter("scope", "instance"))
+            .icon(Icon.of("box-archive"))
+            .inlineInRow(false)
+            .description(Microcopy.of("capture_template_hint").withFilter("scope", "instance"))
+            .visibleFor((row, ctx) -> HohenheimAccess.isAdmin(ctx)
+                && InstanceModel.STATUS_STOPPED.equals(row.get(InstanceModel.STATUS))
+                && supportsCapture(row))
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("capture_template").withFilter("scope", "instance"))
+                .body(Microcopy.of("capture_template_confirm").withFilter("scope", "instance"))
+                .confirmLabel(Microcopy.of("capture_template").withFilter("scope", "instance"))
+                .build())
+            .handler((row, ctx) -> {
+                int templateId = new InstanceTemplateCapture()
+                    .capture(row.get(InstanceModel.ID));
+                // The panel slug is the literal "admin" for the migrateAction reason:
+                // a row action has no conduit to ask, and this action is admin-only.
+                return CmsActionResult.redirect(new Uri(CmsRoutes.detail("admin",
+                    "instance-templates", templateId).toUrl()));
+            })
+            .build();
+    }
+
+    private static boolean supportsCapture(@NonNull Row row) {
+        InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
+        return handler != null && handler.supportsTemplateCapture();
     }
 
     protected @NonNull RowAction<Row> deployAction() {

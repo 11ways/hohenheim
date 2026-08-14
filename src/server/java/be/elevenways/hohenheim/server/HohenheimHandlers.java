@@ -47,6 +47,7 @@ public final class HohenheimHandlers {
         DnsZoneHandlers.initRemoteRecords();
         DynamicDnsHandlers.init();
         DatabaseHandlers.init();
+        ServerMediaHandlers.init();
         SiteControlHandlers.initProcessControl();
         SiteControlHandlers.initDeployControl();
         SiteControlHandlers.initTerminal();

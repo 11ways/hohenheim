@@ -653,6 +653,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     private static final class FakeWorkload {
         final Map<String, Integer> disks = new LinkedHashMap<>();
         final List<String> nics = new ArrayList<>();
+        final Map<String, String> cdroms = new LinkedHashMap<>();
     }
 
     private static final class FakeDeviceRuntime
@@ -712,6 +713,12 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         }
 
         @Override
+        public void ensureCdrom(@NonNull InstanceSpec spec, @NonNull String name,
+                                @NonNull String mediaVolume) throws IOException {
+            require(spec).cdroms.put(name, mediaVolume);
+        }
+
+        @Override
         public void removeDevice(@NonNull InstanceSpec spec, @NonNull String name,
                                  boolean disk) throws IOException {
             FakeWorkload workload = require(spec);
@@ -719,6 +726,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
                 workload.disks.remove(name);
             } else {
                 workload.nics.remove(name);
+                workload.cdroms.remove(name);
             }
         }
 
@@ -767,6 +775,9 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
         /** Its runtime really does implement DeviceAttachSupport, so it declares it. */
         @Override public boolean supportsDevices() { return true; }
+
+        /** Cdrom journeys ride this kind too; the fake runtime honours ensureCdrom. */
+        @Override public boolean supportsInstallMedia() { return true; }
 
         @Override
         public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {

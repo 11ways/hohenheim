@@ -6,6 +6,15 @@ VM from an image that already exists in the target Incus daemon's own image stor
 image is what this document describes, end to end, with the commands that were
 actually run.
 
+UPDATE 2026-08-14: the product now carries an in-panel counterpart for most of
+this. The server record's Install media tab fetches ISOs onto a host, an
+`image_origin=install_media` VM is created EMPTY, the ISO attaches as a cdrom
+device (boot order encoded from step 5's finding), the framebuffer console drives
+the interactive install, and the instance's "Capture as template" action replaces
+step 7's hand-run `incus publish` (unapproved template minted, host-pinned). The
+media REPACKING in steps 1-4 (virtio injection, noprompt boot, the answer-file CD)
+and step 6's sysprep remain hand work this document still owns.
+
 Everything below was executed on `daystrom` (Arch, incus 7.3, 3 vCPU, 3907 MB RAM,
 40 GiB btrfs pool) on 2026-08-06 and produced a working, generalized Windows Server
 2025 Standard Evaluation (Server Core) template. Timings are from that run.

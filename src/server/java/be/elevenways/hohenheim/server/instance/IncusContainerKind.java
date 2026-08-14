@@ -160,6 +160,13 @@ public final class IncusContainerKind implements InstanceKindHandler {
         return 512;
     }
 
+    // AIDEV-NOTE: NO supportsTemplateCapture here, deliberately. The driver could
+    // publish a container (incus publish works for both flavours), but this kind's
+    // settings schema declares no image_origin and specFor never sets one, so a
+    // captured template's prepared alias would be re-resolved against simplestreams and
+    // fail by the wrong name. Capture lands here only together with the origin field
+    // and the specFor plumbing -- the "no unwired vocabulary" rule.
+
     @Override
     public void requirePlaceableOn(@NonNull String serverName,
                                    @NonNull Map<String, Object> settings) {
