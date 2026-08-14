@@ -200,10 +200,6 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         return row.get(ServerModel.ID);
     }
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> get(String session, String path) throws Exception {
         return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
             .send(HttpRequest.newBuilder()

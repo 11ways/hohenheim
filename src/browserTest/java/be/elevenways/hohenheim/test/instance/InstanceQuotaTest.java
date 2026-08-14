@@ -56,10 +56,6 @@ class InstanceQuotaTest extends HohenheimTestBase {
             this.previousLimit == null ? 0 : this.previousLimit);
     }
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> postCreate(String name) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)

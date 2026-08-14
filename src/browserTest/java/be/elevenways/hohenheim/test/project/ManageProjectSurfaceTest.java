@@ -239,23 +239,11 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
 
     // -- fixtures -------------------------------------------------------------
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> get(String path, String session) throws Exception {
         return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
             .send(HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl() + path))
                 .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
-                .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> keyGet(String key, String path) throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("X-Api-Key", key)
                 .build(), HttpResponse.BodyHandlers.ofString());
     }
 

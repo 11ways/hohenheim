@@ -3,27 +3,19 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSourceQuery;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.session.Session;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
@@ -50,8 +42,7 @@ class CertificateOwnerScopeTest extends HohenheimTestBase {
     private static final String FOREIGN_NAME = "Owner scope foreign certificate";
 
     private static Integer tenantId;
-    private static String tenantSession;
-    private static String tenantCsrf;
+    private static TestSession tenant;
     private static Integer ownCertId;
     private static Integer foreignCertId;
 
@@ -72,12 +63,7 @@ class CertificateOwnerScopeTest extends HohenheimTestBase {
         AuthModels.users().save(user);
         tenantId = user.get(UserModel.ID);
 
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, tenantId.longValue());
-        tenantCsrf = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, tenantCsrf);
-        Zenit.getSessionStore().save(session);
-        tenantSession = session.token().secret();
+        tenant = sessionFor(tenantId);
 
         Model certs = Models.get(CertificateModel.class);
         Row own = certs.createEmptyRow();
@@ -183,48 +169,19 @@ class CertificateOwnerScopeTest extends HohenheimTestBase {
             .isEqualTo(403);
     }
 
-    // -- transport ---------------------------------------------------------------
-
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
+    // -- transport (the shared base helpers, specialized to this source) ---------
 
     private HttpResponse<String> sessionQuery() throws Exception {
-        String matchAll = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/zn/records/hohenheim.certificate/query"))
-            .header("Content-Type", "application/dry")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + tenantSession)
-            .header("X-Csrf-Token", tenantCsrf)
-            .POST(HttpRequest.BodyPublishers.ofString(matchAll)));
+        return httpPostDry("/zn/records/hohenheim.certificate/query",
+            Zenit.DRY.stringify(RecordSourceQuery.matchAll()), tenant.token(), tenant.csrf());
     }
 
     private HttpResponse<String> sessionGet(String path) throws Exception {
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + tenantSession)
-            .GET());
+        return httpGet(path, tenant.token());
     }
 
     private HttpResponse<String> keyQuery(String key) throws Exception {
-        String matchAll = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + "/zn/records/hohenheim.certificate/query"))
-            .header("Content-Type", "application/dry")
-            .header("X-Api-Key", key)
-            .POST(HttpRequest.BodyPublishers.ofString(matchAll)));
-    }
-
-    private HttpResponse<String> keyGet(String key, String path) throws Exception {
-        return send(HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl() + path))
-            .header("X-Api-Key", key)
-            .GET());
-    }
-
-    private static HttpResponse<String> send(HttpRequest.Builder builder) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        return keyPostDry(key, "/zn/records/hohenheim.certificate/query",
+            Zenit.DRY.stringify(RecordSourceQuery.matchAll()));
     }
 }

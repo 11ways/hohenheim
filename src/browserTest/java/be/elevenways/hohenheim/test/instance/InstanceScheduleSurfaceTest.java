@@ -6,21 +6,15 @@ import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleStepResource;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.RowAction;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
@@ -28,9 +22,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -57,8 +48,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
 
     private static Integer ownerId;
     private static Integer viewerId;
-    private static String viewerSession;
-    private static String viewerCsrf;
+    private static TestSession viewerHttp;
 
     private static Integer instanceId;
     private static Integer scheduleId;
@@ -69,12 +59,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         ownerId = user("schedsurf-owner@surface.test", "Schedule Owner");
         viewerId = user("schedsurf-viewer@surface.test", "Schedule Viewer");
 
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, viewerId.longValue());
-        viewerCsrf = ZenitAuth.randomToken();
-        session.set(CsrfTokens.TOKEN, viewerCsrf);
-        Zenit.getSessionStore().save(session);
-        viewerSession = session.token().secret();
+        viewerHttp = sessionFor(viewerId);
 
         Model instances = Models.get(InstanceModel.class);
         Row instance = instances.createEmptyRow();
@@ -171,8 +156,9 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         //    invoke too, never a capability oracle.
         long runsBefore = Models.get(RecordScheduleRunModel.class).find()
             .where(RecordScheduleRunModel.SCHEDULE_ID.eq(scheduleId)).count();
-        HttpResponse<String> forged = viewerPost(
-            "/manage/instance-schedules/" + scheduleId + "/action/run_schedule", "");
+        HttpResponse<String> forged = httpPostForm(
+            "/manage/instance-schedules/" + scheduleId + "/action/run_schedule", "",
+            viewerHttp.token(), viewerHttp.csrf());
         assertThat(forged.statusCode())
             .as("step 2: a view-only delegate's forged run-now reads as missing")
             .isEqualTo(404);
@@ -271,17 +257,4 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         }
     }
 
-    // -- transport ---------------------------------------------------------------
-
-    private HttpResponse<String> viewerPost(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + viewerSession)
-            .header("X-Csrf-Token", viewerCsrf)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build(), HttpResponse.BodyHandlers.ofString());
-    }
 }

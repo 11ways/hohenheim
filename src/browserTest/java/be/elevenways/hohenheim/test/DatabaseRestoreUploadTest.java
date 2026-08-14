@@ -38,10 +38,6 @@ class DatabaseRestoreUploadTest extends HohenheimTestBase {
     private static final String POSTGRES_IMAGE = "postgres:17-alpine";
     private static final String BOUNDARY = "HohenheimRestoreTestBoundary";
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     @Test
     @Order(1)
     void restoreWithoutFileRedirectsWithError() throws Exception {

@@ -251,28 +251,6 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         return null;
     }
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
-    private HttpResponse<String> keyGet(String key, String path) throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("X-Api-Key", key)
-                .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> keyPost(String key, String path, String body) throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("X-Api-Key", key)
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
     // -- the journeys ---------------------------------------------------------
 
     /** The API answers to keys only, and shows one tenant exactly its own inventory. */

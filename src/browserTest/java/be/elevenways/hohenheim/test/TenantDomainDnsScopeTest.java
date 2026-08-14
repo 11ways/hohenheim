@@ -179,10 +179,6 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
     // --- HTTP helpers -----------------------------------------------------------------
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> get(String path, String session) throws Exception {
         HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
         HttpRequest.Builder request = HttpRequest.newBuilder().uri(URI.create(baseUrl() + path));

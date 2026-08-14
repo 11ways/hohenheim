@@ -33,10 +33,6 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
     private static final String PASSWORD_V2 = "pw-v2-tr0ub4dor-3c2b1a0f9e8d";
     private static final String LEGACY_PASSWORD = "legacy-plaintext-pw-0102030405";
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> postForm(String path, String body) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)

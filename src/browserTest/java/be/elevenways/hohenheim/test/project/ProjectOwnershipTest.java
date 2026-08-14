@@ -218,10 +218,6 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         return row.get(ServerModel.ID);
     }
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> memberGet(String path) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER).build();

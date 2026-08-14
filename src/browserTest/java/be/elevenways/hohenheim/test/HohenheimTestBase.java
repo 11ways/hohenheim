@@ -29,8 +29,13 @@ import com.microsoft.playwright.options.Cookie;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Instant;
 import be.elevenways.zenit.common.session.SessionToken;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
@@ -200,6 +205,97 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         session.set(CmsFlash.PENDING_BY_TAB, remaining);
         Zenit.getSessionStore().save(session);
         return FlashEncoding.decode(encoded);
+    }
+
+    // -- shared HTTP transport ------------------------------------------------
+    //
+    // THE one copy of the request helpers ~60 test classes used to each hand-roll.
+    // Session requests carry the auth cookie (plus CSRF on writes); key requests
+    // carry X-Api-Key and no cookie. New tests use these; existing classes migrate
+    // opportunistically when touched.
+
+    /** An authenticated session plus its CSRF token, for driving requests as one user. */
+    protected record TestSession(String token, String csrf) {
+    }
+
+    /** Mint an authenticated session (with CSRF token) for an existing user id. */
+    protected static TestSession sessionFor(int userId) {
+        Session session = Zenit.getSessionStore().create();
+        session.set(AuthKeys.USER_ID, (long) userId);
+        String csrf = ZenitAuth.randomToken();
+        session.set(CsrfTokens.TOKEN, csrf);
+        Zenit.getSessionStore().save(session);
+        return new TestSession(session.token().secret(), csrf);
+    }
+
+    protected @NonNull String baseUrl() {
+        return "http://localhost:" + getServerPort();
+    }
+
+    protected HttpResponse<String> httpGet(String path, @Nullable String session)
+            throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + path)).GET();
+        if (session != null) {
+            request.header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session);
+        }
+        return send(request);
+    }
+
+    protected HttpResponse<String> httpPost(String path, String body, String session,
+                                            String csrf, String contentType) throws Exception {
+        return send(HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + path))
+            .header("Content-Type", contentType)
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
+            .header("X-Csrf-Token", csrf)
+            .POST(HttpRequest.BodyPublishers.ofString(body)));
+    }
+
+    protected HttpResponse<String> httpPostForm(String path, String body, String session,
+                                                String csrf) throws Exception {
+        return httpPost(path, body, session, csrf, "application/x-www-form-urlencoded");
+    }
+
+    protected HttpResponse<String> httpPostDry(String path, String body, String session,
+                                               String csrf) throws Exception {
+        return httpPost(path, body, session, csrf, "application/dry");
+    }
+
+    /** The harness admin's session, for a positive anchor beside a tenant journey. */
+    protected HttpResponse<String> adminGet(String path) throws Exception {
+        return httpGet(path, sessionToken);
+    }
+
+    protected HttpResponse<String> keyGet(String key, String path) throws Exception {
+        return send(HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + path))
+            .header("X-Api-Key", key)
+            .GET());
+    }
+
+    protected HttpResponse<String> keyPost(String key, String path, String body)
+            throws Exception {
+        return send(HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + path))
+            .header("X-Api-Key", key)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .POST(HttpRequest.BodyPublishers.ofString(body)));
+    }
+
+    protected HttpResponse<String> keyPostDry(String key, String path, String body)
+            throws Exception {
+        return send(HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl() + path))
+            .header("X-Api-Key", key)
+            .header("Content-Type", "application/dry")
+            .POST(HttpRequest.BodyPublishers.ofString(body)));
+    }
+
+    private static HttpResponse<String> send(HttpRequest.Builder builder) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER).build();
+        return client.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     @Override

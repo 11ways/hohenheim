@@ -714,13 +714,6 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             .as("step 6: the successor now holds the route").isNotNull();
     }
 
-    private HttpResponse<String> adminGet(String path) throws Exception {
-        return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
-            .send(HttpRequest.newBuilder().uri(URI.create(baseUrl() + path))
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-                .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
     private HttpResponse<String> adminPost(String path, String body) throws Exception {
         return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
             .send(HttpRequest.newBuilder().uri(URI.create(baseUrl() + path))
@@ -729,10 +722,6 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
                 .header("X-Csrf-Token", csrfToken)
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
     }
 
     /**

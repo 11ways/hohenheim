@@ -227,7 +227,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
                 HohenheimAccess.MANAGE, true);
             RecordingClient client = new RecordingClient();
             ws = HttpClient.newHttpClient().newWebSocketBuilder()
-                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionFor(userId))
+                .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionFor(userId).token())
                 .buildAsync(URI.create("ws://localhost:" + getServerPort()
                     + "/ws/instance-framebuffer/" + id), client)
                 .join();
@@ -427,13 +427,6 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         row.set(UserModel.UPDATED_AT, Instant.now());
         AuthModels.users().save(row);
         return row.get(UserModel.ID);
-    }
-
-    private static String sessionFor(int userId) {
-        Session session = Zenit.getSessionStore().create();
-        session.set(AuthKeys.USER_ID, (long) userId);
-        Zenit.getSessionStore().save(session);
-        return session.token().secret();
     }
 
     /** Bounded poll: never assert a fresh workload's state with zero retry. */

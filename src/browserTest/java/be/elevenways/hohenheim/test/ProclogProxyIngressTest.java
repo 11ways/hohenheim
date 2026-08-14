@@ -122,15 +122,6 @@ class ProclogProxyIngressTest extends HohenheimTestBase {
         }
     }
 
-    private HttpResponse<String> adminGet(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
     /** The served document minus the hydration DRY payload (which legitimately carries the string). */
     private static String withoutHydrationData(String body) {
         int start = body.indexOf("<script type=\"application/dry\"");

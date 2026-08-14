@@ -36,10 +36,6 @@ class ErrorHandlingTest extends HohenheimTestBase {
         });
     }
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     /**
      * Trigger a soft navigation to the error endpoint via a synthetic link click.
      * Waits until the browser shows an error or the expected text.

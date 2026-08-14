@@ -109,10 +109,6 @@ class ManagePanelTest extends HohenheimTestBase {
         operatorSession = session.token().secret();
     }
 
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
-
     private HttpResponse<String> get(String path, String session) throws Exception {
         HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
         HttpRequest request = HttpRequest.newBuilder()
@@ -132,10 +128,6 @@ class ManagePanelTest extends HohenheimTestBase {
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build();
         return client.send(request, HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> adminGet(String path) throws Exception {
-        return get(path, sessionToken);
     }
 
     private HttpResponse<String> adminPost(String path, String body) throws Exception {

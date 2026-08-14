@@ -96,8 +96,4 @@ class TerminalCspClaimTest extends HohenheimTestBase {
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         return response.headers().firstValue("Content-Security-Policy").orElse("");
     }
-
-    private String baseUrl() {
-        return "http://localhost:" + getServerPort();
-    }
 }
