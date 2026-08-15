@@ -69,8 +69,10 @@ class SitesManageAllTest extends HohenheimTestBase {
 
     private static final String MANAGE_ALL = "hohenheim.sites.manage_all";
     private static final String MANAGE_ACCESS = "hohenheim.manage.access";
-    /** Registered and DELEGABLE; the control that keeps step 4's refusal non-vacuous. */
+    /** Registered and held by the actor; the control that keeps step 4 non-vacuous. */
     private static final String DELEGABLE_CONTROL = "hohenheim.instances.create";
+    /** Registered but NEVER granted to the holder: what step 4c is refused for. */
+    private static final String UNHELD_PERMISSION = "hohenheim.databases.create";
 
     private static Integer alphaSiteId;
     private static Integer betaSiteId;
@@ -115,18 +117,19 @@ class SitesManageAllTest extends HohenheimTestBase {
     /**
      * The whole permission in one walk: it opens every site on BOTH surfaces, an explicit
      * denial of the panel gate closes both again, it reaches nothing on any other model, and
-     * its holder cannot hand it on.
+     * a holder may hand on what they hold -- but nothing they do not.
      */
     @Test
-    void manageAllOpensEverySiteAndNothingElseAndCannotBeHandedOn() throws Exception {
-        // 0. The vocabulary really carries it, and carries it as non-delegable. An
+    void manageAllOpensEverySiteAndNothingElseAndIsHandedOnOnlyByAHolder() throws Exception {
+        // 0. The vocabulary really carries it, and carries it as delegable. An
         //    unregistered permission is one no admin can find in the grants editor.
         assertThat(KnownPermissions.all())
             .as("step 0: the permission is offered by the grants editor")
             .contains(MANAGE_ALL);
         assertThat(KnownPermissions.isDelegable(MANAGE_ALL))
-            .as("step 0: and it is registered NON-delegable")
-            .isFalse();
+            .as("step 0: and it is DELEGABLE -- a permission is a leaf, so holding one"
+                + " includes handing it on (owner's call, 2026-08-15)")
+            .isTrue();
 
         // 0b. The control: with nothing granted, the holder reaches nothing at all. Without
         //     this the rest could pass on authority that was already there.
@@ -281,27 +284,34 @@ class SitesManageAllTest extends HohenheimTestBase {
                 .as("step 3: nor the databases list a database")
                 .doesNotContain("manageall-database");
 
-            // 4. CONTAINMENT: even holding the grant-administration boundary, the holder
-            //    cannot mint its own authority for a peer.
+            // 4. CONTAINMENT, and what it is NOT. A permission is a leaf: holding one
+            //    includes handing it on, so the boundary that remains is HOLDING it --
+            //    not a second delegability class above it (owner's call, 2026-08-15;
+            //    hohenheim declares no nonDelegable permission any more).
             GrantService.createDirectGrant("user", holderId,
                 AuthEndpoints.PERM_GRANTS_MANAGE.value(), true);
             GrantService.createDirectGrant("user", holderId, DELEGABLE_CONTROL, true);
             AccessContext actor = holderContext();
 
-            // 4a. The control: a DELEGABLE permission the actor holds passes the same policy,
-            //     so the refusal below is about delegability and not about the actor.
+            // 4a. The control: a permission the actor holds passes the policy.
             GrantAdministration.requireAuthorizedDiff(actor, "user", peerId, "grants",
                 List.of(new GrantsEditField.Entry(DELEGABLE_CONTROL, true)));
 
-            // 4b. The claim.
+            // 4b. And so does every-site authority, which the actor also holds. This USED
+            //     to be refused with grant_delegate; that asymmetry is gone on purpose.
+            GrantAdministration.requireAuthorizedDiff(actor, "user", peerId, "grants",
+                List.of(new GrantsEditField.Entry(MANAGE_ALL, true)));
+
+            // 4c. The boundary that still bites: a permission the actor does NOT hold
+            //     cannot be conferred, so step 4b is a widening and not a shutdown.
             assertThatThrownBy(() -> GrantAdministration.requireAuthorizedDiff(
                     actor, "user", peerId, "grants",
-                    List.of(new GrantsEditField.Entry(MANAGE_ALL, true))))
-                .as("step 4b: an every-site holder may not confer every-site authority")
+                    List.of(new GrantsEditField.Entry(UNHELD_PERMISSION, true))))
+                .as("step 4c: nobody confers authority they do not themselves hold")
                 .isInstanceOf(Violations.class)
                 .satisfies(refused -> assertThat(refusalTargets((Violations) refused))
-                    .as("step 4b: refused for DELEGABILITY, not for the boundary permission")
-                    .contains("grant_delegate"));
+                    .as("step 4c: refused for NOT HOLDING it")
+                    .contains("grant"));
 
             // 5. THE OTHER LANE, and the one step 4 could not see. Non-delegability lives
             //    on the PERMISSION side, and the RECORD-GRANT editor never asks about it --
