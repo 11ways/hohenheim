@@ -1079,6 +1079,10 @@
     "text": "Attached database {$name} is {$status}",
     "scope": "attention_detail"
   },
+  "spamservice_not_ready": {
+    "text": "The managed spam service is enabled but reports state \"{$state}\"",
+    "scope": "attention_detail"
+  },
   "degraded": [
     {
       "text": "Degraded",

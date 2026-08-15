@@ -396,14 +396,29 @@ public final class AttentionCollector {
 
     /** Surfaces an enabled managed Spamservice that is not currently ready. */
     private static void spamserviceIssue(List<AttentionItem> items) {
-        SpamserviceManager.Snapshot snapshot = SpamserviceManager.get().snapshot();
-        if (snapshot.configured() && snapshot.enabled() && "ready".equals(snapshot.state())) {
-            return;
+        AttentionItem issue = spamserviceIssue(SpamserviceManager.get().snapshot());
+        if (issue != null) {
+            items.add(issue);
         }
-        items.add(item("warning", "shield",
-            copy("not_ready", "spamservice"),
-            literal(snapshot.lastError() != null ? snapshot.lastError()
-                : snapshot.state()), null));
+    }
+
+    /**
+     * The decision behind the spamservice item, on a snapshot so it is testable.
+     * An unconfigured or deliberately disabled service is a CHOICE, never a warning;
+     * only an enabled one that is not ready gets an item, and that item explains
+     * itself (the last error when there is one, else a localized state sentence)
+     * and links to the settings mount where the service is administered.
+     */
+    static @Nullable AttentionItem spamserviceIssue(SpamserviceManager.Snapshot snapshot) {
+        if (!snapshot.configured() || !snapshot.enabled() || "ready".equals(snapshot.state())) {
+            return null;
+        }
+        Microcopy detail = snapshot.lastError() != null
+            ? literal(snapshot.lastError())
+            : copy("spamservice_not_ready", "attention_detail", "state", snapshot.state());
+        return item("warning", "shield",
+            copy("not_ready", "spamservice"), detail,
+            CmsRoutes.list(ADMIN, "settings"));
     }
 
     /** DNS listeners that failed to bind, and enabled zones a resolver cannot delegate to. */
