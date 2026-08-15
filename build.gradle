@@ -226,6 +226,14 @@ serverJar.configure {
         def jarFile = archiveFile.get().asFile
         def jar = new java.util.jar.JarFile(jarFile)
         try {
+            // The deployable must be self-contained: a jar without the client bundle
+            // deploys an old front-end against a new server (the starfleet Aug 10/15
+            // version skew). The assembly lane packs these; this pins that it did.
+            ['public/cms.js', 'public/cms.js.map', 'public/hohenheim.css'].each { asset ->
+                if (jar.getEntry(asset) == null) {
+                    throw new GradleException("${jarFile.name} is missing ${asset} -- a jar-only deploy would strand the front-end")
+                }
+            }
             def resolver = 'META-INF/versions/18/org/xbill/DNS/spi/DnsjavaInetAddressResolverProvider.class'
             if (jar.getEntry(resolver) == null) {
                 throw new GradleException("${jarFile.name} is missing dnsjava's Java 18 resolver provider")
@@ -291,7 +299,12 @@ teavm {
         addedToWebApp = true
         sourceMap = true
         strict = false
-        sourceFilePolicy = SourceFilePolicy.LINK_LOCAL_FILES
+        // DO_NOTHING, not LINK_LOCAL_FILES: the map ships in the server jar and is
+        // served publicly, and LINK_LOCAL_FILES embeds absolute file:///tmp/... build
+        // paths as source links -- browsers refuse them with a security error on every
+        // page load and the map leaks local build paths. Mapping stack traces back to
+        // Java file+line needs only the mappings, which DO_NOTHING keeps.
+        sourceFilePolicy = SourceFilePolicy.DO_NOTHING
         // BALANCED, deliberately, matching orcono/QQ/thoth: NONE ships the unoptimized bundle
         // measured above, and AGGRESSIVE is catastrophic (orcono measured 87.8MB vs 14.9MB at
         // BALANCED -- inlining multiplies the honest suspendable bodies). Do not flip to
@@ -304,13 +317,10 @@ teavm {
     }
 }
 
-// The protoblast plugin's Hawkeye template stage registers copyClientJs (copies
-// TeaVM JS + source map into public/) and compileHawkeyeScss (generates
-// public/hohenheim.css from src/common/scss/app.scss + extracted .hwk tag
-// styles; the browserTest dependency is wired automatically).
-afterEvaluate {
-    serverJar.configure { dependsOn 'copyClientJs', 'compileHawkeyeScss' }
-}
+// The Hawkeye template stage registers copyClientJs (dev serving: TeaVM JS into
+// the project public/ dir) and compileHawkeyeScss; the server jar no longer
+// depends on either by name -- the assembly lane packs generateJavaScript's
+// output and the scss packaging injects the css, each with its own task wiring.
 
 // AIDEV-NOTE: ONE fork count for all three browser lanes. Gradle never runs two tasks of the
 // same project concurrently, so the lanes are strictly sequential and this number IS the

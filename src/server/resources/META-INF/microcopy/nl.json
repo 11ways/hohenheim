@@ -1079,6 +1079,10 @@
     "text": "Gekoppelde database {$name} is {$status}",
     "scope": "attention_detail"
   },
+  "spamservice_not_ready": {
+    "text": "De beheerde spamservice is ingeschakeld maar meldt status \"{$state}\"",
+    "scope": "attention_detail"
+  },
   "degraded": [
     {
       "text": "Verminderd beschikbaar",
