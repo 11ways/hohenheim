@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.protoblast.common.Blast;
@@ -12,8 +13,10 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -39,6 +42,16 @@ public final class ServerMediaPage implements RecordScopedPage<Row> {
     @Override
     public boolean visibleFor(@NonNull Row record) {
         return ServerModel.isIncus(record);
+    }
+
+    /**
+     * Managing install media is its own authority, not a use of the admin permission:
+     * this gate hides the tab AND 404s the route for an admin without it, and the same
+     * permission is what the three media endpoints declare.
+     */
+    @Override
+    public @Nullable Permission requiredPermission() {
+        return HohenheimSources.MEDIA_MANAGE;
     }
 
     @Override
@@ -74,6 +87,11 @@ public final class ServerMediaPage implements RecordScopedPage<Row> {
             .with(HohenheimEndpoints.SERVER_ID, serverId));
         vars.put("deleteTarget", HohenheimEndpoints.SERVERS_MEDIA_DELETE
             .with(HohenheimEndpoints.SERVER_ID, serverId));
+        // The uploader is a fetch() call, not a form post, so the template needs the URL
+        // itself rather than a RouteTarget to render into an action attribute.
+        vars.put("uploadUrl", HohenheimEndpoints.SERVERS_MEDIA_UPLOAD
+            .with(HohenheimEndpoints.SERVER_ID, serverId).toUrl());
+        vars.put("maxIsoGb", InstallMedia.MAX_ISO_BYTES >> 30);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/server-media"), vars);
     }

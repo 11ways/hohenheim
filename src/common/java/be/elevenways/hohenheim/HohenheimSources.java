@@ -38,6 +38,20 @@ public final class HohenheimSources implements ZenitModule {
      */
     public static final Permission ADMIN_ACCESS = Permission.of("hohenheim.admin.access");
 
+    /**
+     * Managing a host's install media: publishing ISOs onto its storage and removing
+     * them again.
+     *
+     * AIDEV-NOTE: deliberately its OWN permission rather than a use of ADMIN_ACCESS, and
+     * deliberately WITHOUT an {@code isAdmin(ctx) ||} bypass beside it (the shape
+     * canCreateInstances uses). An ISO is arbitrary bootable code and the fetch makes
+     * the controller an outbound HTTP client of whatever origin it is pointed at, so
+     * "some admins may, some may not" is the whole point -- an admin bypass would make
+     * this permission unable to say no to anyone. The bootstrap operator holds the "*"
+     * grant and is therefore unaffected.
+     */
+    public static final Permission MEDIA_MANAGE = Permission.of("hohenheim.media.manage");
+
     public static final Identifier SPAMSERVICE_SYSTEM_USERS =
         Identifier.of("hohenheim", "spamservice_system_users");
 
