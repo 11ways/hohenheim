@@ -347,15 +347,30 @@ public class HohenheimEndpoints {
 
     /**
      * Fetch an ISO from an operator-supplied URL into the host's own image pool as an
-     * ISO volume. Admin permission because media provenance is arbitrary bootable code
-     * and the fetch makes the CONTROLLER an outbound HTTP client of an arbitrary origin.
+     * ISO volume. MEDIA_MANAGE rather than the admin permission because media
+     * provenance is arbitrary bootable code and the fetch makes the CONTROLLER an
+     * outbound HTTP client of an arbitrary origin: who may do that is its own answer.
      */
     public static final Endpoint<Object> SERVERS_MEDIA_FETCH = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "servers_media_fetch"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
             .addDelimiter().addStatic("media").addDelimiter().addStatic("fetch").build())
-        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .requiresPermission(HohenheimSources.MEDIA_MANAGE)
+        .rateLimit(DATABASE_IO_LIMIT)
+        .build();
+
+    /**
+     * Upload an ISO from the operator's own machine: the body IS the image, streamed to
+     * disk and never buffered, so this route carries no form at all (the name travels in
+     * the query string). The counterpart to FETCH for media that has no public URL.
+     */
+    public static final Endpoint<Object> SERVERS_MEDIA_UPLOAD = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "servers_media_upload"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
+            .addDelimiter().addStatic("media").addDelimiter().addStatic("upload").build())
+        .requiresPermission(HohenheimSources.MEDIA_MANAGE)
         .rateLimit(DATABASE_IO_LIMIT)
         .build();
 
@@ -364,7 +379,7 @@ public class HohenheimEndpoints {
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("servers").addDelimiter().addParameter(SERVER_ID)
             .addDelimiter().addStatic("media").addDelimiter().addStatic("delete").build())
-        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .requiresPermission(HohenheimSources.MEDIA_MANAGE)
         .rateLimit(DATABASE_IO_LIMIT)
         .build();
 

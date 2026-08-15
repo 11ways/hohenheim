@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -10,6 +11,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.instance.IncusContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -33,6 +35,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -555,7 +558,129 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             .isEqualTo("media_in_use");
     }
 
+    /**
+     * Managing install media is its OWN permission, not a facet of being an admin.
+     * The subject here is a FULL admin (the wildcard grant every operator starts
+     * with) carrying an explicit denial of just this one permission: it neither sees
+     * the tab nor reaches the endpoints, and lifting the denial is what changes that.
+     * Some admins may, some may not -- which a permission folded into admin.access
+     * could never express.
+     */
+    @Test
+    void installMediaIsItsOwnPermissionSeparateFromBeingAnAdmin() throws Exception {
+        Integer operatorId = mediaUser("media-surf-operator@hohenheim.local", "Media Operator");
+        GrantService.createDirectGrant("user", operatorId, "*", true);
+        Row denial = GrantService.createDirectGrant("user", operatorId,
+            HohenheimSources.MEDIA_MANAGE.value(), false);
+        TestSession operator = sessionFor(operatorId);
+
+        try {
+            // 1. THE CONTROL: this really is an admin. A neighbouring tab on the very
+            //    same record answers, so step 2 is about the media permission and not
+            //    about a principal who can reach nothing.
+            assertThat(httpGet("/admin/servers/" + hostId + "/page/overview",
+                    operator.token()).statusCode())
+                .as("step 1: the operator IS an admin -- another server tab answers")
+                .isEqualTo(200);
+
+            // 2. HIDE: the tab is filtered out of the record's own tab strip, so the
+            //    surface never offers an affordance that could only refuse.
+            var overview = httpGet("/admin/servers/" + hostId + "/page/overview",
+                operator.token());
+            assertThat(overview.body())
+                .as("step 2: the media tab is not offered in the tab strip")
+                .doesNotContain("/page/install-media");
+
+            // 2b. AND ENFORCE: its route refuses too. 403 rather than 404 is the
+            //     framework's requiredPermission lane (visibleFor is the 404 one), and
+            //     it is the right shape here -- the tab's EXISTENCE is public product
+            //     knowledge, only this host's media is not.
+            assertThat(httpGet("/admin/servers/" + hostId + "/page/install-media",
+                    operator.token()).statusCode())
+                .as("step 2b: an admin denied the media permission cannot open the tab")
+                .isEqualTo(403);
+
+            // 3. Nor can they reach the write endpoints -- the gate is not the page.
+            assertThat(httpPostForm("/servers/" + hostId + "/media/fetch",
+                    "name=media-surf-nope&url=https://example.test/x.iso",
+                    operator.token(), operator.csrf()).statusCode())
+                .as("step 3: nor fetch")
+                .isIn(401, 403, 404);
+            assertThat(httpPostForm("/servers/" + hostId + "/media/delete",
+                    "name=held-iso", operator.token(), operator.csrf()).statusCode())
+                .as("step 3: nor delete")
+                .isIn(401, 403, 404);
+            assertThat(httpPostForm("/servers/" + hostId + "/media/upload?name=media-surf-nope",
+                    "", operator.token(), operator.csrf()).statusCode())
+                .as("step 3: nor upload -- the streaming lane declares the same permission")
+                .isIn(401, 403, 404);
+
+            // 4. THE POSITIVE ANCHOR: lift the denial and exactly this opens, which is
+            //    what makes steps 2-3 a gate rather than a broken page.
+            GrantService.deleteDirectGrant("user", operatorId,
+                denial.get(be.elevenways.zenit.auth.model.GrantModel.ID));
+            TestSession granted = sessionFor(operatorId);
+
+            assertThat(httpGet("/admin/servers/" + hostId + "/page/install-media",
+                    granted.token()).statusCode())
+                .as("step 4: the media permission is what opens the tab")
+                .isEqualTo(200);
+        } finally {
+            AuthModels.users().delete(operatorId);
+        }
+    }
+
+    /**
+     * A CONTAINER captures like a VM now: its kind declares an image origin, so the
+     * minted template's prepared alias is resolved in the host's own store instead of
+     * being re-resolved against simplestreams under a name that is not there.
+     */
+    @Test
+    void aContainerKindCapturesIntoAPreparedTemplateToo() {
+        InstanceKindHandler container = InstanceKinds.getHandler(
+            IncusContainerKind.ID.toString());
+
+        assertThat(container)
+            .as("the incus container kind is registered").isNotNull();
+        assertThat(container.supportsTemplateCapture())
+            .as("a container declares template capture")
+            .isTrue();
+
+        // The declaration and its enforcement land together: the origin field exists,
+        // offers exactly catalog and prepared, and specFor CARRIES the choice into the
+        // spec -- an unwired vocabulary is what kept this kind out of capture before.
+        assertThat(IncusContainerKind.IMAGE_ORIGIN.getValues().keySet())
+            .as("the container offers catalog and prepared, and NOT install media"
+                + " -- a shared-kernel workload has no firmware to boot an ISO with")
+            .containsExactlyInAnyOrder(ImageOrigin.CATALOG.key(), ImageOrigin.PREPARED.key());
+
+        InstanceSpec prepared = container.specFor(4242, Map.of(
+            "image", "tpl-captured-thing",
+            "image_origin", ImageOrigin.PREPARED.key()));
+        assertThat(prepared.imageOrigin())
+            .as("specFor carries the declared origin into the spec")
+            .isEqualTo(ImageOrigin.PREPARED);
+
+        // And the default is unchanged for every container that declares nothing,
+        // so adding the field cannot have repointed existing workloads.
+        assertThat(container.specFor(4243, Map.of("image", "images:debian/12")).imageOrigin())
+            .as("an undeclared origin still means the catalog")
+            .isEqualTo(ImageOrigin.CATALOG);
+    }
+
     // -- plumbing -------------------------------------------------------------
+
+    /** A user row for the permission journey. */
+    private static Integer mediaUser(String email, String displayName) {
+        Row row = AuthModels.users().createEmptyRow();
+        row.set(UserModel.EMAIL, email);
+        row.set(UserModel.DISPLAY_NAME, displayName);
+        row.set(UserModel.ENABLED, true);
+        row.set(UserModel.CREATED_AT, Instant.now());
+        row.set(UserModel.UPDATED_AT, Instant.now());
+        AuthModels.users().save(row);
+        return row.get(UserModel.ID);
+    }
 
     /** Run the body inside a tenant request scope and return what it threw. */
     private Throwable catchThrowableInTenantScope(@NonNull Runnable body) {

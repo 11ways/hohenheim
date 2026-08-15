@@ -3577,6 +3577,10 @@
     "text": "Alle sites beheren",
     "scope": "permission"
   },
+  "hohenheim_media_manage": {
+    "text": "Installatiemedia beheren",
+    "scope": "permission"
+  },
   "manage": {
     "text": "Beheren",
     "scope": "capability"
@@ -6400,10 +6404,16 @@
     "text": "Opslaan",
     "scope": "instance_files"
   },
-  "upload": {
-    "text": "Uploaden",
-    "scope": "instance_files"
-  },
+  "upload": [
+    {
+      "text": "Uploaden",
+      "scope": "instance_files"
+    },
+    {
+      "text": "Uploaden",
+      "scope": "server_media"
+    }
+  ],
   "rename": {
     "text": "Hernoemen",
     "scope": "instance_files"
@@ -7326,6 +7336,30 @@
   },
   "media_fetched": {
     "text": "Media '{$name}' is nu beschikbaar op deze host",
+    "scope": "server_media"
+  },
+  "media_uploaded": {
+    "text": "Media '{$name}' is naar deze host geupload",
+    "scope": "server_media"
+  },
+  "upload_title": {
+    "text": "Een ISO uploaden",
+    "scope": "server_media"
+  },
+  "upload_description": {
+    "text": "Stuur een image vanaf deze computer, tot {$size} GB. Grote uploads lopen door zolang deze pagina open blijft.",
+    "scope": "server_media"
+  },
+  "upload_file": {
+    "text": "ISO-bestand",
+    "scope": "server_media"
+  },
+  "upload_failed": {
+    "text": "Uploaden van '{$name}' is mislukt",
+    "scope": "server_media"
+  },
+  "upload_empty": {
+    "text": "De upload van '{$name}' bevatte geen data",
     "scope": "server_media"
   },
   "media_deleted": {

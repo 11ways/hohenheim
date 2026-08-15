@@ -6,6 +6,8 @@
 {% declare loadError: String = null %}
 {% declare fetchTarget: RouteTarget %}
 {% declare deleteTarget: RouteTarget %}
+{% declare uploadUrl: String %}
+{% declare maxIsoGb: Long %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% declare flashVariant: String = "default" %}
@@ -55,6 +57,32 @@
     </pl-empty-state>
     {% /if %}
     {% /if %}
+
+    {#- The UPLOAD lane: the file IS the request body (use:CmsUpload.to), so this form
+        posts no multipart part -- an ISO cannot survive being buffered twice in heap.
+        The name field rides the query string, which the directive appends. -#}
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("upload_title", scope: "server_media") }}</pl-card-title>
+            <pl-card-description>{{ t("upload_description", scope: "server_media", size: maxIsoGb) }}</pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            <form id="media-upload-form" use:CmsUpload.to={% uploadUrl %}>
+                <pl-field>
+                    <pl-label target="media-upload-name">{{ t("name", scope: "field") }}</pl-label>
+                    <pl-input inputId="media-upload-name" name="name" required></pl-input>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="media-upload-file">{{ t("upload_file", scope: "server_media") }}</pl-label>
+                    <input id="media-upload-file" type="file" name="file" accept=".iso" required>
+                </pl-field>
+                <div class="cms-form-actions">
+                    <pl-button variant={% "primary" %} type={% "submit" %}>{{ t("upload", scope: "server_media") }}</pl-button>
+                    <span data-cms-upload-progress class="hh-upload-progress"></span>
+                </div>
+            </form>
+        </pl-card-content>
+    </pl-card>
 
     <pl-card>
         <pl-card-header>

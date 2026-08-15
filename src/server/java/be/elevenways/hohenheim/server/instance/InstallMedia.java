@@ -49,7 +49,7 @@ public final class InstallMedia {
      * OS install ISO in circulation fits well under this; a cap is what keeps a typoed
      * URL from filling the controller's disk.
      */
-    static final long MAX_ISO_BYTES = 16L * 1024 * 1024 * 1024;
+    public static final long MAX_ISO_BYTES = 16L * 1024 * 1024 * 1024;
 
     private static final UrlPolicy FETCH_POLICY = UrlPolicy.builder()
         .schemes("http", "https")
@@ -103,10 +103,7 @@ public final class InstallMedia {
         try {
             IncusClient incus = clientOf(server);
             String pool = IncusInstanceRuntime.managedPoolNameOf(incus);
-            if (incus.customVolume(pool, name) != null) {
-                throw Violations.ofField("name", name, violationText("media_exists")
-                    .withArg("media", name));
-            }
+            requireAbsent(incus, pool, name);
             Path temp = Files.createTempFile("hohenheim-media-", ".iso");
             try {
                 download(url, temp);
@@ -114,12 +111,37 @@ public final class InstallMedia {
             } finally {
                 Files.deleteIfExists(temp);
             }
-            if (incus.customVolume(pool, name) == null) {
-                throw new IOException("import was accepted but volume '" + name
-                    + "' does not read back on pool '" + pool + "'");
-            }
+            requirePresent(incus, pool, name);
         } catch (IOException e) {
             Blast.log("MEDIA: fetching", name, "onto",
+                server.get(ServerModel.NAME), "failed -", e.getMessage());
+            throw Violations.ofForm(violationText("media_fetch_failed")
+                .withArg("media", name)
+                .withArg("reason", e.getMessage() != null ? e.getMessage() : e.toString()));
+        }
+    }
+
+    /**
+     * Import an ISO ALREADY on the controller's disk (an operator's upload) into the
+     * host's managed pool as an ISO volume named {@code name}.
+     *
+     * The caller owns {@code source} and its removal: this is the half of {@link #fetch}
+     * below the download, split out so an upload never has to invent a URL for a file
+     * the operator already has.
+     *
+     * @throws Violations {@code media_name_invalid}, {@code media_exists},
+     *         {@code media_fetch_failed}
+     */
+    public void importFrom(@NonNull Row server, @NonNull String name, @NonNull Path source) {
+        requireName(name);
+        try {
+            IncusClient incus = clientOf(server);
+            String pool = IncusInstanceRuntime.managedPoolNameOf(incus);
+            requireAbsent(incus, pool, name);
+            incus.importIsoVolume(pool, name, source);
+            requirePresent(incus, pool, name);
+        } catch (IOException e) {
+            Blast.log("MEDIA: importing", name, "onto",
                 server.get(ServerModel.NAME), "failed -", e.getMessage());
             throw Violations.ofForm(violationText("media_fetch_failed")
                 .withArg("media", name)
@@ -233,6 +255,24 @@ public final class InstallMedia {
             // its own media tab. Deliberately NOT catch(IllegalStateException):
             // any other ISE here is a programming error that must surface.
             throw new IOException(refused.getMessage(), refused);
+        }
+    }
+
+    /** Refuse a name the pool already holds, before anything is transferred. */
+    private static void requireAbsent(@NonNull IncusClient incus, @NonNull String pool,
+                                      @NonNull String name) throws IOException {
+        if (incus.customVolume(pool, name) != null) {
+            throw Violations.ofField("name", name, violationText("media_exists")
+                .withArg("media", name));
+        }
+    }
+
+    /** An accepted import that does not read back is a failure, not a success. */
+    private static void requirePresent(@NonNull IncusClient incus, @NonNull String pool,
+                                       @NonNull String name) throws IOException {
+        if (incus.customVolume(pool, name) == null) {
+            throw new IOException("import was accepted but volume '" + name
+                + "' does not read back on pool '" + pool + "'");
         }
     }
 
