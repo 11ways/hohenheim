@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
@@ -18,6 +19,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DoubleField;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
@@ -54,6 +56,27 @@ public final class IncusContainerKind implements InstanceKindHandler {
     public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
         StringField.builder().name("image").label(HohenheimFormCopy.label("incus_image"))
             .help(HohenheimFormCopy.help("incus_image")).build());
+
+    /**
+     * Where {@link #IMAGE} is resolved: the catalog over simplestreams, or an image
+     * already in THIS host's own store (what a template capture publishes).
+     *
+     * AIDEV-NOTE: deliberately NOT offering {@code install_media}, unlike the VM kind's
+     * otherwise identical field. A system container shares the host kernel and has no
+     * firmware to boot an ISO with, and the driver refuses that combination by name --
+     * an option here could only ever refuse.
+     */
+    public static final EnumField IMAGE_ORIGIN = SETTINGS_SCHEMA.addField(
+        EnumField.builder("image_origin")
+            .value(ImageOrigin.CATALOG.key(), v -> v.displayName("Catalog")
+                .icon("cloud-arrow-down")
+                .label(Microcopy.of("catalog").withFilter("scope", "image_origin")))
+            .value(ImageOrigin.PREPARED.key(), v -> v.displayName("Prepared template")
+                .icon("hard-drive")
+                .label(Microcopy.of("prepared").withFilter("scope", "image_origin")))
+            .defaultValue(ImageOrigin.CATALOG.key())
+            .label(HohenheimFormCopy.label("image_origin"))
+            .help(HohenheimFormCopy.help("image_origin")).build());
 
     // secret(): redacted on derived surfaces, masked in forms, kept on blank submit.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
@@ -141,6 +164,8 @@ public final class IncusContainerKind implements InstanceKindHandler {
         String image = settings.get("image") != null
             ? String.valueOf(settings.get("image")).trim() : "";
         boolean privileged = Boolean.TRUE.equals(settings.get("privileged"));
+        ImageOrigin imageOrigin = ImageOrigin.fromKey(
+            settings.get("image_origin") instanceof String origin ? origin : null);
         // No command override (a system container boots its init), no named volumes
         // (the rootfs IS the persistent state) and no port publication yet (proxy
         // devices are a later mechanism) -- each absence is structural, not an omission.
@@ -149,6 +174,7 @@ public final class IncusContainerKind implements InstanceKindHandler {
                 privileged ? PRIVILEGED : UNPRIVILEGED,
                 OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
             .env(EnvVars.toMap(settings.get("environment_variables")))
+            .imageOrigin(imageOrigin)
             .rootDiskGb(RootDisk.declaredGb(settings))
             .networkLimitMbit(NetworkBandwidth.declaredMbit(settings))
             .build();
@@ -160,12 +186,18 @@ public final class IncusContainerKind implements InstanceKindHandler {
         return 512;
     }
 
-    // AIDEV-NOTE: NO supportsTemplateCapture here, deliberately. The driver could
-    // publish a container (incus publish works for both flavours), but this kind's
-    // settings schema declares no image_origin and specFor never sets one, so a
-    // captured template's prepared alias would be re-resolved against simplestreams and
-    // fail by the wrong name. Capture lands here only together with the origin field
-    // and the specFor plumbing -- the "no unwired vocabulary" rule.
+    /**
+     * IncusInstanceRuntime implements ImagePublishSupport, and {@code incus publish}
+     * works for both flavours.
+     *
+     * AIDEV-NOTE: this used to be deliberately absent, because a captured template's
+     * prepared alias would be re-resolved against simplestreams and fail by the wrong
+     * name while the schema declared no {@code image_origin}. That is what
+     * {@link #IMAGE_ORIGIN} and the {@code specFor} plumbing beside it fixed -- the
+     * declaration and its enforcement landed together, never the vocabulary alone.
+     */
+    @Override
+    public boolean supportsTemplateCapture() { return true; }
 
     @Override
     public void requirePlaceableOn(@NonNull String serverName,
