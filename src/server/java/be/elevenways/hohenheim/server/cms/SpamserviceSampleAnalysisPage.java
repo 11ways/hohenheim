@@ -53,7 +53,6 @@ public final class SpamserviceSampleAnalysisPage implements RecordScopedPage<Sam
             "flag", line.flag(), "points", line.points(), "detail", value(line.detail(), ""))).toList());
         Panel panel = PanelRegistry.getBySlug("admin");
         vars.put("recordTabs", RecordTabs.build(panel, this.resource, record.id(), record, context, SLUG));
-        vars.put("flashMessage", null);
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/spamservice-sample-analysis"), vars);
     }
 

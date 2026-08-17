@@ -51,7 +51,6 @@ public final class SpamserviceOverviewPage extends PanelPage {
         vars.put("checks", List.of());
         vars.put("summary", Map.of());
         vars.put("error", snapshot.lastError() != null ? snapshot.lastError() : "");
-        vars.put("flashMessage", null);
 
         if (manager.client() != null) {
             try {

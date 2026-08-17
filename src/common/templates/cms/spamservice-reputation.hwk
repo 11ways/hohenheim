@@ -11,12 +11,15 @@
 {% declare positiveWeight: Integer %}
 {% declare net: Long %}
 {% declare flashMessage: Microcopy = null %}
+{% declare flashVariant: String = "default" %}
+{% declare flashDuration: Integer = 0 %}
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
 {% block "main" %}
 {% setTitle(title) %}
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
+    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
     <pl-card>
         <pl-card-content>
             <form use:Zenit.route={% pageTarget %} method="get">
