@@ -1,0 +1,5 @@
+# TeaVM bundle size budget: max allowed bytes per generated bundle.
+# The build FAILS when a bundle exceeds these. After a deliberate size
+# change, regenerate with the updateBundleBudget task and commit.
+cms.js.raw=4302508
+cms.js.gzip=1012214

@@ -229,10 +229,16 @@ Most-useful keys:
 {
     // Zenit admin UI
     "network": {
-        "port": 3000                       // admin UI port (default 3000)
+        "port": 3000,                      // admin UI port (default 3000)
+        "trusted_proxies": "loopback"      // peers whose forwarded headers are trusted
     }
 }
 ```
+
+The default trusts forwarded headers only from a proxy on the same machine. Before
+placing the admin listener behind a proxy on another host, set `trusted_proxies` to
+that proxy's literal IP or CIDR. Hostnames are deliberately refused so request-time
+trust decisions can never trigger DNS.
 
 `settings/hohenheim.dry`:
 
