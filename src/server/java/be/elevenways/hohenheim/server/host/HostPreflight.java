@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.host.PreflightStatus;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -34,9 +35,13 @@ import java.util.Map;
  */
 public final class HostPreflight {
 
-    public static final String STATUS_PASS = "pass";
-    public static final String STATUS_WARN = "warn";
-    public static final String STATUS_FAIL = "fail";
+    // AIDEV-NOTE: the tokens are READ OFF PreflightStatus, which is the declaring home of
+    // the pass/warn/fail vocabulary (it also carries the badge fact the views render). These
+    // aliases stay because a Check's status is a stored STRING -- the capabilities JSON on
+    // every existing host record already carries these tokens.
+    public static final String STATUS_PASS = PreflightStatus.PASS.token();
+    public static final String STATUS_WARN = PreflightStatus.WARN.token();
+    public static final String STATUS_FAIL = PreflightStatus.FAIL.token();
 
     /**
      * The stored fact carrying a host's total memory in BYTES, written by both batteries

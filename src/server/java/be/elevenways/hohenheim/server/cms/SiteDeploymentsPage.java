@@ -15,6 +15,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
@@ -148,13 +149,20 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         return null;
     }
 
-    private static String statusVariant(Object status) {
-        return switch (String.valueOf(status)) {
-            case DeploymentModel.STATUS_SUCCESS -> "default";
-            case DeploymentModel.STATUS_RUNNING -> "secondary";
-            case DeploymentModel.STATUS_CANCELLED -> "outline";
-            default -> "destructive";
-        };
+    /**
+     * The badge variant DECLARED on the deployment status enum value itself.
+     *
+     * AIDEV-NOTE: this was a switch re-spelling the four statuses with colours the model
+     * does not declare (success rendered "default", failed lived in the DEFAULT arm), so a
+     * fifth status would have rendered "destructive" here while carrying its own colour
+     * everywhere else. Same shape as StackDeploymentsPage; unknown/blank degrades to
+     * secondary, the honest answer for a value the vocabulary does not contain.
+     */
+    private static String statusVariant(@Nullable Object status) {
+        EnumField.EnumValue value = status == null
+            ? null : DeploymentModel.STATUS.getValues().get(String.valueOf(status));
+        String color = value != null ? value.getColor() : null;
+        return color != null ? color : "secondary";
     }
 
     private static String shortSha(Object sha) {

@@ -19,14 +19,10 @@ public record PreflightCheckView(
     @Nullable String atIso
 ) {
 
-    /** Build with the pl-badge variant derived from the stored status token. */
+    /** Build with the pl-badge variant READ OFF the verdict, never re-spelled here. */
     public static PreflightCheckView of(String name, String status, boolean required,
                                         String detail, @Nullable String atIso) {
-        String variant = switch (status) {
-            case "pass" -> "success";
-            case "warn" -> "warning";
-            default -> "destructive";
-        };
+        String variant = PreflightStatus.fromToken(status).badgeVariant();
         return new PreflightCheckView(name, status, variant, required, detail, atIso);
     }
 }

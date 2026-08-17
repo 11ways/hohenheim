@@ -4,6 +4,8 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.HostStatusCell;
 import be.elevenways.hohenheim.host.KernelIsolationView;
+import be.elevenways.hohenheim.host.PreflightCheckView;
+import be.elevenways.hohenheim.host.PreflightStatus;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -436,6 +438,55 @@ class HostEvidenceTest {
         row.set(InstanceModel.STATUS, status);
         model.save(row);
         return model.find().where(InstanceModel.NAME.eq(name)).first().get(InstanceModel.ID);
+    }
+
+    /**
+     * The preflight verdict vocabulary is ONE declaration: every reader takes the badge
+     * colour off the member instead of re-spelling pass/warn/fail with its own palette.
+     */
+    @Test
+    void preflightVerdictsCarryTheirOwnBadgeFact() {
+
+        // 1. Every member round-trips its stored token, and the tokens HostPreflight
+        //    publishes are those same members -- no second spelling of the vocabulary.
+        for (PreflightStatus status : PreflightStatus.values()) {
+            assertThat(PreflightStatus.fromToken(status.token()))
+                .as("step 1: '%s' round-trips", status.token())
+                .isEqualTo(status);
+        }
+        assertThat(List.of(HostPreflight.STATUS_PASS, HostPreflight.STATUS_WARN,
+                HostPreflight.STATUS_FAIL))
+            .as("step 1: HostPreflight publishes exactly the enum's tokens")
+            .containsExactly(PreflightStatus.PASS.token(), PreflightStatus.WARN.token(),
+                PreflightStatus.FAIL.token());
+
+        // 2. The rendered view reads the badge variant OFF the member, for every member.
+        for (PreflightStatus status : PreflightStatus.values()) {
+            assertThat(PreflightCheckView.of("probe", status.token(), true, "detail", null)
+                    .statusVariant())
+                .as("step 2: the '%s' badge variant comes from the vocabulary", status.token())
+                .isEqualTo(status.badgeVariant());
+        }
+
+        // 3. An unrecognized stored token FAILS CLOSED: it is not a pass, and it renders
+        //    like a failure rather than like an unstyled unknown.
+        PreflightStatus unknown = PreflightStatus.fromToken("probably_fine");
+        assertThat(unknown)
+            .as("step 3: an unknown token is a FAIL, never a pass")
+            .isEqualTo(PreflightStatus.FAIL);
+        assertThat(PreflightStatus.fromToken(null).passed())
+            .as("step 3: a missing token is not evidence of health")
+            .isFalse();
+
+        // 4. The kernel-isolation view answers 'proven' off the same vocabulary.
+        assertThat(new KernelIsolationView(true, true, PreflightStatus.PASS.token(), null, "")
+                .proven())
+            .as("step 4: a stored PASS is proven").isTrue();
+        assertThat(new KernelIsolationView(true, true, PreflightStatus.WARN.token(), null, "")
+                .proven())
+            .as("step 4: a WARN is not proof").isFalse();
+        assertThat(new KernelIsolationView(true, true, null, null, "").proven())
+            .as("step 4: an unprobed lane is not proof").isFalse();
     }
 
     private static void statusOf(int instanceId, String status) {

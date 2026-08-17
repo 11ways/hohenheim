@@ -201,6 +201,14 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         assertThat(deployPage.body()).contains("Deploy now");
         assertThat(deployPage.body()).contains(firstCommit.substring(0, 8));
 
+        // The status badge takes its colour off DeploymentModel.STATUS, so the page can
+        // never carry a second palette that drifts from the declared vocabulary.
+        String successVariant = DeploymentModel.STATUS.getValues()
+            .get(DeploymentModel.STATUS_SUCCESS).getColor();
+        assertThat(deployPage.body())
+            .as("the deployment badge variant is the one the model declares")
+            .contains("variant=\"" + successVariant + "\"");
+
         // The action forms carry the framework _return target of THIS page, so
         // their handlers redirect back to the panel that rendered it.
         assertThat(deployPage.body())

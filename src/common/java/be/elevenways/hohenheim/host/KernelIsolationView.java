@@ -22,6 +22,6 @@ public record KernelIsolationView(
 ) {
 
     public boolean proven() {
-        return "pass".equals(this.status);
+        return this.status != null && PreflightStatus.fromToken(this.status).passed();
     }
 }

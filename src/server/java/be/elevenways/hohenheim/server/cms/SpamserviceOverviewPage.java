@@ -57,8 +57,11 @@ public final class SpamserviceOverviewPage extends PanelPage {
                 ServiceStatus status = manager.requireClient().status();
                 ServiceSummary summary = manager.requireClient().summary();
                 vars.put("connected", true);
-                vars.put("ready", "ready".equals(status.status()));
-                vars.put("service", Map.of("status", status.status(), "service", status.service(),
+                // The readiness FACT off the clientlib's own vocabulary: an unrecognized or
+                // absent token parses to UNKNOWN, which is never ready.
+                vars.put("ready", status.status().isReady());
+                vars.put("service", Map.of("status", status.status().token(),
+                    "service", status.service(),
                     "managementApi", status.managementApi()));
                 vars.put("checks", status.checks().entrySet().stream().map(entry -> Map.<String, Object>of(
                     "name", entry.getKey(), "ok", entry.getValue())).toList());
