@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ConfirmDirectiveJourneysTest extends HohenheimTestBase {
 
-    private static final String DIALOG = ".pl-dialog-modal[data-open]";
+    private static final String DIALOG = ".pl-alertdialog-modal[data-open]";
 
     /** Killing a managed process: dialog appears, cancel keeps it alive, confirm kills it. */
     @Test
@@ -77,7 +77,7 @@ class ConfirmDirectiveJourneysTest extends HohenheimTestBase {
             click(killButton);
             assertIsVisible(DIALOG);
             click("[data-cms-confirm-cancel]");
-            assertIsNotVisible(".pl-dialog-modal");
+            assertIsNotVisible(".pl-alertdialog-modal");
             page.waitForTimeout(400);
             assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false))
                 .as("cancel must not kill the child")

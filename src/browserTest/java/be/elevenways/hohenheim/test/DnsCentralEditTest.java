@@ -332,15 +332,15 @@ class DnsCentralEditTest extends HohenheimTestBase {
 
         // Cancel does NOT forward a delete to the owner.
         click(deleteButton);
-        assertIsVisible(".pl-dialog-modal[data-open]");
+        assertIsVisible(".pl-alertdialog-modal[data-open]");
         click("[data-cms-confirm-cancel]");
-        assertIsNotVisible(".pl-dialog-modal");
+        assertIsNotVisible(".pl-alertdialog-modal");
         page.waitForTimeout(400);
         assertThat(stub.calls).as("cancel must not forward the delete").isEmpty();
 
         // Confirm forwards the delete to the owning peer.
         click(deleteButton);
-        assertIsVisible(".pl-dialog-modal[data-open]");
+        assertIsVisible(".pl-alertdialog-modal[data-open]");
         click("[data-cms-confirm-ok]");
         page.waitForCondition(() -> stub.calls.stream()
             .anyMatch(call -> "/api/dns/zones/confirm.example/records/7/delete".equals(call.path())));
