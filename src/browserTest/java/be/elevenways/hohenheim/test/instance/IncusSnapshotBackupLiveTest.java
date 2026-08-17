@@ -27,6 +27,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
+import be.elevenways.zenit.common.task.record.RunStatus;
+import be.elevenways.zenit.common.task.record.StepFailurePolicy;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
@@ -195,14 +197,14 @@ class IncusSnapshotBackupLiveTest {
                 step.set(RecordScheduleStepModel.ACTION, InstanceSnapshotAction.ID.toString());
                 step.set(RecordScheduleStepModel.OFFSET_SECONDS, 0);
                 step.set(RecordScheduleStepModel.FAILURE_POLICY,
-                    RecordScheduleStepModel.POLICY_ABORT);
+                    StepFailurePolicy.ABORT.storageKey());
                 step.set(RecordScheduleStepModel.PAYLOAD, Map.of("note", "nightly"));
                 Models.get(RecordScheduleStepModel.class).save(step);
 
                 Row run = new RecordSchedules(datasource).runNow(scheduleId);
                 assertThat(run.get(RecordScheduleRunModel.STATUS))
                     .as("step 2: the nightly chain completed")
-                    .isEqualTo(RecordScheduleRunModel.STATUS_COMPLETED);
+                    .isEqualTo(RunStatus.COMPLETED.storageKey());
                 Row snapshot = Models.get(InstanceSnapshotModel.class).find()
                     .where(InstanceSnapshotModel.INSTANCE_ID.eq(id)).first();
                 assertThat(snapshot).as("step 2: the schedule produced a snapshot row")
