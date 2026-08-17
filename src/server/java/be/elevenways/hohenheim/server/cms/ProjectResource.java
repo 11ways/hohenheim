@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -92,7 +93,7 @@ public class ProjectResource extends RowResource {
 
     private static long ownedCount(int groupId, @NonNull Identifier model) {
         long count = 0;
-        for (Row grant : RecordGrants.listForSubject("group", groupId)) {
+        for (Row grant : RecordGrants.listForSubject(GrantSubjectType.GROUP, groupId)) {
             if (HohenheimAccess.MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))
                     && Boolean.TRUE.equals(grant.get(RecordGrantModel.VALUE))
                     && model.toString().equals(grant.get(RecordGrantModel.MODEL))) {

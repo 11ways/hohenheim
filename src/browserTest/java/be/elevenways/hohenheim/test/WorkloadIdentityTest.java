@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -237,7 +238,7 @@ class WorkloadIdentityTest {
         tenant.set(UserModel.CREATED_AT, Instant.now());
         tenant.set(UserModel.UPDATED_AT, Instant.now());
         AuthModels.users().save(tenant);
-        RecordGrants.grant("user", tenant.get(UserModel.ID), SiteModel.MODEL_ID, idB,
+        RecordGrants.grant(GrantSubjectType.USER, tenant.get(UserModel.ID), SiteModel.MODEL_ID, idB,
             "manage", true);
 
         // 2. Even with the transition setting OFF, the tenant-managed site is refused
@@ -251,7 +252,7 @@ class WorkloadIdentityTest {
             .hasMessageContaining("tenant-managed");
 
         // 3. Cleanup so the sibling journey is not affected.
-        RecordGrants.revoke("user", tenant.get(UserModel.ID), SiteModel.MODEL_ID, idB, "manage");
+        RecordGrants.revoke(GrantSubjectType.USER, tenant.get(UserModel.ID), SiteModel.MODEL_ID, idB, "manage");
     }
 
     /**

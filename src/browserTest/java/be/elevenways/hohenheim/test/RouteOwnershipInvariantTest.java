@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.hohenheim.server.proxy.ReleasedClaims;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.action.ActionContext;
@@ -507,7 +508,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
     /** Give an EXISTING tenant subject manage on another site -- the same owner, twice. */
     private static void grantManage(Row site, int userId) {
-        RecordGrants.grant("user", userId, SiteModel.MODEL_ID, site.get(SiteModel.ID),
+        RecordGrants.grant(GrantSubjectType.USER, userId, SiteModel.MODEL_ID, site.get(SiteModel.ID),
             HohenheimAccess.MANAGE, true);
     }
 

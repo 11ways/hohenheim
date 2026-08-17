@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.cms.DatabaseResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -101,21 +102,21 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         foreignTypeRecordId = dnsRecord("delegated", DnsRecordModel.TYPE_NS, "ns1.example.org");
 
         // The viewer holds the READ half everywhere it exists as a verb.
-        RecordGrants.grant("user", viewerId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.VIEW, true);
-        RecordGrants.grant("user", viewerId, DatabaseModel.MODEL_ID, databaseId,
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseId,
             HohenheimAccess.VIEW, true);
-        RecordGrants.grant("user", viewerId, DnsRecordModel.MODEL_ID, recordId,
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, DnsRecordModel.MODEL_ID, recordId,
             HohenheimAccess.VIEW, true);
 
         // The holder carries exactly what each funnel demands.
-        RecordGrants.grant("user", holderId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, holderId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.CONFIG, true);
-        RecordGrants.grant("user", holderId, DatabaseModel.MODEL_ID, databaseId,
+        RecordGrants.grant(GrantSubjectType.USER, holderId, DatabaseModel.MODEL_ID, databaseId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", holderId, DnsRecordModel.MODEL_ID, recordId,
+        RecordGrants.grant(GrantSubjectType.USER, holderId, DnsRecordModel.MODEL_ID, recordId,
             HohenheimAccess.EDIT, true);
-        RecordGrants.grant("user", holderId, DnsRecordModel.MODEL_ID, foreignTypeRecordId,
+        RecordGrants.grant(GrantSubjectType.USER, holderId, DnsRecordModel.MODEL_ID, foreignTypeRecordId,
             HohenheimAccess.EDIT, true);
     }
 
@@ -229,7 +230,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         // ONE-SIDED: revoke the database half and the affordance must fall with it --
         // the exact laundering the two-sided funnel rule exists to refuse. revoke,
         // never grant(false): a planted deny is sticky and would outlive the finally.
-        RecordGrants.revoke("user", holderId, DatabaseModel.MODEL_ID, databaseId,
+        RecordGrants.revoke(GrantSubjectType.USER, holderId, DatabaseModel.MODEL_ID, databaseId,
             HohenheimAccess.MANAGE);
         try {
             assertThat(resource.updatableBy(link, holder()))
@@ -237,7 +238,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             assertThat(resource.deletableBy(link, holder()))
                 .as("nor the detach button").isFalse();
         } finally {
-            RecordGrants.grant("user", holderId, DatabaseModel.MODEL_ID, databaseId,
+            RecordGrants.grant(GrantSubjectType.USER, holderId, DatabaseModel.MODEL_ID, databaseId,
                 HohenheimAccess.MANAGE, true);
         }
     }

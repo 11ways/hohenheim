@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -186,7 +187,7 @@ public final class TenantDatabases {
             .where(DatabaseModel.ID.eq(databaseId)).delete();
         for (String subject : HohenheimAccess.creationOwnerSubjects(ctx)) {
             int separator = subject.indexOf(':');
-            RecordGrants.revoke(subject.substring(0, separator),
+            RecordGrants.revoke(GrantSubjectType.fromKey(subject.substring(0, separator)),
                 Integer.parseInt(subject.substring(separator + 1)),
                 DatabaseModel.MODEL_ID, databaseId, HohenheimAccess.MANAGE);
         }
@@ -200,7 +201,7 @@ public final class TenantDatabases {
     private static void grantCreatorManage(int databaseId, @Nullable AccessContext ctx) {
         for (String subject : HohenheimAccess.creationOwnerSubjects(ctx)) {
             int separator = subject.indexOf(':');
-            RecordGrants.grant(subject.substring(0, separator),
+            RecordGrants.grant(GrantSubjectType.fromKey(subject.substring(0, separator)),
                 Integer.parseInt(subject.substring(separator + 1)),
                 DatabaseModel.MODEL_ID, databaseId, HohenheimAccess.MANAGE, true);
         }

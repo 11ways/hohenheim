@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.instance.InstanceExec;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -92,11 +93,11 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         instanceId = instance(PREFIX + "alpha");
 
         // The delegation under test: console + power, and NOTHING else.
-        RecordGrants.grant("user", consoleUserId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.CONSOLE, true);
-        RecordGrants.grant("user", powerUserId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, powerUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.POWER, true);
-        RecordGrants.grant("user", managerUserId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, managerUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
     }
 
@@ -255,13 +256,13 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
         // Step 4: an explicit DENY of a narrow verb beats the umbrella, so an operator
         // can hand out manage-minus-one.
-        RecordGrants.grant("user", managerUserId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, managerUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.DESTROY, false);
         assertThat(contextOf(managerPrincipal)
                 .capabilityDecision(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.DESTROY))
             .as("step 4: an explicit deny must beat the manage umbrella")
             .isEqualTo(RecordCapabilityDecision.GRANT_DENIED);
-        RecordGrants.revoke("user", managerUserId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.revoke(GrantSubjectType.USER, managerUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.DESTROY);
         assertThat(contextOf(managerPrincipal)
                 .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.DESTROY))
@@ -380,7 +381,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 1: what it HOLDS, it may pass on -- the positive anchor without which
         // every refusal below could be explained by a broken boundary.
         List<RecordGrantChange> passOnConsole = List.of(new RecordGrantChange(
-            "user", powerUserId, HohenheimAccess.CONSOLE, Boolean.TRUE));
+            GrantSubjectType.USER, powerUserId, HohenheimAccess.CONSOLE, Boolean.TRUE));
         assertThat(GrantAdministration.requireAuthorizedRecordDiff(delegate,
                 InstanceModel.MODEL_ID, instanceId, "grants", passOnConsole))
             .as("step 1: a console holder may delegate console")
@@ -389,7 +390,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 2: CONFIG -- refused for lack of the capability itself.
         Throwable config = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
             delegate, InstanceModel.MODEL_ID, instanceId, "grants",
-            List.of(new RecordGrantChange("user", powerUserId, HohenheimAccess.CONFIG,
+            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimAccess.CONFIG,
                 Boolean.TRUE))));
         assertThat(refusalTargets(config))
             .as("step 2: refused because the actor does not hold config")
@@ -398,7 +399,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 3: DESTROY -- same refusal identity.
         Throwable destroy = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
             delegate, InstanceModel.MODEL_ID, instanceId, "grants",
-            List.of(new RecordGrantChange("user", powerUserId, HohenheimAccess.DESTROY,
+            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimAccess.DESTROY,
                 Boolean.TRUE))));
         assertThat(refusalTargets(destroy))
             .as("step 3: refused because the actor does not hold destroy")
@@ -408,7 +409,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // delegable -- which is what makes it unreachable even for a holder.
         Throwable exec = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
             delegate, InstanceModel.MODEL_ID, instanceId, "grants",
-            List.of(new RecordGrantChange("user", powerUserId, HohenheimAccess.EXEC,
+            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimAccess.EXEC,
                 Boolean.TRUE))));
         assertThat(refusalTargets(exec))
             .as("step 4: exec is refused as NON-DELEGABLE, not merely as unheld")
@@ -421,7 +422,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // narrower than a dedicated one would be.)
         Throwable byManager = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
             contextOf(managerPrincipal), InstanceModel.MODEL_ID, instanceId, "grants",
-            List.of(new RecordGrantChange("user", powerUserId, HohenheimAccess.EXEC,
+            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimAccess.EXEC,
                 Boolean.TRUE))));
         assertThat(refusalTargets(byManager))
             .as("step 5: even a manage holder cannot mint exec")
@@ -516,14 +517,14 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
         // Step 3: an admin may plant exec deliberately (the operator choice the plan
         // describes) -- and the recipient STILL cannot pass it on.
-        RecordGrants.grant("user", consoleUserId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.EXEC, true);
         assertThat(contextOf(consolePrincipal)
                 .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.EXEC))
             .as("step 3: an operator-planted exec grant is effective").isTrue();
         Throwable relay = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
             contextOf(consolePrincipal), InstanceModel.MODEL_ID, instanceId, "grants",
-            List.of(new RecordGrantChange("user", powerUserId, HohenheimAccess.EXEC,
+            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimAccess.EXEC,
                 Boolean.TRUE))));
         assertThat(refusalTargets(relay))
             .as("step 3: a HOLDER of exec still cannot re-delegate it")
@@ -531,7 +532,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         assertThat(contextOf(powerPrincipal)
                 .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.EXEC))
             .as("step 3 (STATE): and no exec row was written for the third party").isFalse();
-        RecordGrants.revoke("user", consoleUserId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.revoke(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.EXEC);
     }
 }

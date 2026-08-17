@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -71,7 +72,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         AuthModels.users().save(user);
         tenantUserId = user.get(UserModel.ID);
 
-        RecordGrants.grant("user", tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
             HohenheimAccess.MANAGE, true);
         tenant = CertificateAuthority.Requester.ofSubject(tenantUserId);
 
@@ -269,7 +270,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         certModel.save(cert);
 
         // 1. The authority that issued it is withdrawn.
-        assertThat(RecordGrants.revoke("user", tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
+        assertThat(RecordGrants.revoke(GrantSubjectType.USER, tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
                 HohenheimAccess.MANAGE))
             .describedAs("the manage grant that authorized issuance is revoked")
             .isTrue();
@@ -299,7 +300,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
 
         // 3. Restoring the grant makes the certificate renewable again, so the refusal was
         //    about live authority and not a permanent poisoning.
-        RecordGrants.grant("user", tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
             HohenheimAccess.MANAGE, true);
         assertThat(CertificateAuthority.authorize(tenant, List.of("owned." + ZONE)))
             .containsKey("owned." + ZONE);

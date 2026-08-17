@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.game;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -172,11 +173,11 @@ class GameDomainLiveTest {
                 .isNotBlank();
 
             int tenantId = tenant();
-            RecordGrants.grant("user", tenantId, SiteModel.MODEL_ID, siteId,
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
                 HohenheimAccess.MANAGE, true);
-            RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, proxyId,
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, proxyId,
                 HohenheimAccess.MANAGE, true);
-            RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, backendId,
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, backendId,
                 HohenheimAccess.MANAGE, true);
             AccessContext tenant = contextFor(new UserPrincipal(tenantId, "Game Tenant"));
 

@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.preview.PreviewBranches;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -161,7 +162,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
     void manualCreationFromManageRequiresManageOnTheChosenSite() throws Exception {
         int strangerId = tenantUser("preview-stranger@test");
         int managerId = tenantUser("preview-manager@test");
-        RecordGrants.grant("user", managerId, SiteModel.MODEL_ID, siteId,
+        RecordGrants.grant(GrantSubjectType.USER, managerId, SiteModel.MODEL_ID, siteId,
             HohenheimAccess.MANAGE, true);
         AccessContext stranger = contextOf(strangerId, "Stranger");
         AccessContext manager = contextOf(managerId, "Manager");

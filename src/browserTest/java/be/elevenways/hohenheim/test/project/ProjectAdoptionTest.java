@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.project.ProjectAdoption;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -81,19 +82,19 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         siteXId = site(PREFIX + "site-x");
 
         // The pre-project world: direct per-user manage grants.
-        RecordGrants.grant("user", userXId, InstanceModel.MODEL_ID, instanceX1,
+        RecordGrants.grant(GrantSubjectType.USER, userXId, InstanceModel.MODEL_ID, instanceX1,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", userXId, InstanceModel.MODEL_ID, instanceX2,
+        RecordGrants.grant(GrantSubjectType.USER, userXId, InstanceModel.MODEL_ID, instanceX2,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", userYId, InstanceModel.MODEL_ID, instanceY1,
+        RecordGrants.grant(GrantSubjectType.USER, userYId, InstanceModel.MODEL_ID, instanceY1,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", userZId, InstanceModel.MODEL_ID, instanceZ1,
+        RecordGrants.grant(GrantSubjectType.USER, userZId, InstanceModel.MODEL_ID, instanceZ1,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", userXId, SiteModel.MODEL_ID, siteSharedId,
+        RecordGrants.grant(GrantSubjectType.USER, userXId, SiteModel.MODEL_ID, siteSharedId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", userYId, SiteModel.MODEL_ID, siteSharedId,
+        RecordGrants.grant(GrantSubjectType.USER, userYId, SiteModel.MODEL_ID, siteSharedId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", userXId, SiteModel.MODEL_ID, siteXId,
+        RecordGrants.grant(GrantSubjectType.USER, userXId, SiteModel.MODEL_ID, siteXId,
             HohenheimAccess.MANAGE, true);
 
         // A per-owner quota override keyed on the OLD packing.

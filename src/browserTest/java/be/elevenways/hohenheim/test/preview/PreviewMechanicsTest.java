@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -281,7 +282,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             // 1. The preview's site belongs to a TENANT, so the ledger has an owner to
             //    record that is not the operator's empty set.
             int owner = tenantUser("preview-owner@test");
-            RecordGrants.grant("user", owner, SiteModel.MODEL_ID, siteId,
+            RecordGrants.grant(GrantSubjectType.USER, owner, SiteModel.MODEL_ID, siteId,
                 HohenheimAccess.MANAGE, true);
 
             // 2. A preview mints its hostname through the ordinary domain write pipeline.
@@ -319,7 +320,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             raider.set(SiteModel.STATUS, "active");
             raider.set(SiteModel.ENABLED, true);
             sites.save(raider);
-            RecordGrants.grant("user", tenantUser("preview-raider@test"), SiteModel.MODEL_ID,
+            RecordGrants.grant(GrantSubjectType.USER, tenantUser("preview-raider@test"), SiteModel.MODEL_ID,
                 raider.get(SiteModel.ID), HohenheimAccess.MANAGE, true);
             Row seize = domains.createEmptyRow();
             seize.set(SiteDomainModel.SITE_ID, raider.get(SiteModel.ID));

@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.submit.FormValidator;
@@ -278,7 +279,7 @@ public final class InstanceTemplates {
     private static void grantCreatorManage(int instanceId, @Nullable AccessContext ctx) {
         for (String subject : HohenheimAccess.creationOwnerSubjects(ctx)) {
             int separator = subject.indexOf(':');
-            RecordGrants.grant(subject.substring(0, separator),
+            RecordGrants.grant(GrantSubjectType.fromKey(subject.substring(0, separator)),
                 Integer.parseInt(subject.substring(separator + 1)),
                 InstanceModel.MODEL_ID, instanceId, HohenheimAccess.MANAGE, true);
         }

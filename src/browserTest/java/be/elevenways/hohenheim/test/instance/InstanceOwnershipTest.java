@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -82,7 +83,7 @@ class InstanceOwnershipTest extends HohenheimTestBase {
         //    InstanceModel, the grant cannot exist, both sets stay empty, and this check
         //    CANNOT fail -- exactly the security theater the plan names.
         int tenantA = tenant("instance-tenant-a@test");
-        RecordGrants.grant("user", tenantA, InstanceModel.MODEL_ID, firstId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantA, InstanceModel.MODEL_ID, firstId,
             HohenheimAccess.MANAGE, true);
         assertThat(HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, firstId))
             .as("step 2: the manage-grant subject IS the owner identity")
@@ -94,7 +95,7 @@ class InstanceOwnershipTest extends HohenheimTestBase {
         // 3. A second tenant on the second instance: still different owners (equality of
         //    sets, never overlap).
         int tenantB = tenant("instance-tenant-b@test");
-        RecordGrants.grant("user", tenantB, InstanceModel.MODEL_ID, secondId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantB, InstanceModel.MODEL_ID, secondId,
             HohenheimAccess.MANAGE, true);
         assertThat(HohenheimAccess.sameOwner(InstanceModel.MODEL_ID, firstId, secondId))
             .as("step 3: two differently-tenanted instances are NOT same-owner")
@@ -104,14 +105,14 @@ class InstanceOwnershipTest extends HohenheimTestBase {
         //    predicate answers from the sets, not the record ids.
         Row third = instance("owner-c");
         int thirdId = third.get(InstanceModel.ID);
-        RecordGrants.grant("user", tenantA, InstanceModel.MODEL_ID, thirdId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantA, InstanceModel.MODEL_ID, thirdId,
             HohenheimAccess.MANAGE, true);
         assertThat(HohenheimAccess.sameOwner(InstanceModel.MODEL_ID, firstId, thirdId))
             .as("step 4: two instances of ONE tenant are same-owner")
             .isTrue();
 
         // 5. {A} versus {A, B} is NOT same-owner: overlap would let B seize what A serves.
-        RecordGrants.grant("user", tenantB, InstanceModel.MODEL_ID, thirdId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantB, InstanceModel.MODEL_ID, thirdId,
             HohenheimAccess.MANAGE, true);
         assertThat(HohenheimAccess.sameOwner(InstanceModel.MODEL_ID, firstId, thirdId))
             .as("step 5: subset ownership is different ownership (equality, not overlap)")
@@ -122,7 +123,7 @@ class InstanceOwnershipTest extends HohenheimTestBase {
         Model instances = Models.get(InstanceModel.class);
         second.set(InstanceModel.DELETED_AT, Instant.now());
         instances.save(second);
-        assertThat(catchThrowable(() -> RecordGrants.grant("user", tenantA,
+        assertThat(catchThrowable(() -> RecordGrants.grant(GrantSubjectType.USER, tenantA,
                 InstanceModel.MODEL_ID, secondId, HohenheimAccess.MANAGE, true)))
             .as("step 6: planting a grant on a soft-deleted instance is refused")
             .isNotNull();

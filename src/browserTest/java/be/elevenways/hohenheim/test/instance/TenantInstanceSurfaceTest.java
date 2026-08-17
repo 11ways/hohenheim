@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -88,9 +89,9 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
         instanceAId = instance(PREFIX + "alpha");
         instanceBId = instance(PREFIX + "bravo");
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", tenantBId, InstanceModel.MODEL_ID, instanceBId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantBId, InstanceModel.MODEL_ID, instanceBId,
             HohenheimAccess.MANAGE, true);
 
         approvedTemplateId = template(PREFIX + "approved", true);
@@ -317,7 +318,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         // 2. Revoke, then act again with NOTHING else changed: the refusal moves to the
         //    capability gate. Rendering already happened in step 1 of the previous test;
         //    what this pins is that the gate is asked at EXECUTION, every time.
-        RecordGrants.revoke("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.revoke(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.MANAGE);
         Throwable revoked = catchThrowable(() ->
             TenantConduits.as(principalA, () -> new InstanceService().deploy(instanceAId)));
@@ -331,7 +332,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             .as("step 3: the principal-only walk answers no as well").isFalse();
 
         // 4. Restore for the later ordered tests.
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.MANAGE, true);
         Throwable restored = catchThrowable(() ->
             TenantConduits.as(principalA, () -> new InstanceService().deploy(instanceAId)));
@@ -355,7 +356,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
         // 2. With the snapshots capability the SAME call passes the gate and is stopped
         //    by the driver-level requirement instead.
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.SNAPSHOTS, true);
         Throwable withSnapshots = catchThrowable(() -> TenantConduits.as(principalA,
             () -> new be.elevenways.hohenheim.server.instance.InstanceSnapshots()
@@ -455,7 +456,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
         // 3. With the permission but NO admitted host, placement refuses -- it never
         //    falls back to the local daemon, which is the whole point of the decision.
-        GrantService.createDirectGrant("user", tenantAId,
+        GrantService.createDirectGrant(GrantSubjectType.USER, tenantAId,
             HohenheimAccess.INSTANCES_CREATE.value(), true);
         HttpResponse<String> nowhere = tenantPost(createUrl,
             "template_id=" + approvedTemplateId + "&name=" + PREFIX + "created");
@@ -535,7 +536,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
      * one is testing.
      */
     private static void ensureManageGrant() {
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.MANAGE, true);
     }
 
@@ -572,7 +573,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             .isEqualTo(404);
 
         // 3. With files.read but NOT files.write, no mutating form is drawn at all.
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.FILES_READ, true);
         HttpResponse<String> readOnly = tenantGet(filesUrl);
         assertThat(readOnly.statusCode()).as("step 3: the read-only files tab renders").isEqualTo(200);
@@ -610,7 +611,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         //    refusal. Without this, step 4 would pass on an endpoint that refuses
         //    everything -- what follows is the undeployed workload's own answer, which is
         //    a different refusal and none of this step's business.
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.FILES_WRITE, true);
         try {
             HttpResponse<String> permitted = tenantPost(
@@ -620,7 +621,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                     + " measured the gate and not the daemon, the CSRF token or the route")
                 .isNotEqualTo("instance_not_permitted");
         } finally {
-            RecordGrants.revoke("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+            RecordGrants.revoke(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
                 HohenheimAccess.FILES_WRITE);
         }
 
@@ -669,7 +670,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         //     passes the /admin baseline but must still hit the endpoint's own
         //     hohenheim.admin.access -- the layer this endpoint declares for itself.
         int authAdminId = tenant("auth-admin@surface.test", "Auth Admin");
-        GrantService.createDirectGrant("user", authAdminId, "auth.admin.access", true);
+        GrantService.createDirectGrant(GrantSubjectType.USER, authAdminId, "auth.admin.access", true);
         Session authSession = Zenit.getSessionStore().create();
         authSession.set(be.elevenways.zenit.auth.AuthKeys.USER_ID, (long) authAdminId);
         String authCsrf = ZenitAuth.randomToken();
@@ -748,7 +749,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         try {
             // 1. A VIEW-only delegate. The record itself is genuinely visible, so every
             //    refusal below is about the ACT and not about the record being hidden.
-            RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, consoleInstanceId,
+            RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, consoleInstanceId,
                 HohenheimAccess.VIEW, true);
             assertThat(tenantGet("/manage/instances/" + consoleInstanceId).statusCode())
                 .as("step 1: the view delegate really can open the record")
@@ -774,7 +775,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
             // 4. POSITIVE ANCHOR: the console holder gets the tab AND the stored text.
             //    Without this the test would pass on a tab that is simply broken.
-            RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, consoleInstanceId,
+            RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, consoleInstanceId,
                 HohenheimAccess.CONSOLE, true);
             HttpResponse<String> allowed = tenantGet(tabUrl + "?log=" + logId);
             assertThat(allowed.statusCode())

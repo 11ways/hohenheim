@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -223,7 +224,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             //    Hypervisor-side by construction, and the ONLY way in when a Windows guest
             //    has no drivers, no network or a failed boot -- exactly what RDP cannot
             //    observe.
-            RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, id,
+            RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
                 HohenheimAccess.MANAGE, true);
             RecordingClient client = new RecordingClient();
             ws = HttpClient.newHttpClient().newWebSocketBuilder()
@@ -350,7 +351,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             remote.forceDelete(handle);
             remote.forceDelete(agentlessHandle);
             remote.forceDelete(absentHandle);
-            RecordGrants.revoke("user", userId, InstanceModel.MODEL_ID, id,
+            RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
                 HohenheimAccess.MANAGE);
             for (int record : List.of(id, agentlessId, absentId)) {
                 Models.get(InstanceModel.class).delete(record);

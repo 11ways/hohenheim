@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -65,7 +66,7 @@ class VmFramebufferHandlerTest extends HohenheimTestBase {
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
         instances.save(row);
         int instanceId = row.get(InstanceModel.ID);
-        RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
         try {
             FakeSession session = new FakeSession(new UserPrincipal(userId, "Granted"), instanceId);
@@ -83,7 +84,7 @@ class VmFramebufferHandlerTest extends HohenheimTestBase {
     void closesGracefullyWhenTheVmIsNotRunning() throws Exception {
         int userId = user("fb-stopped");
         int instanceId = vmInstance("fb-stopped-vm", InstanceModel.STATUS_STOPPED);
-        RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
         try {
             FakeSession session = new FakeSession(new UserPrincipal(userId, "Granted"), instanceId);
@@ -107,13 +108,13 @@ class VmFramebufferHandlerTest extends HohenheimTestBase {
             FakeSession session = new FakeSession(principal, instanceId);
             VmFramebufferHandler handler = new VmFramebufferHandler(session, instanceId);
 
-            RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, instanceId,
+            RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.MANAGE, true);
             assertThat(handler.revalidate())
                 .as("a live MANAGE grant keeps the console open")
                 .isTrue();
 
-            RecordGrants.revoke("user", userId, InstanceModel.MODEL_ID, instanceId,
+            RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.MANAGE);
             assertThat(handler.revalidate())
                 .as("once the grant is revoked, revalidate() returns false and core closes 1008")
@@ -148,7 +149,7 @@ class VmFramebufferHandlerTest extends HohenheimTestBase {
     }
 
     private static void cleanup(int userId, int instanceId) {
-        RecordGrants.revoke("user", userId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE);
         Models.get(InstanceModel.class).delete(instanceId);
         AuthModels.users().delete(userId);

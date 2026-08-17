@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -99,7 +100,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         user.set(UserModel.UPDATED_AT, Instant.now());
         AuthModels.users().save(user);
         consoleUserId = user.get(UserModel.ID);
-        RecordGrants.grant("user", consoleUserId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.CONSOLE, true);
 
         Session session = Zenit.getSessionStore().create();
