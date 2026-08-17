@@ -372,19 +372,43 @@ class ContainerHardeningTest {
         assertRefused(docker, profile, "hh-inst-binds",
             Map.of("Binds", List.of("/:/host")), "HostConfig.Binds");
 
-        // 2. Host namespaces, every one of them.
+        // 2. Host namespaces, every one of them. Only NetworkMode is a PERMITTED key (the
+        //    caller names the per-workload network with it), so it is the one that has to
+        //    be caught by the VALUE check; the other four are refused by name because the
+        //    key gate is an allow-list.
+        assertRefused(docker, profile, "hh-inst-ns-net",
+            Map.of("NetworkMode", "host"), "shares a host namespace");
         int index = 0;
-        for (String key : List.of("PidMode", "IpcMode", "UTSMode", "NetworkMode", "CgroupnsMode")) {
+        for (String key : List.of("PidMode", "IpcMode", "UTSMode", "CgroupnsMode")) {
             assertRefused(docker, profile, "hh-inst-ns" + index++,
-                Map.of(key, "host"), "shares a host namespace");
+                Map.of(key, "host"), "HostConfig." + key);
         }
 
         // 2b. Joining ANOTHER container's namespace, which is how a workload opts out of
         //     the per-workload network policy with a string instead of a capability.
+        assertRefused(docker, profile, "hh-inst-join-net",
+            Map.of("NetworkMode", "container:deadbeef"), "joins another container's namespace");
         index = 0;
-        for (String key : List.of("PidMode", "IpcMode", "UTSMode", "NetworkMode", "CgroupnsMode")) {
+        for (String key : List.of("PidMode", "IpcMode", "UTSMode", "CgroupnsMode")) {
             assertRefused(docker, profile, "hh-inst-join" + index++,
-                Map.of(key, "container:deadbeef"), "joins another container's namespace");
+                Map.of(key, "container:deadbeef"), "HostConfig." + key);
+        }
+
+        // 2c. And the keys that used to pass this funnel verbatim because the gate named
+        //     dangers instead of permissions: VolumesFrom inherits another container's
+        //     mounts, Runtime picks a different OCI runtime, GroupAdd hands out the docker
+        //     gid, Ulimits/OomScoreAdj/ShmSize/Tmpfs weaken host-impact bounds.
+        for (Map.Entry<String, Object> smuggled : Map.<String, Object>of(
+                "VolumesFrom", List.of("other"),
+                "Runtime", "runc-unconfined",
+                "GroupAdd", List.of("docker"),
+                "Ulimits", List.of(Map.of("Name", "nproc", "Soft", 1048576, "Hard", 1048576)),
+                "OomScoreAdj", -1000,
+                "ShmSize", 68719476736L,
+                "Tmpfs", Map.of("/scratch", "size=64g")).entrySet()) {
+            assertRefused(docker, profile, "hh-inst-unlisted" + index++,
+                Map.of(smuggled.getKey(), smuggled.getValue()),
+                "HostConfig." + smuggled.getKey());
         }
 
         // 3. A host bind mount, the Docker-socket-is-root-on-the-host case.
