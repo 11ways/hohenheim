@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.notification;
 
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.comms.CommsChannels;
+import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.CommsRecipient;
 import be.elevenways.zenit.comms.Notification;
 import be.elevenways.zenit.comms.message.ChatMessage;
@@ -38,12 +38,12 @@ public final class AlertNotification extends Notification {
 
     /** Only the channels this recipient actually routes: a chat-only endpoint must never produce webhook rows. */
     @Override
-    public @NonNull List<Identifier> via(@NonNull CommsRecipient recipient) {
-        if (recipient.routeFor(CommsChannels.CHAT) != null) {
-            return List.of(CommsChannels.CHAT);
+    public @NonNull List<CommsChannel> via(@NonNull CommsRecipient recipient) {
+        if (recipient.routeFor(CommsChannel.CHAT) != null) {
+            return List.of(CommsChannel.CHAT);
         }
-        if (recipient.routeFor(CommsChannels.WEBHOOK) != null) {
-            return List.of(CommsChannels.WEBHOOK);
+        if (recipient.routeFor(CommsChannel.WEBHOOK) != null) {
+            return List.of(CommsChannel.WEBHOOK);
         }
         return List.of();
     }
