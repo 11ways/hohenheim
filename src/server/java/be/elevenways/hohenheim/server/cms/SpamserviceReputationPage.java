@@ -64,7 +64,6 @@ public final class SpamserviceReputationPage extends PanelPage {
         vars.put("threshold", settings.threshold());
         vars.put("positiveWeight", settings.positiveWeight());
         vars.put("net", 0L);
-        vars.put("flashMessage", null);
 
         if (ip != null) {
             SpamserviceClient client = this.clientSupplier.get();
