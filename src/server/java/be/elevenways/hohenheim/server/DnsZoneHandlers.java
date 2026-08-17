@@ -91,7 +91,7 @@ final class DnsZoneHandlers {
                     items.add(new DataItem(repo.fullName(), repo.fullName(),
                         repo.defaultBranch(), null, null, null, null, Map.of()));
                 }
-                return new DryResult<>(new DataPage(items, 1, 1, items.size()));
+                return new DryResult<>(DataPage.singlePage(items));
             } catch (Exception e) {
                 conduit.setResponseStatus(502);
                 conduit.endWithContentType("text/plain", String.valueOf(e.getMessage()));
@@ -116,7 +116,7 @@ final class DnsZoneHandlers {
                     }
                     items.add(new DataItem(branch, branch, null, null, null, null, null, Map.of()));
                 }
-                return new DryResult<>(new DataPage(items, 1, 1, items.size()));
+                return new DryResult<>(DataPage.singlePage(items));
             } catch (Exception e) {
                 conduit.setResponseStatus(502);
                 conduit.endWithContentType("text/plain", String.valueOf(e.getMessage()));

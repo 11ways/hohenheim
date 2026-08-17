@@ -8,6 +8,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.ZenitAuth;
+import be.elevenways.zenit.common.data.DataPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.session.Session;
@@ -171,6 +172,13 @@ class GitRepositoryPickerTest extends HohenheimTestBase {
         assertThat(FAKE_HITS.get()).as("step 3: the fake API answered").isGreaterThan(hitsBefore);
         assertThat(lastFakeAuth).as("step 3: the stored token authenticated the upstream call")
             .isEqualTo("Bearer picker-pat");
+
+        HttpResponse<String> noMatches = get(path + "?text=absent", sessionToken);
+        DataPage emptyPage = (DataPage) Zenit.DRY.parse(noMatches.body());
+        assertThat(emptyPage.items()).as("step 3: unmatched provider searches are empty").isEmpty();
+        assertThat(emptyPage.pageCount())
+            .as("step 3: an empty provider result must not claim a page exists")
+            .isZero();
 
         // 4. Branch listing rides the same gate and requires a repository.
         HttpResponse<String> noRepo = get("/admin/git-providers/" + providerId + "/branches",

@@ -194,11 +194,10 @@ public final class ManagePanel extends Panel {
             return;
         }
         sourceRegistered = true;
-        // override, not register: the manage panel deliberately serves a WIDER audience
-        // than the sites panel's own access permission -- any principal with a grant,
-        // scoped to the sites that grant covers. The registry refuses a silent widening
-        // of the derived default, and this is the verb that declares one.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteModel.class)
+        // SiteModel has no display fields, so zenit-cms derives no source. This server-side
+        // declaration is the only source: its scope reads zenit-auth grants unavailable to
+        // the common/browser registration lane.
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SiteModel.class)
             .search(SiteModel.NAME, SiteModel.SLUG)
             .baseCriteria(() -> SiteModel.DELETED_AT.isNull())
             .accessCriteria(ManagePanel::siteScope)
@@ -220,11 +219,10 @@ public final class ManagePanel extends Panel {
             .accessCriteria(ManagePanel::domainScope)
             .build());
 
-        // DNS records: the SAME shadowing hazard (the admin DnsRecordResource and the
-        // delegated ManageDnsRecordResource both derive a default), plus the reason the
-        // capability vocabulary exists at all -- a tenant reaches individual names inside a
-        // zone it can never see.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(DnsRecordModel.class)
+        // DNS records have no display fields and therefore no derived source. This one scopes
+        // child rows by their parent zone: a tenant reaches names inside a zone it cannot
+        // otherwise enumerate.
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(DnsRecordModel.class)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
             .accessCriteria(ManagePanel::dnsRecordScope)
             .build());
@@ -249,11 +247,10 @@ public final class ManagePanel extends Panel {
             .accessCriteria(ctx -> HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW))
             .build());
 
-        // Record schedules: same hazard (the admin InstanceScheduleResource and the
-        // delegated one both derive), and this source is the one a picker or a widget
-        // would reach, so it carries the SAME scope the delegated resource enforces --
-        // never the resource's scope in one place and an open source in another.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(RecordScheduleModel.class)
+        // Record schedules have no display fields and therefore no derived source. This
+        // declaration carries the SAME scope the delegated resource enforces, so a picker
+        // and the resource can never disagree.
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(RecordScheduleModel.class)
             .search(RecordScheduleModel.NAME)
             .accessCriteria(ManagePanel::recordScheduleScope)
             .build());
@@ -300,10 +297,10 @@ public final class ManagePanel extends Panel {
             .accessCriteria(ManagePanel::previewScope)
             .build());
 
-        // Instance-database attachments: the same hazard once more. The row names both a
-        // workload and a credential store, so an unscoped source would tell any principal
-        // a picker rendered for which databases every other tenant's servers run on.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDatabaseModel.class)
+        // Instance-database attachments have no display fields and therefore no derived
+        // source. The row names both a workload and a credential store, so this sole source
+        // must carry the parent instance's visibility scope.
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(InstanceDatabaseModel.class)
             .title()
             .accessCriteria(ManagePanel::instanceDatabaseScope)
             .build());
