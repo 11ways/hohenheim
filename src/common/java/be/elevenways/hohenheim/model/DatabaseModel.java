@@ -83,13 +83,30 @@ public class DatabaseModel extends Model {
         .label(HohenheimFormCopy.label("cpu_limit"))
         .help(HohenheimFormCopy.help("cpu_limit"))
         .build());
+    /**
+     * The provisioning state, with the badge facets every surface renders it through.
+     *
+     * AIDEV-NOTE: this field is THE home of the status vocabulary. The site-databases tab
+     * used to switch on the raw strings and knew only three of the four -- destroy_failed
+     * (the one state carrying an operator obligation) rendered as a neutral grey pill with
+     * no icon, exactly where an operator looks for it. Every surface now derives an
+     * EnumBadgeState from here; nothing re-spells the colours.
+     */
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_PROVISIONING, v -> v.displayName("Provisioning").icon("rotate").color("warning"))
-        .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
-        .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-xmark").color("destructive"))
-        .value(STATUS_DESTROY_FAILED,
-            v -> v.displayName("Destroy failed").icon("triangle-exclamation").color("destructive"))
+        .value(STATUS_PROVISIONING, v -> v.displayName("Provisioning")
+            .label(statusLabel(STATUS_PROVISIONING)).icon("rotate").color("warning"))
+        .value(STATUS_ACTIVE, v -> v.displayName("Active")
+            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color("success"))
+        .value(STATUS_FAILED, v -> v.displayName("Failed")
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+        .value(STATUS_DESTROY_FAILED, v -> v.displayName("Destroy failed")
+            .label(statusLabel(STATUS_DESTROY_FAILED)).icon("triangle-exclamation").color("destructive"))
         .build());
+
+    /** The translation token for a status; the key IS the stored value. */
+    private static Microcopy statusLabel(String status) {
+        return Microcopy.of(status).withFilter("scope", "database_status");
+    }
     /** The host this database's container runs on: a {@code servers.id} FK, never a name. */
     public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
         .label(HohenheimFormCopy.label("server"))

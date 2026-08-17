@@ -4,7 +4,7 @@
 {% declare scheduleId: Integer %}
 {% declare scheduleName: String %}
 {% declare steps: List %}
-{% declare runs: List %}
+{% declare runs: List<ScheduleRunView> %}
 {% declare addStepTarget: RouteTarget = null %}
 {% declare canEdit: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
@@ -60,12 +60,15 @@
         <pl-table-body>
             {% each runs as index, run %}
             <pl-table-row>
-                <pl-table-cell>{{ run.get("startedAt") }}</pl-table-cell>
-                <pl-table-cell>
-                    <pl-badge variant={% run.get("status") == "completed" ? "success" : "destructive" %}>{{ run.get("status") }}</pl-badge>
-                    {% if run.get("error") %} {{ run.get("error") }}{% /if %}
+                <pl-table-cell>{{ run.startedAt }}</pl-table-cell>
+                {#- The verdict badge is ScheduleRunStatuses' declared state: this template
+                    does not classify a status, so "running" is not red and "completed with
+                    failures" is not indistinguishable from an outright failure. -#}
+                <pl-table-cell data-run-status={% run.status != null ? run.status.key : "" %}>
+                    {% render "zenitcms:cell/enum-badge" var:value=run.status %}
+                    {% if run.error != "" %} {{ run.error }}{% /if %}
                 </pl-table-cell>
-                <pl-table-cell>{{ run.get("summary") }}</pl-table-cell>
+                <pl-table-cell>{{ run.summary }}</pl-table-cell>
             </pl-table-row>
             {% /each %}
         </pl-table-body>

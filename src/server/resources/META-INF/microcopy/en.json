@@ -943,6 +943,10 @@
     {
       "text": "Active",
       "scope": "stack_status"
+    },
+    {
+      "text": "Active",
+      "scope": "database_status"
     }
   ],
   "add_domain": {
@@ -1273,6 +1277,14 @@
     {
       "text": "Failed",
       "scope": "backup_status"
+    },
+    {
+      "text": "Failed",
+      "scope": "database_status"
+    },
+    {
+      "text": "Failed",
+      "scope": "schedule_run_status"
     }
   ],
   "forced": {
@@ -1421,6 +1433,10 @@
     {
       "text": "Provisioning",
       "scope": "instance"
+    },
+    {
+      "text": "Provisioning",
+      "scope": "database_status"
     }
   ],
   "provisioning_failed": {
@@ -4629,6 +4645,10 @@
     {
       "text": "Running",
       "scope": "instance_status"
+    },
+    {
+      "text": "Running",
+      "scope": "schedule_run_status"
     }
   ],
   "unhealthy": {
@@ -6880,6 +6900,10 @@
     {
       "text": "Preview teardown failed: {$reason}",
       "scope": "preview_deployment"
+    },
+    {
+      "text": "Destroy failed",
+      "scope": "database_status"
     }
   ],
   "docker": [
@@ -8389,5 +8413,29 @@
   "refused": {
     "text": "The request was refused.",
     "scope": "violations"
+  },
+  "deleted_database": {
+    "text": "(deleted)",
+    "scope": "site_databases"
+  },
+  "missing_database": {
+    "text": "Missing",
+    "scope": "site_databases"
+  },
+  "completed": {
+    "text": "Completed",
+    "scope": "schedule_run_status"
+  },
+  "completed_with_failures": {
+    "text": "Completed with failures",
+    "scope": "schedule_run_status"
+  },
+  "aborted": {
+    "text": "Aborted",
+    "scope": "schedule_run_status"
+  },
+  "abandoned": {
+    "text": "Abandoned",
+    "scope": "schedule_run_status"
   }
 }

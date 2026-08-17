@@ -3,7 +3,7 @@
 {% declare title: String %}
 {% declare siteId: Integer %}
 {% declare siteName: String %}
-{% declare links: List %}
+{% declare links: List<SiteDatabaseLinkView> %}
 {% declare attachDatabaseTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
@@ -34,25 +34,26 @@
             {% each links as index, link %}
             <pl-table-row>
                 <pl-table-cell>
-                    <a use:Zenit.route={% link.get("editTarget") %}>{{ link.get("dbName") }}</a>
-                    {% if link.get("primary") == true %}
+                    <a use:Zenit.route={% link.editTarget %}>{% if link.missing %}{{ t("deleted_database", scope: "site_databases") }}{% else %}{{ link.dbName }}{% /if %}</a>
+                    {% if link.primary %}
                     <pl-badge variant={% "outline" %}>{{ t("primary", scope: "site_databases") }}</pl-badge>
                     {% /if %}
                 </pl-table-cell>
-                <pl-table-cell>{{ link.get("engine") }}</pl-table-cell>
-                <pl-table-cell data-db-status={% link.get("status") %}>
-                    {% if link.get("status") == "active" %}
-                    <a use:Zenit.route={% link.get("dbTarget") %}><pl-badge variant={% "success" %}>{{ t("active", scope: "site_databases") }}</pl-badge></a>
-                    {% elseif link.get("status") == "failed" %}
-                    <a use:Zenit.route={% link.get("dbTarget") %}><pl-badge variant={% "destructive" %}>{{ t("failed", scope: "site_databases") }}</pl-badge></a>
-                    {% elseif link.get("status") == "provisioning" %}
-                    <a use:Zenit.route={% link.get("dbTarget") %}><pl-badge variant={% "warning" %}>{{ t("provisioning", scope: "site_databases") }}</pl-badge></a>
+                <pl-table-cell>{{ link.engine }}</pl-table-cell>
+                {#- The badge is the model's own EnumField state, so every declared status
+                    keeps its label/icon/colour. "missing" is the ONE synthetic case and is
+                    rendered on its own, never as a status token. -#}
+                <pl-table-cell data-db-status={% link.missing ? "missing" : (link.status != null ? link.status.key : "") %}>
+                    {% if link.missing %}
+                    <pl-badge variant={% "destructive" %}>{{ t("missing_database", scope: "site_databases") }}</pl-badge>
+                    {% elseif link.dbTarget != null %}
+                    <a use:Zenit.route={% link.dbTarget %}>{% render "zenitcms:cell/enum-badge" var:value=link.status %}</a>
                     {% else %}
-                    <pl-badge variant={% "secondary" %}>{{ link.get("status") }}</pl-badge>
+                    {% render "zenitcms:cell/enum-badge" var:value=link.status %}
                     {% /if %}
                 </pl-table-cell>
-                <pl-table-cell><code>{{ link.get("prefix") }}</code></pl-table-cell>
-                <pl-table-cell><code>{{ link.get("varNames") }}</code></pl-table-cell>
+                <pl-table-cell><code>{{ link.prefix }}</code></pl-table-cell>
+                <pl-table-cell><code>{{ link.varNames }}</code></pl-table-cell>
             </pl-table-row>
             {% /each %}
         </pl-table-body>

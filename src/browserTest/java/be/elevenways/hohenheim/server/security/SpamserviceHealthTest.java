@@ -20,7 +20,7 @@ class SpamserviceHealthTest {
 
     private SpamserviceHealth newHealth() {
         return new SpamserviceHealth(now::get,
-            (event, subject, message) -> sent.add(event));
+            (event, subject, message) -> sent.add(event.token()));
     }
 
     @Test

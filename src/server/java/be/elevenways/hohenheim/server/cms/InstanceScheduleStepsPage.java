@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
+import be.elevenways.hohenheim.schedule.ScheduleRunView;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -56,17 +58,19 @@ public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
             steps.add(entry);
         }
 
-        List<Map<String, Object>> runs = new ArrayList<>();
+        List<ScheduleRunView> runs = new ArrayList<>();
         for (Row run : Models.get(RecordScheduleRunModel.class)
                 .findRecentForSchedule(scheduleId, 10)) {
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("id", run.get(RecordScheduleRunModel.ID));
-            entry.put("status", run.get(RecordScheduleRunModel.STATUS));
-            entry.put("trigger", run.get(RecordScheduleRunModel.TRIGGER));
-            entry.put("startedAt", String.valueOf(run.get(RecordScheduleRunModel.STARTED_AT)));
-            entry.put("summary", InstanceScheduleRunResource.describeSteps(run));
-            entry.put("error", run.get(RecordScheduleRunModel.ERROR));
-            runs.add(entry);
+            // The verdict's label, icon and colour come from ScheduleRunStatuses -- the ONE
+            // table over the framework's six statuses. The template used to call everything
+            // that was not "completed" destructive, which painted a still-RUNNING chain red.
+            String error = run.get(RecordScheduleRunModel.ERROR);
+            runs.add(new ScheduleRunView(
+                run.get(RecordScheduleRunModel.ID),
+                ScheduleRunStatuses.badgeFor(run.get(RecordScheduleRunModel.STATUS)),
+                String.valueOf(run.get(RecordScheduleRunModel.STARTED_AT)),
+                InstanceScheduleRunResource.describeSteps(run),
+                error != null ? error : ""));
         }
 
         int instanceId = InstanceScheduleResource.parseInstanceId(

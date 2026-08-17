@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -42,9 +43,9 @@ public final class NotificationChannelResource extends RowResource {
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(NotificationChannelModel.FORMAT))
         .add(NotificationChannelModel.URL)
         .add(Array.of(NotificationChannelModel.EVENTS, NotificationChannelModel.EVENTS.getItemField())
-            .options(OptionSource.of(NotificationEvents.ALL.stream()
-                .map(event -> FieldOption.of(event,
-                    Microcopy.of(event).withFilter("scope", "notification_event")))
+            // Derived from the vocabulary itself: an event cannot exist and be unofferable.
+            .options(OptionSource.of(Arrays.stream(NotificationEvents.values())
+                .map(event -> FieldOption.of(event.token(), event.label()))
                 .toList()))
             .build())
         .build();

@@ -37,12 +37,13 @@ public final class Alerts {
      *
      * @return the number of channels the alert was queued for
      */
-    public static int send(@NonNull String event, @NonNull String subject, @Nullable String message) {
-        AlertNotification notification = new AlertNotification(event, subject, message);
+    public static int send(@NonNull NotificationEvents event, @NonNull String subject,
+                           @Nullable String message) {
+        AlertNotification notification = new AlertNotification(event.token(), subject, message);
         int queued = 0;
 
         for (Row row : Models.get(NotificationChannelModel.class).find().all()) {
-            if (!subscribes(row, event)) {
+            if (!subscribes(row, event.token())) {
                 continue;
             }
 
@@ -59,7 +60,7 @@ public final class Alerts {
             // An alert that reached nobody must not vanish silently: an operator
             // can otherwise believe alerting works while receiving nothing.
             Blast.slog("hohenheim.notification.undelivered", Map.of(
-                "event", event,
+                "event", event.token(),
                 "subject", subject,
                 "reason", "no_subscribed_channels"));
         }
@@ -120,8 +121,17 @@ public final class Alerts {
                 }
                 return new AdHocRecipient().route(CommsChannel.CHAT, route).setDisplayName(name);
             }
-            default -> {
+            case NotificationChannelModel.FORMAT_GENERIC -> {
                 return AdHocRecipient.webhook(url).setDisplayName(name);
+            }
+            // AIDEV-NOTE: this arm used to be `default`, so ANY format outside the
+            // vocabulary -- a typo, a hand-edited row, a format added to the model without
+            // a branch here -- was silently POSTed as a generic JSON body to a receiver
+            // expecting something else, and the operator saw a queued alert either way.
+            // Fail closed and say which format was refused.
+            default -> {
+                slogUnmappable(name, format, "unknown channel format");
+                return null;
             }
         }
     }

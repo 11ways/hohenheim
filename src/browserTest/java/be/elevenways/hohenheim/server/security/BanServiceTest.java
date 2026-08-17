@@ -64,7 +64,7 @@ class BanServiceTest {
             return new NftRunner.Result(0, "", "");
         }, () -> nftEnabled);
         return new BanService(nft, clock,
-            (event, subject, message) -> notifications.add(event));
+            (event, subject, message) -> notifications.add(event.token()));
     }
 
     @Test
@@ -348,7 +348,7 @@ class BanServiceTest {
             ? new NftRunner.Result(1, "", "injected failure")
             : new NftRunner.Result(0, "", ""), () -> true);
         BanService service = new BanService(nft, System::currentTimeMillis,
-            (event, subject, message) -> notifications.add(event));
+            (event, subject, message) -> notifications.add(event.token()));
 
         service.autoBan("192.0.2.67", "reputation", "nft fails");
         assertThat(Models.get(BanModel.class).find()

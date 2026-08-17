@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.HostStatusCell;
 import be.elevenways.hohenheim.host.KernelIsolationView;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
@@ -259,7 +260,7 @@ class HostEvidenceTest {
                 assertThat(hostStatusCell(afterRefusal).state())
                     .withFailMessage("step 4: the host list shows nothing about a host that"
                         + " stopped answering: '%s'", hostStatusCell(afterRefusal))
-                    .isEqualTo("silent");
+                    .isEqualTo(HostState.SILENT);
 
                 // 5. POSITIVE ANCHOR for the whole bound: a fresh contact clears both the
                 //    refusal and the cell, so steps 2 and 4 were the clock and not a gate
@@ -270,7 +271,7 @@ class HostEvidenceTest {
                 HostAdmission.requireInstancePlacement(serverId,
                     WorkloadIsolation.SHARED_KERNEL, BUCKET);
                 assertThat(hostStatusCell(model.findByName("evidence-b")).state())
-                    .as("step 5: and the cell stops saying it").isEqualTo("ok");
+                    .as("step 5: and the cell stops saying it").isEqualTo(HostState.OK);
 
                 // 6. Zero disables the bound outright -- the declared way out for an
                 //    operator who would rather place onto an unheard-from host.
@@ -349,7 +350,7 @@ class HostEvidenceTest {
                 .withFailMessage("step 3: a quarantined host renders in the list with no"
                     + " quarantine state at all: '%s'",
                     hostStatusCell(model.findByName("evidence-c")))
-                .isEqualTo("quarantined");
+                .isEqualTo(HostState.QUARANTINED);
 
             // 4. POSITIVE ANCHOR: lifting the stamp restores the ordinary cell, so step 3
             //    was the quarantine column and not a cell that always shouts.
@@ -359,7 +360,7 @@ class HostEvidenceTest {
             HostStatusCell ordinary = hostStatusCell(model.findByName("evidence-c"));
             assertThat(ordinary.state())
                 .as("step 4: an unquarantined host reads as its daemon again")
-                .isNotEqualTo("quarantined");
+                .isNotEqualTo(HostState.QUARANTINED);
             assertThat(ordinary.daemon())
                 .as("step 4: with the stored daemon label").contains("Incus");
         });

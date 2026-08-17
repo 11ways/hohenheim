@@ -121,7 +121,7 @@ class AlertsTest {
             addChannel("everything", NotificationChannelModel.FORMAT_GENERIC,
                 receiver.url("/all"), null);
             addChannel("deploys-only", NotificationChannelModel.FORMAT_GENERIC,
-                receiver.url("/deploys"), List.of(NotificationEvents.DEPLOY_FAILED));
+                receiver.url("/deploys"), List.of(NotificationEvents.DEPLOY_FAILED.token()));
 
             // A backup event reaches only the receive-all channel.
             assertThat(Alerts.send(NotificationEvents.BACKUP_FAILED, "Backup", "boom")).isEqualTo(1);

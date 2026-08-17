@@ -109,7 +109,7 @@ public final class SpamserviceHealth {
         }
     }
 
-    private void notify(@NonNull String event, @NonNull String subject, @NonNull String message) {
+    private void notify(@NonNull NotificationEvents event, @NonNull String subject, @NonNull String message) {
         try {
             this.notifier.send(event, subject, message);
         } catch (RuntimeException e) {
