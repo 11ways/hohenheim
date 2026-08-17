@@ -110,6 +110,14 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
         return Microcopy.of(state).withFilter("scope", "stack_state");
     }
 
+    /**
+     * AIDEV-NOTE: this switch stays hand-written, unlike the sibling deployment-status
+     * one which now reads the colour off its EnumField. These states are LIVE runtime
+     * facts derived from the Docker daemon by {@code StackRuntime.serviceStates} plus the
+     * synthetic "missing" -- there is no status COLUMN and no enum vocabulary to declare
+     * a colour on, so there is no second list here to remove. The default arm is the
+     * fail-closed half: an unrecognised daemon state renders neutral, never "success".
+     */
     private static String stateVariant(String state) {
         return switch (state) {
             case "healthy", "running" -> "success";
