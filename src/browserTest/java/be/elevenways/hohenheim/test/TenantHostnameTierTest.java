@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -105,7 +106,7 @@ class TenantHostnameTierTest extends HohenheimTestBase {
         Zenit.getSessionStore().save(session);
         tenantSession = session.token().secret();
 
-        RecordGrants.grant("user", tenantId, SiteModel.MODEL_ID, ownSiteId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, ownSiteId,
             HohenheimAccess.MANAGE, true);
     }
 

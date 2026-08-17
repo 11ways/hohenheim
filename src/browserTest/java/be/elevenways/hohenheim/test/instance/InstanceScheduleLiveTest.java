@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -235,9 +236,9 @@ class InstanceScheduleLiveTest {
             InstanceService service = new InstanceService();
             RecordSchedules recordSchedules = new RecordSchedules(datasource);
 
-            RecordGrants.grant("user", (int) tenantId, InstanceModel.MODEL_ID, id,
+            RecordGrants.grant(GrantSubjectType.USER, (int) tenantId, InstanceModel.MODEL_ID, id,
                 HohenheimAccess.MANAGE, true);
-            RecordGrants.grant("user", (int) tenantId, InstanceModel.MODEL_ID, id,
+            RecordGrants.grant(GrantSubjectType.USER, (int) tenantId, InstanceModel.MODEL_ID, id,
                 HohenheimAccess.BACKUPS, true);
 
             try {
@@ -279,7 +280,7 @@ class InstanceScheduleLiveTest {
 
                 // 4. REVOKE the manage grant. The stored schedule must stop working:
                 //    no console line, no restart -- host state, not a log line.
-                RecordGrants.revoke("user", (int) tenantId, InstanceModel.MODEL_ID, id,
+                RecordGrants.revoke(GrantSubjectType.USER, (int) tenantId, InstanceModel.MODEL_ID, id,
                     HohenheimAccess.MANAGE);
                 String beforeRevoked = containerId(docker, handle);
 

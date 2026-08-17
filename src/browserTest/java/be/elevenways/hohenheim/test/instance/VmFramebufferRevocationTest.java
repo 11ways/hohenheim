@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -71,7 +72,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
         int userId = user("fb-reval-socket");
         int instanceId = runningVm("fb-reval-socket-vm");
         WS_INSTANCE_ID.set(instanceId);
-        RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
         String token = sessionFor(userId).token();
 
@@ -90,7 +91,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
             assertThat(WS_SOURCE.keys).contains("KeyA:true");
 
             // Clause 2: revoke the grant; the OPEN socket must be closed 1008.
-            RecordGrants.revoke("user", userId, InstanceModel.MODEL_ID, instanceId,
+            RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.MANAGE);
             assertThat(client.closed.await(5, TimeUnit.SECONDS))
                 .as("a revoked viewer's OPEN console is disconnected, not merely refused later")
@@ -121,9 +122,9 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
         int viewUserId = user("fb-view-only");
         int instanceId = runningVm("fb-console-only-vm");
         WS_INSTANCE_ID.set(instanceId);
-        RecordGrants.grant("user", consoleUserId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.CONSOLE, true);
-        RecordGrants.grant("user", viewUserId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, viewUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.VIEW, true);
 
         RecordingClient consoleClient = new RecordingClient();
@@ -162,9 +163,9 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
             }
         } finally {
             consoleSocket.abort();
-            RecordGrants.revoke("user", consoleUserId, InstanceModel.MODEL_ID, instanceId,
+            RecordGrants.revoke(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.CONSOLE);
-            RecordGrants.revoke("user", viewUserId, InstanceModel.MODEL_ID, instanceId,
+            RecordGrants.revoke(GrantSubjectType.USER, viewUserId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.VIEW);
             Models.get(InstanceModel.class).delete(instanceId);
             AuthModels.users().delete(consoleUserId);
@@ -212,7 +213,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
     }
 
     private static void cleanup(int userId, int instanceId) {
-        RecordGrants.revoke("user", userId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE);
         Models.get(InstanceModel.class).delete(instanceId);
         AuthModels.users().delete(userId);

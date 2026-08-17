@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -180,7 +181,7 @@ class InstanceBackupsTest {
                 .assign(InstanceModel.BACKUP_TARGET_ID, 999_999)
                 .updateAll();
             int viewerId = tenant("viewer@backup-gate.test", "Viewer");
-            RecordGrants.grant("user", viewerId, InstanceModel.MODEL_ID, instanceId,
+            RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.VIEW, true);
             UserPrincipal viewer = new UserPrincipal(viewerId, "Viewer");
 
@@ -231,7 +232,7 @@ class InstanceBackupsTest {
             Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
 
             int managerId = tenant("manager@backup-restore.test", "Manager");
-            RecordGrants.grant("user", managerId, InstanceModel.MODEL_ID, instanceId,
+            RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.MANAGE, true);
             UserPrincipal manager = new UserPrincipal(managerId, "Manager");
 

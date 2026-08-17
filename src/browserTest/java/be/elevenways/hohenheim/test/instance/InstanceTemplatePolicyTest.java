@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.TemplatePortability;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -351,7 +352,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
         // same grant by hand. Without it the tenant holds no CONFIG on the record and
         // the step-4 rename below is refused by the tenant-write rule -- correctly,
         // but for a reason that has nothing to do with the image policy under test.
-        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, created[0],
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, created[0],
             HohenheimAccess.MANAGE, true);
 
         // 3. An UNAPPROVED template is not an image source for a tenant: pointing
@@ -389,7 +390,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
 
         // 5. image_any ON THE RECORD is the sanctioned override: with the grant the
         //    same update passes.
-        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, created[0],
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, created[0],
             HohenheimAccess.IMAGE_ANY, true);
         TenantConduits.as(tenantPrincipal, () -> {
             Row row = instances.findById(created[0]);
@@ -432,7 +433,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
             instances.save(row);
             created[0] = row.get(InstanceModel.ID);
         });
-        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, created[0],
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, created[0],
             HohenheimAccess.MANAGE, true);
 
         // 2. THE DEFECT: the tenant flips settings.privileged. The image policy judges

@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -102,9 +103,9 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
         siteAId = site(PREFIX + "site-a");
         siteBId = site(PREFIX + "site-b");
-        RecordGrants.grant("user", tenantAId, SiteModel.MODEL_ID, siteAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", tenantBId, SiteModel.MODEL_ID, siteBId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantBId, SiteModel.MODEL_ID, siteBId,
             HohenheimAccess.MANAGE, true);
 
         admittedHostId = admittedHost();
@@ -260,9 +261,9 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             .isNotIn(302, 303);
 
         // 2. With the permission the allocation lands.
-        GrantService.createDirectGrant("user", tenantAId,
+        GrantService.createDirectGrant(GrantSubjectType.USER, tenantAId,
             TenantDatabases.DATABASES_CREATE.value(), true);
-        GrantService.createDirectGrant("user", tenantBId,
+        GrantService.createDirectGrant(GrantSubjectType.USER, tenantBId,
             TenantDatabases.DATABASES_CREATE.value(), true);
         HttpResponse<String> created = post(sessionA, csrfA, createUrl,
             "name=blog&engine=postgres");
@@ -360,7 +361,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             .isNotBlank().isNotEqualTo("null");
 
         // 1. The teammate is granted VIEW and nothing else. They reach the record.
-        RecordGrants.grant("user", viewerId, DatabaseModel.MODEL_ID, databaseAId,
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseAId,
             HohenheimAccess.VIEW, true);
         HttpResponse<String> detail = get(sessionViewer, "/manage/databases/" + databaseAId);
         assertThat(detail.statusCode()).as("step 1: a view grant opens the record")
@@ -389,12 +390,12 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         assertThat(owner.body()).as("step 3: and reads the credential").contains(password);
 
         // 4. Granting the teammate CREDENTIALS explicitly opens exactly that one door.
-        RecordGrants.grant("user", viewerId, DatabaseModel.MODEL_ID, databaseAId,
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseAId,
             HohenheimAccess.CREDENTIALS, true);
         assertThat(get(sessionViewer, credentialsUrl).body())
             .as("step 4: an explicit credentials grant is what opens it")
             .contains(password);
-        RecordGrants.revoke("user", viewerId, DatabaseModel.MODEL_ID, databaseAId,
+        RecordGrants.revoke(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseAId,
             HohenheimAccess.CREDENTIALS);
         assertThat(get(sessionViewer, credentialsUrl).statusCode())
             .as("step 4: and revoking it closes the door again, same request")

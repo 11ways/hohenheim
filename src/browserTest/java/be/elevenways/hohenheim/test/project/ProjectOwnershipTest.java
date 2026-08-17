@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -326,7 +327,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             .as("step 1: a project record and an operator record differ too").isFalse();
 
         // 2. A member creates THROUGH the one funnel, into its project.
-        GrantService.createDirectGrant("user", memberAId,
+        GrantService.createDirectGrant(GrantSubjectType.USER, memberAId,
             HohenheimAccess.INSTANCES_CREATE.value(), true);
         admittedHostId = admittedHost();
         HttpResponse<String> created = memberPost("/instances/from-template",

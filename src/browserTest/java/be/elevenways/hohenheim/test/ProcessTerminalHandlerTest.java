@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.process.ProcessTerminalHandler;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -196,7 +197,7 @@ class ProcessTerminalHandlerTest extends HohenheimTestBase {
             siteModel.save(site);
             this.siteId = site.get(SiteModel.ID);
 
-            RecordGrants.grant("user", this.userId, SiteModel.MODEL_ID, this.siteId,
+            RecordGrants.grant(GrantSubjectType.USER, this.userId, SiteModel.MODEL_ID, this.siteId,
                 HohenheimAccess.MANAGE, true);
 
             this.outFile = Files.createTempFile(label, ".txt");
@@ -217,7 +218,7 @@ class ProcessTerminalHandlerTest extends HohenheimTestBase {
         }
 
         void revokeGrant() {
-            RecordGrants.revoke("user", this.userId, SiteModel.MODEL_ID, this.siteId,
+            RecordGrants.revoke(GrantSubjectType.USER, this.userId, SiteModel.MODEL_ID, this.siteId,
                 HohenheimAccess.MANAGE);
         }
 

@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -161,7 +162,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         Zenit.getSessionStore().save(session);
         tenantSession = session.token().secret();
 
-        RecordGrants.grant("user", tenantId, SiteModel.MODEL_ID, ownSiteId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, ownSiteId,
             HohenheimAccess.MANAGE, true);
     }
 
@@ -664,7 +665,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         for (String capability : List.of(HohenheimAccess.EDIT, HohenheimAccess.VIEW,
                 HohenheimAccess.DYNDNS)) {
-            RecordGrants.revoke("user", tenantId, DnsRecordModel.MODEL_ID, dynamicId, capability);
+            RecordGrants.revoke(GrantSubjectType.USER, tenantId, DnsRecordModel.MODEL_ID, dynamicId, capability);
         }
         TenantConduits.as(adminPrincipal, () -> {
             model.delete(model.findById(dynamicId));
@@ -878,9 +879,9 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             .isEqualTo("foreign");
 
         // 7. Revoking both puts the row back out of reach on every surface.
-        RecordGrants.revoke("user", tenantId, DnsRecordModel.MODEL_ID, foreignRecordId,
+        RecordGrants.revoke(GrantSubjectType.USER, tenantId, DnsRecordModel.MODEL_ID, foreignRecordId,
             HohenheimAccess.VIEW);
-        RecordGrants.revoke("user", tenantId, DnsRecordModel.MODEL_ID, foreignRecordId,
+        RecordGrants.revoke(GrantSubjectType.USER, tenantId, DnsRecordModel.MODEL_ID, foreignRecordId,
             HohenheimAccess.EDIT);
         assertThat(tenantGet("/zn/records/hohenheim.dns_record/item/" + foreignRecordId)
             .statusCode()).as("a revoked grant is a closed door again").isEqualTo(404);
@@ -948,7 +949,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
     /** Grant and PROVE it landed: grant() over a live deny is a documented silent no-op. */
     private static void assertGranted(be.elevenways.protoblast.common.registry.Identifier model,
                                       Object recordId, String capability) {
-        Row written = RecordGrants.grant("user", tenantId, model, recordId, capability, true);
+        Row written = RecordGrants.grant(GrantSubjectType.USER, tenantId, model, recordId, capability, true);
         assertThat((Boolean) written.get(
             be.elevenways.zenit.auth.model.RecordGrantModel.VALUE))
             .as("the %s grant actually landed", capability).isTrue();

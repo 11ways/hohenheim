@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.GrantModel;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
@@ -88,7 +89,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
 
             // 2. A record grant flips the decision to GRANT_ALLOWED, and both
             //    policy faces (context and principal-only) agree.
-            RecordGrants.grant("user", walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
+            RecordGrants.grant(GrantSubjectType.USER, walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
                 HohenheimAccess.MANAGE, true);
             assertThat(ctx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimAccess.MANAGE))
                 .as("step 2: a positive record grant must decide GRANT_ALLOWED")
@@ -105,7 +106,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
             //    record grant: precedence row 2 (GATE_DENIED). This is the
             //    tri-state the deleted wrapper used to swallow (its inherited
             //    decide() mapped every false to abstain).
-            GrantService.createDirectGrant("user", walkOperatorId, "hohenheim.manage.access", false);
+            GrantService.createDirectGrant(GrantSubjectType.USER, walkOperatorId, "hohenheim.manage.access", false);
             assertThat(ctx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimAccess.MANAGE))
                 .as("step 3: an explicit gate denial must decide GATE_DENIED, not fall through to the grant")
                 .isEqualTo(RecordCapabilityDecision.GATE_DENIED);
@@ -131,7 +132,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
                 .as("step 5: the admin permission must decide ADMIN_BYPASS")
                 .isEqualTo(RecordCapabilityDecision.ADMIN_BYPASS);
         } finally {
-            RecordGrants.revoke("user", walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
+            RecordGrants.revoke(GrantSubjectType.USER, walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
                 HohenheimAccess.MANAGE);
             deleteManageAccessGrants(walkOperatorId);
         }
@@ -160,7 +161,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
             // 2. With the grant, the SAME mint succeeds: the production vocabulary
             //    registers manage as delegable, so this is the first mintable cap:
             //    scope in a real install.
-            RecordGrants.grant("user", walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
+            RecordGrants.grant(GrantSubjectType.USER, walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
                 HohenheimAccess.MANAGE, true);
             ApiKeyService.CreatedKey created =
                 ApiKeyService.create(actor, walkOperatorId, "walk-ci", List.of(scope), null);
@@ -187,15 +188,15 @@ class CapabilityWalkTest extends HohenheimTestBase {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown capability");
         } finally {
-            RecordGrants.revoke("user", walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
+            RecordGrants.revoke(GrantSubjectType.USER, walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
                 HohenheimAccess.MANAGE);
         }
     }
 
     private static void deleteManageAccessGrants(int userId) {
-        for (Row grant : GrantService.listDirectGrants("user", userId)) {
+        for (Row grant : GrantService.listDirectGrants(GrantSubjectType.USER, userId)) {
             if ("hohenheim.manage.access".equals(grant.get(GrantModel.PERMISSION))) {
-                GrantService.deleteDirectGrant("user", userId, grant.get(GrantModel.ID));
+                GrantService.deleteDirectGrant(GrantSubjectType.USER, userId, grant.get(GrantModel.ID));
             }
         }
     }

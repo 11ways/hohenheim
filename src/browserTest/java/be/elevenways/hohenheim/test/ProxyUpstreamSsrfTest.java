@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -71,7 +72,7 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
         Row tenantSite = proxySite(siteModel, "SSRF Tenant Site", "ssrf-tenant", "93.184.216.34");
         TenantConduits.as(adminPrincipal, () -> siteModel.save(tenantSite));
         tenantSiteId = tenantSite.get(SiteModel.ID);
-        RecordGrants.grant("user", tenantId, SiteModel.MODEL_ID, tenantSiteId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, tenantSiteId,
             HohenheimAccess.MANAGE, true);
     }
 

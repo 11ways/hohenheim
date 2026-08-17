@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -70,9 +71,9 @@ class InstanceQuotaAttributionTest extends HohenheimTestBase {
         operatorSiteId = site(PREFIX + "operator-site");
         tenantSiteId = site(PREFIX + "tenant-site");
         secondTenantSiteId = site(PREFIX + "tenant-site-two");
-        RecordGrants.grant("user", tenantId, SiteModel.MODEL_ID, tenantSiteId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, tenantSiteId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", tenantId, SiteModel.MODEL_ID, secondTenantSiteId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, secondTenantSiteId,
             HohenheimAccess.MANAGE, true);
 
         operatorBucket = InstanceQuota.bucketKeyOf("");

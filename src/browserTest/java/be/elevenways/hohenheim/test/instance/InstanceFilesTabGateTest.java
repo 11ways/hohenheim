@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -87,7 +88,7 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
         user.set(UserModel.UPDATED_AT, Instant.now());
         AuthModels.users().save(user);
         int userId = user.get(UserModel.ID);
-        RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, dockerInstanceId,
+        RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, dockerInstanceId,
             capability, true);
         Session session = Zenit.getSessionStore().create();
         session.set(AuthKeys.USER_ID, (long) userId);

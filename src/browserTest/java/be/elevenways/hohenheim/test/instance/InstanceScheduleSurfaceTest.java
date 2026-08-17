@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.ManageInstanceScheduleStepResource;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -71,9 +72,9 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         instances.save(instance);
         instanceId = instance.get(InstanceModel.ID);
 
-        RecordGrants.grant("user", ownerId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", viewerId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.VIEW, true);
 
         Model schedules = Models.get(RecordScheduleModel.class);
@@ -212,7 +213,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         // 3. Revocation withdraws them: the answer tracks the live grant graph.
         //    revoke, never grant(false) -- a planted deny is STICKY (deny beats a later
         //    allow), so grant(false) would poison the owner for every later test.
-        RecordGrants.revoke("user", ownerId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.revoke(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE);
         try {
             AccessContext revoked = contextOf(ownerId, "Schedule Owner");
@@ -222,7 +223,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
             assertThat(stepResource.deletableBy(step, revoked))
                 .as("step 3: and the step delete button").isFalse();
         } finally {
-            RecordGrants.grant("user", ownerId, InstanceModel.MODEL_ID, instanceId,
+            RecordGrants.grant(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.MANAGE, true);
         }
     }

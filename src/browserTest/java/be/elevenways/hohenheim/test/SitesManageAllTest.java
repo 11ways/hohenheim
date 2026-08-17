@@ -10,6 +10,7 @@ import be.elevenways.zenit.auth.AuthEndpoints;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.cms.GrantsEditField;
 import be.elevenways.zenit.auth.model.GrantModel;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -140,11 +141,11 @@ class SitesManageAllTest extends HohenheimTestBase {
             .as("step 0b: and no site")
             .isFalse();
 
-        GrantService.createDirectGrant("user", holderId, MANAGE_ALL, true);
+        GrantService.createDirectGrant(GrantSubjectType.USER, holderId, MANAGE_ALL, true);
         try {
             // 1. THE claim, both halves at once. The holder has NO record grant on either
             //    site and NEITHER hohenheim.admin.access NOR hohenheim.manage.access.
-            assertThat(GrantService.listDirectGrants("user", holderId))
+            assertThat(GrantService.listDirectGrants(GrantSubjectType.USER, holderId))
                 .as("step 1: the holder's only grant is manage_all -- no admin, no panel grant")
                 .allMatch(grant -> MANAGE_ALL.equals(grant.get(GrantModel.PERMISSION)));
 
@@ -206,7 +207,7 @@ class SitesManageAllTest extends HohenheimTestBase {
             // 2. THE PRECEDENCE TRAP. Gate denial sits AHEAD of the type-level row, and an
             //    ALL scope has no candidate for a downstream per-record check to re-confirm,
             //    so the mask that hides a wrong ordering disappears exactly here.
-            GrantService.createDirectGrant("user", holderId, MANAGE_ACCESS, false);
+            GrantService.createDirectGrant(GrantSubjectType.USER, holderId, MANAGE_ACCESS, false);
 
             assertThat(holderContext().capabilityDecision(SiteModel.MODEL_ID, alphaSiteId,
                     HohenheimAccess.MANAGE))
@@ -288,24 +289,24 @@ class SitesManageAllTest extends HohenheimTestBase {
             //    includes handing it on, so the boundary that remains is HOLDING it --
             //    not a second delegability class above it (owner's call, 2026-08-15;
             //    hohenheim declares no nonDelegable permission any more).
-            GrantService.createDirectGrant("user", holderId,
+            GrantService.createDirectGrant(GrantSubjectType.USER, holderId,
                 AuthEndpoints.PERM_GRANTS_MANAGE.value(), true);
-            GrantService.createDirectGrant("user", holderId, DELEGABLE_CONTROL, true);
+            GrantService.createDirectGrant(GrantSubjectType.USER, holderId, DELEGABLE_CONTROL, true);
             AccessContext actor = holderContext();
 
             // 4a. The control: a permission the actor holds passes the policy.
-            GrantAdministration.requireAuthorizedDiff(actor, "user", peerId, "grants",
+            GrantAdministration.requireAuthorizedDiff(actor, GrantSubjectType.USER, peerId, "grants",
                 List.of(new GrantsEditField.Entry(DELEGABLE_CONTROL, true)));
 
             // 4b. And so does every-site authority, which the actor also holds. This USED
             //     to be refused with grant_delegate; that asymmetry is gone on purpose.
-            GrantAdministration.requireAuthorizedDiff(actor, "user", peerId, "grants",
+            GrantAdministration.requireAuthorizedDiff(actor, GrantSubjectType.USER, peerId, "grants",
                 List.of(new GrantsEditField.Entry(MANAGE_ALL, true)));
 
             // 4c. The boundary that still bites: a permission the actor does NOT hold
             //     cannot be conferred, so step 4b is a widening and not a shutdown.
             assertThatThrownBy(() -> GrantAdministration.requireAuthorizedDiff(
-                    actor, "user", peerId, "grants",
+                    actor, GrantSubjectType.USER, peerId, "grants",
                     List.of(new GrantsEditField.Entry(UNHELD_PERMISSION, true))))
                 .as("step 4c: nobody confers authority they do not themselves hold")
                 .isInstanceOf(Violations.class)
@@ -320,7 +321,7 @@ class SitesManageAllTest extends HohenheimTestBase {
             //    "allowed" for all of them) and could mint a peer's per-site `manage` grant
             //    installation-wide from /manage/sites/{id}/access: the same spread step 4b
             //    refuses, through a door that never checked.
-            GrantService.createDirectGrant("user", holderId, MANAGE_ACCESS, true);
+            GrantService.createDirectGrant(GrantSubjectType.USER, holderId, MANAGE_ACCESS, true);
             AccessContext everySite = holderContext();
             assertThat(everySite.capabilityDecision(SiteModel.MODEL_ID, alphaSiteId,
                     HohenheimAccess.MANAGE))
@@ -329,7 +330,7 @@ class SitesManageAllTest extends HohenheimTestBase {
             assertThatThrownBy(() -> GrantAdministration.requireAuthorizedRecordDiff(
                     everySite, SiteModel.MODEL_ID, alphaSiteId, "access",
                     List.of(new GrantAdministration.RecordGrantChange(
-                        "user", peerId, HohenheimAccess.MANAGE, true))))
+                        GrantSubjectType.USER, peerId, HohenheimAccess.MANAGE, true))))
                 .as("step 5: but blanket authority over sites is not authority to hand one out")
                 .isInstanceOf(Violations.class)
                 .satisfies(refused -> assertThat(refusalTargets((Violations) refused))
@@ -348,20 +349,20 @@ class SitesManageAllTest extends HohenheimTestBase {
             //    manage holder still delegates manage on the site it actually holds. That
             //    is the delegation this lane exists for and it is untouched.
             Integer ownerId = user("manage-all-owner@hohenheim.local", "Site Owner");
-            RecordGrants.grant("user", ownerId, SiteModel.MODEL_ID, alphaSiteId,
+            RecordGrants.grant(GrantSubjectType.USER, ownerId, SiteModel.MODEL_ID, alphaSiteId,
                 HohenheimAccess.MANAGE, true);
             AccessContext owner = TestAccessContexts.contextFor(
                 new UserPrincipal(ownerId, "Site Owner"));
             assertThat(GrantAdministration.requireAuthorizedRecordDiff(
                     owner, SiteModel.MODEL_ID, alphaSiteId, "access",
                     List.of(new GrantAdministration.RecordGrantChange(
-                        "user", peerId, HohenheimAccess.MANAGE, true))))
+                        GrantSubjectType.USER, peerId, HohenheimAccess.MANAGE, true))))
                 .as("step 6: a record-level manage holder may still delegate on its own site")
                 .hasSize(1);
             assertThatThrownBy(() -> GrantAdministration.requireAuthorizedRecordDiff(
                     owner, SiteModel.MODEL_ID, betaSiteId, "access",
                     List.of(new GrantAdministration.RecordGrantChange(
-                        "user", peerId, HohenheimAccess.MANAGE, true))))
+                        GrantSubjectType.USER, peerId, HohenheimAccess.MANAGE, true))))
                 .as("step 6: and only there -- the boundary is still per record")
                 .isInstanceOf(Violations.class);
         } finally {
@@ -383,9 +384,9 @@ class SitesManageAllTest extends HohenheimTestBase {
 
     private static void deleteGrants(int userId, String... permissions) {
         List<String> wanted = List.of(permissions);
-        for (Row grant : GrantService.listDirectGrants("user", userId)) {
+        for (Row grant : GrantService.listDirectGrants(GrantSubjectType.USER, userId)) {
             if (wanted.contains(grant.get(GrantModel.PERMISSION))) {
-                GrantService.deleteDirectGrant("user", userId, grant.get(GrantModel.ID));
+                GrantService.deleteDirectGrant(GrantSubjectType.USER, userId, grant.get(GrantModel.ID));
             }
         }
     }

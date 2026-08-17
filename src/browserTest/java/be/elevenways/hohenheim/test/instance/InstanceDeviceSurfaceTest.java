@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.CapabilityScopes;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
@@ -186,7 +187,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         Models.get(InstanceModel.class).save(row);
         int id = row.get(InstanceModel.ID);
         this.instances.add(id);
-        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, id,
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, id,
             HohenheimAccess.MANAGE, true);
         return id;
     }
@@ -488,7 +489,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         // 2. THE PREMISE: a VIEW-only delegate can SEE the instance and its devices.
         //    Without this the refusals below would be indistinguishable from the
         //    no-existence-oracle 404 the foreign-instance journey already pins.
-        RecordGrants.grant("user", viewerId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.VIEW, true);
         HttpResponse<String> listed = keyGet(viewerKey,
             "/api/v1/instances/" + instanceId + "/devices");
@@ -575,7 +576,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
         // 2. THE PREMISE, again: view-only really can SEE this device, so an absent
         //    affordance below is a WRITE decision and not the row being invisible.
-        RecordGrants.grant("user", viewerId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.VIEW, true);
         assertThat(resource.accessFunction().decide(viewer).isDenied())
             .as("step 2: the view delegate's read scope is an allow, not a deny")
@@ -593,7 +594,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
         // 4. And they are OFFERED to the config holder, so step 3 measured AUTHORITY and
         //    not a surface that refuses everyone -- the way an untested gate rots.
-        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.CONFIG, true);
         assertThat(resource.updatableBy(row, operator))
             .as("step 4: a config holder keeps its edit affordance").isTrue();
@@ -602,7 +603,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
         // 5. Revoking the capability takes the affordances away again, so the answer
         //    tracks the live grant graph rather than anything cached at wiring time.
-        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.CONFIG, false);
         AccessContext revoked = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(tenantId, "Device Surface Tenant")));

@@ -10,6 +10,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.GrantModel;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -130,8 +131,8 @@ public final class Projects {
         }
         String subject = subjectOf(project);
         for (PermissionResolver.Subject expanded
-                : PermissionResolver.expandSubjects("user", principalId.intValue())) {
-            if (subject.equals(expanded.type() + ":" + expanded.id())) {
+                : PermissionResolver.expandSubjects(GrantSubjectType.USER, principalId.intValue())) {
+            if (subject.equals(expanded.type().key() + ":" + expanded.id())) {
                 return true;
             }
         }
@@ -140,12 +141,14 @@ public final class Projects {
 
     /** Add a user as a project member (a positive membership grant on its group). */
     public static void addMember(@NonNull Row project, int userId) {
-        GrantService.createDirectGrant("user", userId, membershipPermissionOf(project), true);
+        GrantService.createDirectGrant(GrantSubjectType.USER, userId,
+            membershipPermissionOf(project), true);
     }
 
     /** Add a whole permission group as a member (groups nest through the same walk). */
     public static void addMemberGroup(@NonNull Row project, int groupId) {
-        GrantService.createDirectGrant("group", groupId, membershipPermissionOf(project), true);
+        GrantService.createDirectGrant(GrantSubjectType.GROUP, groupId,
+            membershipPermissionOf(project), true);
     }
 
     /**
@@ -218,8 +221,8 @@ public final class Projects {
     static @NonNull List<Row> projectsOf(int userId) {
         Set<Integer> groupIds = new LinkedHashSet<>();
         for (PermissionResolver.Subject expanded
-                : PermissionResolver.expandSubjects("user", userId)) {
-            if ("group".equals(expanded.type())) {
+                : PermissionResolver.expandSubjects(GrantSubjectType.USER, userId)) {
+            if (expanded.type() == GrantSubjectType.GROUP) {
                 groupIds.add(expanded.id());
             }
         }
@@ -278,10 +281,16 @@ public final class Projects {
                     && Boolean.TRUE.equals(grant.get(RecordGrantModel.VALUE))) {
                 continue;
             }
-            RecordGrants.revoke(type, id, model, recordId, HohenheimAccess.MANAGE);
+            GrantSubjectType subjectType = GrantSubjectType.fromStored(type);
+            if (subjectType == null) {
+                // A stored type this build does not know: leave it exactly where it is
+                // rather than guess what revoking it would mean.
+                continue;
+            }
+            RecordGrants.revoke(subjectType, id, model, recordId, HohenheimAccess.MANAGE);
         }
         Integer groupId = project.get(ProjectModel.GROUP_ID);
-        Row planted = RecordGrants.grant("group", groupId, model, recordId,
+        Row planted = RecordGrants.grant(GrantSubjectType.GROUP, groupId, model, recordId,
             HohenheimAccess.MANAGE, true);
         // grant() reports a refused allow by RETURNING the winning deny row rather
         // than throwing (the raced-deny contract). Adoption moved ownership above, so
@@ -339,7 +348,7 @@ public final class Projects {
                 AuthModels.grants().delete(grantId);
             }
         }
-        RecordGrants.revokeAllForSubject("group", groupId);
+        RecordGrants.revokeAllForSubject(GrantSubjectType.GROUP, groupId);
         if (group != null) {
             AuthModels.permissionGroups().delete(groupId);
         }
@@ -350,7 +359,7 @@ public final class Projects {
      */
     static int ownedRecordCount(int groupId) {
         int count = 0;
-        for (Row grant : RecordGrants.listForSubject("group", groupId)) {
+        for (Row grant : RecordGrants.listForSubject(GrantSubjectType.GROUP, groupId)) {
             if (HohenheimAccess.MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))) {
                 count++;
             }

@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.GrantModel;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -152,7 +153,7 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         // Grant everything (the /setup admin's shape) so the CMS panel's
         // hohenheim.admin.access permission check passes.
         Row grant = AuthModels.grants().createEmptyRow();
-        grant.set(GrantModel.SUBJECT_TYPE, "user");
+        grant.set(GrantModel.SUBJECT_TYPE, GrantSubjectType.USER.key());
         grant.set(GrantModel.SUBJECT_ID, user.get(UserModel.ID));
         grant.set(GrantModel.PERMISSION, "*");
         grant.set(GrantModel.VALUE, true);

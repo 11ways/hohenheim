@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -180,7 +181,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
             .doesNotContain("somedb");
 
         // 4. The grant that changes everything below.
-        RecordGrants.grant("user", limitedUserId, SiteModel.MODEL_ID, siteAId,
+        RecordGrants.grant(GrantSubjectType.USER, limitedUserId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
 
         // 5. Site A passes authorization: no git source configured, so the handler falls
@@ -264,7 +265,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
 
         // 10. A grant cannot be planted on a trashed site either -- the SAME liveness
         //     definition guards the write path.
-        assertThatThrownBy(() -> RecordGrants.grant("user", limitedUserId, SiteModel.MODEL_ID,
+        assertThatThrownBy(() -> RecordGrants.grant(GrantSubjectType.USER, limitedUserId, SiteModel.MODEL_ID,
                 siteAId, HohenheimAccess.MANAGE, true))
             .describedAs("step 10: a trashed site is not a grant target")
             .isInstanceOf(IllegalArgumentException.class);
@@ -283,7 +284,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
 
         // 12. The site is grantable again now that it is live, so the refusal was about
         //     liveness and not about the site being permanently poisoned.
-        assertThat(RecordGrants.grant("user", limitedUserId, SiteModel.MODEL_ID, siteAId,
+        assertThat(RecordGrants.grant(GrantSubjectType.USER, limitedUserId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true).get(RecordGrantModel.VALUE))
             .describedAs("step 12: a live site accepts a grant again")
             .isTrue();

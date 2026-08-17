@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.AuthKeys;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -65,7 +66,7 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
         int userId = user("fb-live");
         int instanceId = vmRecord("vm-fb-probe", hostId);
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        RecordGrants.grant("user", userId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
         String token = sessionFor(userId).token();
 
@@ -100,7 +101,7 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
                 .as("input did not tear the console down").isEqualTo(-1);
 
             // Clause 2: revoke the grant; the tenant's OPEN console is closed 1008.
-            RecordGrants.revoke("user", userId, InstanceModel.MODEL_ID, instanceId,
+            RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.MANAGE);
             // The PRODUCTION endpoint revalidates every TERMINAL_REVALIDATION_INTERVAL_MS
             // (15s); allow two intervals so a tick that just passed still gets its next one.
@@ -118,7 +119,7 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
                 // best effort; forceDelete below is the daemon-truth cleanup
             }
             remote.forceDelete(handle);
-            RecordGrants.revoke("user", userId, InstanceModel.MODEL_ID, instanceId,
+            RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.MANAGE);
             Models.get(InstanceModel.class).delete(instanceId);
             AuthModels.users().delete(userId);

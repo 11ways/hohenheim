@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.CapabilityScopes;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
@@ -101,22 +102,22 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         // an operator can point the file lane at a lowered site/database container, and
         // the one docs/paas-api.md says the automation API never lists or drives.
         instanceGeneratedId = generatedInstance(PREFIX + "generated");
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceGeneratedId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceGeneratedId,
             HohenheimAccess.FILES_READ, true);
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.FILES_READ, true);
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.SNAPSHOTS, true);
-        RecordGrants.grant("user", tenantBId, InstanceModel.MODEL_ID, instanceBId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantBId, InstanceModel.MODEL_ID, instanceBId,
             HohenheimAccess.MANAGE, true);
         // The Phase 3 gate's own worked example: a delegate handed console (and, through
         // the umbrella, view) and NOTHING else on instance C. And a second delegate with
         // bare view, for the read lanes.
-        RecordGrants.grant("user", tenantConsoleId, InstanceModel.MODEL_ID, instanceCId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantConsoleId, InstanceModel.MODEL_ID, instanceCId,
             HohenheimAccess.CONSOLE, true);
-        RecordGrants.grant("user", tenantViewId, InstanceModel.MODEL_ID, instanceCId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantViewId, InstanceModel.MODEL_ID, instanceCId,
             HohenheimAccess.VIEW, true);
         // A value that already exists, so the DELETE lane has something real to aim at.
         new InstanceVariables().setValue(instanceCId, null, "SEEDED",
@@ -382,7 +383,7 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         // 5. Grant the owner the permission; the SAME call now gets past authority and
         //    meets the template approval gate -- the second named refusal the HTML
         //    surface produces for the same submit.
-        GrantService.createDirectGrant("user", tenantAId,
+        GrantService.createDirectGrant(GrantSubjectType.USER, tenantAId,
             HohenheimAccess.INSTANCES_CREATE.value(), true);
         HttpResponse<String> unapproved = keyPost(keyCreateA, "/api/v1/instances",
             "template_id=" + unapprovedTemplateId + "&name=" + PREFIX + "api-created");

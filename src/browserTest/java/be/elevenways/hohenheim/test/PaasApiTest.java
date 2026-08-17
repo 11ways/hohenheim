@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.CapabilityScopes;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -96,15 +97,15 @@ class PaasApiTest extends HohenheimTestBase {
         siteAId = site(PREFIX + "alpha", "hohenheim:docker");
         siteBId = site(PREFIX + "bravo", "hohenheim:docker");
         staticSiteId = site(PREFIX + "static", "hohenheim:static");
-        RecordGrants.grant("user", tenantAId, SiteModel.MODEL_ID, siteAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", tenantAId, SiteModel.MODEL_ID, staticSiteId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, SiteModel.MODEL_ID, staticSiteId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", tenantBId, SiteModel.MODEL_ID, siteBId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantBId, SiteModel.MODEL_ID, siteBId,
             HohenheimAccess.MANAGE, true);
 
         instanceAId = instance(PREFIX + "workload");
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.MANAGE, true);
 
         projectOneId = project(PREFIX + "one");
@@ -557,7 +558,7 @@ class PaasApiTest extends HohenheimTestBase {
         unadopted.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
         Models.get(InstanceModel.class).save(unadopted);
         int unadoptedId = unadopted.get(InstanceModel.ID);
-        RecordGrants.grant("group", projectGroupId, InstanceModel.MODEL_ID, unadoptedId,
+        RecordGrants.grant(GrantSubjectType.GROUP, projectGroupId, InstanceModel.MODEL_ID, unadoptedId,
             HohenheimAccess.MANAGE, true);
         unadopted.set(InstanceModel.ENVIRONMENT_ID, environmentId);
         Models.get(InstanceModel.class).save(unadopted);
@@ -566,7 +567,7 @@ class PaasApiTest extends HohenheimTestBase {
         //    which no hook re-validates: the grouping outlives the grant that justified
         //    it. Tenant A is still a project member but now cannot even SEE the
         //    instance -- the ordinary flow would have left it holding MANAGE.
-        RecordGrants.revoke("group", projectGroupId, InstanceModel.MODEL_ID, unadoptedId,
+        RecordGrants.revoke(GrantSubjectType.GROUP, projectGroupId, InstanceModel.MODEL_ID, unadoptedId,
             HohenheimAccess.MANAGE);
         String envBase = "/api/v1/environments/" + environmentId + "/variables";
         assertThat(Models.get(InstanceModel.class).findById(unadoptedId)

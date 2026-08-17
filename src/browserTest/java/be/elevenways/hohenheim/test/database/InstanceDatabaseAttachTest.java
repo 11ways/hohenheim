@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -112,31 +113,31 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         // Tenant A owns instance A, the Incus one, the remote one and database A;
         // tenant B owns instance B and database B. MANAGE is the ownership marker and
         // implies CONFIG on an instance, so A is a legitimate attacher on its own pair.
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, incusInstanceId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, incusInstanceId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, remoteInstanceId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, remoteInstanceId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", tenantAId, DatabaseModel.MODEL_ID, databaseAId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, DatabaseModel.MODEL_ID, databaseAId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", tenantBId, InstanceModel.MODEL_ID, instanceBId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantBId, InstanceModel.MODEL_ID, instanceBId,
             HohenheimAccess.MANAGE, true);
-        RecordGrants.grant("user", tenantBId, DatabaseModel.MODEL_ID, databaseBId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantBId, DatabaseModel.MODEL_ID, databaseBId,
             HohenheimAccess.MANAGE, true);
         // Tenant B also owns a database on the OTHER host: the fixture whose stored
         // (owner-namespaced) name and host the pre-fix mismatch refusal leaked.
-        RecordGrants.grant("user", tenantBId, DatabaseModel.MODEL_ID, databaseRemoteId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantBId, DatabaseModel.MODEL_ID, databaseRemoteId,
             HohenheimAccess.MANAGE, true);
         // The read-only teammate: VIEW on both ends of a legitimate pair, and nothing more.
-        RecordGrants.grant("user", viewerId, InstanceModel.MODEL_ID, instanceAId,
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceAId,
             HohenheimAccess.VIEW, true);
-        RecordGrants.grant("user", viewerId, DatabaseModel.MODEL_ID, databaseAId,
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseAId,
             HohenheimAccess.VIEW, true);
         // THE trap actor: an auth administrator (it can edit users) who holds no hohenheim
         // record grant at all. Without it a refusal could be zenit-auth's /admin baseline
         // answering rather than this rule.
-        GrantService.createDirectGrant("user", authAdminId, "auth.users.edit", true);
+        GrantService.createDirectGrant(GrantSubjectType.USER, authAdminId, "auth.users.edit", true);
     }
 
     @AfterAll
@@ -475,7 +476,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         //    the DATABASE side.
         int probeInstanceId = instance(PREFIX + "srv-probe", "hohenheim:docker_container",
             hostId);
-        RecordGrants.grant("user", tenantAId, InstanceModel.MODEL_ID, probeInstanceId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, probeInstanceId,
             HohenheimAccess.MANAGE, true);
         assertThat(HohenheimAccess.hasInstanceCapability(
                 AccessContext.of(TenantConduits.stubFor(principalA)), probeInstanceId,

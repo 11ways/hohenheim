@@ -32,6 +32,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -329,7 +330,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         // 2. A tenant holding CONFIG on the instance is refused with the tier's
         //    UNIFORM refusal (media provenance is arbitrary bootable code), and no
         //    second row appears.
-        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.CONFIG, true);
         Throwable refused = catchThrowableInTenantScope(() ->
             devices.attachCdrom(instanceId, PREFIX + "tenant-cd", "win-iso"));
@@ -422,7 +423,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
 
         // 2. A tenant-originated call is refused with the tier's uniform refusal.
         stampStatus(instanceId, InstanceModel.STATUS_STOPPED);
-        RecordGrants.grant("user", tenantId, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE, true);
         Throwable refused = catchThrowableInTenantScope(() ->
             new InstanceTemplateCapture().capture(instanceId));
@@ -569,8 +570,8 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     @Test
     void installMediaIsItsOwnPermissionSeparateFromBeingAnAdmin() throws Exception {
         Integer operatorId = mediaUser("media-surf-operator@hohenheim.local", "Media Operator");
-        GrantService.createDirectGrant("user", operatorId, "*", true);
-        Row denial = GrantService.createDirectGrant("user", operatorId,
+        GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "*", true);
+        Row denial = GrantService.createDirectGrant(GrantSubjectType.USER, operatorId,
             HohenheimSources.MEDIA_MANAGE.value(), false);
         TestSession operator = sessionFor(operatorId);
 
@@ -617,7 +618,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
 
             // 4. THE POSITIVE ANCHOR: lift the denial and exactly this opens, which is
             //    what makes steps 2-3 a gate rather than a broken page.
-            GrantService.deleteDirectGrant("user", operatorId,
+            GrantService.deleteDirectGrant(GrantSubjectType.USER, operatorId,
                 denial.get(be.elevenways.zenit.auth.model.GrantModel.ID));
             TestSession granted = sessionFor(operatorId);
 

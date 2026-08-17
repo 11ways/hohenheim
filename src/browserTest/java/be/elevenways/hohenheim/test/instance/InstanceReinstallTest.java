@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -227,7 +228,7 @@ class InstanceReinstallTest extends HohenheimTestBase {
         // 2. CONFIG alone -- the authority every other "author what the instance is" act
         //    needs -- still does not buy the WIPE. The split is the whole point: this is
         //    the assertion that separates "gated" from "gated by the right verb".
-        RecordGrants.grant("user", configOnlyUserId, InstanceModel.MODEL_ID,
+        RecordGrants.grant(GrantSubjectType.USER, configOnlyUserId, InstanceModel.MODEL_ID,
             instanceId, HohenheimAccess.CONFIG, true);
         Throwable configOnly = catchThrowable(() -> TenantConduits.as(configOnlyPrincipal,
             () -> new InstanceInstalls().reinstall(instanceId)));
@@ -244,7 +245,7 @@ class InstanceReinstallTest extends HohenheimTestBase {
 
         // 3. The POSITIVE anchor: with DESTROY added the very same call goes through, so
         //    steps 1 and 2 cannot be passing because the call was broken for other reasons.
-        RecordGrants.grant("user", configOnlyUserId, InstanceModel.MODEL_ID,
+        RecordGrants.grant(GrantSubjectType.USER, configOnlyUserId, InstanceModel.MODEL_ID,
             instanceId, HohenheimAccess.DESTROY, true);
         TenantConduits.as(configOnlyPrincipal,
             () -> new InstanceInstalls().reinstall(instanceId));

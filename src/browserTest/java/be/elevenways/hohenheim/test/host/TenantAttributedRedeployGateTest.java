@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -59,7 +60,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         //    skipped, and the ownership lives on the SITE, never on the instance row.
         int siteId = site();
         int tenantId = user("redeploy-tenant@hohenheim.local");
-        RecordGrants.grant("user", tenantId, SiteModel.MODEL_ID, siteId,
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
             HohenheimAccess.MANAGE, true);
         int instanceId = releaseContainer(siteId, hostId);
 
@@ -116,7 +117,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         //    Asserted on the CONDITION rather than by calling deploy again: a deploy that
         //    passes the gate goes on to real daemon work, which this lane must not do.
         //    Steps 3 and 4 already prove the condition is what deploy branches on.
-        RecordGrants.revoke("user", tenantId, SiteModel.MODEL_ID, siteId,
+        RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
             HohenheimAccess.MANAGE);
         assertThat(OwnedInstances.isTenantAttributed(
                 Models.get(InstanceModel.class).findById(instanceId)))

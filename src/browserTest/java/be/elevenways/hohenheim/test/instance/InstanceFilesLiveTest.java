@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -299,11 +300,11 @@ class InstanceFilesLiveTest {
         int reader = tenant("files-reader@live.test");
         int writer = tenant("files-writer@live.test");
         int stranger = tenant("files-stranger@live.test");
-        RecordGrants.grant("user", reader, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, reader, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.FILES_READ, true);
-        RecordGrants.grant("user", writer, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, writer, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.FILES_READ, true);
-        RecordGrants.grant("user", writer, InstanceModel.MODEL_ID, instanceId,
+        RecordGrants.grant(GrantSubjectType.USER, writer, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.FILES_WRITE, true);
 
         // 1. The read-capable tenant reads.

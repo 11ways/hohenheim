@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.PermissionResolver;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
@@ -290,8 +291,8 @@ public final class ReleasedClaims {
         }
         try {
             for (PermissionResolver.Subject subject
-                    : PermissionResolver.expandSubjects("user", userId)) {
-                if (former.contains(subject.type() + ":" + subject.id())) {
+                    : PermissionResolver.expandSubjects(GrantSubjectType.USER, userId)) {
+                if (former.contains(subject.type().key() + ":" + subject.id())) {
                     return true;
                 }
             }
