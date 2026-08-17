@@ -11,6 +11,7 @@ import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.GroupMembershipToken;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -46,9 +47,6 @@ import java.util.Set;
  * sameOwner treats it.
  */
 public final class Projects {
-
-    /** Membership permissions are {@code group.<slug>}; the resolver's group walk. */
-    private static final String GROUP_PERMISSION_PREFIX = "group.";
 
     /** Every project group slug starts with this; the rest derives from the name. */
     public static final String GROUP_SLUG_PREFIX = "project-";
@@ -107,11 +105,13 @@ public final class Projects {
     public static @NonNull String membershipPermissionOf(@NonNull Row project) {
         Integer groupId = project.get(ProjectModel.GROUP_ID);
         Row group = groupId == null ? null : AuthModels.permissionGroups().findById(groupId);
-        if (group == null) {
+        String slug = group == null ? null : group.get(PermissionGroupModel.SLUG);
+        if (slug == null) {
             throw new IllegalStateException("Project " + project.get(ProjectModel.ID)
-                + " references a missing permission group " + groupId);
+                + (group == null ? " references a missing permission group " : " references a slugless permission group ")
+                + groupId);
         }
-        return GROUP_PERMISSION_PREFIX + group.get(PermissionGroupModel.SLUG);
+        return GroupMembershipToken.of(slug);
     }
 
     /**
@@ -337,8 +337,10 @@ public final class Projects {
      */
     static void removeGroupFor(int groupId) {
         Row group = AuthModels.permissionGroups().findById(groupId);
-        if (group != null) {
-            String permission = GROUP_PERMISSION_PREFIX + group.get(PermissionGroupModel.SLUG);
+        String slug = group == null ? null : group.get(PermissionGroupModel.SLUG);
+        // A slug-less group names no membership token, so there is nothing to sweep.
+        if (slug != null) {
+            String permission = GroupMembershipToken.of(slug);
             List<Integer> doomed = new ArrayList<>();
             for (Row grant : AuthModels.grants().find()
                     .where(GrantModel.PERMISSION.eq(permission)).all()) {
