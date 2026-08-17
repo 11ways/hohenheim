@@ -11,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * THE isolation policy every container hohenheim creates is stamped with, applied
@@ -19,8 +21,9 @@ import java.util.Map;
  * AIDEV-NOTE: this is a POLICY, not a caller option, and the shape enforces that. Every
  * authority that creates a container passes a {@link Profile} to createContainer; they
  * cannot pass "none", they cannot hand-add a capability, and they cannot set any of the
- * {@link #ESCAPE_KEYS} -- a spec carrying one is REFUSED, so a later feature cannot
- * quietly reintroduce {@code Privileged}. A NEW authority added later reaches the same
+ * HostConfig key outside {@link #PERMITTED_KEYS} -- a spec carrying one is REFUSED, so a
+ * later feature cannot quietly reintroduce {@code Privileged}, and neither can a Docker
+ * API version that invents a new escape. A NEW authority added later reaches the same
  * funnel or it reaches no daemon at all.
  *
  * AIDEV-NOTE: this note used to enumerate "the four container authorities (stacks, Docker
@@ -173,43 +176,63 @@ public final class ContainerHardening {
     public static final int DEFAULT_LOG_MAX_FILES = 3;
 
     /**
-     * HostConfig keys a caller may never set: each one is either a documented container
-     * escape or a way to opt back out of this policy.
+     * THE closed set of HostConfig keys a caller may set, each with the reason it is on
+     * the list. Every other key -- known escape, future Docker addition or typo -- is
+     * REFUSED at {@link #refuseEscapes}.
      *
-     * AIDEV-NOTE: {@code CapAdd}/{@code CapDrop}/{@code SecurityOpt}/{@code PidsLimit}
-     * are in here because the profile owns them -- a caller that wants a capability
-     * declares a profile, it does not append one. {@code Binds} and bind-type
-     * {@code Mounts} are refused separately in {@link #refuseEscapes} because a bind of
-     * /var/run/docker.sock is root on the host; no tier binds host paths today and none
-     * should start without revisiting this class. {@code UsernsMode} is refused rather
-     * than set: per-container userns REMAPPING does not exist in the Docker API (it is
-     * daemon-level {@code userns-remap} in daemon.json, which hohenheim does not own),
-     * and the only thing the field can do here is "host", i.e. opt a container OUT of
-     * remapping on a daemon that has it configured.
+     * AIDEV-NOTE: this was a DENY-list until 2026-08-17, and the inversion is the whole
+     * point rather than a refactor. A deny-list of today's escape-capable keys silently
+     * admits tomorrow's, and it silently admitted several of today's: {@code VolumesFrom}
+     * (inherits another container's mounts, including a volume holding host-reachable
+     * state), {@code Runtime} (picks a different OCI runtime, e.g. one configured without
+     * seccomp), {@code GroupAdd} (adds supplementary gids, {@code docker} among them),
+     * {@code Ulimits} and {@code OomScoreAdj} (weaken the caps that bound a tenant's host
+     * impact), {@code Tmpfs} and {@code StorageOpt} (unbounded host RAM / a storage knob
+     * this tier cannot verify), {@code Isolation} and {@code Annotations} (runtime-level
+     * switches with no reviewed meaning here) all reached the daemon verbatim. The same
+     * mechanism that refuses those refuses whatever the next API version adds, because
+     * permission is now DECLARED rather than danger being enumerated.
      *
-     * AIDEV-NOTE: {@code LogConfig} joined this list with the log cap itself. It is not a
-     * privilege escape -- it is here for the OTHER reason the list exists: the policy owns
-     * the key, so no caller can hand back the unbounded default (or a driver whose output
-     * the console lane cannot read) by setting it.
+     * AIDEV-NOTE: what the policy sets ITSELF is deliberately NOT here --
+     * {@code CapDrop}/{@code CapAdd}/{@code SecurityOpt}/{@code PidsLimit}/{@code LogConfig}
+     * are stamped in {@link #applyTo} AFTER this check, so a caller passing one is refused
+     * exactly like a caller passing {@code Privileged}. A workload that wants a capability
+     * declares a {@link Profile}; it does not append one. The unbounded log default is the
+     * same story: the policy owns {@code LogConfig} so no caller can hand it back, or point
+     * it at a driver the console lane cannot read.
      *
-     * AIDEV-NOTE: {@code ReadonlyRootfs} joined it on 2026-08-13, and it is the RECORD of
-     * a decision rather than a new control. The Phase 3 threat-model clause lists
-     * "read-only rootfs WHERE THE TEMPLATE ALLOWS" among the Docker hardening controls,
-     * and this policy deliberately does not set it: it runs arbitrary published images,
-     * whose entrypoints chown their data directory, write pid files and unpack assets into
-     * the rootfs, so a read-only root would refuse to start the ordinary workload instead
-     * of confining a hostile one -- and a knob nobody can turn on is theater, the same
-     * verdict {@code NET_BIND_SERVICE} got beside it. What was missing was not the control
-     * but the DECISION: the key was neither set nor owned, so a later caller could have
-     * passed it straight through the funnel and given itself a workload the tier's own
-     * lifecycle (config staging, log capture, in-place app update) cannot service. It is
-     * owned now, so re-opening the question means editing THIS list on purpose. The
-     * clause's own copy of the verdict lives at docs/instance-tier-plan.md.
+     * AIDEV-NOTE: three refusals that are RECORDED DECISIONS rather than mere omissions,
+     * kept here because this list is where a later reader will come to re-open them.
+     * {@code UsernsMode} is refused rather than set: per-container userns REMAPPING does
+     * not exist in the Docker API (it is daemon-level {@code userns-remap} in daemon.json,
+     * which hohenheim does not own), and the only thing the field can do here is "host",
+     * i.e. opt a container OUT of remapping on a daemon that has it configured.
+     * {@code ReadonlyRootfs} is refused because the Phase 3 threat-model clause offers it
+     * "where the template allows" and no template in this tier allows it -- published
+     * images chown their data directory, write pid files and unpack assets into the
+     * rootfs, so a read-only root would refuse to start the ordinary workload instead of
+     * confining a hostile one (docs/instance-tier-plan.md carries the clause's own copy of
+     * the verdict). {@code Binds} needs no entry of its own any more, but the reason it
+     * was refused still holds and now covers bind-type {@link #refuseEscapes} entries in
+     * the permitted {@code Mounts}: a bind of /var/run/docker.sock is root on the host, no
+     * tier binds host paths today, and none should start without revisiting this class.
      */
-    public static final List<String> ESCAPE_KEYS = List.of(
-        "Privileged", "CapAdd", "CapDrop", "SecurityOpt", "PidsLimit", "UsernsMode",
-        "Devices", "DeviceCgroupRules", "DeviceRequests", "CgroupParent", "Sysctls",
-        "Binds", "ReadonlyPaths", "MaskedPaths", "ReadonlyRootfs", "LogConfig");
+    public static final Map<String, String> PERMITTED_KEYS = orderedMap(
+        "NetworkMode", "the per-workload private network the caller just created;"
+            + " the host and container: spellings are refused below, so what this can name"
+            + " is a network, never a namespace share.",
+        "Mounts", "named volumes and tmpfs for a workload's declared storage; a bind-type"
+            + " entry is refused below because a host path is not an isolation boundary.",
+        "PortBindings", "host port publication, materializing a port the allocator ledger"
+            + " already claimed.",
+        "Memory", "the operator-configured cgroup memory cap (ResourceLimits): a cap the"
+            + " operator chooses, on top of policy the operator cannot weaken.",
+        "NanoCpus", "the operator-configured cgroup cpu cap (ResourceLimits).");
+
+    /** {@link #PERMITTED_KEYS} folded once, because Go matches HostConfig fields case-insensitively. */
+    private static final Set<String> PERMITTED_FOLDED = PERMITTED_KEYS.keySet().stream()
+        .map(ContainerHardening::fold)
+        .collect(Collectors.toUnmodifiableSet());
 
     /**
      * HostConfig namespace-sharing keys: "host" defeats the container boundary outright,
@@ -222,6 +245,12 @@ public final class ContainerHardening {
      * SUBNET) match nothing for it. The private network would then be defeated by a
      * string, which is why this refusal lives here at the funnel and not in the instance
      * driver.
+     *
+     * AIDEV-NOTE: since the key gate became an allow-list, only {@code NetworkMode} can
+     * still reach this VALUE check -- the other four are refused by name a few lines
+     * earlier. They stay listed because this is the value guard any namespace key would
+     * inherit if one were ever permitted, and a permitted namespace key with no value
+     * check is the exact hole this list closes.
      */
     private static final List<String> NAMESPACE_KEYS = List.of(
         "PidMode", "IpcMode", "UTSMode", "NetworkMode", "CgroupnsMode");
@@ -245,8 +274,8 @@ public final class ContainerHardening {
      * capabilities its author declared, refusing anything outside {@link #DECLARABLE}.
      *
      * <p>AIDEV-NOTE: this is the whole per-service capability mechanism, and it lives here
-     * rather than in the deployer on purpose -- {@code CapAdd} is an {@link #ESCAPE_KEYS}
-     * entry, so a caller has never been able to append one, and the only way to get a
+     * rather than in the deployer on purpose -- {@code CapAdd} is outside {@link #PERMITTED_KEYS},
+     * so a caller has never been able to append one, and the only way to get a
      * capability is to come through a {@link Profile}. Making the declaration a profile
      * FACTORY keeps that true: the validation cannot be skipped by constructing a Profile
      * directly, because a Profile carrying an undeclarable capability is exactly what this
@@ -308,7 +337,7 @@ public final class ContainerHardening {
      * AIDEV-NOTE: {@code tighterPidsLimit} can only ever LOWER the cap -- the value used
      * is the minimum of it and {@link #pidsLimit()}. That direction is the whole reason
      * this parameter is allowed to exist next to {@code PidsLimit} being an
-     * {@link #ESCAPE_KEYS} entry: a caller still cannot raise or remove the cap, and a
+     * {@link #PERMITTED_KEYS} refusal: a caller still cannot raise or remove the cap, and a
      * workload class that wants a smaller one (the build sandbox: a Dockerfile has no
      * business forking 512 processes) does not need a second funnel to get it.
      *
@@ -378,7 +407,7 @@ public final class ContainerHardening {
      * {@code GET /containers/{id}/logs}, which is the lane the console tab and the
      * readiness matcher both read through -- a daemon configured with any other default
      * driver would silently take the console away, and a caller cannot re-point it because
-     * {@code LogConfig} is an {@link #ESCAPE_KEYS} entry. Naming the driver we depend on is
+     * {@code LogConfig} is outside {@link #PERMITTED_KEYS}. Naming the driver we depend on is
      * the honest half of depending on it.
      */
     private static @NonNull Map<String, Object> logConfig() {
@@ -417,12 +446,16 @@ public final class ContainerHardening {
      */
     private static void refuseEscapes(Map<String, Object> hostConfig) {
         Map<String, Object> folded = caseFolded(hostConfig);
-        for (String key : ESCAPE_KEYS) {
-            if (folded.containsKey(fold(key))) {
+        for (Object rawKey : hostConfig.keySet()) {
+            String key = String.valueOf(rawKey);
+            if (!PERMITTED_FOLDED.contains(fold(key))) {
                 throw new IllegalArgumentException("REFUSED to create container: HostConfig."
-                    + key + " is owned by ContainerHardening and may not be set by a caller."
+                    + key + " is not on ContainerHardening's permitted key list "
+                    + PERMITTED_KEYS.keySet() + ", so it may not be set by a caller."
                     + " A workload that needs a capability declares a ContainerHardening.Profile;"
-                    + " nothing declares a privilege escape.");
+                    + " nothing declares a privilege escape. A key the policy stamps itself"
+                    + " (CapDrop, CapAdd, SecurityOpt, PidsLimit, LogConfig) is refused here"
+                    + " for the same reason: the policy owns it.");
             }
         }
         for (String key : NAMESPACE_KEYS) {

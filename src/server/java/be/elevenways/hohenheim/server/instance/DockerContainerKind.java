@@ -57,7 +57,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
      * game-server image shape this tier exists to run. The trust-independent floor is
      * unchanged and is where the tenant-vs-operator boundary actually lives: drop-ALL as
      * the base, no-new-privileges, the pids cap, and the structural refusals in
-     * {@link ContainerHardening#ESCAPE_KEYS} (Privileged, host namespaces, host bind
+     * {@link ContainerHardening#PERMITTED_KEYS} (Privileged, host namespaces, host bind
      * mounts, devices, sysctls, UsernsMode). The rest of that boundary -- per-tenant
      * network policy -- is NOT BUILT; do not read this constant as a substitute for it.
      * A future kind whose image shape is genuinely narrower declares its own profile

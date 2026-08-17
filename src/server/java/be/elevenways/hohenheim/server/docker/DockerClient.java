@@ -572,7 +572,7 @@ public class DockerClient {
      * @param profile the workload kind's declared capability needs
      * @return the new container's id
      * @throws IllegalArgumentException when the spec carries a privilege escape
-     *                                  (see {@link ContainerHardening#ESCAPE_KEYS})
+     *                                  (see {@link ContainerHardening#PERMITTED_KEYS})
      */
     public String createContainer(String name, Map<String, Object> spec,
                                   ContainerHardening.Profile profile) throws IOException {
