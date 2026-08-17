@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.zenit.common.security.SecurityEventTypes;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,13 +36,31 @@ public final class ThreatScorer {
     // AIDEV-NOTE: hardcoded per-type weights on purpose -- they become settings
     // when someone actually needs to tune them, not before. Unknown types use
     // the security.default_event_weight setting.
+    //
+    // AIDEV-NOTE: keyed by the SecurityEventTypes CONSTANTS, never by re-spelled
+    // literals. The literals were a silent second copy of zenit's vocabulary: a rename
+    // there compiled fine here and quietly demoted the renamed event to the default
+    // weight, which is a scoring change nobody would see. {@link #isClassified} plus
+    // ThreatScorerTest's coverage journey close the other half -- a NEW zenit event type
+    // now fails the build until somebody decides what it is worth.
     private static final Map<String, Integer> EVENT_WEIGHTS = Map.of(
-        "auth.login_failed", 3,
-        "auth.lockout", 10,
-        "http.rate_limited", 1,
-        "http.csrf_failure", 2,
-        "proxy.domain_miss", 1);
+        SecurityEventTypes.AUTH_LOGIN_FAILED, 3,
+        SecurityEventTypes.AUTH_LOCKOUT, 10,
+        SecurityEventTypes.RATE_LIMITED, 1,
+        SecurityEventTypes.CSRF_FAILURE, 2,
+        SecurityEventTypes.DOMAIN_MISS, 1);
     private static final int WS_EVENT_WEIGHT = 2;
+
+    /** Every {@code ws.*} handshake refusal shares {@link #WS_EVENT_WEIGHT}. */
+    private static final String WS_PREFIX = "ws.";
+
+    /**
+     * Event types DELIBERATELY left at {@code security.default_event_weight}, each with
+     * the reason -- the declaration slot that keeps "we decided this is worth 1" distinct
+     * from "nobody has looked at it yet". Empty today: every known type is either weighted
+     * above, covered by the {@code ws.} rule, or classified positive.
+     */
+    private static final Map<String, String> DEFAULT_WEIGHTED = Map.of();
 
     /**
      * Callback fired when an actor's weighted score crosses the ban threshold.
@@ -143,13 +162,28 @@ public final class ThreatScorer {
         this.autoBanTrigger = trigger;
     }
 
+    /**
+     * Whether somebody has actually DECIDED what this event type is worth, as opposed to
+     * it falling through to the default weight because nobody noticed it exists.
+     *
+     * @return true when the type carries an explicit weight, rides the {@code ws.} rule,
+     *         is declared default-weighted, or is classified positive (never scored)
+     */
+    public static boolean isClassified(@Nullable String type) {
+        return type != null
+            && (EVENT_WEIGHTS.containsKey(type)
+                || type.startsWith(WS_PREFIX)
+                || DEFAULT_WEIGHTED.containsKey(type)
+                || SecurityEventClassification.isPositive(type));
+    }
+
     /** The ban-score weight of one occurrence of this event type. */
     public int weightOf(String type) {
         Integer weight = EVENT_WEIGHTS.get(type);
         if (weight != null) {
             return weight;
         }
-        if (type != null && type.startsWith("ws.")) {
+        if (type != null && type.startsWith(WS_PREFIX)) {
             return WS_EVENT_WEIGHT;
         }
         refreshSettings();
