@@ -30,6 +30,9 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
+import be.elevenways.zenit.common.task.record.RunStatus;
+import be.elevenways.zenit.common.task.record.StepFailurePolicy;
+import be.elevenways.zenit.common.task.record.StepStatus;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
@@ -163,7 +166,7 @@ class InstanceScheduleLiveTest {
         row.set(RecordScheduleStepModel.POSITION, position);
         row.set(RecordScheduleStepModel.ACTION, action);
         row.set(RecordScheduleStepModel.OFFSET_SECONDS, offsetSeconds);
-        row.set(RecordScheduleStepModel.FAILURE_POLICY, RecordScheduleStepModel.POLICY_ABORT);
+        row.set(RecordScheduleStepModel.FAILURE_POLICY, StepFailurePolicy.ABORT.storageKey());
         if (payload != null) {
             row.set(RecordScheduleStepModel.PAYLOAD, payload);
         }
@@ -261,7 +264,7 @@ class InstanceScheduleLiveTest {
                 assertThat(chainRun).as("step 2: the chain ran").isNotNull();
                 assertThat(chainRun.get(RecordScheduleRunModel.STATUS))
                     .as("step 2: both steps completed")
-                    .isEqualTo(RecordScheduleRunModel.STATUS_COMPLETED);
+                    .isEqualTo(RunStatus.COMPLETED.storageKey());
 
                 // 3. Host truth: the warning reached the workload's console (persisted
                 //    on the volume across the restart) and the restart REPLACED the
@@ -287,10 +290,10 @@ class InstanceScheduleLiveTest {
                 Row revokedRun = recordSchedules.runNow(chainId);
                 assertThat(revokedRun.get(RecordScheduleRunModel.STATUS))
                     .as("step 4: the run aborted on the refused step")
-                    .isEqualTo(RecordScheduleRunModel.STATUS_ABORTED);
+                    .isEqualTo(RunStatus.ABORTED.storageKey());
                 assertThat(stepsOf(revokedRun).get(0).get(RecordScheduleRunModel.KEY_STATUS))
                     .as("step 4: the console step was REFUSED, not executed")
-                    .isEqualTo(RecordScheduleRunModel.STEP_REFUSED);
+                    .isEqualTo(StepStatus.REFUSED.storageKey());
                 assertThat(execRead(docker, handle, "cat /data/marker"))
                     .as("step 4: no second console line reached the workload")
                     .isEqualTo("warned");
@@ -317,7 +320,7 @@ class InstanceScheduleLiveTest {
                 Row backupRun = recordSchedules.runNow(backupScheduleId);
                 assertThat(backupRun.get(RecordScheduleRunModel.STATUS))
                     .as("step 5: the backup chain completed")
-                    .isEqualTo(RecordScheduleRunModel.STATUS_COMPLETED);
+                    .isEqualTo(RunStatus.COMPLETED.storageKey());
                 Row backup = Models.get(InstanceBackupModel.class).find()
                     .where(InstanceBackupModel.INSTANCE_ID.eq(id)).first();
                 assertThat(backup).as("step 5: a backup row exists").isNotNull();

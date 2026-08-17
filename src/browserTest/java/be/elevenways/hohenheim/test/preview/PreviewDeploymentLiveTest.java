@@ -25,6 +25,7 @@ import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.task.record.RecordScheduleKind;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import org.junit.jupiter.api.AfterAll;
@@ -229,7 +230,7 @@ class PreviewDeploymentLiveTest {
         assertThat(armed)
             .as("step 1: deploy itself armed the one-shot expiry schedule").hasSize(1);
         assertThat((String) armed.get(0).get(RecordScheduleModel.KIND))
-            .as("step 1: as a one-shot").isEqualTo(RecordScheduleModel.KIND_ONCE);
+            .as("step 1: as a one-shot").isEqualTo(RecordScheduleKind.ONCE.storageKey());
         assertThat((Object) armed.get(0).get(RecordScheduleModel.RUN_AT)
                 .truncatedTo(java.time.temporal.ChronoUnit.MILLIS))
             .as("step 1: at the stored deadline (storage keeps millis)")

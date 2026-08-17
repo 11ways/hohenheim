@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
+import be.elevenways.zenit.common.task.record.RunStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -36,15 +37,16 @@ class StatusPresentationDriftTest {
     @Test
     @DisplayName("the schedule-run badge covers every status the framework can store")
     void scheduleRunStatusesAreExhaustive() {
-        // 1. The framework declares its run statuses as bare String constants, so the
-        //    presentation table is bound to them by NAME: STATUS_* on the run model.
-        List<String> declared = constantsWithPrefix(RecordScheduleRunModel.class, "STATUS_");
-        assertThat(declared)
-            .as("step 1: the run model still declares its statuses as STATUS_* constants")
-            .hasSizeGreaterThanOrEqualTo(6);
+        // 1. The framework declares its run statuses as the RunStatus enum, and the
+        //    persisted column offers exactly those keys.
+        List<String> declared = RunStatus.storageKeys();
+        assertThat(RecordScheduleRunModel.STATUS.getValues().keySet())
+            .as("step 1: the stored column is derived from the enum")
+            .containsExactlyElementsOf(declared);
 
         // 2. Every one of them has a declared label/icon/colour here. A status added
-        //    upstream fails HERE rather than rendering as an unstyled raw token.
+        //    upstream breaks the exhaustive switches in ScheduleRunStatuses at COMPILE
+        //    time; this assertion is the belt to that braces.
         assertThat(ScheduleRunStatuses.FIELD.getValues().keySet())
             .as("step 2: the presentation table covers exactly the framework's statuses")
             .containsExactlyInAnyOrderElementsOf(declared);
@@ -57,14 +59,14 @@ class StatusPresentationDriftTest {
             assertThat(value.getMicrocopy()).as("step 3: %s declares a label", value.getKey()).isNotNull();
         }
         assertThat(ScheduleRunStatuses.FIELD.getValues()
-                .get(RecordScheduleRunModel.STATUS_COMPLETED).getColor())
+                .get(RunStatus.COMPLETED.storageKey()).getColor())
             .as("step 3: a clean completion is the success colour").isEqualTo("success");
         assertThat(ScheduleRunStatuses.FIELD.getValues()
-                .get(RecordScheduleRunModel.STATUS_COMPLETED_WITH_FAILURES).getColor())
+                .get(RunStatus.COMPLETED_WITH_FAILURES.storageKey()).getColor())
             .as("step 3: a partial completion is neither success nor outright failure")
             .isEqualTo("warning");
         assertThat(ScheduleRunStatuses.FIELD.getValues()
-                .get(RecordScheduleRunModel.STATUS_RUNNING).getColor())
+                .get(RunStatus.RUNNING.storageKey()).getColor())
             .as("step 3: a chain still running is not painted as a failure")
             .isNotEqualTo("destructive");
 
