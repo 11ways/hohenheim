@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
@@ -79,13 +80,20 @@ public final class StackDeploymentsPage implements RecordScopedPage<Row> {
         return Microcopy.of(String.valueOf(value)).withFilter("scope", scope);
     }
 
+    /**
+     * The badge variant DECLARED on the status enum value itself.
+     *
+     * AIDEV-NOTE: this was a switch re-spelling running/success/failed with the very
+     * colours {@code StackDeploymentModel.STATUS} already declares three lines apart in
+     * the model -- a fourth status would have rendered "secondary" here while carrying its
+     * own colour everywhere else. Unknown/blank still degrades to secondary, which is the
+     * honest answer for a value the vocabulary does not contain.
+     */
     private static String statusVariant(@Nullable Object status) {
-        return switch (String.valueOf(status)) {
-            case "success" -> "success";
-            case "failed" -> "destructive";
-            case "running" -> "warning";
-            default -> "secondary";
-        };
+        EnumField.EnumValue value = status == null
+            ? null : StackDeploymentModel.STATUS.getValues().get(String.valueOf(status));
+        String color = value != null ? value.getColor() : null;
+        return color != null ? color : "secondary";
     }
 
     private static String durationLabel(@Nullable Object durationMs) {
