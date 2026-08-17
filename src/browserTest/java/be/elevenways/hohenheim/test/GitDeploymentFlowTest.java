@@ -301,14 +301,14 @@ class GitDeploymentFlowTest extends HohenheimTestBase {
         waitForSelector(rollbackButton);
 
         click(rollbackButton);
-        assertIsVisible(".pl-dialog-modal[data-open]");
+        assertIsVisible(".pl-alertdialog-modal[data-open]");
         click("[data-cms-confirm-cancel]");
-        assertIsNotVisible(".pl-dialog-modal");
+        assertIsNotVisible(".pl-alertdialog-modal");
         page.waitForTimeout(400);
         assertThat(deployments()).as("cancel must not roll back").hasSize(2);
 
         click(rollbackButton);
-        assertIsVisible(".pl-dialog-modal[data-open]");
+        assertIsVisible(".pl-alertdialog-modal[data-open]");
         click("[data-cms-confirm-ok]");
 
         await("rollback", () -> hasFinished(3));
