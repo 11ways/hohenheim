@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,9 +42,6 @@ public class DnsRecordModel extends Model {
 
     /** {@link #MANAGED_BY} value for records the ACME DNS-01 flow owns. */
     public static final String MANAGED_BY_ACME = "acme";
-
-    public static final List<String> ALL_TYPES = List.of(
-        TYPE_A, TYPE_AAAA, TYPE_CNAME, TYPE_NS, TYPE_MX, TYPE_TXT, TYPE_CAA, TYPE_SRV);
 
     // --- Per-type sub-schemas (the ONLY home for type-specific fields) ---
 
@@ -83,6 +81,24 @@ public class DnsRecordModel extends Model {
         .value(TYPE_CAA, v -> v.displayName("CAA").icon("certificate").color("teal"))
         .value(TYPE_SRV, v -> v.displayName("SRV").icon("network-wired").color("pink").schema(SRV_DATA_SCHEMA))
         .build());
+    /**
+     * THE record-type vocabulary, DERIVED from {@link #TYPE}'s declared values rather than
+     * re-listed beside them.
+     *
+     * AIDEV-NOTE: this was a hand-written {@code List.of(TYPE_A, ...)} above the enum until
+     * 2026-08-17, i.e. the same eight names written twice, three lines apart, with nothing
+     * that noticed when they disagreed. A new type is now ONE edit -- add the
+     * {@code .value(...)} and everything reading this list follows. Declaration order is
+     * preserved (EnumField keeps a LinkedHashMap), so display order is unchanged.
+     */
+    public static final List<String> ALL_TYPES = List.copyOf(TYPE.getValues().keySet());
+
+    /**
+     * Every field name any type's sub-schema declares (today: priority, weight, port),
+     * derived from the schemas themselves -- what the peer wire has to carry FLAT.
+     */
+    public static final List<String> DATA_FIELD_NAMES = dataFieldNames();
+
     public static final IntegerField TTL = SCHEMA.addField(IntegerField.builder().name("ttl")
         .suffix("s").label(HohenheimFormCopy.label("record_ttl")).help(HohenheimFormCopy.help("record_ttl")).build());
     public static final StringField VALUE = SCHEMA.addField(StringField.builder().name("value")
@@ -124,6 +140,23 @@ public class DnsRecordModel extends Model {
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
+
+    /** Union of every per-type sub-schema's field names, in type then declaration order. */
+    private static List<String> dataFieldNames() {
+        List<String> names = new ArrayList<>();
+        for (EnumField.EnumValue value : TYPE.getValues().values()) {
+            Schema schema = value.getSchema();
+            if (schema == null) {
+                continue;
+            }
+            for (String field : schema.getFields().keySet()) {
+                if (!names.contains(field)) {
+                    names.add(field);
+                }
+            }
+        }
+        return List.copyOf(names);
+    }
 
     /** @return true when the type is an address record (the only types dynamic DNS applies to) */
     public static boolean isAddressType(@Nullable String type) {

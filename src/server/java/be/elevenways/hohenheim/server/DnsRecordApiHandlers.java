@@ -36,9 +36,32 @@ import java.util.Map;
  */
 final class DnsRecordApiHandlers {
 
-    /** The record fields the wire carries, shared with the remote-record forwarding form. */
-    static final List<String> RECORD_FIELDS =
-        List.of("name", "type", "value", "ttl", "priority", "weight", "port", "enabled");
+    /**
+     * The row columns the peer wire carries FLAT: a deliberate SUBSET of the model (no
+     * zone_id, no managed_by, no generated_* -- those are the server's, not a caller's).
+     */
+    private static final List<String> COLUMN_FIELDS = List.of(
+        DnsRecordModel.NAME.getName(), DnsRecordModel.TYPE.getName(),
+        DnsRecordModel.VALUE.getName(), DnsRecordModel.TTL.getName(),
+        DnsRecordModel.ENABLED.getName());
+
+    /**
+     * The record fields the wire carries, shared with the remote-record forwarding form.
+     *
+     * AIDEV-NOTE: the type-specific half is DERIVED from the model's per-type sub-schemas
+     * ({@link DnsRecordModel#DATA_FIELD_NAMES}), never re-listed. Until 2026-08-17 this
+     * spelled "priority", "weight", "port" here AND partitioned on the same three names
+     * again in {@link #recordValues} -- so adding a field to the SRV schema needed two
+     * edits in this file that nothing tied together, and forgetting either silently
+     * dropped the field off the API instead of failing.
+     */
+    static final List<String> RECORD_FIELDS = recordFields();
+
+    private static List<String> recordFields() {
+        List<String> fields = new ArrayList<>(COLUMN_FIELDS);
+        fields.addAll(DnsRecordModel.DATA_FIELD_NAMES);
+        return List.copyOf(fields);
+    }
 
     private DnsRecordApiHandlers() {
     }
@@ -200,9 +223,11 @@ final class DnsRecordApiHandlers {
             if (!form.containsKey(field)) {
                 continue;
             }
-            switch (field) {
-                case "priority", "weight", "port" -> data.put(field, form.get(field));
-                default -> values.put(field, form.get(field));
+            if (DnsRecordModel.DATA_FIELD_NAMES.contains(field)) {
+                data.put(field, form.get(field));
+            }
+            else {
+                values.put(field, form.get(field));
             }
         }
         if (!data.isEmpty()) {
