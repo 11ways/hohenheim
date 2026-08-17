@@ -13,9 +13,12 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * THE image gate of the threat model: templates are the DEFAULT source of instance
@@ -36,19 +39,42 @@ import java.util.Set;
  */
 public final class InstanceImagePolicy {
 
+    /** How one judged settings member is READ out of a settings map. */
+    @FunctionalInterface
+    public interface SettingReading {
+        @Nullable String read(@Nullable Object settings);
+    }
+
+    /** One judged {@code settings} member: its key and how to read it for comparison. */
+    public record JudgedSetting(@NonNull String key, @NonNull SettingReading reading) {}
+
     /**
-     * The {@code settings} members this gate judges, and therefore the ONLY ones a tenant
-     * write may move at all.
+     * The {@code settings} members this gate judges, WITH the reading each comparison uses
+     * -- one declaration that both {@link #JUDGED_SETTINGS_KEYS} and {@link #check} are
+     * derived from.
      *
-     * AIDEV-NOTE: exported because {@code TenantWrites.checkInstanceWrite} freezes the rest
-     * of the column against it. The two must name the same set or one of them is wrong: a
-     * key this gate does not judge and TenantWrites does not freeze is a key with NO
-     * authority check on it (that was {@code privileged}, which lowers straight onto an
-     * Incus {@code security.privileged} container). Adding a member here without teaching
-     * {@link #check} to judge it re-opens exactly that hole.
+     * AIDEV-NOTE: until 2026-08-17 the key SET was a literal and {@link #check} read
+     * image/tag/image_origin by hand three times each, and the javadoc openly admitted the
+     * hole: "adding a member here without teaching check to judge it re-opens exactly
+     * that". It is not possible to add one here without judging it now -- the comparisons
+     * iterate THIS list. That matters because {@code TenantWrites.checkInstanceWrite}
+     * freezes every settings key NOT in the exported set, so a key this gate does not
+     * judge and TenantWrites does not freeze is a key with NO authority check on it (that
+     * was {@code privileged}, which lowers straight onto an Incus
+     * {@code security.privileged} container).
      */
-    public static final Set<String> JUDGED_SETTINGS_KEYS =
-        Set.of("image", "tag", "image_origin");
+    private static final List<JudgedSetting> JUDGED_SETTINGS = List.of(
+        new JudgedSetting("image", settings -> settingText(settings, "image")),
+        new JudgedSetting("tag", settings -> settingText(settings, "tag")),
+        // Absent origin is CATALOG on both sides -- the pre-existing default
+        // (InstanceSpec's convenience constructor), so an approved template authored
+        // before image_origin existed keeps authorising exactly what it always did.
+        new JudgedSetting("image_origin", InstanceImagePolicy::originOf));
+
+    /** The judged keys, and therefore the ONLY settings members a tenant write may move. */
+    public static final Set<String> JUDGED_SETTINGS_KEYS = JUDGED_SETTINGS.stream()
+        .map(JudgedSetting::key)
+        .collect(Collectors.toUnmodifiableSet());
 
     private static volatile boolean installed;
 
@@ -76,35 +102,28 @@ public final class InstanceImagePolicy {
 
         Object templateId = effective(row, stored, InstanceModel.TEMPLATE_ID.getName());
         Object kind = effective(row, stored, InstanceModel.KIND.getName());
-        String image = imageOf(effective(row, stored, InstanceModel.SETTINGS.getName()), "image");
-        String tag = imageOf(effective(row, stored, InstanceModel.SETTINGS.getName()), "tag");
-        // Absent origin is CATALOG on both sides -- this is the pre-existing default
-        // (InstanceSpec's convenience constructor), so an approved template authored
-        // before image_origin existed keeps authorising exactly what it always did.
-        String origin = originOf(effective(row, stored, InstanceModel.SETTINGS.getName()));
+        Map<String, String> judged =
+            readJudged(effective(row, stored, InstanceModel.SETTINGS.getName()));
+        String image = judged.get("image");
 
         if (stored != null) {
             boolean unchanged = Objects.equals(templateId, stored.get(InstanceModel.TEMPLATE_ID))
                 && Objects.equals(kind, stored.get(InstanceModel.KIND))
-                && Objects.equals(image, imageOf(stored.get(InstanceModel.SETTINGS), "image"))
-                && Objects.equals(tag, imageOf(stored.get(InstanceModel.SETTINGS), "tag"))
-                && Objects.equals(origin, originOf(stored.get(InstanceModel.SETTINGS)));
+                && judged.equals(readJudged(stored.get(InstanceModel.SETTINGS)));
             if (unchanged) {
                 return;   // the write never touched an image fact; not this gate's business
             }
         }
 
         // Path 1: the instance rides a template. The template must exist, be APPROVED,
-        // and declare exactly this kind, image AND origin -- a prepared alias namespace
-        // is entirely operator-controlled, so an approved CATALOG template must never
-        // authorise a same-named PREPARED alias (or vice versa).
+        // and declare exactly this kind and every judged image fact -- a prepared alias
+        // namespace is entirely operator-controlled, so an approved CATALOG template must
+        // never authorise a same-named PREPARED alias (or vice versa).
         if (templateId instanceof Integer id) {
             Row template = Models.get(InstanceTemplateModel.class).findById(id);
             if (template != null && template.get(InstanceTemplateModel.APPROVED_AT) != null
                     && Objects.equals(kind, template.get(InstanceTemplateModel.KIND))
-                    && Objects.equals(image, imageOf(template.get(InstanceTemplateModel.SETTINGS), "image"))
-                    && Objects.equals(tag, imageOf(template.get(InstanceTemplateModel.SETTINGS), "tag"))
-                    && Objects.equals(origin, originOf(template.get(InstanceTemplateModel.SETTINGS)))) {
+                    && judged.equals(readJudged(template.get(InstanceTemplateModel.SETTINGS)))) {
                 return;
             }
         }
@@ -132,7 +151,21 @@ public final class InstanceImagePolicy {
         return stored != null ? stored.get(name) : null;
     }
 
-    private static @Nullable String imageOf(@Nullable Object settings, @NonNull String key) {
+    /**
+     * Every judged member of one settings map, keyed by name.
+     *
+     * @return a map carrying an entry per {@link #JUDGED_SETTINGS} member, null values
+     *         included, so two readings compare with a single {@code equals}
+     */
+    private static @NonNull Map<String, String> readJudged(@Nullable Object settings) {
+        Map<String, String> readings = new LinkedHashMap<>();
+        for (JudgedSetting judged : JUDGED_SETTINGS) {
+            readings.put(judged.key(), judged.reading().read(settings));
+        }
+        return readings;
+    }
+
+    private static @Nullable String settingText(@Nullable Object settings, @NonNull String key) {
         if (settings instanceof Map<?, ?> map && map.get(key) != null) {
             String value = String.valueOf(map.get(key)).trim();
             return value.isEmpty() ? null : value;
@@ -142,7 +175,7 @@ public final class InstanceImagePolicy {
 
     /** The declared {@code image_origin} key, defaulting to catalog like {@link ImageOrigin}. */
     private static @NonNull String originOf(@Nullable Object settings) {
-        String key = imageOf(settings, "image_origin");
+        String key = settingText(settings, "image_origin");
         return key == null ? ImageOrigin.CATALOG.key() : key;
     }
 

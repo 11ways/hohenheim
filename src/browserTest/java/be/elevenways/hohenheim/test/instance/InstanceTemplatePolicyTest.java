@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.TemplatePortability;
@@ -503,5 +504,24 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
                 .get(InstanceModel.SETTINGS)).get("privileged"))
             .as("step 6: an operator may still declare the escape hatch")
             .isEqualTo(Boolean.TRUE);
+
+        // 7. THE SEAM ITSELF: TenantWrites freezes exactly the keys the image policy
+        //    EXPORTS, so a key exported but not actually judged would be a member with no
+        //    authority check at all. Every exported key, moved on its own, must therefore
+        //    be refused by the IMAGE gate (image_requires_capability) and never fall
+        //    through to the freeze or, worse, through both.
+        for (String judged : InstanceImagePolicy.JUDGED_SETTINGS_KEYS) {
+            Throwable moved = catchThrowable(() -> TenantConduits.as(tenantPrincipal, () -> {
+                Row row = instances.findById(created[0]);
+                Map<String, Object> settings = settingsOf(row);
+                settings.put(judged, "not-what-the-template-declares");
+                row.set(InstanceModel.SETTINGS, settings);
+                instances.save(row);
+            }));
+            assertThat(violationKeys(moved))
+                .as("step 7: settings." + judged + " is exported as JUDGED, so the image"
+                    + " gate must be what refuses it")
+                .contains("image_requires_capability");
+        }
     }
 }

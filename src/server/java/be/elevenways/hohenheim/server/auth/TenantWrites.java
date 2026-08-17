@@ -87,6 +87,15 @@ public final class TenantWrites {
      * timestamps are behaviour-stamped, and live_route_key is written by the route invariant
      * on a later tier of this very pass.
      */
+    // AIDEV-NOTE: the four *_DERIVED sets stay HAND-WRITTEN, and that is a recorded
+    // verdict (2026-08-17) rather than an omission. Deriving them from a
+    // `pipelineWritten()`-style schema flag would be a new zenit Field API with exactly
+    // one consumer, and it would cover only the generic three members (pk plus the two
+    // behaviour-stamped timestamps): live_route_key here and settings on the instance set
+    // are APP pipeline facts no schema flag expresses, so the hand list would survive the
+    // abstraction and nothing would have been removed. The *_TENANT_WRITABLE sets are
+    // allow-lists that fail closed, and WriteAffordanceParityTest already pins them
+    // against the resource surfaces. Revisit only if a fifth model joins.
     private static final Set<String> DOMAIN_DERIVED = Set.of(
         SiteDomainModel.ID.getName(),
         SiteDomainModel.CREATED_AT.getName(),
@@ -101,6 +110,19 @@ public final class TenantWrites {
     public static final Set<String> RECORD_TYPES = Set.of(
         DnsRecordModel.TYPE_A, DnsRecordModel.TYPE_AAAA, DnsRecordModel.TYPE_CNAME,
         DnsRecordModel.TYPE_TXT, DnsRecordModel.TYPE_SRV);
+
+    /**
+     * The counterpart DECISION: types a tenant is refused, each with the reason, so
+     * {@code RECORD_TYPES + this == DnsRecordModel.ALL_TYPES} is a checkable claim.
+     *
+     * AIDEV-NOTE: the allow-list above already fails closed on an unlisted type, so this
+     * set changes no behaviour -- it exists so a new record type cannot be UNDECIDED. It
+     * lands as a `TenantWriteVocabularyTest` failure naming itself, instead of being
+     * quietly unauthorable for whoever added it. NS delegates a subtree away, CAA
+     * redirects or disables issuance for the whole name, MX repoints a domain's mail.
+     */
+    public static final Set<String> REFUSED_RECORD_TYPES = Set.of(
+        DnsRecordModel.TYPE_NS, DnsRecordModel.TYPE_CAA, DnsRecordModel.TYPE_MX);
 
     /** The DnsRecordModel counterpart of {@link #DOMAIN_DERIVED}: pipeline-written columns. */
     private static final Set<String> RECORD_DERIVED = Set.of(
