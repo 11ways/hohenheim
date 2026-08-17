@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -10,5 +11,5 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 @FunctionalInterface
 public interface SecurityNotifier {
 
-    void send(@NonNull String event, @NonNull String subject, @Nullable String message);
+    void send(@NonNull NotificationEvents event, @NonNull String subject, @Nullable String message);
 }

@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim.host;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * Structured host-list status cell: a state token, the daemon label and the last-contact
+ * Structured host-list status cell: a typed state, the daemon label and the last-contact
  * instant -- rendered by {@code hohenheim:cms/cell/host-status} as a status dot plus a
  * live relative time, never a fully-resolved sentence.
  *
@@ -13,17 +15,16 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * transient error kind is overwritten by any later probe (the M078 lesson: a security
  * state a later success hides is worse than no state).
  *
- * @param state       {@code quarantined} / {@code error} / {@code silent} /
- *                    {@code never_probed} / {@code ok}
+ * @param state       the typed verdict; see {@link HostState} for why it is not a String
  * @param daemon      "Docker 27.1.1" / "Incus 7.3" -- the daemon plus its stored version
- * @param errorKind   the typed failure class when {@code state} is {@code error}
+ * @param errorKind   the typed failure class when {@code state} is {@link HostState#ERROR}
  * @param lastSeenIso last daemon contact, null when never reached
  * @param wording     request-independent relative-time wording (server default locale,
  *                    like every host stat computed without a conduit)
  */
 @HawkeyeClass
 public record HostStatusCell(
-    String state,
+    @NonNull HostState state,
     String daemon,
     @Nullable String errorKind,
     @Nullable String lastSeenIso,
@@ -39,12 +40,25 @@ public record HostStatusCell(
      * ({@code {% value.dot %}}) exactly like a component -- but only in PROPERTY spelling;
      * call syntax on a @HawkeyeClass is a compile error.
      */
-    public String dot() {
-        return switch (state) {
-            case "quarantined", "error" -> "error";
-            case "silent" -> "warning";
-            case "never_probed" -> "idle";
-            default -> "online";
-        };
+    public @NonNull String dot() {
+        return this.state.dot();
+    }
+
+    /** The stable state token, for {@code data-host-state} and template branching. */
+    public @NonNull String stateToken() {
+        return this.state.token();
+    }
+
+    /**
+     * The state's wording, with the failure class already bound for {@link HostState#ERROR}.
+     *
+     * @return null for {@link HostState#OK}, which shows the daemon label instead
+     */
+    public @Nullable Microcopy stateText() {
+        Microcopy wording = this.state.wording();
+        if (wording != null && this.state == HostState.ERROR) {
+            return wording.withArg("kind", this.errorKind != null ? this.errorKind : "");
+        }
+        return wording;
     }
 }

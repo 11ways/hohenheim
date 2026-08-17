@@ -88,7 +88,7 @@ class IsolationVisibilityTest {
         // Subscribed to the isolation event ONLY: a channel that receives this because it
         // subscribes to everything would prove nothing about the event's existence.
         channel.set(NotificationChannelModel.EVENTS,
-            List.of(NotificationEvents.WORKLOAD_ISOLATION));
+            List.of(NotificationEvents.WORKLOAD_ISOLATION.token()));
         channels.save(channel);
     }
 

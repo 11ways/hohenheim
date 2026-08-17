@@ -943,6 +943,10 @@
     {
       "text": "Actief",
       "scope": "stack_status"
+    },
+    {
+      "text": "Actief",
+      "scope": "database_status"
     }
   ],
   "add_domain": {
@@ -1273,6 +1277,14 @@
     {
       "text": "Mislukt",
       "scope": "backup_status"
+    },
+    {
+      "text": "Mislukt",
+      "scope": "database_status"
+    },
+    {
+      "text": "Mislukt",
+      "scope": "schedule_run_status"
     }
   ],
   "forced": {
@@ -1421,6 +1433,10 @@
     {
       "text": "Provisioning",
       "scope": "instance"
+    },
+    {
+      "text": "Voorbereiden",
+      "scope": "database_status"
     }
   ],
   "provisioning_failed": {
@@ -4629,6 +4645,10 @@
     {
       "text": "Actief",
       "scope": "instance_status"
+    },
+    {
+      "text": "Bezig",
+      "scope": "schedule_run_status"
     }
   ],
   "unhealthy": {
@@ -6880,6 +6900,10 @@
     {
       "text": "Preview-afbraak mislukt: {$reason}",
       "scope": "preview_deployment"
+    },
+    {
+      "text": "Verwijderen mislukt",
+      "scope": "database_status"
     }
   ],
   "docker": [
@@ -8389,5 +8413,29 @@
   "refused": {
     "text": "De aanvraag werd geweigerd.",
     "scope": "violations"
+  },
+  "deleted_database": {
+    "text": "(verwijderd)",
+    "scope": "site_databases"
+  },
+  "missing_database": {
+    "text": "Ontbreekt",
+    "scope": "site_databases"
+  },
+  "completed": {
+    "text": "Voltooid",
+    "scope": "schedule_run_status"
+  },
+  "completed_with_failures": {
+    "text": "Voltooid met fouten",
+    "scope": "schedule_run_status"
+  },
+  "aborted": {
+    "text": "Afgebroken",
+    "scope": "schedule_run_status"
+  },
+  "abandoned": {
+    "text": "Verlaten",
+    "scope": "schedule_run_status"
   }
 }

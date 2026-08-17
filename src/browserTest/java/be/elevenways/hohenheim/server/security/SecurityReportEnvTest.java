@@ -206,7 +206,7 @@ class SecurityReportEnvTest {
             new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
         List<String> sent = new ArrayList<>();
         SpamserviceHealth.setActive(new SpamserviceHealth(now::get,
-            (event, subject, message) -> sent.add(event)));
+            (event, subject, message) -> sent.add(event.token())));
 
         SecurityReportEnv.setProvisioner((externalId, name, trusted, rawKey) -> {
             throw new IllegalStateException("spamservice unreachable");

@@ -97,7 +97,7 @@ class ProxyListenerSupervisionTest {
         channel.set(NotificationChannelModel.FORMAT, NotificationChannelModel.FORMAT_GENERIC);
         channel.set(NotificationChannelModel.URL,
             "http://127.0.0.1:" + receiver.getAddress().getPort() + "/hook");
-        channel.set(NotificationChannelModel.EVENTS, List.of(NotificationEvents.PROXY_LISTENER_DOWN));
+        channel.set(NotificationChannelModel.EVENTS, List.of(NotificationEvents.PROXY_LISTENER_DOWN.token()));
         channels.save(channel);
 
         // Step 1: a certificate exists but the HTTPS port is already taken -> HTTPS start

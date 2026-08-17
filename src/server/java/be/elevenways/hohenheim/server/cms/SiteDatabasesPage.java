@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.database.SiteDatabaseLinkView;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -10,6 +11,7 @@ import be.elevenways.hohenheim.sitetype.SiteTypeInfo;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -53,37 +55,39 @@ public final class SiteDatabasesPage implements RecordScopedPage<Row> {
         Integer siteId = site.get(SiteModel.ID);
         DatabaseModel databaseModel = Models.get(DatabaseModel.class);
 
-        List<Map<String, Object>> links = new ArrayList<>();
+        List<SiteDatabaseLinkView> links = new ArrayList<>();
         boolean primary = true;
         for (Row link : Models.get(SiteDatabaseModel.class).findBySiteId(siteId)) {
-            Map<String, Object> entry = new HashMap<>();
             String prefix = DatabaseEnvInjection.normalizedPrefix(link.get(SiteDatabaseModel.ENV_PREFIX));
-            entry.put("id", link.get(SiteDatabaseModel.ID));
-            entry.put("prefix", prefix);
-            entry.put("primary", primary);
             // The site-database and database resources live only on the admin panel.
-            entry.put("editTarget", CmsRoutes.detail("admin", "site-databases",
-                link.get(SiteDatabaseModel.ID)));
-            entry.put("varNames", prefix + "_HOST, _PORT, _USER, _PASSWORD, _NAME, _URL"
-                + (primary ? " + DATABASE_URL" : ""));
-            primary = false;
+            RouteTarget editTarget = CmsRoutes.detail("admin", "site-databases",
+                link.get(SiteDatabaseModel.ID));
+            String varNames = prefix + "_HOST, _PORT, _USER, _PASSWORD, _NAME, _URL"
+                + (primary ? " + DATABASE_URL" : "");
 
             Row database = databaseModel.find()
                 .where(DatabaseModel.ID.eq(link.get(SiteDatabaseModel.DATABASE_ID)))
                 .first();
-            if (database != null) {
-                entry.put("dbName", database.get(DatabaseModel.NAME));
-                entry.put("engine", database.get(DatabaseModel.ENGINE));
-                entry.put("status", String.valueOf(database.get(DatabaseModel.STATUS)));
-                entry.put("dbTarget", CmsRoutes.detail("admin", "databases",
-                    database.get(DatabaseModel.ID)));
+
+            if (database == null) {
+                // A dangling link is NOT a status: it gets no badge state at all, and the
+                // template says "missing" in its own words rather than inventing a token
+                // the status vocabulary does not contain.
+                links.add(new SiteDatabaseLinkView(link.get(SiteDatabaseModel.ID), null, "",
+                    null, true, primary, prefix, varNames, editTarget, null));
             } else {
-                entry.put("dbName", "(deleted)");
-                entry.put("engine", "");
-                entry.put("status", "missing");
-                entry.put("dbTarget", null);
+                // The badge comes off the model's own EnumField, so every declared status --
+                // destroy_failed included -- keeps its label, icon and colour here.
+                Object status = database.get(DatabaseModel.STATUS);
+                String engine = database.get(DatabaseModel.ENGINE);
+                links.add(new SiteDatabaseLinkView(link.get(SiteDatabaseModel.ID),
+                    database.get(DatabaseModel.NAME),
+                    engine != null ? engine : "",
+                    status != null ? EnumBadgeState.of(DatabaseModel.STATUS, status) : null,
+                    false, primary, prefix, varNames, editTarget,
+                    CmsRoutes.detail("admin", "databases", database.get(DatabaseModel.ID))));
             }
-            links.add(entry);
+            primary = false;
         }
 
         Map<String, Object> vars = new HashMap<>();

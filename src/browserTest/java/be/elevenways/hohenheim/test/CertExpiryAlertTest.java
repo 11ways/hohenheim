@@ -71,7 +71,7 @@ class CertExpiryAlertTest {
             channel.set(NotificationChannelModel.FORMAT, NotificationChannelModel.FORMAT_GENERIC);
             channel.set(NotificationChannelModel.URL,
                 "http://127.0.0.1:" + receiver.getAddress().getPort() + "/hook");
-            channel.set(NotificationChannelModel.EVENTS, List.of(NotificationEvents.CERT_EXPIRING));
+            channel.set(NotificationChannelModel.EVENTS, List.of(NotificationEvents.CERT_EXPIRING.token()));
             channels.save(channel);
 
             CertificateModel certModel = Models.get(CertificateModel.class);

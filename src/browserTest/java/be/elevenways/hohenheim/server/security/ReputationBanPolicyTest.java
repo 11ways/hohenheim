@@ -387,7 +387,7 @@ class ReputationBanPolicyTest {
     void lookupFailuresFeedTheOutageDetector() {
         List<String> sent = new ArrayList<>();
         SpamserviceHealth.setActive(new SpamserviceHealth(now::get,
-            (event, subject, message) -> sent.add(event)));
+            (event, subject, message) -> sent.add(event.token())));
         try {
             java.util.concurrent.atomic.AtomicBoolean up =
                 new java.util.concurrent.atomic.AtomicBoolean(false);

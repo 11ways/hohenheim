@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 
+import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.HostStatusCell;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -230,22 +231,22 @@ public final class ServerResource extends RowResource {
         String daemon = daemonLabelOf(row);
         RelativeTimeWording wording = defaultWording();
         if (row.get(ServerModel.QUARANTINED_AT) != null) {
-            return new HostStatusCell("quarantined", daemon, null, lastSeenIso, wording);
+            return new HostStatusCell(HostState.QUARANTINED, daemon, null, lastSeenIso, wording);
         }
         String errorKind = row.get(ServerModel.LAST_ERROR_KIND);
         if (errorKind != null && !errorKind.isBlank()) {
-            return new HostStatusCell("error", daemon, errorKind, lastSeenIso, wording);
+            return new HostStatusCell(HostState.ERROR, daemon, errorKind, lastSeenIso, wording);
         }
         if (lastSeen == null) {
-            return new HostStatusCell("never_probed", daemon, null, null, wording);
+            return new HostStatusCell(HostState.NEVER_PROBED, daemon, null, null, wording);
         }
         // A host whose last contact is older than the placement bound looks identical to a
         // healthy one otherwise: same version, same admission, no error kind. The refusal
         // an operator would otherwise only meet at deploy is stated where they read.
         if (lapsed(row)) {
-            return new HostStatusCell("silent", daemon, null, lastSeenIso, wording);
+            return new HostStatusCell(HostState.SILENT, daemon, null, lastSeenIso, wording);
         }
-        return new HostStatusCell("ok", daemon, null, lastSeenIso, wording);
+        return new HostStatusCell(HostState.OK, daemon, null, lastSeenIso, wording);
     }
 
     /** "Docker 27.1.1" / "Incus 7.3": the daemon label plus its STORED version. */
