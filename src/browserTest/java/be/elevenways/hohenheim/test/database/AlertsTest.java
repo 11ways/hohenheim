@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
-import be.elevenways.zenit.comms.CommsChannels;
+import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.CommsRecipient;
 import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.comms.server.CommsDeliveryModel;
@@ -54,7 +54,7 @@ class AlertsTest {
         Models.get(CommsDeliveryModel.class).find().delete();
         // Inline webhook-only dispatcher: assertions run right after send().
         Comms.install(new CommsDispatcher(Map.of(
-            CommsChannels.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+            CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
     }
 
     @AfterEach
@@ -85,19 +85,19 @@ class AlertsTest {
 
         CommsRecipient slack_recipient = Alerts.recipientFor(slack);
         assertThat(slack_recipient).isNotNull();
-        assertThat(slack_recipient.routeFor(CommsChannels.CHAT))
+        assertThat(slack_recipient.routeFor(CommsChannel.CHAT))
             .isEqualTo("slack://hooks.slack.com/services/T0/B0/XYZ");
 
         CommsRecipient discord_recipient = Alerts.recipientFor(discord);
         assertThat(discord_recipient).isNotNull();
-        assertThat(discord_recipient.routeFor(CommsChannels.CHAT))
+        assertThat(discord_recipient.routeFor(CommsChannel.CHAT))
             .isEqualTo("discord://1234/tok-en");
 
         CommsRecipient generic_recipient = Alerts.recipientFor(generic);
         assertThat(generic_recipient).isNotNull();
-        assertThat(generic_recipient.routeFor(CommsChannels.WEBHOOK))
+        assertThat(generic_recipient.routeFor(CommsChannel.WEBHOOK))
             .isEqualTo("https://example.com/hook");
-        assertThat(generic_recipient.routeFor(CommsChannels.CHAT)).isNull();
+        assertThat(generic_recipient.routeFor(CommsChannel.CHAT)).isNull();
     }
 
     @Test

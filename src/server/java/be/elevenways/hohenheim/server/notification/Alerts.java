@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.server.notification;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.comms.AdHocRecipient;
-import be.elevenways.zenit.comms.CommsChannels;
+import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.CommsRecipient;
 import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -110,7 +110,7 @@ public final class Alerts {
                     slogUnmappable(name, format, "not an https webhook URL");
                     return null;
                 }
-                return new AdHocRecipient().route(CommsChannels.CHAT, route).setDisplayName(name);
+                return new AdHocRecipient().route(CommsChannel.CHAT, route).setDisplayName(name);
             }
             case NotificationChannelModel.FORMAT_DISCORD -> {
                 route = discordRoute(url);
@@ -118,7 +118,7 @@ public final class Alerts {
                     slogUnmappable(name, format, "not a discord /api/webhooks/ID/TOKEN URL");
                     return null;
                 }
-                return new AdHocRecipient().route(CommsChannels.CHAT, route).setDisplayName(name);
+                return new AdHocRecipient().route(CommsChannel.CHAT, route).setDisplayName(name);
             }
             default -> {
                 return AdHocRecipient.webhook(url).setDisplayName(name);

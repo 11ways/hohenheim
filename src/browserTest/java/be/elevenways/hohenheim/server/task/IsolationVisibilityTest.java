@@ -12,7 +12,7 @@ import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.zenit.comms.CommsChannels;
+import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.comms.server.CommsDispatcher;
 import be.elevenways.zenit.comms.server.transport.TransportTypes;
@@ -76,7 +76,7 @@ class IsolationVisibilityTest {
         // Inline delivery, the CertExpiryAlertTest shape: the receiver's count is settled
         // by the time publish() returns, so no polling and no sleeping.
         Comms.install(new CommsDispatcher(Map.of(
-            CommsChannels.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+            CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
 
         NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
         Row channel = channels.createEmptyRow();
