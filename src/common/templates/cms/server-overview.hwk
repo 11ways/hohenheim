@@ -191,7 +191,7 @@
                 <pl-badge variant="secondary">{{ t("kernel_not_required", scope: "server_overview") }}</pl-badge>
                 {% elseif kernel.laneAvailable == false %}
                 <pl-badge variant="destructive">{{ t("kernel_no_lane", scope: "server_overview") }}</pl-badge>
-                {% elseif kernel.status == "pass" %}
+                {% elseif kernel.proven %}
                 <pl-badge variant="success">{{ t("kernel_proven", scope: "server_overview") }}</pl-badge>
                 {% if kernel.checkedAtIso != null %}
                 <pl-relative-time datetime={% kernel.checkedAtIso %} wording={% timeWording %} title={% kernel.checkedAtIso %}></pl-relative-time>
