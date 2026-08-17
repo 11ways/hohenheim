@@ -10,5 +10,10 @@
     "network": {
         // Port the admin UI listens on. Default: 3000.
         //"port": 2999
+
+        // Forwarded headers are trusted only from these literal peers/ranges. The default
+        // is "loopback"; explicitly list a LAN/reverse-proxy address before placing the
+        // admin listener behind a proxy on another host.
+        //"trusted_proxies": "loopback, 10.0.0.0/8"
     }
 }
