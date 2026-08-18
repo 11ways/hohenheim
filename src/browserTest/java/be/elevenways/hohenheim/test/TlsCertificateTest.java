@@ -401,8 +401,19 @@ class TlsCertificateTest {
         domain.set(SiteDomainModel.FORCE_SSL, true);
         domainModel.save(domain);
 
+        // AIDEV-NOTE: the HTTPS port must be a CONFIGURED non-default one -- redirectToHttps
+        // reads the setting, not the bound listener, and appends the suffix only when the
+        // setting is >0 and != 443, so an ephemeral 0 yields a portless Location. It must
+        // not be hardcoded either: a fixed 8443 fails wherever anything else already owns
+        // that port (a mitmproxy on the dev workstation was enough) because the listener
+        // never binds and force-ssl answers 503. Reserve a free port and configure that.
+        int httpsPort;
+        try (java.net.ServerSocket reservation = new java.net.ServerSocket(0)) {
+            httpsPort = reservation.getLocalPort();
+        }
+
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 8443);
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, httpsPort);
 
         ProxyServer proxy = new ProxyServer();
         proxy.start();
@@ -433,7 +444,7 @@ class TlsCertificateTest {
                 }
             }
 
-            assertThat(location).isEqualTo("https://force-ssl.test:8443/some/path?q=1");
+            assertThat(location).isEqualTo("https://force-ssl.test:" + httpsPort + "/some/path?q=1");
         }
 
         proxy.stop();
