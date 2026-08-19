@@ -137,18 +137,36 @@ class HostRuntimeTest {
                         assertThat(violation.message().key())
                             .isEqualTo("no_placement_available")));
 
-            // 5. Resolve refuses a kind/host runtime mismatch BEFORE any client exists:
-            //    a docker_container record pointed at the incus host is a named
-            //    violation, not a wrong-daemon client.
+            // 5. The kind/host runtime mismatch is refused at SAVE, not only at deploy:
+            //    the instance form offers every host, so the record itself is the gate.
             Row instance = Models.get(InstanceModel.class).createEmptyRow();
             instance.set(InstanceModel.NAME, "mismatched");
             instance.set(InstanceModel.KIND, "hohenheim:docker_container");
             instance.set(InstanceModel.SETTINGS, Map.of("image", "alpine"));
             instance.set(InstanceModel.SERVER_ID, admitted.get(ServerModel.ID));
+            assertThat(catchThrowable(() -> Models.get(InstanceModel.class).save(instance)))
+                .as("step 5: a docker kind saved onto an incus host is a named refusal")
+                .isInstanceOfSatisfying(Violations.class, violations ->
+                    assertThat(violations.all()).anySatisfy(violation ->
+                        assertThat(violation.message().key())
+                            .isEqualTo("host_runtime_mismatch")));
+            // Falsify it: the guard refuses the MISMATCH, not the write.
+            instance.set(InstanceModel.SERVER_ID, dockerLocal.get(ServerModel.ID));
             Models.get(InstanceModel.class).save(instance);
+            assertThat((Object) instance.get(InstanceModel.ID))
+                .as("step 5: the same record saves onto the docker host")
+                .isNotNull();
+
+            // 5b. Resolve keeps its own refusal for a row that never met the save guard:
+            //     a set-based update runs no per-row hooks, which is exactly how a
+            //     mismatched row can still exist by the time a deploy resolves it.
+            Models.get(InstanceModel.class).find()
+                .where(InstanceModel.ID.eq(instance.get(InstanceModel.ID)))
+                .assign(InstanceModel.SERVER_ID, admitted.get(ServerModel.ID))
+                .updateAll();
             assertThat(catchThrowable(() -> new InstanceService()
                     .resolve(instance.get(InstanceModel.ID))))
-                .as("step 5: kind/host runtime mismatch is a named refusal")
+                .as("step 5b: resolve still refuses a mismatch it is handed")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
                         assertThat(violation.message().key())

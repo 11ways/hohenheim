@@ -81,6 +81,38 @@ public final class InstanceKinds {
     }
 
     /**
+     * THE kind-versus-host runtime comparison, and the one spelling of its refusal.
+     *
+     * AIDEV-NOTE: the host runtime is passed in rather than derived from a row, because
+     * the three callers legitimately disagree about an ABSENT host -- resolve folds a
+     * missing row onto the local docker daemon, a migration target names it "absent" --
+     * and only the comparison and the message must exist once.
+     *
+     * @return the named refusal, or null when the host runs what the kind requires
+     */
+    public static @Nullable Microcopy runtimeMismatch(@NonNull String hostName,
+                                                      @NonNull String hostRuntime,
+                                                      @NonNull String requiredRuntime) {
+        if (hostRuntime.equals(requiredRuntime)) {
+            return null;
+        }
+        return Microcopy.of("host_runtime_mismatch")
+            .withFilter("scope", "violations")
+            .withArg("name", hostName)
+            .withArg("runtime", hostRuntime)
+            .withArg("required", requiredRuntime);
+    }
+
+    /** @throws Violations naming the host when its runtime is not the kind's required one */
+    public static void requireRuntimeMatch(@NonNull String hostName, @NonNull String hostRuntime,
+                                           @NonNull String requiredRuntime) {
+        Microcopy refusal = runtimeMismatch(hostName, hostRuntime, requiredRuntime);
+        if (refusal != null) {
+            throw Violations.ofForm(refusal);
+        }
+    }
+
+    /**
      * The kinds a human may actually create, as select options.
      *
      * AIDEV-NOTE: derived by SKIPPING what requireAuthorable refuses, never by a hand-kept

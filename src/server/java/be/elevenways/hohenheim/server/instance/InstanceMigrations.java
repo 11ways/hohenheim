@@ -175,11 +175,10 @@ public final class InstanceMigrations {
                                                   @NonNull Resolved resolved,
                                                   @NonNull String requiredRuntime,
                                                   boolean sourceTransportable) {
-        if (!ServerModel.runtimeOf(server).equals(requiredRuntime)) {
-            return violationText("host_runtime_mismatch")
-                .withArg("name", name)
-                .withArg("runtime", ServerModel.runtimeOf(server))
-                .withArg("required", requiredRuntime);
+        Microcopy runtimeRefusal = InstanceKinds.runtimeMismatch(name,
+            ServerModel.runtimeOf(server), requiredRuntime);
+        if (runtimeRefusal != null) {
+            return runtimeRefusal;
         }
         // Through the ONE named-refusal funnel (InstanceService.runtimeFor): client
         // construction fails closed for an unpinned SSH host, and letting that throw
@@ -266,13 +265,9 @@ public final class InstanceMigrations {
                 .withArg("name", nameOf(resolved.row())));
         }
         Row target = Models.get(ServerModel.class).findById(targetServerId);
-        if (target == null || !ServerModel.runtimeOf(target)
-                .equals(resolved.handler().requiredRuntime())) {
-            throw Violations.ofForm(violationText("host_runtime_mismatch")
-                .withArg("name", ServerModel.nameOf(targetServerId))
-                .withArg("runtime", target != null ? ServerModel.runtimeOf(target) : "absent")
-                .withArg("required", resolved.handler().requiredRuntime()));
-        }
+        InstanceKinds.requireRuntimeMatch(ServerModel.nameOf(targetServerId),
+            target != null ? ServerModel.runtimeOf(target) : "absent",
+            resolved.handler().requiredRuntime());
         HostAdmission.requireInstancePlacement(targetServerId, resolved.handler().isolation(),
             resolved.row().get(InstanceModel.QUOTA_BUCKET));
 
