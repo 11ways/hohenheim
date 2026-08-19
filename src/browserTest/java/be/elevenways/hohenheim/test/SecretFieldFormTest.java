@@ -21,13 +21,17 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The stored-secret contract on hohenheim admin forms, walked over the real
  * routes: a {@code secret()} field is never echoed into the rendered form, a
  * blank submit keeps the stored value, an explicit value replaces it, the
- * {@code __clear} companion empties it (specimen: the DNS peer api key), and
+ * {@code __clear} companion empties it (specimen: the DNS peer TSIG secret), and
  * the dyndns mint row action is the ONE disclosure of a freshly minted token
  * (specimen: a DNS record's credential).
  */
 class SecretFieldFormTest extends HohenheimTestBase {
 
-    private static final String STORED_KEY = "peer-api-key-original-value";
+    // AIDEV-NOTE: the specimen is the TSIG secret rather than the peer api key, which it
+    // was until the peer TYPE landed: a nameserver peer's api key is not writable at all
+    // (the type's field binding strips it) and a hohenheim peer's may not be cleared, so
+    // neither half of that column can carry the generic secret contract any more.
+    private static final String STORED_KEY = "peer-tsig-secret-original-value";
 
     private HttpResponse<String> get(String path) throws Exception {
         return client().send(HttpRequest.newBuilder()
@@ -58,12 +62,12 @@ class SecretFieldFormTest extends HohenheimTestBase {
 
         // 1. The edit form still OFFERS the field, but never echoes the stored value.
         assertThat(keyOf(peerId))
-            .as("1. the seeded peer holds the stored api key").isEqualTo(STORED_KEY);
+            .as("1. the seeded peer holds the stored TSIG secret").isEqualTo(STORED_KEY);
         HttpResponse<String> form = get(editPath);
         assertThat(form.statusCode()).as("1. the edit form must render").isEqualTo(200);
         assertThat(form.body())
-            .as("1. the form must still offer the api_key entry")
-            .contains("api_key");
+            .as("1. the form must still offer the tsig_secret entry")
+            .contains("tsig_secret");
         assertThat(form.body())
             .as("1. a secret() field must NEVER echo the stored value into the form")
             .doesNotContain(STORED_KEY);
@@ -76,7 +80,7 @@ class SecretFieldFormTest extends HohenheimTestBase {
             .isEqualTo(STORED_KEY);
 
         // 3. A submitted value REPLACES the stored one.
-        String replacement = "peer-api-key-replacement-value";
+        String replacement = "peer-tsig-secret-replacement-value";
         HttpResponse<String> replaced = post(editPath, peerBody(replacement));
         assertThat(replaced.statusCode()).as("3. the replacing submit must be accepted").isIn(200, 302, 303);
         assertThat(keyOf(peerId))
@@ -84,7 +88,7 @@ class SecretFieldFormTest extends HohenheimTestBase {
             .isEqualTo(replacement);
 
         // 4. The __clear companion is the one way to EMPTY a secret.
-        HttpResponse<String> cleared = post(editPath, peerBody("") + "&api_key__clear=true");
+        HttpResponse<String> cleared = post(editPath, peerBody("") + "&tsig_secret__clear=true");
         assertThat(cleared.statusCode()).as("4. the clearing submit must be accepted").isIn(200, 302, 303);
         assertThat(keyOf(peerId))
             .as("4. the __clear companion must empty the stored secret")
@@ -118,14 +122,15 @@ class SecretFieldFormTest extends HohenheimTestBase {
     // ------------------------------------------------------------------
 
     private static String keyOf(int peerId) {
-        return Models.get(DnsPeerModel.class).findById(peerId).get(DnsPeerModel.API_KEY);
+        return Models.get(DnsPeerModel.class).findById(peerId).get(DnsPeerModel.TSIG_SECRET);
     }
 
     /** The full peer form body; only the secret entry varies. */
-    private static String peerBody(String apiKey) {
-        return "name=secret-form-peer&transfer_host=peer.secret-form.example&transfer_port=53"
-            + "&tsig_key_name=&tsig_algorithm=hmac-sha256&base_url=&enabled=true"
-            + "&api_key=" + apiKey;
+    private static String peerBody(String tsigSecret) {
+        return "name=secret-form-peer&peer_type=nameserver"
+            + "&transfer_host=peer.secret-form.example&transfer_port=53"
+            + "&tsig_key_name=&tsig_algorithm=hmac-sha256&base_url=&api_key=&enabled=true"
+            + "&tsig_secret=" + tsigSecret;
     }
 
     private int seedPeer() {
@@ -135,7 +140,8 @@ class SecretFieldFormTest extends HohenheimTestBase {
         peer.set(DnsPeerModel.TRANSFER_HOST, "peer.secret-form.example");
         peer.set(DnsPeerModel.TRANSFER_PORT, 53);
         peer.set(DnsPeerModel.TSIG_ALGORITHM, "hmac-sha256");
-        peer.set(DnsPeerModel.API_KEY, STORED_KEY);
+        peer.set(DnsPeerModel.PEER_TYPE, DnsPeerModel.TYPE_NAMESERVER);
+        peer.set(DnsPeerModel.TSIG_SECRET, STORED_KEY);
         peer.set(DnsPeerModel.ENABLED, true);
         peers.save(peer);
         return peer.get(DnsPeerModel.ID);

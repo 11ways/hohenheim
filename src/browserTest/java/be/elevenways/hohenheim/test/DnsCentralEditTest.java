@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
@@ -19,10 +20,12 @@ import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
+import org.xbill.DNS.TSIG;
 
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -346,9 +349,123 @@ class DnsCentralEditTest extends HohenheimTestBase {
             .anyMatch(call -> "/api/dns/zones/confirm.example/records/7/delete".equals(call.path())));
     }
 
+    /**
+     * Transfer-key negotiation, both halves: this instance mints a shared TSIG key onto a
+     * Hohenheim peer, and the endpoint it exposes installs a peer's key here.
+     *
+     * AIDEV-NOTE: the two halves are the SAME endpoint -- the client half calls
+     * /api/dns/peer-key on the stub, the server half is this instance answering it. A
+     * change that breaks the symmetry fails one of the two here.
+     */
+    @Test
+    @Order(4)
+    void transferKeyNegotiationJourney() throws Exception {
+        if (stub != null) {
+            stub.close();
+        }
+        stub = new PeerStub();
+        int peerId = createPeer("negotiate-peer", stub.baseUrl());
+        DnsPeerModel peers = Models.get(DnsPeerModel.class);
+
+        // 1. The key name is derived from both instance names, so the peer can be told
+        //    exactly what to echo back.
+        String localName = DnsFederationKeys.localName();
+        String keyName = DnsFederationKeys.keyNameFor(localName, "negotiate-peer");
+        assertThat(keyName).startsWith("xfer-");
+        stub.status = 200;
+        stub.body = "{\"status\":\"ok\",\"key_name\":\"" + keyName + "\",\"peer\":\"us\"}";
+
+        var negotiated = postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", "");
+        assertThat(negotiated.statusCode()).describedAs("the action runs").isIn(200, 302, 303);
+
+        // 2. The peer was called on the symmetric endpoint, with the API key.
+        StubCall call = stub.calls.get(stub.calls.size() - 1);
+        assertThat(call.method()).isEqualTo("POST");
+        assertThat(call.path()).isEqualTo("/api/dns/peer-key");
+        assertThat(call.authorization()).isEqualTo("Bearer test-peer-key");
+        assertThat(call.body()).contains("key_name=" + keyName)
+            .contains("algorithm=hmac-sha256")
+            .contains("peer=" + URLEncoder.encode(localName, StandardCharsets.UTF_8));
+
+        // 3. Both sides hold the SAME material: what went over the wire is what was stored.
+        String sentSecret = formValue(call.body(), "secret");
+        Row stored = peers.findById(peerId);
+        assertThat((String) stored.get(DnsPeerModel.TSIG_KEY_NAME)).isEqualTo(keyName);
+        assertThat((String) stored.get(DnsPeerModel.TSIG_ALGORITHM)).isEqualTo("hmac-sha256");
+        assertThat((String) stored.get(DnsPeerModel.TSIG_SECRET)).isEqualTo(sentSecret);
+        // ...and it is usable TSIG material, not just a random string.
+        assertThat(new TSIG(TSIG.HMAC_SHA256, keyName + ".", sentSecret)).isNotNull();
+
+        // 4. Falsification -- a peer confirming a DIFFERENT key name stores nothing: the
+        //    two sides would look each other up under names that never match.
+        stub.body = "{\"status\":\"ok\",\"key_name\":\"xfer-somebody-else\",\"peer\":\"us\"}";
+        postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", "");
+        assertThat((String) peers.findById(peerId).get(DnsPeerModel.TSIG_SECRET))
+            .describedAs("a mismatched confirmation must not rotate the working key")
+            .isEqualTo(sentSecret);
+
+        // 5. Falsification -- a peer that refuses leaves the working key alone too.
+        stub.status = 500;
+        stub.body = "nope";
+        postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", "");
+        assertThat((String) peers.findById(peerId).get(DnsPeerModel.TSIG_SECRET))
+            .isEqualTo(sentSecret);
+
+        // 6. The receiving half: a peer installs its key HERE over the same endpoint.
+        String incomingSecret = DnsFederationKeys.mintSecret();
+        var installed = apiPost("/api/dns/peer-key",
+            "peer=office&key_name=xfer-office-us&algorithm=hmac-sha256"
+            + "&secret=" + URLEncoder.encode(incomingSecret, StandardCharsets.UTF_8));
+        assertThat(installed.statusCode()).isEqualTo(200);
+        assertThat(installed.body()).contains("xfer-office-us");
+        Row incoming = peers.findByTsigKeyName("xfer-office-us");
+        assertThat(incoming).isNotNull();
+        assertThat((String) incoming.get(DnsPeerModel.TSIG_SECRET)).isEqualTo(incomingSecret);
+        assertThat(DnsPeerModel.typeOf(incoming))
+            .describedAs("we hold no admin credentials for the caller")
+            .isEqualTo(DnsPeerModel.TYPE_NAMESERVER);
+
+        // 7. Re-negotiating rotates the SAME row rather than growing a second peer.
+        String rotated = DnsFederationKeys.mintSecret();
+        var again = apiPost("/api/dns/peer-key",
+            "peer=office&key_name=xfer-office-us&algorithm=hmac-sha256"
+            + "&secret=" + URLEncoder.encode(rotated, StandardCharsets.UTF_8));
+        assertThat(again.statusCode()).isEqualTo(200);
+        Row rotatedRow = peers.findByTsigKeyName("xfer-office-us");
+        assertThat(rotatedRow.get(DnsPeerModel.ID)).isEqualTo(incoming.get(DnsPeerModel.ID));
+        assertThat((String) rotatedRow.get(DnsPeerModel.TSIG_SECRET)).isEqualTo(rotated);
+
+        // 8. Falsification of the guards: unusable material and an unknown algorithm are
+        //    refused before storage, and a session cookie can never plant a key at all.
+        assertThat(apiPost("/api/dns/peer-key",
+            "peer=bad&key_name=xfer-bad&algorithm=hmac-sha256&secret=not-base-64!!")
+            .statusCode()).isEqualTo(422);
+        assertThat(apiPost("/api/dns/peer-key",
+            "peer=bad&key_name=xfer-bad&algorithm=rot13&secret="
+            + URLEncoder.encode(DnsFederationKeys.mintSecret(), StandardCharsets.UTF_8))
+            .statusCode()).isEqualTo(422);
+        assertThat(postForm("/api/dns/peer-key",
+            "peer=bad&key_name=xfer-bad&algorithm=hmac-sha256&secret="
+            + URLEncoder.encode(DnsFederationKeys.mintSecret(), StandardCharsets.UTF_8))
+            .statusCode()).isEqualTo(403);
+        assertThat(peers.findByTsigKeyName("xfer-bad"))
+            .describedAs("no refused negotiation may leave a row behind").isNull();
+    }
+
     // ------------------------------------------------------------------
     // Fixtures + plumbing
     // ------------------------------------------------------------------
+
+    /** One field out of a urlencoded form body. */
+    private static String formValue(String body, String field) {
+        for (String pair : body.split("&")) {
+            int split = pair.indexOf('=');
+            if (split > 0 && pair.substring(0, split).equals(field)) {
+                return URLDecoder.decode(pair.substring(split + 1), StandardCharsets.UTF_8);
+            }
+        }
+        throw new IllegalStateException("no " + field + " in the negotiation body");
+    }
 
     private static int createZone(String origin, String role, Integer primaryPeerId) {
         DnsZoneModel zones = Models.get(DnsZoneModel.class);
@@ -367,6 +484,10 @@ class DnsCentralEditTest extends HohenheimTestBase {
         DnsPeerModel peers = Models.get(DnsPeerModel.class);
         Row peer = peers.createEmptyRow();
         peer.set(DnsPeerModel.NAME, name);
+        // A peer with admin credentials IS a Hohenheim peer; the type is what
+        // DnsPeerApi.forPeer keys on, so a credentialed peer must declare it.
+        peer.set(DnsPeerModel.PEER_TYPE, baseUrl != null
+            ? DnsPeerModel.TYPE_HOHENHEIM : DnsPeerModel.TYPE_NAMESERVER);
         peer.set(DnsPeerModel.BASE_URL, baseUrl);
         peer.set(DnsPeerModel.API_KEY, baseUrl != null ? "test-peer-key" : null);
         peer.set(DnsPeerModel.ENABLED, true);

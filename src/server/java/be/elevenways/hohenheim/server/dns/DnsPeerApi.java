@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
+import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
@@ -56,9 +57,17 @@ public final class DnsPeerApi {
         this.apiKey = apiKey;
     }
 
-    /** @return a client for the peer, or null when it has no base URL / API key configured */
+    /**
+     * @return a client for the peer, or null when it is not a Hohenheim peer or its
+     *         credentials are missing
+     *
+     * AIDEV-NOTE: the TYPE decides first. Before it existed, "has a base URL and a key"
+     * WAS the definition of a Hohenheim peer, so a half-configured one silently behaved
+     * like a plain nameserver; now a hohenheim-typed peer missing a credential still
+     * yields null (fail closed) but the form refuses to create one in the first place.
+     */
     public static @Nullable DnsPeerApi forPeer(@Nullable Row peer) {
-        if (peer == null) {
+        if (peer == null || !DnsPeerModel.isHohenheim(peer)) {
             return null;
         }
         String baseUrl = peer.get(DnsPeerModel.BASE_URL);
@@ -107,6 +116,26 @@ public final class DnsPeerApi {
         request("POST", HohenheimEndpoints.API_DNS_RECORD_DELETE.toUrl(Map.of(
             HohenheimEndpoints.DNS_ORIGIN, origin,
             HohenheimEndpoints.DNS_RECORD_ID, recordId)), Map.of());
+    }
+
+    /**
+     * Installs a freshly minted shared TSIG key on the peer.
+     *
+     * @param localName the name this instance announces; the peer files us under it
+     * @return the key name the peer confirms, which both sides then store
+     */
+    public @NonNull String negotiateTransferKey(@NonNull String localName, @NonNull String keyName,
+                                                @NonNull String algorithm, @NonNull String secret) {
+        String body = request("POST", HohenheimEndpoints.API_DNS_PEER_KEY.toUrl(), Map.of(
+            "peer", localName,
+            "key_name", keyName,
+            "algorithm", algorithm,
+            "secret", secret));
+        DnsPeerKeyResponse response = parseQuietly(body, DnsPeerKeyResponse.class);
+        if (response == null || response.key_name() == null || response.key_name().isBlank()) {
+            throw new PeerApiException("Unexpected response from peer", null, null);
+        }
+        return response.key_name();
     }
 
     private @Nullable String request(@NonNull String method, @NonNull String path,

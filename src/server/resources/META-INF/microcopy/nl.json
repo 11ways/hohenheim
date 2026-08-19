@@ -8664,7 +8664,7 @@
       "scope": "environment_variable"
     },
     {
-      "text": "Andere nameservers waarmee deze server zones uitwisselt.",
+      "text": "Andere nameservers waarmee deze server zones uitwisselt, en de Hohenheim-instanties waarnaar hij ook recordwijzigingen doorstuurt.",
       "scope": "dns_peer"
     },
     {
@@ -9001,5 +9001,63 @@
   "reissue_failed": {
     "text": "Opnieuw uitgeven mislukt, het bestaande certificaat is behouden: {$reason}",
     "scope": "certificate_request_error"
+  },
+  "peer_type": [
+    {
+      "text": "Soort peer",
+      "scope": "field"
+    },
+    {
+      "text": "Hohenheim-peers aanvaarden ook doorgestuurde recordwijzigingen via hun beheer-API; elke andere nameserver wisselt enkel zones uit.",
+      "scope": "help"
+    }
+  ],
+  "type_hohenheim": {
+    "text": "Hohenheim",
+    "scope": "dns_peer"
+  },
+  "type_nameserver": {
+    "text": "Nameserver",
+    "scope": "dns_peer"
+  },
+  "negotiate_key": {
+    "text": "Transfersleutel afspreken",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_hint": {
+    "text": "Maak een gedeelde zonetransfersleutel en installeer die aan beide kanten, zodat niemand een geheim overtypt",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_confirm": {
+    "text": "Een nieuwe gedeelde transfersleutel met deze peer maken? Een sleutel die jullie vandaag gebruiken werkt niet meer zodra de nieuwe is opgeslagen.",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_done": {
+    "text": "Beide kanten hebben nu transfersleutel {$key}",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_failed": {
+    "text": "De peer weigerde de sleuteluitwisseling: {$reason}",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_mismatch": {
+    "text": "De peer bevestigde een andere sleutelnaam, dus er is niets opgeslagen",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_unsupported": {
+    "text": "Deze peer heeft geen beheer-URL en API-sleutel, dus er valt niets af te spreken",
+    "scope": "dns_peer"
+  },
+  "dns_peer_base_url_required": {
+    "text": "Een Hohenheim-peer heeft een beheer-URL nodig",
+    "scope": "violations"
+  },
+  "dns_peer_api_key_required": {
+    "text": "Een Hohenheim-peer heeft een API-sleutel nodig",
+    "scope": "violations"
+  },
+  "dns_peer_transfer_host_required": {
+    "text": "Een nameserver-peer heeft een transferhost nodig",
+    "scope": "violations"
   }
 }

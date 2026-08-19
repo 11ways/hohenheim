@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.dns.AxfrResponder;
+import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
 import be.elevenways.hohenheim.server.dns.DnsResponder;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
@@ -98,6 +99,31 @@ class DnsFederationTest {
 
         assertThat(records).anyMatch(r -> r.getType() == Type.SOA);
         assertThat(records).anyMatch(r -> r.getType() == Type.A
+            && r.getName().toString(true).equals("www.primary.example"));
+    }
+
+    /**
+     * A key produced by transfer-key negotiation authorizes a real AXFR.
+     *
+     * AIDEV-NOTE: the point is the MATERIAL. The negotiation endpoint proves the two
+     * sides store the same string; only a transfer proves that string is usable TSIG
+     * material -- a secret minted in the wrong base64 alphabet passes every HTTP
+     * assertion and then refuses every transfer.
+     */
+    @Test
+    void aNegotiatedKeyAuthorizesTheTransfer() throws Exception {
+        String keyName = DnsFederationKeys.keyNameFor("here", "negotiated-peer");
+        String secret = DnsFederationKeys.mintSecret();
+        Row peer = DnsFederationKeys.install("negotiated-peer", keyName,
+            DnsFederationKeys.ALGORITHM, secret);
+        linkZonePeer(primaryZoneId, peer.get(DnsPeerModel.ID));
+
+        TSIG key = new TSIG(TSIG.HMAC_SHA256, keyName + ".", secret);
+        ZoneTransferIn xfr = ZoneTransferIn.newAXFR(
+            Name.fromString("primary.example."), "127.0.0.1", primaryPort, key);
+        xfr.run();
+
+        assertThat(xfr.getAXFR()).anyMatch(r -> r.getType() == Type.A
             && r.getName().toString(true).equals("www.primary.example"));
     }
 

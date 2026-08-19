@@ -8,6 +8,7 @@ import org.xbill.DNS.Name;
 import org.xbill.DNS.TSIG;
 
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Builds dnsjava {@link TSIG} instances from stored peer credentials and maps
@@ -15,7 +16,22 @@ import java.util.Locale;
  */
 public final class DnsTsig {
 
+    /**
+     * The algorithm names Hohenheim accepts; {@link #algorithmName} maps each one.
+     *
+     * AIDEV-NOTE: the vocabulary's one declaring home. {@code DnsPeerResource} kept its
+     * own copy of this set until 2026-08-19, so adding an algorithm meant editing two
+     * files and forgetting one silently refused a value the mapper understood.
+     */
+    public static final Set<String> ALGORITHMS = Set.of(
+        "hmac-sha256", "hmac-sha512", "hmac-sha384", "hmac-sha224", "hmac-sha1");
+
     private DnsTsig() {}
+
+    /** @return true when the (case-insensitive, trimmed) algorithm name is one we accept */
+    public static boolean isSupportedAlgorithm(@Nullable String algorithm) {
+        return algorithm != null && ALGORITHMS.contains(algorithm.trim().toLowerCase(Locale.ROOT));
+    }
 
     /** @return the peer's TSIG key, or null when the peer has no key configured */
     public static @Nullable TSIG forPeer(@NonNull Row peer) {

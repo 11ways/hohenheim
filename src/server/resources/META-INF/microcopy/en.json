@@ -8664,7 +8664,7 @@
       "scope": "environment_variable"
     },
     {
-      "text": "Other nameservers this server transfers zones to or from.",
+      "text": "Other nameservers this server transfers zones with, and the Hohenheim instances it also forwards record edits to.",
       "scope": "dns_peer"
     },
     {
@@ -9001,5 +9001,63 @@
   "reissue_failed": {
     "text": "Re-issue failed, the existing certificate was kept: {$reason}",
     "scope": "certificate_request_error"
+  },
+  "peer_type": [
+    {
+      "text": "Peer type",
+      "scope": "field"
+    },
+    {
+      "text": "Hohenheim peers also accept forwarded record edits over their admin API; any other nameserver only exchanges zones.",
+      "scope": "help"
+    }
+  ],
+  "type_hohenheim": {
+    "text": "Hohenheim",
+    "scope": "dns_peer"
+  },
+  "type_nameserver": {
+    "text": "Nameserver",
+    "scope": "dns_peer"
+  },
+  "negotiate_key": {
+    "text": "Negotiate transfer key",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_hint": {
+    "text": "Create a shared zone-transfer key and install it on both sides, so nobody copies a secret by hand",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_confirm": {
+    "text": "Create a new shared transfer key with this peer? Any key the two of you use today stops working the moment the new one is stored.",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_done": {
+    "text": "Both sides now hold transfer key {$key}",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_failed": {
+    "text": "The peer refused the key exchange: {$reason}",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_mismatch": {
+    "text": "The peer confirmed a different key name, so nothing was stored",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_unsupported": {
+    "text": "This peer has no admin URL and API key, so there is nothing to negotiate over",
+    "scope": "dns_peer"
+  },
+  "dns_peer_base_url_required": {
+    "text": "A Hohenheim peer needs an admin base URL",
+    "scope": "violations"
+  },
+  "dns_peer_api_key_required": {
+    "text": "A Hohenheim peer needs an API key",
+    "scope": "violations"
+  },
+  "dns_peer_transfer_host_required": {
+    "text": "A nameserver peer needs a transfer host",
+    "scope": "violations"
   }
 }

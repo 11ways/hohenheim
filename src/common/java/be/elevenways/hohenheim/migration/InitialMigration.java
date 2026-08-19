@@ -520,6 +520,8 @@ public class InitialMigration extends HohenheimMigration {
             table.id();
             table.addColumn("name", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(120));
+            table.addColumn("peer_type", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(20).defaultValue("nameserver"));
             table.addColumn("base_url", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(500));
             table.addColumn("api_key", ColumnType.STRING,
