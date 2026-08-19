@@ -8610,6 +8610,14 @@
     {
       "text": "The DNS names you may edit, across every zone this server hosts.",
       "scope": "dns_record"
+    },
+    {
+      "text": "Accounts that can sign in here, with their own permissions and sessions.",
+      "scope": "user"
+    },
+    {
+      "text": "Named permission sets you assign to accounts instead of granting each one by hand.",
+      "scope": "role"
     }
   ]
 }

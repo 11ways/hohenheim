@@ -8610,6 +8610,14 @@
     {
       "text": "De DNS-namen die je mag bewerken, over elke zone die deze server host.",
       "scope": "dns_record"
+    },
+    {
+      "text": "Accounts die hier kunnen aanmelden, met hun eigen rechten en sessies.",
+      "scope": "user"
+    },
+    {
+      "text": "Benoemde rechtensets die je aan accounts toekent in plaats van ze stuk voor stuk te geven.",
+      "scope": "role"
     }
   ]
 }

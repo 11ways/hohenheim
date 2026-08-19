@@ -70,16 +70,6 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         "spamservice-installation", "spamservice-clients", "spamservice-samples",
         "spamservice-security-events", "spamservice-words", "spamservice-reputation");
 
-    /**
-     * The only visible entries without a description, and the only ones allowed to be.
-     *
-     * AIDEV-NOTE: zenit-auth's AuthUsersResource and AuthRolesResource are FINAL and expose
-     * no description seam, so hohenheim cannot author one for them. This set is asserted to
-     * be EXACTLY these two -- a third undescribed entry is a hohenheim omission, not a
-     * framework limit, and must fail.
-     */
-    private static final Set<String> NO_DESCRIPTION_SEAM = Set.of("users", "roles");
-
     @Test
     void adminSidebarIsCuratedAndEveryDemotedPeerStaysReachable() throws Exception {
         Panel admin = PanelRegistry.getBySlug("admin");
@@ -113,17 +103,6 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         for (PanelNav.Section section : sections) {
             Set<Integer> orders = new HashSet<>();
             for (PanelPeer peer : section.peers()) {
-                if (NO_DESCRIPTION_SEAM.contains(peer.slug())) {
-                    assertThat(peer.description())
-                        .as("step 2: '" + peer.slug() + "' is exempt because the framework"
-                            + " resource is final; if it grew a seam, describe it and drop"
-                            + " it from NO_DESCRIPTION_SEAM")
-                        .isNull();
-                    assertThat(orders.add(peer.navOrder()))
-                        .as("step 2: '" + peer.slug() + "' still needs a unique navOrder")
-                        .isTrue();
-                    continue;
-                }
                 Microcopy description = peer.description();
                 assertThat(description)
                     .as("step 2: '" + peer.slug() + "' declares a description")
