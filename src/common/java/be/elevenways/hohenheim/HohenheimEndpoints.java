@@ -944,6 +944,23 @@ public class HohenheimEndpoints {
         .csrfExempt()
         .build();
 
+    /**
+     * Transfer-key negotiation: the caller minted a TSIG key for the two of us and
+     * installs its half here. SYMMETRIC -- every instance both calls and exposes it.
+     *
+     * csrfExempt is safe for the same reason as the record routes: the handler refuses
+     * every principal that is not an API key, so an ambient session cookie can never
+     * plant a transfer key.
+     */
+    public static final Endpoint<Object> API_DNS_PEER_KEY = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_dns_peer_key"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("dns").addDelimiter()
+            .addStatic("peer-key").build())
+        .requiresPermission(HohenheimSources.ADMIN_ACCESS)
+        .csrfExempt()
+        .build();
+
     // --- Remote-record edit forwarding (admin form POST on a SECONDARY zone's
     //     Records tab; forwards to the owning peer's API above) ---
     public static final Endpoint<Object> DNS_REMOTE_RECORD = Endpoint.<Object>builder()

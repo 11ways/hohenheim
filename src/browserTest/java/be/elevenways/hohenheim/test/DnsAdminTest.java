@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -252,5 +254,82 @@ class DnsAdminTest extends HohenheimTestBase {
                 zones.delete(zone);
             }
         }
+    }
+
+    /**
+     * The peer type decides which channel a peer must have complete, which fields its
+     * form even asks for, and whether the edit-forwarding client exists at all.
+     *
+     * AIDEV-NOTE: counterfactual for the last step -- before the type existed, "has a
+     * base URL and an API key" WAS the definition of a Hohenheim peer, so a peer whose
+     * type says nameserver but whose credential columns are still populated would keep
+     * forwarding edits. That is the assertion that fails without DnsPeerModel.isHohenheim.
+     */
+    @Test
+    @Order(4)
+    void dnsPeerTypeDrivesTheFormAndItsValidation() throws Exception {
+        DnsPeerModel peers = Models.get(DnsPeerModel.class);
+
+        // 1. A Hohenheim peer without admin credentials is refused.
+        var noCredentials = postForm("/admin/dns-peers/new",
+            "name=peer-incomplete&peer_type=hohenheim&transfer_host=&transfer_port="
+            + "&tsig_key_name=&tsig_algorithm=&tsig_secret=&base_url=&api_key=&enabled=on");
+        assertThat(noCredentials.statusCode()).isEqualTo(200);
+        assertThat(noCredentials.body()).contains("admin base URL");
+        assertThat(peers.findByName("peer-incomplete")).isNull();
+
+        // 2. A plain nameserver peer with no transfer host is refused too: nothing here
+        //    could ever reach it.
+        var noHost = postForm("/admin/dns-peers/new",
+            "name=peer-hostless&peer_type=nameserver&transfer_host=&transfer_port="
+            + "&tsig_key_name=&tsig_algorithm=&tsig_secret=&base_url=&api_key=&enabled=on");
+        assertThat(noHost.statusCode()).isEqualTo(200);
+        assertThat(noHost.body()).contains("transfer host");
+        assertThat(peers.findByName("peer-hostless")).isNull();
+
+        // 3. Both complete shapes are accepted.
+        assertThat(postForm("/admin/dns-peers/new",
+            "name=peer-hohenheim&peer_type=hohenheim&transfer_host=ns1.peer.example"
+            + "&transfer_port=53&tsig_key_name=&tsig_algorithm=&tsig_secret="
+            + "&base_url=https%3A%2F%2Fpeer.example&api_key=znit_secret&enabled=on")
+            .statusCode()).isIn(200, 302, 303);
+        assertThat(postForm("/admin/dns-peers/new",
+            "name=peer-nameserver&peer_type=nameserver&transfer_host=ns1.other.example"
+            + "&transfer_port=53&tsig_key_name=&tsig_algorithm=&tsig_secret="
+            + "&base_url=&api_key=&enabled=on")
+            .statusCode()).isIn(200, 302, 303);
+
+        Row hohenheimPeer = peers.findByName("peer-hohenheim");
+        Row nameserverPeer = peers.findByName("peer-nameserver");
+        assertThat(hohenheimPeer).isNotNull();
+        assertThat(nameserverPeer).isNotNull();
+        assertThat(DnsPeerModel.isHohenheim(hohenheimPeer)).isTrue();
+        assertThat(DnsPeerModel.isHohenheim(nameserverPeer)).isFalse();
+
+        // 4. The forwarding credentials cannot be written onto a nameserver peer: the
+        //    field binding strips them from the submit.
+        //    AIDEV-NOTE: this asserts the WRITE, not the render. The form renderer
+        //    resolves field access without the record, so the inputs still appear on the
+        //    page; the type is enforced when the form comes back.
+        int nameserverId = nameserverPeer.get(DnsPeerModel.ID);
+        assertThat(postForm("/admin/dns-peers/" + nameserverId,
+            "name=peer-nameserver&peer_type=nameserver&transfer_host=ns1.other.example"
+            + "&transfer_port=53&tsig_key_name=&tsig_algorithm=&tsig_secret="
+            + "&base_url=https%3A%2F%2Fsmuggled.example&api_key=znit_smuggled&enabled=on")
+            .statusCode()).isIn(200, 302, 303);
+        Row afterSmuggle = peers.findById(nameserverId);
+        assertThat((String) afterSmuggle.get(DnsPeerModel.BASE_URL))
+            .describedAs("a nameserver peer never gains edit-forwarding credentials")
+            .isNullOrEmpty();
+        assertThat((String) afterSmuggle.get(DnsPeerModel.API_KEY)).isNullOrEmpty();
+
+        // 5. The edit-forwarding client follows the TYPE, not the leftover columns.
+        assertThat(DnsPeerApi.forPeer(hohenheimPeer)).isNotNull();
+        assertThat(DnsPeerApi.forPeer(nameserverPeer)).isNull();
+        hohenheimPeer.set(DnsPeerModel.PEER_TYPE, DnsPeerModel.TYPE_NAMESERVER);
+        peers.save(hohenheimPeer);
+        assertThat(DnsPeerApi.forPeer(peers.findByName("peer-hohenheim")))
+            .describedAs("demoting a peer closes the channel even with credentials stored")
+            .isNull();
     }
 }

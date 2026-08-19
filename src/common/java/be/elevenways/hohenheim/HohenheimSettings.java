@@ -324,6 +324,13 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
+        public static final SettingDefinition<String> FEDERATION_NAME = GROUP
+            .buildSetting("federation_name", String.class)
+            .description("The name this instance announces to a DNS peer when it negotiates a "
+                + "shared transfer key; it becomes half of the TSIG key name and the peer row "
+                + "the other side creates. Blank uses the system hostname")
+            .build();
+
         public static final SettingDefinition<Integer> RATE_LIMIT_PER_SECOND = GROUP
             .buildSetting("rate_limit_per_second", Integer.class)
             .defaultValue(20)

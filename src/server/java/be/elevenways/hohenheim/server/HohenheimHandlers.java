@@ -45,6 +45,7 @@ public final class HohenheimHandlers {
         AccessRuleHandlers.init();
         DnsZoneHandlers.initZones();
         DnsRecordApiHandlers.init();
+        DnsPeerApiHandlers.init();
         DnsZoneHandlers.initRemoteRecords();
         DynamicDnsHandlers.init();
         DatabaseHandlers.init();
