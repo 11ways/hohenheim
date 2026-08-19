@@ -90,22 +90,47 @@ public final class InstanceTemplateFileResource extends RowResource {
         return Map.copyOf(values);
     }
 
+
+    /**
+     * The path a file lands on and the mode it lands with -- the two answers an operator
+     * corrects while reading the list, and both staged into the container at the next
+     * DEPLOY rather than at this click.
+     *
+     * AIDEV-NOTE: CONTENT is excluded and always will be: it is the file BODY, encrypted
+     * at rest and routinely multi-line, so a one-line cell is the wrong instrument for
+     * it. Both cells still run {@code validatePathAndMode}, which is written
+     * containsKey-first and therefore correct on the one-entry map this lane sends.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(InstanceTemplateFileModel.CONTAINER_PATH, InstanceTemplateFileModel.MODE);
+    }
+
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        validatePathAndMode(coerced);
-        return super.persistRow(coerced, accessContext);
+        return super.persistRow(validatePathAndMode(coerced), accessContext);
     }
 
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        validatePathAndMode(coerced);
-        super.updateRow(existing, coerced, accessContext);
+        super.updateRow(existing, validatePathAndMode(coerced), accessContext);
     }
 
-    /** Absolute, traversal-free path; octal mode (the StackFileResource contract). */
-    static void validatePathAndMode(@NonNull Map<String, Object> coerced) {
+    /**
+     * Absolute, traversal-free path; octal mode (the StackFileResource contract).
+     *
+     * AIDEV-NOTE: it CANONICALISES (the trimmed path is written back), so it returns a
+     * COPY instead of mutating what it was handed. The map the framework passes is
+     * immutable on the inline cell lane, where this used to throw an
+     * UnsupportedOperationException the pipeline then reported as the generic
+     * "save_failed" -- a refusal with no reason, on a write that was perfectly valid.
+     *
+     * @return the coerced values with the path canonicalised
+     */
+    static @NonNull Map<String, Object> validatePathAndMode(@NonNull Map<String, Object> raw) {
+        Map<String, Object> coerced = CmsSupport.mutable(raw);
         if (coerced.containsKey("container_path")) {
             String path = String.valueOf(coerced.get("container_path")).trim();
             if (!path.startsWith("/") || path.contains("..")) {
@@ -123,5 +148,6 @@ public final class InstanceTemplateFileResource extends RowResource {
                     CmsSupport.violationText("file_mode_format"));
             }
         }
+        return coerced;
     }
 }

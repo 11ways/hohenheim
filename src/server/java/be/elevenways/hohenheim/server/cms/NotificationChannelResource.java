@@ -141,22 +141,48 @@ public final class NotificationChannelResource extends RowResource {
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
-        validate(values);
+        validate(values, null);
         values.put("kind", NotificationChannelModel.KIND_WEBHOOK);
         return super.persistRow(values, accessContext);
+    }
+
+    /**
+     * The name only.
+     *
+     * AIDEV-NOTE: FORMAT is deliberately full-form only. It decides the PAYLOAD SHAPE a
+     * webhook receives, and a Slack-shaped body posted to a Discord DSN is accepted by
+     * nobody and reported by nothing -- delivery just stops, silently. URL is the endpoint
+     * credential itself. And an empty {@code events} list means RECEIVE EVERYTHING, which
+     * is why this resource has no quick-add bar either: a one-line create would wire an
+     * alert firehose to a URL nobody re-read.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(NotificationChannelModel.NAME);
     }
 
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
-        validate(values);
+        validate(values, existing);
         values.put("kind", NotificationChannelModel.KIND_WEBHOOK);
         super.updateRow(existing, values, accessContext);
     }
 
-    private static void validate(@NonNull Map<String, Object> coerced) {
-        Object urlValue = coerced.get("url");
+    /**
+     * URL scheme and event vocabulary.
+     *
+     * AIDEV-NOTE: {@code existing} is the PARTIAL-WRITE fallback and it is load-bearing.
+     * The inline cell lane hands updateRow a map holding EXACTLY ONE entry, so reading
+     * {@code url} straight off the coerced map made a rename refuse with "url_scheme" --
+     * a refusal naming a field the operator never touched. Absent key means leave-alone
+     * everywhere in this pipeline; a validator must read the STORED value there, never
+     * treat absence as blank.
+     */
+    private static void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
+        Object urlValue = coerced.containsKey("url") ? coerced.get("url")
+            : existing != null ? existing.get(NotificationChannelModel.URL) : null;
         String url = urlValue != null ? String.valueOf(urlValue).trim() : "";
         if (url.isEmpty() || !(url.startsWith("http://") || url.startsWith("https://"))) {
             throw Violations.ofField("url", null, CmsSupport.violationText("url_scheme"));
