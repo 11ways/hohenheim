@@ -41,6 +41,9 @@ class ServerOverviewTest extends HohenheimTestBase {
 
     private static Integer hostId;
 
+    /** The quarantine alert's own title copy, which identifies the band. */
+    private static final String QUARANTINE_TITLE = "This host is quarantined";
+
     /**
      * Rendering the server DETAIL FORM contacts no daemon and overwrites nothing: a page
      * view is a read. Pre-fix the {@code live_overview} Computed called
@@ -191,9 +194,12 @@ class ServerOverviewTest extends HohenheimTestBase {
             true, Instant.now().minus(Duration.ofDays(365)), null));
         HttpResponse<String> stale = get("/admin/servers/" + hostId + "/page/overview");
         assertThat(stale.statusCode()).isEqualTo(200);
+        // The unmeasured posture is the usage widget's own built-in state now (the page
+        // used to spell it in a bespoke template branch); the SEMANTIC assertion is
+        // unchanged -- a named state plus its reason, never a bar.
         assertThat(stale.body())
             .as("step 1: a stale reading is an explicit unmeasured state")
-            .contains("data-capacity-state=\"unmeasured\"");
+            .contains("widget-usage-unmeasured");
         assertThat(stale.body())
             .as("step 1: and no usage bar renders over a number nobody re-read")
             .doesNotContain("<pl-usage-bar");
@@ -205,7 +211,7 @@ class ServerOverviewTest extends HohenheimTestBase {
         HttpResponse<String> fresh = get("/admin/servers/" + hostId + "/page/overview");
         assertThat(fresh.body())
             .as("step 2: a fresh measurement renders a real usage bar")
-            .contains("data-capacity-state=\"measured\"")
+            .doesNotContain("widget-usage-unmeasured")
             .contains("<pl-usage-bar");
     }
 
@@ -253,7 +259,9 @@ class ServerOverviewTest extends HohenheimTestBase {
 
         HttpResponse<String> overview = get("/admin/servers/" + hostId + "/page/overview");
         String body = overview.body();
-        assertThat(body).as("the banner renders").contains("data-quarantine-banner");
+        // The banner is the framework's alert widget now, so it is identified by the
+        // copy it carries rather than by a hand-written data attribute.
+        assertThat(body).as("the banner renders").contains(QUARANTINE_TITLE);
         assertThat(body).as("with the stored reason")
             .contains("host key contradicted the pinned identity");
         assertThat(body)
@@ -266,7 +274,7 @@ class ServerOverviewTest extends HohenheimTestBase {
         Models.get(ServerModel.class).save(cleared);
         assertThat(get("/admin/servers/" + hostId + "/page/overview").body())
             .as("positive anchor: an unquarantined host renders no banner")
-            .doesNotContain("data-quarantine-banner");
+            .doesNotContain(QUARANTINE_TITLE);
     }
 
     /**

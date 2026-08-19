@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.instance.InstanceActionsView;
+import be.elevenways.hohenheim.InstanceEndpointsWidget;
 import be.elevenways.hohenheim.instance.InstanceBlockerView;
 import be.elevenways.hohenheim.instance.InstanceDiskView;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
@@ -12,52 +12,68 @@ import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
-import be.elevenways.protoblast.common.http.Uri;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
-import be.elevenways.zenit.cms.common.render.action.LinkActionState;
-import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.server.render.action.ActionStateTranslator;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.RecordDashboardPage;
+import be.elevenways.zenit.cms.common.widget.RecordActionsWidget;
+import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.result.ActionResult;
-import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.server.http.ReturnTarget;
+import be.elevenways.zenit.widget.common.WidgetInstance;
+import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.ActionButtonWidget;
+import be.elevenways.zenit.widget.common.builtin.AlertVariant;
+import be.elevenways.zenit.widget.common.builtin.AlertWidget;
+import be.elevenways.zenit.widget.common.builtin.FactWidget;
+import be.elevenways.zenit.widget.common.builtin.SectionWidget;
+import be.elevenways.zenit.widget.common.builtin.StatusWidget;
+import be.elevenways.zenit.widget.common.builtin.UsageBarWidget;
+import be.elevenways.zenit.widget.common.data.NoticeData;
+import be.elevenways.zenit.widget.common.data.UsageData;
+import be.elevenways.zenit.widget.common.data.WidgetBadge;
+import be.elevenways.zenit.widget.common.data.WidgetFact;
+import be.elevenways.zenit.widget.common.surface.SurfaceActionOutcome;
+import be.elevenways.zenit.widget.common.surface.SurfaceActionRequest;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Overview tab on an instance, and the list row's own target: status and power in one
- * place, the STORED disk observation that until now only the attention collector read,
- * and the public endpoint resolved out of the port ledger.
+ * Overview tab on an instance, and the record's own front door: status and power in one
+ * place, the STORED disk observation that until this page shipped only the attention
+ * collector read, and the public endpoint resolved out of the port ledger.
  *
- * Composition, not construction ({@link ServerOverviewPage} is the shape this follows):
- * every button is one of the HOST RESOURCE'S own row actions projected through the
- * standard action-state translation, so a /manage reader gets exactly the shorter list
- * {@link ManageInstanceResource} declares, with each action's per-record capability
- * predicate already applied.
+ * The page IS a widget tree ({@link RecordDashboardPage}), so the action row is the
+ * resource's own row actions through {@code zenitcms:record_actions}, and the bespoke
+ * endpoint table is an app-local widget type rather than a hand-rendered template.
+ *
+ * AIDEV-NOTE: the delegated projection is applied FIELD BY FIELD in {@link #widgets},
+ * not by trusting the resource: this is the SAME page class on both panels
+ * ({@link ManageInstanceResource} registers it verbatim), so the omissions are here or
+ * nowhere. See the AIDEV-NOTEs at each censored band for what is dropped and why.
  */
-public final class InstanceOverviewPage implements RecordScopedPage<Row> {
+public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
 
     public static final String SLUG = "overview";
 
+    /** The one widget-native action on this page: re-read the stored evidence. */
+    static final String REFRESH_ACTION = "refresh";
+
     private final InstanceResource resource;
-    private final ActionStateTranslator actions = new ActionStateTranslator();
 
     InstanceOverviewPage(@NonNull InstanceResource resource) {
         this.resource = resource;
@@ -69,53 +85,134 @@ public final class InstanceOverviewPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("gauge"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row instance) {
+    public @NonNull WidgetTree widgets(@NonNull Row instance, @NonNull AccessContext accessContext) {
+        Conduit conduit = accessContext.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
-        String name = String.valueOf((Object) instance.get(InstanceModel.NAME));
         int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
-        String panel = CmsSupport.panelSlug(conduit);
-        // The delegated projection, applied FIELD BY FIELD rather than by trusting the
-        // resource: this page is the SAME class on both panels (ManageInstanceResource
-        // registers it verbatim), so the omissions are here or nowhere. See the two
-        // AIDEV-NOTEs below for what is dropped and what deliberately is not.
+        String panelSlug = CmsSupport.panelSlug(conduit);
         boolean delegated = CmsSupport.isDelegatedPanel(conduit);
-        String overviewUrl = CmsRoutes.subpage(panel, this.resource.slug(), instanceId, SLUG)
-            .toUrl();
+        LocaleChain locales = conduit.getLocales();
+        MessageResolver resolver = conduit.getMessageResolver();
 
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "instance_overview", name));
-        vars.put("instanceName", name);
-        vars.put("instanceId", instanceId);
-        vars.put("statusBadge", EnumBadgeState.of(InstanceModel.STATUS,
-            instance.get(InstanceModel.STATUS)));
-        vars.put("kindBadge", badgeOf(InstanceModel.KIND, instance.get(InstanceModel.KIND)));
-        vars.put("installBadge", badgeOf(InstanceModel.INSTALL_STATE,
-            instance.get(InstanceModel.INSTALL_STATE)));
+        List<WidgetInstance> state = new ArrayList<>();
+        state.add(new WidgetInstance(StatusWidget.ID,
+            Map.of("label", HohenheimWidgetCopy.localized("state", "instance_overview")))
+            .withData(statusBadges(instance, locales, resolver)));
+
         // AIDEV-NOTE: the host is operator inventory, and BOTH halves leak it -- the name
         // is the machine's identity and the link carries its numeric server id, which is
         // the id every host-scoped admin route is keyed on. A tenant is told WHAT their
         // workload is doing, never WHERE it runs; the endpoint list below is the one
-        // address they legitimately get, because it is the address they connect to.
-        vars.put("hostName", delegated ? "" : ServerModel.nameOf(serverId));
-        vars.put("hostTarget", delegated ? null
-            : CmsRoutes.subpage(panel, "servers", serverId, ServerOverviewPage.SLUG));
+        // address they legitimately get, because it is the address they connect to. The
+        // censoring is the fact simply NOT BEING ADDED to the delegated tree.
+        if (!delegated) {
+            state.add(new WidgetInstance(FactWidget.ID, Map.of())
+                .withData(WidgetFact.link(
+                    text("host", "instance_overview", locales, resolver),
+                    ServerModel.nameOf(serverId),
+                    CmsRoutes.subpage(panelSlug, "servers", serverId, ServerOverviewPage.SLUG)
+                        .toUrl())));
+        }
+
         // AIDEV-NOTE: install_error is stamped with the daemon's or transport's OWN text
         // (InstanceInstalls stamps describe(IOException) and "exit N" plus the script's
         // output tail), so it names image registries, socket paths, host paths and ssh
         // failures. The install BADGE already tells the tenant the install failed, which
         // is the fact they can act on; the operator reads the reason on /admin.
-        vars.put("installError", delegated ? ""
-            : blankable(instance.get(InstanceModel.INSTALL_ERROR)));
-        vars.put("deployBlocker", deployBlockerOf(conduit, instance, serverId, delegated));
-        vars.put("disk", diskOf(instance, serverId));
-        vars.put("endpoints", endpointsOf(instanceId));
-        vars.put("actions", this.actionsOf(instance, accessContext, overviewUrl, panel));
-        vars.put("timeWording", RelativeTimeWording.resolve(
-            conduit.getLocales(), conduit.getMessageResolver()));
-        vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-overview"), vars);
+        String installError = instance.get(InstanceModel.INSTALL_ERROR);
+        if (!delegated && installError != null && !installError.isBlank()) {
+            state.add(alert(AlertVariant.DESTRUCTIVE, NoticeData.of(
+                text("install_error", "instance_overview", locales, resolver), installError)));
+        }
+
+        // The DECLARED precondition that will refuse the next deploy, stated where the
+        // operator already is. Deploy stays offered on purpose: the button is what proves
+        // the explanation is about a host, not about their own authority.
+        InstanceBlockerView blocker = deployBlockerOf(conduit, instance, serverId, delegated);
+        if (blocker.blocked()) {
+            String hostUrl = blocker.hostLinkable() && !delegated
+                ? CmsRoutes.subpage(panelSlug, "servers", serverId, ServerOverviewPage.SLUG).toUrl()
+                : null;
+            NoticeData notice = hostUrl == null
+                ? NoticeData.of(text("deploy_blocked", "instance_overview", locales, resolver),
+                    blocker.reason())
+                : NoticeData.link(text("deploy_blocked", "instance_overview", locales, resolver),
+                    blocker.reason(), hostUrl,
+                    Microcopy.of("deploy_blocked_fix").withFilter("scope", "instance_overview")
+                        .withArg("host", ServerModel.nameOf(serverId))
+                        .resolve(locales, resolver));
+            state.add(alert(AlertVariant.WARNING, notice));
+        }
+
+        Panel panel = PanelRegistry.getBySlug(panelSlug);
+        if (panel != null) {
+            state.add(new WidgetInstance(RecordActionsWidget.ID, Map.of())
+                .withData(RecordActionBands.forRecord(panel, this.resource, instance,
+                    accessContext, conduit)));
+        }
+        state.add(new WidgetInstance(ActionButtonWidget.ID, Map.of(
+            "label", HohenheimWidgetCopy.localized("refresh", "instance_overview"),
+            "action", REFRESH_ACTION,
+            "variant", "outline")));
+
+        List<WidgetInstance> bands = new ArrayList<>();
+        bands.add(band(new WidgetTree(state)));
+        bands.add(band(new WidgetTree(List.of(
+            new WidgetInstance(UsageBarWidget.ID,
+                Map.of("label", HohenheimWidgetCopy.localized("disk", "instance_overview")))
+                .withData(diskUsage(instance, serverId, locales, resolver))))));
+        bands.add(band(new WidgetTree(List.of(
+            new WidgetInstance(InstanceEndpointsWidget.ID, Map.of())
+                .withData(endpointsOf(instanceId))))));
+
+        // AIDEV-NOTE: a per-record RECENT ACTIVITY band is NOT here, and the reason is
+        // upstream: zenit-cms's `zenit.activity` record source deliberately does not
+        // PROJECT record_id (ActivitySources.register), and a source's rule vocabulary is
+        // derived from its projection -- so `ActivityRules.forRecord` cannot validate
+        // against it and every render 500s on `unknown_variable: record_id`. Filtering on
+        // the model alone would list every instance's activity on one instance's page,
+        // which is worse than absence. Projecting record_id (or giving the source an
+        // explicit vocabulary) is the framework-side fix; do not work around it here by
+        // re-registering the shared source, which would replace its gates wholesale.
+        return new WidgetTree(List.of(new WidgetInstance(SectionWidget.ID,
+            Map.of("css_class", "hh-instance-overview"), new WidgetTree(bands))));
+    }
+
+    /**
+     * The one widget-native action: re-render this record's tree from freshly read
+     * evidence. The adapter re-loads the record through the resource's access scope
+     * before this runs, so the tree it answers with is a new SSR-truth render.
+     */
+    @Override
+    public @NonNull SurfaceActionOutcome onSurfaceAction(@NonNull SurfaceActionRequest request,
+                                                         @NonNull Row instance,
+                                                         @NonNull AccessContext accessContext) {
+        if (REFRESH_ACTION.equals(request.action())) {
+            return SurfaceActionOutcome.tree(this.widgets(instance, accessContext));
+        }
+        return super.onSurfaceAction(request, instance, accessContext);
+    }
+
+    // -- status ----------------------------------------------------------------------
+
+    private static @NonNull List<WidgetBadge> statusBadges(@NonNull Row instance,
+                                                           @NonNull LocaleChain locales,
+                                                           @Nullable MessageResolver resolver) {
+        List<WidgetBadge> badges = new ArrayList<>();
+        badges.add(WidgetBadge.of(InstanceModel.STATUS, instance.get(InstanceModel.STATUS),
+            locales, resolver));
+        addBadge(badges, InstanceModel.KIND, instance.get(InstanceModel.KIND), locales, resolver);
+        addBadge(badges, InstanceModel.INSTALL_STATE, instance.get(InstanceModel.INSTALL_STATE),
+            locales, resolver);
+        return badges;
+    }
+
+    private static void addBadge(@NonNull List<WidgetBadge> badges, @NonNull EnumField field,
+                                 @Nullable Object raw, @NonNull LocaleChain locales,
+                                 @Nullable MessageResolver resolver) {
+        if (raw != null) {
+            badges.add(WidgetBadge.of(field, raw, locales, resolver));
+        }
     }
 
     // -- deploy blocker --------------------------------------------------------------
@@ -154,8 +251,8 @@ public final class InstanceOverviewPage implements RecordScopedPage<Row> {
                 return InstanceBlockerView.CLEAR;
             }
 
-            // The host-free sentence is decided by the SURFACE, exactly as hostName and
-            // installError are above: an operator opening /manage must see what a tenant
+            // The host-free sentence is decided by the SURFACE, exactly as the host fact and
+            // the install error are above: an operator opening /manage must see what a tenant
             // sees there. Every placement refusal interpolates the host's NAME, which is
             // operator inventory this panel blanks everywhere else.
             if (delegated) {
@@ -175,17 +272,33 @@ public final class InstanceOverviewPage implements RecordScopedPage<Row> {
     // -- disk ------------------------------------------------------------------------
 
     /**
-     * The STORED observation {@code ObserveInstanceDisk} stamps, which until this page
-     * shipped was read by {@code AttentionCollector} and by nothing else.
+     * The STORED observation {@code ObserveInstanceDisk} stamps, as the usage widget's
+     * own NOT-MEASURED-is-an-answer shape.
      *
-     * A null observation is SILENCE, exactly as the collector reads it: Docker enforces
-     * no root quota and stamps nothing, so the whole tier is unmeasured by contract and
-     * a percentage computed from zeros would be a fabricated reading.
+     * A null observation is SILENCE, exactly as {@code AttentionCollector} reads it:
+     * Docker enforces no root quota and stamps nothing, so the whole tier is unmeasured
+     * by contract and a percentage computed from zeros would be a fabricated reading.
      *
      * AIDEV-NOTE: "by contract" is a recorded DECISION, not an omission awaiting a fix --
      * the reasoning lives on {@code ResourceLimits} and in docs/instance-tier-plan.md
      * beside the runtime-limits gate clause. Read it before changing this branch.
      */
+    private static @NonNull UsageData diskUsage(@NonNull Row instance, int serverId,
+                                                @NonNull LocaleChain locales,
+                                                @Nullable MessageResolver resolver) {
+        InstanceDiskView disk = diskOf(instance, serverId);
+        if (!disk.measured() || !disk.enforced()) {
+            return UsageData.unmeasured(
+                Microcopy.of("not_measured_body").withFilter("scope", "instance_overview")
+                    .withArg("runtime", disk.runtime())
+                    .resolve(locales, resolver));
+        }
+        return UsageData.measured(disk.usedBytes(), disk.limitBytes(),
+            ByteText.human(disk.usedBytes()), ByteText.human(disk.limitBytes()),
+            disk.observedAtIso());
+    }
+
+    /** The stored disk observation as a view, for the attention collector and this page. */
     static @NonNull InstanceDiskView diskViewOf(@NonNull Row instance) {
         return diskOf(instance,
             ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
@@ -247,53 +360,23 @@ public final class InstanceOverviewPage implements RecordScopedPage<Row> {
         return v6 != null && !v6.isBlank() ? v6 : "";
     }
 
-    // -- actions ---------------------------------------------------------------------
-
-    /**
-     * The host resource's row actions for THIS record and viewer, targeting the standard
-     * invoke endpoint with {@code _return} pointing back at this page, so a
-     * Refresh/Toast result re-renders the page the operator is looking at.
-     */
-    private @NonNull InstanceActionsView actionsOf(@NonNull Row instance,
-                                                   @NonNull AccessContext accessContext,
-                                                   @NonNull String overviewUrl,
-                                                   @NonNull String panel) {
-        Object instanceId = instance.get(InstanceModel.ID);
-        // AIDEV-NOTE: RowAction.Url is Uri-typed, so the typed target is rendered here
-        // rather than concatenated; _return rides ReturnTarget.bind, never "?_return=" + x.
-        ActionStateTranslator.RowActionPresentation presentation =
-            this.actions.translateRowActionsForList(this.resource.rowActions(), instance,
-                (actionId, row) -> new Uri(ReturnTarget.bind(
-                    CmsRoutes.invokeRow(panel, this.resource.slug(), instanceId, actionId),
-                    overviewUrl).toUrl()),
-                accessContext);
-        Map<String, InvokeActionState> invokes = new LinkedHashMap<>();
-        for (InvokeActionState state : presentation.inlineInvokes()) {
-            invokes.put(state.id().getPath(), state);
-        }
-        for (InvokeActionState state : presentation.overflowInvokes()) {
-            invokes.put(state.id().getPath(), state);
-        }
-        Map<String, LinkActionState> links = new LinkedHashMap<>();
-        for (LinkActionState state : presentation.inlineLinks()) {
-            links.put(state.id().getPath(), state);
-        }
-        for (LinkActionState state : presentation.overflowLinks()) {
-            links.put(state.id().getPath(), state);
-        }
-        return new InstanceActionsView(
-            invokes.get("deploy_instance"), invokes.get("stop_instance"),
-            invokes.get("restart_instance"), invokes.get("install_instance"),
-            invokes.get("reinstall_instance"), invokes.get("app_update_instance"),
-            invokes.get("snapshot_instance"), invokes.get("backup_instance"),
-            links.get("migrate_instance"));
-    }
-
     // -- helpers ---------------------------------------------------------------------
 
-    private static @Nullable EnumBadgeState badgeOf(@NonNull EnumField field,
-                                                    @Nullable Object raw) {
-        return raw == null ? null : EnumBadgeState.of(field, raw);
+    private static @NonNull WidgetInstance alert(@NonNull AlertVariant variant,
+                                                 @NonNull NoticeData notice) {
+        return new WidgetInstance(AlertWidget.ID, Map.of("variant", variant.token()))
+            .withData(notice);
+    }
+
+    private static @NonNull WidgetInstance band(@NonNull WidgetTree children) {
+        return new WidgetInstance(SectionWidget.ID,
+            Map.of("css_class", "hh-overview-band"), children);
+    }
+
+    private static @NonNull String text(@NonNull String key, @NonNull String scope,
+                                        @NonNull LocaleChain locales,
+                                        @Nullable MessageResolver resolver) {
+        return Microcopy.of(key).withFilter("scope", scope).resolve(locales, resolver);
     }
 
     private static @NonNull String blankable(@Nullable String value) {

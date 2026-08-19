@@ -47,6 +47,7 @@ import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -218,16 +219,18 @@ public class InstanceResource extends RowResource {
     }
 
     /**
-     * The list row's title opens the OVERVIEW, not the edit form: the form edits five
+     * The record's front door is the OVERVIEW, not the edit form: the form edits five
      * columns, the overview is where an operator sees state, power, disk and endpoint.
      * The synthesized edit action still points at the form.
+     *
+     * AIDEV-NOTE: this replaced a {@code rowUrl} override spelling
+     * {@code CmsRoutes.subpage("admin", ...)}, which baked the PANEL SLUG into the
+     * resource and is why the delegated panel needed its own copy. The framework now
+     * derives the tab order, the row title link and the create landing per panel.
      */
     @Override
-    public @NonNull String rowUrl(@NonNull Row row) {
-        // Resource.rowUrl is String-typed (a zenit-cms boundary), so the typed target is
-        // rendered here rather than concatenated.
-        return CmsRoutes.subpage("admin", this.slug(), row.get(InstanceModel.ID),
-            InstanceOverviewPage.SLUG).toUrl();
+    public @Nullable String landingSubpage() {
+        return InstanceOverviewPage.SLUG;
     }
 
     @Override

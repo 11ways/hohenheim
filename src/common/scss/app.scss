@@ -275,11 +275,28 @@
     }
 
     // Host Overview tab (server records), instance Overview and instance Migrate:
-    // one card rhythm for every bespoke record page.
+    // one card rhythm for every record front door.
+    //
+    // The two overviews are widget TREES now, so their root class rides the outermost
+    // section widget and has to claim the dashboard grid's full width -- the cards
+    // inside it lay themselves out, exactly as the dashboard bands do.
+    .hh-server-overview,
+    .hh-instance-overview {
+        grid-column: 1 / -1;
+        min-width: 0;
+    }
+
     .hh-server-overview,
     .hh-instance-overview,
     .hh-instance-migrate {
         .hh-overview-card {
+            margin-bottom: var(--pl-space-md);
+        }
+
+        .hh-overview-band {
+            display: flex;
+            flex-direction: column;
+            gap: var(--pl-space-sm);
             margin-bottom: var(--pl-space-md);
         }
     }

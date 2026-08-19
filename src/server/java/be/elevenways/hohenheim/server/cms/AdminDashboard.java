@@ -7,19 +7,15 @@ import be.elevenways.hohenheim.OnboardingWidget;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.HohenheimRoles;
-import be.elevenways.protoblast.common.i18n.Locale;
-import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.DashboardPanelPeer;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.rules.Rule;
 import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
 import be.elevenways.zenit.common.orm.query.rules.RuleOperator;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
@@ -31,7 +27,6 @@ import be.elevenways.zenit.widget.common.builtin.StatWidget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -65,7 +60,7 @@ public final class AdminDashboard extends DashboardPanelPeer {
         // spamservice now, so bans are the only security records here).
         WidgetTree securityStats = new WidgetTree(List.of(
             new WidgetInstance(StatWidget.ID, Map.of(
-                "label", localized("active_bans", "dashboard"),
+                "label", HohenheimWidgetCopy.localized("active_bans", "dashboard"),
                 "source", "hohenheim.ban",
                 "rules", RuleGroup.and(Rule.of("active", RuleOperator.IS_TRUE)),
                 "icon", "ban",
@@ -101,7 +96,7 @@ public final class AdminDashboard extends DashboardPanelPeer {
             // firewall operator's own overview page, which they open on purpose.
         }
         widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
-                "title", localized("recent_activity", "dashboard"),
+                "title", HohenheimWidgetCopy.localized("recent_activity", "dashboard"),
                 "source", "zenit.activity",
                 "sort", "created_at",
                 "descending", true,
@@ -113,7 +108,7 @@ public final class AdminDashboard extends DashboardPanelPeer {
     private static @NonNull WidgetInstance stat(@NonNull String modelScope, @NonNull String sourceToken,
                                                 @NonNull String resourceSlug, @NonNull String icon) {
         return new WidgetInstance(StatWidget.ID, Map.of(
-            "label", localized("plural", modelScope),
+            "label", HohenheimWidgetCopy.localized("plural", modelScope),
             "source", sourceToken,
             "icon", icon,
             "link", CmsRoutes.list(ADMIN, resourceSlug).toUrl()));
@@ -124,12 +119,4 @@ public final class AdminDashboard extends DashboardPanelPeer {
             new WidgetTree(List.of(child)));
     }
 
-    private static @NonNull Map<Locale, String> localized(@NonNull String key, @NonNull String scope) {
-        Microcopy copy = Microcopy.of(key).withFilter("scope", scope);
-        Map<Locale, String> label = new LinkedHashMap<>();
-        for (Locale locale : ContentLocales.get()) {
-            label.put(locale, copy.resolve(LocaleChain.of(locale), Zenit.getMessageResolver()));
-        }
-        return label;
-    }
 }

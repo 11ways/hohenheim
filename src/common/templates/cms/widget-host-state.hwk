@@ -1,0 +1,10 @@
+{# The host's live contact state: the status dot, the state word and the last-contact
+   relative time. NOT a badge -- pl-badge would drop the dot's verdict and the timestamp,
+   which is the half an operator actually reads -- so it stays the same cell the host
+   list renders, moved here verbatim. #}
+{% declare widget: WidgetInstance %}
+{% declare data: HostStatusCell = null %}
+
+<div class="widget hh-host-state-widget">
+    {% render "hohenheim:cms/cell/host-status" var:value=data %}
+</div>

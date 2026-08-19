@@ -1,11 +1,15 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HostPreflightWidget;
+import be.elevenways.hohenheim.HostStateWidget;
+import be.elevenways.hohenheim.HostTrustWidget;
+import be.elevenways.hohenheim.HostWorkloadsWidget;
 import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.host.HostFactView;
+import be.elevenways.hohenheim.host.HostPreflightReportView;
 import be.elevenways.hohenheim.host.KernelIsolationView;
 import be.elevenways.hohenheim.host.PostureAcknowledgementView;
 import be.elevenways.hohenheim.host.PreflightCheckView;
-import be.elevenways.hohenheim.host.ServerActionsView;
 import be.elevenways.hohenheim.host.TrustLaneView;
 import be.elevenways.hohenheim.host.WorkloadView;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -23,51 +27,61 @@ import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.process.ProcessCapacity;
-import be.elevenways.protoblast.common.http.Uri;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
-import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.server.render.action.ActionStateTranslator;
+import be.elevenways.zenit.cms.common.resource.RecordDashboardPage;
+import be.elevenways.zenit.cms.common.widget.RecordActionsWidget;
+import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.result.ActionResult;
-import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.server.http.ReturnTarget;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.widget.common.WidgetInstance;
+import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.AlertVariant;
+import be.elevenways.zenit.widget.common.builtin.AlertWidget;
+import be.elevenways.zenit.widget.common.builtin.FactListWidget;
+import be.elevenways.zenit.widget.common.builtin.SectionWidget;
+import be.elevenways.zenit.widget.common.builtin.StatusWidget;
+import be.elevenways.zenit.widget.common.builtin.UsageBarWidget;
+import be.elevenways.zenit.widget.common.data.NoticeData;
+import be.elevenways.zenit.widget.common.data.UsageData;
+import be.elevenways.zenit.widget.common.data.WidgetBadge;
+import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 
 /**
- * Overview tab on a host record: the STORED evidence the machinery already keeps --
- * admission and quarantine, per-lane trust state, the full preflight report with
- * per-check timestamps, capacity bookings and the workloads that hold the host --
- * rendered structured instead of flattened into form-field sentences.
+ * Overview tab on a host record, and the record's own front door: the STORED evidence
+ * the machinery already keeps -- admission and quarantine, per-lane trust state, the
+ * full preflight report with per-check timestamps, capacity bookings and the workloads
+ * that hold the host -- rendered structured instead of flattened into form-field
+ * sentences.
  *
- * Read-only by design ({@link RecordScopedPage}); every mutation on the page is one of
- * the resource's own {@code RowAction}s, projected through the standard action-state
- * translation so confirmations, permissions and per-row visibility stay single-sourced.
+ * The page IS a widget tree ({@link RecordDashboardPage}) and stays read-only: every
+ * mutation on it is one of the resource's own {@code RowAction}s, projected through
+ * {@code zenitcms:record_actions} so confirmations, permissions and per-row visibility
+ * stay single-sourced.
  */
-public final class ServerOverviewPage implements RecordScopedPage<Row> {
+public final class ServerOverviewPage extends RecordDashboardPage<Row> {
 
     public static final String SLUG = "overview";
 
     private final ServerResource resource;
-    private final ActionStateTranslator actions = new ActionStateTranslator();
 
     ServerOverviewPage(@NonNull ServerResource resource) {
         this.resource = resource;
@@ -79,41 +93,124 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("gauge"); }
 
     @Override
-    public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
-                                           @NonNull AccessContext accessContext,
-                                           @NonNull Row server) {
-        String name = server.get(ServerModel.NAME);
+    public @NonNull WidgetTree widgets(@NonNull Row server, @NonNull AccessContext accessContext) {
+        Conduit conduit = accessContext.conduit();
         Integer serverId = server.get(ServerModel.ID);
-        String panel = CmsSupport.panelSlug(conduit);
-        String overviewUrl = CmsRoutes.subpage(panel, "servers", serverId, SLUG).toUrl();
+        String panelSlug = CmsSupport.panelSlug(conduit);
+        LocaleChain locales = conduit.getLocales();
+        MessageResolver resolver = conduit.getMessageResolver();
 
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "server_overview", name));
-        vars.put("serverName", name);
-        vars.put("runtimeBadge", EnumBadgeState.of(ServerModel.RUNTIME,
-            ServerModel.runtimeOf(server)));
-        vars.put("admissionBadge", badgeOf(ServerModel.ADMISSION,
-            server.get(ServerModel.ADMISSION)));
-        vars.put("postureBadge", badgeOf(ServerModel.POSTURE,
-            server.get(ServerModel.POSTURE)));
-        vars.put("statusCell", ServerResource.statusCellOf(server));
-        vars.put("lastError", blankable(server.get(ServerModel.LAST_ERROR)));
-        vars.put("quarantinedAtIso", isoOf(server.get(ServerModel.QUARANTINED_AT)));
-        vars.put("quarantineReason", blankable(server.get(ServerModel.QUARANTINE_REASON)));
-        vars.put("trustLanes", trustLanes(server));
-        vars.put("acknowledgement", acknowledgementViewOf(server));
-        vars.put("kernel", kernelIsolationViewOf(server));
-        vars.put("preflightChecks", preflightChecks(server));
-        vars.put("preflightFacts", preflightFacts(server));
-        vars.put("probedAtIso", isoOf(server.get(ServerModel.PROBED_AT)));
-        vars.put("preflightOk", Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK)));
-        vars.put("capacity", capacityOf(server, serverId));
-        vars.put("workloads", workloadsOf(panel, serverId));
-        vars.put("actions", this.actionsOf(server, accessContext, overviewUrl));
-        vars.put("timeWording", RelativeTimeWording.resolve(
-            conduit.getLocales(), conduit.getMessageResolver()));
-        vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/server-overview"), vars);
+        List<WidgetInstance> bands = new ArrayList<>();
+
+        // Quarantine is LOUD and leads: the repin ceremony that clears it renders in the
+        // action band below, as the resource's own confirmed row action.
+        Instant quarantinedAt = server.get(ServerModel.QUARANTINED_AT);
+        if (quarantinedAt != null) {
+            String reason = blankable(server.get(ServerModel.QUARANTINE_REASON));
+            String body = reason.isBlank()
+                ? text("quarantine_clears_by_repin", locales, resolver)
+                : reason + " " + text("quarantine_clears_by_repin", locales, resolver);
+            bands.add(band(new WidgetTree(List.of(
+                alert(AlertVariant.DESTRUCTIVE,
+                    NoticeData.of(text("quarantined_title", locales, resolver), body))))));
+        }
+
+        List<WidgetInstance> state = new ArrayList<>();
+        state.add(new WidgetInstance(StatusWidget.ID,
+            Map.of("label", HohenheimWidgetCopy.localized("state", "server_overview")))
+            .withData(stateBadges(server, locales, resolver)));
+        state.add(new WidgetInstance(HostStateWidget.ID, Map.of())
+            .withData(ServerResource.statusCellOf(server)));
+
+        String lastError = blankable(server.get(ServerModel.LAST_ERROR));
+        if (!lastError.isBlank()) {
+            state.add(alert(AlertVariant.DESTRUCTIVE,
+                NoticeData.of(text("last_error", locales, resolver), lastError)));
+        }
+
+        PostureAcknowledgementView acknowledgement = acknowledgementViewOf(server);
+        if (acknowledgement.needed()) {
+            state.add(new WidgetInstance(FactListWidget.ID, Map.of())
+                .withData(List.of(WidgetFact.badge(
+                    text("acknowledgement", locales, resolver),
+                    acknowledgementBadge(acknowledgement, locales, resolver)))));
+        }
+
+        Panel panel = PanelRegistry.getBySlug(panelSlug);
+        if (panel != null) {
+            state.add(new WidgetInstance(RecordActionsWidget.ID, Map.of())
+                .withData(RecordActionBands.forRecord(panel, this.resource, server,
+                    accessContext, conduit)));
+        }
+        bands.add(band(new WidgetTree(state)));
+
+        List<TrustLaneView> lanes = trustLanes(server);
+        if (!lanes.isEmpty()) {
+            bands.add(band(new WidgetTree(List.of(
+                new WidgetInstance(HostTrustWidget.ID, Map.of()).withData(lanes)))));
+        }
+
+        bands.add(band(new WidgetTree(List.of(
+            new WidgetInstance(HostPreflightWidget.ID, Map.of()).withData(preflightReport(server))))));
+
+        HostCapacityView capacity = capacityOf(server, serverId);
+        bands.add(band(new WidgetTree(List.of(
+            new WidgetInstance(UsageBarWidget.ID,
+                Map.of("label", HohenheimWidgetCopy.localized("capacity", "server_overview")))
+                .withData(capacityUsage(capacity, locales, resolver)),
+            new WidgetInstance(FactListWidget.ID, Map.of())
+                .withData(capacityFacts(capacity, locales, resolver))))));
+
+        bands.add(band(new WidgetTree(List.of(
+            new WidgetInstance(HostWorkloadsWidget.ID, Map.of())
+                .withData(workloadsOf(panelSlug, serverId))))));
+
+        // AIDEV-NOTE: no per-record RECENT ACTIVITY band -- see the same note on
+        // InstanceOverviewPage: the shared `zenit.activity` source does not project
+        // record_id, so ActivityRules.forRecord is not expressible against its
+        // vocabulary yet.
+
+        return new WidgetTree(List.of(new WidgetInstance(SectionWidget.ID,
+            Map.of("css_class", "hh-server-overview"), new WidgetTree(bands))));
+    }
+
+    // -- state ---------------------------------------------------------------------
+
+    private static @NonNull List<WidgetBadge> stateBadges(@NonNull Row server,
+                                                          @NonNull LocaleChain locales,
+                                                          @Nullable MessageResolver resolver) {
+        List<WidgetBadge> badges = new ArrayList<>();
+        badges.add(WidgetBadge.of(ServerModel.RUNTIME, ServerModel.runtimeOf(server),
+            locales, resolver));
+        addBadge(badges, ServerModel.ADMISSION, server.get(ServerModel.ADMISSION), locales, resolver);
+        addBadge(badges, ServerModel.POSTURE, server.get(ServerModel.POSTURE), locales, resolver);
+        return badges;
+    }
+
+    private static void addBadge(@NonNull List<WidgetBadge> badges, @NonNull EnumField field,
+                                 @Nullable Object raw, @NonNull LocaleChain locales,
+                                 @Nullable MessageResolver resolver) {
+        if (raw != null) {
+            badges.add(WidgetBadge.of(field, raw, locales, resolver));
+        }
+    }
+
+    /** The acknowledgement state as ONE pill: current, out of date, or never given. */
+    private static @NonNull WidgetBadge acknowledgementBadge(
+            @NonNull PostureAcknowledgementView acknowledgement,
+            @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
+        if (acknowledgement.current()) {
+            return WidgetBadge.of(Microcopy.of("ack_current").withFilter("scope", "server_overview")
+                .withArg("actor", acknowledgement.actorLabel())
+                .withArg("version", String.valueOf(acknowledgement.version()))
+                .resolve(locales, resolver), "success", null);
+        }
+        if (acknowledgement.stale()) {
+            return WidgetBadge.of(Microcopy.of("ack_stale").withFilter("scope", "server_overview")
+                .withArg("version", String.valueOf(acknowledgement.requiredVersion()))
+                .resolve(locales, resolver), "destructive", null);
+        }
+        return WidgetBadge.of(text("ack_missing", locales, resolver), "destructive", null);
     }
 
     // -- trust ---------------------------------------------------------------------
@@ -188,6 +285,17 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
 
     // -- preflight -----------------------------------------------------------------
 
+    /** The whole stored report as one payload: kernel verdict, checks, facts and stamp. */
+    private static @NonNull HostPreflightReportView preflightReport(@NonNull Row server) {
+        Instant probedAt = server.get(ServerModel.PROBED_AT);
+        return new HostPreflightReportView(
+            kernelIsolationViewOf(server),
+            preflightChecks(server),
+            preflightFacts(server),
+            probedAt != null ? probedAt.toString() : null,
+            Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK)));
+    }
+
     /** Every stored check with its own status/required/detail/timestamp. */
     private static @NonNull List<PreflightCheckView> preflightChecks(@NonNull Row server) {
         List<PreflightCheckView> checks = new ArrayList<>();
@@ -251,6 +359,50 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
             maxAge != null ? maxAge : 0);
     }
 
+    /**
+     * The booking bar, with UNMEASURED as a first-class answer: no usable memory reading
+     * means this host has no placement budget at all, and a zero bar there would read as
+     * an empty host.
+     */
+    private static @NonNull UsageData capacityUsage(@NonNull HostCapacityView capacity,
+                                                    @NonNull LocaleChain locales,
+                                                    @Nullable MessageResolver resolver) {
+        if (!capacity.measured()) {
+            String reason = capacity.stale()
+                ? Microcopy.of("evidence_stale").withFilter("scope", "server_overview")
+                    .withArg("hours", String.valueOf(capacity.maxAgeHours()))
+                    .resolve(locales, resolver)
+                : text("unmeasured_body", locales, resolver);
+            return UsageData.unmeasured(reason);
+        }
+        return UsageData.measured(capacity.bookedMb(), capacity.budgetMb(),
+            megabytes(capacity.bookedMb()), megabytes(capacity.budgetMb()),
+            capacity.measuredAtIso());
+    }
+
+    /** The numbers the bar itself cannot show: what is still bookable, and by whom. */
+    private static @NonNull List<WidgetFact> capacityFacts(@NonNull HostCapacityView capacity,
+                                                           @NonNull LocaleChain locales,
+                                                           @Nullable MessageResolver resolver) {
+        List<WidgetFact> facts = new ArrayList<>();
+        if (!capacity.measured()) {
+            return facts;
+        }
+        facts.add(WidgetFact.of(text("booked", locales, resolver), megabytes(capacity.bookedMb())));
+        facts.add(WidgetFact.of(text("budget", locales, resolver), megabytes(capacity.budgetMb())));
+        facts.add(WidgetFact.of(text("bookable", locales, resolver),
+            megabytes(capacity.bookableMb())));
+        if (capacity.processBookedMb() > 0) {
+            facts.add(WidgetFact.of(text("process_booked", locales, resolver),
+                megabytes(capacity.processBookedMb())));
+        }
+        return facts;
+    }
+
+    private static @NonNull String megabytes(int value) {
+        return value + " MB";
+    }
+
     private static int clampInt(long value) {
         return (int) Math.min(Integer.MAX_VALUE, Math.max(0, value));
     }
@@ -295,44 +447,6 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
         return workloads;
     }
 
-    // -- actions -------------------------------------------------------------------
-
-    /**
-     * The resource's row actions for THIS row and viewer, targeting the standard invoke
-     * endpoint with {@code _return} pointing back at the overview page.
-     */
-    private @NonNull ServerActionsView actionsOf(@NonNull Row server,
-                                                 @NonNull AccessContext accessContext,
-                                                 @NonNull String overviewUrl) {
-        Object serverId = server.get(ServerModel.ID);
-        // AIDEV-NOTE: RowAction.Url is Uri-typed, hence the render here. The panel slug is
-        // the literal "admin" this page already produced -- the server resource is
-        // installation administration and the URL must not move; converting the SHAPE is
-        // this change, converting the PANEL would be a behaviour change.
-        ActionStateTranslator.RowActionPresentation presentation =
-            this.actions.translateRowActionsForList(this.resource.rowActions(), server,
-                (actionId, row) -> new Uri(ReturnTarget.bind(
-                    CmsRoutes.invokeRow("admin", "servers", serverId, actionId),
-                    overviewUrl).toUrl()),
-                accessContext);
-        Map<String, InvokeActionState> byPath = new LinkedHashMap<>();
-        for (InvokeActionState state : presentation.inlineInvokes()) {
-            byPath.put(state.id().getPath(), state);
-        }
-        for (InvokeActionState state : presentation.overflowInvokes()) {
-            byPath.put(state.id().getPath(), state);
-        }
-        return new ServerActionsView(
-            byPath.get("scan_host_key"), byPath.get("confirm_host_key"),
-            byPath.get("repin_host_key"), byPath.get("rotate_host_key"),
-            byPath.get("scan_incus_cert"), byPath.get("confirm_incus_cert"),
-            byPath.get("repin_incus_cert"), byPath.get("rotate_incus_cert"),
-            byPath.get("probe_server"), byPath.get("preflight_server"),
-            byPath.get("admit_server"), byPath.get("cordon_server"),
-            byPath.get("uncordon_server"), byPath.get("drain_server"),
-            byPath.get("reap_controller_objects"), byPath.get("acknowledge_posture"));
-    }
-
     // -- helpers -------------------------------------------------------------------
 
     private static @Nullable EnumBadgeState badgeOf(@NonNull EnumField field,
@@ -340,8 +454,20 @@ public final class ServerOverviewPage implements RecordScopedPage<Row> {
         return raw == null ? null : EnumBadgeState.of(field, raw);
     }
 
-    private static @Nullable String isoOf(@Nullable Instant instant) {
-        return instant != null ? instant.toString() : null;
+    private static @NonNull WidgetInstance alert(@NonNull AlertVariant variant,
+                                                 @NonNull NoticeData notice) {
+        return new WidgetInstance(AlertWidget.ID, Map.of("variant", variant.token()))
+            .withData(notice);
+    }
+
+    private static @NonNull WidgetInstance band(@NonNull WidgetTree children) {
+        return new WidgetInstance(SectionWidget.ID,
+            Map.of("css_class", "hh-overview-band"), children);
+    }
+
+    private static @NonNull String text(@NonNull String key, @NonNull LocaleChain locales,
+                                        @Nullable MessageResolver resolver) {
+        return Microcopy.of(key).withFilter("scope", "server_overview").resolve(locales, resolver);
     }
 
     private static @NonNull String blankable(@Nullable String value) {

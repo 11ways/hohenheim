@@ -1,0 +1,104 @@
+{# The stored preflight report, moved verbatim from the old bespoke overview template:
+   the kernel-truth verdict, every check with its own stamp and required/advisory flag,
+   and the measured facts. No live probe happens here -- this reads what preflight wrote. #}
+{% declare widget: WidgetInstance %}
+{% declare data: HostPreflightReportView = null %}
+
+<pl-card class="widget hh-overview-card">
+    <pl-card-header>
+        <pl-card-title>{{ t("preflight_report", scope: "server_overview") }}</pl-card-title>
+        {% if data != null && data.probedAtIso != null %}
+        <pl-card-description>
+            {{ t("last_preflight", scope: "server_overview") }}
+            <pl-relative-time datetime={% data.probedAtIso %} title={% data.probedAtIso %}></pl-relative-time>
+            {% if data.passed %}
+            <pl-badge variant="success">{{ t("verdict_passed", scope: "server_overview") }}</pl-badge>
+            {% else %}
+            <pl-badge variant="destructive">{{ t("verdict_failed", scope: "server_overview") }}</pl-badge>
+            {% /if %}
+        </pl-card-description>
+        {% /if %}
+    </pl-card-header>
+    <pl-card-content>
+        {% if data != null && data.kernel != null %}
+        <p class="hh-kernel-state" data-kernel-isolation="1">
+            <span class="hh-trust-label">{{ t("kernel_isolation", scope: "server_overview") }}</span>
+            {% if data.kernel.required == false %}
+            <pl-badge variant="secondary">{{ t("kernel_not_required", scope: "server_overview") }}</pl-badge>
+            {% elseif data.kernel.laneAvailable == false %}
+            <pl-badge variant="destructive">{{ t("kernel_no_lane", scope: "server_overview") }}</pl-badge>
+            {% elseif data.kernel.proven %}
+            <pl-badge variant="success">{{ t("kernel_proven", scope: "server_overview") }}</pl-badge>
+            {% if data.kernel.checkedAtIso != null %}
+            <pl-relative-time datetime={% data.kernel.checkedAtIso %} title={% data.kernel.checkedAtIso %}></pl-relative-time>
+            {% /if %}
+            {% else %}
+            <pl-badge variant="destructive">{{ t("kernel_unproven", scope: "server_overview") }}</pl-badge>
+            {% /if %}
+            {% if data.kernel.endpointNote != "" %}
+            <span class="hh-kernel-endpoint">{{ t("kernel_endpoint_note", scope: "server_overview", socket: data.kernel.endpointNote) }}</span>
+            {% /if %}
+        </p>
+        {% /if %}
+        {% if data != null && data.checks %}
+        <pl-table>
+            <pl-table-header><pl-table-row>
+                <pl-table-head>{{ t("check", scope: "server_overview") }}</pl-table-head>
+                <pl-table-head>{{ t("status", scope: "server_overview") }}</pl-table-head>
+                <pl-table-head>{{ t("required", scope: "server_overview") }}</pl-table-head>
+                <pl-table-head>{{ t("detail", scope: "server_overview") }}</pl-table-head>
+                <pl-table-head>{{ t("checked_at", scope: "server_overview") }}</pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                {% each data.checks as check %}
+                <pl-table-row>
+                    <pl-table-cell><code>{{ check.name }}</code></pl-table-cell>
+                    <pl-table-cell><pl-badge variant={% check.statusVariant %}>{{ check.status }}</pl-badge></pl-table-cell>
+                    <pl-table-cell>
+                        {% if check.required %}
+                        <pl-badge variant="outline">{{ t("required", scope: "server_overview") }}</pl-badge>
+                        {% else %}
+                        <pl-badge variant="secondary">{{ t("advisory", scope: "server_overview") }}</pl-badge>
+                        {% /if %}
+                    </pl-table-cell>
+                    <pl-table-cell class="hh-check-detail">{{ check.detail }}</pl-table-cell>
+                    <pl-table-cell>
+                        {% if check.atIso != null %}
+                        <pl-relative-time datetime={% check.atIso %} title={% check.atIso %}></pl-relative-time>
+                        {% /if %}
+                    </pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </pl-table>
+        {% else %}
+        <pl-empty-state icon="stethoscope">
+            <pl-empty-state-title>{{ t("never_preflighted", scope: "server_overview") }}</pl-empty-state-title>
+            <pl-empty-state-description>{{ t("never_preflighted_hint", scope: "server_overview") }}</pl-empty-state-description>
+        </pl-empty-state>
+        {% /if %}
+        {% if data != null && data.facts %}
+        <h3 class="hh-facts-title">{{ t("facts", scope: "server_overview") }}</h3>
+        <pl-table>
+            <pl-table-header><pl-table-row>
+                <pl-table-head>{{ t("fact", scope: "server_overview") }}</pl-table-head>
+                <pl-table-head>{{ t("value", scope: "server_overview") }}</pl-table-head>
+                <pl-table-head>{{ t("measured_at", scope: "server_overview") }}</pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                {% each data.facts as fact %}
+                <pl-table-row>
+                    <pl-table-cell><code>{{ fact.name }}</code></pl-table-cell>
+                    <pl-table-cell>{{ fact.value }}</pl-table-cell>
+                    <pl-table-cell>
+                        {% if fact.measuredAtIso != null %}
+                        <pl-relative-time datetime={% fact.measuredAtIso %} title={% fact.measuredAtIso %}></pl-relative-time>
+                        {% /if %}
+                    </pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </pl-table>
+        {% /if %}
+    </pl-card-content>
+</pl-card>

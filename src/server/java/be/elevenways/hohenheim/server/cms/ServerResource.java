@@ -20,7 +20,6 @@ import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -148,13 +147,14 @@ public final class ServerResource extends RowResource {
     @Override public int navOrder() { return 20; }
     @Override public @NonNull Icon icon() { return Icon.of("server"); }
 
-    /** The list row's title link opens the Overview page; the edit action keeps the form. */
+    /**
+     * The host record's front door is the Overview page; the edit action keeps the form.
+     * One declaration drives the tab order, the row title link and the create landing,
+     * each derived panel-correctly by the framework.
+     */
     @Override
-    public @NonNull String rowUrl(@NonNull Row row) {
-        // Resource.rowUrl is String-typed (a zenit-cms boundary), so the typed target is
-        // rendered here rather than concatenated.
-        return CmsRoutes.subpage("admin", "servers", row.get(ServerModel.ID),
-            ServerOverviewPage.SLUG).toUrl();
+    public @Nullable String landingSubpage() {
+        return ServerOverviewPage.SLUG;
     }
 
     @Override

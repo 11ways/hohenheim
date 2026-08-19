@@ -83,9 +83,12 @@ public final class DnsZoneResource extends RowResource {
             .label(FieldLabels.labelFor(DnsZoneModel.ENABLED)).build())
         .build();
 
+    /** The panel slug, referenced by the record resource's zone-scoped preset. */
+    public static final String SLUG = "dns-zones";
+
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_zone"); }
-    @Override public @NonNull String slug() { return "dns-zones"; }
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Model model() { return Models.get(DnsZoneModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }

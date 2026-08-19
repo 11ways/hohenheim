@@ -22,6 +22,8 @@ import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.cms.server.page.CmsRecordSources;
+import be.elevenways.zenit.common.data.RecordCreateProvider;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.Zenit;
@@ -228,11 +230,23 @@ public final class ManagePanel extends Panel {
         // ManageDnsRecordResource's form, which resolves the zone from the name it typed.
         // The write pipeline (TenantWrites) stays the gate either way -- this only decides
         // which surface is OFFERED.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(DnsRecordModel.class)
+        //
+        // AIDEV-NOTE: the provider is the FRAMEWORK's own resource-backed one
+        // (CmsRecordSources.createProviderFor), which is what zenit-cms derives for every
+        // creatable RowResource whose source it registers itself. hohenheim registers this
+        // source explicitly (DnsRecordModel declares no display fields, so nothing is
+        // derived for it) and an explicit source replaces the derived default whole -- so
+        // the create half has to be declared here or the bar simply never appears. It used
+        // to be a hand-written copy of that provider; nothing about the reduction or the
+        // persistence path was ever hohenheim-specific.
+        var dnsRecords = RecordSource.of(DnsRecordModel.class)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
-            .accessCriteria(ManagePanel::dnsRecordScope)
-            .creatable(new DnsQuickCreateProvider(), HohenheimSources.ADMIN_ACCESS)
-            .build());
+            .accessCriteria(ManagePanel::dnsRecordScope);
+        RecordCreateProvider dnsCreate = CmsRecordSources.createProviderFor(new DnsRecordResource());
+        if (dnsCreate != null) {
+            dnsRecords.creatable(dnsCreate, HohenheimSources.ADMIN_ACCESS);
+        }
+        RecordSourceRegistry.INSTANCE.register(dnsRecords.build());
 
         // Certificates: this REPLACES the common ADMIN_ACCESS-gated registration (which the
         // browser registry keeps, legitimately -- the scope below reads zenit-auth record

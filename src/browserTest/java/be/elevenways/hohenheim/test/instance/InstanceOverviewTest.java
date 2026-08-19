@@ -40,6 +40,9 @@ class InstanceOverviewTest extends HohenheimTestBase {
 
     private static Integer instanceId;
 
+    /** The deploy-blocker alert's own title copy, which identifies the band. */
+    private static final String BLOCKER_TITLE = "This instance cannot start yet";
+
     private int instance() {
         if (instanceId != null) {
             return instanceId;
@@ -84,8 +87,10 @@ class InstanceOverviewTest extends HohenheimTestBase {
 
         // 3. Power rides the resource's declared actions, translated through the standard
         //    invoke lane -- so their confirmations and capability gates come along.
+        // The band is the FRAMEWORK's record_actions widget now, so its marker is that
+        // widget's own class rather than a hand-written data attribute.
         assertThat(page.body()).as("step 3: the action block renders")
-            .contains("data-instance-actions");
+            .contains("cms-record-actions");
         assertThat(page.body())
             .withFailMessage("step 3: the deploy action is not projected onto the page")
             .contains("/action/deploy_instance");
@@ -155,9 +160,12 @@ class InstanceOverviewTest extends HohenheimTestBase {
 
         // 1. Docker stamps nothing: the honest rendering is a named state, not a bar.
         HttpResponse<String> unmeasured = get(overviewUrl());
+        // The not-measured posture is the usage widget's own built-in state now (the
+        // page used to spell it in a bespoke template branch); the SEMANTIC assertion is
+        // unchanged -- a named state, never a bar.
         assertThat(unmeasured.body())
             .withFailMessage("step 1: an unmeasured disk does not render an explicit state")
-            .contains("data-disk-state=\"not-measured\"");
+            .contains("widget-usage-unmeasured");
         assertThat(unmeasured.body())
             .withFailMessage("step 1: a zero usage bar rendered over a disk nobody"
                 + " measured -- that reads as an empty disk")
@@ -174,10 +182,10 @@ class InstanceOverviewTest extends HohenheimTestBase {
             HttpResponse<String> measured = get(overviewUrl());
             assertThat(measured.body())
                 .withFailMessage("step 2: a stored disk observation still renders nowhere")
-                .contains("data-disk-state=\"measured\"")
+                .doesNotContain("widget-usage-unmeasured")
                 .contains("<pl-usage-bar");
-            assertThat(measured.body()).as("step 2: with the stored numbers")
-                .contains("3221225472").contains("4294967296");
+            assertThat(measured.body()).as("step 2: with the stored numbers, humanized")
+                .contains("3.0 GB").contains("4.0 GB");
             assertThat(measured.body()).as("step 2: and the observation's own timestamp")
                 .contains("2026-08-11T08:00:00Z");
 
@@ -188,7 +196,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             instances.save(unenforced);
             assertThat(get(overviewUrl()).body())
                 .as("step 3: a zero ceiling is silence, never a full bar")
-                .contains("data-disk-state=\"not-measured\"");
+                .contains("widget-usage-unmeasured");
         } finally {
             Row cleared = instances.findById(instanceId);
             cleared.set(InstanceModel.DISK_USED_BYTES, (Long) null);
@@ -276,9 +284,11 @@ class InstanceOverviewTest extends HohenheimTestBase {
             //    the block" from "always shows a warning" -- and admission alone is not
             //    enough: the gate also asks for identity, posture, preflight and contact.
             HostFixtures.admitLocal();
+            // The banner is the framework's alert widget now, so it is identified by the
+            // copy it carries rather than by a hand-written data attribute.
             assertThat(get(overviewUrl()).body())
                 .as("step 1: an admitted host produces no blocker banner")
-                .doesNotContain("data-deploy-blocked");
+                .doesNotContain(BLOCKER_TITLE);
 
             // 2. Block the host and change NOTHING else.
             server = servers.findById(serverId);
@@ -289,7 +299,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             assertThat(blocked)
                 .withFailMessage("step 2: the overview does not state the blocking condition,"
                     + " so the only explanation is the toast that follows the click")
-                .contains("data-deploy-blocked");
+                .contains(BLOCKER_TITLE);
 
             // 3. It points at the host whose preflight/admit fixes it -- an explanation
             //    with no lever is only half an answer.
@@ -309,7 +319,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             assertThat(get(overviewUrl()).body())
                 .withFailMessage("step 5: the explanation did not survive a second render --"
                     + " it is action-scoped after all, which is the defect being fixed")
-                .contains("data-deploy-blocked");
+                .contains(BLOCKER_TITLE);
         } finally {
             Row restore = servers.findById(serverId);
             restore.set(ServerModel.ADMISSION, admissionBefore);

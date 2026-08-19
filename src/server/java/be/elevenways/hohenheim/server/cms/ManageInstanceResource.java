@@ -7,7 +7,6 @@ import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.RowAction;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -22,6 +21,7 @@ import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -127,13 +127,15 @@ public final class ManageInstanceResource extends InstanceResource {
         return pages;
     }
 
-    /** The delegated row title opens the same overview, under /manage. */
+    /**
+     * The delegated front door is the same overview -- and the URL is now DERIVED, so
+     * this declaration is byte-identical to the operator resource's and cannot drift
+     * to the wrong panel the way a hand-spelled {@code CmsRoutes.subpage("manage", ...)}
+     * could.
+     */
     @Override
-    public @NonNull String rowUrl(@NonNull Row row) {
-        // Resource.rowUrl is String-typed (a zenit-cms boundary), so the typed target is
-        // rendered here rather than concatenated.
-        return CmsRoutes.subpage("manage", this.slug(), row.get(InstanceModel.ID),
-            InstanceOverviewPage.SLUG).toUrl();
+    public @Nullable String landingSubpage() {
+        return InstanceOverviewPage.SLUG;
     }
 
     /**

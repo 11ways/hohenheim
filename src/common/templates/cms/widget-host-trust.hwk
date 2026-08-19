@@ -1,0 +1,63 @@
+{# Per-lane trust state, one card per declared lane: what is pinned, what the machine
+   offers now, and this controller's own client material. Moved verbatim from the old
+   bespoke overview template, minus the per-lane button rows -- every ceremony is one of
+   the resource's own row actions and now renders once, in the record_actions band, where
+   its confirmation and per-record capability gate travel with it. #}
+{% declare widget: WidgetInstance %}
+{% declare data: List<TrustLaneView> = null %}
+
+{% each data as lane %}
+<pl-card class="widget hh-overview-card" data-trust-lane={% lane.laneId %}>
+    <pl-card-header>
+        <pl-card-title>
+            {% if lane.laneId == "incus_cert" %}
+            {{ t("trust_incus", scope: "server_overview") }}
+            {% else %}
+            {{ t("trust_ssh", scope: "server_overview") }}
+            {% /if %}
+        </pl-card-title>
+    </pl-card-header>
+    <pl-card-content>
+        {% if lane.pinned %}
+        <div class="hh-trust-row">
+            <span class="hh-trust-label">{{ t("pinned_fingerprint", scope: "server_overview") }}</span>
+            <code>{{ lane.fingerprint }}</code>
+            <pl-copy-button value={% lane.fingerprint %} ariaLabel={% t("copy", scope: "server_overview") %}></pl-copy-button>
+            {% if lane.verified %}
+            <pl-badge variant="success">{{ t("confirmed", scope: "server_overview") }}</pl-badge>
+            {% else %}
+            <pl-badge variant="warning">{{ t("unconfirmed", scope: "server_overview") }}</pl-badge>
+            {% /if %}
+            {% if lane.pinnedAtIso != null %}
+            <span class="hh-trust-when">{{ t("pinned_at", scope: "server_overview") }}
+                <pl-relative-time datetime={% lane.pinnedAtIso %} title={% lane.pinnedAtIso %}></pl-relative-time>
+            </span>
+            {% /if %}
+        </div>
+        {% else %}
+        <p class="hh-trust-unpinned"><pl-badge variant="destructive">{{ t("not_pinned", scope: "server_overview") }}</pl-badge></p>
+        {% /if %}
+        {% if lane.offeredFingerprint != "" %}
+        <p class="hh-trust-mismatch" data-trust-mismatch="1">
+            <pl-icon name="triangle-exclamation"></pl-icon>
+            {{ t("offered_mismatch", scope: "server_overview", fingerprint: lane.offeredFingerprint) }}
+        </p>
+        {% /if %}
+        <div class="hh-trust-client">
+            <span class="hh-trust-label">
+                {% if lane.laneId == "incus_cert" %}
+                {{ t("client_cert", scope: "server_overview") }}
+                {% else %}
+                {{ t("client_key", scope: "server_overview") }}
+                {% /if %}
+            </span>
+            {% if lane.clientMaterial != "" %}
+            <pre class="hh-trust-material">{{ lane.clientMaterial }}</pre>
+            <pl-copy-button value={% lane.clientMaterial %} ariaLabel={% t("copy", scope: "server_overview") %}></pl-copy-button>
+            {% else %}
+            <span>{{ t("client_missing", scope: "server_overview") }}</span>
+            {% /if %}
+        </div>
+    </pl-card-content>
+</pl-card>
+{% /each %}

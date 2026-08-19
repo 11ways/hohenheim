@@ -7694,16 +7694,8 @@
       "scope": "site_domains"
     },
     {
-      "text": "{$name} - Overzicht",
-      "scope": "server_overview"
-    },
-    {
       "text": "{$name} - Migreren",
       "scope": "instance_migrate"
-    },
-    {
-      "text": "{$name} - Overzicht",
-      "scope": "instance_overview"
     },
     {
       "text": "{$name} - Momentopnames",
@@ -8441,5 +8433,9 @@
   "abandoned": {
     "text": "Verlaten",
     "scope": "schedule_run_status"
+  },
+  "refresh": {
+    "text": "Vernieuwen",
+    "scope": "instance_overview"
   }
 }
