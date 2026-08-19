@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.channel.ChannelException;
 import be.elevenways.zenit.common.channel.ChannelHandler;
-import be.elevenways.zenit.common.channel.ServerChannelLink;
+import be.elevenways.zenit.common.channel.ChannelLink;
 import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -34,13 +34,13 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
     /** How often a live link's view capability is re-decided. */
     private static final long REVALIDATION_INTERVAL_MS = 15_000;
 
-    private final @NonNull ServerChannelLink<Object, Object> link;
+    private final @NonNull ChannelLink<Object, Object> link;
 
     private @Nullable Integer instanceId;
     private InstanceStats.@Nullable Subscription subscription;
     private volatile long lastChecked;
 
-    public InstanceStatsHandler(@NonNull ServerChannelLink<Object, Object> link) {
+    public InstanceStatsHandler(@NonNull ChannelLink<Object, Object> link) {
         this.link = link;
     }
 
