@@ -42,6 +42,7 @@ public final class HohenheimHandlers {
         initHealth();
         InstanceTemplateHandlers.init();
         CertificateHandlers.init();
+        AccessRuleHandlers.init();
         DnsZoneHandlers.initZones();
         DnsRecordApiHandlers.init();
         DnsZoneHandlers.initRemoteRecords();

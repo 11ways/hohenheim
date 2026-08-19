@@ -155,15 +155,31 @@ public class InitialMigration extends HohenheimMigration {
                 column -> column.nullable(true).maxLength(255));
             table.addColumn("satisfy", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(10).defaultValue("any"));
-            table.addColumn("basic_auth_user", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(255));
-            table.addColumn("basic_auth_pass", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(255));
-            table.addColumn("allowed_ips", ColumnType.TEXT,
-                column -> column.nullable(true));
-            table.addColumn("denied_ips", ColumnType.TEXT,
-                column -> column.nullable(true));
             table.timestamps();
+        });
+
+        // The rule TREE behind an access list. parent_id is the nesting edge (null = a
+        // direct child of the list's implicit root group); data holds the per-type
+        // sub-schema the row's type declares.
+        schema.createTable("access_rules", table -> {
+            table.id();
+            table.addColumn("access_list_id", ColumnType.INTEGER,
+                column -> column.nullable(false).references("access_lists", "id"));
+            table.addColumn("parent_id", ColumnType.INTEGER,
+                column -> column.nullable(true).references("access_rules", "id"));
+            table.addColumn("sort", ColumnType.INTEGER,
+                column -> column.nullable(false).defaultValue(0));
+            table.addColumn("type", ColumnType.STRING,
+                column -> column.nullable(false).maxLength(32));
+            table.addColumn("data", ColumnType.JSON,
+                column -> column.nullable(true));
+            table.addColumn("search_text", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(512));
+            table.addColumn("enabled", ColumnType.BOOLEAN,
+                column -> column.nullable(false).defaultValue(true));
+            table.timestamps();
+            table.addIndex("access_rules_access_list_id_index", List.of("access_list_id"));
+            table.addIndex("access_rules_parent_id_index", List.of("parent_id"));
         });
 
         schema.createTable("proclogs", table -> {
@@ -1354,6 +1370,7 @@ public class InitialMigration extends HohenheimMigration {
         schema.dropTable("node_versions");
         schema.dropTable("system_users");
         schema.dropTable("proclogs");
+        schema.dropTable("access_rules");
         schema.dropTable("access_lists");
         schema.dropTable("certificates");
         schema.dropTable("site_domains");

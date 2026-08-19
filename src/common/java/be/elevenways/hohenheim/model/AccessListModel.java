@@ -10,7 +10,12 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.validation.Violations;
 
 /**
- * IP allow/deny rules with optional basic auth.
+ * A named, attachable access policy: the list row IS the implicit ROOT group of an
+ * {@link AccessRuleModel} tree, and {@link #SATISFY} is that root's any/all mode.
+ *
+ * AIDEV-NOTE: the flat shape (one basic-auth pair plus two free-text IP columns) was
+ * replaced by the tree on 2026-08-19. A list carrying no rules is INERT, not a lockout --
+ * the root group is empty and an empty group passes.
  */
 public class AccessListModel extends Model {
 
@@ -35,27 +40,12 @@ public class AccessListModel extends Model {
         .defaultValue(SATISFY_ANY)
         .label(HohenheimFormCopy.label("satisfy"))
         .build());
-    public static final StringField BASIC_AUTH_USER = SCHEMA.addField(StringField.builder().name("basic_auth_user")
-        .label(HohenheimFormCopy.label("basic_auth_user"))
-        .help(HohenheimFormCopy.help("basic_auth_user"))
-        .build());
-    public static final StringField BASIC_AUTH_PASS = SCHEMA.addField(StringField.builder().name("basic_auth_pass")
-        .label(HohenheimFormCopy.label("basic_auth_password"))
-        .help(HohenheimFormCopy.help("basic_auth_password"))
-        .secret()
-        .build());
-    public static final TextField ALLOWED_IPS = SCHEMA.addField(TextField.builder().name("allowed_ips")
-        .label(HohenheimFormCopy.label("allowed_ips"))
-        .help(HohenheimFormCopy.help("allowed_ips"))
-        .build());
-    public static final TextField DENIED_IPS = SCHEMA.addField(TextField.builder().name("denied_ips")
-        .label(HohenheimFormCopy.label("denied_ips"))
-        .help(HohenheimFormCopy.help("denied_ips"))
-        .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
     static {
+        SCHEMA.setDisplayFields(NAME);
+
         // AIDEV-NOTE: enforcement lives on the model pipeline, never on a form spec.
         // A staged null/blank satisfy is folded to the default rather than stored, so
         // the column can only ever hold a vocabulary value; the dispatcher additionally

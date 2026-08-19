@@ -4,6 +4,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.net.Hostnames;
@@ -15,10 +16,8 @@ import be.elevenways.hohenheim.server.security.ReputationBanPolicy;
 import be.elevenways.hohenheim.server.security.ThreatScorer;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 import be.elevenways.zenit.server.security.SecurityEvents;
-import be.elevenways.hohenheim.server.auth.SiteAuthContext;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
-import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
-import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
+import be.elevenways.hohenheim.server.auth.SiteAuthGates;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -28,6 +27,7 @@ import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.session.SessionStore;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
@@ -210,6 +210,17 @@ public class SiteDispatcher implements HttpHandler {
         for (Row accessList : accessListModel.find().all()) {
             accessLists.put(accessList.get(AccessListModel.ID), accessList);
         }
+        // One query for every rule in the system, bucketed per list: a route load must not
+        // grow a query per guarded site.
+        Map<Integer, List<Row>> rulesByList = new HashMap<>();
+        for (Row rule : Models.get(AccessRuleModel.class).find()
+                .orderBy(AccessRuleModel.SORT, SortOrder.ASC)
+                .orderBy(AccessRuleModel.ID, SortOrder.ASC).all()) {
+            Integer listId = rule.get(AccessRuleModel.ACCESS_LIST_ID);
+            if (listId != null) {
+                rulesByList.computeIfAbsent(listId, ignored -> new ArrayList<>()).add(rule);
+            }
+        }
         Map<Integer, Row> authProviders = new HashMap<>();
         for (Row provider : authProviderModel.find().all()) {
             authProviders.put(provider.get(SiteAuthProviderModel.ID), provider);
@@ -254,36 +265,31 @@ public class SiteDispatcher implements HttpHandler {
             Integer authProviderId = site.get(SiteModel.AUTH_PROVIDER_ID);
             if (authProviderId != null) {
                 Row providerRow = authProviders.get(authProviderId);
-                if (providerRow == null) {
-                    // Site wants auth but the provider record is gone: fail closed, never expose.
-                    Blast.log("SiteDispatcher: auth provider", authProviderId, "missing for site", siteName);
+                SiteAuthGates.Built built = SiteAuthGates.build(providerRow,
+                    providerRow != null ? providerRow.get(SiteAuthProviderModel.REQUIRED_PERMISSION) : null,
+                    proxySessionStore, siteId, authProviderId);
+                if (built.gate() == null) {
+                    // Site wants auth but the provider cannot be built: fail closed, never expose.
+                    Blast.log("SiteDispatcher: auth provider", authProviderId, "for site", siteName,
+                        "is unusable -", built.refusal(), built.detail());
                     authGate = FAIL_CLOSED_GATE;
-                    authProviderName = "(missing provider)";
+                    authProviderName = "(" + built.refusal() + ")";
                 } else {
-                    String providerType = providerRow.get(SiteAuthProviderModel.PROVIDER_TYPE);
-                    SiteAuthProviderTypeHandler providerHandler = SiteAuthProviders.getHandler(providerType);
-                    if (providerHandler == null) {
-                        Blast.log("SiteDispatcher: unknown auth provider type", providerType,
-                            "for site", siteName);
-                        authGate = FAIL_CLOSED_GATE;
-                        authProviderName = "(unknown type)";
-                    } else {
-                        try {
-                            String requiredPermission = providerRow.get(SiteAuthProviderModel.REQUIRED_PERMISSION);
-                            authGate = providerHandler.createGate(new SiteAuthContext(
-                                providerRow, requiredPermission, proxySessionStore, siteId, providerType));
-                            authProviderName = providerRow.get(SiteAuthProviderModel.NAME);
-                        } catch (Exception e) {
-                            // createGate must be pure; if it throws anyway, fail closed.
-                            Blast.log("SiteDispatcher: failed to build auth gate for site", siteName,
-                                "-", e.getMessage());
-                            authGate = FAIL_CLOSED_GATE;
-                            authProviderName = "(misconfigured)";
-                        }
-                    }
+                    authGate = built.gate();
+                    authProviderName = providerRow.get(SiteAuthProviderModel.NAME);
                 }
             }
             if (authGate != null) ownedGates.add(authGate);
+
+            // Compile the access list's rule tree ONCE per site: the leaves that need an
+            // identity build their own gate from the same provider records, narrowed by
+            // the leaf's required permission, and the route table owns them from here on.
+            AccessRuleTree accessTree = accessList == null ? null : AccessRuleTree.compile(
+                accessList.get(AccessListModel.SATISFY),
+                rulesByList.getOrDefault(accessListId, List.of()),
+                new SiteLeafContext(siteName, siteId, proxySessionStore, authProviders));
+            List<SiteAuthGate> treeGates = accessTree != null ? accessTree.gates() : List.of();
+            ownedGates.addAll(treeGates);
 
             // Check for git provisioning. Isolate per-site handler creation so one
             // misconfigured site (e.g. a dangling system_user_id, which now fails
@@ -328,7 +334,7 @@ public class SiteDispatcher implements HttpHandler {
                     domainHandler = previewHandler;
                 }
 
-                RouteEntry entry = new RouteEntry(domainHandler, siteName, domain, accessList,
+                RouteEntry entry = new RouteEntry(domainHandler, siteName, domain, accessTree,
                     settings, authGate, authProviderName);
 
                 // HostnamePatterns.effectiveKind is THE tier decision, shared with the
@@ -389,6 +395,16 @@ public class SiteDispatcher implements HttpHandler {
                         authGate.destroy();
                     } catch (RuntimeException failure) {
                         Blast.log("SiteDispatcher: unused auth gate teardown failed -", failure.getMessage());
+                    }
+                }
+                for (SiteAuthGate treeGate : treeGates) {
+                    if (ownedGates.remove(treeGate)) {
+                        try {
+                            treeGate.destroy();
+                        } catch (RuntimeException failure) {
+                            Blast.log("SiteDispatcher: unused access-rule gate teardown failed -",
+                                failure.getMessage());
+                        }
                     }
                 }
             }
@@ -647,6 +663,14 @@ public class SiteDispatcher implements HttpHandler {
 
         ResolvedClientIp.attach(exchange, clientIp);
 
+        // An access list whose tree carries a credential leaf blocks while evaluating it
+        // (argon2 verification, an identity provider's HTTP round trip), so it may not run
+        // on the I/O thread. Address-only lists keep the zero-overhead inline path.
+        if (entry.accessListBlocks() && exchange.isInIoThread()) {
+            exchange.dispatch(() -> continueAfterAuth(entry, exchange, hostname, clientIp));
+            return;
+        }
+
         // --- Access list enforcement ---
         if (entry.hasAccessList() && !AccessListGate.allows(exchange, entry, clientIp)) {
             return;
@@ -689,7 +713,7 @@ public class SiteDispatcher implements HttpHandler {
     }
 
     /** Apply a non-null gate decision: redirect the browser, or deny with a status + body. */
-    private void applySiteAuthDecision(HttpServerExchange exchange, SiteAuthDecision decision) {
+    static void applySiteAuthDecision(HttpServerExchange exchange, SiteAuthDecision decision) {
         if (decision instanceof SiteAuthDecision.Redirect redirect) {
             exchange.setStatusCode(302);
             exchange.getResponseHeaders().put(Headers.LOCATION, redirect.url());
@@ -735,11 +759,6 @@ public class SiteDispatcher implements HttpHandler {
     /** Public seam over {@link RouteResolver#isSuspiciousRegexHostname}. */
     public static boolean isSuspiciousRegexHostname(String hostname) {
         return RouteResolver.isSuspiciousRegexHostname(hostname);
-    }
-
-    /** Test seam over {@link AccessListGate#verifyBasicAuthPassword}. */
-    static boolean verifyBasicAuthPassword(String presented, String stored, String siteName) {
-        return AccessListGate.verifyBasicAuthPassword(presented, stored, siteName);
     }
 
     private void dispatchToRoute(RouteEntry entry, HttpServerExchange exchange) {
@@ -1006,5 +1025,32 @@ public class SiteDispatcher implements HttpHandler {
             Thread.currentThread().interrupt();
         }
         delayScheduler.shutdownNow();
+    }
+
+    /**
+     * What an access-rule leaf may ask of the site it guards. Provider leaves build their
+     * gate through the SHARED factory, so a leaf and a site-level provider agree on what
+     * "unbuildable" means -- and a leaf that cannot build one denies rather than degrading
+     * into "no identity required".
+     */
+    private record SiteLeafContext(String siteName, int siteId, SessionStore sessionStore,
+                                   Map<Integer, Row> providers) implements AccessRuleTree.LeafContext {
+
+        @Override
+        public String realm() {
+            return siteName != null && !siteName.isBlank() ? siteName : "Restricted";
+        }
+
+        @Override
+        public SiteAuthGate gateFor(int providerId, String requiredPermission) {
+            SiteAuthGates.Built built = SiteAuthGates.build(providers.get(providerId),
+                requiredPermission, sessionStore, siteId, providerId);
+            if (built.gate() == null) {
+                Blast.log("SiteDispatcher: access rule on site", siteName,
+                    "names auth provider", providerId, "which is unusable -",
+                    built.refusal(), built.detail());
+            }
+            return built.gate();
+        }
     }
 }

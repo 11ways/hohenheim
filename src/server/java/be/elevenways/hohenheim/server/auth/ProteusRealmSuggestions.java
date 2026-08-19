@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.types.ProteusAuthProviderType;
 import be.elevenways.protoblast.common.Blast;
@@ -41,6 +42,43 @@ public final class ProteusRealmSuggestions {
     public static void register() {
         PermissionSuggestionSources.register(
             SiteAuthProviderModel.PROTEUS_SUGGESTION_SOURCE, ProteusRealmSuggestions::resolve);
+        PermissionSuggestionSources.register(
+            AccessRuleModel.RULE_PROVIDER_SUGGESTION_SOURCE, ProteusRealmSuggestions::resolveForRule);
+    }
+
+    /**
+     * The same lane for an access-rule {@code auth_provider} leaf, whose realm is the one
+     * belonging to the provider the rule POINTS AT rather than one on the form itself.
+     * A rule that has not chosen a provider yet contributes nothing, and the caller falls
+     * back to the KnownPermissions vocabulary.
+     */
+    static @NonNull List<KnownPermission> resolveForRule(@NonNull Map<String, Object> rootValues,
+                                                         @NonNull EditContext context) {
+        if (!(rootValues.get(AccessRuleModel.DATA.getName()) instanceof Map<?, ?> data)) {
+            return List.of();
+        }
+        Object rawId = data.get(AccessRuleModel.PROVIDER_ID.getName());
+        if (rawId == null) {
+            return List.of();
+        }
+        Integer providerId = rawId instanceof Number number ? number.intValue() : parseId(rawId);
+        if (providerId == null) {
+            return List.of();
+        }
+        Row provider = Models.get(SiteAuthProviderModel.class).find()
+            .where(SiteAuthProviderModel.ID.eq(providerId)).first();
+        if (provider == null || !(provider.get(SiteAuthProviderModel.CONFIG) instanceof Map<?, ?> config)) {
+            return List.of();
+        }
+        return resolve(Map.of(SiteAuthProviderModel.CONFIG.getName(), config), context);
+    }
+
+    private static @Nullable Integer parseId(@NonNull Object value) {
+        try {
+            return Integer.valueOf(String.valueOf(value).trim());
+        } catch (NumberFormatException notANumber) {
+            return null;
+        }
     }
 
     static @NonNull List<KnownPermission> resolve(@NonNull Map<String, Object> rootValues,

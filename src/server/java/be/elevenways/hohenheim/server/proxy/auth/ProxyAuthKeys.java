@@ -28,6 +28,15 @@ public final class ProxyAuthKeys {
     /** The provider slug that authenticated this session. */
     public static final IdentifierKey<String> PROVIDER_SLUG = IdentifierKey.of(NS, "provider_slug");
 
+    /**
+     * The provider RECORD that authenticated this session.
+     *
+     * AIDEV-NOTE: the slug names a TYPE, so it cannot tell two configured providers apart.
+     * An access-rule tree can carry one leaf per provider record, and each leaf must only
+     * be satisfied by a session its OWN provider established.
+     */
+    public static final IdentifierKey<Integer> PROVIDER_ID = IdentifierKey.of(NS, "provider_id");
+
     /** The rlid of a started-but-unfinished Proteus login (pending state). */
     public static final IdentifierKey<String> PENDING_RLID = IdentifierKey.of(NS, "pending_rlid");
 

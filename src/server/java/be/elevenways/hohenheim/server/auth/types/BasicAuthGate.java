@@ -31,6 +31,7 @@ public class BasicAuthGate implements SiteAuthGate {
     private final SessionStore store;
     private final int siteId;
     private final String providerSlug;
+    private final int providerId;
     private final Map<String, String> credentials;
     private final String challenge;
 
@@ -38,6 +39,7 @@ public class BasicAuthGate implements SiteAuthGate {
         this.store = context.sessionStore();
         this.siteId = context.siteId();
         this.providerSlug = context.providerSlug();
+        this.providerId = context.providerId();
         this.credentials = BasicAuthProviderType.credentials(configMap(context));
         this.challenge = "Basic realm=\"" + realmName(this.siteId) + "\"";
     }
@@ -75,6 +77,7 @@ public class BasicAuthGate implements SiteAuthGate {
         Session session = store.create();
         session.set(ProxyAuthKeys.SITE_ID, siteId);
         session.set(ProxyAuthKeys.PROVIDER_SLUG, providerSlug);
+        session.set(ProxyAuthKeys.PROVIDER_ID, providerId);
         session.set(ProxyAuthKeys.SUBJECT, username);
         store.save(session);
         ProxySessionSupport.writeSessionCookie(exchange, session);

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -45,6 +46,13 @@ class SecretFieldsTest extends HohenheimTestBase {
             .build();
 
         return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** The argon2 hash stored inside one rule's per-type data map. */
+    private static String storedPassword(int ruleId) {
+        Row rule = Models.get(AccessRuleModel.class).findById(ruleId);
+        Object value = AccessRuleModel.dataOf(rule).get(AccessRuleModel.BASIC_AUTH_PASSWORD.getName());
+        return value == null ? null : String.valueOf(value);
     }
 
     @Test
@@ -107,32 +115,41 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(config).containsEntry("access_key", ACCESS_KEY);
         assertThat(config).containsEntry("endpoint", "https://proteus2.example.com");
 
-        // Access list: a hashed secret, blank save keeps the hash untouched.
+        // Access rule: a hashed secret INSIDE a dynamic (schemaFrom) sub-form, blank save
+        // keeps the hash untouched.
         String password = "access-list-password-4c2a9e";
-        response = postForm("/admin/access-lists/new",
-            "name=Private+network&satisfy=any&basic_auth_user=operator&basic_auth_pass=" + password
-                + "&allowed_ips=10.0.0.0%2F8&denied_ips=");
+        response = postForm("/admin/access-lists/new", "name=Private+network&satisfy=any");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         row = Models.get(AccessListModel.class).find()
             .where(AccessListModel.NAME.eq("Private network")).first();
         assertThat(row).isNotNull();
         Integer accessListId = row.get(AccessListModel.ID);
-        String storedHash = row.get(AccessListModel.BASIC_AUTH_PASS);
+
+        response = postForm("/admin/access-lists/" + accessListId + "/rules",
+            "type=basic_auth");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+        Row rule = Models.get(AccessRuleModel.class).find()
+            .where(AccessRuleModel.ACCESS_LIST_ID.eq(accessListId)).first();
+        assertThat(rule).isNotNull();
+        Integer ruleId = rule.get(AccessRuleModel.ID);
+
+        response = postForm("/admin/access-rules/" + ruleId,
+            "type=basic_auth&data.username=operator&data.password=" + password + "&enabled=true");
+        assertThat(response.statusCode()).isIn(200, 302, 303);
+
+        String storedHash = storedPassword(ruleId);
         assertThat(storedHash).startsWith("$argon2");
         assertThat(PasswordHasher.verify(password, storedHash)).isTrue();
 
-        navigateToApp("/admin/access-lists/" + accessListId);
+        navigateToApp("/admin/access-rules/" + ruleId);
         waitForHydration();
         assertThat(page.content()).doesNotContain(password);
 
-        response = postForm("/admin/access-lists/" + accessListId,
-            "name=Private+network&satisfy=any&basic_auth_user=operator&basic_auth_pass="
-                + "&allowed_ips=10.0.0.0%2F8&denied_ips=");
+        response = postForm("/admin/access-rules/" + ruleId,
+            "type=basic_auth&data.username=operator&data.password=&enabled=true");
         assertThat(response.statusCode()).isIn(200, 302, 303);
-
-        Row storedList = Models.get(AccessListModel.class).findById(accessListId);
-        assertThat(storedList.get(AccessListModel.BASIC_AUTH_PASS)).isEqualTo(storedHash);
+        assertThat(storedPassword(ruleId)).isEqualTo(storedHash);
 
         // Git webhook secret: a secret inside a site's source settings map.
         SiteModel sites = Models.get(SiteModel.class);
