@@ -1901,6 +1901,14 @@
     {
       "text": "Manual",
       "scope": "stack_deploy_reason"
+    },
+    {
+      "text": "Manual",
+      "scope": "ban_source"
+    },
+    {
+      "text": "Manual",
+      "scope": "dns_publisher"
     }
   ],
   "automatic_hook": {
@@ -8639,5 +8647,13 @@
   "events": {
     "text": "Events",
     "scope": "notification_channel"
+  },
+  "auto": {
+    "text": "Automatic",
+    "scope": "ban_source"
+  },
+  "internal": {
+    "text": "Internal DNS",
+    "scope": "dns_publisher"
   }
 }

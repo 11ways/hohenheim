@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -30,7 +32,13 @@ public class BanModel extends Model {
     public static final StringField REASON = SCHEMA.addField(StringField.builder().name("reason")
         .label(HohenheimFormCopy.label("ban_reason"))
         .build());
-    public static final StringField SOURCE = SCHEMA.addField(StringField.builder().name("source")
+    public static final EnumField SOURCE = SCHEMA.addField(EnumField.builder("source")
+        .value(SOURCE_AUTO, v -> v.displayName("Auto")
+            .label(Microcopy.of("auto").withFilter("scope", "ban_source"))
+            .icon("robot").color("orange"))
+        .value(SOURCE_MANUAL, v -> v.displayName("Manual")
+            .label(Microcopy.of("manual").withFilter("scope", "ban_source"))
+            .icon("pen").color("blue"))
         .label(HohenheimFormCopy.label("ban_source"))
         .build());
     public static final StringField EVENT_TYPE = SCHEMA.addField(StringField.builder().name("event_type")

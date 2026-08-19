@@ -60,11 +60,8 @@ public final class DnsZoneResource extends RowResource {
     private final FormSpec formSpec = FormSpec.builder()
         .add(DnsZoneModel.ORIGIN)
         .add(DnsZoneModel.ENABLED)
-        .add(Select.of(DnsZoneModel.ROLE)
-            .options(OptionSource.of(List.of(
-                FieldOption.of(DnsZoneModel.ROLE_PRIMARY, Microcopy.of("role_primary").withFilter("scope", "dns_role")),
-                FieldOption.of(DnsZoneModel.ROLE_SECONDARY, Microcopy.of("role_secondary").withFilter("scope", "dns_role")))))
-            .build())
+        // The select derives from the ROLE EnumField -- the vocabulary's one declaring home.
+        .add(DnsZoneModel.ROLE)
         .add(Select.of(DnsZoneModel.PRIMARY_PEER_ID)
             .options(OptionSource.dynamic(ctx -> peerOptions()))
             .build())

@@ -11,10 +11,7 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
-import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
-import be.elevenways.zenit.common.edit.OptionSource;
-import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -31,15 +28,11 @@ import java.util.Map;
  */
 public final class AccessListResource extends RowResource {
 
-    private static final List<FieldOption<String>> SATISFY_OPTIONS = List.of(
-        FieldOption.of(AccessListModel.SATISFY_ANY,
-            Microcopy.of("any").withFilter("scope", "access_satisfy")),
-        FieldOption.of("all",
-            Microcopy.of("all").withFilter("scope", "access_satisfy")));
-
     private final FormSpec formSpec = FormSpec.builder()
         .add(AccessListModel.NAME)
-        .add(Select.of(AccessListModel.SATISFY).options(OptionSource.of(SATISFY_OPTIONS)).build())
+        // The select derives from the SATISFY EnumField -- the vocabulary's one
+        // declaring home (the old hand-built list here spelled "all" as a literal).
+        .add(AccessListModel.SATISFY)
         .add(AccessListModel.BASIC_AUTH_USER)
         .add(AccessListModel.BASIC_AUTH_PASS)
         .add(AccessListModel.ALLOWED_IPS)
@@ -59,7 +52,7 @@ public final class AccessListResource extends RowResource {
         .column(ColumnSpec.fromField(AccessListModel.CREATED_AT).build())
         .filter(FilterSpec.forField(AccessListModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(AccessListModel.NAME)).build())
-        .filter(FilterSpec.forField(AccessListModel.SATISFY, FilterSpec.Kind.TEXT)
+        .filter(FilterSpec.forField(AccessListModel.SATISFY, FilterSpec.Kind.SELECT)
             .label(FieldLabels.labelFor(AccessListModel.SATISFY)).build())
         .build();
 

@@ -1,7 +1,13 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.host.HostState;
+import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.BanModel;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -143,6 +149,51 @@ class StatusPresentationDriftTest {
         assertThat(NotificationEvents.ALL).as("step 3: tokens are unique").doesNotHaveDuplicates();
         assertThat(NotificationEvents.isKnown("not_an_event"))
             .as("step 3: an undeclared token is refused").isFalse();
+    }
+
+    @Test
+    @DisplayName("the converted string vocabularies are faceted enums with one declaring home")
+    void convertedVocabulariesAreFacetedAndSingleHomed() {
+        // 1. Each column's value set IS its model's declared constant set.
+        record Vocabulary(String name, EnumField field, Class<?> home, String prefix) {}
+        List<Vocabulary> vocabularies = List.of(
+            new Vocabulary("domain match type", SiteDomainModel.MATCH_TYPE,
+                SiteDomainModel.class, "MATCH_"),
+            new Vocabulary("released-claim match type", ReleasedRouteClaimModel.MATCH_TYPE,
+                SiteDomainModel.class, "MATCH_"),
+            new Vocabulary("access-list satisfy", AccessListModel.SATISFY,
+                AccessListModel.class, "SATISFY_"),
+            new Vocabulary("dns zone role", DnsZoneModel.ROLE,
+                DnsZoneModel.class, "ROLE_"),
+            new Vocabulary("ban source", BanModel.SOURCE,
+                BanModel.class, "SOURCE_"),
+            new Vocabulary("certificate dns publisher", CertificateModel.DNS_PUBLISHER,
+                CertificateModel.class, "DNS_PUBLISHER_"));
+        for (Vocabulary vocabulary : vocabularies) {
+            assertThat(vocabulary.field().getValues().keySet())
+                .as("step 1: %s offers exactly its declared constants", vocabulary.name())
+                .containsExactlyInAnyOrderElementsOf(
+                    constantsWithPrefix(vocabulary.home(), vocabulary.prefix()));
+
+            // 2. Every member carries the pill facets plus a localizable label.
+            for (EnumField.EnumValue value : vocabulary.field().getValues().values()) {
+                assertThat(value.getIcon())
+                    .as("step 2: %s / %s declares an icon", vocabulary.name(), value.getKey())
+                    .isNotNull();
+                assertThat(value.getColor())
+                    .as("step 2: %s / %s declares a colour", vocabulary.name(), value.getKey())
+                    .isNotNull();
+                assertThat(value.getMicrocopy())
+                    .as("step 2: %s / %s is localizable", vocabulary.name(), value.getKey())
+                    .isNotNull();
+            }
+        }
+
+        // 3. The two match-type columns share ONE vocabulary (SiteDomainModel.matchTypeField):
+        //    a member added for domains reaches released claims in the same edit.
+        assertThat(ReleasedRouteClaimModel.MATCH_TYPE.getValues().keySet())
+            .as("step 3: released claims store the SAME match-type member set as domains")
+            .containsExactlyElementsOf(SiteDomainModel.MATCH_TYPE.getValues().keySet());
     }
 
     /** Public static String constants of a class whose NAME starts with the prefix. */

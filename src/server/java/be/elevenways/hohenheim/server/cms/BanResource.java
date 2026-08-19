@@ -117,7 +117,7 @@ public final class BanResource extends RowResource {
         .column(ColumnSpec.fromField(BanModel.CREATED_AT).build())
         .filter(FilterSpec.forField(BanModel.IP, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(BanModel.IP)).build())
-        .filter(FilterSpec.forField(BanModel.SOURCE, FilterSpec.Kind.TEXT)
+        .filter(FilterSpec.forField(BanModel.SOURCE, FilterSpec.Kind.SELECT)
             .label(FieldLabels.labelFor(BanModel.SOURCE)).build())
         .filter(FilterSpec.forField(BanModel.ACTIVE, FilterSpec.Kind.BOOLEAN)
             .label(FieldLabels.labelFor(BanModel.ACTIVE)).build())

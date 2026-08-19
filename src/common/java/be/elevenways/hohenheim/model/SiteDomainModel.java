@@ -34,6 +34,26 @@ public class SiteDomainModel extends Model {
     public static final String MATCH_REGEX = "regex";
 
     /**
+     * THE domain match-type vocabulary, declared ONCE for every column that stores it:
+     * {@link #MATCH_TYPE} here and {@link ReleasedRouteClaimModel#MATCH_TYPE} (a released
+     * claim's match type IS a domain match type). Facets ride the members, so list cells
+     * render pills and form selects derive without a resource-side option list; adding a
+     * member is this one edit.
+     */
+    public static EnumField.Builder matchTypeField() {
+        return EnumField.builder("match_type")
+            .value(MATCH_EXACT, v -> v.displayName("Exact")
+                .label(Microcopy.of("exact").withFilter("scope", "domain_match"))
+                .icon("check").color("green"))
+            .value(MATCH_WILDCARD, v -> v.displayName("Wildcard")
+                .label(Microcopy.of("wildcard").withFilter("scope", "domain_match"))
+                .icon("sitemap").color("orange"))
+            .value(MATCH_REGEX, v -> v.displayName("Regex")
+                .label(Microcopy.of("regex").withFilter("scope", "domain_match"))
+                .icon("code").color("purple"));
+    }
+
+    /**
      * THE stored/canonical hostname form, shared by the beforeValidate hook, the
      * route-identity check and the dispatcher: trimmed, lowercased and stripped of the FQDN
      * root dot, except for regex sources (lowercasing pattern TEXT would flip class escapes
@@ -121,7 +141,7 @@ public class SiteDomainModel extends Model {
         .help(HohenheimFormCopy.help("hostname"))
         .placeholder("example.com")
         .build());
-    public static final StringField MATCH_TYPE = SCHEMA.addField(StringField.builder().name("match_type")
+    public static final EnumField MATCH_TYPE = SCHEMA.addField(matchTypeField()
         .defaultValue(MATCH_EXACT)
         .label(HohenheimFormCopy.label("match_type"))
         .help(HohenheimFormCopy.help("match_type"))
