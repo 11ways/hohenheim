@@ -26,7 +26,7 @@
             {% if item.target != null %}
             <a class="hh-attention-target" use:Zenit.route={% item.target %}>
                 {% render attentionContent(item) %}
-                <span class="hh-attention-chevron" attr:aria-label={% Cms.text(t("open", scope: "attention")) %}>
+                <span class="hh-attention-chevron" attr:aria-label={% t("open", scope: "attention") %}>
                     <pl-icon name="chevron-right" size="sm"></pl-icon>
                 </span>
             </a>

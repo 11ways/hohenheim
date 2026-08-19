@@ -1,10 +1,26 @@
-{#- Records tab on a DNS zone: the zone's resource records, linking into the
-    (nav-hidden) record resource forms. -#}
+{#- Records tab on a DNS zone. The table, its cells and its row actions are the
+    record RESOURCE's own declarations rendered through the framework's shared row
+    partial, so this page adds exactly what a generated list cannot know: the zone
+    scope and the zone the quick-add bar adds into. -#}
 {% declare title: String %}
 {% declare zoneId: Integer %}
 {% declare origin: String %}
-{% declare records: List<DnsRecordView> %}
-{% declare addRecordTarget: RouteTarget %}
+{% declare available: Boolean = false %}
+{% declare table: TableState = null %}
+{% declare hasRowActions: Boolean = false %}
+{% declare panelSlug: String = "" %}
+{% declare resourceSlug: String = "" %}
+{% declare listUrl: String = "" %}
+{% declare searchEnabled: Boolean = false %}
+{% declare searchActive: Boolean = false %}
+{% declare searchValue: String = "" %}
+{% declare quickAddEnabled: Boolean = false %}
+{% declare quickAddForm: InlineCreateFormState = null %}
+{% declare quickAddValues: Map<String, Object> = null %}
+{% declare quickAddPresets: Map<String, Object> = null %}
+{% declare quickAddRefreshUrl: String = "" %}
+{% declare quickAddCreateUrl: String = "" %}
+{% declare addRecordTarget: RouteTarget = null %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% declare flashVariant: String = "default" %}
@@ -12,49 +28,76 @@
 {% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
 
 {% block "main" %}
-<section class="cms-resource-list-page">
+<section class="cms-resource-list-page" data-cms-wide>
     <header class="cms-resource-list-header">
         <h1>{{ origin }}</h1>
+        {% if searchEnabled %}
+        <form method="get" action={% listUrl %} id="dns-records-filter-form" class="cms-list-search">
+            <cms-list-search formId="dns-records-filter-form" value={% searchValue %}></cms-list-search>
+        </form>
+        {% /if %}
+        {% if addRecordTarget %}
         <pl-button variant="primary" use:Zenit.route={% addRecordTarget %} id="add-record-link">{{ t("add_record", scope: "dns_zone") }}</pl-button>
+        {% /if %}
     </header>
 
     {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
-    {% if records %}
-    <pl-table>
-        <pl-table-header><pl-table-row>
-            <pl-table-head>{{ t("record_name_column", scope: "dns_zone") }}</pl-table-head>
-            <pl-table-head>{{ t("record_type_column", scope: "dns_zone") }}</pl-table-head>
-            <pl-table-head>{{ t("record_ttl_column", scope: "dns_zone") }}</pl-table-head>
-            <pl-table-head>{{ t("record_value_column", scope: "dns_zone") }}</pl-table-head>
-            <pl-table-head>{{ t("record_status_column", scope: "dns_zone") }}</pl-table-head>
-        </pl-table-row></pl-table-header>
-        <pl-table-body>
-            {% each records as index, record %}
+    {% if available %}
+    {#- The bar adds INTO this zone: the zone rides along as a preset, so nothing
+        asks the operator which zone they are looking at. -#}
+    {% if quickAddEnabled %}
+    <div class="cms-list-card-quick-add">
+        <cms-quick-add createForm={% quickAddForm %}
+                       values={% quickAddValues %}
+                       presets={% quickAddPresets %}
+                       refreshUrl={% quickAddRefreshUrl %}
+                       createUrl={% quickAddCreateUrl %}></cms-quick-add>
+    </div>
+    {% /if %}
+
+    {% if table.rows %}
+    <div class="cms-table-scroll">
+    <pl-table class="cms-resource-list-table">
+        <pl-table-header>
             <pl-table-row>
-                <pl-table-cell><a use:Zenit.route={% record.editTarget %}><code>{{ record.name }}</code></a></pl-table-cell>
-                <pl-table-cell><pl-badge variant={% "secondary" %}>{{ record.type }}</pl-badge></pl-table-cell>
-                <pl-table-cell>{{ record.ttl }}</pl-table-cell>
-                <pl-table-cell><code>{{ record.value }}</code></pl-table-cell>
-                <pl-table-cell>
-                    {% if record.enabled == true %}
-                    <pl-badge variant={% "success" %}>{{ t("record_enabled_badge", scope: "dns_zone") }}</pl-badge>
-                    {% else %}
-                    <pl-badge variant={% "outline" %}>{{ t("record_disabled_badge", scope: "dns_zone") }}</pl-badge>
-                    {% /if %}
-                    {% if record.managed == true %}
-                    <pl-badge variant={% "secondary" %}>{{ t("record_managed_badge", scope: "dns_zone") }}</pl-badge>
-                    {% /if %}
-                </pl-table-cell>
+                {% each table.columns as column %}
+                <pl-table-head data-column={% column.name %} data-alignment={% column.alignment %}>{{ column.label }}</pl-table-head>
+                {% /each %}
+                {% if hasRowActions %}
+                <pl-table-head class="cms-chrome-head">{{ t("actions", scope: "cms") }}</pl-table-head>
+                {% /if %}
             </pl-table-row>
+        </pl-table-header>
+        <pl-table-body>
+            {% each table.rows as row %}
+            {% render "zenitcms:pages/resource-list-row" var:row=row var:table=table
+                var:hasBulkActions=false var:hasRowActions=hasRowActions
+                var:panelSlug=panelSlug var:resourceSlug=resourceSlug %}
             {% /each %}
         </pl-table-body>
     </pl-table>
+    </div>
+    {% elseif searchActive %}
+    <pl-empty-state icon="list-ul" data-cms-empty-state="filtered">
+        <pl-empty-state-title>{{ t("empty", scope: "cms", target: "filtered_title") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("empty", scope: "cms", target: "filtered_description") }}</pl-empty-state-description>
+        <pl-empty-state-action>
+            <a href={% listUrl %} data-cms-clear-filters>{{ t("clear_filters", scope: "cms", target: "empty") }}</a>
+        </pl-empty-state-action>
+    </pl-empty-state>
     {% else %}
-    <pl-empty-state icon="list-ul">
+    <pl-empty-state icon="list-ul" data-cms-empty-state="empty">
         <pl-empty-state-title>{{ t("records_empty", scope: "dns_zone") }}</pl-empty-state-title>
         <pl-empty-state-description>{{ t("records_empty_description", scope: "dns_zone") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+    {% else %}
+    {#- The DNS role is off on this node, so there is no record resource to read the
+        zone's records through. Saying so is the honest empty state. -#}
+    <pl-empty-state icon="list-ul" data-cms-empty-state="unavailable">
+        <pl-empty-state-title>{{ t("records_unavailable", scope: "dns_zone") }}</pl-empty-state-title>
     </pl-empty-state>
     {% /if %}
 </section>
