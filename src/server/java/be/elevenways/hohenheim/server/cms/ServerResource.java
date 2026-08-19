@@ -917,24 +917,26 @@ public final class ServerResource extends RowResource {
         ServerOptions.refresh();
     }
 
+    /**
+     * Name spelling plus the runtime's own address demand.
+     *
+     * AIDEV-NOTE: every read takes the STORED value when the write does not carry the key.
+     * The inline cell lane hands updateRow a map holding EXACTLY ONE entry, and ssh_target
+     * was read straight off it: renaming any Docker-runtime host refused with
+     * "ssh_target_format", naming an address the operator never touched.
+     */
     private static void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
-        Object nameValue = coerced.get("name");
-        String name = nameValue != null ? String.valueOf(nameValue).trim()
-            : existing != null ? existing.get(ServerModel.NAME) : "";
+        String name = CmsSupport.textOf(coerced, existing, ServerModel.NAME);
         if (ServerService.LOCAL.equals(name)) {
             throw Violations.ofField("name", name, CmsSupport.violationText(
                 existing == null ? "local_server_reserved" : "local_server_immutable"));
         }
-        if (name == null || name.isEmpty() || !name.matches("[a-z0-9][a-z0-9-]*")) {
+        if (name.isEmpty() || !name.matches("[a-z0-9][a-z0-9-]*")) {
             throw Violations.ofField("name", name, CmsSupport.violationText("name_format"));
         }
-        Object targetValue = coerced.get("ssh_target");
-        String target = targetValue != null ? String.valueOf(targetValue).trim() : "";
+        String target = CmsSupport.textOf(coerced, existing, ServerModel.SSH_TARGET);
         if (ServerModel.RUNTIME_INCUS.equals(runtimeOf(coerced, existing))) {
-            Object urlValue = coerced.get("incus_url");
-            String url = urlValue != null ? String.valueOf(urlValue).trim()
-                : existing != null ? String.valueOf(
-                    (Object) existing.get(ServerModel.INCUS_URL)) : "";
+            String url = CmsSupport.textOf(coerced, existing, ServerModel.INCUS_URL);
             try {
                 IncusEndpoint.parse(url);
             } catch (IllegalArgumentException bad) {

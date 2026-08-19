@@ -85,11 +85,11 @@ public final class SpamserviceWordsResource extends SpamserviceRemoteResource<Sp
         return Map.of("word", row.word(), "score", row.score(), "language", value(row.language()), "leet", row.leet());
     }
     @Override public @NonNull Object persistRow(@NonNull Map<String, Object> values, @NonNull AccessContext context) {
-        return this.requireClient().createSpamWord(input(values));
+        return this.requireClient().createSpamWord(input(values, null));
     }
     @Override public void updateRow(@NonNull SpamWordEntry row, @NonNull Map<String, Object> values,
                                     @NonNull AccessContext context) {
-        this.requireClient().updateSpamWord(row.id(), input(values));
+        this.requireClient().updateSpamWord(row.id(), input(values, row));
     }
     @Override public void deleteRow(@NonNull SpamWordEntry row, @NonNull AccessContext context) {
         this.requireClient().deleteSpamWord(row.id());
@@ -108,11 +108,28 @@ public final class SpamserviceWordsResource extends SpamserviceRemoteResource<Sp
 
     @Override public @Nullable String recordTitle(@NonNull SpamWordEntry row) { return row.word(); }
 
-    private static SpamWordInput input(Map<String, Object> values) {
-        String language = String.valueOf(values.getOrDefault("language", "")).trim();
-        return new SpamWordInput(String.valueOf(values.getOrDefault("word", "")),
-            values.get("score") instanceof Number number ? number.intValue() : 0,
-            language.isEmpty() ? null : language, Boolean.TRUE.equals(values.get("leet")));
+    /**
+     * The whole remote word, filled from the STORED entry wherever this write carries no
+     * value for a field.
+     *
+     * AIDEV-NOTE: the remote update is a full-DTO PUT, and the inline cell lane hands
+     * updateRow a map holding EXACTLY ONE entry. Building the DTO off that map alone
+     * pushed a blank word, a zero score and leet=false to the LIVE filter on any single
+     * edit. The stored record is the fallback here rather than a remote merge semantic,
+     * which the service's own API does not promise.
+     *
+     * @param stored the entry being edited, or null on a create
+     */
+    private static SpamWordInput input(Map<String, Object> values, @Nullable SpamWordEntry stored) {
+        Object word = CmsSupport.valueOf(values, "word", stored == null ? "" : stored.word());
+        Object score = CmsSupport.valueOf(values, "score", stored == null ? null : stored.score());
+        Object rawLanguage = CmsSupport.valueOf(values, "language",
+            stored == null ? null : stored.language());
+        Object leet = CmsSupport.valueOf(values, "leet", stored == null ? null : stored.leet());
+        String language = rawLanguage != null ? String.valueOf(rawLanguage).trim() : "";
+        return new SpamWordInput(String.valueOf(word == null ? "" : word),
+            score instanceof Number number ? number.intValue() : 0,
+            language.isEmpty() ? null : language, Boolean.TRUE.equals(leet));
     }
     private static String value(@Nullable String value) { return value != null ? value : ""; }
 }

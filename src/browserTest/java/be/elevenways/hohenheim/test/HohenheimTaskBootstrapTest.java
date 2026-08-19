@@ -106,9 +106,18 @@ class HohenheimTaskBootstrapTest {
         service = TaskBootstrap.start(HohenheimDatabase.datasource());
     }
 
+    /**
+     * AIDEV-NOTE: the settings property is JVM-WIDE and the browser lane shares one fork,
+     * so leaving it set pointed every later class in this fork at this suite's temp file --
+     * SettingsGroupCoverageTest then read that path where it asserts the production one,
+     * and failed on an order it never chose. Clearing it is half the restore; the reload is
+     * what puts the loaded snapshot back.
+     */
     @AfterAll
     static void shutdown() {
         if (service != null) service.shutdown();
+        System.clearProperty("hohenheim.settings");
+        HohenheimSettingsFiles.load();
     }
 
     @Test

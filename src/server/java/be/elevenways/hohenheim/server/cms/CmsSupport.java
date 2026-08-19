@@ -7,6 +7,8 @@ import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -49,6 +51,48 @@ public final class CmsSupport {
     /** The coerced maps the CMS hands to persist/update are immutable; copy before staging values. */
     public static @NonNull Map<String, Object> mutable(@NonNull Map<String, Object> coerced) {
         return new LinkedHashMap<>(coerced);
+    }
+
+    /**
+     * The value a write carries for one column, or the STORED one when it carries none.
+     *
+     * AIDEV-NOTE: THE partial-write read. The inline cell lane hands persist/updateRow a map
+     * holding EXACTLY ONE entry (and an IMMUTABLE one), so absence means LEAVE ALONE
+     * everywhere in this pipeline. A validator or normalizer that reads a sibling straight
+     * off the coerced map either refuses a field the operator never touched or -- worse --
+     * writes a blank over stored data. containsKey, never a null check: a submitted null is
+     * a deliberate clear and must not silently resurrect the stored value.
+     *
+     * @param existing the stored row, or null on a create (where absence really is blank)
+     */
+    public static @Nullable Object valueOf(@NonNull Map<String, Object> coerced,
+                                           @Nullable Row existing, @NonNull Field<?, ?> field) {
+        if (coerced.containsKey(field.getName())) {
+            return coerced.get(field.getName());
+        }
+        return existing != null ? existing.get(field) : null;
+    }
+
+    /**
+     * {@link #valueOf} for a resource whose stored record is not a {@link Row} (the typed
+     * remote resources): the caller reads the stored value off its own record type.
+     */
+    public static @Nullable Object valueOf(@NonNull Map<String, Object> coerced,
+                                           @NonNull String name, @Nullable Object stored) {
+        return coerced.containsKey(name) ? coerced.get(name) : stored;
+    }
+
+    /** {@link #valueOf} as a trimmed string; absent, null and blank all read as {@code ""}. */
+    public static @NonNull String textOf(@NonNull Map<String, Object> coerced,
+                                         @Nullable Row existing, @NonNull Field<?, ?> field) {
+        Object value = valueOf(coerced, existing, field);
+        return value != null ? String.valueOf(value).trim() : "";
+    }
+
+    /** {@link #valueOf} as an Integer; anything that is not one reads as null. */
+    public static @Nullable Integer intOf(@NonNull Map<String, Object> coerced,
+                                          @Nullable Row existing, @NonNull Field<?, ?> field) {
+        return valueOf(coerced, existing, field) instanceof Integer value ? value : null;
     }
 
     /** A violation-scoped microcopy message (catalog entries carry {@code scope=violations}). */

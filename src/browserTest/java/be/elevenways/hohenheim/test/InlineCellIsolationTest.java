@@ -84,7 +84,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
      * Columns every write moves by design, so they are not evidence of a leak: the ORM
      * stamps {@code updated_at} on every UPDATE.
      */
-    private static final Set<String> BOOKKEEPING = Set.of("updated_at");
+    static final Set<String> BOOKKEEPING = Set.of("updated_at");
 
     /**
      * How to move a value whose SHAPE the generic mutation would break, keyed
@@ -221,7 +221,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
      * resource in this wave declares either as inline-editable (the framework refuses a
      * localized one at registration), so the skip cannot hide a leak they would carry.
      */
-    private static Map<String, Object> storedValues(Model model, int id) {
+    static Map<String, Object> storedValues(Model model, int id) {
         Row row = model.findById(id);
         assertThat(row).as("the fixture row of " + model.getModelId() + " still exists").isNotNull();
         Map<String, Object> values = new LinkedHashMap<>();

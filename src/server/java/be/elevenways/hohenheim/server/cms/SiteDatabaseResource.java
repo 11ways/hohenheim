@@ -107,8 +107,7 @@ public final class SiteDatabaseResource extends RowResource {
      * refused by name, here and again on the deploy path).
      */
     private void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
-        Integer siteId = intOf(coerced.get("site_id"),
-            existing != null ? existing.get(SiteDatabaseModel.SITE_ID) : null);
+        Integer siteId = CmsSupport.intOf(coerced, existing, SiteDatabaseModel.SITE_ID);
         if (siteId == null) {
             throw Violations.ofField("site_id", null, CmsSupport.violationText("site_required"));
         }
@@ -126,8 +125,7 @@ public final class SiteDatabaseResource extends RowResource {
                     .withArg("type", typeInfo != null ? typeInfo.getLabel() : siteType));
         }
 
-        Integer databaseId = intOf(coerced.get("database_id"),
-            existing != null ? existing.get(SiteDatabaseModel.DATABASE_ID) : null);
+        Integer databaseId = CmsSupport.intOf(coerced, existing, SiteDatabaseModel.DATABASE_ID);
         if (databaseId == null) {
             throw Violations.ofField("database_id", null, CmsSupport.violationText("database_required"));
         }
@@ -186,13 +184,8 @@ public final class SiteDatabaseResource extends RowResource {
     }
 
     private static @NonNull String prefixOf(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
-        Object submitted = coerced.containsKey("env_prefix") ? coerced.get("env_prefix")
-            : existing != null ? existing.get(SiteDatabaseModel.ENV_PREFIX) : null;
-        String prefix = submitted != null ? String.valueOf(submitted).trim() : "";
+        String prefix = CmsSupport.textOf(coerced, existing, SiteDatabaseModel.ENV_PREFIX);
         return prefix.isEmpty() ? SiteDatabaseModel.DEFAULT_PREFIX : prefix;
     }
 
-    private static @Nullable Integer intOf(@Nullable Object submitted, @Nullable Integer fallback) {
-        return submitted instanceof Integer i ? i : fallback;
-    }
 }

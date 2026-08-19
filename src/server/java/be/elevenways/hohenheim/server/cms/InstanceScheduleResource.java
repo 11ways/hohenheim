@@ -132,13 +132,13 @@ public class InstanceScheduleResource extends RowResource {
      * preset, and every add still passes {@link #validated} (target, cron, zone, the
      * CONFIG demand and the run_as stamp).
      *
-     * AIDEV-NOTE: there is deliberately NO inline counterpart here, for two independent
-     * reasons. ENABLED makes the row DUE for a sweeper that polls every minute, so one
-     * click fires a real chain against a live instance within 60s -- that wants a form and
-     * a deliberate save. And this resource's own {@code updateRow} re-stamps run_as and
-     * clears disabled_reason on every write while reading record_id and cron straight off
-     * the coerced map, so a one-entry map would refuse anyway. Fixing the second without
-     * the first would ship the dangerous half.
+     * AIDEV-NOTE: there is deliberately NO inline counterpart here. ENABLED makes the row
+     * DUE for a sweeper that polls every minute, so one click fires a real chain against a
+     * live instance within 60s -- that wants a form and a deliberate save. {@code validated}
+     * is now partial-safe (it reads record_id, cron and timezone through the stored value),
+     * so this is the ONE reason left; it is still enough. Note that any write here also
+     * re-stamps run_as and clears disabled_reason, which is deliberate for a hand edit and
+     * would be a surprise for a one-click cell.
      */
     @Override
     public @Nullable QuickCreateSpec quickCreate() {
@@ -166,14 +166,14 @@ public class InstanceScheduleResource extends RowResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        Map<String, Object> values = validated(coerced, accessContext);
+        Map<String, Object> values = validated(coerced, null, accessContext);
         return super.persistRow(values, accessContext);
     }
 
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        Map<String, Object> values = validated(coerced, accessContext);
+        Map<String, Object> values = validated(coerced, existing, accessContext);
         super.updateRow(existing, values, accessContext);
     }
 
@@ -227,10 +227,21 @@ public class InstanceScheduleResource extends RowResource {
         return actions;
     }
 
-    /** Validate target/cron/zone, demand manage on the instance, stamp run_as. */
+    /**
+     * Validate target/cron/zone, demand manage on the instance, stamp run_as.
+     *
+     * AIDEV-NOTE: target, cron and zone are read through the STORED value when the write
+     * does not carry the key. The inline cell lane hands updateRow a map holding EXACTLY
+     * ONE entry, so reading record_id straight off it refused every partial write with
+     * "unknown_instance" -- and reading cron off it refused with "invalid_cron" while
+     * parsing the literal string "null".
+     *
+     * @param existing the stored schedule, or null on a create
+     */
     private @NonNull Map<String, Object> validated(@NonNull Map<String, Object> coerced,
+                                                   @Nullable Row existing,
                                                    @NonNull AccessContext accessContext) {
-        Object recordId = coerced.get("record_id");
+        Object recordId = CmsSupport.valueOf(coerced, existing, RecordScheduleModel.RECORD_ID);
         int instanceId = parseInstanceId(recordId);
 
         if (instanceId <= 0
@@ -243,14 +254,14 @@ public class InstanceScheduleResource extends RowResource {
 
         requireManage(accessContext, instanceId);
 
-        Object cron = coerced.get("cron");
+        Object cron = CmsSupport.valueOf(coerced, existing, RecordScheduleModel.CRON);
         try {
             CronExpression.parse(String.valueOf(cron));
         } catch (RuntimeException e) {
             throw Violations.ofField("cron", cron, CmsSupport.violationText("invalid_cron"));
         }
 
-        Object timezone = coerced.get("timezone");
+        Object timezone = CmsSupport.valueOf(coerced, existing, RecordScheduleModel.TIMEZONE);
         if (timezone instanceof String zone && !zone.isBlank()) {
             try {
                 ZoneId.of(zone);

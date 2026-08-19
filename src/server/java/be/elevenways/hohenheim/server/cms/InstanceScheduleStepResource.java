@@ -108,7 +108,7 @@ public class InstanceScheduleStepResource extends RowResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        Row schedule = authorize(coerced, accessContext);
+        Row schedule = authorize(coerced, null, accessContext);
         Object id = super.persistRow(coerced, accessContext);
         restampAuthority(schedule, accessContext);
         return id;
@@ -117,7 +117,7 @@ public class InstanceScheduleStepResource extends RowResource {
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        Row schedule = authorize(coerced, accessContext);
+        Row schedule = authorize(coerced, existing, accessContext);
         super.updateRow(existing, coerced, accessContext);
         restampAuthority(schedule, accessContext);
     }
@@ -141,10 +141,19 @@ public class InstanceScheduleStepResource extends RowResource {
      * The edit-time half of per-step authorization: the schedule must exist and target
      * an instance, and the EDITOR must hold the selected action's own capability on
      * that instance now.
+     *
+     * AIDEV-NOTE: both reads take the STORED value when the write does not carry the key.
+     * The inline cell lane hands updateRow a map holding EXACTLY ONE entry, so reading
+     * schedule_id straight off it refused every partial write with "unknown_schedule" --
+     * naming a chain the operator never repointed.
+     *
+     * @param existing the stored step, or null on a create
      */
     private @NonNull Row authorize(@NonNull Map<String, Object> coerced,
+                                   @Nullable Row existing,
                                    @NonNull AccessContext accessContext) {
-        Object scheduleId = coerced.get("schedule_id");
+        Object scheduleId = CmsSupport.valueOf(coerced, existing,
+            RecordScheduleStepModel.SCHEDULE_ID);
         Row schedule = scheduleId instanceof Integer id ? loadSchedule(id) : null;
 
         if (schedule == null
@@ -154,7 +163,7 @@ public class InstanceScheduleStepResource extends RowResource {
         }
 
         String recordId = schedule.get(RecordScheduleModel.RECORD_ID);
-        Object action = coerced.get("action");
+        Object action = CmsSupport.valueOf(coerced, existing, RecordScheduleStepModel.ACTION);
         String refusal = RecordScheduleActions.editRefusal(accessContext,
             InstanceModel.MODEL_ID, recordId,
             action instanceof String key ? key : null);
