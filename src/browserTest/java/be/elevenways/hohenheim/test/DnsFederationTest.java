@@ -185,7 +185,7 @@ class DnsFederationTest {
 
             // The zone row records a successful transfer.
             Row zone = Models.get(DnsZoneModel.class).findById(secondaryZoneId);
-            assertThat(zone.get(DnsZoneModel.TRANSFER_STATUS)).isEqualTo(SecondaryZoneService.STATUS_OK);
+            assertThat(zone.get(DnsZoneModel.TRANSFER_STATUS)).isEqualTo(DnsZoneModel.TRANSFER_OK);
             assertThat(zone.get(DnsZoneModel.SERIAL)).isEqualTo(7);
         }
         finally {
@@ -207,7 +207,7 @@ class DnsFederationTest {
         // Never-transferred zones RETRY as errors; expiry is reserved for zones
         // whose last successful transfer outlived the SOA expire window.
         Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
-        assertThat(zone.get(DnsZoneModel.TRANSFER_STATUS)).isEqualTo(SecondaryZoneService.STATUS_ERROR);
+        assertThat(zone.get(DnsZoneModel.TRANSFER_STATUS)).isEqualTo(DnsZoneModel.TRANSFER_ERROR);
         assertThat(zone.get(DnsZoneModel.ENABLED)).isTrue();
     }
 

@@ -245,6 +245,8 @@ public class DnsRecordResource extends RowResource {
                 && HohenheimAccess.reachesRecord(ctx, DnsRecordModel.MODEL_ID,
                     row.get(DnsRecordModel.ID), HohenheimAccess.DYNDNS))
             .handler((row, ctx) -> mintDynamicToken(row))
+            // A credential chore, not a per-row affordance: it belongs in the overflow menu.
+            .inlineInRow(false)
             .build());
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "dyndns_revoke"))
             .label(Microcopy.of("dyndns_revoke").withFilter("scope", "dns_record"))
@@ -259,6 +261,7 @@ public class DnsRecordResource extends RowResource {
                     row.get(DnsRecordModel.ID), HohenheimAccess.DYNDNS)
                 && DynamicDnsService.credentialFor(row.get(DnsRecordModel.ID)) != null)
             .handler((row, ctx) -> revokeDynamicToken(row))
+            .inlineInRow(false)
             .build());
         return actions;
     }

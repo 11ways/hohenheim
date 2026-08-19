@@ -47,7 +47,7 @@ class ServerAdminTest extends HohenheimTestBase {
         waitForHydration();
 
         String body = page.locator("body").textContent();
-        assertThat(body).as("step 2: the list page renders").contains("Servers");
+        assertThat(body).as("step 2: the list page renders").contains("Hosts");
         assertThat(body).as("step 2: and shows the seeded implicit host").contains("local");
         assertThat(Models.get(ServerModel.class).find().count())
             .as("step 2: a GET of the server list must INSERT nothing")

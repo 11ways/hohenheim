@@ -1289,6 +1289,10 @@
     {
       "text": "Failed",
       "scope": "schedule_run_status"
+    },
+    {
+      "text": "Failed",
+      "scope": "dns_transfer"
     }
   ],
   "forced": {
@@ -2057,7 +2061,7 @@
       "scope": "notification_channel"
     },
     {
-      "text": "Servers",
+      "text": "Hosts",
       "scope": "server"
     },
     {
@@ -2129,7 +2133,7 @@
       "scope": "stack_file"
     },
     {
-      "text": "Hostname cooldowns",
+      "text": "Released hostnames",
       "scope": "released_claim"
     },
     {
@@ -2649,10 +2653,16 @@
       "scope": "help"
     }
   ],
-  "serial": {
-    "text": "Serial",
-    "scope": "field"
-  },
+  "serial": [
+    {
+      "text": "Serial",
+      "scope": "field"
+    },
+    {
+      "text": "The SOA serial. Hohenheim bumps it on every change; secondary servers compare it to decide whether to pull the zone again.",
+      "scope": "help"
+    }
+  ],
   "default_ttl": [
     {
       "text": "Default TTL",
@@ -5035,14 +5045,26 @@
     "text": "VM isolated",
     "scope": "host_posture"
   },
-  "posture": {
-    "text": "Posture",
-    "scope": "field"
-  },
-  "admission": {
-    "text": "Admission",
-    "scope": "field"
-  },
+  "posture": [
+    {
+      "text": "Posture",
+      "scope": "field"
+    },
+    {
+      "text": "How well this host separates tenants. Trusted only: no hostile tenants at all. Dedicated: one tenant owns the machine. Shared containers: several tenants share one kernel, so a container escape reaches all of them. VM isolated: every workload runs in its own virtual machine, the only posture rated against a hostile root tenant.",
+      "scope": "help"
+    }
+  ],
+  "admission": [
+    {
+      "text": "Admission",
+      "scope": "field"
+    },
+    {
+      "text": "Whether new workloads may be placed here. Blocked until a preflight passes; admitted accepts placement; cordoned keeps what already runs but takes nothing new. Changed with the Admit and Cordon actions, never by editing this form.",
+      "scope": "help"
+    }
+  ],
   "remove_orphan": {
     "text": "Remove orphan",
     "scope": "reconcile_finding"
@@ -6991,7 +7013,7 @@
     "scope": "violations"
   },
   "incus_container": {
-    "text": "Incus container",
+    "text": "System container (LXC)",
     "scope": "instance_kind"
   },
   "incus_image": [
@@ -8492,7 +8514,7 @@
       "scope": "instance_template"
     },
     {
-      "text": "The websites and applications this proxy serves, with their domains and deployments.",
+      "text": "The websites and applications served from this host, with their domains and deployments.",
       "scope": "site"
     },
     {
@@ -8508,7 +8530,7 @@
       "scope": "git_provider"
     },
     {
-      "text": "Hostnames recently detached from a site, held back so a new owner cannot claim them at once.",
+      "text": "Hostnames released from a site and held in quarantine for a while, so another tenant cannot immediately take over the traffic they still deliver.",
       "scope": "released_claim"
     },
     {
@@ -8659,5 +8681,43 @@
   "internal": {
     "text": "Internal DNS",
     "scope": "dns_publisher"
+  },
+  "transfer_status": [
+    {
+      "text": "Transfer status",
+      "scope": "field"
+    },
+    {
+      "text": "Outcome of the last zone transfer from the primary peer. Secondary zones only.",
+      "scope": "help"
+    }
+  ],
+  "transfer_message": [
+    {
+      "text": "Transfer detail",
+      "scope": "field"
+    },
+    {
+      "text": "The error or note recorded by the last transfer attempt.",
+      "scope": "help"
+    }
+  ],
+  "last_transfer_at": [
+    {
+      "text": "Last transfer",
+      "scope": "field"
+    },
+    {
+      "text": "When records were last pulled successfully from the primary peer.",
+      "scope": "help"
+    }
+  ],
+  "transferred": {
+    "text": "Transferred",
+    "scope": "dns_transfer"
+  },
+  "expired": {
+    "text": "Expired",
+    "scope": "dns_transfer"
   }
 }

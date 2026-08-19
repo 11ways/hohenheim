@@ -22,6 +22,8 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
+import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -73,6 +75,11 @@ public final class DnsZoneResource extends RowResource {
         .add(DnsZoneModel.SOA_RETRY)
         .add(DnsZoneModel.SOA_EXPIRE)
         .add(DnsZoneModel.DNSSEC_ENABLED)
+        // Replication diagnostics: written by the transfer machinery, read-only here
+        // and hidden entirely on a primary zone (see fieldBindings).
+        .add(DnsZoneModel.TRANSFER_STATUS)
+        .add(DnsZoneModel.LAST_TRANSFER_AT)
+        .add(DnsZoneModel.TRANSFER_MESSAGE)
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -220,8 +227,30 @@ public final class DnsZoneResource extends RowResource {
         return counts;
     }
 
+    /**
+     * Replication diagnostics belong to secondary zones only; a primary zone shows them
+     * neither in its list cell nor in its form.
+     */
+    @Override
+    public @NonNull List<ResourceFieldBinding> fieldBindings() {
+        FieldAccess secondaryOnly = FieldAccess.customRecordAware((ctx, record) ->
+            record instanceof Row zone && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))
+                ? FieldAccess.Decision.READONLY
+                : FieldAccess.Decision.HIDDEN);
+        return List.of(
+            ResourceFieldBinding.of(DnsZoneModel.TRANSFER_STATUS.getName(), secondaryOnly),
+            ResourceFieldBinding.of(DnsZoneModel.LAST_TRANSFER_AT.getName(), secondaryOnly),
+            ResourceFieldBinding.of(DnsZoneModel.TRANSFER_MESSAGE.getName(), secondaryOnly));
+    }
+
     @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        // A primary zone transfers from nobody: the stored word would be noise, and a
+        // null cell renders blank rather than as a badge.
+        if (DnsZoneModel.TRANSFER_STATUS.getName().equals(column.name())
+            && !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(row))) {
+            return null;
+        }
         if ("record_count".equals(column.name())) {
             Integer zoneId = row.get(DnsZoneModel.ID);
             Conduit conduit = RouteScope.currentConduit();
