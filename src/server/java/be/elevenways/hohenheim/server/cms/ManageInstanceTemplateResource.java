@@ -17,6 +17,7 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -58,6 +59,19 @@ public final class ManageInstanceTemplateResource extends InstanceTemplateResour
     @Override public boolean creatable() { return false; }
     @Override public boolean updatable() { return false; }
     @Override public boolean deletable() { return false; }
+
+    /**
+     * The operator resource's inline cells are dropped with the write surface.
+     *
+     * AIDEV-NOTE: required twice over. Registration refuses inlineEditableFields() on a
+     * resource whose updatable() is false, AND this mirror narrows the formSpec to name,
+     * description and version -- two of the three inherited cells back no entry of it at
+     * all. The catalog exists so a tenant can PICK a template, never inspect or shape one.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of();
+    }
 
     /** Admins see the whole catalog; everyone else only what an operator approved. */
     @Override

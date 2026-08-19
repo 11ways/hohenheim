@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -35,6 +36,11 @@ import java.util.Map;
  * Secondaries tab with {@code ?zone_id=} preselected.
  */
 public final class DnsZonePeerResource extends RowResource {
+
+    /** The Secondaries tab's quick-add entry; the zone rides along as a preset. */
+    private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
+        .of(DnsZonePeerModel.PEER_ID.getName())
+        .presets(DnsZonePeerModel.ZONE_ID.getName());
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(DnsZonePeerModel.ZONE_ID)
@@ -75,6 +81,31 @@ public final class DnsZonePeerResource extends RowResource {
             }
         }
         return Map.of();
+    }
+
+    /**
+     * The Secondaries tab's quick-add bar: linking a peer is one pick.
+     *
+     * AIDEV-NOTE: there is deliberately no inline counterpart. PEER_ID is the whole row --
+     * it defines which peer is AXFR-authorized for this zone -- so editing it in place is
+     * not editing a property of a link, it is replacing the link. Unlinking and linking
+     * are the two acts, and both already exist.
+     */
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return QUICK_CREATE;
+    }
+
+    /** The zone the bar links into: the {@code ?zone_id=} prefill, else the tab's own record. */
+    @Override
+    public @NonNull Map<String, Object> quickCreatePresetValues(@NonNull AccessContext accessContext) {
+        Conduit conduit = accessContext.conduit();
+        if (conduit == null) {
+            return Map.of();
+        }
+        Integer zoneId = CmsSupport.scopedParentId(conduit, DnsZonePeerModel.ZONE_ID.getName(),
+            DnsZoneResource.SLUG);
+        return zoneId != null ? Map.of(DnsZonePeerModel.ZONE_ID.getName(), zoneId) : Map.of();
     }
 
     @Override

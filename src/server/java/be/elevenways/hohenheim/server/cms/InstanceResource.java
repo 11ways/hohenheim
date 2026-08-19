@@ -174,6 +174,23 @@ public class InstanceResource extends RowResource {
                 idOf(record), HohenheimAccess.CONFIG);
     }
 
+    /**
+     * The label and the crash policy -- the two answers that describe an instance without
+     * moving it or changing what it runs.
+     *
+     * AIDEV-NOTE: a rename is capacity-NEUTRAL ({@code InstanceCapacity} books memory per
+     * record, never per name), which is why it is the one text field safe to retype in a
+     * list of live workloads. KIND is excluded because switching it NULLS
+     * IMAGE_FINGERPRINT -- the record would stop knowing what is actually running.
+     * SERVER_ID is excluded because it REBOOKS host memory: a placement decision is not a
+     * cell edit, and it is a RelationPick outside the compact subset anyway. SETTINGS is
+     * the dynamic sub-form (image, command, environment) and can never be one cell.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(InstanceModel.NAME, InstanceModel.CRASH_POLICY);
+    }
+
     private static int idOf(@NonNull Row record) {
         Integer id = record.get(InstanceModel.ID);
         return id != null ? id : -1;

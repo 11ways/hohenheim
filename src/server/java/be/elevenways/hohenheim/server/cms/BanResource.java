@@ -8,14 +8,15 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
-import be.elevenways.zenit.common.edit.Plain;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -40,8 +41,11 @@ public final class BanResource extends RowResource {
 
     private static final Identifier LIFT = Identifier.of("hohenheim", "lift_ban");
 
+    /** The form-only duration entry's name; it backs no column. */
+    private static final String DURATION_NAME = "duration";
+
     /** Duration choices for a manual ban; "permanent" maps to a null TTL. */
-    private static final EnumField DURATION = EnumField.builder("duration")
+    private static final EnumField DURATION = EnumField.builder(DURATION_NAME)
         .value("1h", v -> v.displayName("1 hour")
             .label(Microcopy.of("duration_1h").withFilter("scope", "ban")))
         .value("24h", v -> v.displayName("24 hours")
@@ -56,10 +60,25 @@ public final class BanResource extends RowResource {
         .label(Microcopy.of("ban_duration").withFilter("scope", "field"))
         .build();
 
+    /**
+     * The list's quick-add bar: THE manual "ban an IP" flow, which is three answers.
+     *
+     * AIDEV-NOTE: there is deliberately no inline counterpart. Ban rows are an audit
+     * trail ({@code updatable() == false}), and that is not merely a policy: BanService
+     * programs nftables at create and at lift, so a row edited underneath it would leave
+     * the kernel enforcing something the record no longer says.
+     */
+    private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
+        .of(BanModel.IP.getName(), BanModel.REASON.getName(), DURATION_NAME);
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(BanModel.IP)
         .add(BanModel.REASON)
-        .add(Plain.of(DURATION))
+        // AIDEV-NOTE: the DERIVED entry, never a bare Plain. An EnumField wrapped in
+        // Plain renders as a free-text box on the full form and is outside the compact
+        // subset entirely, so the quick-add bar could not offer it at all -- and every
+        // ban created there would have silently taken the 24h default.
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(DURATION))
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "ban"); }
@@ -79,6 +98,11 @@ public final class BanResource extends RowResource {
     /** Ban rows are an audit trail: created and lifted, never edited or deleted. */
     @Override public boolean updatable() { return false; }
     @Override public boolean deletable() { return false; }
+
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return QUICK_CREATE;
+    }
 
     // AIDEV-NOTE: this list had NO filters at all despite three columns that are pure
     // classification. "Which active auto-bans came from the login probe" was a question

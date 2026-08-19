@@ -6,11 +6,14 @@ import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
@@ -43,6 +46,19 @@ public final class ManageProjectResource extends ProjectResource {
     @Override public boolean creatable() { return false; }
     @Override public boolean updatable() { return false; }
     @Override public boolean deletable() { return false; }
+
+    /**
+     * The operator resource's quick-add bar and inline cells are dropped WITH the write
+     * surfaces they belong to.
+     *
+     * AIDEV-NOTE: these two are not decoration. Registration REFUSES a resource that
+     * declares quickCreate() while creatable() is false, or inlineEditableFields() while
+     * updatable() is false -- so this mirror would fail to register at boot without them.
+     * That refusal is the mechanism working: a delegated peer inherits every declaration
+     * of its base, and a narrowing subclass must say what it narrows.
+     */
+    @Override public @Nullable QuickCreateSpec quickCreate() { return null; }
+    @Override public @NonNull List<Field<?, ?>> inlineEditableFields() { return List.of(); }
 
     /** Deliberately NOT frameworkSubpages(): activity and revision history are admin history. */
     @Override public @NonNull List<RecordScopedPage<Row>> subpages() { return List.of(); }

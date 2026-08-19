@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -106,6 +107,26 @@ public final class DnsZoneResource extends RowResource {
     @Override
     public @NonNull List<Field<?, ?>> searchFields() {
         return List.of(DnsZoneModel.ORIGIN);
+    }
+
+    /**
+     * The list's quick-add bar: an origin is a whole zone.
+     *
+     * AIDEV-NOTE: every other entry is either field-defaulted or DEGRADES correctly -- a
+     * blank primary NS and contact are derived from the origin by {@code DnsZoneStore}
+     * when the snapshot is built, so a zone added here serves correctly and gets tuned in
+     * its own form.
+     *
+     * AIDEV-NOTE: there is deliberately NO inline counterpart, and the
+     * {@link DnsRecordResource} precedent does not transfer up to the zone. No zone field
+     * is stored metadata: {@link #updateRow} bumps the SERIAL and swaps the SERVED
+     * snapshot on every save, so a cell commit would re-announce the zone to every
+     * secondary. DNSSEC_ENABLED additionally triggers key generation and ENABLED takes a
+     * live domain dark.
+     */
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return QuickCreateSpec.of(DnsZoneModel.ORIGIN.getName());
     }
 
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }

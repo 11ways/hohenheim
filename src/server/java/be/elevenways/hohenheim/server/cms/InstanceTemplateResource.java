@@ -107,6 +107,22 @@ public class InstanceTemplateResource extends RowResource {
     }
     @Override public @NonNull Icon icon() { return Icon.of("clone"); }
 
+    /**
+     * The catalog metadata an operator corrects while reading the list: the version string
+     * it advertises, the log line that means "ready", and the graceful stop command.
+     *
+     * AIDEV-NOTE: INSTALL_SCRIPT and UPDATE_SCRIPT are excluded. Their vocabulary gate runs
+     * at APPROVE time only, so a cell edit would let an already-approved recipe be rewritten
+     * with nothing re-judging it -- and an install script is what the whole installation
+     * runs. REINSTALL_POLICY is excluded because it decides whether a reinstall WIPES
+     * volumes; that is a data-destruction default, not a label.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(InstanceTemplateModel.VERSION, InstanceTemplateModel.READINESS_LINE,
+            InstanceTemplateModel.STOP_COMMAND);
+    }
+
     /** A template with live instances is load-bearing: refuse to delete it. */
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {

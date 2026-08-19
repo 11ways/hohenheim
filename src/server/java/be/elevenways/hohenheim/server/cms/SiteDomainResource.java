@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.sitetype.types.TlsPassthroughSiteType;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -33,6 +34,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -59,6 +61,11 @@ public class SiteDomainResource extends RowResource {
             Microcopy.of("wildcard").withFilter("scope", "domain_match")),
         FieldOption.of(SiteDomainModel.MATCH_REGEX,
             Microcopy.of("regex").withFilter("scope", "domain_match")));
+
+    /** The Domains tab's quick-add entries; the site rides along as a host-supplied preset. */
+    private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
+        .of(SiteDomainModel.HOSTNAME.getName(), SiteDomainModel.FORCE_SSL.getName())
+        .presets(SiteDomainModel.SITE_ID.getName());
 
     /** Discovered local addresses (refreshed hourly by UpdateSystemIpAddresses); blank = all interfaces. */
     static List<FieldOption<String>> listenOnOptions() {
@@ -128,6 +135,26 @@ public class SiteDomainResource extends RowResource {
     }
 
 
+    /**
+     * Writing a domain row demands {@code manage} on the site it binds to.
+     *
+     * AIDEV-NOTE: declared HERE, on the base, and not left to the delegated peer. Until
+     * this wave the mirror was safe only by COINCIDENCE -- no base {@code writableBy} plus
+     * a read scope that already excluded foreign sites -- and the moment a surface offers
+     * a one-click pencil, "the list only shows yours" stops being the whole answer: the
+     * pencil, the cell endpoint and the commit all consult THIS predicate. The write
+     * pipeline's own {@code TenantWrites} freeze stays the gate; this decides the
+     * affordance, so a view-only delegate is never shown a control that can only refuse.
+     */
+    @Override
+    public boolean writableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        // reachesRecord, never canManageSite: this runs once per RENDERED ROW, and the
+        // per-record walk would be a grant-store round trip per row on a page whose own
+        // scope criteria already asked the same question set-wise.
+        return HohenheimAccess.reachesRecord(accessContext, SiteModel.MODEL_ID,
+            record.get(SiteDomainModel.SITE_ID), HohenheimAccess.MANAGE);
+    }
+
     /** The site's Domains tab links here with ?site_id= so the pick is preselected. */
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
@@ -148,6 +175,54 @@ public class SiteDomainResource extends RowResource {
             }
         }
         return Map.copyOf(values);
+    }
+
+    /**
+     * The Domains tab's quick-add bar: a hostname and whether it is HTTPS-only, with the
+     * site riding along as a host-supplied preset.
+     *
+     * AIDEV-NOTE: MATCH_TYPE is deliberately NOT here even though the admin form and the
+     * admin table both carry it -- {@link ManageDomainResource} narrows its formSpec to
+     * the delegated subset, which has no match_type entry, and a bar naming an entry the
+     * mirror's spec does not declare REFUSES that mirror's registration at boot. The
+     * default (exact) is what a hostname typed into a one-line bar means anyway.
+     */
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return QUICK_CREATE;
+    }
+
+    /** The site the bar adds into: the {@code ?site_id=} prefill, else the tab's own record. */
+    @Override
+    public @NonNull Map<String, Object> quickCreatePresetValues(@NonNull AccessContext accessContext) {
+        Conduit conduit = accessContext.conduit();
+        if (conduit == null) {
+            return Map.of();
+        }
+        Integer siteId = CmsSupport.scopedParentId(conduit, SiteDomainModel.SITE_ID.getName(),
+            "sites");
+        return siteId != null ? Map.of(SiteDomainModel.SITE_ID.getName(), siteId) : Map.of();
+    }
+
+    /**
+     * The TLS switches, which are the everyday domain edits and are read per REQUEST
+     * rather than baked into a route.
+     *
+     * AIDEV-NOTE: every write here is correct on a ONE-ENTRY map by construction, because
+     * the route invariant reads its inputs through {@link SiteDomainModel#effective}
+     * (submitted value else stored value) rather than off the coerced map -- which is why
+     * this resource needs no {@code updateRow} override at all.
+     *
+     * AIDEV-NOTE: HOSTNAME, PATH, LISTEN_ON and MATCH_TYPE are excluded, and not for
+     * tidiness: those four ARE the live route claim. Editing one frees the departing key
+     * into the released-claim quarantine ledger (the beforeWrite hook above, release path
+     * 2 of 3), so a one-click cell edit would quarantine a hostname the operator still
+     * believes they own. That belongs on a form, next to the refusals that explain it.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(SiteDomainModel.FORCE_SSL, SiteDomainModel.HSTS_ENABLED,
+            SiteDomainModel.HSTS_SUBDOMAINS, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT);
     }
 
     private static volatile boolean routeInvariantInstalled;

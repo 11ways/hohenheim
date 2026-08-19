@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -14,6 +15,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
@@ -61,6 +63,32 @@ public final class InstanceQuotaResource extends RowResource {
     @Override
     public @NonNull List<Field<?, ?>> searchFields() {
         return List.of(InstanceQuotaModel.SUBJECTS);
+    }
+
+    /** The three caps an override is usually opened for; the rest default to unlimited. */
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return QuickCreateSpec.of(InstanceQuotaModel.SUBJECTS.getName(),
+            InstanceQuotaModel.MAX_INSTANCES.getName(),
+            InstanceQuotaModel.MAX_MEMORY_MB.getName());
+    }
+
+    /**
+     * Every cap, and only the caps.
+     *
+     * AIDEV-NOTE: a cap is read at RESERVE time ({@code InstanceQuota}) and never swept
+     * retroactively, so lowering one here cannot retire anything already running -- it
+     * decides the next reservation, which is exactly what an operator raising a limit
+     * mid-incident wants. The negative-value refusal still runs: the cell lane is a
+     * sibling of the form lane, not a bypass. SUBJECTS is excluded because it is the
+     * row's unique key -- retyping it in place silently re-points the override at
+     * another owner, which reads as "I edited a number".
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(InstanceQuotaModel.MAX_INSTANCES, InstanceQuotaModel.MAX_MEMORY_MB,
+            InstanceQuotaModel.MAX_DISK_GB, InstanceQuotaModel.MAX_NICS,
+            InstanceQuotaModel.MAX_SITES, InstanceQuotaModel.MAX_DATABASES);
     }
 
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }

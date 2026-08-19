@@ -19,6 +19,7 @@ import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -48,6 +49,11 @@ import java.util.regex.Pattern;
  * rollbacks are explicit row actions so saving a form never restarts containers.
  */
 public class StackResource extends RowResource {
+
+    /** The list's quick-add entry; the host rides along as a preset. */
+    private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
+        .of(StackModel.NAME.getName())
+        .presets(StackModel.SERVER_ID.getName());
 
     /** Stack names become network/container/volume name segments. */
     static final Pattern NAME_PATTERN = Pattern.compile("[a-z0-9][a-z0-9-]{0,62}");
@@ -107,6 +113,39 @@ public class StackResource extends RowResource {
         Map<String, Object> values = CmsSupport.mutable(formSpec().defaultValues());
         values.put("server_id", ServerModel.localServerId());
         return Map.copyOf(values);
+    }
+
+    /**
+     * The list's quick-add bar: a stack is a name plus a host, and the host is the local
+     * daemon unless somebody says otherwise on the form.
+     *
+     * AIDEV-NOTE: a stack created here is INERT -- {@code enabled} defaults off, so
+     * nothing is deployed until an operator opens the record and arms it. That is what
+     * makes a one-field bar safe on a resource whose enable switch arms a boot-time deploy.
+     */
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return QUICK_CREATE;
+    }
+
+    /** The bar's host preset: the same local daemon the full create form defaults to. */
+    @Override
+    public @NonNull Map<String, Object> quickCreatePresetValues(@NonNull AccessContext accessContext) {
+        return Map.of(StackModel.SERVER_ID.getName(), ServerModel.localServerId());
+    }
+
+    /**
+     * The description only.
+     *
+     * AIDEV-NOTE: ENABLED is excluded because it ARMS a boot-time deploy
+     * ({@code StackInstances}) -- one click would start containers. NAME is excluded
+     * because it is embedded in every container, network and volume name, so a rename is
+     * gated behind a LIVE Docker round-trip that can refuse or be unverifiable; a cell
+     * that can answer "cannot prove this is safe" is a cell in the wrong place.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(StackModel.DESCRIPTION);
     }
 
     @Override

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -65,6 +66,19 @@ public class InstanceSnapshotResource extends RowResource {
         return List.of(InstanceSnapshotModel.NOTE);
     }
 
+    /**
+     * The note, and only the note.
+     *
+     * AIDEV-NOTE: every OTHER column of a snapshot is captured state -- the status the
+     * capture reached, the byte count it wrote, the instance it was taken from. Editing
+     * one in place would be editing the record OF an event that already happened, so the
+     * form does not offer them either (NOTE is its sole entry).
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(InstanceSnapshotModel.NOTE);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 16; }
 
@@ -74,6 +88,23 @@ public class InstanceSnapshotResource extends RowResource {
     /** Snapshots are born from the instance action, never from a form. */
     @Override
     public boolean creatable() { return false; }
+
+    /**
+     * Writing a snapshot row demands {@code snapshots} on the instance it captured --
+     * the same capability {@link ManageInstanceSnapshotResource} scopes its list by.
+     *
+     * AIDEV-NOTE: declared HERE, on the base, and not left to the delegated peer. Until
+     * this wave the mirror was safe only by COINCIDENCE (no base {@code writableBy}, plus
+     * a read scope that already excluded foreign snapshots), and a one-click pencil makes
+     * "the list only shows yours" stop being the whole answer: the affordance, the cell
+     * endpoint and the commit all consult THIS predicate.
+     */
+    @Override
+    public boolean writableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        // reachesRecord, never hasInstanceCapability: this runs once per RENDERED ROW.
+        return HohenheimAccess.reachesRecord(accessContext, InstanceModel.MODEL_ID,
+            record.get(InstanceSnapshotModel.INSTANCE_ID), HohenheimAccess.SNAPSHOTS);
+    }
 
     /** Delete removes the payload files WITH the row. */
     @Override
