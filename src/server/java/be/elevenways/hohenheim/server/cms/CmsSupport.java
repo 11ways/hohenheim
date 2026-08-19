@@ -111,6 +111,44 @@ public final class CmsSupport {
     }
 
     /**
+     * THE parent-record id a quick-add bar adds into, read off the REQUEST.
+     *
+     * AIDEV-NOTE: the framework asks the RESOURCE for its quick-add presets, so a
+     * bespoke tab page cannot hand them in -- answering from the request is also the
+     * more honest shape, because a page rendering the bar for parent A can then no
+     * longer pass parent B. Two sources, in order: the {@code ?param=} prefill a
+     * create link carries, then the record whose subpage is being rendered. A
+     * malformed value answers null, which renders NO bar rather than a bar whose every
+     * add fails on a field nothing shows.
+     *
+     * @param param      the query parameter AND form entry name of the parent key
+     * @param parentSlug the parent resource's slug, whose subpage supplies the fallback
+     */
+    public static @Nullable Integer scopedParentId(@NonNull Conduit conduit, @NonNull String param,
+                                                   @NonNull String parentSlug) {
+        Integer prefilled = parsedInt(conduit.getQueryParam(param));
+        if (prefilled != null) {
+            return prefilled;
+        }
+        if (!parentSlug.equals(conduit.getParameter(CmsEndpoints.RESOURCE_PARAM))) {
+            return null;
+        }
+        return parsedInt(conduit.getParameter(CmsEndpoints.RESOURCE_ID_PARAM));
+    }
+
+    /** @return the parsed integer, or null for an absent, empty or malformed value */
+    public static @Nullable Integer parsedInt(@Nullable String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException malformed) {
+            return null;
+        }
+    }
+
+    /**
      * The hosting panel's slug during a cms dispatch (subpages render under /admin AND
      * /manage).
      *
