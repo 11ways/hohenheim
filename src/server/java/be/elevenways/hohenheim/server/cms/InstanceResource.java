@@ -166,12 +166,18 @@ public class InstanceResource extends RowResource {
      * wider {@code view}, and without this a view-only delegate was shown an editor
      * whose every save the pipeline could only refuse. The boolean twin of the gate,
      * never a second authority.
+     *
+     * AIDEV-NOTE: reachesRecord, never hasInstanceCapability -- this and every
+     * {@code visibleFor} below run once per RENDERED ROW, and the un-memoized walk was
+     * SEVEN grant-store round trips per instance row. The fresh walk stays for the write
+     * gates that look identical (TenantWrites, InstanceScheduleResource.requireManage):
+     * the memo deliberately does not see a grant written earlier in the same request.
      */
     @Override
     public boolean updatableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
         return super.updatableBy(record, accessContext)
-            && HohenheimAccess.hasInstanceCapability(accessContext,
-                idOf(record), HohenheimAccess.CONFIG);
+            && HohenheimAccess.reachesRecord(accessContext, InstanceModel.MODEL_ID,
+                record.get(InstanceModel.ID), HohenheimAccess.CONFIG);
     }
 
     /**
@@ -189,11 +195,6 @@ public class InstanceResource extends RowResource {
     @Override
     public @NonNull List<Field<?, ?>> inlineEditableFields() {
         return List.of(InstanceModel.NAME, InstanceModel.CRASH_POLICY);
-    }
-
-    private static int idOf(@NonNull Row record) {
-        Integer id = record.get(InstanceModel.ID);
-        return id != null ? id : -1;
     }
 
     /**
@@ -355,8 +356,8 @@ public class InstanceResource extends RowResource {
             .icon(Icon.of("arrow-up-from-bracket"))
             .inlineInRow(false)
             .visibleFor((row, ctx) -> InstanceAppUpdates.hasUpdateScript(row)
-                && HohenheimAccess.hasInstanceCapability(
-                    ctx, row.get(InstanceModel.ID), HohenheimAccess.CONFIG))
+                && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
+                    row.get(InstanceModel.ID), HohenheimAccess.CONFIG))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("app_update").withFilter("scope", "instance"))
                 .body(Microcopy.of("app_update_confirm").withFilter("scope", "instance"))
@@ -387,8 +388,8 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("snapshot").withFilter("scope", "instance"))
             .icon(Icon.of("camera"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> HohenheimAccess.hasInstanceCapability(
-                ctx, row.get(InstanceModel.ID), HohenheimAccess.SNAPSHOTS))
+            .visibleFor((row, ctx) -> HohenheimAccess.reachesRecord(ctx,
+                InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.SNAPSHOTS))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("snapshot").withFilter("scope", "instance"))
                 .body(Microcopy.of("snapshot_confirm").withFilter("scope", "instance"))
@@ -409,8 +410,8 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("backup_now").withFilter("scope", "instance"))
             .icon(Icon.of("box-archive"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> HohenheimAccess.hasInstanceCapability(
-                ctx, row.get(InstanceModel.ID), HohenheimAccess.BACKUPS))
+            .visibleFor((row, ctx) -> HohenheimAccess.reachesRecord(ctx,
+                InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.BACKUPS))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("backup_now").withFilter("scope", "instance"))
                 .body(Microcopy.of("backup_confirm").withFilter("scope", "instance"))
@@ -466,8 +467,8 @@ public class InstanceResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "deploy_instance"))
             .label(Microcopy.of("deploy").withFilter("scope", "instance"))
             .icon(Icon.of("play"))
-            .visibleFor((row, ctx) -> HohenheimAccess.hasInstanceCapability(
-                ctx, row.get(InstanceModel.ID), HohenheimAccess.POWER))
+            .visibleFor((row, ctx) -> HohenheimAccess.reachesRecord(ctx,
+                InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.POWER))
             .handler((row, ctx) -> {
                 this.instances.deploy(row.get(InstanceModel.ID));
                 return CmsActionResult.refreshWithToast(
@@ -486,8 +487,8 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("restart").withFilter("scope", "instance"))
             .icon(Icon.of("rotate-right"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> HohenheimAccess.hasInstanceCapability(
-                ctx, row.get(InstanceModel.ID), HohenheimAccess.POWER))
+            .visibleFor((row, ctx) -> HohenheimAccess.reachesRecord(ctx,
+                InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.POWER))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("restart").withFilter("scope", "instance"))
                 .body(Microcopy.of("restart_confirm").withFilter("scope", "instance"))
@@ -509,8 +510,8 @@ public class InstanceResource extends RowResource {
             .style(ActionStyle.DESTRUCTIVE)
             .visibleFor((row, ctx) ->
                 InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS))
-                    && HohenheimAccess.hasInstanceCapability(
-                        ctx, row.get(InstanceModel.ID), HohenheimAccess.POWER))
+                    && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
+                        row.get(InstanceModel.ID), HohenheimAccess.POWER))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("stop").withFilter("scope", "instance"))
                 .body(Microcopy.of("stop_confirm").withFilter("scope", "instance"))

@@ -125,8 +125,10 @@ public final class ManageDatabaseResource extends DatabaseResource {
         return List.of(RowAction.Url.<Row>builder(Identifier.of("hohenheim", "manage_backup_database"))
             .label(Microcopy.of("backup").withFilter("scope", "database"))
             .icon(Icon.of("download"))
-            .visibleFor((row, ctx) -> HohenheimAccess.hasDatabaseCapability(ctx,
-                row.get(DatabaseModel.ID), HohenheimAccess.BACKUPS))
+            // reachesRecord, never hasDatabaseCapability: a visibleFor runs once per
+            // RENDERED ROW. The download endpoint keeps the fresh walk as its gate.
+            .visibleFor((row, ctx) -> HohenheimAccess.reachesRecord(ctx,
+                DatabaseModel.MODEL_ID, row.get(DatabaseModel.ID), HohenheimAccess.BACKUPS))
             .url(row -> new Uri(HohenheimEndpoints.DATABASES_BACKUP
                 .with(HohenheimEndpoints.DATABASE_NAME, row.get(DatabaseModel.NAME)).toUrl()))
             .build());
