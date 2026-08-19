@@ -99,8 +99,8 @@ public final class DnsZoneResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(DnsZoneModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
-    @Override public int navOrder() { return 50; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
+    @Override public int navOrder() { return 10; }
 
     @Override
     public @Nullable Microcopy description() {

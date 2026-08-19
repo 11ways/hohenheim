@@ -37,16 +37,25 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AdminNavigationJourneyTest extends HohenheimTestBase {
 
-    /** group id -> the peer slugs it shows, in the order the sidebar renders them. */
+    /**
+     * group id -> the peer slugs it shows, in the order the sidebar renders them.
+     *
+     * AIDEV-NOTE: the groups are named after the OPERATOR'S JOB, not the code's tiers -- the
+     * predecessors (Compute / Proxy / Infrastructure) named subsystems, so an operator had to
+     * know how hohenheim is built to guess where a page lives, and "Infrastructure" collected
+     * whatever fit neither. Within a group the order is OPERATOR VALUE, never alphabetical:
+     * Sites and Instances before the templates they are built from, DNS zones and
+     * Certificates before the cooldown that gates a released name.
+     */
     private static final List<Map.Entry<String, List<String>>> EXPECTED_SIDEBAR = List.of(
-        Map.entry("default", List.of("dashboard")),
-        Map.entry("compute", List.of("instances", "instance-templates")),
-        Map.entry("proxy", List.of("sites", "certificates", "access-lists",
-            "git-providers", "released-claims")),
-        Map.entry("infra", List.of("projects", "servers", "databases", "stacks",
-            "dns-zones", "notifications")),
-        Map.entry("security", List.of("spamservice", "bans", "users", "roles")),
-        Map.entry("system", List.of("activity", "settings")));
+        // The ungrouped top block: what you look at, and what everything runs on.
+        Map.entry("default", List.of("dashboard", "servers")),
+        Map.entry("deploy", List.of("projects", "sites", "instances", "stacks",
+            "databases", "instance-templates", "git-providers")),
+        Map.entry("networking", List.of("dns-zones", "certificates", "access-lists",
+            "released-claims")),
+        Map.entry("security", List.of("users", "roles", "spamservice", "bans")),
+        Map.entry("system", List.of("activity", "notifications", "settings")));
 
     /**
      * Every peer demoted out of the sidebar, with the surface that adopted it. showInNav(false)
@@ -54,12 +63,12 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
      * feature.
      */
     private static final List<String> DEMOTED_SLUGS = List.of(
-        // Compute: instance record tabs (snapshots, backups) and the Instances list header.
+        // Instance record tabs (snapshots, backups) and the Instances list header.
         "instance-snapshots", "instance-backups", "backup-targets", "instance-quotas",
         "game-domains",
-        // Proxy: the Sites list header.
+        // The Sites list header.
         "auth-providers", "previews", "builds", "releases",
-        // Infrastructure: the Projects, Environments, Servers and DNS zones list headers.
+        // The Projects, Environments, Servers and DNS zones list headers.
         "environments", "environment-variables", "reconcile-findings", "dns-peers",
         // Security: the abuse-protection overview page.
         "spamservice-installation", "spamservice-clients", "spamservice-samples",
@@ -125,18 +134,38 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
             }
         }
 
-        // 3. The Security group opens the background tail with a separator, and every group
-        //    that carries a heading carries an icon too (a bare word is not a landmark).
-        NavGroup security = sections.stream()
+        // 3. Section shape: the top block is a bare run of items (a heading over "Dashboard,
+        //    Servers" would have to invent a word for "the two things that are always
+        //    there"), the Security group opens the administration tail with the sidebar's
+        //    ONE separator, and every group hohenheim itself declares carries an icon -- a
+        //    bare word is not a landmark.
+        NavGroup top = sections.get(0).group();
+        assertThat(top.labelled())
+            .as("step 3: the ungrouped top block renders without a heading")
+            .isFalse();
+        assertThat(sections.get(0).peers())
+            .as("step 3: and holds both always-there entries, so it reads as a block")
+            .hasSize(2);
+
+        List<String> separated = sections.stream()
             .map(PanelNav.Section::group)
-            .filter(group -> "security".equals(group.id()))
-            .findFirst().orElseThrow();
-        assertThat(security.separatorBefore())
-            .as("step 3: a rule marks where the daily surfaces end")
-            .isTrue();
-        assertThat(HohenheimPanel.COMPUTE_GROUP.icon().name())
-            .as("step 3: a labelled group carries an icon")
-            .isNotBlank();
+            .filter(NavGroup::separatorBefore)
+            .map(NavGroup::id).toList();
+        assertThat(separated)
+            .as("step 3: exactly one rule, where operating ends and administering begins")
+            .containsExactly("security");
+
+        for (NavGroup group : List.of(HohenheimPanel.DEPLOY_GROUP,
+                HohenheimPanel.NETWORK_GROUP, HohenheimPanel.SECURITY_GROUP)) {
+            assertThat(group.icon().name())
+                .as("step 3: the '" + group.id() + "' group carries an icon")
+                .isNotBlank();
+        }
+        // AIDEV-NOTE: the System group is deliberately absent from that loop. It is
+        // zenit-cms's own NavGroup.SYSTEM constant, which ships Icon.NONE; hohenheim adding
+        // one would mean re-declaring the id here, and PanelNav keeps whichever instance a
+        // peer happens to name FIRST. The nav reserves the icon gutter for labelled groups,
+        // so the heading still aligns. Giving it an icon is a zenit-cms change.
 
         // 4. Demotion removed ENTRIES, not routes: every demoted peer still answers on its
         //    own URL. This is the guard that a showInNav(false) is never a silent delete.

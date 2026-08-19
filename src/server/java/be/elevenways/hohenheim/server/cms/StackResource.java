@@ -81,7 +81,7 @@ public class StackResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(StackModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 40; }
 
     @Override

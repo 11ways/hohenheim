@@ -45,7 +45,7 @@ public final class AccessListResource extends RowResource {
     @Override public @NonNull String slug() { return "access-lists"; }
     @Override public @NonNull Model model() { return Models.get(AccessListModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.PROXY_GROUP; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
     @Override public int navOrder() { return 30; }
 
     @Override

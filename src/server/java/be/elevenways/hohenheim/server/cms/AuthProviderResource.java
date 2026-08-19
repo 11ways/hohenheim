@@ -40,7 +40,7 @@ public final class AuthProviderResource extends RowResource {
     @Override public @NonNull String slug() { return "auth-providers"; }
     @Override public @NonNull Model model() { return Models.get(SiteAuthProviderModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.PROXY_GROUP; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
     @Override public int navOrder() { return 50; }
 
     @Override public boolean showInNav() { return false; }

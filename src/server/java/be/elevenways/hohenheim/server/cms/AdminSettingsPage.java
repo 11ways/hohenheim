@@ -14,7 +14,7 @@ import java.util.List;
  * The panel's settings editor, placed in the System group beside the activity log.
  *
  * AIDEV-NOTE: zenit-cms's {@link SettingsPage} declares no group of its own (it lands in
- * NavGroup.DEFAULT, which rendered it as a stray unlabelled entry above Compute). It is a
+ * NavGroup.DEFAULT, which rendered it as a stray unlabelled entry in the top block). It is a
  * plain class, so a three-line subclass is the whole fix -- no framework change, and the
  * group/order/description stay where every other hohenheim peer declares them.
  */

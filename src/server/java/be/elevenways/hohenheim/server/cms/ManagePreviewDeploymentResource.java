@@ -30,7 +30,12 @@ public final class ManagePreviewDeploymentResource extends PreviewDeploymentReso
      * header action on the Sites list, and this panel has no such list to hang one on.
      */
     @Override public boolean showInNav() { return true; }
-    @Override public int navOrder() { return 30; }
+
+    // AIDEV-NOTE: 25, not 30 -- the admin regrouping folded sites and instances into ONE
+    // Deploy group, and instances already hold 30 there. 25 keeps previews directly under
+    // the Sites entry they are a projection of, and keeps every navOrder in this panel's
+    // Deploy section unique (AdminNavigationJourneyTest step 7).
+    @Override public int navOrder() { return 25; }
 
     /** Admins see everything; everyone else only previews of their granted sites. */
     @Override

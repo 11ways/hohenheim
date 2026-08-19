@@ -1099,6 +1099,10 @@
   ],
   "deploy": [
     {
+      "text": "Deploy",
+      "scope": "nav"
+    },
+    {
       "text": "Deployment van {$name}",
       "scope": "attention_title"
     },
@@ -2251,20 +2255,14 @@
       "scope": "schedule_action"
     }
   ],
-  "infra": {
-    "text": "Infrastructuur",
+  "networking": {
+    "text": "Netwerk",
     "scope": "nav"
   },
-  "proxy": [
-    {
-      "text": "Proxy",
-      "scope": "nav"
-    },
-    {
-      "text": "Proxy",
-      "scope": "site_type"
-    }
-  ],
+  "proxy": {
+    "text": "Proxy",
+    "scope": "site_type"
+  },
   "test": [
     {
       "text": "Test versturen",
@@ -7893,10 +7891,6 @@
   "host_probe_failed": {
     "text": "Peiling van {$name} mislukt: {$kind}",
     "scope": "violations"
-  },
-  "compute": {
-    "text": "Compute",
-    "scope": "nav"
   },
   "quarantined_title": {
     "text": "Deze host staat in quarantaine",
