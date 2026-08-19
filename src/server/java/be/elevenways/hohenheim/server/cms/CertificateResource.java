@@ -23,6 +23,7 @@ import be.elevenways.zenit.common.edit.FieldGroup;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
@@ -62,16 +63,21 @@ public class CertificateResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).filterable().build())
+        // AIDEV-NOTE: eight visible columns down to five. Each pair below answers ONE
+        // question in one cell: what does it cover, why is it in this state, and when is
+        // the next thing going to happen to it.
+        .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).filterable()
+            .subtext("domain_names_text").build())
+        .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).filterable().hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.PROVIDER).filterable().build())
-        .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).filterable().build())
-        .column(ColumnSpec.fromField(CertificateModel.STATUS).filterable().build())
-        .column(ColumnSpec.fromField(CertificateModel.CHALLENGE_TYPE).filterable().build())
+        .column(ColumnSpec.fromField(CertificateModel.STATUS).filterable().subtext("renewal_error").build())
+        .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).filterable().hidden().build())
+        .column(ColumnSpec.fromField(CertificateModel.CHALLENGE_TYPE).filterable().hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.DNS_PUBLISHER).hidden().build())
-        .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).filterable().build())
+        .column(ColumnSpec.fromField(CertificateModel.EXPIRES_ON).filterable()
+            .subtext("next_attempt_at").build())
         .column(ColumnSpec.fromField(CertificateModel.NEXT_ATTEMPT_AT).hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.ERROR_COUNT).hidden().build())
-        .column(ColumnSpec.fromField(CertificateModel.EXPIRES_ON).filterable().build())
         .column(ColumnSpec.fromField(CertificateModel.CREATED_AT).filterable().build())
         .filter(FilterSpec.forField(CertificateModel.NICE_NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(CertificateModel.NICE_NAME)).build())
@@ -94,6 +100,13 @@ public class CertificateResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(CertificateModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The question asked here is always which certificate covers a hostname. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(CertificateModel.NICE_NAME, CertificateModel.DOMAIN_NAMES_TEXT);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
     @Override public int navOrder() { return 20; }
 

@@ -6,11 +6,16 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.PasswordHasher;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.cms.common.schema.FilterSpec;
+import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
@@ -39,6 +44,32 @@ public final class AccessListResource extends RowResource {
         .add(AccessListModel.ALLOWED_IPS)
         .add(AccessListModel.DENIED_IPS)
         .build();
+
+    // AIDEV-NOTE: an explicit spec, because the derived one has no room for the two
+    // columns this list exists for. "Which list holds 10.0.0.5" was previously only
+    // answerable by opening every record.
+    private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
+        .column(ColumnSpec.fromField(AccessListModel.NAME).filterable()
+            .subtext("basic_auth_user").build())
+        .column(ColumnSpec.fromField(AccessListModel.BASIC_AUTH_USER).hidden().build())
+        .column(ColumnSpec.fromField(AccessListModel.SATISFY).filterable().build())
+        .column(ColumnSpec.fromField(AccessListModel.ALLOWED_IPS).build())
+        .column(ColumnSpec.fromField(AccessListModel.DENIED_IPS).build())
+        .column(ColumnSpec.fromField(AccessListModel.CREATED_AT).build())
+        .filter(FilterSpec.forField(AccessListModel.NAME, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(AccessListModel.NAME)).build())
+        .filter(FilterSpec.forField(AccessListModel.SATISFY, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(AccessListModel.SATISFY)).build())
+        .build();
+
+    /** The rule bodies are searchable BECAUSE the question is always "who allows this address". */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(AccessListModel.NAME, AccessListModel.ALLOWED_IPS,
+            AccessListModel.DENIED_IPS, AccessListModel.BASIC_AUTH_USER);
+    }
+
+    @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "access_list"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "access_list"); }

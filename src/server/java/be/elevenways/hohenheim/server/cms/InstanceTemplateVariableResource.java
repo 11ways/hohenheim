@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -23,6 +24,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -45,7 +47,11 @@ public final class InstanceTemplateVariableResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(InstanceTemplateVariableModel.KEY).build())
+        // The key is what gets typed into a template body, so it carries the chip; the
+        // label is the human name of the same thing.
+        .column(ColumnSpec.fromField(InstanceTemplateVariableModel.KEY)
+            .subtext("label").copyable().build())
+        .column(ColumnSpec.fromField(InstanceTemplateVariableModel.LABEL).hidden().build())
         .column(ColumnSpec.fromField(InstanceTemplateVariableModel.TYPE).build())
         .column(ColumnSpec.fromField(InstanceTemplateVariableModel.REQUIRED).build())
         .column(ColumnSpec.fromField(InstanceTemplateVariableModel.TEMPLATE_ID)
@@ -60,6 +66,13 @@ public final class InstanceTemplateVariableResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceTemplateVariableModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** A variable is hunted for by its key or by the words the form shows for it. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(InstanceTemplateVariableModel.KEY, InstanceTemplateVariableModel.LABEL, InstanceTemplateVariableModel.DESCRIPTION);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 17; }
     @Override public @NonNull Icon icon() { return Icon.of("sliders"); }

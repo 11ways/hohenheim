@@ -53,7 +53,9 @@ public class InstanceFileModel extends Model {
      * the same four-column discipline as DnsRecordModel's generated rows.
      */
     public static final StringField GENERATED_BY = SCHEMA.addField(
-        StringField.builder().name("generated_by").filterable(false).build());
+        StringField.builder().name("generated_by").filterable(false)
+            .label(HohenheimFormCopy.label("generated_by"))
+            .build());
 
     /** Model id of the record that authorized this row. */
     public static final StringField GENERATED_FOR_MODEL = SCHEMA.addField(

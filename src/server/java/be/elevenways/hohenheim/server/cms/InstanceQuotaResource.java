@@ -9,10 +9,13 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.List;
 
 /**
  * Per-owner quota overrides: a plain generated resource (the floor IS the page --
@@ -38,7 +41,7 @@ public final class InstanceQuotaResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(InstanceQuotaModel.SUBJECTS).filterable().build())
+        .column(ColumnSpec.fromField(InstanceQuotaModel.SUBJECTS).filterable().copyable().build())
         .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_INSTANCES).build())
         .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_MEMORY_MB).build())
         .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_DISK_GB).build())
@@ -53,6 +56,13 @@ public final class InstanceQuotaResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceQuotaModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The subject expression is the only text a quota carries. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(InstanceQuotaModel.SUBJECTS);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 16; }
 

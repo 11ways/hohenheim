@@ -23,6 +23,7 @@ import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -77,7 +78,7 @@ public class StackServiceResource extends RowResource {
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(StackServiceModel.NAME).build())
-        .column(ColumnSpec.fromField(StackServiceModel.IMAGE).build())
+        .column(ColumnSpec.fromField(StackServiceModel.IMAGE).copyable().build())
         .column(ColumnSpec.fromField(StackServiceModel.ENABLED).build())
         .column(ColumnSpec.fromField(StackServiceModel.STACK_ID)
             .relation(RelationPick.of(StackServiceModel.STACK_ID, StackModel.MODEL_ID).build()).build())
@@ -89,6 +90,13 @@ public class StackServiceResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(StackServiceModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** A service is found by its name or by the image it runs. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(StackServiceModel.NAME, StackServiceModel.IMAGE);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 26; }
     @Override public @NonNull Icon icon() { return Icon.of("cube"); }

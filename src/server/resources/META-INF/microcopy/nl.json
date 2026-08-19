@@ -4849,10 +4849,16 @@
       "scope": "instance_artifacts"
     }
   ],
-  "error": {
-    "text": "Fout",
-    "scope": "instance_status"
-  },
+  "error": [
+    {
+      "text": "Fout",
+      "scope": "instance_status"
+    },
+    {
+      "text": "Fout",
+      "scope": "instance_schedule"
+    }
+  ],
   "deployed": {
     "text": "Instantie {$name} draait",
     "scope": "instance"
@@ -8613,5 +8619,25 @@
       "text": "Benoemde rechtensets die je aan accounts toekent in plaats van ze stuk voor stuk te geven.",
       "scope": "role"
     }
-  ]
+  ],
+  "slug": {
+    "text": "Slug",
+    "scope": "field"
+  },
+  "remote_key": {
+    "text": "Externe sleutel",
+    "scope": "field"
+  },
+  "generated_by": {
+    "text": "Gegenereerd door",
+    "scope": "field"
+  },
+  "satisfy": {
+    "text": "Voldoen aan",
+    "scope": "field"
+  },
+  "events": {
+    "text": "Gebeurtenissen",
+    "scope": "notification_channel"
+  }
 }

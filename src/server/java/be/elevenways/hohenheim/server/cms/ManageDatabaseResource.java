@@ -58,7 +58,7 @@ public final class ManageDatabaseResource extends DatabaseResource {
     private final TableSpec<Row> manageTableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(DatabaseModel.NAME).build())
         .column(ColumnSpec.fromField(DatabaseModel.ENGINE).build())
-        .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).build())
+        .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).copyable().build())
         .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
         .build();
 

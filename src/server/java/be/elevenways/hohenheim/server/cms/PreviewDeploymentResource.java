@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -54,8 +55,11 @@ public class PreviewDeploymentResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(PreviewDeploymentModel.HOSTNAME).filterable().build())
-        .column(ColumnSpec.fromField(PreviewDeploymentModel.REF).filterable().build())
+        // The hostname IS the thing a reviewer opens, so it carries the chip; the ref
+        // says which branch it is a preview OF.
+        .column(ColumnSpec.fromField(PreviewDeploymentModel.HOSTNAME).filterable()
+            .subtext("ref").copyable().build())
+        .column(ColumnSpec.fromField(PreviewDeploymentModel.REF).filterable().hidden().build())
         .column(ColumnSpec.fromField(PreviewDeploymentModel.STATUS).filterable().build())
         .column(ColumnSpec.fromField(PreviewDeploymentModel.EXPIRES_AT).sortable().build())
         .column(ColumnSpec.fromField(PreviewDeploymentModel.CREATED_AT).sortable().build())
@@ -67,6 +71,13 @@ public class PreviewDeploymentResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(PreviewDeploymentModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** A reviewer arrives with a hostname, a branch name or a commit sha. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.REF, PreviewDeploymentModel.HEAD_SHA);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 20; }
 

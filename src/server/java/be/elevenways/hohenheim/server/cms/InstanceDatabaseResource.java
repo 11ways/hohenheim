@@ -23,6 +23,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -31,6 +32,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -67,7 +69,7 @@ public class InstanceDatabaseResource extends RowResource {
         .column(ColumnSpec.fromField(InstanceDatabaseModel.DATABASE_ID)
             .relation(RelationPick.of(InstanceDatabaseModel.DATABASE_ID,
                 DatabaseModel.MODEL_ID).build()).build())
-        .column(ColumnSpec.fromField(InstanceDatabaseModel.ENV_PREFIX).build())
+        .column(ColumnSpec.fromField(InstanceDatabaseModel.ENV_PREFIX).copyable().build())
         .column(ColumnSpec.fromField(InstanceDatabaseModel.CREATED_AT).build())
         .build();
 
@@ -77,6 +79,13 @@ public class InstanceDatabaseResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceDatabaseModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The env prefix names the injected variable family; nothing else here is text. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(InstanceDatabaseModel.ENV_PREFIX);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 21; }
     @Override public @NonNull Icon icon() { return Icon.of("database"); }

@@ -47,8 +47,8 @@ public final class ManageInstanceTemplateResource extends InstanceTemplateResour
         .build();
 
     private final TableSpec<Row> manageTableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(InstanceTemplateModel.NAME).build())
-        .column(ColumnSpec.fromField(InstanceTemplateModel.DESCRIPTION).build())
+        .column(ColumnSpec.fromField(InstanceTemplateModel.NAME).subtext("description").build())
+        .column(ColumnSpec.fromField(InstanceTemplateModel.DESCRIPTION).hidden().build())
         .column(ColumnSpec.fromField(InstanceTemplateModel.VERSION).build())
         .build();
 

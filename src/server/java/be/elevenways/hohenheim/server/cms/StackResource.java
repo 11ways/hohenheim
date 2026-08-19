@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -62,7 +63,10 @@ public class StackResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(StackModel.NAME).filterable().build())
+        // The name becomes network/container/volume name segments, so it is copied often.
+        .column(ColumnSpec.fromField(StackModel.NAME).filterable()
+            .subtext("description").copyable().build())
+        .column(ColumnSpec.fromField(StackModel.DESCRIPTION).hidden().build())
         .column(ColumnSpec.fromField(StackModel.SERVER_ID)
             .relation(RelationPick.of(StackModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
         .column(ColumnSpec.fromField(StackModel.STATUS).filterable().build())
@@ -81,6 +85,13 @@ public class StackResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(StackModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** Name and description are all a stack carries. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(StackModel.NAME, StackModel.DESCRIPTION);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 40; }
 

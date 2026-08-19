@@ -59,10 +59,10 @@ public final class ManageInstanceResource extends InstanceResource {
         .build();
 
     private final TableSpec<Row> manageTableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(InstanceModel.NAME).build())
-        .column(ColumnSpec.fromField(InstanceModel.KIND).build())
-        .column(ColumnSpec.fromField(InstanceModel.STATUS).filterable().build())
-        .column(ColumnSpec.fromField(InstanceModel.INSTALL_STATE).build())
+        .column(ColumnSpec.fromField(InstanceModel.NAME).subtext("kind").build())
+        .column(ColumnSpec.fromField(InstanceModel.KIND).hidden().build())
+        .column(ColumnSpec.fromField(InstanceModel.STATUS).filterable().subtext("install_state").build())
+        .column(ColumnSpec.fromField(InstanceModel.INSTALL_STATE).hidden().build())
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_instance"); }

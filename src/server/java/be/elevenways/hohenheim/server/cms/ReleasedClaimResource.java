@@ -20,6 +20,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
@@ -46,7 +47,8 @@ public class ReleasedClaimResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(ReleasedRouteClaimModel.HOSTNAME).filterable().build())
+        // The lift action demands the hostname TYPED, so the chip feeds the next click.
+        .column(ColumnSpec.fromField(ReleasedRouteClaimModel.HOSTNAME).filterable().copyable().build())
         // A released hostname is unreadable without its kind: "^(shop|www)\.x\.test$" is a
         // pattern, not a host, and the quarantine judges the two differently.
         .column(ColumnSpec.fromField(ReleasedRouteClaimModel.MATCH_TYPE).build())
@@ -66,6 +68,13 @@ public class ReleasedClaimResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(ReleasedRouteClaimModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** A quarantined name is looked up by the hostname, or by who used to hold it. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(ReleasedRouteClaimModel.HOSTNAME, ReleasedRouteClaimModel.FORMER_SUBJECTS);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
     @Override public int navOrder() { return 40; }
 

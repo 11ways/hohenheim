@@ -30,6 +30,7 @@ import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -87,8 +88,11 @@ public class SiteDomainResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(SiteDomainModel.HOSTNAME).filterable().build())
-        .column(ColumnSpec.fromField(SiteDomainModel.MATCH_TYPE).filterable().build())
+        .column(ColumnSpec.fromField(SiteDomainModel.HOSTNAME).filterable().copyable().build())
+        // The path is half of what this route matches; a match type without it is a rule
+        // with its subject missing.
+        .column(ColumnSpec.fromField(SiteDomainModel.MATCH_TYPE).filterable().subtext("path").build())
+        .column(ColumnSpec.fromField(SiteDomainModel.PATH).hidden().build())
         .column(ColumnSpec.fromField(SiteDomainModel.FORCE_SSL).filterable().build())
         .column(ColumnSpec.fromField(SiteDomainModel.SITE_ID)
             .relation(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build()).build())
@@ -106,6 +110,13 @@ public class SiteDomainResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(SiteDomainModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** A route is looked up by the host it answers on and the path it claims. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(SiteDomainModel.HOSTNAME, SiteDomainModel.PATH);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 20; }
     @Override public @NonNull Icon icon() { return Icon.of("at"); }

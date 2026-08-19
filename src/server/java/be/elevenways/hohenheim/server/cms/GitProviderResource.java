@@ -13,6 +13,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
@@ -42,7 +43,7 @@ public final class GitProviderResource extends RowResource {
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(GitProviderModel.NAME).filterable().build())
         .column(ColumnSpec.fromField(GitProviderModel.KIND).filterable().build())
-        .column(ColumnSpec.fromField(GitProviderModel.BASE_URL).build())
+        .column(ColumnSpec.fromField(GitProviderModel.BASE_URL).copyable().build())
         .column(ColumnSpec.fromField(GitProviderModel.CREATED_AT).build())
         .build();
 
@@ -52,6 +53,13 @@ public final class GitProviderResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(GitProviderModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** Name and endpoint; the credentials are secret and never enter a search. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(GitProviderModel.NAME, GitProviderModel.BASE_URL);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 70; }
 

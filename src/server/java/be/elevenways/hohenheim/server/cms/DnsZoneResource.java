@@ -27,6 +27,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.aggregate.Aggregate;
@@ -77,7 +78,8 @@ public final class DnsZoneResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(DnsZoneModel.ORIGIN).filterable().build())
+        // The origin is pasted straight into dig/whois far more often than it is read.
+        .column(ColumnSpec.fromField(DnsZoneModel.ORIGIN).filterable().copyable().build())
         .column(ColumnSpec.fromField(DnsZoneModel.ENABLED).filterable().build())
         .column(ColumnSpec.fromField(DnsZoneModel.ROLE).build())
         .column(ColumnSpec.fromField(DnsZoneModel.SERIAL).build())
@@ -99,6 +101,13 @@ public final class DnsZoneResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(DnsZoneModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The origin is the zone's identity. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(DnsZoneModel.ORIGIN);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
     @Override public int navOrder() { return 10; }
 

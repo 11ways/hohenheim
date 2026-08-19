@@ -11,6 +11,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
@@ -46,7 +47,7 @@ public final class ReleaseOperationResource extends RowResource {
         .column(ColumnSpec.fromField(ReleaseOperationModel.KIND).filterable().build())
         .column(ColumnSpec.fromField(ReleaseOperationModel.FOR_MODEL).filterable().build())
         .column(ColumnSpec.fromField(ReleaseOperationModel.FOR_ID).build())
-        .column(ColumnSpec.fromField(ReleaseOperationModel.IMAGE_ID).build())
+        .column(ColumnSpec.fromField(ReleaseOperationModel.IMAGE_ID).copyable().build())
         .column(ColumnSpec.fromField(ReleaseOperationModel.DURATION_MS).build())
         .column(ColumnSpec.fromField(ReleaseOperationModel.STARTED_AT).sortable().build())
         .build();
@@ -57,6 +58,13 @@ public final class ReleaseOperationResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(ReleaseOperationModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** A release is traced back from the image it shipped or the reason it did not. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(ReleaseOperationModel.IMAGE_ID, ReleaseOperationModel.FAILURE_REASON);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 18; }
 

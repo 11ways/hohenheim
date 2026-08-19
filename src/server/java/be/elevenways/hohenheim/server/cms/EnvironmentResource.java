@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
@@ -37,7 +38,11 @@ public final class EnvironmentResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(EnvironmentModel.NAME).filterable().build())
+        // AIDEV-NOTE: the project stays a VISIBLE relation column rather than the name's
+        // subtext -- relation titles resolve for visible columns only, so a hidden
+        // project_id would render the raw foreign key under every name.
+        .column(ColumnSpec.fromField(EnvironmentModel.NAME).filterable().subtext("description").build())
+        .column(ColumnSpec.fromField(EnvironmentModel.DESCRIPTION).hidden().build())
         .column(ColumnSpec.fromField(EnvironmentModel.PROJECT_ID)
             .relation(RelationPick.of(EnvironmentModel.PROJECT_ID, ProjectModel.MODEL_ID).build())
             .build())
@@ -49,6 +54,13 @@ public final class EnvironmentResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(EnvironmentModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** Name and description are all an environment carries. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(EnvironmentModel.NAME, EnvironmentModel.DESCRIPTION);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 15; }
 

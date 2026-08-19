@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -22,6 +23,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,8 +41,9 @@ public class StackFileResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(StackFileModel.CONTAINER_PATH).build())
-        .column(ColumnSpec.fromField(StackFileModel.MODE).build())
+        .column(ColumnSpec.fromField(StackFileModel.CONTAINER_PATH)
+            .subtext("mode").copyable().build())
+        .column(ColumnSpec.fromField(StackFileModel.MODE).hidden().build())
         .column(ColumnSpec.fromField(StackFileModel.STACK_SERVICE_ID)
             .relation(RelationPick.of(StackFileModel.STACK_SERVICE_ID, StackServiceModel.MODEL_ID).build())
             .build())
@@ -52,6 +55,13 @@ public class StackFileResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(StackFileModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The path only: CONTENT is encrypted at rest, so a search over it would match ciphertext. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(StackFileModel.CONTAINER_PATH);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 27; }
     @Override public @NonNull Icon icon() { return Icon.of("file-code"); }

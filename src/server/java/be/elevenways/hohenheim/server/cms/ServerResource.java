@@ -40,6 +40,7 @@ import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -121,9 +122,13 @@ public final class ServerResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(ServerModel.NAME).filterable().build())
+        // AIDEV-NOTE: the public address was stored and never rendered anywhere. It reads
+        // under the name rather than as a column, because the SSH target -- which is what
+        // an operator actually pastes into a terminal -- keeps the copy chip.
+        .column(ColumnSpec.fromField(ServerModel.NAME).filterable().subtext("public_ipv4").build())
+        .column(ColumnSpec.fromField(ServerModel.PUBLIC_IPV4).hidden().build())
         .column(ColumnSpec.fromField(ServerModel.RUNTIME).filterable().build())
-        .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).filterable().build())
+        .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).filterable().copyable().build())
         .column(ColumnSpec.fromField(ServerModel.ADMISSION).filterable().build())
         .column(ColumnSpec.fromField(ServerModel.POSTURE).filterable().build())
         .column(ColumnSpec.virtual("host_status", Microcopy.of("host_status").withFilter("scope", "server"))
@@ -144,6 +149,13 @@ public final class ServerResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(ServerModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** A host is hunted for by its name or by the address something else reported it at. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(ServerModel.NAME, ServerModel.SSH_TARGET, ServerModel.PUBLIC_IPV4, ServerModel.PUBLIC_IPV6);
+    }
+
     // AIDEV-NOTE: the UNGROUPED top block, beside the dashboard -- not a labelled section.
     // A host is not something you deploy, it is what everything else is deployed ONTO, so
     // every labelled group it could join would be a lie about what it is. NavGroup.DEFAULT

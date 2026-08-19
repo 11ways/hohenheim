@@ -11,6 +11,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -19,6 +20,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Locale;
@@ -47,9 +49,10 @@ public final class DnsPeerResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(DnsPeerModel.NAME).filterable().build())
-        .column(ColumnSpec.fromField(DnsPeerModel.TRANSFER_HOST).build())
-        .column(ColumnSpec.fromField(DnsPeerModel.TSIG_KEY_NAME).build())
+        .column(ColumnSpec.fromField(DnsPeerModel.NAME).filterable().subtext("transfer_host").build())
+        .column(ColumnSpec.fromField(DnsPeerModel.TRANSFER_HOST).hidden().build())
+        // The key NAME (never the secret) is what the other side's operator must be told.
+        .column(ColumnSpec.fromField(DnsPeerModel.TSIG_KEY_NAME).copyable().build())
         .column(ColumnSpec.fromField(DnsPeerModel.ENABLED).filterable().build())
         .filter(FilterSpec.forField(DnsPeerModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(DnsPeerModel.NAME)).build())
@@ -63,6 +66,13 @@ public final class DnsPeerResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(DnsPeerModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** Name and transfer host; both TSIG secrets are secret columns. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(DnsPeerModel.NAME, DnsPeerModel.TRANSFER_HOST);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
     @Override public int navOrder() { return 40; }
 

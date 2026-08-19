@@ -22,6 +22,7 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -57,12 +58,17 @@ public class InstanceScheduleResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(RecordScheduleModel.NAME).filterable().build())
+        // "When does this run next" belongs to the schedule's name, and "why not" belongs
+        // to the switch that is off -- a disabled reason in a column of its own was blank
+        // on every healthy row.
+        .column(ColumnSpec.fromField(RecordScheduleModel.NAME).filterable()
+            .subtext("next_fire_at").build())
+        .column(ColumnSpec.fromField(RecordScheduleModel.NEXT_FIRE_AT).hidden().build())
         .column(ColumnSpec.fromField(RecordScheduleModel.RECORD_ID).build())
-        .column(ColumnSpec.fromField(RecordScheduleModel.CRON).build())
-        .column(ColumnSpec.fromField(RecordScheduleModel.ENABLED).filterable().build())
-        .column(ColumnSpec.fromField(RecordScheduleModel.DISABLED_REASON).build())
-        .column(ColumnSpec.fromField(RecordScheduleModel.NEXT_FIRE_AT).build())
+        .column(ColumnSpec.fromField(RecordScheduleModel.CRON).copyable().build())
+        .column(ColumnSpec.fromField(RecordScheduleModel.ENABLED).filterable()
+            .subtext("disabled_reason").build())
+        .column(ColumnSpec.fromField(RecordScheduleModel.DISABLED_REASON).hidden().build())
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedule"); }
@@ -71,6 +77,13 @@ public class InstanceScheduleResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(RecordScheduleModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** A schedule is found by its name or by the cron expression an operator remembers writing. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(RecordScheduleModel.NAME, RecordScheduleModel.CRON);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 18; }
     @Override public @NonNull Icon icon() { return Icon.of("clock"); }

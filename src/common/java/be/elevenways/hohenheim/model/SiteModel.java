@@ -38,7 +38,9 @@ public class SiteModel extends Model {
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimFormCopy.label("name"))
         .build());
-    public static final StringField SLUG = SCHEMA.addField(StringField.builder().name("slug").build());
+    public static final StringField SLUG = SCHEMA.addField(StringField.builder().name("slug")
+        .label(HohenheimFormCopy.label("slug"))
+        .build());
 
     // RegistryEnumField: values come from SiteTypeRegistry at runtime
     public static final EnumField SITE_TYPE = SCHEMA.addField(

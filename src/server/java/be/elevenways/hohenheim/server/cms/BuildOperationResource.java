@@ -11,6 +11,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
@@ -55,8 +56,8 @@ public final class BuildOperationResource extends RowResource {
         .column(ColumnSpec.fromField(BuildOperationModel.BUILDER_KIND).filterable().build())
         .column(ColumnSpec.fromField(BuildOperationModel.FOR_MODEL).filterable().build())
         .column(ColumnSpec.fromField(BuildOperationModel.FOR_ID).build())
-        .column(ColumnSpec.fromField(BuildOperationModel.SOURCE_REF).build())
-        .column(ColumnSpec.fromField(BuildOperationModel.IMAGE_ID).build())
+        .column(ColumnSpec.fromField(BuildOperationModel.SOURCE_REF).copyable().build())
+        .column(ColumnSpec.fromField(BuildOperationModel.IMAGE_ID).copyable().build())
         .column(ColumnSpec.fromField(BuildOperationModel.DURATION_MS).build())
         .column(ColumnSpec.fromField(BuildOperationModel.STARTED_AT).sortable().build())
         .build();
@@ -67,6 +68,13 @@ public final class BuildOperationResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(BuildOperationModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** A build is traced back from a commit, an image, a tag, or the reason it failed. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(BuildOperationModel.SOURCE_REF, BuildOperationModel.IMAGE_ID, BuildOperationModel.TAG, BuildOperationModel.FAILURE_REASON);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 17; }
 

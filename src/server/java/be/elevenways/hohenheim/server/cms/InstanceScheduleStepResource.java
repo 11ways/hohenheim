@@ -49,8 +49,8 @@ public class InstanceScheduleStepResource extends RowResource {
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(RecordScheduleStepModel.SCHEDULE_ID).build())
         .column(ColumnSpec.fromField(RecordScheduleStepModel.POSITION).build())
-        .column(ColumnSpec.fromField(RecordScheduleStepModel.ACTION).build())
-        .column(ColumnSpec.fromField(RecordScheduleStepModel.OFFSET_SECONDS).build())
+        .column(ColumnSpec.fromField(RecordScheduleStepModel.ACTION).subtext("offset_seconds").build())
+        .column(ColumnSpec.fromField(RecordScheduleStepModel.OFFSET_SECONDS).hidden().build())
         .column(ColumnSpec.fromField(RecordScheduleStepModel.FAILURE_POLICY).build())
         .build();
 
