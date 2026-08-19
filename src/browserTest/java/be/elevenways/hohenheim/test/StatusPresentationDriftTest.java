@@ -16,11 +16,15 @@ import be.elevenways.zenit.common.task.record.RunStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -153,7 +157,7 @@ class StatusPresentationDriftTest {
 
     @Test
     @DisplayName("the converted string vocabularies are faceted enums with one declaring home")
-    void convertedVocabulariesAreFacetedAndSingleHomed() {
+    void convertedVocabulariesAreFacetedAndSingleHomed() throws Exception {
         // 1. Each column's value set IS its model's declared constant set.
         record Vocabulary(String name, EnumField field, Class<?> home, String prefix) {}
         List<Vocabulary> vocabularies = List.of(
@@ -194,6 +198,34 @@ class StatusPresentationDriftTest {
         assertThat(ReleasedRouteClaimModel.MATCH_TYPE.getValues().keySet())
             .as("step 3: released claims store the SAME match-type member set as domains")
             .containsExactlyElementsOf(SiteDomainModel.MATCH_TYPE.getValues().keySet());
+
+        // 4. Step 1 is CIRCULAR -- it compares an enum to constants declared beside it, so it
+        //    cannot see a value some OTHER file writes. This step asks the writers instead:
+        //    dns_publisher is chosen by a hand-built select in the request form, and that
+        //    select offered "command" (CommandDnsTxtPublisher.ID) while the enum did not,
+        //    which is the narrowing this whole method exists to catch.
+        assertThat(dnsModeOptionsOffered())
+            .as("step 4: every dns_publisher the request form offers is a declared member")
+            .isNotEmpty()
+            .allMatch(CertificateModel.DNS_PUBLISHER::isValidValue,
+                "declared in CertificateModel.DNS_PUBLISHER");
+    }
+
+    /** The {@code dns_mode} select's literal option values, read out of the request template. */
+    private static List<String> dnsModeOptionsOffered() throws Exception {
+        String template = Files.readString(
+            Path.of("src/common/templates/cms/certificate-request.hwk"));
+        int select = template.indexOf("name=\"dns_mode\"");
+        assertThat(select).as("the request form still carries a dns_mode select")
+            .isGreaterThan(-1);
+        String body = template.substring(select, template.indexOf("</pl-select>", select));
+
+        List<String> offered = new ArrayList<>();
+        Matcher matcher = Pattern.compile("<pl-select-item value=\"([^\"]+)\"").matcher(body);
+        while (matcher.find()) {
+            offered.add(matcher.group(1));
+        }
+        return offered;
     }
 
     /** Public static String constants of a class whose NAME starts with the prefix. */

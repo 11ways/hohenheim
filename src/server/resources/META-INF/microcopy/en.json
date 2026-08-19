@@ -4269,6 +4269,10 @@
     {
       "text": "Command",
       "scope": "site_type"
+    },
+    {
+      "text": "Command hook",
+      "scope": "dns_publisher"
     }
   ],
   "registry_server": [
