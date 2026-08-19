@@ -82,6 +82,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
     private static Integer otherHostId;
     private static Integer instanceAId;
     private static Integer instanceBId;
+    private static Integer incusHostId;
     private static Integer incusInstanceId;
     private static Integer remoteInstanceId;
     private static Integer databaseAId;
@@ -101,10 +102,11 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
         hostId = host(PREFIX + "host");
         otherHostId = host(PREFIX + "other");
+        incusHostId = host(PREFIX + "incus-host", ServerModel.RUNTIME_INCUS);
 
         instanceAId = instance(PREFIX + "srv-a", "hohenheim:docker_container", hostId);
         instanceBId = instance(PREFIX + "srv-b", "hohenheim:docker_container", hostId);
-        incusInstanceId = instance(PREFIX + "srv-incus", "hohenheim:incus_container", hostId);
+        incusInstanceId = instance(PREFIX + "srv-incus", "hohenheim:incus_container", incusHostId);
         remoteInstanceId = instance(PREFIX + "srv-remote", "hohenheim:docker_container", otherHostId);
         databaseAId = database(PREFIX + "db-a", hostId);
         databaseBId = database(PREFIX + "db-b", hostId);
@@ -623,9 +625,15 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
     }
 
     private static int host(String name) {
+        return host(name, ServerModel.RUNTIME_DOCKER);
+    }
+
+    /** The runtime is fixture DATA now: an instance may only be saved onto a host that runs its kind. */
+    private static int host(String name, String runtime) {
         Model servers = Models.get(ServerModel.class);
         Row row = servers.createEmptyRow();
         row.set(ServerModel.NAME, name);
+        row.set(ServerModel.RUNTIME, runtime);
         row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
         row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
         row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -64,7 +65,34 @@ public final class OwnedInstances {
             // same generatedOnly() declaration -- this hook is the authoritative gate but
             // deliberately not a second copy of the rule.
             InstanceKinds.requireAuthorable(row.get(InstanceModel.KIND));
+            requireHostRuntime(row);
         });
+    }
+
+    /**
+     * Refuse a kind pointed at a host that does not run the runtime it requires, at SAVE
+     * time rather than only at deploy.
+     *
+     * AIDEV-NOTE: the comparison is InstanceKinds', not a second copy -- this hook only
+     * decides WHICH host and kind are being asked about. It reads the whole row, so the
+     * CMS update lane's PARTIAL coerced map is a non-issue: the sibling the operator did
+     * not touch is already on the row being validated. A host id naming no row is skipped
+     * on purpose, matching {@code InstanceService.resolve}, which folds an absent host
+     * onto the local daemon.
+     */
+    private static void requireHostRuntime(@NonNull Row row) {
+        Object declaredHost = row.get(InstanceModel.SERVER_ID.getName());
+        InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
+        if (declaredHost == null || handler == null) {
+            return;
+        }
+        int serverId = ServerModel.canonicalServerId(declaredHost);
+        Row server = Models.get(ServerModel.class).findById(serverId);
+        if (server == null) {
+            return;
+        }
+        InstanceKinds.requireRuntimeMatch(ServerModel.nameOf(serverId),
+            ServerModel.runtimeOf(server), handler.requiredRuntime());
     }
 
     /** A scope body that may fail the way the write it wraps fails. */
