@@ -12,6 +12,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -151,16 +152,43 @@ public class DnsRecordResource extends RowResource {
     }
 
     /**
-     * The zone the bar adds into, from the same {@code ?zone_id=} the create link
-     * carries. The generated list without one renders no bar (an unanswered preset
-     * would fail every add on a field nothing shows); the zone's Records tab hands
-     * the element its own preset map instead.
+     * The zone the bar adds into, read off the REQUEST: the {@code ?zone_id=} prefill a
+     * create link carries, or the zone whose Records tab is being rendered. The generated
+     * list without either renders no bar (an unanswered preset would fail every add on a
+     * field nothing shows).
+     *
+     * AIDEV-NOTE: the tab branch exists because the framework's quick-add builder asks
+     * the RESOURCE for its presets -- the bespoke page cannot hand them in. Answering
+     * from the route is also the more honest shape: the preset is a fact about the
+     * request, and a page rendering the bar for zone A can no longer pass zone B.
      */
     @Override
     public @NonNull Map<String, Object> quickCreatePresetValues(@NonNull AccessContext accessContext) {
         Conduit conduit = accessContext.conduit();
-        Integer zoneId = conduit != null ? prefilledZoneId(conduit) : null;
+        if (conduit == null) {
+            return Map.of();
+        }
+        Integer zoneId = prefilledZoneId(conduit);
+        if (zoneId == null) {
+            zoneId = zoneSubpageId(conduit);
+        }
         return zoneId != null ? Map.of(DnsRecordModel.ZONE_ID.getName(), zoneId) : Map.of();
+    }
+
+    /** @return the zone id when this request is a DNS zone's own record subpage, else null */
+    private static @Nullable Integer zoneSubpageId(@NonNull Conduit conduit) {
+        if (!DnsZoneResource.SLUG.equals(conduit.getParameter(CmsEndpoints.RESOURCE_PARAM))) {
+            return null;
+        }
+        String rawId = conduit.getParameter(CmsEndpoints.RESOURCE_ID_PARAM);
+        if (rawId == null || rawId.isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(rawId);
+        } catch (NumberFormatException malformed) {
+            return null;
+        }
     }
 
     /**

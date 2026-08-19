@@ -1,0 +1,51 @@
+{# Every port claim this instance holds, joined to its host's declared address. The
+   markup moved here VERBATIM from the old bespoke overview template: the record's front
+   door is a widget tree now, which never meant this table had to become a built-in. #}
+{% declare widget: WidgetInstance %}
+{% declare data: List<InstanceEndpointView> = null %}
+
+<pl-card class="widget hh-overview-card">
+    <pl-card-header>
+        <pl-card-title>{{ t("endpoint", scope: "instance_overview") }}</pl-card-title>
+        <pl-card-description>{{ t("endpoint_hint", scope: "instance_overview") }}</pl-card-description>
+    </pl-card-header>
+    <pl-card-content>
+        {% if data %}
+        <pl-table>
+            <pl-table-header><pl-table-row>
+                <pl-table-head>{{ t("address", scope: "instance_overview") }}</pl-table-head>
+                <pl-table-head>{{ t("protocol", scope: "instance_overview") }}</pl-table-head>
+                <pl-table-head>{{ t("claim", scope: "instance_overview") }}</pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                {% each data as endpoint %}
+                <pl-table-row data-endpoint-port={% endpoint.port %}>
+                    <pl-table-cell>
+                        {% if endpoint.address != "" %}
+                        <code>{{ endpoint.address }}:{{ endpoint.port }}</code>
+                        <pl-copy-button value={% endpoint.address + ":" + endpoint.port %} ariaLabel={% t("copy", scope: "instance_overview") %}></pl-copy-button>
+                        {% else %}
+                        <code>{{ endpoint.port }}</code>
+                        <span class="hh-endpoint-noaddress" data-endpoint-noaddress="1">{{ t("no_public_address", scope: "instance_overview") }}</span>
+                        {% /if %}
+                    </pl-table-cell>
+                    <pl-table-cell>{{ endpoint.protocol }}</pl-table-cell>
+                    <pl-table-cell>
+                        {% if endpoint.preallocated %}
+                        <pl-badge variant="outline">{{ t("reserved", scope: "instance_overview") }}</pl-badge>
+                        {% else %}
+                        <pl-badge variant="secondary">{{ endpoint.status }}</pl-badge>
+                        {% /if %}
+                    </pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </pl-table>
+        {% else %}
+        <pl-empty-state icon="plug">
+            <pl-empty-state-title>{{ t("no_endpoint", scope: "instance_overview") }}</pl-empty-state-title>
+            <pl-empty-state-description>{{ t("no_endpoint_hint", scope: "instance_overview") }}</pl-empty-state-description>
+        </pl-empty-state>
+        {% /if %}
+    </pl-card-content>
+</pl-card>

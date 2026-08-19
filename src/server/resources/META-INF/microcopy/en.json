@@ -7694,16 +7694,8 @@
       "scope": "site_domains"
     },
     {
-      "text": "{$name} - Overview",
-      "scope": "server_overview"
-    },
-    {
       "text": "{$name} - Migrate",
       "scope": "instance_migrate"
-    },
-    {
-      "text": "{$name} - Overview",
-      "scope": "instance_overview"
     },
     {
       "text": "{$name} - Snapshots",
@@ -8441,5 +8433,9 @@
   "abandoned": {
     "text": "Abandoned",
     "scope": "schedule_run_status"
+  },
+  "refresh": {
+    "text": "Refresh",
+    "scope": "instance_overview"
   }
 }

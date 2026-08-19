@@ -20,12 +20,11 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
-import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
+import be.elevenways.zenit.cms.server.page.InlineEditStates;
+import be.elevenways.zenit.cms.server.page.QuickAddState;
 import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.edit.FieldAccess;
-import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.TextSearchable;
@@ -47,7 +46,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -130,7 +128,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
             .build()
             .apply(resource.tableSpec());
 
-        BoundEndpoint<?> listTarget = CmsRoutes.subpage(PANEL, "dns-zones", zoneId, this.slug());
+        BoundEndpoint<?> listTarget = CmsRoutes.subpage(PANEL, DnsZoneResource.SLUG, zoneId, this.slug());
         String listUrl = listTarget.toUrl();
         // An add returns to the listing AS IT STANDS, so a search made before it survives.
         // Rebuilt from the state this render knows rather than echoed from the request URL:
@@ -160,7 +158,9 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
                     returnTo).toUrl()
                 : null,
             resource.deleteConfirmation(),
-            row -> editableCells(resource, applied, row, accessContext),
+            // Promoted seam: the framework's own affordance answer, which the generated
+            // list page uses too -- this page used to carry a copy of it.
+            row -> InlineEditStates.editableCellsFor(resource, applied, row, accessContext),
             accessContext);
 
         RouteTarget addRecordTarget = CmsEndpoints.CREATE_FORM
@@ -183,8 +183,9 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         vars.put("searchActive", search != null);
         vars.put("addRecordTarget", addRecordTarget);
         vars.put("recordTabs", recordTabs(conduit));
-        QuickAdd.putVars(vars, resource, accessContext, refreshUrl, addRecordTarget.toUrl(),
-            Map.of(DnsRecordModel.ZONE_ID.getName(), zoneId));
+        // Promoted seam: the framework's own quick-add builder. The zone preset it needs
+        // is answered by DnsRecordResource.quickCreatePresetValues, which reads THIS route.
+        QuickAddState.putVars(vars, resource, accessContext, refreshUrl, addRecordTarget.toUrl());
         return new RenderTemplateResult(TEMPLATE, vars);
     }
 
@@ -244,47 +245,6 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
                                              @Nullable String returnTo) {
         return ReturnTarget.bind(
             CmsRoutes.detail(PANEL, resource.slug(), resource.rowKey(row)), returnTo).toUrl();
-    }
-
-    /**
-     * Which of a row's cells this principal may edit in place, mapped to the form entry
-     * each writes through -- the affordance half of the verdict the cell endpoints enforce.
-     *
-     * AIDEV-NOTE: composed from the resource's own public verdicts because zenit-cms's
-     * identical helper (InlineEditStates.editableCellsFor) is package-private -- the
-     * generated list page is its only caller, and a bespoke page over the SAME resource
-     * needs it too. Promoting it is a framework follow-up. Drift can only offer or hide a
-     * pencil: the cell element re-fetches the verdict on activation and CELL_SUBMIT decides
-     * again, so nothing here can widen what a commit may write.
-     */
-    private static @NonNull Map<String, String> editableCells(@NonNull DnsRecordResource resource,
-                                                              TableView.@NonNull Applied<Row> applied,
-                                                              @NonNull Row row,
-                                                              @NonNull AccessContext accessContext) {
-        if (!resource.updatable() || !resource.updatableBy(row, accessContext)) {
-            return Map.of();
-        }
-        Map<String, String> cells = new LinkedHashMap<>();
-        for (ColumnSpec column : applied.columns()) {
-            Field<?, ?> source = column.source();
-            // A renderer column's value is a hand-built render state; editing it in place
-            // would write through a shape this lane never saw.
-            if (source == null || column.renderer() != null) {
-                continue;
-            }
-            for (Field<?, ?> field : resource.inlineEditableFields()) {
-                if (!field.getName().equals(source.getName())) {
-                    continue;
-                }
-                FormEntry entry = resource.inlineEntryFor(field);
-                if (entry != null && resource.fieldAccessFor(entry.name()).decide(accessContext, row)
-                        == FieldAccess.Decision.EDITABLE) {
-                    cells.put(column.name(), entry.name());
-                }
-                break;
-            }
-        }
-        return cells;
     }
 
     /**
@@ -355,7 +315,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         vars.put("editRecord", editRecord);
         vars.put("recordTypes", DnsRecordModel.ALL_TYPES);
         vars.put("addRecordTarget", remoteRecordTarget(zoneId, "new"));
-        vars.put("recordsTabTarget", CmsRoutes.subpage("admin", "dns-zones", zoneId, "records"));
+        vars.put("recordsTabTarget", CmsRoutes.subpage(PANEL, DnsZoneResource.SLUG, zoneId, this.slug()));
         vars.put("remoteFormTarget", HohenheimEndpoints.DNS_REMOTE_RECORD
             .with(HohenheimEndpoints.ZONE_ID, zoneId));
         vars.put("recordTabs", recordTabs(conduit));
@@ -372,8 +332,8 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
     private static @NonNull RouteTarget remoteRecordTarget(@NonNull Integer zoneId,
                                                            @NonNull String recordId) {
         return CmsEndpoints.RECORD_SUBPAGE
-            .with(CmsEndpoints.PANEL_PARAM, "admin")
-            .with(CmsEndpoints.RESOURCE_PARAM, "dns-zones")
+            .with(CmsEndpoints.PANEL_PARAM, PANEL)
+            .with(CmsEndpoints.RESOURCE_PARAM, DnsZoneResource.SLUG)
             .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(zoneId))
             .with(CmsEndpoints.SUBPAGE_PARAM, "records")
             .with(HohenheimParams.REMOTE_RECORD, recordId);

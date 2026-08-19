@@ -9,18 +9,14 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Locale;
-import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.DashboardPanelPeer;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
@@ -29,7 +25,6 @@ import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -60,7 +55,7 @@ public final class ManageDashboard extends DashboardPanelPeer {
         widgets.add(section(new WidgetInstance(AttentionWidget.ID, Map.of())
             .withData(tenantAttention(accessContext))));
         widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
-            "title", localized("your_instances", "manage_dashboard"),
+            "title", HohenheimWidgetCopy.localized("your_instances", "manage_dashboard"),
             // The instance DEFAULT source carries the per-principal VIEW scope
             // (ManagePanel overrides it), so this list is tenant-correct with
             // nothing declared here.
@@ -118,12 +113,4 @@ public final class ManageDashboard extends DashboardPanelPeer {
             new WidgetTree(List.of(child)));
     }
 
-    private static @NonNull Map<Locale, String> localized(@NonNull String key, @NonNull String scope) {
-        Microcopy copy = Microcopy.of(key).withFilter("scope", scope);
-        Map<Locale, String> label = new LinkedHashMap<>();
-        for (Locale locale : ContentLocales.get()) {
-            label.put(locale, copy.resolve(LocaleChain.of(locale), Zenit.getMessageResolver()));
-        }
-        return label;
-    }
 }

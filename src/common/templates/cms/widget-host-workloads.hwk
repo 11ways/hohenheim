@@ -1,0 +1,51 @@
+{# Everything this host carries -- the same three populations that block cordon, drain
+   and delete. Moved verbatim from the old bespoke overview template. #}
+{% declare widget: WidgetInstance %}
+{% declare data: List<WorkloadView> = null %}
+
+<pl-card class="widget hh-overview-card">
+    <pl-card-header>
+        <pl-card-title>{{ t("workloads", scope: "server_overview") }}</pl-card-title>
+        <pl-card-description>{{ t("workloads_hint", scope: "server_overview") }}</pl-card-description>
+    </pl-card-header>
+    <pl-card-content>
+        {% if data %}
+        <pl-table>
+            <pl-table-header><pl-table-row>
+                <pl-table-head>{{ t("workload_name", scope: "server_overview") }}</pl-table-head>
+                <pl-table-head>{{ t("tier", scope: "server_overview") }}</pl-table-head>
+                <pl-table-head>{{ t("status", scope: "server_overview") }}</pl-table-head>
+                <pl-table-head>{{ t("booked_memory", scope: "server_overview") }}</pl-table-head>
+            </pl-table-row></pl-table-header>
+            <pl-table-body>
+                {% each data as workload %}
+                <pl-table-row>
+                    <pl-table-cell><a use:Zenit.route={% workload.target %}>{{ workload.name }}</a></pl-table-cell>
+                    <pl-table-cell>
+                        {% if workload.tier == "instance" %}
+                        {{ t("tier_instance", scope: "server_overview") }}
+                        {% elseif workload.tier == "stack" %}
+                        {{ t("tier_stack", scope: "server_overview") }}
+                        {% else %}
+                        {{ t("tier_database", scope: "server_overview") }}
+                        {% /if %}
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        {% if workload.status != null %}
+                        {% render "zenitcms:cell/enum-badge" var:value=workload.status %}
+                        {% /if %}
+                    </pl-table-cell>
+                    <pl-table-cell>
+                        {% if workload.bookedMb != null %}{{ workload.bookedMb }} MB{% /if %}
+                    </pl-table-cell>
+                </pl-table-row>
+                {% /each %}
+            </pl-table-body>
+        </pl-table>
+        {% else %}
+        <pl-empty-state icon="cubes">
+            <pl-empty-state-title>{{ t("workloads_empty", scope: "server_overview") }}</pl-empty-state-title>
+        </pl-empty-state>
+        {% /if %}
+    </pl-card-content>
+</pl-card>

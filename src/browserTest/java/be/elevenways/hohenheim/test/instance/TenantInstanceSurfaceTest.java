@@ -880,6 +880,19 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 .as("step 4: without the daemon's text")
                 .doesNotContain("pull access denied")
                 .doesNotContain("docker.sock");
+
+            // 5. THE FRONT DOOR is derived per panel now (Resource.landingSubpage), not
+            //    hand-spelled per resource subclass: the delegated list's row title must
+            //    still open the overview, under /manage.
+            HttpResponse<String> tenantList = tenantGet("/manage/instances");
+            assertThat(tenantList.statusCode())
+                .as("step 5: the delegated instance list renders").isEqualTo(200);
+            assertThat(tenantList.body())
+                .as("step 5: and its row title opens the overview on THIS panel")
+                .contains("/manage/instances/" + instanceAId + "/page/overview");
+            assertThat(adminGet("/admin/instances").body())
+                .as("step 5: while the operator list derives the /admin spelling")
+                .contains("/admin/instances/" + instanceAId + "/page/overview");
         } finally {
             Row reset = instances.findById(instanceAId);
             reset.set(InstanceModel.SERVER_ID, null);

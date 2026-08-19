@@ -72,7 +72,7 @@ class ServerAdminTest extends HohenheimTestBase {
             .as("step 4: the overview page renders").isEqualTo(1);
         assertThat(page.locator(".hh-host-state[data-host-state]").count())
             .as("step 4: with the structured state cell in its header").isEqualTo(1);
-        assertThat(page.locator("[data-capacity-state]").count())
+        assertThat(page.locator(".widget-usage").count())
             .as("step 4: and an explicit capacity state").isEqualTo(1);
     }
 
