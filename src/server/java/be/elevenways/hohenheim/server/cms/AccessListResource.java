@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -63,6 +64,7 @@ public final class AccessListResource extends RowResource {
     }
 
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "access_list"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "access_list"); }

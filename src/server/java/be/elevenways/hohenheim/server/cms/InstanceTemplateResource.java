@@ -16,6 +16,7 @@ import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -91,6 +92,7 @@ public class InstanceTemplateResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceTemplateModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     /** Templates are hunted for by name, by the image they install from, and by where they were imported from. */
     @Override

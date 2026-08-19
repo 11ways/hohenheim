@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -60,6 +61,7 @@ public final class AuthProviderResource extends RowResource {
     }
 
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "auth_provider"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "auth_provider"); }

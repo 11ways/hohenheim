@@ -11,6 +11,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -59,6 +60,7 @@ public class InstanceSnapshotResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceSnapshotModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     /** The note is the only thing an operator wrote here themselves. */
     @Override

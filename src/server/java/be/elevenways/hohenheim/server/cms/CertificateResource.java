@@ -13,6 +13,7 @@ import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -101,6 +102,8 @@ public class CertificateResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(CertificateModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    /** Views deliberately dropped: a certificate list is read by expiry, never by a saved query. */
+    @Override public @NonNull ListChrome listChrome() { return CmsSupport.WIDE_LIST; }
 
     /** The question asked here is always which certificate covers a hostname. */
     @Override

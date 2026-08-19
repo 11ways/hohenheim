@@ -27,6 +27,7 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -149,6 +150,8 @@ public final class ServerResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(ServerModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    /** A host inventory is counted in handfuls: no saved views, no rule builder, no column gear. */
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     /** A host is hunted for by its name or by the address something else reported it at. */
     @Override

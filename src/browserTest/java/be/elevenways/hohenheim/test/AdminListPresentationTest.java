@@ -231,6 +231,67 @@ class AdminListPresentationTest extends HohenheimTestBase {
             .doesNotContain("wavea ban reason");
     }
 
+    /**
+     * Step 1-6: the per-resource list CHROME an operator actually sees, and the one relation
+     * pick that must not offer to mint a host inline.
+     *
+     * AIDEV-NOTE: asserted on the SSR markers the framework templates carry
+     * (data-cms-advanced-toggle / data-cms-views-toggle / data-cms-columns-toggle, and
+     * zenit-forms' data-zf-chooser-dialog), never on visible label text -- a microcopy edit
+     * must not silently turn this into an assertion about nothing. All four are rendered
+     * only when their knob is on, so absence IS the assertion.
+     */
+    @Test
+    void listChromeIsDeclaredPerResourceAndHostPicksRefuseInlineCreate() throws Exception {
+        seed();
+
+        // 1. Hosts: the ruling that started this wave. A handful of servers never needs a
+        //    rule builder, saved views or a column gear.
+        String hosts = adminGet("/admin/servers").body();
+        assertThat(hosts).as("step 1: the hosts list renders").contains("cms-list-card");
+        assertThat(hosts).as("step 1: hosts offer no advanced filter")
+            .doesNotContain("data-cms-advanced-toggle");
+        assertThat(hosts).as("step 1: hosts offer no saved views")
+            .doesNotContain("data-cms-views-toggle");
+        assertThat(hosts).as("step 1: hosts offer no column picker")
+            .doesNotContain("data-cms-columns-toggle");
+
+        // 2. But the search box a previous wave deliberately gave them STAYS: finding a host
+        //    by the public address under its name is what that declaration exists for.
+        assertThat(hosts).as("step 2: hosts keep their search box")
+            .contains("cms-list-search");
+
+        // 3. Certificates: the other named ruling -- no saved views on a list read by expiry.
+        //    Only the views/advanced knobs are asserted here: the column gear lives in the
+        //    TABLE's header cell, which an empty list replaces with the empty state.
+        String certificates = adminGet("/admin/certificates").body();
+        assertThat(certificates).as("step 3: certificates offer no saved views")
+            .doesNotContain("data-cms-views-toggle");
+
+        // 4. The positive control: sites keep all four, so steps 1 and 3 are proving a
+        //    per-resource DECLARATION and not that the framework stopped rendering chrome.
+        String sites = adminGet("/admin/sites").body();
+        assertThat(sites).as("step 4: sites keep the advanced filter")
+            .contains("data-cms-advanced-toggle");
+        assertThat(sites).as("step 4: sites keep saved views")
+            .contains("data-cms-views-toggle");
+        assertThat(sites).as("step 4: sites keep the column picker")
+            .contains("data-cms-columns-toggle");
+
+        // 5. The instance create form's HOST pick offers no inline create: a host is
+        //    admitted, preflighted and trusted, never minted from inside another form.
+        String instanceForm = adminGet("/admin/instances/new").body();
+        assertThat(instanceForm).as("step 5: the instance create form renders its host pick")
+            .contains("name=\"server_id\"");
+        assertThat(instanceForm).as("step 5: and that pick has no create dialog")
+            .doesNotContain("data-zf-chooser-dialog=\"server_id\"");
+
+        // 6. A pick left alone in the SAME form still offers it, so step 5 proves the
+        //    per-entry off-switch rather than a form that lost inline create wholesale.
+        assertThat(instanceForm).as("step 6: the environment pick keeps inline create")
+            .contains("data-zf-chooser-dialog=\"environment_id\"");
+    }
+
     /** Idempotent fixtures: this class shares its server, so every seed is find-or-create. */
     private static void seed() {
         site("wavea-alpha-site", "wavea-alpha-slug");

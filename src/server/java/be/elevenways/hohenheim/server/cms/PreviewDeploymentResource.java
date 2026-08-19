@@ -10,6 +10,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -71,6 +72,7 @@ public class PreviewDeploymentResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(PreviewDeploymentModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     /** A reviewer arrives with a hostname, a branch name or a commit sha. */
     @Override

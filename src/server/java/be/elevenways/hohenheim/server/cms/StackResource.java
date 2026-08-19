@@ -18,6 +18,7 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -61,7 +62,9 @@ public class StackResource extends RowResource {
     private final FormSpec formSpec = FormSpec.builder()
         .add(StackModel.NAME)
         .add(StackModel.ENABLED)
-        .add(RelationPick.of(StackModel.SERVER_ID, ServerModel.MODEL_ID).build())
+        // See InstanceResource: a host is enrolled deliberately, never inline.
+        .add(RelationPick.of(StackModel.SERVER_ID, ServerModel.MODEL_ID)
+            .creatable(false).build())
         .add(StackModel.REGISTRY_SERVER)
         .add(StackModel.REGISTRY_USER)
         .add(StackModel.REGISTRY_PASSWORD)
@@ -91,6 +94,7 @@ public class StackResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(StackModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     /** Name and description are all a stack carries. */
     @Override

@@ -26,6 +26,7 @@ import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -71,8 +72,12 @@ public class SiteResource extends RowResource {
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SETTINGS))
         .add(SiteModel.ENABLED)
         .add(SiteModel.DESCRIPTION)
-        .add(RelationPick.of(SiteModel.AUTH_PROVIDER_ID, SiteAuthProviderModel.MODEL_ID).build())
-        .add(RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
+        // Both are SECURITY declarations shared across sites: minting one from inside a
+        // site form is how a half-configured provider or an empty allow-list goes live.
+        .add(RelationPick.of(SiteModel.AUTH_PROVIDER_ID, SiteAuthProviderModel.MODEL_ID)
+            .creatable(false).build())
+        .add(RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID)
+            .creatable(false).build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SOURCE))
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SOURCE_SETTINGS))
         .build();
@@ -111,6 +116,11 @@ public class SiteResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(SiteModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    /**
+     * The one list an operator lives in: hundreds of sites, a real rule vocabulary, and
+     * saved views ("my staging sites", "everything failing TLS") are how they are reached.
+     */
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.DEFAULT; }
 
     /** An operator looks a site up by what they call it, by what the paths call it, or by the note they left on it. */
     @Override

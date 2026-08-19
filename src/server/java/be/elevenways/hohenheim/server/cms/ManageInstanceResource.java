@@ -8,6 +8,7 @@ import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -68,6 +69,12 @@ public final class ManageInstanceResource extends InstanceResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_instance"); }
     @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
+
+    /**
+     * Does NOT inherit the admin fleet list's views and rule builder: a tenant sees the
+     * instances they hold a grant on, through two visible columns.
+     */
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     @Override
     public @NonNull List<ResourceFieldBinding> fieldBindings() {

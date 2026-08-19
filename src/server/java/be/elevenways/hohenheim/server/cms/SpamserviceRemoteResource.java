@@ -5,6 +5,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.spamservice.client.PageResult;
 import be.elevenways.spamservice.client.SpamserviceApiException;
 import be.elevenways.spamservice.client.SpamserviceClient;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -29,6 +30,15 @@ abstract class SpamserviceRemoteResource<T> extends Resource<T> {
 
     protected SpamserviceRemoteResource(@NonNull Supplier<SpamserviceClient> clientSupplier) {
         this.clientSupplier = Objects.requireNonNull(clientSupplier, "clientSupplier cannot be null");
+    }
+
+    /**
+     * One choice for the whole family: these lists are read through the abuse-protection
+     * overview that links to them, and a remote page cannot back a saved view anyway.
+     */
+    @Override
+    public @NonNull ListChrome listChrome() {
+        return ListChrome.MINIMAL;
     }
 
     protected final @Nullable SpamserviceClient client() {

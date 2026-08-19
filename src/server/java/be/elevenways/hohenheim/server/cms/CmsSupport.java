@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -36,6 +37,25 @@ public final class CmsSupport {
      * typo in any of them degrades to an empty widget with only a log line to show for it.
      */
     public static final String ACTIVITY_SOURCE = "zenit.activity";
+
+    // AIDEV-NOTE: the small operator-declared sets (hosts, DNS peers, git providers, access
+    // lists, auth providers, backup targets) are plain ListChrome.MINIMAL, NOT a fourth
+    // constant that also drops search. Search on those lists is a DELIBERATE declaration --
+    // AdminListPresentationTest pins each of them by slug, and finding a host by the address
+    // that renders under its name is the question that wave existed to answer. MINIMAL
+    // already removes the three knobs a handful of rows cannot justify.
+
+    /**
+     * A high-volume table wide enough that an operator wants to choose columns, but whose
+     * questions are answered by the per-column filter row rather than a saved rule tree.
+     */
+    public static final ListChrome WIDE_LIST = ListChrome.MINIMAL.withColumnPicker(true);
+
+    /**
+     * High volume AND a real filter vocabulary: the advanced builder is the only way to ask
+     * the question ("every AAAA record under this zone whose value is not in this range").
+     */
+    public static final ListChrome FILTERABLE_LIST = ListChrome.MINIMAL.withAdvancedFilter(true);
 
     private CmsSupport() {
     }

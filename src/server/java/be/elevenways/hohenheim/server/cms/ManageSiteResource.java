@@ -7,6 +7,7 @@ import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -47,6 +48,12 @@ public final class ManageSiteResource extends SiteResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_site"); }
     @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
+
+    /**
+     * Does NOT inherit the admin list's views and rule builder: a tenant sees the handful
+     * of sites they hold a grant on, through two columns.
+     */
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     /** Only non-execution metadata is editable in the delegated panel. */
     @Override

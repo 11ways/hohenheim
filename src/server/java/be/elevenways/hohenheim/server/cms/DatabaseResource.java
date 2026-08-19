@@ -19,6 +19,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -67,7 +68,9 @@ public class DatabaseResource extends RowResource {
         .add(DatabaseModel.EPHEMERAL)
         .add(DatabaseModel.MEMORY_LIMIT_MB)
         .add(DatabaseModel.CPU_LIMIT)
-        .add(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID).build())
+        // See InstanceResource: a host is enrolled deliberately, never inline.
+        .add(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID)
+            .creatable(false).build())
         .add(DatabaseModel.STATUS)
         .build();
 
@@ -107,6 +110,7 @@ public class DatabaseResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(DatabaseModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    @Override public @NonNull ListChrome listChrome() { return CmsSupport.WIDE_LIST; }
 
     /** The managed name and the name inside the engine are different strings; a connection string only ever carries the second. */
     @Override
