@@ -44,6 +44,19 @@ public class CertificateModel extends Model {
     public static final String DNS_PUBLISHER_MANUAL = "manual";
     public static final String DNS_PUBLISHER_INTERNAL = "internal";
 
+    /**
+     * {@link #DNS_PUBLISHER} value for the operator-owned executable hook.
+     *
+     * AIDEV-NOTE: THE declaring home of the id, which {@code CommandDnsTxtPublisher.ID}
+     * reads back -- the publisher lives in the server source set and this column is common,
+     * so the string cannot come the other way. The 2026-08-19 enum conversion declared only
+     * manual and internal and NARROWED a live vocabulary: the request form has offered this
+     * value since it shipped, so rows already hold it, and the select lost its option while
+     * a resubmit and a filter rule started refusing the stored value outright.
+     */
+    public static final String DNS_PUBLISHER_COMMAND = "command";
+
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name")
         .label(HohenheimFormCopy.label("cert_nice_name"))
@@ -103,6 +116,9 @@ public class CertificateModel extends Model {
             .value(DNS_PUBLISHER_INTERNAL, v -> v.displayName("Internal")
                 .label(Microcopy.of("internal").withFilter("scope", "dns_publisher"))
                 .icon("server").color("green"))
+            .value(DNS_PUBLISHER_COMMAND, v -> v.displayName("Command hook")
+                .label(Microcopy.of("command").withFilter("scope", "dns_publisher"))
+                .icon("terminal").color("blue"))
             .visibleIn(EditView.EDIT)
             .label(HohenheimFormCopy.label("cert_dns_publisher"))
             .help(HohenheimFormCopy.help("cert_dns_publisher")).build());

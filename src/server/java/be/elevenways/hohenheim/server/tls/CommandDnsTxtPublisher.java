@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.tls;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.CertificateModel;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
@@ -11,7 +12,8 @@ import java.util.concurrent.TimeUnit;
 /** DNS-01 publisher backed by an operator-owned executable hook. */
 public final class CommandDnsTxtPublisher implements DnsTxtPublisher {
 
-    public static final String ID = "command";
+    /** The stored column's member, never a second spelling of it. */
+    public static final String ID = CertificateModel.DNS_PUBLISHER_COMMAND;
     private static final long TIMEOUT_SECONDS = 60;
 
     @Override public @NonNull String id() { return ID; }
