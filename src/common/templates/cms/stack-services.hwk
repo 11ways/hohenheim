@@ -58,6 +58,7 @@
     <pl-empty-state icon="cubes">
         <pl-empty-state-title>{{ t("empty", scope: "stack_services") }}</pl-empty-state-title>
         <pl-empty-state-description>{{ t("empty_description", scope: "stack_services") }}</pl-empty-state-description>
+        <pl-button variant="primary" use:Zenit.route={% addServiceTarget %} id="add-first-service-link">{{ t("add_service", scope: "stack_services") }}</pl-button>
     </pl-empty-state>
     {% /if %}
 </section>

@@ -397,6 +397,20 @@ public class StackResource extends RowResource {
         return actions;
     }
 
+    /**
+     * The record's front door is the SERVICES tab, not the edit form.
+     *
+     * AIDEV-NOTE: this is the whole fix for "created a stack, now what": the create form
+     * takes a name and a host, and everything that makes the stack RUN lives on the
+     * subpages. Landing on the form the operator just submitted told them nothing; the
+     * services tab shows its empty state, which names the next step. It also re-points
+     * the list's title link, deliberately -- the same argument holds for opening one.
+     */
+    @Override
+    public @Nullable String landingSubpage() {
+        return StackServicesPage.SLUG;
+    }
+
     @Override
     public @NonNull List<RecordScopedPage<Row>> subpages() {
         List<RecordScopedPage<Row>> pages = new ArrayList<>(

@@ -69,6 +69,17 @@ class StackAdminTest extends HohenheimTestBase {
             .where(StackModel.NAME.eq("admin-test-stack")).first();
         assertThat(stack).isNotNull();
         stackId = stack.get(StackModel.ID);
+
+        // Creating a stack lands on its SERVICES tab, not back on the form it just
+        // submitted: everything that makes a stack run is added there, and the tab's
+        // empty state is what says so.
+        assertThat(response.headers().firstValue("Location").orElse(""))
+            .contains("/admin/stacks/" + stackId + "/page/services");
+
+        var landing = adminGet("/admin/stacks/" + stackId + "/page/services");
+        assertThat(landing.statusCode()).isEqualTo(200);
+        assertThat(landing.body()).contains("A stack is composed of services")
+            .contains("add-first-service-link");
     }
 
     /** The service form's RelationPick needs a registered record source for the stack model. */

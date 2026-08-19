@@ -1189,7 +1189,7 @@
       "scope": "site_deployments"
     },
     {
-      "text": "Voeg een service toe om te beschrijven wat deze stack draait.",
+      "text": "Een stack bestaat uit services, elk een container-image. Voeg de eerste toe om te beschrijven wat deze stack draait.",
       "scope": "stack_services"
     },
     {
@@ -8596,7 +8596,7 @@
       "scope": "database"
     },
     {
-      "text": "Docker Compose-stacks die als een geheel worden uitgerold en bediend.",
+      "text": "Deployments met meerdere containers die je hier samenstelt: een stack is een naam plus de services die hij draait.",
       "scope": "stack"
     },
     {
