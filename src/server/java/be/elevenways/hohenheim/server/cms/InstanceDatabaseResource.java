@@ -111,16 +111,20 @@ public class InstanceDatabaseResource extends RowResource {
      * wider {@code view}, and without this a view-only delegate was shown Edit/Delete
      * buttons the write pipeline could only refuse. The boolean twin, never a second
      * authority: the pipeline hook stays the gate.
+     *
+     * reachesRecord, never hasInstance/hasDatabaseCapability: this runs once per
+     * RENDERED ROW, on both models, so the un-memoized walk was 2 grant-store round
+     * trips per row. The write pipeline (TenantWrites) keeps the fresh walk.
      */
     @Override
     public boolean writableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
         Integer instanceId = record.get(InstanceDatabaseModel.INSTANCE_ID);
         Integer databaseId = record.get(InstanceDatabaseModel.DATABASE_ID);
         return instanceId != null && databaseId != null
-            && HohenheimAccess.hasInstanceCapability(accessContext, instanceId,
-                HohenheimAccess.CONFIG)
-            && HohenheimAccess.hasDatabaseCapability(accessContext, databaseId,
-                HohenheimAccess.MANAGE);
+            && HohenheimAccess.reachesRecord(accessContext, InstanceModel.MODEL_ID,
+                instanceId, HohenheimAccess.CONFIG)
+            && HohenheimAccess.reachesRecord(accessContext, DatabaseModel.MODEL_ID,
+                databaseId, HohenheimAccess.MANAGE);
     }
 
     /**

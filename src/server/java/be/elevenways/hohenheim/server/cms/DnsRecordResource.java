@@ -240,8 +240,9 @@ public class DnsRecordResource extends RowResource {
             // 404s). The token is a bearer credential that survives grant revocation,
             // so minting it is additionally its OWN capability -- an operator passes
             // through the walk's admin bypass, so one predicate answers for both panels.
+            // reachesRecord, never ctx.hasCapability: this runs once per RENDERED ROW.
             .visibleFor((row, ctx) -> DnsRecordModel.isAddressType(row.get(DnsRecordModel.TYPE))
-                && ctx.hasCapability(DnsRecordModel.MODEL_ID,
+                && HohenheimAccess.reachesRecord(ctx, DnsRecordModel.MODEL_ID,
                     row.get(DnsRecordModel.ID), HohenheimAccess.DYNDNS))
             .handler((row, ctx) -> mintDynamicToken(row))
             .build());
@@ -254,7 +255,7 @@ public class DnsRecordResource extends RowResource {
             // Only offered where a credential actually exists: revoke on a record that
             // is not dynamic is not a no-op button, it is not a button at all.
             .visibleFor((row, ctx) -> DnsRecordModel.isAddressType(row.get(DnsRecordModel.TYPE))
-                && ctx.hasCapability(DnsRecordModel.MODEL_ID,
+                && HohenheimAccess.reachesRecord(ctx, DnsRecordModel.MODEL_ID,
                     row.get(DnsRecordModel.ID), HohenheimAccess.DYNDNS)
                 && DynamicDnsService.credentialFor(row.get(DnsRecordModel.ID)) != null)
             .handler((row, ctx) -> revokeDynamicToken(row))

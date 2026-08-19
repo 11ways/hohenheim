@@ -640,6 +640,12 @@ public final class HohenheimAccess {
     /**
      * Whether the context holds {@code capability} on the instance -- the SAME precedence
      * walk {@link #canManageInstance} rides, over the wider instance vocabulary.
+     *
+     * AIDEV-NOTE: this is the FRESH walk, kept deliberately for the once-per-request
+     * callers (write gates like requireOperationCapability/TenantWrites, page views,
+     * socket handshakes). A predicate that runs once per RENDERED ROW must use
+     * {@link #reachesRecord} instead -- converting THIS wrapper would put the request
+     * memo (and its documented staleness rule) under every write gate.
      */
     public static boolean hasInstanceCapability(@NonNull AccessContext ctx, int instanceId,
                                                 @NonNull String capability) {
@@ -717,7 +723,9 @@ public final class HohenheimAccess {
 
     /**
      * Whether the context holds {@code capability} on the managed database -- the SAME
-     * precedence walk every other tier rides, over the database vocabulary.
+     * precedence walk every other tier rides, over the database vocabulary. Per-ROW
+     * callers use {@link #reachesRecord}; the fresh walk stays for write gates
+     * (see the note on {@link #hasInstanceCapability(AccessContext, int, String)}).
      */
     public static boolean hasDatabaseCapability(@NonNull AccessContext ctx, int databaseId,
                                                 @NonNull String capability) {

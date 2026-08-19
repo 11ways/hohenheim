@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
@@ -93,16 +94,57 @@ public class InstanceScheduleStepResource extends RowResource {
      * {@link #authorize}), so the synthesized affordances are offered on the shared
      * floor of those gates instead of lying to a view-only delegate. The
      * {@link InstanceDeviceResource} shape.
+     *
+     * reachesRecord, never hasInstanceCapability: this runs once per RENDERED ROW.
+     * The schedule row rides a request memo for the same reason -- a steps list is
+     * scoped to ONE schedule, so the un-memoized spelling loaded the same schedule
+     * once per row on top of a grant walk per row. Write paths (authorize/deleteRow)
+     * keep the fresh loadSchedule.
      */
     @Override
     public boolean writableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        Row schedule = loadSchedule(record.get(RecordScheduleStepModel.SCHEDULE_ID));
+        Row schedule = scheduleForRender(accessContext,
+            record.get(RecordScheduleStepModel.SCHEDULE_ID));
         if (schedule == null) {
             return false;
         }
-        return HohenheimAccess.hasInstanceCapability(accessContext,
+        return HohenheimAccess.reachesRecord(accessContext, InstanceModel.MODEL_ID,
             InstanceScheduleResource.parseInstanceId(schedule.get(RecordScheduleModel.RECORD_ID)),
             HohenheimAccess.CONFIG);
+    }
+
+    /** Request-scoped memo of schedule rows, keyed by schedule id (render-only reads). */
+    private static final IdentifierKey<Map<Integer, Row>> SCHEDULE_ROWS =
+        IdentifierKey.of("hohenheim", "schedule_step_schedule_rows");
+
+    /**
+     * The render-side schedule lookup: one load per DISTINCT schedule per request.
+     * Conduit-less contexts (and attribute-less conduits) pay the load each call.
+     */
+    private static @Nullable Row scheduleForRender(@NonNull AccessContext accessContext,
+                                                   @Nullable Integer scheduleId) {
+        if (scheduleId == null) {
+            return null;
+        }
+        Conduit conduit = accessContext.conduit();
+        if (conduit == null) {
+            return loadSchedule(scheduleId);
+        }
+        Map<Integer, Row> cache = conduit.getAttribute(SCHEDULE_ROWS);
+        if (cache == null) {
+            cache = new LinkedHashMap<>();
+            try {
+                conduit.setAttribute(SCHEDULE_ROWS, cache);
+            } catch (UnsupportedOperationException attributeless) {
+                // A conduit without attribute storage just pays the load each call.
+            }
+        }
+        if (cache.containsKey(scheduleId)) {
+            return cache.get(scheduleId);
+        }
+        Row schedule = loadSchedule(scheduleId);
+        cache.put(scheduleId, schedule);
+        return schedule;
     }
 
     @Override

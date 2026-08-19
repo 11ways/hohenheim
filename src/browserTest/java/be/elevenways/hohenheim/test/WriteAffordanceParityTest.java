@@ -10,7 +10,12 @@ import be.elevenways.hohenheim.server.cms.DatabaseResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.RecordGrantModel;
+import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.common.task.record.RecordScheduleModel;
+import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -24,8 +29,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiPredicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -276,5 +285,132 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             .as("the operator keeps the NS editor").isTrue();
         assertThat(resource.deletableBy(editable, operator()))
             .as("and every delete button").isTrue();
+    }
+
+    // --- Query budgets: per-row predicates answer off the request memo ---------------
+
+    /**
+     * The dyndns row actions' {@code visibleFor} runs once per rendered row (twice: mint
+     * and revoke), so it must answer off the request memo ({@code reachesRecord}) instead
+     * of walking the grant store per row -- the TenantDomainDnsScopeTest budget idiom,
+     * pinned here at the predicate itself so the regression names this resource.
+     */
+    @Test
+    void theDyndnsVisibilityPredicateStaysInsideTheGrantQueryBudget() {
+        Model records = Models.get(DnsRecordModel.class);
+        List<Integer> extra = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            extra.add(dnsRecord("budget-" + i, DnsRecordModel.TYPE_A, "192.0.2." + (20 + i)));
+        }
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, DnsRecordModel.MODEL_ID, recordId,
+            HohenheimAccess.DYNDNS, true);
+        try {
+            DnsRecordResource resource = new DnsRecordResource();
+            List<BiPredicate<Row, AccessContext>> predicates = resource.rowActions().stream()
+                .filter(action -> action instanceof RowAction.Invoke<Row> invoke
+                    && invoke.id().toString().contains("dyndns"))
+                .map(action -> ((RowAction.Invoke<Row>) action).visibleFor())
+                .toList();
+            assertThat(predicates).as("both dyndns actions carry a per-row predicate").hasSize(2);
+
+            List<Row> rows = new ArrayList<>();
+            rows.add(records.findById(recordId));
+            for (Integer id : extra) {
+                rows.add(records.findById(id));
+            }
+
+            AtomicInteger finds = new AtomicInteger();
+            RecordGrantModel.SCHEMA.addBeforeFindHook(ignored -> finds.incrementAndGet());
+            finds.set(0);
+            AccessContext ctx = viewer();
+            for (Row row : rows) {
+                for (BiPredicate<Row, AccessContext> predicate : predicates) {
+                    predicate.test(row, ctx);
+                }
+            }
+            // Memoized: ONE dns_record#dyndns enumeration (candidate fetch + walk
+            // confirmations) for all 12 evaluations. The un-memoized spelling walks
+            // per evaluation and lands far outside this cap. Fix by removing queries,
+            // never by raising the cap.
+            assertThat(finds.get())
+                .as("record-grant finds across 12 dyndns visibility evaluations "
+                    + "(one capability set)")
+                .isBetween(1, 4);
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, viewerId, DnsRecordModel.MODEL_ID, recordId,
+                HohenheimAccess.DYNDNS);
+            for (Integer id : extra) {
+                records.delete(id);
+            }
+        }
+    }
+
+    /**
+     * The attachment's two-sided {@code writableBy} runs once per rendered row and asks
+     * about TWO models, so an un-memoized spelling paid two grant walks per row.
+     */
+    @Test
+    void theAttachmentAffordanceStaysInsideTheGrantQueryBudget() {
+        InstanceDatabaseResource resource = new InstanceDatabaseResource();
+        Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
+
+        AtomicInteger finds = new AtomicInteger();
+        RecordGrantModel.SCHEMA.addBeforeFindHook(ignored -> finds.incrementAndGet());
+        finds.set(0);
+        AccessContext ctx = holder();
+        for (int i = 0; i < 6; i++) {
+            resource.updatableBy(link, ctx);
+        }
+        // Memoized: one enumeration per DISTINCT set (instance#config, database#manage)
+        // for all 6 rows. Un-memoized was 2 walks x 6 rows. Never raise the cap.
+        assertThat(finds.get())
+            .as("record-grant finds across 6 attachment writability checks "
+                + "(two capability sets)")
+            .isBetween(1, 8);
+    }
+
+    /**
+     * The schedule-step {@code writableBy} loads the parent schedule AND asks a
+     * capability per row; both must collapse to once per request -- the steps list is
+     * scoped to ONE schedule, so per-row loads were pure duplication.
+     */
+    @Test
+    void theScheduleStepAffordanceStaysInsideBothQueryBudgets() {
+        Model schedules = Models.get(RecordScheduleModel.class);
+        Row schedule = schedules.createEmptyRow();
+        schedule.set(RecordScheduleModel.MODEL, InstanceModel.MODEL_ID.toString());
+        schedule.set(RecordScheduleModel.RECORD_ID, String.valueOf(instanceId));
+        schedule.set(RecordScheduleModel.NAME, PREFIX + "budget-schedule");
+        schedule.set(RecordScheduleModel.CRON, "0 4 * * *");
+        schedule.set(RecordScheduleModel.ENABLED, true);
+        schedule.set(RecordScheduleModel.RUN_AS, holderId.longValue());
+        schedules.save(schedule);
+        Integer scheduleId = schedule.get(RecordScheduleModel.ID);
+        try {
+            InstanceScheduleStepResource resource = new InstanceScheduleStepResource();
+            Row step = Models.get(RecordScheduleStepModel.class).createEmptyRow();
+            step.set(RecordScheduleStepModel.SCHEDULE_ID, scheduleId);
+
+            AtomicInteger grantFinds = new AtomicInteger();
+            AtomicInteger scheduleFinds = new AtomicInteger();
+            RecordGrantModel.SCHEMA.addBeforeFindHook(ignored -> grantFinds.incrementAndGet());
+            RecordScheduleModel.SCHEMA.addBeforeFindHook(ignored -> scheduleFinds.incrementAndGet());
+            grantFinds.set(0);
+            scheduleFinds.set(0);
+            AccessContext ctx = holder();
+            for (int i = 0; i < 6; i++) {
+                assertThat(resource.writableBy(step, ctx))
+                    .as("the config holder keeps the step editor").isTrue();
+            }
+            assertThat(scheduleFinds.get())
+                .as("schedule loads across 6 step writability checks (one schedule)")
+                .isEqualTo(1);
+            assertThat(grantFinds.get())
+                .as("record-grant finds across 6 step writability checks "
+                    + "(one capability set)")
+                .isBetween(1, 4);
+        } finally {
+            schedules.delete(scheduleId);
+        }
     }
 }
