@@ -239,6 +239,30 @@ class SpamserviceCmsContractTest {
 
         assertThat(body.get()).as("step 3: an absent name is sent as absent, never as \"null\"")
             .doesNotContain("\"name\":\"null\"");
+
+        // 4. The SAME shape one file over, which the fix above did not reach: a client whose
+        //    stored name is null, edited by a write that carries no name. The fallback is the
+        //    null itself, and String.valueOf over it is the four characters "null" -- PUT to
+        //    the live filter as the client's new name.
+        new SpamserviceClientsResource(() -> client).updateRow(
+            new ManagedClient(clientId, null, true, false, false, false, "owned", null, "eng",
+                50, null, null, null, "r1"),
+            Map.of("enabled", true), AccessContext.anonymous());
+
+        assertThat(body.get())
+            .as("step 4: a client with no stored name is never renamed to the text \"null\"")
+            .doesNotContain("\"name\":\"null\"");
+
+        // 5. And the same for a name the write DOES carry as null, which is what a blank
+        //    submitted entry coerces to -- getOrDefault answers null for a present key.
+        Map<String, Object> blankName = new java.util.HashMap<>();
+        blankName.put("name", null);
+        new SpamserviceClientsResource(() -> client).updateRow(existing, blankName,
+            AccessContext.anonymous());
+
+        assertThat(body.get())
+            .as("step 5: a submitted blank name is not the text \"null\" either")
+            .doesNotContain("\"name\":\"null\"");
     }
 
     @Test

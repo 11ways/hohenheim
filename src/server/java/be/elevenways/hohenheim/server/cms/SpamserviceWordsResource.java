@@ -121,13 +121,13 @@ public final class SpamserviceWordsResource extends SpamserviceRemoteResource<Sp
      * @param stored the entry being edited, or null on a create
      */
     private static SpamWordInput input(Map<String, Object> values, @Nullable SpamWordEntry stored) {
-        Object word = values.getOrDefault("word", stored == null ? "" : stored.word());
+        String word = requiredText(values, "word", stored == null ? "" : stored.word());
         Object score = values.getOrDefault("score", stored == null ? null : stored.score());
         Object rawLanguage = values.getOrDefault("language",
             stored == null ? null : stored.language());
         Object leet = values.getOrDefault("leet", stored == null ? null : stored.leet());
         String language = rawLanguage != null ? String.valueOf(rawLanguage).trim() : "";
-        return new SpamWordInput(String.valueOf(word == null ? "" : word),
+        return new SpamWordInput(word,
             score instanceof Number number ? number.intValue() : 0,
             language.isEmpty() ? null : language, Boolean.TRUE.equals(leet));
     }
