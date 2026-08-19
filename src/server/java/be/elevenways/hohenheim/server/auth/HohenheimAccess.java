@@ -956,6 +956,35 @@ public final class HohenheimAccess {
         return !capabilityScope(ctx, model, capability).isNone();
     }
 
+    /**
+     * Whether the context holds {@code capability} on ONE record, answered off the REQUEST
+     * MEMO rather than by a fresh per-record walk.
+     *
+     * AIDEV-NOTE: this is the shape a LIST asks, once per rendered row, to decide whether
+     * that row gets a pencil or an Edit button. The obvious spelling --
+     * {@code ctx.hasCapability(model, id, capability)} -- is a grant-store round trip PER
+     * ROW, which is an N+1 the page's own scope criteria already paid for once: the
+     * set-wise face runs the SAME precedence rows and confirms every candidate through
+     * them, so membership in the scope and the per-record answer agree by construction.
+     * TenantDomainDnsScopeTest's query budget is what catches the regression when a new
+     * per-row predicate reaches for the un-memoized face.
+     *
+     * The memo's staleness rule applies: a grant written earlier in THIS request is not
+     * seen unless {@link #forgetCapabilityScopes} was called, which is correct for a
+     * render and is why creation funnels drop it.
+     */
+    public static boolean reachesRecord(@NonNull AccessContext ctx, @NonNull Identifier model,
+                                        @Nullable Integer recordId, @NonNull String capability) {
+        if (recordId == null) {
+            return false;
+        }
+        RecordCapabilityScope scope = capabilityScope(ctx, model, capability);
+        if (scope.isAll()) {
+            return true;
+        }
+        return !scope.isNone() && intIds(scope.recordIds()).contains(recordId);
+    }
+
     /** Whether the context manages at least one site, an every-site scope included. */
     public static boolean managesAnySite(@NonNull AccessContext ctx) {
         return reachesAny(ctx, SiteModel.MODEL_ID, MANAGE);
