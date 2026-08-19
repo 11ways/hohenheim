@@ -8,8 +8,11 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -328,6 +331,67 @@ class InstanceOverviewTest extends HohenheimTestBase {
     }
 
     // -- plumbing -----------------------------------------------------------------
+
+
+    /**
+     * The per-record activity band: what happened to THIS instance, and only this one.
+     *
+     * AIDEV-NOTE: the discriminator is the ACTIVITY ROW ID in the entry link, not the row's
+     * rendered text. Activity titles are the localized verb plus a captured record title,
+     * which is blank for both instances here -- so "Created * Instance" appears for the
+     * decoy too and a text assertion would pass against a band filtered on the MODEL alone,
+     * which is precisely the wrong filter this band could regress to.
+     */
+    @Test
+    @Order(6)
+    void theOverviewShowsThisRecordsActivityAndNoOtherRecords() throws Exception {
+        var instances = Models.get(InstanceModel.class);
+        Row decoy = instances.createEmptyRow();
+        decoy.set(InstanceModel.NAME, "activity-decoy-instance");
+        decoy.set(InstanceModel.KIND, "hohenheim:docker_container");
+        decoy.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
+        decoy.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+        decoy.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        instances.save(decoy);
+
+        try {
+            // 1. One recorded action per instance, so a band filtered on the model alone
+            //    would show both and a correctly filtered one shows exactly one.
+            ActivityLog.record(instances, instance(), "deploy", "overview band fixture");
+            ActivityLog.record(instances, decoy.get(InstanceModel.ID), "deploy", "decoy fixture");
+
+            Object mine = latestActivityId(String.valueOf(instance()));
+            Object theirs = latestActivityId(String.valueOf(decoy.get(InstanceModel.ID)));
+            assertThat(mine).as("step 1: this instance has an activity row").isNotNull();
+            assertThat(theirs).as("step 1: the decoy has one too").isNotNull();
+
+            // 2. The band renders, and links this instance's entry.
+            String body = get(overviewUrl()).body();
+            assertThat(body)
+                .as("step 2: the overview carries a recent-activity band")
+                .contains("Recent activity");
+            assertThat(body)
+                .as("step 2: it links this instance's own activity entry")
+                .contains("/admin/activity/" + mine);
+
+            // 3. And NOT the other instance's -- the rule is (model, record id), not model.
+            assertThat(body)
+                .as("step 3: another instance's activity never leaks onto this page")
+                .doesNotContain("/admin/activity/" + theirs);
+        } finally {
+            instances.delete(decoy);
+        }
+    }
+
+    /** The newest activity row id written about one instance id, or null. */
+    private static Object latestActivityId(String recordId) {
+        Row entry = Models.get(ActivityModel.class).find()
+            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
+            .where(ActivityModel.RECORD_ID.eq(recordId))
+            .orderBy(ActivityModel.ID, SortOrder.DESC)
+            .first();
+        return entry == null ? null : entry.get(ActivityModel.ID);
+    }
 
     private HttpResponse<String> get(String path) throws Exception {
         HttpClient client = HttpClient.newBuilder()

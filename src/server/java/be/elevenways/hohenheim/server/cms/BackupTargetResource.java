@@ -50,6 +50,8 @@ public final class BackupTargetResource extends RowResource {
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.COMPUTE_GROUP; }
     @Override public int navOrder() { return 18; }
+
+    @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("box-archive"); }
 
     @Override

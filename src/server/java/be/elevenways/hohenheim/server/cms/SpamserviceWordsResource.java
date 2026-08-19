@@ -51,6 +51,8 @@ public final class SpamserviceWordsResource extends SpamserviceRemoteResource<Sp
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
     @Override public int navOrder() { return 60; }
+
+    @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("book"); }
 
     @Override

@@ -68,6 +68,11 @@ public final class ManageProjectMemberResource extends Resource<ManageProjectMem
     @Override public @NonNull Schema schema() { return SCHEMA; }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public int navOrder() { return 41; }
+
+    @Override
+    public @Nullable Microcopy description() {
+        return CmsSupport.navHint("project_member");
+    }
     @Override public @NonNull Icon icon() { return Icon.of("users"); }
 
     @Override public boolean creatable() { return false; }

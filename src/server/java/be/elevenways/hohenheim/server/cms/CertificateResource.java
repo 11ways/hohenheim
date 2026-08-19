@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
-
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
@@ -12,15 +12,15 @@ import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
-import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldGroup;
+import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -28,9 +28,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.protoblast.common.http.Uri;
+import be.elevenways.zenit.common.validation.Violations;
 import org.bouncycastle.openssl.PEMParser;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -96,7 +95,12 @@ public class CertificateResource extends RowResource {
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.PROXY_GROUP; }
-    @Override public int navOrder() { return 30; }
+    @Override public int navOrder() { return 20; }
+
+    @Override
+    public @Nullable Microcopy description() {
+        return Microcopy.of("nav_hint").withFilter("scope", "certificate");
+    }
     @Override public @NonNull Icon icon() { return Icon.of("certificate"); }
 
 

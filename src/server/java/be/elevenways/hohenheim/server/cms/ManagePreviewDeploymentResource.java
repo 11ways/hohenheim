@@ -25,6 +25,13 @@ public final class ManagePreviewDeploymentResource extends PreviewDeploymentReso
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_preview_deployment"); }
 
+    /**
+     * Visible here although the operator resource is not: /admin demoted previews behind a
+     * header action on the Sites list, and this panel has no such list to hang one on.
+     */
+    @Override public boolean showInNav() { return true; }
+    @Override public int navOrder() { return 30; }
+
     /** Admins see everything; everyone else only previews of their granted sites. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {

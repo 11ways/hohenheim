@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
@@ -62,8 +63,12 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
     @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
     @Override public boolean showInNav() { return true; }
-    @Override public int navOrder() { return 30; }
+    @Override public int navOrder() { return 35; }
 
+    @Override
+    public @Nullable Microcopy description() {
+        return CmsSupport.navHint("dns_record");
+    }
     /** Admins see every record; everyone else only the names they answer for. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {

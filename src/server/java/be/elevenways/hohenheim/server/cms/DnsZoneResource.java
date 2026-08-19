@@ -6,9 +6,11 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.http.Uri;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -17,6 +19,8 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.common.schema.TableView;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -25,6 +29,8 @@ import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.aggregate.Aggregate;
+import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
@@ -32,6 +38,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -93,7 +100,12 @@ public final class DnsZoneResource extends RowResource {
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
-    @Override public int navOrder() { return 30; }
+    @Override public int navOrder() { return 50; }
+
+    @Override
+    public @Nullable Microcopy description() {
+        return Microcopy.of("nav_hint").withFilter("scope", "dns_zone");
+    }
     @Override public @NonNull Icon icon() { return Icon.of("sitemap"); }
 
     /** The zone list opens the records workspace; the standard edit action still opens zone settings. */
@@ -121,11 +133,78 @@ public final class DnsZoneResource extends RowResource {
             "records").toUrl();
     }
 
+    /**
+     * Request-scoped memo of the record counts of the zones on the page being rendered.
+     *
+     * AIDEV-NOTE: {@code cellValue} takes no context, so the counts are computed where a
+     * context DOES exist ({@link #listRows}) and read back through the framework's own
+     * request scope ({@code RouteScope.currentConduit}) -- never a field on the resource,
+     * which one Panel instance shares across every concurrent request.
+     */
+    private static final IdentifierKey<Map<Integer, Long>> RECORD_COUNTS =
+        IdentifierKey.of("hohenheim", "dns_zone_record_counts");
+
+    /**
+     * The page's rows, with every zone's record count resolved in ONE grouped aggregate.
+     *
+     * AIDEV-NOTE: this replaced a per-row {@code COUNT(*)} inside {@code cellValue} -- 25
+     * extra statements on a default page, and the column is on by default. The count query
+     * is keyed on exactly the ids this page loaded, so it does not grow with the table.
+     */
+    @Override
+    public @NonNull List<Row> listRows(TableView.Applied<Row> applied,
+                                       @NonNull AccessContext accessContext) {
+        List<Row> rows = super.listRows(applied, accessContext);
+        Conduit conduit = accessContext.conduit();
+        if (conduit != null) {
+            try {
+                conduit.setAttribute(RECORD_COUNTS, countRecordsPerZone(rows));
+            } catch (UnsupportedOperationException attributeless) {
+                // An attribute-less conduit degrades to the per-row count below.
+            }
+        }
+        return rows;
+    }
+
+    /** @return zone id -> stored record count, for exactly the zones handed in */
+    private static @NonNull Map<Integer, Long> countRecordsPerZone(@NonNull List<Row> zones) {
+        Map<Integer, Long> counts = new HashMap<>();
+        List<Integer> ids = new ArrayList<>();
+        for (Row zone : zones) {
+            Integer id = zone.get(DnsZoneModel.ID);
+            if (id != null) {
+                ids.add(id);
+                counts.put(id, 0L);
+            }
+        }
+        if (ids.isEmpty()) {
+            return counts;
+        }
+        for (Row group : Models.get(DnsRecordModel.class).find()
+                .where(DnsRecordModel.ZONE_ID.in(ids))
+                .groupBy(DnsRecordModel.ZONE_ID)
+                .aggregateAll(Aggregate.count().as("record_count"))) {
+            Object zoneId = group.get(DnsRecordModel.ZONE_ID.getName());
+            Object counted = group.get("record_count");
+            if (zoneId instanceof Number id && counted instanceof Number number) {
+                counts.put(id.intValue(), number.longValue());
+            }
+        }
+        return counts;
+    }
+
     @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
         if ("record_count".equals(column.name())) {
+            Integer zoneId = row.get(DnsZoneModel.ID);
+            Conduit conduit = RouteScope.currentConduit();
+            Map<Integer, Long> counted = conduit == null ? null : conduit.getAttribute(RECORD_COUNTS);
+            if (counted != null && counted.containsKey(zoneId)) {
+                return counted.get(zoneId);
+            }
+            // A row outside the memoized page (a detail render, a conduit-less caller).
             return Models.get(DnsRecordModel.class).find()
-                .where(DnsRecordModel.ZONE_ID.eq(row.get(DnsZoneModel.ID)))
+                .where(DnsRecordModel.ZONE_ID.eq(zoneId))
                 .count();
         }
         return super.cellValue(row, column);
@@ -248,4 +327,16 @@ public final class DnsZoneResource extends RowResource {
             throw Violations.ofField(field, value, CmsSupport.violationText(violationKey));
         }
     }
+
+    /**
+     * The federation peers these zones transfer with, demoted out of the sidebar.
+     */
+    @Override
+    public @NonNull List<HeaderAction> headerActions() {
+        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
+        actions.addAll(List.of(
+            CmsSupport.relatedList("dns_peers_link", "dns-peers", "dns_peer", Icon.of("handshake"))));
+        return actions;
+    }
+
 }

@@ -63,6 +63,8 @@ public final class SpamserviceSecurityEventsResource extends SpamserviceRemoteRe
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
     @Override public int navOrder() { return 50; }
+
+    @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("shield-halved"); }
     @Override public boolean creatable() { return false; }
     @Override public boolean updatable() { return false; }

@@ -2,13 +2,17 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.ui.Icon;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Shared helpers for the CMS resources: proxy reload and coerced-map copies.
@@ -22,6 +26,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * An action that must be accountable records itself explicitly.
  */
 public final class CmsSupport {
+
+    /**
+     * The framework activity record source's token, as {@code ActivitySources} derives it
+     * from {@code ActivityModel}. One home here because three surfaces name it (the admin
+     * dashboard feed plus the per-record bands on the instance and server overviews) and a
+     * typo in any of them degrades to an empty widget with only a log line to show for it.
+     */
+    public static final String ACTIVITY_SOURCE = "zenit.activity";
 
     private CmsSupport() {
     }
@@ -42,6 +54,37 @@ public final class CmsSupport {
     /** A violation-scoped microcopy message (catalog entries carry {@code scope=violations}). */
     public static @NonNull Microcopy violationText(@NonNull String key) {
         return Microcopy.of(key).withFilter("scope", "violations");
+    }
+
+    /**
+     * THE sidebar description of a peer, and the tooltip of the header action that leads to
+     * a demoted one: microcopy key {@code nav_hint} in the peer's OWN scope, so one sentence
+     * has one home no matter which of the two surfaces renders it.
+     */
+    public static @NonNull Microcopy navHint(@NonNull String scope) {
+        return Microcopy.of("nav_hint").withFilter("scope", scope);
+    }
+
+    /**
+     * A header-action link from a parent list to a peer that was demoted out of the sidebar.
+     *
+     * AIDEV-NOTE: this is the reachability half of the sidebar curation -- showInNav(false)
+     * removes the entry, this puts the entry back where an operator is already standing. The
+     * label is the target's own {@code plural} microcopy and the tooltip its own
+     * {@code nav_hint}, so a demoted peer never grows a second name. The target is always the
+     * ADMIN panel: every caller is an operator-only list, and the /manage subclasses blank
+     * their inherited header actions rather than relaying a tenant to /admin.
+     *
+     * @param scope the target peer's microcopy scope, supplying BOTH its label and tooltip
+     */
+    public static @NonNull HeaderAction relatedList(@NonNull String actionId, @NonNull String slug,
+                                                    @NonNull String scope, @NonNull Icon icon) {
+        return HeaderAction.Url.builder(Identifier.of("hohenheim", actionId))
+            .label(Microcopy.of("plural").withFilter("scope", scope))
+            .description(navHint(scope))
+            .icon(icon)
+            .route(CmsRoutes.list("admin", slug))
+            .build();
     }
 
     /**

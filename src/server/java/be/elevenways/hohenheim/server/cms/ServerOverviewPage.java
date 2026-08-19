@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HostPreflightWidget;
 import be.elevenways.hohenheim.HostStateWidget;
 import be.elevenways.hohenheim.HostTrustWidget;
@@ -12,7 +13,6 @@ import be.elevenways.hohenheim.host.PostureAcknowledgementView;
 import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.host.TrustLaneView;
 import be.elevenways.hohenheim.host.WorkloadView;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -21,9 +21,9 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
-import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.process.ProcessCapacity;
@@ -39,6 +39,8 @@ import be.elevenways.zenit.cms.common.resource.RecordDashboardPage;
 import be.elevenways.zenit.cms.common.widget.RecordActionsWidget;
 import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ActivityRules;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -49,6 +51,7 @@ import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
 import be.elevenways.zenit.widget.common.builtin.AlertWidget;
 import be.elevenways.zenit.widget.common.builtin.FactListWidget;
+import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.StatusWidget;
 import be.elevenways.zenit.widget.common.builtin.UsageBarWidget;
@@ -165,10 +168,20 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
             new WidgetInstance(HostWorkloadsWidget.ID, Map.of())
                 .withData(workloadsOf(panelSlug, serverId))))));
 
-        // AIDEV-NOTE: no per-record RECENT ACTIVITY band -- see the same note on
-        // InstanceOverviewPage: the shared `zenit.activity` source does not project
-        // record_id, so ActivityRules.forRecord is not expressible against its
-        // vocabulary yet.
+        // AIDEV-NOTE: the per-record RECENT ACTIVITY band -- what an operator did to THIS
+        // host, in the order it happened. Unconditional here, unlike the instance page's
+        // copy: no delegated resource registers this page (ManagePanel projects no host
+        // inventory at all), so there is no tenant audience to censor for. If one ever
+        // appears it must take the instance page's !delegated branch, because the shared
+        // `zenit.activity` source is gated on ADMIN_ACCESS and would render empty.
+        bands.add(band(new WidgetTree(List.of(
+            new WidgetInstance(RecordsWidget.ID, Map.of(
+                "title", HohenheimWidgetCopy.localized("recent_activity", "server_overview"),
+                "source", CmsSupport.ACTIVITY_SOURCE,
+                "rules", ActivityRules.forRecord(this.resource.model(), serverId),
+                "sort", ActivityModel.CREATED_AT.getName(),
+                "descending", true,
+                "limit", 10))))));
 
         return new WidgetTree(List.of(new WidgetInstance(SectionWidget.ID,
             Map.of("css_class", "hh-server-overview"), new WidgetTree(bands))));

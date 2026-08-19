@@ -120,11 +120,13 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         waitForHydration();
 
         String body = page.locator("body").textContent();
-        assertThat(body).contains("Auth Providers");
+        assertThat(body).contains("Auth providers");
         assertThat(body).contains("Staff Gate");
-        // The shell sidebar carries the auth-providers entry.
+        // The sidebar deliberately does NOT carry this entry any more: auth providers are
+        // reached from the Sites list header (AdminNavigationJourneyTest step 6 pins the
+        // link, step 4 pins that this page still answers). The page is what matters here.
         PlaywrightAssertions.assertThat(
-            page.locator("pl-app-sidebar a[href='/admin/auth-providers']")).hasCount(1);
+            page.locator("pl-app-sidebar a[href='/admin/auth-providers']")).hasCount(0);
 
         // Regression: over soft navigation the form renders CLIENT-side; the
         // permission descriptions are Java-registered microcopy, which only

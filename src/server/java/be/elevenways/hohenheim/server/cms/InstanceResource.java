@@ -23,6 +23,7 @@ import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -139,7 +140,12 @@ public class InstanceResource extends RowResource {
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.COMPUTE_GROUP; }
-    @Override public int navOrder() { return 15; }
+    @Override public int navOrder() { return 10; }
+
+    @Override
+    public @Nullable Microcopy description() {
+        return Microcopy.of("nav_hint").withFilter("scope", "instance");
+    }
     @Override public @NonNull Icon icon() { return Icon.of("cube"); }
 
     /**
@@ -492,4 +498,19 @@ public class InstanceResource extends RowResource {
             })
             .build();
     }
+
+    /**
+     * The instance tier's sibling catalogs, demoted out of the sidebar: where backups are
+     * written, who may run how many instances, and which public names route to which workload.
+     */
+    @Override
+    public @NonNull List<HeaderAction> headerActions() {
+        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
+        actions.addAll(List.of(
+            CmsSupport.relatedList("backup_targets_link", "backup-targets", "backup_target", Icon.of("box-archive")),
+            CmsSupport.relatedList("instance_quotas_link", "instance-quotas", "instance_quota", Icon.of("gauge")),
+            CmsSupport.relatedList("game_domains_link", "game-domains", "game_domain", Icon.of("gamepad"))));
+        return actions;
+    }
+
 }

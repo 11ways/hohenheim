@@ -16,7 +16,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -144,7 +146,7 @@ class DnsAdminTest extends HohenheimTestBase {
         navigateToApp("/admin/dns-zones");
         waitForHydration();
         assertThat(page.locator("pl-app-sidebar a[href='/admin/dns-zones']").count()).isEqualTo(1);
-        assertThat(page.locator("body").textContent()).contains("DNS Zones");
+        assertThat(page.locator("body").textContent()).contains("DNS zones");
         assertThat(page.locator(".cms-row-link[href='/admin/dns-zones/" + zoneId
             + "/page/records']").count()).isEqualTo(1);
 
@@ -206,5 +208,49 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat(internal.count()).isEqualTo(1);
         assertThat(internal.getAttribute("aria-disabled")).isEqualTo("true");
         page.keyboard().press("Escape");
+    }
+    /**
+     * The zone list's record-count column costs ONE query no matter how many zones it shows.
+     *
+     * AIDEV-NOTE: this is a SHAPE assertion, not a magic number: the same page is rendered
+     * with one zone and then with six, and the DnsRecordModel find count must not move. A
+     * per-row COUNT(*) inside cellValue -- what this column used to be -- makes the second
+     * number five higher, which is exactly the regression a fixed cap would let through on a
+     * small fixture.
+     */
+    @Test
+    @Order(3)
+    void theZoneListCountsRecordsWithoutAQueryPerRow() throws Exception {
+        var zones = Models.get(DnsZoneModel.class);
+        List<Row> extra = new ArrayList<>();
+        AtomicInteger finds = new AtomicInteger();
+        DnsRecordModel.SCHEMA.addBeforeFindHook(ignored -> finds.incrementAndGet());
+        try {
+            finds.set(0);
+            assertThat(adminGet("/admin/dns-zones").statusCode()).isEqualTo(200);
+            int withOneZone = finds.get();
+
+            for (int i = 0; i < 5; i++) {
+                Row zone = zones.createEmptyRow();
+                zone.set(DnsZoneModel.ORIGIN, "count-" + i + ".example");
+                zone.set(DnsZoneModel.ENABLED, true);
+                zone.set(DnsZoneModel.ROLE, DnsZoneModel.ROLE_PRIMARY);
+                zones.save(zone);
+                extra.add(zone);
+            }
+
+            finds.set(0);
+            assertThat(adminGet("/admin/dns-zones").statusCode()).isEqualTo(200);
+            int withSixZones = finds.get();
+
+            assertThat(withSixZones)
+                .as("the record-count column does not query per zone (1 zone cost "
+                    + withOneZone + ", 6 zones cost " + withSixZones + ")")
+                .isEqualTo(withOneZone);
+        } finally {
+            for (Row zone : extra) {
+                zones.delete(zone);
+            }
+        }
     }
 }

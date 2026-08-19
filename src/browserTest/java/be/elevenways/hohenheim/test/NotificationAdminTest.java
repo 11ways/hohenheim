@@ -30,7 +30,7 @@ class NotificationAdminTest extends HohenheimTestBase {
         waitForHydration();
 
         String body = page.locator("body").textContent();
-        assertThat(body).contains("Notification Channels");
+        assertThat(body).contains("Notification channels");
 
         // The shell sidebar carries the notifications entry.
         PlaywrightAssertions.assertThat(

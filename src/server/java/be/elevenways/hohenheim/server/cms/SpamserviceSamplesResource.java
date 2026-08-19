@@ -67,6 +67,8 @@ public final class SpamserviceSamplesResource extends SpamserviceRemoteResource<
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
     @Override public int navOrder() { return 20; }
+
+    @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("file-lines"); }
     @Override public boolean creatable() { return false; }
     @Override public boolean updatable() { return false; }

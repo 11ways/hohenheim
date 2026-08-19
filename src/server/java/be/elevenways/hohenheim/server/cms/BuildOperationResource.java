@@ -69,6 +69,8 @@ public final class BuildOperationResource extends RowResource {
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
     @Override public int navOrder() { return 17; }
+
+    @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("hammer"); }
 
     @Override public boolean creatable() { return false; }

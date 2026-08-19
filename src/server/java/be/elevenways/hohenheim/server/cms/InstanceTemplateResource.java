@@ -36,6 +36,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -89,7 +90,12 @@ public class InstanceTemplateResource extends RowResource {
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.COMPUTE_GROUP; }
-    @Override public int navOrder() { return 16; }
+    @Override public int navOrder() { return 20; }
+
+    @Override
+    public @Nullable Microcopy description() {
+        return Microcopy.of("nav_hint").withFilter("scope", "instance_template");
+    }
     @Override public @NonNull Icon icon() { return Icon.of("clone"); }
 
     /** A template with live instances is load-bearing: refuse to delete it. */

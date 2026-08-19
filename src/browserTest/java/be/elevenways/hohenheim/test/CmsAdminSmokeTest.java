@@ -27,11 +27,13 @@ class CmsAdminSmokeTest extends HohenheimTestBase {
         String sidebar = page.locator("pl-app-sidebar").textContent();
         assertThat(sidebar).contains("Sites");
         assertThat(sidebar).contains("Certificates");
-        assertThat(sidebar).contains("Access Lists");
-        assertThat(sidebar).contains("Auth Providers");
+        assertThat(sidebar).contains("Access lists");
+        // Auth providers is DEMOTED out of the sidebar (reached from the Sites list header);
+        // AdminNavigationJourneyTest owns the full curated inventory and its reachability.
+        assertThat(sidebar).doesNotContain("Auth providers");
         assertThat(sidebar).contains("Databases");
         assertThat(sidebar).contains("Servers");
-        assertThat(sidebar).contains("Notification Channels");
+        assertThat(sidebar).contains("Notification channels");
         assertThat(sidebar).contains("Activity");
         assertThat(sidebar).contains("Settings");
 

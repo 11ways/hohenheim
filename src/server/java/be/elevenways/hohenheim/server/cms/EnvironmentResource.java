@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -17,7 +18,9 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -48,6 +51,8 @@ public final class EnvironmentResource extends RowResource {
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
     @Override public int navOrder() { return 15; }
+
+    @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("layer-group"); }
 
     /** Related-record prefill: /new?project_id=N arrives preselected. */
@@ -64,4 +69,16 @@ public final class EnvironmentResource extends RowResource {
         }
         return values;
     }
+
+    /**
+     * The variables owned by these environments, demoted out of the sidebar.
+     */
+    @Override
+    public @NonNull List<HeaderAction> headerActions() {
+        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
+        actions.addAll(List.of(
+            CmsSupport.relatedList("environment_variables_link", "environment-variables", "environment_variable", Icon.of("sliders"))));
+        return actions;
+    }
+
 }
