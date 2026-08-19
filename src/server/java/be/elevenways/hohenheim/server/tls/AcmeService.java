@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.security.SecureTokens;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.shredzone.acme4j.*;
 import org.shredzone.acme4j.challenge.Challenge;
@@ -96,6 +97,15 @@ public class AcmeService {
     /** Safe UI projection of an in-memory manual DNS order. */
     public record ManualDnsRequest(String token, int certificateId, List<DnsTxtRecord> records) {}
 
+    /**
+     * The outcome of a re-issue, which cannot be reported as a row id: the row already
+     * existed, so "failed" has to be distinguishable from "issued" by something other than
+     * the presence of an id.
+     *
+     * @param failureReason null exactly when the certificate was re-issued
+     */
+    public record ReissueResult(boolean issued, @Nullable String failureReason) {}
+
     public AcmeService(CertificateStore certificateStore) {
         this.certificateStore = certificateStore;
         DnsTxtPublishers.INSTANCE.register(new CommandDnsTxtPublisher());
@@ -177,7 +187,7 @@ public class AcmeService {
         // Claim the order key BEFORE creating a row: a concurrent identical
         // request shares the leader's certificate row instead of minting a
         // duplicate ACTIVE record for the same domains.
-        String orderKey = certificateOrderKey(hostnames, email);
+        String orderKey = certificateOrderKey(hostnames, email, null);
         OrderFlight flight = new OrderFlight(true, new CompletableFuture<>());
         OrderFlight existing = inFlightOrders.putIfAbsent(orderKey, flight);
         if (existing != null) {
@@ -212,6 +222,118 @@ public class AcmeService {
         flight.certificateId().set(certId);
 
         try {
+            OrderResult result = runIssuance(orderKey, flight, hostnames, email, challengeType,
+                dnsPublisher, declaring);
+
+            applyIssuedMaterial(certRow, result);
+            certModel.save(certRow);
+
+            certificateStore.loadFromDatabase();
+            Blast.log("ACME: certificate issued for", String.join(", ", hostnames));
+            return certId;
+
+        } catch (Exception e) {
+            String reason = failureReason(e);
+            Blast.log("ACME: certificate request failed for", String.join(", ", hostnames), "-", reason);
+
+            recordRenewalFailure(certRow, reason);
+            certModel.save(certRow);
+
+            return -1;
+        }
+    }
+
+    /**
+     * Re-order an EXISTING Let's Encrypt certificate against a possibly different hostname
+     * set, challenge type or DNS publisher, writing the result onto the SAME row.
+     *
+     * The row is touched ONLY on success. A failed re-issue leaves the stored certificate,
+     * its domain list and its renewal bookkeeping byte-identical, so the old certificate
+     * keeps serving and keeps auto-renewing against the names it was actually issued for --
+     * the alternative (stamping the new names first) would point every later renewal at a
+     * set no certificate was ever issued for.
+     *
+     * AIDEV-NOTE: REQUESTED_BY_USER_ID moves to the re-issuing actor, which is what renewal
+     * re-authorizes as from here on. That is the correct accountability -- the names on the
+     * certificate are now the ones THIS actor asked for -- but it does mean an operator
+     * re-issuing a tenant's certificate takes over its renewal authority.
+     *
+     * @param certRow the stored certificate; must be a {@code letsencrypt} row
+     * @throws CertificateAuthority.Refused when the requester may not obtain the NEW names
+     */
+    public @NonNull ReissueResult reissueCertificate(@NonNull Row certRow, List<String> hostnames,
+                                                     @Nullable String email, String challengeType,
+                                                     @Nullable String dnsPublisher,
+                                                     CertificateAuthority.Requester requester) {
+        // Visibility is not authorization: the row action hides itself for non-ACME rows and
+        // the handler refuses one, and this refuses it a third time because this is the only
+        // layer every future caller must pass through.
+        if (!CertificateModel.PROVIDER_LETSENCRYPT.equals(certRow.get(CertificateModel.PROVIDER))) {
+            throw new IllegalArgumentException("Only Let's Encrypt certificates can be re-issued");
+        }
+        if (CertificateModel.CHALLENGE_DNS.equals(challengeType)
+                && CertificateModel.DNS_PUBLISHER_MANUAL.equals(dnsPublisher)) {
+            // The manual lane is a two-step, in-memory order that has to survive a redirect;
+            // it mints its own row by construction. Re-issuing INTO an existing row through
+            // it is a separate mechanism, not a parameter of this one.
+            throw new IllegalArgumentException("Manual DNS-01 re-issue is not supported");
+        }
+
+        int certificateId = certRow.get(CertificateModel.ID);
+        var certModel = Models.get(CertificateModel.class);
+
+        // The FULL new name set is authorized, never the added ones: the stored row proves
+        // an authority that existed when it was issued, and says nothing about this actor.
+        Map<String, Integer> declaring = CertificateAuthority.authorize(requester, hostnames);
+
+        // AIDEV-NOTE: the row id is part of the key. Without it a re-issue and a fresh
+        // request for the same names coalesce onto one order, and the joiner adopts the
+        // leader's material -- which for a re-issue means writing a certificate ordered
+        // under a different row's request onto this row. Renewal deliberately keeps the
+        // id-less key so SAN-identical renewals still share one order.
+        String orderKey = certificateOrderKey(hostnames, email, certificateId);
+        OrderFlight flight = new OrderFlight(false, new CompletableFuture<>());
+        if (inFlightOrders.putIfAbsent(orderKey, flight) != null) {
+            return new ReissueResult(false, "A re-issue of this certificate is already in progress");
+        }
+
+        try {
+            OrderResult result = runIssuance(orderKey, flight, hostnames, email, challengeType,
+                dnsPublisher, declaring);
+
+            applyIssuedMaterial(certRow, result);
+            certRow.set(CertificateModel.DOMAIN_NAMES_TEXT, String.join(",", hostnames));
+            certRow.set(CertificateModel.CHALLENGE_TYPE, challengeType);
+            certRow.set(CertificateModel.DNS_PUBLISHER, dnsPublisher);
+            certRow.set(CertificateModel.LETSENCRYPT_EMAIL,
+                email != null && !email.isBlank() ? email.trim() : null);
+            certRow.set(CertificateModel.REQUESTED_BY_USER_ID, requester.subjectId());
+            certModel.save(certRow);
+
+            certificateStore.loadFromDatabase();
+            Blast.log("ACME: certificate re-issued for", String.join(", ", hostnames));
+            return new ReissueResult(true, null);
+
+        } catch (Exception e) {
+            String reason = failureReason(e);
+            Blast.log("ACME: re-issue failed for", String.join(", ", hostnames), "-", reason);
+            return new ReissueResult(false, reason);
+        }
+    }
+
+    /**
+     * THE issuance pipeline both entry shapes share: validate the names, place the order,
+     * and settle the in-flight claim whichever way it ends.
+     *
+     * Nothing here touches a certificate row -- the row bookkeeping is the ONLY thing a
+     * fresh request and a re-issue differ in, and it is what makes "leave the row alone on
+     * failure" expressible at all.
+     */
+    private OrderResult runIssuance(String orderKey, OrderFlight flight, List<String> hostnames,
+                                    @Nullable String email, String challengeType,
+                                    @Nullable String dnsPublisher,
+                                    Map<String, Integer> declaring) throws Exception {
+        try {
             boolean dns = CertificateModel.CHALLENGE_DNS.equals(challengeType);
             List<String> invalid = invalidHostnames(hostnames, dns);
             if (!invalid.isEmpty()) {
@@ -221,30 +343,22 @@ public class AcmeService {
             OrderResult result = performAcmeOrderUncoalesced(hostnames, email, challengeType,
                 dnsPublisher, declaring);
             flight.result().complete(result);
-
-            certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
-            certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
-            certRow.set(CertificateModel.EXPIRES_ON, result.expiresAt);
-            certRow.set(CertificateModel.ISSUED_ON, Instant.now());
-            markRenewalSuccess(certRow);
-            certModel.save(certRow);
-
-            certificateStore.loadFromDatabase();
-            Blast.log("ACME: certificate issued for", String.join(", ", hostnames));
-            return certId;
-
+            return result;
         } catch (Exception e) {
             flight.result().completeExceptionally(e);
-            String reason = failureReason(e);
-            Blast.log("ACME: certificate request failed for", String.join(", ", hostnames), "-", reason);
-
-            recordRenewalFailure(certRow, reason);
-            certModel.save(certRow);
-
-            return -1;
+            throw e;
         } finally {
             inFlightOrders.remove(orderKey, flight);
         }
+    }
+
+    /** Stamp freshly issued material onto a row; the four issuance lanes all write this. */
+    private static void applyIssuedMaterial(Row certRow, OrderResult result) {
+        certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem());
+        certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem());
+        certRow.set(CertificateModel.EXPIRES_ON, result.expiresAt());
+        certRow.set(CertificateModel.ISSUED_ON, Instant.now());
+        markRenewalSuccess(certRow);
     }
 
     /** Preserves nested transport diagnostics that generic ACME exceptions hide. */
@@ -306,7 +420,7 @@ public class AcmeService {
             throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
         }
 
-        String orderKey = certificateOrderKey(hostnames, email);
+        String orderKey = certificateOrderKey(hostnames, email, null);
         OrderFlight flight = new OrderFlight(false, new CompletableFuture<>());
         if (inFlightOrders.putIfAbsent(orderKey, flight) != null) {
             throw new IllegalStateException("A certificate order for these hostnames is already in progress");
@@ -376,11 +490,7 @@ public class AcmeService {
         try {
             completeDnsAuthorizations(pending.order().authorizations());
             OrderResult result = finalizeOrder(pending.order());
-            certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem());
-            certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem());
-            certRow.set(CertificateModel.EXPIRES_ON, result.expiresAt());
-            certRow.set(CertificateModel.ISSUED_ON, Instant.now());
-            markRenewalSuccess(certRow);
+            applyIssuedMaterial(certRow, result);
             certModel.save(certRow);
             certificateStore.loadFromDatabase();
             pending.flight().result().complete(result);
@@ -581,11 +691,7 @@ public class AcmeService {
                 certRow.get(CertificateModel.DNS_PUBLISHER),
                 certRow.get(CertificateModel.ID), declaring);
 
-            certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem);
-            certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem);
-            certRow.set(CertificateModel.EXPIRES_ON, result.expiresAt);
-            certRow.set(CertificateModel.ISSUED_ON, Instant.now());
-            markRenewalSuccess(certRow);
+            applyIssuedMaterial(certRow, result);
             certModel.save(certRow);
 
             certificateStore.loadFromDatabase();
@@ -662,7 +768,7 @@ public class AcmeService {
             throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
         }
 
-        String orderKey = certificateOrderKey(hostnames, email);
+        String orderKey = certificateOrderKey(hostnames, email, null);
         OrderFlight leader = new OrderFlight(true, new CompletableFuture<>());
         leader.certificateId().set(certificateId);
         OrderFlight existing = inFlightOrders.putIfAbsent(orderKey, leader);
@@ -698,8 +804,17 @@ public class AcmeService {
         }
     }
 
-    private static String certificateOrderKey(List<String> hostnames, @Nullable String email) {
-        return normalizeAccountEmail(email) + ":" + hostnames.stream()
+    /**
+     * The key same-account/same-SAN orders coalesce on.
+     *
+     * @param certificateId the row an order writes INTO when that row already exists, which
+     *                      makes the key unshareable with any other row's order; null for
+     *                      the lanes that may legitimately share one order
+     */
+    private static String certificateOrderKey(List<String> hostnames, @Nullable String email,
+                                              @Nullable Integer certificateId) {
+        return (certificateId != null ? "cert" + certificateId + "@" : "")
+            + normalizeAccountEmail(email) + ":" + hostnames.stream()
             .map(name -> name.trim().toLowerCase(Locale.ROOT))
             .distinct()
             .sorted()

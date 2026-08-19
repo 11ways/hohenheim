@@ -8,6 +8,10 @@
 {% declare internalDnsAvailable: Boolean = false %}
 {% declare manualToken: String = "" %}
 {% declare dnsRecords: List<Map<String, Object>> %}
+{% declare reissueCertId: Integer = 0 %}
+{% declare challengeType: String = "http" %}
+{% declare dnsMode: String = "manual" %}
+{% declare accountEmail: String = "" %}
 {% declare startOverTarget: RouteTarget %}
 {% declare certificatesTarget: RouteTarget %}
 {% declare flashMessage: Microcopy = null %}
@@ -58,6 +62,12 @@
     </form>
     {% else %}
     <form use:Zenit.form={% Zenit.Endpoints.hohenheim.certificates_request %}>
+        {#- The re-issue id is what makes this POST write back into an existing row
+            instead of minting a new certificate. -#}
+        {% if reissueCertId > 0 %}
+        <input type="hidden" name="reissue_cert_id" value={% reissueCertId %}>
+        <pl-alert variant="info">{{ t("reissue_notice", scope: "certificate_request") }}</pl-alert>
+        {% /if %}
         <pl-card><pl-card-content><zf-form-scope><div class="zf-entries">
             <pl-field>
                 <pl-label target="nice_name">{{ t("name", scope: "certificate_request") }}</pl-label>
@@ -68,7 +78,7 @@
             {% /each %}
             <pl-field>
                 <pl-label>{{ t("validation", scope: "certificate_request") }}</pl-label>
-                <pl-select name="challenge_type" value="http" submitEmpty={% true %}>
+                <pl-select name="challenge_type" value={% challengeType %} submitEmpty={% true %}>
                     <pl-select-item value="http">HTTP-01</pl-select-item>
                     <pl-select-item value="dns">DNS-01</pl-select-item>
                 </pl-select>
@@ -76,7 +86,7 @@
             </pl-field>
             <pl-field>
                 <pl-label>{{ t("dns_mode", scope: "certificate_request") }}</pl-label>
-                <pl-select name="dns_mode" value="manual" submitEmpty={% true %}>
+                <pl-select name="dns_mode" value={% dnsMode %} submitEmpty={% true %}>
                     <pl-select-item value="manual">{{ t("manual", scope: "certificate_request") }}</pl-select-item>
                     <pl-select-item value="internal" disabled={% !internalDnsAvailable %}>{{ t("internal_dns", scope: "certificate_request") }}</pl-select-item>
                     <pl-select-item value="command" disabled={% !dnsHookConfigured %}>{{ t("automatic_hook", scope: "certificate_request") }}</pl-select-item>
@@ -86,12 +96,12 @@
             </pl-field>
             <pl-field>
                 <pl-label target="letsencrypt_email">{{ t("account_email", scope: "certificate_request") }}</pl-label>
-                <pl-input inputId="letsencrypt_email" type="email" name="letsencrypt_email"></pl-input>
+                <pl-input inputId="letsencrypt_email" type="email" name="letsencrypt_email" value={% accountEmail %}></pl-input>
                 <pl-field-description>{{ t("account_email_help", scope: "certificate_request") }}</pl-field-description>
             </pl-field>
         </div></zf-form-scope></pl-card-content></pl-card>
         <div class="cms-form-actions">
-            <pl-button variant="primary" type="submit">{{ t("request", scope: "certificate_request") }}</pl-button>
+            <pl-button variant="primary" type="submit">{% if reissueCertId > 0 %}{{ t("reissue_submit", scope: "certificate_request") }}{% else %}{{ t("request", scope: "certificate_request") }}{% /if %}</pl-button>
             <a use:Zenit.route={% certificatesTarget %}>{{ t("cancel", scope: "certificate_request") }}</a>
         </div>
     </form>

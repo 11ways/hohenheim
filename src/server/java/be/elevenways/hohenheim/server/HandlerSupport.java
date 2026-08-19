@@ -46,6 +46,20 @@ final class HandlerSupport {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /** One raw submit value as a positive id, or 0 when absent or unparseable. */
+    static int submittedId(Map<String, Object> values, String name) {
+        String raw = submittedString(values, name);
+        if (raw.isEmpty()) {
+            return 0;
+        }
+        try {
+            int parsed = Integer.parseInt(raw);
+            return parsed > 0 ? parsed : 0;
+        } catch (NumberFormatException malformed) {
+            return 0;
+        }
+    }
+
     /**
      * Whether this request is a cross-site browser drive (an {@code <img src>}, a
      * cross-origin fetch, a form POST from another site) rather than a same-origin click or

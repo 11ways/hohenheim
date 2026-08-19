@@ -8973,5 +8973,33 @@
   "access_rule_provider_missing": {
     "text": "Choose the auth provider this rule requires",
     "scope": "violations"
+  },
+  "reissue": {
+    "text": "Modify & re-issue",
+    "scope": "certificate"
+  },
+  "reissue_certificate": {
+    "text": "Modify & re-issue certificate",
+    "scope": "certificate_request"
+  },
+  "reissue_submit": {
+    "text": "Re-issue certificate",
+    "scope": "certificate_request"
+  },
+  "reissue_notice": {
+    "text": "This replaces the certificate on the existing record. Nothing changes until the new certificate is issued: if the order fails, the current certificate keeps serving and renewing.",
+    "scope": "certificate_request"
+  },
+  "reissue_unavailable": {
+    "text": "That certificate cannot be re-issued; only Let's Encrypt certificates can be re-ordered.",
+    "scope": "certificate_request_error"
+  },
+  "reissue_manual_unsupported": {
+    "text": "Manual TXT records cannot re-issue an existing certificate. Pick another DNS publishing mode, or start a new request.",
+    "scope": "certificate_request_error"
+  },
+  "reissue_failed": {
+    "text": "Re-issue failed, the existing certificate was kept: {$reason}",
+    "scope": "certificate_request_error"
   }
 }

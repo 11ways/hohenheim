@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateAuthority;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
-import be.elevenways.hohenheim.server.tls.DnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.DnsTxtPublishers;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -18,7 +17,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
-import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -33,7 +31,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -69,43 +66,6 @@ class AcmeIssuanceContractTest {
     private static String savedDirectory;
     private static Integer savedPropagation;
 
-    /** The DNS-01 publisher of this test: records what was published and what was removed. */
-    private static final class RecordingTxtPublisher implements DnsTxtPublisher {
-
-        final List<DnsTxtRecord> published = new CopyOnWriteArrayList<>();
-        final List<DnsTxtRecord> removed = new CopyOnWriteArrayList<>();
-
-        @Override
-        public @NonNull String id() {
-            return "recording_txt";
-        }
-
-        @Override
-        public void publish(@NonNull DnsTxtRecord record) {
-            this.published.add(record);
-        }
-
-        @Override
-        public void cleanup(@NonNull DnsTxtRecord record) {
-            this.removed.add(record);
-        }
-
-        @Override
-        public boolean servesImmediately() {
-            return true;
-        }
-
-        /** The value published for one record name, or null. */
-        String valueOf(String name) {
-            for (DnsTxtRecord record : this.published) {
-                if (record.name().equals(name)) {
-                    return record.value();
-                }
-            }
-            return null;
-        }
-    }
-
     @BeforeAll
     static void setUp() throws Exception {
         datasource = TestDatabases.freshDatasource();
@@ -123,7 +83,7 @@ class AcmeIssuanceContractTest {
             "acme-test@example.com");
 
         acme = new AcmeService(new CertificateStore());
-        publisher = new RecordingTxtPublisher();
+        publisher = new RecordingTxtPublisher("recording_txt");
         DnsTxtPublishers.INSTANCE.register(publisher);
     }
 

@@ -97,6 +97,22 @@ final class CertificateHandlers {
 
             var requester = CertificateAuthority.Requester.of(AccessContext.of(conduit));
 
+            // Re-issue: the same submission, aimed at a row that already exists. The row is
+            // resolved and re-checked HERE as well as in the service -- the row action's
+            // visibility rule is a rendering decision and authorizes nothing.
+            Row reissueTarget = null;
+            int reissueCertId = HandlerSupport.submittedId(form, "reissue_cert_id");
+            if (reissueCertId > 0) {
+                reissueTarget = certModel.findById(reissueCertId);
+                if (reissueTarget == null || !CertificateModel.PROVIDER_LETSENCRYPT
+                        .equals(reissueTarget.get(CertificateModel.PROVIDER))) {
+                    return requestError(conduit, certificateError("reissue_unavailable"));
+                }
+                if (dns && CertificateModel.DNS_PUBLISHER_MANUAL.equals(dnsMode)) {
+                    return requestError(conduit, certificateError("reissue_manual_unsupported"));
+                }
+            }
+
             if (dns && CertificateModel.DNS_PUBLISHER_MANUAL.equals(dnsMode)) {
                 try {
                     var manual = proxy.getAcmeService().prepareManualDnsCertificate(
@@ -138,6 +154,26 @@ final class CertificateHandlers {
             if (dns && CommandDnsTxtPublisher.ID.equals(dnsMode) && !CommandDnsTxtPublisher.isConfigured()) {
                 return requestError(conduit, certificateError("hook_not_configured"));
             }
+            if (reissueTarget != null) {
+                String previousDomains = String.valueOf(
+                    reissueTarget.get(CertificateModel.DOMAIN_NAMES_TEXT));
+                AcmeService.ReissueResult outcome;
+                try {
+                    outcome = proxy.getAcmeService().reissueCertificate(reissueTarget, hostnames,
+                        email.isEmpty() ? null : email, challengeType, publisher, requester);
+                } catch (CertificateAuthority.Refused refused) {
+                    return requestError(conduit, refusalMessage(refused));
+                }
+                if (!outcome.issued()) {
+                    return requestError(conduit, certificateError("reissue_failed")
+                        .withArg("reason", String.valueOf(outcome.failureReason())));
+                }
+                // The names are the point of the entry; no key material is ever logged.
+                ActivityLog.record(certModel, reissueCertId, "reissued",
+                    previousDomains + " -> " + String.join(",", hostnames));
+                return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, "certificates"));
+            }
+
             int certId;
             try {
                 certId = proxy.getAcmeService().requestCertificate(hostnames, niceName,

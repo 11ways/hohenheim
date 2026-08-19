@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -19,6 +21,7 @@ import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -43,6 +46,10 @@ public final class CertificateRequestPage extends PanelPage {
         vars.put("title", Microcopy.of("request_certificate")
             .withFilter("scope", "certificate_request")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        vars.put("reissueCertId", 0);
+        vars.put("challengeType", CertificateModel.CHALLENGE_HTTP);
+        vars.put("dnsMode", CertificateModel.DNS_PUBLISHER_MANUAL);
+        vars.put("accountEmail", "");
         // Render-time condition only (an expired manual challenge); redirect outcomes
         // ride the session flash, never a query parameter.
         vars.put("error", "");
@@ -73,8 +80,73 @@ public final class CertificateRequestPage extends PanelPage {
             }
         }
         List<String> domains = prefillFromSite(conduit, accessContext, vars);
-        vars.put("domainForm", CertificateRequestForm.state(accessContext, domains));
+        List<String> reissued = prefillFromCertificate(conduit, accessContext, vars);
+        vars.put("domainForm", CertificateRequestForm.state(accessContext,
+            reissued.isEmpty() ? domains : reissued));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/certificate-request"), vars);
+    }
+
+    /**
+     * A ?cert_id= link (the certificate list's re-issue action) turns this into the EDIT
+     * form of an existing order: same page, same validation, prefilled with what the row
+     * was last issued for, and a hidden id that makes the POST write back into that row.
+     *
+     * AIDEV-NOTE: scoped for the same reason {@link #prefillFromSite} is -- the answer is
+     * a hostname list, which is exactly what a reader who may not see the certificate must
+     * not be handed. A row that is not a Let's Encrypt certificate is refused here AND in
+     * the handler: this one only decides what to render.
+     *
+     * @return the row's stored hostnames, or empty when this is not a re-issue
+     */
+    private static @NonNull List<String> prefillFromCertificate(@NonNull Conduit conduit,
+                                                                @NonNull AccessContext accessContext,
+                                                                @NonNull Map<String, Object> vars) {
+        String raw = conduit.getQueryParam(HohenheimParams.CERTIFICATE_REISSUE_NAME);
+        if (raw == null || raw.isEmpty()) {
+            return List.of();
+        }
+        int certId;
+        try {
+            certId = Integer.parseInt(raw);
+        } catch (NumberFormatException invalid) {
+            return List.of();
+        }
+        if (certId <= 0) {
+            return List.of();
+        }
+        Row cert = HohenheimAccess.isAdmin(accessContext)
+            ? Models.get(CertificateModel.class).findById(certId) : null;
+        if (cert == null || !CertificateModel.PROVIDER_LETSENCRYPT
+                .equals(cert.get(CertificateModel.PROVIDER))) {
+            vars.put("error", Microcopy.of("reissue_unavailable")
+                .withFilter("scope", "certificate_request_error")
+                .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+            return List.of();
+        }
+
+        vars.put("reissueCertId", certId);
+        vars.put("title", Microcopy.of("reissue_certificate")
+            .withFilter("scope", "certificate_request")
+            .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        vars.put("niceName", text(cert.get(CertificateModel.NICE_NAME)));
+        vars.put("accountEmail", text(cert.get(CertificateModel.LETSENCRYPT_EMAIL)));
+
+        String challengeType = text(cert.get(CertificateModel.CHALLENGE_TYPE));
+        vars.put("challengeType", challengeType.isEmpty()
+            ? CertificateModel.CHALLENGE_HTTP : challengeType);
+        String publisher = text(cert.get(CertificateModel.DNS_PUBLISHER));
+        vars.put("dnsMode", publisher.isEmpty()
+            ? CertificateModel.DNS_PUBLISHER_MANUAL : publisher);
+
+        String stored = text(cert.get(CertificateModel.DOMAIN_NAMES_TEXT));
+        if (stored.isEmpty()) {
+            return List.of();
+        }
+        return List.of(stored.split(","));
+    }
+
+    private static @NonNull String text(@Nullable Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
     }
 
     /**

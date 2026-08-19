@@ -424,6 +424,74 @@ class AdminPagesTest extends HohenheimTestBase {
             .doesNotContain(goneUrl);
     }
 
+    /**
+     * The re-issue mode of the request page: a ?cert_id= link turns the create form into the
+     * edit form of an existing order, and a row that has no order to repeat is refused.
+     */
+    @Test
+    @Order(22)
+    void certificateRequestPageOpensInReissueModeForAnAcmeRow() throws Exception {
+        var certModel = Models.get(CertificateModel.class);
+        Row cert = certModel.createEmptyRow();
+        cert.set(CertificateModel.NICE_NAME, "reissue-me-cert");
+        cert.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_LETSENCRYPT);
+        cert.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+        cert.set(CertificateModel.DOMAIN_NAMES_TEXT, "alpha.example.test,beta.example.test");
+        cert.set(CertificateModel.CHALLENGE_TYPE, CertificateModel.CHALLENGE_DNS);
+        cert.set(CertificateModel.DNS_PUBLISHER, CertificateModel.DNS_PUBLISHER_INTERNAL);
+        certModel.save(cert);
+
+        Row uploaded = certModel.createEmptyRow();
+        uploaded.set(CertificateModel.NICE_NAME, "uploaded-cert");
+        uploaded.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_CUSTOM);
+        uploaded.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+        certModel.save(uploaded);
+
+        try {
+            // 1. The list offers the action for the ACME row, in the overflow menu.
+            String list = get("/admin/certificates").body();
+            assertThat(list)
+                .as("step 1: the re-issue link is rendered for the ACME certificate")
+                .contains("/admin/certificates-request?cert_id=" + cert.get(CertificateModel.ID));
+            assertThat(list)
+                .as("step 1: and never for the manual upload")
+                .doesNotContain("/admin/certificates-request?cert_id="
+                    + uploaded.get(CertificateModel.ID));
+
+            // 2. The page opens PREFILLED with what the row was last issued for, carrying the
+            //    hidden id that makes the POST write back into that row.
+            navigateToApp("/admin/certificates-request?cert_id=" + cert.get(CertificateModel.ID));
+            waitForHydration();
+            assertThat(page.locator("input[name='reissue_cert_id']").getAttribute("value"))
+                .as("step 2: the row the submit re-issues is carried in the form")
+                .isEqualTo(String.valueOf(cert.get(CertificateModel.ID)));
+            var domainInputs = page.locator("zf-array pl-input[name='domains'] input");
+            assertThat(domainInputs.count())
+                .as("step 2: both stored hostnames are prefilled as rows").isEqualTo(2);
+            assertThat(List.of(domainInputs.nth(0).inputValue(), domainInputs.nth(1).inputValue()))
+                .as("step 2: carrying the names the row was last issued for")
+                .containsExactly("alpha.example.test", "beta.example.test");
+            assertThat(page.locator("pl-input[name='nice_name'] input").inputValue())
+                .as("step 2: with the certificate's own name").isEqualTo("reissue-me-cert");
+            assertThat(page.content())
+                .as("step 2: and the page says it is re-issuing, not creating")
+                .contains("re-issue");
+
+            // 3. A row with no ACME order to repeat is refused at render, and the form stays
+            //    a plain create form rather than half-adopting the row.
+            navigateToApp("/admin/certificates-request?cert_id="
+                + uploaded.get(CertificateModel.ID));
+            waitForHydration();
+            assertThat(page.locator("pl-alert[variant='destructive']").count())
+                .as("step 3: the refusal is shown").isGreaterThanOrEqualTo(1);
+            assertThat(page.locator("input[name='reissue_cert_id']").count())
+                .as("step 3: and nothing would be written back to it").isZero();
+        } finally {
+            certModel.delete(cert);
+            certModel.delete(uploaded);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Site record pages
     // -----------------------------------------------------------------------
