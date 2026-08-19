@@ -120,8 +120,12 @@ public class InstanceDeviceResource extends RowResource {
      */
     @Override
     public boolean writableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return HohenheimAccess.hasInstanceCapability(accessContext, instanceIdOf(record),
-            HohenheimAccess.CONFIG);
+        // reachesRecord, never hasInstanceCapability: this runs once per RENDERED ROW.
+        // The InstanceDevices mutator funnel it mirrors keeps the FRESH walk -- that one
+        // is a write gate, and the memo deliberately does not see a grant written earlier
+        // in the same request.
+        return HohenheimAccess.reachesRecord(accessContext, InstanceModel.MODEL_ID,
+            instanceIdOf(record), HohenheimAccess.CONFIG);
     }
 
     /**

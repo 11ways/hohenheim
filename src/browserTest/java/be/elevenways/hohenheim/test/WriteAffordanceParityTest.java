@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.cms.DatabaseResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
+import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
@@ -412,5 +413,124 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         } finally {
             schedules.delete(scheduleId);
         }
+    }
+
+    /**
+     * The instances list is the headline: {@code updatableBy} plus SIX action
+     * {@code visibleFor} predicates all answer a per-record capability question, so an
+     * un-memoized spelling paid up to seven grant-store round trips PER RENDERED ROW.
+     */
+    @Test
+    void theInstanceListAffordancesStayInsideTheGrantQueryBudget() {
+        Model instances = Models.get(InstanceModel.class);
+        List<Integer> extra = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            extra.add(instanceRow(PREFIX + "budget-" + i));
+        }
+        RecordGrants.grant(GrantSubjectType.USER, holderId, InstanceModel.MODEL_ID, instanceId,
+            HohenheimAccess.POWER, true);
+        try {
+            InstanceResource resource = new InstanceResource();
+            List<RowAction<Row>> actions = resource.rowActions();
+
+            List<Row> rows = new ArrayList<>();
+            rows.add(instances.findById(instanceId));
+            for (Integer id : extra) {
+                rows.add(instances.findById(id));
+            }
+
+            AtomicInteger finds = new AtomicInteger();
+            RecordGrantModel.SCHEMA.addBeforeFindHook(ignored -> finds.incrementAndGet());
+            finds.set(0);
+            AccessContext ctx = holder();
+            boolean sawAnAffordance = false;
+            for (Row row : rows) {
+                sawAnAffordance |= resource.updatableBy(row, ctx);
+                for (RowAction<Row> action : actions) {
+                    sawAnAffordance |= action.isVisibleFor(row, ctx);
+                }
+            }
+            assertThat(sawAnAffordance)
+                .as("the granted instance still offers its affordances").isTrue();
+            // Memoized this measures 8: one enumeration per DISTINCT capability set
+            // asked of instance (config, power, snapshots, backups) for all 6 rows,
+            // each costing a candidate fetch plus walk confirmations. Reverting ONE
+            // predicate to the fresh walk measures 13, which is what the cap catches --
+            // fix a breach by removing queries, never by raising the cap.
+            assertThat(finds.get())
+                .as("record-grant finds across 6 instance rows x 7 affordance checks "
+                    + "(four capability sets)")
+                .isBetween(1, 10);
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, holderId, InstanceModel.MODEL_ID,
+                instanceId, HohenheimAccess.POWER);
+            for (Integer id : extra) {
+                instances.delete(id);
+            }
+        }
+    }
+
+    /**
+     * The schedule list asks the SAME question twice per row ({@code writableBy} and the
+     * run_now {@code visibleFor}); its {@code requireManage} write gate reads identically
+     * and deliberately keeps the fresh walk, so this pins which of the two is memoized.
+     */
+    @Test
+    void theScheduleListAffordancesStayInsideTheGrantQueryBudget() {
+        Model schedules = Models.get(RecordScheduleModel.class);
+        List<Integer> ids = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            Row schedule = schedules.createEmptyRow();
+            schedule.set(RecordScheduleModel.MODEL, InstanceModel.MODEL_ID.toString());
+            schedule.set(RecordScheduleModel.RECORD_ID, String.valueOf(instanceId));
+            schedule.set(RecordScheduleModel.NAME, PREFIX + "list-schedule-" + i);
+            schedule.set(RecordScheduleModel.CRON, "0 4 * * *");
+            schedule.set(RecordScheduleModel.ENABLED, true);
+            schedule.set(RecordScheduleModel.RUN_AS, holderId.longValue());
+            schedules.save(schedule);
+            ids.add(schedule.get(RecordScheduleModel.ID));
+        }
+        try {
+            InstanceScheduleResource resource = new InstanceScheduleResource();
+            List<RowAction<Row>> actions = resource.rowActions();
+            List<Row> rows = new ArrayList<>();
+            for (Integer id : ids) {
+                rows.add(schedules.findById(id));
+            }
+
+            AtomicInteger finds = new AtomicInteger();
+            RecordGrantModel.SCHEMA.addBeforeFindHook(ignored -> finds.incrementAndGet());
+            finds.set(0);
+            AccessContext ctx = holder();
+            for (Row row : rows) {
+                assertThat(resource.writableBy(row, ctx))
+                    .as("the config holder keeps the schedule editor").isTrue();
+                for (RowAction<Row> action : actions) {
+                    action.isVisibleFor(row, ctx);
+                }
+            }
+            // Memoized: ONE instance#config enumeration for all 12 evaluations.
+            // Un-memoized was 2 walks x 6 rows. Never raise the cap.
+            assertThat(finds.get())
+                .as("record-grant finds across 6 schedule rows x 2 affordance checks "
+                    + "(one capability set)")
+                .isBetween(1, 4);
+        } finally {
+            for (Integer id : ids) {
+                schedules.delete(id);
+            }
+        }
+    }
+
+    private static int instanceRow(String name) {
+        Model instances = Models.get(InstanceModel.class);
+        Row row = instances.createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND, "hohenheim:docker_container");
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
+            Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
+        row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
+        instances.save(row);
+        return row.get(InstanceModel.ID);
     }
 }

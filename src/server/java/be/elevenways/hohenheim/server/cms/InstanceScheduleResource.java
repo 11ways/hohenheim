@@ -184,10 +184,16 @@ public class InstanceScheduleResource extends RowResource {
      * {@link InstanceDeviceResource} shape: read stays the WIDER {@code view} on the
      * delegated peer, and without this a view-only delegate was shown Edit/Delete
      * buttons the pipeline could only refuse.
+     *
+     * AIDEV-NOTE: reachesRecord here and in the run_now {@code visibleFor} below -- both
+     * run once per RENDERED ROW. {@link #requireManage} reads IDENTICALLY and must keep
+     * the fresh walk: it THROWS to gate a write, and the memo deliberately does not see a
+     * grant written earlier in the same request. Render predicate above, write gate
+     * below, same question, different face.
      */
     @Override
     public boolean writableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return HohenheimAccess.hasInstanceCapability(accessContext,
+        return HohenheimAccess.reachesRecord(accessContext, InstanceModel.MODEL_ID,
             parseInstanceId(record.get(RecordScheduleModel.RECORD_ID)), HohenheimAccess.CONFIG);
     }
 
@@ -212,7 +218,7 @@ public class InstanceScheduleResource extends RowResource {
             .label(Microcopy.of("run_now").withFilter("scope", "instance_schedule"))
             .icon(Icon.of("play"))
             .visibleFor((row, ctx) -> Boolean.TRUE.equals(row.get(RecordScheduleModel.ENABLED))
-                && HohenheimAccess.hasInstanceCapability(ctx,
+                && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
                     parseInstanceId(row.get(RecordScheduleModel.RECORD_ID)),
                     HohenheimAccess.CONFIG))
             .handler((row, ctx) -> {
@@ -284,6 +290,11 @@ public class InstanceScheduleResource extends RowResource {
     /**
      * A schedule declares what runs unattended, so authoring one is a CONFIG act.
      * No isAdmin prefix: the walk's own admin row already answers for operators.
+     *
+     * AIDEV-NOTE: the FRESH walk stays here on purpose. This reads exactly like
+     * {@link #writableBy} (which answers off the request memo) but it THROWS to gate a
+     * WRITE, and the memo's documented staleness rule -- a grant written earlier in this
+     * request is not seen -- is correct for a render and wrong for a gate.
      */
     static void requireManage(@NonNull AccessContext accessContext, int instanceId) {
         if (HohenheimAccess.hasInstanceCapability(
