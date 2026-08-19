@@ -26,24 +26,29 @@ import java.util.List;
 /**
  * Admin surface for git provider installations. Credentials are static encrypted
  * secret columns; the connection test lists repositories through the real client, so
- * a wrong token or unusable App key fails HERE, not on the first deploy.
+ * a wrong token or unusable App key fails HERE, not on the first deploy. This surface
+ * owns the SHARED switch -- the delegated projection ({@link ManageGitProviderResource})
+ * deliberately does not.
  */
-public final class GitProviderResource extends RowResource {
+public class GitProviderResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(GitProviderModel.NAME)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(GitProviderModel.KIND))
         .add(GitProviderModel.BASE_URL)
+        // The per-kind sub-form: the GitHub App identifiers appear on a GitHub provider
+        // and on no other, without a second resource or a hand-written visibility rule.
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(GitProviderModel.SETTINGS))
         .add(GitProviderModel.ACCESS_TOKEN)
-        .add(GitProviderModel.APP_ID)
-        .add(GitProviderModel.APP_INSTALLATION_ID)
         .add(GitProviderModel.APP_PRIVATE_KEY_PEM)
+        .add(GitProviderModel.SHARED)
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(GitProviderModel.NAME).filterable().build())
         .column(ColumnSpec.fromField(GitProviderModel.KIND).filterable().build())
         .column(ColumnSpec.fromField(GitProviderModel.BASE_URL).copyable().build())
+        .column(ColumnSpec.fromField(GitProviderModel.SHARED).filterable().build())
         .column(ColumnSpec.fromField(GitProviderModel.CREATED_AT).build())
         .build();
 

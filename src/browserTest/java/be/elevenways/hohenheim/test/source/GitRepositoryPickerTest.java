@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.source;
 
+import be.elevenways.hohenheim.server.source.GithubProviderKind;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -80,7 +81,7 @@ class GitRepositoryPickerTest extends HohenheimTestBase {
         var model = Models.get(GitProviderModel.class);
         Row provider = model.createEmptyRow();
         provider.set(GitProviderModel.NAME, "Picker Provider");
-        provider.set(GitProviderModel.KIND, GitProviderModel.KIND_GITHUB);
+        provider.set(GitProviderModel.KIND, GithubProviderKind.ID.toString());
         provider.set(GitProviderModel.BASE_URL, fakeBase);
         provider.set(GitProviderModel.ACCESS_TOKEN, "picker-pat");
         model.save(provider);

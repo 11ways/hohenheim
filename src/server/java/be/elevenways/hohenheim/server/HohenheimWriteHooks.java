@@ -53,6 +53,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // No disabled site can go live on a hostname an enabled site already
         // owns (form, toggle, delegated save, revision restore).
         SiteResource.installEnableInvariant();
+        // No git provider row can store an undeclared kind, an unusable base URL, or a
+        // blank one on a kind that has no public host (form, delegated form, restore).
+        be.elevenways.hohenheim.server.source.GitProviders.installKindInvariant();
         // No domain row can take a route an enabled site already owns, and every row
         // stamps the live-route claim its unique index arbitrates (form, clone, seeder,
         // API writeback, direct model save).

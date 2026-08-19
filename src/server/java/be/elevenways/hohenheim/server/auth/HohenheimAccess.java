@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.auth;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
@@ -19,6 +20,8 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
+import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownCapabilities;
@@ -446,6 +449,23 @@ public final class HohenheimAccess {
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
 
+        // Git providers: MANAGE is the WHOLE vocabulary, and that is a decision. The row
+        // is a credential store, so there is no read-only half worth granting -- either a
+        // subject owns the installation (edit it, test it, delete it) or it merely USES
+        // one, and using is not a grant question: a provider is offered to a picker when
+        // it is SHARED or when the principal manages it (see gitProviderScope). The
+        // narrow verbs instances have (console/power/...) have no analogue here.
+        RecordGrants.declareGrantable(GrantableModel.of(GitProviderModel.MODEL_ID));
+        KnownCapabilities.register(GitProviderModel.MODEL_ID,
+            KnownCapability.of(MANAGE)
+                .label(Microcopy.of("manage").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable());
+        RecordGrantCapabilityChecker.declareRules(GitProviderModel.MODEL_ID,
+            RecordCapabilityRules.create()
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS));
+
         RecordGrants.declareGrantable(GrantableModel.of(CertificateModel.MODEL_ID));
         // AIDEV-NOTE: VIEW is the WHOLE certificate vocabulary, and that is a decision.
         // Key EXPORT and certificate UPLOAD are not capabilities at all -- hohenheim
@@ -778,6 +798,42 @@ public final class HohenheimAccess {
     public static Set<Integer> databaseIdsWith(@NonNull AccessContext ctx,
                                                @NonNull String capability) {
         return grantedRecordIds(ctx, DatabaseModel.MODEL_ID, capability);
+    }
+
+    /**
+     * THE git-provider visibility policy: which provider rows a principal may SEE and
+     * therefore pick. Shared providers are offered to every authenticated principal (the
+     * operator's declaration that this installation's credential is for general use);
+     * everything else is offered only to the subjects the walk confirms {@code manage}
+     * for. Anonymous reaches nothing -- a provider row names a host an operator runs.
+     *
+     * AIDEV-NOTE: the shared half is deliberately NOT a capability. Modelling "may use"
+     * as a grant would demand a grant row per (tenant, provider) pair for a credential
+     * the operator already decided is general, and the pickers and the /manage list would
+     * then answer to two different questions. One criteria, one answer, one home.
+     *
+     * @return null for an unconstrained scope, else a criteria that never widens past
+     *         shared rows plus the confirmed ids
+     */
+    public static @Nullable Criteria gitProviderScope(@NonNull AccessContext ctx) {
+        Model model = Models.get(GitProviderModel.class);
+        if (ctx.isAnonymous()) {
+            return model.matchNone();
+        }
+        RecordCapabilityScope scope = capabilityScope(ctx, GitProviderModel.MODEL_ID, MANAGE);
+        if (scope.isAll()) {
+            return null;
+        }
+        Criteria shared = GitProviderModel.SHARED.eq(true);
+        if (scope.isNone()) {
+            return shared;
+        }
+        Set<Integer> managed = intIds(scope.recordIds());
+        if (managed.isEmpty()) {
+            return shared;
+        }
+        return new CompositeCriteria(CompositeOperator.OR, shared,
+            GitProviderModel.ID.in(managed));
     }
 
     /**

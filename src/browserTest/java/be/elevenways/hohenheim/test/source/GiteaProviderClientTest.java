@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.source;
 
+import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitProviders;
@@ -105,7 +106,7 @@ class GiteaProviderClientTest {
         Row provider = Models.get(GitProviderModel.class).createEmptyRow();
         provider.set(GitProviderModel.ID, id);
         provider.set(GitProviderModel.NAME, "fake-gitea");
-        provider.set(GitProviderModel.KIND, GitProviderModel.KIND_GITEA);
+        provider.set(GitProviderModel.KIND, GiteaProviderKind.ID.toString());
         provider.set(GitProviderModel.BASE_URL, baseUrl);
         provider.set(GitProviderModel.ACCESS_TOKEN, "gitea-pat-token");
         return provider;

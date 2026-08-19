@@ -146,7 +146,7 @@ class EncryptedSecretsAtRestTest {
             Model providers = Models.get(be.elevenways.hohenheim.model.GitProviderModel.class);
             Row provider = providers.createEmptyRow();
             provider.set(be.elevenways.hohenheim.model.GitProviderModel.NAME, "at-rest provider");
-            provider.set(be.elevenways.hohenheim.model.GitProviderModel.KIND, "github");
+            provider.set(be.elevenways.hohenheim.model.GitProviderModel.KIND, "hohenheim:github");
             provider.set(be.elevenways.hohenheim.model.GitProviderModel.ACCESS_TOKEN, PROVIDER_TOKEN);
             provider.set(be.elevenways.hohenheim.model.GitProviderModel.APP_PRIVATE_KEY_PEM,
                 PROVIDER_APP_KEY);

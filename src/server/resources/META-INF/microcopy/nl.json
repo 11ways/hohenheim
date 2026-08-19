@@ -6773,7 +6773,7 @@
     "scope": "violations"
   },
   "git_provider_kind_unavailable": {
-    "text": "Git-providersoort '{$kind}' is gedeclareerd maar nog niet geimplementeerd",
+    "text": "Git-providersoort '{$kind}' is niet gedeclareerd in deze installatie",
     "scope": "violations"
   },
   "git_provider_base_url_required": {
@@ -6890,6 +6890,34 @@
       "scope": "help"
     }
   ],
+  "provider_settings": [
+    {
+      "text": "Instellingen per soort",
+      "scope": "field"
+    }
+  ],
+  "provider_shared": [
+    {
+      "text": "Gedeeld",
+      "scope": "field"
+    },
+    {
+      "text": "Bied deze provider aan in de keuzelijsten van elke tenant. Laat uit om hem bij de beheerders ervan te houden.",
+      "scope": "help"
+    }
+  ],
+  "github": {
+    "text": "GitHub",
+    "scope": "git_provider_kind"
+  },
+  "gitlab": {
+    "text": "GitLab",
+    "scope": "git_provider_kind"
+  },
+  "gitea": {
+    "text": "Gitea",
+    "scope": "git_provider_kind"
+  },
   "git_provider": [
     {
       "text": "Git-provider",

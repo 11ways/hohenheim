@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.source;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.UrlPolicy;
 import be.elevenways.zenit.common.validation.Violations;
@@ -17,17 +18,19 @@ import java.util.Map;
 
 /**
  * The one construction funnel of provider clients, and the derivation of the per-clone
- * credential environment. There are exactly THREE provider kinds:
- * {@link GithubProviderClient} (PAT or App-minted installation tokens),
- * {@link GitlabProviderClient} (v4 API, clone user {@code oauth2}) and
- * {@link GiteaProviderClient} (v1 API, token in the password position). Anything else is
- * refused by name below.
+ * credential environment. WHICH client a row gets is the kind's own declaration
+ * ({@link GitProviderKind#clientFor}), reached through the compile-time-discovered
+ * {@link GitProviderKinds} map: {@link GithubProviderKind} (PAT or App-minted
+ * installation tokens), {@link GitlabProviderKind} (v4 API, clone user {@code oauth2})
+ * and {@link GiteaProviderKind} (v1 API, token in the password position). An undeclared
+ * kind is refused by name -- unknown fails CLOSED.
  *
- * ADDING A KIND is three edits and no more: a {@code KIND_*} constant plus an enum value
- * on {@link GitProviderModel#KIND}, an {@link ApiProviderClient} subclass, and one branch
- * here. Everything downstream is kind-agnostic on purpose -- the repository/branch
- * pickers, the credential environment below, the connection test and the webhook receiver
- * all route through this funnel or through provider-neutral headers.
+ * ADDING A KIND is ONE class: a {@link GitProviderKind} implementation (plus its
+ * {@link ApiProviderClient} subclass). It registers itself, its label/icon/schema enter
+ * the model's RegistryEnumField live, and nothing here changes. Everything downstream is
+ * kind-agnostic on purpose -- the repository/branch pickers, the credential environment
+ * below, the connection test and the webhook receiver all route through this funnel or
+ * through provider-neutral headers.
  *
  * AIDEV-NOTE: Gitea was webhook-only until 2026-08-08 -- the inbound path accepted its
  * signature while {@code clientFor} refused the kind by name, so a Gitea repository could
@@ -58,42 +61,104 @@ public final class GitProviders {
     }
 
     public static @NonNull GitProviderClient clientFor(@NonNull Row provider) {
-        String kind = provider.get(GitProviderModel.KIND);
-        String baseUrl = provider.get(GitProviderModel.BASE_URL);
-        if (baseUrl != null && !baseUrl.isBlank()) {
-            String problem = BASE_URL_POLICY.problemOf(baseUrl.trim());
-            if (problem != null) {
-                throw Violations.ofField("base_url", baseUrl,
-                    Microcopy.of("git_provider_bad_base_url")
-                        .withFilter("scope", "violations").withArg("reason", problem));
-            }
+        GitProviderKind kind = requireKind(provider.get(GitProviderModel.KIND));
+        return kind.clientFor(provider, validatedBaseUrl(kind,
+            provider.get(GitProviderModel.BASE_URL)));
+    }
+
+    /**
+     * THE per-kind validity check of a provider row, asked by the write hook
+     * ({@link #installKindInvariant}) so a bad row is refused at SAVE, and again here so
+     * a row written outside a form (a seed, a test, a future API) can never build a
+     * client that talks to the wrong host.
+     *
+     * @throws Violations naming the refusal (undeclared kind, unusable or missing base URL)
+     */
+    public static void validate(@Nullable String kindToken, @Nullable String baseUrl) {
+        validatedBaseUrl(requireKind(kindToken), baseUrl);
+    }
+
+    /** @throws Violations {@code git_provider_kind_unavailable} for an undeclared kind */
+    private static @NonNull GitProviderKind requireKind(@Nullable String kindToken) {
+        GitProviderKind kind = GitProviderKinds.getHandler(kindToken);
+        if (kind == null) {
+            throw Violations.ofField(GitProviderModel.KIND.getName(), kindToken,
+                Microcopy.of("git_provider_kind_unavailable")
+                    .withFilter("scope", "violations")
+                    .withArg("kind", String.valueOf(kindToken)));
         }
-        if (GitProviderModel.KIND_GITHUB.equals(kind)) {
-            Integer id = provider.get(GitProviderModel.ID);
-            return new GithubProviderClient(id != null ? id : -1, baseUrl,
-                provider.get(GitProviderModel.ACCESS_TOKEN),
-                provider.get(GitProviderModel.APP_ID),
-                provider.get(GitProviderModel.APP_INSTALLATION_ID),
-                provider.get(GitProviderModel.APP_PRIVATE_KEY_PEM));
-        }
-        if (GitProviderModel.KIND_GITLAB.equals(kind)) {
-            return new GitlabProviderClient(baseUrl,
-                provider.get(GitProviderModel.ACCESS_TOKEN));
-        }
-        if (GitProviderModel.KIND_GITEA.equals(kind)) {
-            // No public default host: a blank base URL would aim an operator's stored
-            // token at gitea.com, a third party they never named. Refuse instead.
-            if (baseUrl == null || baseUrl.isBlank()) {
-                throw Violations.ofField("base_url", baseUrl,
+        return kind;
+    }
+
+    /**
+     * @return the trimmed base URL, or null when the kind uses its public host
+     * @throws Violations when the URL is unusable, or missing on a kind that requires one
+     */
+    private static @Nullable String validatedBaseUrl(@NonNull GitProviderKind kind,
+                                                     @Nullable String baseUrl) {
+        String trimmed = baseUrl == null ? "" : baseUrl.trim();
+        if (trimmed.isEmpty()) {
+            if (kind.requiresBaseUrl()) {
+                throw Violations.ofField(GitProviderModel.BASE_URL.getName(), baseUrl,
                     Microcopy.of("git_provider_base_url_required")
                         .withFilter("scope", "violations"));
             }
-            return new GiteaProviderClient(baseUrl,
-                provider.get(GitProviderModel.ACCESS_TOKEN));
+            return null;
         }
-        throw Violations.ofField("kind", kind,
-            Microcopy.of("git_provider_kind_unavailable")
-                .withFilter("scope", "violations").withArg("kind", String.valueOf(kind)));
+        String problem = BASE_URL_POLICY.problemOf(trimmed);
+        if (problem != null) {
+            throw Violations.ofField(GitProviderModel.BASE_URL.getName(), baseUrl,
+                Microcopy.of("git_provider_bad_base_url")
+                    .withFilter("scope", "violations").withArg("reason", problem));
+        }
+        return trimmed;
+    }
+
+    /** The row's per-kind settings map, never null. */
+    @SuppressWarnings("unchecked")
+    static @NonNull Map<String, Object> settingsOf(@NonNull Row provider) {
+        Object stored = provider.get(GitProviderModel.SETTINGS);
+        return stored instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+    }
+
+    private static volatile boolean kindInvariantInstalled;
+
+    /**
+     * Install THE per-kind row invariant on the GitProviderModel write pipeline, so an
+     * undeclared kind or a Gitea row without a base URL is refused at SAVE rather than at
+     * the first deploy -- one check for the admin form, the delegated /manage form, a
+     * revision restore and any future writer.
+     */
+    public static synchronized void installKindInvariant() {
+        if (kindInvariantInstalled) {
+            return;
+        }
+        kindInvariantInstalled = true;
+        // beforeVALIDATE, and reading through the EFFECTIVE row: a partial write (the
+        // inline cell lane submits ONE entry) must be judged against what the row will
+        // actually hold, never against the keys this submission happened to carry.
+        GitProviderModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row == null) {
+                return;
+            }
+            validate(effective(row, GitProviderModel.KIND),
+                effective(row, GitProviderModel.BASE_URL));
+        });
+    }
+
+    /** The value this write will leave on the row: submitted key wins, else the stored one. */
+    private static @Nullable String effective(@NonNull Row row, @NonNull Field<?, ?> field) {
+        if (row.has(field.getName())) {
+            Object value = row.get(field.getName());
+            return value == null ? null : String.valueOf(value);
+        }
+        if (!row.has(GitProviderModel.ID.getName())) {
+            return null;
+        }
+        Row stored = Models.get(GitProviderModel.class).findById(row.get(GitProviderModel.ID));
+        Object value = stored == null ? null : stored.get(field.getName());
+        return value == null ? null : String.valueOf(value);
     }
 
     /**

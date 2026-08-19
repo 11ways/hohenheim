@@ -6773,7 +6773,7 @@
     "scope": "violations"
   },
   "git_provider_kind_unavailable": {
-    "text": "Git provider kind '{$kind}' is declared but not yet implemented",
+    "text": "Git provider kind '{$kind}' is not declared by this installation",
     "scope": "violations"
   },
   "git_provider_base_url_required": {
@@ -6890,6 +6890,34 @@
       "scope": "help"
     }
   ],
+  "provider_settings": [
+    {
+      "text": "Kind settings",
+      "scope": "field"
+    }
+  ],
+  "provider_shared": [
+    {
+      "text": "Shared",
+      "scope": "field"
+    },
+    {
+      "text": "Offer this provider to every tenant's pickers. Leave off to keep it to the people who manage it.",
+      "scope": "help"
+    }
+  ],
+  "github": {
+    "text": "GitHub",
+    "scope": "git_provider_kind"
+  },
+  "gitlab": {
+    "text": "GitLab",
+    "scope": "git_provider_kind"
+  },
+  "gitea": {
+    "text": "Gitea",
+    "scope": "git_provider_kind"
+  },
   "git_provider": [
     {
       "text": "Git provider",
