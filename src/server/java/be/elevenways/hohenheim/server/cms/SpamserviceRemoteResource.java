@@ -12,6 +12,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -92,5 +93,24 @@ abstract class SpamserviceRemoteResource<T> extends Resource<T> {
     protected static @Nullable Boolean booleanFilter(TableView.Applied<?> applied, String name) {
         String value = textFilter(applied, name);
         return value == null ? null : Boolean.valueOf(value);
+    }
+
+    /**
+     * A remote DTO's REQUIRED text field, read off a partial write with the stored value as
+     * the fallback.
+     *
+     * AIDEV-NOTE: never a bare {@code String.valueOf(values.getOrDefault(...))}. getOrDefault
+     * answers null for a key that is PRESENT and null -- which is exactly what a blank
+     * submitted entry coerces to -- and String.valueOf(null) is the four characters "null",
+     * which this family then PUTs to the live service. It renamed an API key once and a spam
+     * filter client once; the guard belongs here rather than in each subclass, because it was
+     * fixed one file at a time twice and missed the third.
+     *
+     * @param stored the value the loaded record carries, or null on a create
+     */
+    protected static @NonNull String requiredText(@NonNull Map<String, Object> values,
+                                                  @NonNull String name, @Nullable String stored) {
+        Object value = values.getOrDefault(name, stored);
+        return value == null ? "" : String.valueOf(value);
     }
 }

@@ -200,7 +200,7 @@ public final class SpamserviceClientsResource extends SpamserviceRemoteResource<
     private static ManagedClientInput input(Map<String, Object> values,
                                             @Nullable ManagedClient stored) {
         return new ManagedClientInput(
-            String.valueOf(values.getOrDefault("name", stored == null ? "" : stored.name())),
+            requiredText(values, "name", stored == null ? "" : stored.name()),
             bool(values, "enabled", stored == null ? null : stored.enabled()),
             bool(values, "trusted", stored == null ? null : stored.trusted()),
             bool(values, "provisioner", stored == null ? null : stored.provisioner()),

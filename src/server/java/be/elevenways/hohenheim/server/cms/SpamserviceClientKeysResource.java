@@ -151,8 +151,8 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
 
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> values, @NonNull AccessContext context) {
-        String clientId = String.valueOf(values.getOrDefault("client_id", ""));
-        String name = String.valueOf(values.getOrDefault("name", "key"));
+        String clientId = requiredText(values, "client_id", "");
+        String name = requiredText(values, "name", "key");
         String raw = trimmed(values.get("key"));
         CreatedClientKey created = this.requireClient().createKey(clientId, name, raw);
         Microcopy message = created.generated()
