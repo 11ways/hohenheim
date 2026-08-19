@@ -173,16 +173,6 @@
       "scope": "help"
     }
   ],
-  "allowed_ips": [
-    {
-      "text": "Toegestane IP-netwerken",
-      "scope": "field"
-    },
-    {
-      "text": "E\u00e9n IP-adres of CIDR-netwerk per regel, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
-      "scope": "help"
-    }
-  ],
   "auto_deploy": [
     {
       "text": "Automatisch uitrollen",
@@ -444,16 +434,6 @@
     },
     {
       "text": "Kunstmatige vertraging in milliseconden v\u00f3\u00f3r elke aanvraag.",
-      "scope": "help"
-    }
-  ],
-  "denied_ips": [
-    {
-      "text": "Geweigerde IP-netwerken",
-      "scope": "field"
-    },
-    {
-      "text": "E\u00e9n IP-adres of CIDR-netwerk per regel, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
       "scope": "help"
     }
   ],
@@ -1189,6 +1169,10 @@
     {
       "text": "Geen installatiemedia",
       "scope": "server_media"
+    },
+    {
+      "text": "Nog geen regels",
+      "scope": "access_rule"
     }
   ],
   "empty_description": [
@@ -1940,11 +1924,11 @@
     "scope": "certificate_request"
   },
   "any": {
-    "text": "E\u00e9n van beide (IP of Basic Auth)",
+    "text": "E\u00e9n regel volstaat",
     "scope": "access_satisfy"
   },
   "all": {
-    "text": "Beide (IP en Basic Auth)",
+    "text": "Alle regels moeten slagen",
     "scope": "access_satisfy"
   },
   "exact": {
@@ -2215,6 +2199,10 @@
     {
       "text": "Apparaten",
       "scope": "instance_device"
+    },
+    {
+      "text": "Regels",
+      "scope": "access_rule"
     }
   ],
   "dashboard": [
@@ -2395,10 +2383,16 @@
     "text": "Processen",
     "scope": "site"
   },
-  "toggle": {
-    "text": "In-/uitschakelen",
-    "scope": "site"
-  },
+  "toggle": [
+    {
+      "text": "In-/uitschakelen",
+      "scope": "site"
+    },
+    {
+      "text": "Aan of uit",
+      "scope": "access_rule"
+    }
+  ],
   "attention": {
     "text": "Vraagt aandacht",
     "scope": "dashboard"
@@ -2463,7 +2457,7 @@
       "scope": "field"
     },
     {
-      "text": "Optionele IP-toestaan/weigeren-lijst en basic auth, toegepast voor verzoeken de site bereiken.",
+      "text": "Optionele regelboom (adressen, wachtwoorden, aanmelding) die geldt voordat verzoeken de site bereiken.",
       "scope": "help"
     }
   ],
@@ -2475,6 +2469,10 @@
     {
       "text": "Optionele identiteitsprovider waarmee bezoekers zich eerst moeten aanmelden.",
       "scope": "help"
+    },
+    {
+      "text": "Aanmelding",
+      "scope": "access_rule_type"
     }
   ],
   "listen_on": [
@@ -3225,6 +3223,10 @@
     {
       "text": "Gebruik de eigen momentopname- of back-upactie van de instantie om er een vast te leggen.",
       "scope": "instance_artifacts"
+    },
+    {
+      "text": "Een lijst zonder regels laat elk verzoek door.",
+      "scope": "access_rule"
     }
   ],
   "registration_token": [
@@ -3431,6 +3433,10 @@
     {
       "text": "Dit ISO-volume van de host verwijderen? Instanties die er niet meer naar verwijzen merken er niets van.",
       "scope": "server_media"
+    },
+    {
+      "text": "Deze regel verwijderen? Alles wat erin genest zit gaat mee, en de wijziging geldt meteen voor live verkeer.",
+      "scope": "access_rule"
     }
   ],
   "priority": {
@@ -3647,6 +3653,10 @@
     {
       "text": "Bewerken",
       "scope": "instance_files"
+    },
+    {
+      "text": "Bewerken",
+      "scope": "access_rule"
     }
   ],
   "dyndns": {
@@ -4597,6 +4607,10 @@
     {
       "text": "Uitgeschakeld",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Uit",
+      "scope": "access_rule"
     }
   ],
   "deploy_log": {
@@ -6474,6 +6488,10 @@
     {
       "text": "Verwijderen",
       "scope": "server_media"
+    },
+    {
+      "text": "Verwijderen",
+      "scope": "access_rule"
     }
   ],
   "save": {
@@ -7780,6 +7798,10 @@
     {
       "text": "{$name} - Back-ups",
       "scope": "instance_backups"
+    },
+    {
+      "text": "Regels van {$name}",
+      "scope": "access_rule"
     }
   ],
   "stored_log_heading": {
@@ -8680,6 +8702,10 @@
     {
       "text": "Benoemde rechtensets die je aan accounts toekent in plaats van ze stuk voor stuk te geven.",
       "scope": "role"
+    },
+    {
+      "text": "De regelboom achter \u00e9\u00e9n toegangslijst.",
+      "scope": "access_rule"
     }
   ],
   "slug": {
@@ -8747,5 +8773,205 @@
   "expired": {
     "text": "Verlopen",
     "scope": "dns_transfer"
+  },
+  "root_group": {
+    "text": "De lijst zelf (bovenste niveau)",
+    "scope": "access_rule"
+  },
+  "root_any": {
+    "text": "Een verzoek wordt toegelaten zodra \u00c9\u00c9N van deze regels slaagt.",
+    "scope": "access_rule"
+  },
+  "root_all": {
+    "text": "Een verzoek wordt alleen toegelaten als ELKE regel slaagt.",
+    "scope": "access_rule"
+  },
+  "group_at": {
+    "text": "Groep {$path}",
+    "scope": "access_rule"
+  },
+  "add_title": {
+    "text": "Regel toevoegen",
+    "scope": "access_rule"
+  },
+  "add_description": {
+    "text": "Kies in welke groep de regel komt en wat ze controleert.",
+    "scope": "access_rule"
+  },
+  "add_parent": {
+    "text": "Toevoegen in",
+    "scope": "access_rule"
+  },
+  "add_type": {
+    "text": "Soort regel",
+    "scope": "access_rule"
+  },
+  "add_action": {
+    "text": "Regel toevoegen",
+    "scope": "access_rule"
+  },
+  "add_disabled_note": {
+    "text": "Een nieuwe regel staat eerst uit, zodat het verkeer blijft doorgaan tot je ze hebt ingevuld en aangezet.",
+    "scope": "access_rule"
+  },
+  "added_group": {
+    "text": "Groep toegevoegd",
+    "scope": "access_rule"
+  },
+  "unknown_type": {
+    "text": "Dat is geen soort regel",
+    "scope": "access_rule"
+  },
+  "move_up": {
+    "text": "Omhoog",
+    "scope": "access_rule"
+  },
+  "move_up_hint": {
+    "text": "Verplaats deze regel \u00e9\u00e9n plaats omhoog binnen haar eigen groep.",
+    "scope": "access_rule"
+  },
+  "move_down": {
+    "text": "Omlaag",
+    "scope": "access_rule"
+  },
+  "move_down_hint": {
+    "text": "Verplaats deze regel \u00e9\u00e9n plaats omlaag binnen haar eigen groep.",
+    "scope": "access_rule"
+  },
+  "moved": {
+    "text": "Volgorde gewijzigd",
+    "scope": "access_rule"
+  },
+  "toggle_hint": {
+    "text": "Zet deze regel aan of uit. Een regel die uit staat telt helemaal niet mee.",
+    "scope": "access_rule"
+  },
+  "turned_on": {
+    "text": "Regel aangezet",
+    "scope": "access_rule"
+  },
+  "turned_off": {
+    "text": "Regel uitgezet",
+    "scope": "access_rule"
+  },
+  "delete_hint": {
+    "text": "Verwijder deze regel, en alles wat erin genest zit.",
+    "scope": "access_rule"
+  },
+  "deleted": {
+    "text": "Regel verwijderd",
+    "scope": "access_rule"
+  },
+  "summary_group_any": {
+    "text": "\u00c9\u00e9n van de regels hierin moet slagen",
+    "scope": "access_rule"
+  },
+  "summary_group_all": {
+    "text": "Elke regel hierin moet slagen",
+    "scope": "access_rule"
+  },
+  "summary_network": {
+    "text": "{$network}",
+    "scope": "access_rule"
+  },
+  "summary_basic_auth": {
+    "text": "Gebruikersnaam {$username}",
+    "scope": "access_rule"
+  },
+  "summary_auth_provider": {
+    "text": "Aangemeld via {$provider}",
+    "scope": "access_rule"
+  },
+  "summary_auth_provider_permission": {
+    "text": "Aangemeld via {$provider}, met {$permission}",
+    "scope": "access_rule"
+  },
+  "summary_unknown": {
+    "text": "Niet begrepen; deze regel weigert elk verzoek",
+    "scope": "access_rule"
+  },
+  "group": {
+    "text": "Groep",
+    "scope": "access_rule_type"
+  },
+  "basic_auth": {
+    "text": "Wachtwoord",
+    "scope": "access_rule_type"
+  },
+  "ip_allow": {
+    "text": "Toegelaten netwerk",
+    "scope": "access_rule_type"
+  },
+  "ip_deny": {
+    "text": "Geweigerd netwerk",
+    "scope": "access_rule_type"
+  },
+  "rule_type": [
+    {
+      "text": "Soort regel",
+      "scope": "field"
+    },
+    {
+      "text": "Wat deze regel controleert. Als je dit wijzigt vervangen de instellingen hieronder.",
+      "scope": "help"
+    }
+  ],
+  "rule_data": {
+    "text": "Instellingen",
+    "scope": "field"
+  },
+  "rule_enabled": [
+    {
+      "text": "Aan",
+      "scope": "field"
+    },
+    {
+      "text": "Een regel die uit staat telt niet mee, precies alsof ze verwijderd was.",
+      "scope": "help"
+    }
+  ],
+  "rule_network": [
+    {
+      "text": "Netwerk",
+      "scope": "field"
+    },
+    {
+      "text": "E\u00e9n IP-adres of CIDR-netwerk, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
+      "scope": "help"
+    }
+  ],
+  "rule_provider": [
+    {
+      "text": "Aanmeldbron",
+      "scope": "field"
+    },
+    {
+      "text": "De ingestelde aanmeldbron waarlangs een bezoeker aangemeld moet zijn.",
+      "scope": "help"
+    }
+  ],
+  "rule_access_list": {
+    "text": "Toegangslijst",
+    "scope": "field"
+  },
+  "rule_satisfy": {
+    "text": "Of \u00e9\u00e9n regel in deze groep volstaat, of ze allemaal nodig zijn.",
+    "scope": "help"
+  },
+  "access_rule_type_invalid": {
+    "text": "Dat is geen soort regel",
+    "scope": "violations"
+  },
+  "access_rule_network_invalid": {
+    "text": "Geef \u00e9\u00e9n IP-adres of CIDR-netwerk op, bijvoorbeeld 10.0.0.0/8",
+    "scope": "violations"
+  },
+  "access_rule_credential_incomplete": {
+    "text": "Een wachtwoordregel heeft zowel een gebruikersnaam als een wachtwoord nodig",
+    "scope": "violations"
+  },
+  "access_rule_provider_missing": {
+    "text": "Kies de aanmeldbron die deze regel vereist",
+    "scope": "violations"
   }
 }

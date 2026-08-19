@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -177,12 +178,13 @@ class AdminListPresentationTest extends HohenheimTestBase {
             .doesNotContain("wavea-beta-site");
 
         // 4. The search this wave exists for: "which access list holds 10.77.0.5" was
-        //    previously only answerable by opening every record, because the rule bodies
-        //    are not columns anyone reads.
-        String byRule = adminGet("/admin/access-lists?search=10.77.0.5").body();
-        assertThat(byRule).as("step 4: the list whose ALLOWED_IPS holds the address")
+        //    previously only answerable by opening every record. The rules are their own
+        //    records now, so the question is asked of them -- and each answer names the
+        //    list it belongs to.
+        String byRule = adminGet("/admin/access-rules?search=10.77.0.5").body();
+        assertThat(byRule).as("step 4: the rule holding the address names its list")
             .contains("wavea-allow-list");
-        assertThat(byRule).as("step 4: and not the one that does not")
+        assertThat(byRule).as("step 4: and not the list that does not hold it")
             .doesNotContain("wavea-other-list");
 
         // 5. A host is found by an address that was stored and, before this wave, rendered
@@ -245,7 +247,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
             servers.save(row);
         }
 
-        accessList("wavea-allow-list", "10.77.0.5\n10.77.0.6");
+        accessList("wavea-allow-list", "10.77.0.5", "10.77.0.6");
         accessList("wavea-other-list", "10.99.0.1");
 
         var bans = Models.get(BanModel.class);
@@ -275,7 +277,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
         model.save(row);
     }
 
-    private static void accessList(String name, String allowed) {
+    private static void accessList(String name, String... allowed) {
         var model = Models.get(AccessListModel.class);
         if (model.find().where(AccessListModel.NAME.eq(name)).first() != null) {
             return;
@@ -283,7 +285,17 @@ class AdminListPresentationTest extends HohenheimTestBase {
         Row row = model.createEmptyRow();
         row.set(AccessListModel.NAME, name);
         row.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ANY);
-        row.set(AccessListModel.ALLOWED_IPS, allowed);
         model.save(row);
+
+        // The addresses live in the list's rule tree now, not in a column on the list.
+        var rules = Models.get(AccessRuleModel.class);
+        for (String network : allowed) {
+            Row rule = rules.createEmptyRow();
+            rule.set(AccessRuleModel.ACCESS_LIST_ID, row.get(AccessListModel.ID));
+            rule.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_ALLOW);
+            rule.set(AccessRuleModel.DATA, Map.of("network", network));
+            rule.set(AccessRuleModel.ENABLED, true);
+            rules.save(rule);
+        }
     }
 }

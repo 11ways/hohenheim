@@ -173,16 +173,6 @@
       "scope": "help"
     }
   ],
-  "allowed_ips": [
-    {
-      "text": "Allowed IP networks",
-      "scope": "field"
-    },
-    {
-      "text": "One IP address or CIDR network per line, for example 203.0.113.8 or 10.0.0.0/8.",
-      "scope": "help"
-    }
-  ],
   "auto_deploy": [
     {
       "text": "Deploy automatically",
@@ -444,16 +434,6 @@
     },
     {
       "text": "Artificial delay in milliseconds before handling each request.",
-      "scope": "help"
-    }
-  ],
-  "denied_ips": [
-    {
-      "text": "Denied IP networks",
-      "scope": "field"
-    },
-    {
-      "text": "One IP address or CIDR network per line, for example 203.0.113.8 or 10.0.0.0/8.",
       "scope": "help"
     }
   ],
@@ -1189,6 +1169,10 @@
     {
       "text": "No install media",
       "scope": "server_media"
+    },
+    {
+      "text": "No rules yet",
+      "scope": "access_rule"
     }
   ],
   "empty_description": [
@@ -1940,11 +1924,11 @@
     "scope": "certificate_request"
   },
   "any": {
-    "text": "Any (IP or Basic Auth)",
+    "text": "Any rule passes",
     "scope": "access_satisfy"
   },
   "all": {
-    "text": "All (IP and Basic Auth)",
+    "text": "Every rule passes",
     "scope": "access_satisfy"
   },
   "exact": {
@@ -2215,6 +2199,10 @@
     {
       "text": "Devices",
       "scope": "instance_device"
+    },
+    {
+      "text": "Rules",
+      "scope": "access_rule"
     }
   ],
   "dashboard": [
@@ -2395,10 +2383,16 @@
     "text": "Processes",
     "scope": "site"
   },
-  "toggle": {
-    "text": "Enable/disable",
-    "scope": "site"
-  },
+  "toggle": [
+    {
+      "text": "Enable/disable",
+      "scope": "site"
+    },
+    {
+      "text": "On or off",
+      "scope": "access_rule"
+    }
+  ],
   "attention": {
     "text": "Needs attention",
     "scope": "dashboard"
@@ -2463,7 +2457,7 @@
       "scope": "field"
     },
     {
-      "text": "Optional IP allow/deny list and basic auth applied before requests reach the site.",
+      "text": "Optional rule tree (addresses, passwords, sign-in) applied before requests reach the site.",
       "scope": "help"
     }
   ],
@@ -2475,6 +2469,10 @@
     {
       "text": "Optional identity provider visitors must authenticate with before reaching the site.",
       "scope": "help"
+    },
+    {
+      "text": "Sign-in",
+      "scope": "access_rule_type"
     }
   ],
   "listen_on": [
@@ -3225,6 +3223,10 @@
     {
       "text": "Use the instance's own snapshot or backup action to capture one.",
       "scope": "instance_artifacts"
+    },
+    {
+      "text": "A list without rules lets every request through.",
+      "scope": "access_rule"
     }
   ],
   "registration_token": [
@@ -3431,6 +3433,10 @@
     {
       "text": "Delete this ISO volume from the host? Instances no longer referencing it are unaffected.",
       "scope": "server_media"
+    },
+    {
+      "text": "Delete this rule? Anything nested inside it goes with it, and the change reaches live traffic immediately.",
+      "scope": "access_rule"
     }
   ],
   "priority": {
@@ -3647,6 +3653,10 @@
     {
       "text": "Edit",
       "scope": "instance_files"
+    },
+    {
+      "text": "Edit",
+      "scope": "access_rule"
     }
   ],
   "dyndns": {
@@ -4597,6 +4607,10 @@
     {
       "text": "Disabled",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Off",
+      "scope": "access_rule"
     }
   ],
   "deploy_log": {
@@ -6474,6 +6488,10 @@
     {
       "text": "Delete",
       "scope": "server_media"
+    },
+    {
+      "text": "Delete",
+      "scope": "access_rule"
     }
   ],
   "save": {
@@ -7780,6 +7798,10 @@
     {
       "text": "{$name} - Backups",
       "scope": "instance_backups"
+    },
+    {
+      "text": "Rules of {$name}",
+      "scope": "access_rule"
     }
   ],
   "stored_log_heading": {
@@ -8680,6 +8702,10 @@
     {
       "text": "Named permission sets you assign to accounts instead of granting each one by hand.",
       "scope": "role"
+    },
+    {
+      "text": "The rule tree behind one access list.",
+      "scope": "access_rule"
     }
   ],
   "slug": {
@@ -8747,5 +8773,205 @@
   "expired": {
     "text": "Expired",
     "scope": "dns_transfer"
+  },
+  "root_group": {
+    "text": "The list itself (top level)",
+    "scope": "access_rule"
+  },
+  "root_any": {
+    "text": "A request is allowed as soon as ONE of these rules passes.",
+    "scope": "access_rule"
+  },
+  "root_all": {
+    "text": "A request is allowed only when EVERY one of these rules passes.",
+    "scope": "access_rule"
+  },
+  "group_at": {
+    "text": "Group {$path}",
+    "scope": "access_rule"
+  },
+  "add_title": {
+    "text": "Add a rule",
+    "scope": "access_rule"
+  },
+  "add_description": {
+    "text": "Choose which group the rule joins and what it checks.",
+    "scope": "access_rule"
+  },
+  "add_parent": {
+    "text": "Add inside",
+    "scope": "access_rule"
+  },
+  "add_type": {
+    "text": "Rule type",
+    "scope": "access_rule"
+  },
+  "add_action": {
+    "text": "Add rule",
+    "scope": "access_rule"
+  },
+  "add_disabled_note": {
+    "text": "A new rule starts switched off, so traffic keeps flowing until you have filled it in and switched it on.",
+    "scope": "access_rule"
+  },
+  "added_group": {
+    "text": "Group added",
+    "scope": "access_rule"
+  },
+  "unknown_type": {
+    "text": "That is not a rule type",
+    "scope": "access_rule"
+  },
+  "move_up": {
+    "text": "Move up",
+    "scope": "access_rule"
+  },
+  "move_up_hint": {
+    "text": "Move this rule one place up inside its own group.",
+    "scope": "access_rule"
+  },
+  "move_down": {
+    "text": "Move down",
+    "scope": "access_rule"
+  },
+  "move_down_hint": {
+    "text": "Move this rule one place down inside its own group.",
+    "scope": "access_rule"
+  },
+  "moved": {
+    "text": "Order changed",
+    "scope": "access_rule"
+  },
+  "toggle_hint": {
+    "text": "Switch this rule on or off. A rule that is off is ignored entirely.",
+    "scope": "access_rule"
+  },
+  "turned_on": {
+    "text": "Rule switched on",
+    "scope": "access_rule"
+  },
+  "turned_off": {
+    "text": "Rule switched off",
+    "scope": "access_rule"
+  },
+  "delete_hint": {
+    "text": "Remove this rule, and everything nested inside it.",
+    "scope": "access_rule"
+  },
+  "deleted": {
+    "text": "Rule deleted",
+    "scope": "access_rule"
+  },
+  "summary_group_any": {
+    "text": "One of the rules inside must pass",
+    "scope": "access_rule"
+  },
+  "summary_group_all": {
+    "text": "Every rule inside must pass",
+    "scope": "access_rule"
+  },
+  "summary_network": {
+    "text": "{$network}",
+    "scope": "access_rule"
+  },
+  "summary_basic_auth": {
+    "text": "Username {$username}",
+    "scope": "access_rule"
+  },
+  "summary_auth_provider": {
+    "text": "Signed in through {$provider}",
+    "scope": "access_rule"
+  },
+  "summary_auth_provider_permission": {
+    "text": "Signed in through {$provider}, holding {$permission}",
+    "scope": "access_rule"
+  },
+  "summary_unknown": {
+    "text": "Not understood; this rule refuses every request",
+    "scope": "access_rule"
+  },
+  "group": {
+    "text": "Group",
+    "scope": "access_rule_type"
+  },
+  "basic_auth": {
+    "text": "Password",
+    "scope": "access_rule_type"
+  },
+  "ip_allow": {
+    "text": "Allowed network",
+    "scope": "access_rule_type"
+  },
+  "ip_deny": {
+    "text": "Denied network",
+    "scope": "access_rule_type"
+  },
+  "rule_type": [
+    {
+      "text": "Rule type",
+      "scope": "field"
+    },
+    {
+      "text": "What this rule checks. Changing it replaces the settings below.",
+      "scope": "help"
+    }
+  ],
+  "rule_data": {
+    "text": "Rule settings",
+    "scope": "field"
+  },
+  "rule_enabled": [
+    {
+      "text": "Switched on",
+      "scope": "field"
+    },
+    {
+      "text": "A rule that is off is ignored, exactly as if it had been deleted.",
+      "scope": "help"
+    }
+  ],
+  "rule_network": [
+    {
+      "text": "Network",
+      "scope": "field"
+    },
+    {
+      "text": "One IP address or CIDR network, for example 203.0.113.8 or 10.0.0.0/8.",
+      "scope": "help"
+    }
+  ],
+  "rule_provider": [
+    {
+      "text": "Auth provider",
+      "scope": "field"
+    },
+    {
+      "text": "The configured auth provider a visitor must be signed in through.",
+      "scope": "help"
+    }
+  ],
+  "rule_access_list": {
+    "text": "Access list",
+    "scope": "field"
+  },
+  "rule_satisfy": {
+    "text": "Whether one rule inside this group is enough, or all of them are needed.",
+    "scope": "help"
+  },
+  "access_rule_type_invalid": {
+    "text": "That is not a rule type",
+    "scope": "violations"
+  },
+  "access_rule_network_invalid": {
+    "text": "Enter one IP address or CIDR network, for example 10.0.0.0/8",
+    "scope": "violations"
+  },
+  "access_rule_credential_incomplete": {
+    "text": "A password rule needs both a username and a password",
+    "scope": "violations"
+  },
+  "access_rule_provider_missing": {
+    "text": "Choose the auth provider this rule requires",
+    "scope": "violations"
   }
 }

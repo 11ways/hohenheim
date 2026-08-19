@@ -42,6 +42,7 @@ public class ProteusAuthGate implements SiteAuthGate {
     private final SessionStore store;
     private final int siteId;
     private final String providerSlug;
+    private final int providerId;
     private final @Nullable String requiredPermission;
     private final ProteusClient client;
     private final String authenticator;
@@ -52,6 +53,7 @@ public class ProteusAuthGate implements SiteAuthGate {
         this.store = context.sessionStore();
         this.siteId = context.siteId();
         this.providerSlug = context.providerSlug();
+        this.providerId = context.providerId();
         this.requiredPermission = context.requiredPermission();
         this.client = client;
         this.authenticator = authenticator;
@@ -145,6 +147,7 @@ public class ProteusAuthGate implements SiteAuthGate {
         Session session = store.create();
         session.set(ProxyAuthKeys.SITE_ID, siteId);
         session.set(ProxyAuthKeys.PROVIDER_SLUG, providerSlug);
+        session.set(ProxyAuthKeys.PROVIDER_ID, providerId);
         if (ls.rlid() != null) {
             session.set(ProxyAuthKeys.PENDING_RLID, ls.rlid());
         }
@@ -159,6 +162,7 @@ public class ProteusAuthGate implements SiteAuthGate {
         Session session = store.create();
         session.set(ProxyAuthKeys.SITE_ID, siteId);
         session.set(ProxyAuthKeys.PROVIDER_SLUG, providerSlug);
+        session.set(ProxyAuthKeys.PROVIDER_ID, providerId);
         session.set(ProxyAuthKeys.SUBJECT, subject);
         store.save(session);
         ProxySessionSupport.writeSessionCookie(exchange, session);

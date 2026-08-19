@@ -1,0 +1,95 @@
+{#- Rules tab on an access list: the rule TREE, flattened to one depth-ordered loop.
+    Every row's buttons are the rule resource's OWN row actions rendered through the
+    standard invoke partial, so move/toggle/delete arrive with their confirmations and
+    permission gates attached. Adding is the host-declared ACCESS_RULES_ADD endpoint,
+    because where a node lands belongs to the tree, not to a text box on a form. -#}
+{% declare title: String %}
+{% declare listName: String %}
+{% declare satisfy: String = "any" %}
+{% declare rules: List<AccessRuleView> %}
+{% declare parentOptions: List<AccessRuleOption> %}
+{% declare typeOptions: List<AccessRuleOption> %}
+{% declare addTarget: RouteTarget %}
+{% declare recordTabs: List<RecordTabState> %}
+{% declare flashMessage: Microcopy = null %}
+{% declare flashVariant: String = "default" %}
+{% declare flashDuration: Integer = 0 %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-list-page hh-access-rules">
+    <header class="cms-resource-list-header">
+        <h1>{{ listName }}</h1>
+    </header>
+
+    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
+    {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    <pl-card>
+        <pl-card-header>
+            <pl-card-title>{{ t("plural", scope: "access_rule") }}</pl-card-title>
+            <pl-card-description>
+                {% if satisfy == "all" %}{{ t("root_all", scope: "access_rule") }}{% else %}{{ t("root_any", scope: "access_rule") }}{% /if %}
+            </pl-card-description>
+        </pl-card-header>
+        <pl-card-content>
+            {% if rules %}
+            <ul class="hh-rule-tree">
+                {% each rules as rule %}
+                <li class="hh-rule-row" style={% rule.indentStyle %} data-rule-id={% rule.id %} data-rule-type={% rule.type %}>
+                    <span class="hh-rule-path">{{ rule.path }}</span>
+                    <pl-badge color-set={% rule.color %}><pl-icon name={% rule.iconName %} size="sm"></pl-icon> {{ rule.typeLabel }}</pl-badge>
+                    <span class="hh-rule-summary">{{ rule.summary }}</span>
+                    {% if !rule.enabled %}
+                    <pl-badge variant="outline" data-rule-disabled="1">{{ t("disabled", scope: "access_rule") }}</pl-badge>
+                    {% /if %}
+                    <span class="hh-rule-actions">
+                        <pl-button size="sm" variant="ghost" use:Zenit.route={% rule.editTarget %} data-rule-edit={% rule.id %}>{{ t("edit", scope: "access_rule") }}</pl-button>
+                        {% each rule.invokes as invoke %}
+                        {% render "zenitcms:action/invoke" var:action=invoke %}
+                        {% /each %}
+                    </span>
+                </li>
+                {% /each %}
+            </ul>
+            {% else %}
+            <pl-empty-state icon="sitemap">
+                <pl-empty-state-title>{{ t("empty", scope: "access_rule") }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ t("empty_hint", scope: "access_rule") }}</pl-empty-state-description>
+            </pl-empty-state>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+
+    <form use:Zenit.form={% addTarget %} id="add-rule-form">
+        <pl-card>
+            <pl-card-header>
+                <pl-card-title>{{ t("add_title", scope: "access_rule") }}</pl-card-title>
+                <pl-card-description>{{ t("add_description", scope: "access_rule") }}</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <pl-field>
+                    <pl-label target="rule_parent">{{ t("add_parent", scope: "access_rule") }}</pl-label>
+                    <pl-select inputId="rule_parent" name="parent_id" value="" submitEmpty={% true %}>
+                        {% each parentOptions as option %}
+                        <pl-select-item value={% option.value %}>{{ option.label }}</pl-select-item>
+                        {% /each %}
+                    </pl-select>
+                </pl-field>
+                <pl-field>
+                    <pl-label target="rule_type">{{ t("add_type", scope: "access_rule") }}</pl-label>
+                    <pl-select inputId="rule_type" name="type" value="group" submitEmpty={% true %}>
+                        {% each typeOptions as option %}
+                        <pl-select-item value={% option.value %}>{{ option.label }}</pl-select-item>
+                        {% /each %}
+                    </pl-select>
+                    <pl-field-description>{{ t("add_disabled_note", scope: "access_rule") }}</pl-field-description>
+                </pl-field>
+            </pl-card-content>
+        </pl-card>
+        <div class="cms-form-actions">
+            <pl-button variant="primary" type="submit" id="add-rule-submit">{{ t("add_action", scope: "access_rule") }}</pl-button>
+        </div>
+    </form>
+</section>
+{% /block %}

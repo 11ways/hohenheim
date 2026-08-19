@@ -3,9 +3,9 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.auth.server.PasswordHasher;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -20,11 +20,12 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
- * IP allow/deny lists plus optional single-credential basic auth, attachable to sites.
+ * Named access policies attachable to sites: this record is the tree's implicit ROOT
+ * group (its satisfy column is that group's mode) and the Rules tab holds the tree.
  */
 public final class AccessListResource extends RowResource {
 
@@ -32,23 +33,15 @@ public final class AccessListResource extends RowResource {
         .add(AccessListModel.NAME)
         // The select derives from the SATISFY EnumField -- the vocabulary's one
         // declaring home (the old hand-built list here spelled "all" as a literal).
+        // This IS the root group's mode; everything else lives in the Rules tab.
         .add(AccessListModel.SATISFY)
-        .add(AccessListModel.BASIC_AUTH_USER)
-        .add(AccessListModel.BASIC_AUTH_PASS)
-        .add(AccessListModel.ALLOWED_IPS)
-        .add(AccessListModel.DENIED_IPS)
         .build();
 
-    // AIDEV-NOTE: an explicit spec, because the derived one has no room for the two
-    // columns this list exists for. "Which list holds 10.0.0.5" was previously only
-    // answerable by opening every record.
+    // AIDEV-NOTE: an explicit spec. The rules themselves live in their own table now, so
+    // "which list holds 10.0.0.5" is answered by the rule search below, not by a column.
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(AccessListModel.NAME).filterable()
-            .subtext("basic_auth_user").build())
-        .column(ColumnSpec.fromField(AccessListModel.BASIC_AUTH_USER).hidden().build())
+        .column(ColumnSpec.fromField(AccessListModel.NAME).filterable().build())
         .column(ColumnSpec.fromField(AccessListModel.SATISFY).filterable().build())
-        .column(ColumnSpec.fromField(AccessListModel.ALLOWED_IPS).build())
-        .column(ColumnSpec.fromField(AccessListModel.DENIED_IPS).build())
         .column(ColumnSpec.fromField(AccessListModel.CREATED_AT).build())
         .filter(FilterSpec.forField(AccessListModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(AccessListModel.NAME)).build())
@@ -56,11 +49,17 @@ public final class AccessListResource extends RowResource {
             .label(FieldLabels.labelFor(AccessListModel.SATISFY)).build())
         .build();
 
-    /** The rule bodies are searchable BECAUSE the question is always "who allows this address". */
     @Override
     public @NonNull List<Field<?, ?>> searchFields() {
-        return List.of(AccessListModel.NAME, AccessListModel.ALLOWED_IPS,
-            AccessListModel.DENIED_IPS, AccessListModel.BASIC_AUTH_USER);
+        return List.of(AccessListModel.NAME);
+    }
+
+    /** The rule tree is edited on its own tab: arbitrary nesting has no form shape. */
+    @Override
+    public @NonNull List<RecordScopedPage<Row>> subpages() {
+        List<RecordScopedPage<Row>> pages = new ArrayList<>(List.of(new AccessListRulesPage()));
+        pages.addAll(this.frameworkSubpages());
+        return pages;
     }
 
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -97,24 +96,15 @@ public final class AccessListResource extends RowResource {
      * The name only.
      *
      * AIDEV-NOTE: SATISFY is excluded because it is the AND/OR of the REQUEST-TIME gate
-     * -- flipping it in a cell changes, on the next request, whether an address rule and
-     * the basic-auth credential must BOTH pass or only one. ALLOWED_IPS/DENIED_IPS are
-     * excluded for the same reason one level down: they are enforced per request, so a
-     * mistyped line locks out live traffic with no form and no refusal to explain it.
-     * BASIC_AUTH_PASS is a hashed credential and never leaves the form layer at all.
+     * -- flipping it in a cell changes, on the next request, whether the root group's
+     * rules must ALL pass or merely one of them. The same reasoning is why no rule field
+     * is inline editable one level down: they are enforced per request, so a mistyped
+     * cell locks out live traffic with no form and no refusal to explain it. A stored
+     * credential is hashed and never leaves the form layer at all.
      */
     @Override
     public @NonNull List<Field<?, ?>> inlineEditableFields() {
         return List.of(AccessListModel.NAME);
-    }
-
-    @Override
-    public void applyValuesToRow(@NonNull Row row, @NonNull Map<String, Object> coerced) {
-        super.applyValuesToRow(row, coerced);
-        String password = row.get(AccessListModel.BASIC_AUTH_PASS);
-        if (password != null && !password.isBlank() && !password.startsWith("$argon2")) {
-            row.set(AccessListModel.BASIC_AUTH_PASS, PasswordHasher.hash(password));
-        }
     }
 
 }

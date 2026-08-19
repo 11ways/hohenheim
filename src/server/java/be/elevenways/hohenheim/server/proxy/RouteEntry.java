@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.proxy;
 
-import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -38,15 +37,11 @@ final class RouteEntry {
     final @Nullable SiteAuthGate authGate;
     final @Nullable String authProviderName;
 
-    // Access list enforcement
-    final boolean hasAccessList;
-    final String[] allowedIps;
-    final String[] deniedIps;
-    final String basicAuthUser;
-    final String basicAuthPass;
-    final String accessListSatisfy;
+    // Access list enforcement: the compiled rule tree, or null when the site has no list.
+    final @Nullable AccessRuleTree accessTree;
 
-    RouteEntry(SiteRequestHandler handler, String siteName, Row domain, Row accessList,
+    RouteEntry(SiteRequestHandler handler, String siteName, Row domain,
+               @Nullable AccessRuleTree accessTree,
                Map<String, Object> siteSettings, @Nullable SiteAuthGate authGate,
                @Nullable String authProviderName) {
         this.handler = handler;
@@ -69,33 +64,20 @@ final class RouteEntry {
         this.listenOnAddresses = ListenerAddressMatcher.parse(
             domain != null ? domain.get(SiteDomainModel.LISTEN_ON) : null);
 
-        this.hasAccessList = accessList != null;
-        if (accessList != null) {
-            // AIDEV-NOTE: a NULL/blank satisfy column must never disable the list.
-            // hasAccessList() used to be "satisfy != null", so one nullable column
-            // switched off ALL of the control (allowed/denied IPs AND basic auth).
-            // The ROW is the operator's statement that this site is guarded; an
-            // absent satisfy just defaults to the model/DB default ("any").
-            String satisfy = accessList.get(AccessListModel.SATISFY);
-            this.accessListSatisfy = satisfy != null && !satisfy.isBlank()
-                ? satisfy : AccessListModel.SATISFY_ANY;
-            this.basicAuthUser = accessList.get(AccessListModel.BASIC_AUTH_USER);
-            this.basicAuthPass = accessList.get(AccessListModel.BASIC_AUTH_PASS);
-            String allowed = accessList.get(AccessListModel.ALLOWED_IPS);
-            this.allowedIps = allowed != null ? allowed.split("\\s+") : null;
-            String denied = accessList.get(AccessListModel.DENIED_IPS);
-            this.deniedIps = denied != null ? denied.split("\\s+") : null;
-        } else {
-            this.accessListSatisfy = null;
-            this.basicAuthUser = null;
-            this.basicAuthPass = null;
-            this.allowedIps = null;
-            this.deniedIps = null;
-        }
+        // AIDEV-NOTE: a NULL/blank satisfy column must never disable the list.
+        // hasAccessList() used to be "satisfy != null", so one nullable column
+        // switched off ALL of the control. The ROW is the operator's statement that
+        // this site is guarded; the compile folds an absent satisfy to the default.
+        this.accessTree = accessTree;
     }
 
     boolean hasAccessList() {
-        return hasAccessList;
+        return this.accessTree != null;
+    }
+
+    /** Whether evaluating this route's access list must run off the I/O thread. */
+    boolean accessListBlocks() {
+        return this.accessTree != null && this.accessTree.needsBlockingEvaluation();
     }
 
     /**
