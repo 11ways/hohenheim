@@ -1171,12 +1171,14 @@ public class InitialMigration extends HohenheimMigration {
                 column -> column.nullable(true).maxLength(50));
             table.addColumn("base_url", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(500));
+            // Per-kind NON-SECRET settings (the GitHub App identifiers); every credential
+            // stays a column below, because a JSON sub-field cannot be encrypted.
+            table.addColumn("settings", ColumnType.JSON,
+                column -> column.nullable(true));
+            table.addColumn("shared", ColumnType.BOOLEAN,
+                column -> column.nullable(true).defaultValue(false));
             table.addColumn("access_token", ColumnType.TEXT,
                 column -> column.nullable(true));
-            table.addColumn("app_id", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(100));
-            table.addColumn("app_installation_id", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(100));
             table.addColumn("app_private_key_pem", ColumnType.TEXT,
                 column -> column.nullable(true));
             table.timestamps();

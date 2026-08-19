@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.source;
 
+import be.elevenways.hohenheim.server.source.GitlabProviderKind;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitProviders;
@@ -98,7 +99,7 @@ class GitlabProviderClientTest {
         Row provider = Models.get(GitProviderModel.class).createEmptyRow();
         provider.set(GitProviderModel.ID, id);
         provider.set(GitProviderModel.NAME, "fake-gitlab");
-        provider.set(GitProviderModel.KIND, GitProviderModel.KIND_GITLAB);
+        provider.set(GitProviderModel.KIND, GitlabProviderKind.ID.toString());
         provider.set(GitProviderModel.BASE_URL, base);
         provider.set(GitProviderModel.ACCESS_TOKEN, "glpat-token");
         return provider;

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.server.source.GithubProviderKind;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsPeerModel;
@@ -519,7 +520,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
         Model providers = Models.get(GitProviderModel.class);
         Row row = providers.createEmptyRow();
         row.set(GitProviderModel.NAME, PREFIX + "provider");
-        row.set(GitProviderModel.KIND, GitProviderModel.KIND_GITHUB);
+        row.set(GitProviderModel.KIND, GithubProviderKind.ID.toString());
         row.set(GitProviderModel.BASE_URL, "https://git.example.test");
         providers.save(row);
         return row.get(GitProviderModel.ID);

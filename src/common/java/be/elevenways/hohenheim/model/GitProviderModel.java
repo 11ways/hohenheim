@@ -1,11 +1,15 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.source.GitProviderKindRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.orm.field.RegistryEnumField;
+import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -13,33 +17,22 @@ import be.elevenways.zenit.common.orm.model.Schema;
 
 /**
  * A git hosting provider installation (github.com, GitHub Enterprise, GitLab, ...):
- * the admin-owned credential record sites bind to for repository/branch selection,
- * authenticated clones, short-lived build credentials and deployment status reporting.
+ * the credential record sites bind to for repository/branch selection, authenticated
+ * clones, short-lived build credentials and deployment status reporting. Ownership is
+ * the record's {@code manage} grant subjects (the sites/instances doctrine, no owner
+ * FK); {@link #SHARED} is what widens one row past its owners.
  *
  * Credentials are STATIC {@code .secret().encrypted()} columns -- never keys inside a
  * JSON settings map, which zenit refuses to encrypt (the InstanceVariableModel lesson).
- * When the three GitHub App columns are set, per-operation INSTALLATION TOKENS are
- * minted (about one hour of upstream validity) and the stored access token is only the
- * fallback; that minted token is what plugs into {@code BuildCredentials.issue}.
+ * When the GitHub App id, installation id ({@link #SETTINGS}) and private key are set,
+ * per-operation INSTALLATION TOKENS are minted (about one hour of upstream validity) and
+ * the stored access token is only the fallback; that minted token is what plugs into
+ * {@code BuildCredentials.issue}.
  */
 public class GitProviderModel extends Model {
 
     public static final Identifier MODEL_ID = Identifier.of("hohenheim", "git_provider");
     public static final Schema SCHEMA = new Schema();
-
-    /** {@link #KIND} of a GitHub-compatible provider (github.com or GHE). */
-    public static final String KIND_GITHUB = "github";
-
-    /** {@link #KIND} of a GitLab-compatible provider (gitlab.com or self-hosted). */
-    public static final String KIND_GITLAB = "gitlab";
-
-    /**
-     * {@link #KIND} of a Gitea-compatible provider (Gitea, Forgejo, Gogs descendants).
-     * Unlike the other two this kind has NO public default host: {@link #BASE_URL} is
-     * required, because defaulting would send a stored token to a third-party forge the
-     * operator never named.
-     */
-    public static final String KIND_GITEA = "gitea";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
@@ -49,17 +42,29 @@ public class GitProviderModel extends Model {
         .label(HohenheimFormCopy.label("provider_name"))
         .build());
 
-    public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
-        .value(KIND_GITHUB, v -> v.displayName("GitHub").icon("github").color("info"))
-        .value(KIND_GITLAB, v -> v.displayName("GitLab").icon("gitlab").color("warning"))
-        // AIDEV-NOTE: the generic Git mark, not a Gitea mark -- FontAwesome ships none, and the
-        // name "gitea" resolved to the missing-icon placeholder here for as long as this row
-        // existed. The displayName beside it already says which forge this is.
-        .value(KIND_GITEA, v -> v.displayName("Gitea").icon("git-alt").color("success"))
-        .defaultValue(KIND_GITHUB)
-        .label(HohenheimFormCopy.label("provider_kind"))
-        .help(HohenheimFormCopy.help("provider_kind"))
-        .build());
+    // ONE discriminator over the kind registry: values enumerate it live, so a new kind is
+    // one GitProviderKind class and no edit here. Stored value = "hohenheim:<kind>".
+    public static final EnumField KIND = SCHEMA.addField(
+        RegistryEnumField.builder("kind")
+            .registry(GitProviderKindRegistry.REGISTRY)
+            .label(HohenheimFormCopy.label("provider_kind"))
+            .help(HohenheimFormCopy.help("provider_kind"))
+            .build());
+
+    /**
+     * Per-kind NON-SECRET configuration (the GitHub App identifiers today).
+     *
+     * AIDEV-NOTE: every credential stays a COLUMN below and none of them may move here --
+     * a field under a JSON SchemaField cannot be encrypted at all
+     * ({@code Schema.refuseEncryptedJsonSubFields}), so a token stored here would be
+     * plaintext. The dynamic (schemaFrom) form entry also REWRITES this whole map on
+     * every admin save, so nothing that must survive a save of another kind belongs here.
+     */
+    public static final SchemaField SETTINGS = SCHEMA.addField(
+        SchemaField.builder("settings")
+            .schemaFrom("kind")
+            .label(HohenheimFormCopy.label("provider_settings"))
+            .build());
 
     /** Blank = the public host of the kind (https://github.com); set for self-hosted. */
     public static final StringField BASE_URL = SCHEMA.addField(StringField.builder().name("base_url")
@@ -74,17 +79,17 @@ public class GitProviderModel extends Model {
             .help(HohenheimFormCopy.help("provider_access_token"))
             .build());
 
-    /** GitHub App id; with {@link #APP_INSTALLATION_ID} and the key, tokens are MINTED. */
-    public static final StringField APP_ID = SCHEMA.addField(StringField.builder().name("app_id")
-        .label(HohenheimFormCopy.label("provider_app_id"))
-        .help(HohenheimFormCopy.help("provider_app_id"))
+    /**
+     * Offered to EVERY tenant's pickers, not only to the principals holding a manage
+     * grant on the row: the operator's declaration that this installation's credential
+     * may be used by anyone who can pick a provider at all. Default false, so a provider
+     * a tenant creates in /manage is private to its owners until an admin says otherwise.
+     */
+    public static final BooleanField SHARED = SCHEMA.addField(BooleanField.builder("shared")
+        .defaultValue(false)
+        .label(HohenheimFormCopy.label("provider_shared"))
+        .help(HohenheimFormCopy.help("provider_shared"))
         .build());
-
-    public static final StringField APP_INSTALLATION_ID = SCHEMA.addField(
-        StringField.builder().name("app_installation_id")
-            .label(HohenheimFormCopy.label("provider_app_installation_id"))
-            .help(HohenheimFormCopy.help("provider_app_installation_id"))
-            .build());
 
     /** The App's RS256 private key (PEM), encrypted at rest. */
     public static final TextField APP_PRIVATE_KEY_PEM = SCHEMA.addField(

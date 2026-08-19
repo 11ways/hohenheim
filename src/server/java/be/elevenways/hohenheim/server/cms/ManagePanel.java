@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -129,6 +130,11 @@ public final class ManagePanel extends Panel {
                 // tenant who rents only a database holds no site or instance grant and
                 // would be 403'd out of the panel that now projects their database.
                 || HohenheimAccess.reachesAny(ctx, DatabaseModel.MODEL_ID, HohenheimAccess.VIEW)
+                // GIT PROVIDERS join for the same reason: a tenant may hold nothing but a
+                // provider it registered (a forge installation waiting for its first
+                // site), and would be 403'd out of the panel that projects it.
+                || HohenheimAccess.reachesAny(ctx, GitProviderModel.MODEL_ID,
+                    HohenheimAccess.MANAGE)
                 // PROJECTS join the disjunction for the reason stated above: a member of
                 // a project that owns nothing yet holds no site or instance grant, and
                 // would be 403'd out of the panel that now projects their project.
@@ -167,7 +173,11 @@ public final class ManagePanel extends Panel {
             new ManageProjectResource(), new ManageProjectMemberResource(),
             // Preview deployments of granted sites: view, create for a chosen ref,
             // destroy. Scoped by the site's manage grant like domains are.
-            new ManagePreviewDeploymentResource());
+            new ManagePreviewDeploymentResource(),
+            // The tenant's OWN forge installations: register one, test it, use it on the
+            // tenant's own sites. Shared operator providers are usable but never listed
+            // here -- see ManageGitProviderResource.
+            new ManageGitProviderResource());
     }
 
     /**
@@ -316,6 +326,18 @@ public final class ManagePanel extends Panel {
             .baseCriteria(() ->
                 PreviewDeploymentModel.DELETED_AT.isNull())
             .accessCriteria(ManagePanel::previewScope)
+            .build());
+
+        // Git providers: the SAME two-derived-defaults hazard (the admin
+        // GitProviderResource and the delegated ManageGitProviderResource both derive one
+        // from the model's display field), and the widest of the two would name every
+        // tenant's forge installation -- host included -- to whoever a picker rendered
+        // for. The scope IS the visibility policy (shared rows plus the ones the
+        // principal manages), so the site form's provider picker and this source can
+        // never disagree.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(GitProviderModel.class)
+            .search(GitProviderModel.NAME)
+            .accessCriteria(HohenheimAccess::gitProviderScope)
             .build());
 
         // Instance-database attachments have no display fields and therefore no derived

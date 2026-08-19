@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.server.source.GithubProviderKind;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
@@ -77,7 +78,7 @@ class EncryptionRekeyJourneyTest {
 
                 Row provider = Models.get(GitProviderModel.class).createEmptyRow();
                 provider.set(GitProviderModel.NAME, "rekey-provider");
-                provider.set(GitProviderModel.KIND, GitProviderModel.KIND_GITHUB);
+                provider.set(GitProviderModel.KIND, GithubProviderKind.ID.toString());
                 provider.set(GitProviderModel.ACCESS_TOKEN, GIT_TOKEN);
                 Models.get(GitProviderModel.class).save(provider);
             });

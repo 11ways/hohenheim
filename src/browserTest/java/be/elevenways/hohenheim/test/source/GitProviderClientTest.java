@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.source;
 
+import be.elevenways.hohenheim.server.source.GithubProviderKind;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitProviders;
@@ -111,7 +112,7 @@ class GitProviderClientTest {
         Row provider = Models.get(GitProviderModel.class).createEmptyRow();
         provider.set(GitProviderModel.ID, id);
         provider.set(GitProviderModel.NAME, "fake");
-        provider.set(GitProviderModel.KIND, GitProviderModel.KIND_GITHUB);
+        provider.set(GitProviderModel.KIND, GithubProviderKind.ID.toString());
         provider.set(GitProviderModel.BASE_URL, base);
         provider.set(GitProviderModel.ACCESS_TOKEN, "pat-token");
         return provider;
@@ -120,8 +121,9 @@ class GitProviderClientTest {
     private static Row appProvider(int id, String pem) {
         Row provider = patProvider(id);
         provider.set(GitProviderModel.ACCESS_TOKEN, null);
-        provider.set(GitProviderModel.APP_ID, "42");
-        provider.set(GitProviderModel.APP_INSTALLATION_ID, "55");
+        provider.set(GitProviderModel.SETTINGS, Map.of(
+            GithubProviderKind.APP_ID.getName(), "42",
+            GithubProviderKind.APP_INSTALLATION_ID.getName(), "55"));
         provider.set(GitProviderModel.APP_PRIVATE_KEY_PEM, pem);
         return provider;
     }

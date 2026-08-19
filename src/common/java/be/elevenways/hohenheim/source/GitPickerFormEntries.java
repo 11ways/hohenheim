@@ -3,13 +3,15 @@ package be.elevenways.hohenheim.source;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
+import be.elevenways.zenit.common.data.RecordSource;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
-import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.forms.common.edit.ProviderPick;
@@ -39,7 +41,7 @@ public final class GitPickerFormEntries {
         FieldFormEntryRegistry registry = FieldFormEntryRegistry.INSTANCE;
 
         registry.register(GitProviderRefField.class, field -> Select.of(field)
-            .options(OptionSource.supplied(GitPickerFormEntries::providerOptions))
+            .options(OptionSource.dynamic(GitPickerFormEntries::providerOptions))
             .build());
 
         registry.register(GitRepositoryField.class, field -> ProviderPick.of(field)
@@ -55,11 +57,27 @@ public final class GitPickerFormEntries {
         return true;
     }
 
-    /** The registered provider rows as options; resolved per render, server-side. */
-    private static @NonNull List<FieldOption<Integer>> providerOptions() {
+    /**
+     * The provider rows this audience may pick, resolved per render through the model's
+     * RECORD SOURCE -- so the picker and the /manage list answer to the one scope
+     * declaration (shared providers plus the ones the principal manages) instead of a
+     * second, drifting copy of it.
+     *
+     * AIDEV-NOTE: an absent source means an empty picker, deliberately. The scoped source
+     * is registered SERVER-side (its criteria reads zenit-auth record grants that common
+     * code cannot see), so on any platform without it there is no audience question this
+     * class could answer honestly -- and offering every stored provider there would be
+     * the exact widening the scope exists to prevent. Fails CLOSED.
+     */
+    private static @NonNull List<FieldOption<Integer>> providerOptions(@NonNull EditContext ctx) {
         List<FieldOption<Integer>> options = new ArrayList<>();
-        var model = Models.get(GitProviderModel.class);
-        for (Row provider : model.find().orderBy(GitProviderModel.NAME, SortOrder.ASC).all()) {
+        RecordSource<?> source = RecordSourceRegistry.INSTANCE.byId(GitProviderModel.MODEL_ID);
+        if (source == null) {
+            return options;
+        }
+        List<Row> rows = source.buildQuery(null, null, null, SortOrder.ASC, null,
+            ctx.accessContext()).all();
+        for (Row provider : rows) {
             String name = provider.get(GitProviderModel.NAME);
             FieldOption<Integer> option = FieldOption.of(
                 provider.get(GitProviderModel.ID),
