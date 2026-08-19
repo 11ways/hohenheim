@@ -52,8 +52,8 @@ public final class GitProviderResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(GitProviderModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.PROXY_GROUP; }
-    @Override public int navOrder() { return 40; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
+    @Override public int navOrder() { return 70; }
 
     @Override
     public @Nullable Microcopy description() {

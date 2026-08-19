@@ -89,8 +89,8 @@ public class InstanceTemplateResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceTemplateModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.COMPUTE_GROUP; }
-    @Override public int navOrder() { return 20; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
+    @Override public int navOrder() { return 60; }
 
     @Override
     public @Nullable Microcopy description() {

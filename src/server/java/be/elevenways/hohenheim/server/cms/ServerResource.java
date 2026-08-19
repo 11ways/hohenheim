@@ -144,8 +144,13 @@ public final class ServerResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(ServerModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
-    @Override public int navOrder() { return 20; }
+    // AIDEV-NOTE: the UNGROUPED top block, beside the dashboard -- not a labelled section.
+    // A host is not something you deploy, it is what everything else is deployed ONTO, so
+    // every labelled group it could join would be a lie about what it is. NavGroup.DEFAULT
+    // renders unlabelled and never collapses, which is exactly the "always there" register
+    // this and the dashboard need.
+    @Override public @NonNull NavGroup navGroup() { return NavGroup.DEFAULT; }
+    @Override public int navOrder() { return 10; }
 
     @Override
     public @Nullable Microcopy description() {

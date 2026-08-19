@@ -64,7 +64,7 @@ public final class BanResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(BanModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
-    @Override public int navOrder() { return 20; }
+    @Override public int navOrder() { return 40; }
 
     @Override
     public @Nullable Microcopy description() {

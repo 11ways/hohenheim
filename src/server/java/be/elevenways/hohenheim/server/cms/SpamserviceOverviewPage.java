@@ -70,7 +70,7 @@ public final class SpamserviceOverviewPage extends PanelPage {
     @Override public @NonNull Microcopy label() { return Microcopy.of("overview").withFilter("scope", "spamservice"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
-    @Override public int navOrder() { return 10; }
+    @Override public int navOrder() { return 30; }
 
     @Override
     public @Nullable Microcopy description() {

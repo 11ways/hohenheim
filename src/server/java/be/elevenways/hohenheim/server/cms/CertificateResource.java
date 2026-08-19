@@ -94,7 +94,7 @@ public class CertificateResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(CertificateModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.PROXY_GROUP; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
     @Override public int navOrder() { return 20; }
 
     @Override

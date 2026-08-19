@@ -56,8 +56,11 @@ public final class NotificationChannelResource extends RowResource {
     @Override public @NonNull String slug() { return "notifications"; }
     @Override public @NonNull Model model() { return Models.get(NotificationChannelModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
-    @Override public int navOrder() { return 60; }
+    // AIDEV-NOTE: System, between the activity log (90) and the settings editor (95): where
+    // this installation talks about ITSELF. It is not a networking concern -- the channels
+    // carry alerts, not traffic.
+    @Override public @NonNull NavGroup navGroup() { return NavGroup.SYSTEM; }
+    @Override public int navOrder() { return 92; }
 
     @Override
     public @Nullable Microcopy description() {

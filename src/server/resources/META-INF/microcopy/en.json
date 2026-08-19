@@ -1099,6 +1099,10 @@
   ],
   "deploy": [
     {
+      "text": "Deploy",
+      "scope": "nav"
+    },
+    {
       "text": "Deploy of {$name}",
       "scope": "attention_title"
     },
@@ -2251,20 +2255,14 @@
       "scope": "schedule_action"
     }
   ],
-  "infra": {
-    "text": "Infrastructure",
+  "networking": {
+    "text": "Networking",
     "scope": "nav"
   },
-  "proxy": [
-    {
-      "text": "Proxy",
-      "scope": "nav"
-    },
-    {
-      "text": "Proxy",
-      "scope": "site_type"
-    }
-  ],
+  "proxy": {
+    "text": "Proxy",
+    "scope": "site_type"
+  },
   "test": [
     {
       "text": "Send test",
@@ -7893,10 +7891,6 @@
   "host_probe_failed": {
     "text": "Probe of {$name} failed: {$kind}",
     "scope": "violations"
-  },
-  "compute": {
-    "text": "Compute",
-    "scope": "nav"
   },
   "quarantined_title": {
     "text": "This host is quarantined",

@@ -53,7 +53,7 @@ public final class InstanceQuotaResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceQuotaModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.COMPUTE_GROUP; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 16; }
 
     @Override public boolean showInNav() { return false; }

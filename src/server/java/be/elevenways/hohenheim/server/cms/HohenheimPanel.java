@@ -38,13 +38,23 @@ public final class HohenheimPanel extends Panel {
     public static final Permission ACCESS = HohenheimSources.ADMIN_ACCESS;
 
     // AIDEV-NOTE: sidebar order is these weights, ASCENDING (PanelNav.sections). It is
-    // ordered by WHAT THIS PRODUCT IS FOR, not alphabetically and not by module: Compute
-    // and Proxy are the daily surfaces, Infrastructure supports them, and Security --
-    // eleven items, eight of them contributed by the spamservice module -- is a background
-    // concern that used to open the sidebar and push Compute below the fold on a 1440x900
-    // screen. Do not re-weight a group ANOTHER module declares by re-declaring its id here:
+    // ordered by WHAT THIS PRODUCT IS FOR, not alphabetically and not by module: Deploy
+    // and Networking are the daily surfaces, and Security -- eleven items, eight of them
+    // contributed by the spamservice module -- is a background concern that used to open
+    // the sidebar and push the workload surfaces below the fold on a 1440x900 screen. Do
+    // not re-weight a group ANOTHER module declares by re-declaring its id here:
     // NavGroup.equals is id-only and PanelNav keeps the first instance it sees, so the
     // winner would depend on peer declaration order.
+    //
+    // AIDEV-NOTE: these groups are named after the OPERATOR'S JOB, not after the tiers the
+    // code is split into. The predecessors (Compute / Proxy / Infrastructure) were the
+    // module map read out loud: they told an operator which subsystem a resource belonged
+    // to, never which task it belonged to, and "Infrastructure" ended up meaning "the rest".
+    // Deploy = everything you create to make something RUN, Networking = how traffic
+    // reaches it, Security = who may act, System = the installation's own record. A new
+    // resource picks the group by the question its operator is asking, and a resource that
+    // fits none of the four is a signal the taxonomy is wrong -- not a reason for a fifth
+    // catch-all.
     //
     // AIDEV-NOTE: the sidebar is CURATED, not a schema dump. 39 visible entries became 20:
     // a peer stays visible only when an operator would go LOOKING for it by name. Every
@@ -59,27 +69,37 @@ public final class HohenheimPanel extends Panel {
     // and a description() -- ties made the order depend on declaration order, and a bare
     // label is what made this panel read as a table list.
     //
-    // AIDEV-NOTE: the separator sits before SECURITY, not before SYSTEM, on purpose. It
-    // marks the same boundary (the daily product surfaces end here, background concerns
-    // follow) but declares it on a group THIS class owns. NavGroup.SYSTEM is zenit-cms's
-    // constant: re-declaring its id from here to add a fact would make the winning instance
-    // depend on peer declaration order, which the note above forbids.
+    // AIDEV-NOTE: the separator STAYS before SECURITY after the regrouping, and it is still
+    // the only one. Section headings now carry their own visual register (they share
+    // pl-nav-label's, with the icon gutter reserved), so a rule between EVERY group would be
+    // noise on top of a boundary the heading already draws; the one boundary a heading
+    // cannot express is the change of SUBJECT -- Deploy and Networking are what you operate,
+    // Security and System are the installation administering itself. It is declared on a
+    // group THIS class owns: NavGroup.SYSTEM is zenit-cms's constant, and re-declaring its
+    // id from here to add a fact would make the winning instance depend on peer declaration
+    // order, which the note above forbids.
+    //
+    // AIDEV-NOTE: the System section therefore renders WITHOUT an icon while the other three
+    // labelled groups carry one. That is the framework constant's shape, not an oversight --
+    // and it aligns correctly because the nav reserves the icon gutter for labelled groups
+    // either way. Giving it one means adding an Icon to NavGroup.SYSTEM in zenit-cms, never
+    // shadowing the id from here.
 
-    /** Compute group: the container/VM management surface -- instances, templates,
-     *  quotas, snapshots, backups, backup targets, game domains. Servers and reconcile
-     *  findings stay in Infrastructure deliberately (host inventory, not workloads). */
-    public static final NavGroup COMPUTE_GROUP =
-        NavGroup.of("compute", Microcopy.of("compute").withFilter("scope", "nav"), 150, Icon.of("cubes"));
+    /** Deploy group: everything an operator creates to make something RUN -- projects,
+     *  sites, instances, stacks, databases, and the templates and git providers they are
+     *  built from. Servers are deliberately NOT here: a host is not a workload, it is the
+     *  installation itself, so it sits in the ungrouped top block beside the dashboard. */
+    public static final NavGroup DEPLOY_GROUP =
+        NavGroup.of("deploy", Microcopy.of("deploy").withFilter("scope", "nav"), 150, Icon.of("rocket"));
 
-    /** Proxy configuration group: sites, certificates, access control. */
-    public static final NavGroup PROXY_GROUP =
-        NavGroup.of("proxy", Microcopy.of("proxy").withFilter("scope", "nav"), 200, Icon.of("globe"));
+    /** Networking group: how traffic REACHES those workloads -- DNS, certificates, access
+     *  control, and the cooldown that holds a released hostname out of circulation. */
+    public static final NavGroup NETWORK_GROUP =
+        NavGroup.of("networking", Microcopy.of("networking").withFilter("scope", "nav"), 200,
+            Icon.of("network-wired"));
 
-    /** Infrastructure group: databases, servers, notifications. */
-    public static final NavGroup INFRA_GROUP =
-        NavGroup.of("infra", Microcopy.of("infra").withFilter("scope", "nav"), 250, Icon.of("server"));
-
-    /** Security group: abuse protection, IP bans, users and roles; opens the background tail. */
+    /** Security group: who may act and who is refused -- users, roles, abuse protection,
+     *  IP bans; opens the background tail. */
     public static final NavGroup SECURITY_GROUP =
         NavGroup.of("security", Microcopy.of("security").withFilter("scope", "nav"), 800, Icon.of("shield-halved"))
             .withSeparatorBefore(true);
@@ -167,9 +187,9 @@ public final class HohenheimPanel extends Panel {
         // AIDEV-NOTE: zenit-auth grew the description seam (a third constructor argument),
         // so these two describe themselves like every other entry and
         // AdminNavigationJourneyTest step 2 no longer exempts anything.
-        peers.add(new AuthUsersResource(SECURITY_GROUP, 30,
+        peers.add(new AuthUsersResource(SECURITY_GROUP, 10,
             Microcopy.of("nav_hint").withFilter("scope", "user")));
-        peers.add(new AuthRolesResource(SECURITY_GROUP, 40,
+        peers.add(new AuthRolesResource(SECURITY_GROUP, 20,
             Microcopy.of("nav_hint").withFilter("scope", "role")));
         addIf(peers, new SpamserviceOverviewPage(), Role.FIREWALL);
         addIf(peers, new SpamserviceInstallationResource(), Role.FIREWALL);

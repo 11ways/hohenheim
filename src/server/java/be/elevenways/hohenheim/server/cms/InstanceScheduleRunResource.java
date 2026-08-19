@@ -54,7 +54,7 @@ public class InstanceScheduleRunResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(RecordScheduleRunModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
-    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.COMPUTE_GROUP; }
+    @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 20; }
     @Override public @NonNull Icon icon() { return Icon.of("clock-rotate-left"); }
     @Override public boolean showInNav() { return false; }
