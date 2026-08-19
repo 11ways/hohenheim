@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,7 +53,12 @@ public final class GitProviderResource extends RowResource {
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.PROXY_GROUP; }
-    @Override public int navOrder() { return 19; }
+    @Override public int navOrder() { return 40; }
+
+    @Override
+    public @Nullable Microcopy description() {
+        return Microcopy.of("nav_hint").withFilter("scope", "git_provider");
+    }
     @Override public @NonNull Icon icon() { return Icon.of("code-branch"); }
 
     @Override

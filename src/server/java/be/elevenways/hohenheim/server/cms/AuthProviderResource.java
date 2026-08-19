@@ -42,6 +42,8 @@ public final class AuthProviderResource extends RowResource {
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.PROXY_GROUP; }
     @Override public int navOrder() { return 50; }
+
+    @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("key"); }
 
 

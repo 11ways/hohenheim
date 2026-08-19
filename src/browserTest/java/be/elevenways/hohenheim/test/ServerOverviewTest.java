@@ -5,8 +5,11 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -178,6 +181,34 @@ class ServerOverviewTest extends HohenheimTestBase {
         // 4. Stored facts render with their provenance.
         assertThat(body).as("step 4: a measured fact renders").contains("docker_version");
         assertThat(body).as("step 4: with its value").contains("27.1.1");
+
+        // 5. And the host's own history: the recent-activity band is filtered on (model,
+        //    record id), so an entry written about ANOTHER host never lands here. The decoy
+        //    is what makes this a filter assertion rather than a "band exists" one.
+        var servers = Models.get(ServerModel.class);
+        ActivityLog.record(servers, hostId, "admit", "overview band fixture");
+        ActivityLog.record(servers, hostId + 100000, "admit", "decoy fixture");
+        Object mine = latestActivityId(String.valueOf(hostId));
+        Object theirs = latestActivityId(String.valueOf(hostId + 100000));
+        assertThat(mine).as("step 5: this host has an activity row").isNotNull();
+
+        String withBand = get("/admin/servers/" + hostId + "/page/overview").body();
+        assertThat(withBand).as("step 5: the overview carries a recent-activity band")
+            .contains("Recent activity");
+        assertThat(withBand).as("step 5: it links this host's own entry")
+            .contains("/admin/activity/" + mine);
+        assertThat(withBand).as("step 5: and never another host's")
+            .doesNotContain("/admin/activity/" + theirs);
+    }
+
+    /** The newest activity row id written about one server id, or null. */
+    private static Object latestActivityId(String recordId) {
+        Row entry = Models.get(ActivityModel.class).find()
+            .where(ActivityModel.MODEL.eq(ServerModel.MODEL_ID.toString()))
+            .where(ActivityModel.RECORD_ID.eq(recordId))
+            .orderBy(ActivityModel.ID, SortOrder.DESC)
+            .first();
+        return entry == null ? null : entry.get(ActivityModel.ID);
     }
 
     /**

@@ -179,7 +179,7 @@
       "scope": "field"
     },
     {
-      "text": "Eén IP-adres of CIDR-netwerk per regel, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
+      "text": "E\u00e9n IP-adres of CIDR-netwerk per regel, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
       "scope": "help"
     }
   ],
@@ -269,7 +269,7 @@
       "scope": "field"
     },
     {
-      "text": "Eén Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.",
+      "text": "E\u00e9n Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.",
       "scope": "help"
     },
     {
@@ -363,7 +363,7 @@
       "scope": "field"
     },
     {
-      "text": "Shellcommando na checkout en vóór de deployment actief wordt.",
+      "text": "Shellcommando na checkout en v\u00f3\u00f3r de deployment actief wordt.",
       "scope": "help"
     }
   ],
@@ -443,7 +443,7 @@
       "scope": "field"
     },
     {
-      "text": "Kunstmatige vertraging in milliseconden vóór elke aanvraag.",
+      "text": "Kunstmatige vertraging in milliseconden v\u00f3\u00f3r elke aanvraag.",
       "scope": "help"
     }
   ],
@@ -453,7 +453,7 @@
       "scope": "field"
     },
     {
-      "text": "Eén IP-adres of CIDR-netwerk per regel, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
+      "text": "E\u00e9n IP-adres of CIDR-netwerk per regel, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
       "scope": "help"
     }
   ],
@@ -661,7 +661,7 @@
       "scope": "field"
     },
     {
-      "text": "Commandoregelargument vóór het toegewezen poortnummer.",
+      "text": "Commandoregelargument v\u00f3\u00f3r het toegewezen poortnummer.",
       "scope": "help"
     }
   ],
@@ -1032,15 +1032,15 @@
     "scope": "database_tab"
   },
   "copy_password": {
-    "text": "Wachtwoord kopiëren",
+    "text": "Wachtwoord kopi\u00ebren",
     "scope": "database_tab"
   },
   "copy_webhook_secret": {
-    "text": "Webhookgeheim kopiëren",
+    "text": "Webhookgeheim kopi\u00ebren",
     "scope": "site_deployments"
   },
   "copy_webhook_url": {
-    "text": "Webhook-URL kopiëren",
+    "text": "Webhook-URL kopi\u00ebren",
     "scope": "site_deployments"
   },
   "cpu": [
@@ -1310,7 +1310,7 @@
     "scope": "site_processes"
   },
   "isolated": {
-    "text": "Geïsoleerd",
+    "text": "Ge\u00efsoleerd",
     "scope": "site_processes"
   },
   "kill": {
@@ -1318,7 +1318,7 @@
     "scope": "site_processes"
   },
   "kill_confirm": {
-    "text": "Het proces wordt onmiddellijk beëindigd.",
+    "text": "Het proces wordt onmiddellijk be\u00ebindigd.",
     "scope": "site_processes"
   },
   "last_run_failed": {
@@ -1685,7 +1685,7 @@
   },
   "variables": [
     {
-      "text": "Geïnjecteerde variabelen",
+      "text": "Ge\u00efnjecteerde variabelen",
       "scope": "site_databases"
     },
     {
@@ -1814,11 +1814,11 @@
     }
   ],
   "copy_record_name": {
-    "text": "Naam van TXT-record kopiëren",
+    "text": "Naam van TXT-record kopi\u00ebren",
     "scope": "certificate_request"
   },
   "copy_record_value": {
-    "text": "Waarde van TXT-record kopiëren",
+    "text": "Waarde van TXT-record kopi\u00ebren",
     "scope": "certificate_request"
   },
   "verify_dns": {
@@ -1924,7 +1924,7 @@
     "scope": "certificate_request"
   },
   "any": {
-    "text": "Eén van beide (IP of Basic Auth)",
+    "text": "E\u00e9n van beide (IP of Basic Auth)",
     "scope": "access_satisfy"
   },
   "all": {
@@ -1968,7 +1968,7 @@
     "scope": "certificate_request_error"
   },
   "domain_required": {
-    "text": "Er is minstens één domein vereist",
+    "text": "Er is minstens \u00e9\u00e9n domein vereist",
     "scope": "certificate_request_error"
   },
   "unknown_validation": {
@@ -2117,7 +2117,7 @@
       "scope": "stack_file"
     },
     {
-      "text": "Vrijgegeven hostnamen",
+      "text": "Hostnaam-afkoelperiodes",
       "scope": "released_claim"
     },
     {
@@ -2129,15 +2129,15 @@
       "scope": "instance_quota"
     },
     {
-      "text": "Builds",
+      "text": "Buildgeschiedenis",
       "scope": "build_operation"
     },
     {
-      "text": "Releases",
+      "text": "Releasegeschiedenis",
       "scope": "release_operation"
     },
     {
-      "text": "Reconciliatiebevindingen",
+      "text": "Onverwachte workloads",
       "scope": "reconcile_finding"
     },
     {
@@ -2348,7 +2348,7 @@
     "scope": "site"
   },
   "generate_api_key_hint": {
-    "text": "Genereer een sleutel voor de proces-API; hij wordt één keer getoond",
+    "text": "Genereer een sleutel voor de proces-API; hij wordt \u00e9\u00e9n keer getoond",
     "scope": "site"
   },
   "api_key_minted": {
@@ -2397,10 +2397,20 @@
     "text": "Alles in orde - niets vraagt aandacht.",
     "scope": "dashboard"
   },
-  "recent_activity": {
-    "text": "Recente activiteit",
-    "scope": "dashboard"
-  },
+  "recent_activity": [
+    {
+      "text": "Recente activiteit",
+      "scope": "dashboard"
+    },
+    {
+      "text": "Recente activiteit",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "Recente activiteit",
+      "scope": "server_overview"
+    }
+  ],
   "site_type": [
     {
       "text": "Sitetype",
@@ -3765,7 +3775,7 @@
   },
   "overview": [
     {
-      "text": "Spamservice-overzicht",
+      "text": "Misbruikbescherming",
       "scope": "spamservice"
     },
     {
@@ -5166,7 +5176,7 @@
     "scope": "violations"
   },
   "host_kernel_lane_missing": {
-    "text": "Host '{$name}' aanvaardt tenant-workloads maar heeft geen kanaal om zijn eigen kernel te lezen, dus workload-isolatie valt er niet te verifiëren; geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet zijn houding op trusted-only",
+    "text": "Host '{$name}' aanvaardt tenant-workloads maar heeft geen kanaal om zijn eigen kernel te lezen, dus workload-isolatie valt er niet te verifi\u00ebren; geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet zijn houding op trusted-only",
     "scope": "violations"
   },
   "host_kernel_lane_unproven": {
@@ -5344,7 +5354,7 @@
     }
   ],
   "snapshot_confirm": {
-    "text": "Snapshot nemen? Drivers die volumes kopiëren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
+    "text": "Snapshot nemen? Drivers die volumes kopi\u00ebren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
     "scope": "instance"
   },
   "snapshot_taken": {
@@ -8437,5 +8447,169 @@
   "refresh": {
     "text": "Vernieuwen",
     "scope": "instance_overview"
-  }
+  },
+  "sections": [
+    {
+      "text": "Onderdelen",
+      "scope": "spamservice"
+    }
+  ],
+  "installation_hint": [
+    {
+      "text": "De misbruikbeschermingsdienst zelf installeren, bijwerken of verwijderen.",
+      "scope": "spamservice"
+    }
+  ],
+  "reputation_hint": [
+    {
+      "text": "Reputatiescores per bron, zoals de dienst ze nu ziet.",
+      "scope": "spamservice"
+    }
+  ],
+  "nav_hint": [
+    {
+      "text": "De toestand van de vloot in een oogopslag: wat aandacht vraagt, plus tellingen en recente wijzigingen.",
+      "scope": "admin"
+    },
+    {
+      "text": "Containers en virtuele machines die deze installatie voor haar tenants draait.",
+      "scope": "instance"
+    },
+    {
+      "text": "Herbruikbare blauwdrukken waaruit een instantie wordt aangemaakt.",
+      "scope": "instance_template"
+    },
+    {
+      "text": "De websites en applicaties die deze proxy bedient, met hun domeinen en deployments.",
+      "scope": "site"
+    },
+    {
+      "text": "TLS-certificaten: geuploade PEM-bestanden en die van Let's Encrypt.",
+      "scope": "certificate"
+    },
+    {
+      "text": "Herbruikbare IP-toegangsregels die je aan een site kunt koppelen.",
+      "scope": "access_list"
+    },
+    {
+      "text": "Verbindingen met GitHub, GitLab en verwanten om broncode op te halen en uit te rollen.",
+      "scope": "git_provider"
+    },
+    {
+      "text": "Hostnamen die onlangs van een site zijn losgekoppeld en tijdelijk niet opnieuw geclaimd kunnen worden.",
+      "scope": "released_claim"
+    },
+    {
+      "text": "Groepen die sites, instanties en databanken bezitten, en wie ze mag beheren.",
+      "scope": "project"
+    },
+    {
+      "text": "De machines die workloads draaien, met hun toelatingsstatus en capaciteit.",
+      "scope": "server"
+    },
+    {
+      "text": "Beheerde databankservers die deze installatie inricht en back-upt.",
+      "scope": "database"
+    },
+    {
+      "text": "Docker Compose-stacks die als een geheel worden uitgerold en bediend.",
+      "scope": "stack"
+    },
+    {
+      "text": "De DNS-zones waarvoor deze server antwoordt, en de records erin.",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "Waar meldingen naartoe gaan: Slack, Discord of een eigen webhook.",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "De misbruikbeschermingsdienst: of hij draait, en alles wat hij heeft geleerd.",
+      "scope": "spamservice"
+    },
+    {
+      "text": "IP-adressen die momenteel geen toegang tot deze server hebben.",
+      "scope": "ban"
+    },
+    {
+      "text": "Wie wat heeft gewijzigd, en wanneer, in de hele installatie.",
+      "scope": "activity"
+    },
+    {
+      "text": "Elke instelbare waarde van deze installatie, gegroepeerd per subsysteem.",
+      "scope": "settings"
+    },
+    {
+      "text": "Waar back-ups van instanties en databanken terechtkomen: lokale schijf of externe opslag.",
+      "scope": "backup_target"
+    },
+    {
+      "text": "Hoeveel instanties, en hoeveel van elke resource, een eigenaar mag gebruiken.",
+      "scope": "instance_quota"
+    },
+    {
+      "text": "Publieke gamehostnamen, elk gerouteerd naar de instantie die ervoor antwoordt.",
+      "scope": "game_domain"
+    },
+    {
+      "text": "Aanmeldvereisten die een site voor zijn bezoekers kan zetten.",
+      "scope": "auth_provider"
+    },
+    {
+      "text": "Tijdelijke deployments van een branch of pull request, elk op een eigen hostnaam.",
+      "scope": "preview_deployment"
+    },
+    {
+      "text": "Elke image-build die deze installatie heeft uitgevoerd, met het vastgelegde logboek.",
+      "scope": "build_operation"
+    },
+    {
+      "text": "Elke release die live ging, en de image die daarbij werd vastgezet.",
+      "scope": "release_operation"
+    },
+    {
+      "text": "Workloads die op een host gevonden zijn maar niet bij deze installatie bekend zijn.",
+      "scope": "reconcile_finding"
+    },
+    {
+      "text": "De productie-, staging- en andere fasen waarnaar een project uitrolt.",
+      "scope": "environment"
+    },
+    {
+      "text": "Configuratiewaarden die alles binnen een omgeving deelt.",
+      "scope": "environment_variable"
+    },
+    {
+      "text": "Andere nameservers waarmee deze server zones uitwisselt.",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "De applicaties die inhoud mogen indienen voor spamcontrole.",
+      "scope": "spamservice_client"
+    },
+    {
+      "text": "Ingediende inhoud, met het oordeel dat ze kreeg.",
+      "scope": "spamservice_sample"
+    },
+    {
+      "text": "Misbruik- en authenticatiegebeurtenissen die de dienst heeft vastgelegd.",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "Woorden en zinsdelen die een inzending richting spam wegen.",
+      "scope": "spamservice_word"
+    },
+    {
+      "text": "Wat jouw aandacht vraagt, en de diensten die je beheert.",
+      "scope": "manage_dashboard"
+    },
+    {
+      "text": "Wie er nog meer in jouw projecten zit.",
+      "scope": "project_member"
+    },
+    {
+      "text": "De DNS-namen die je mag bewerken, over elke zone die deze server host.",
+      "scope": "dns_record"
+    }
+  ]
 }

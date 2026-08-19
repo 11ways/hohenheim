@@ -23,6 +23,7 @@ import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +50,10 @@ public final class ManageDashboard extends DashboardPanelPeer {
     @Override public @NonNull Icon icon() { return Icon.LAYOUT_DASH; }
     @Override public int navOrder() { return 1; }
 
+    @Override
+    public @Nullable Microcopy description() {
+        return CmsSupport.navHint("manage_dashboard");
+    }
     @Override
     public @NonNull WidgetTree widgets(@NonNull AccessContext accessContext) {
         List<WidgetInstance> widgets = new ArrayList<>();

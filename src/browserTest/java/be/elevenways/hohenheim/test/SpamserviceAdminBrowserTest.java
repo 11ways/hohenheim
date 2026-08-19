@@ -23,9 +23,16 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
         navigateToApp("/admin/spamservice");
         waitForHydration();
 
-        assertThat(page.locator("h1").innerText()).contains("Spamservice");
+        // The front door is named for what it DOES, not for the daemon behind it: the
+        // product-neutral label is what a newcomer scanning the sidebar reads.
+        assertThat(page.locator("h1").innerText()).contains("Abuse protection");
         assertThat(page.locator("pl-alert").innerText()).contains("not connected");
         assertThat(page.locator("pl-card").count()).isGreaterThanOrEqualTo(2);
+        // It is also the ONLY nav entry for this subsystem now, so it must link the five
+        // sub-resources plus the reputation page it swallowed.
+        assertThat(page.locator("pl-nav-item[href='/admin/spamservice-installation']").count())
+            .isEqualTo(1);
+        assertThat(page.locator(".hh-spamservice-sections pl-nav-item").count()).isEqualTo(6);
 
         // The installation form never renders the controller key.
         navigateToApp("/admin/spamservice-installation");

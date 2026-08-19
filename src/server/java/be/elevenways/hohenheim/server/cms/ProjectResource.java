@@ -12,6 +12,7 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -23,6 +24,9 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Projects: the hierarchical owner tier's admin surface. The generated floor plus
@@ -58,7 +62,12 @@ public class ProjectResource extends RowResource {
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
-    @Override public int navOrder() { return 14; }
+    @Override public int navOrder() { return 10; }
+
+    @Override
+    public @Nullable Microcopy description() {
+        return Microcopy.of("nav_hint").withFilter("scope", "project");
+    }
     @Override public @NonNull Icon icon() { return Icon.of("folder-tree"); }
 
     @Override
@@ -102,4 +111,16 @@ public class ProjectResource extends RowResource {
         }
         return count;
     }
+
+    /**
+     * The environments of these projects, demoted out of the sidebar.
+     */
+    @Override
+    public @NonNull List<HeaderAction> headerActions() {
+        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
+        actions.addAll(List.of(
+            CmsSupport.relatedList("environments_link", "environments", "environment", Icon.of("layer-group"))));
+        return actions;
+    }
+
 }

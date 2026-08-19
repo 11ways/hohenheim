@@ -25,6 +25,7 @@ import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.StatWidget;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,6 +46,10 @@ public final class AdminDashboard extends DashboardPanelPeer {
     @Override public @NonNull Icon icon() { return Icon.LAYOUT_DASH; }
     @Override public int navOrder() { return 1; }
 
+    @Override
+    public @Nullable Microcopy description() {
+        return Microcopy.of("nav_hint").withFilter("scope", "admin");
+    }
     /** Role-gated bands: a tile must not link to a resource this install has no route for. */
     @Override
     public @NonNull WidgetTree widgets(@NonNull AccessContext accessContext) {
@@ -97,7 +102,7 @@ public final class AdminDashboard extends DashboardPanelPeer {
         }
         widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
                 "title", HohenheimWidgetCopy.localized("recent_activity", "dashboard"),
-                "source", "zenit.activity",
+                "source", CmsSupport.ACTIVITY_SOURCE,
                 "sort", "created_at",
                 "descending", true,
                 "limit", 10))));

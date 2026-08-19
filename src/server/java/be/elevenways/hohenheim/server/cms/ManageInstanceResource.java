@@ -6,14 +6,15 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
+import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldAccess;
+import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
@@ -150,4 +151,11 @@ public final class ManageInstanceResource extends InstanceResource {
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
         return HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID, HohenheimAccess.VIEW);
     }
+
+    /**
+     * No inherited header actions: the operator resource links sibling ADMIN lists a
+     * tenant may not reach, and a 403 button is worse than no button.
+     */
+    @Override public @NonNull List<HeaderAction> headerActions() { return List.of(); }
+
 }

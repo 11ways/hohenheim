@@ -21,6 +21,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.util.List;
@@ -63,7 +64,12 @@ public final class BanResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(BanModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
-    @Override public int navOrder() { return 10; }
+    @Override public int navOrder() { return 20; }
+
+    @Override
+    public @Nullable Microcopy description() {
+        return Microcopy.of("nav_hint").withFilter("scope", "ban");
+    }
     @Override public @NonNull Icon icon() { return Icon.of("ban"); }
 
     /** Ban rows are an audit trail: created and lifted, never edited or deleted. */

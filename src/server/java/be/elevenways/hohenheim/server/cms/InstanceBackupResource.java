@@ -60,6 +60,8 @@ public class InstanceBackupResource extends RowResource {
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.COMPUTE_GROUP; }
     @Override public int navOrder() { return 17; }
+
+    @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("box-archive"); }
 
     /** Backups are born from the instance action or the nightly task, never a form. */

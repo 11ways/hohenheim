@@ -242,6 +242,20 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             .doesNotContain("name=\"kind\"")
             .doesNotContain("name=\"settings.image\"")
             .doesNotContain("name=\"server_id\"");
+
+        // 5. The overview's RECENT ACTIVITY band is operator-only, and censored the same way
+        //    the host fact and the install error are: by never being added to the delegated
+        //    tree. The shared zenit.activity source is gated on the admin permission, so a
+        //    band rendered here could only ever be empty -- which reads as a broken widget,
+        //    and would still put the audit log's shape in front of a tenant.
+        HttpResponse<String> overview = tenantGet(
+            "/manage/instances/" + instanceAId + "/page/overview");
+        assertThat(overview.statusCode()).as("step 5: the tenant's front door opens").isEqualTo(200);
+        assertThat(overview.body())
+            .as("step 5: the delegated front door grows no activity band")
+            .doesNotContain("Recent activity")
+            .doesNotContain("/manage/activity/")
+            .doesNotContain("/admin/activity/");
     }
 
     /** COUNTERFACTUAL: an unowned id and a nonexistent id are indistinguishable. */

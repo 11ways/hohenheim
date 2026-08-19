@@ -1,51 +1,52 @@
 package be.elevenways.hohenheim.server.cms;
 
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.HostStatusCell;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.incus.IncusReaper;
-import be.elevenways.hohenheim.server.task.ReapIncusControllers;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
+import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.options.ServerOptions;
+import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
-import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
-import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.cms.common.schema.FilterSpec;
+import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.edit.Computed;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
-import be.elevenways.zenit.cms.common.schema.FilterSpec;
-import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -145,6 +146,11 @@ public final class ServerResource extends RowResource {
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
     @Override public int navOrder() { return 20; }
+
+    @Override
+    public @Nullable Microcopy description() {
+        return Microcopy.of("nav_hint").withFilter("scope", "server");
+    }
     @Override public @NonNull Icon icon() { return Icon.of("server"); }
 
     /**
@@ -931,4 +937,16 @@ public final class ServerResource extends RowResource {
             throw Violations.ofField("ssh_target", target, CmsSupport.violationText("ssh_target_format"));
         }
     }
+
+    /**
+     * What the reconciler found on these hosts, demoted out of the sidebar.
+     */
+    @Override
+    public @NonNull List<HeaderAction> headerActions() {
+        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
+        actions.addAll(List.of(
+            CmsSupport.relatedList("reconcile_findings_link", "reconcile-findings", "reconcile_finding", Icon.of("magnifying-glass"))));
+        return actions;
+    }
+
 }

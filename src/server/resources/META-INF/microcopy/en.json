@@ -2025,11 +2025,11 @@
       "scope": "game_domain"
     },
     {
-      "text": "Access Lists",
+      "text": "Access lists",
       "scope": "access_list"
     },
     {
-      "text": "Auth Providers",
+      "text": "Auth providers",
       "scope": "auth_provider"
     },
     {
@@ -2041,7 +2041,7 @@
       "scope": "database"
     },
     {
-      "text": "Notification Channels",
+      "text": "Notification channels",
       "scope": "notification_channel"
     },
     {
@@ -2061,15 +2061,15 @@
       "scope": "instance_database"
     },
     {
-      "text": "Site Domains",
+      "text": "Site domains",
       "scope": "site_domain"
     },
     {
-      "text": "DNS Zones",
+      "text": "DNS zones",
       "scope": "dns_zone"
     },
     {
-      "text": "DNS Records",
+      "text": "DNS records",
       "scope": "dns_record"
     },
     {
@@ -2081,7 +2081,7 @@
       "scope": "dns_zone_peer"
     },
     {
-      "text": "IP Bans",
+      "text": "IP bans",
       "scope": "ban"
     },
     {
@@ -2117,7 +2117,7 @@
       "scope": "stack_file"
     },
     {
-      "text": "Released hostnames",
+      "text": "Hostname cooldowns",
       "scope": "released_claim"
     },
     {
@@ -2125,19 +2125,19 @@
       "scope": "instance"
     },
     {
-      "text": "Instance Quotas",
+      "text": "Instance quotas",
       "scope": "instance_quota"
     },
     {
-      "text": "Builds",
+      "text": "Build history",
       "scope": "build_operation"
     },
     {
-      "text": "Releases",
+      "text": "Release history",
       "scope": "release_operation"
     },
     {
-      "text": "Reconcile findings",
+      "text": "Unexpected workloads",
       "scope": "reconcile_finding"
     },
     {
@@ -2397,10 +2397,20 @@
     "text": "All clear - nothing needs attention.",
     "scope": "dashboard"
   },
-  "recent_activity": {
-    "text": "Recent activity",
-    "scope": "dashboard"
-  },
+  "recent_activity": [
+    {
+      "text": "Recent activity",
+      "scope": "dashboard"
+    },
+    {
+      "text": "Recent activity",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "Recent activity",
+      "scope": "server_overview"
+    }
+  ],
   "site_type": [
     {
       "text": "Site type",
@@ -3765,7 +3775,7 @@
   },
   "overview": [
     {
-      "text": "Spamservice overview",
+      "text": "Abuse protection",
       "scope": "spamservice"
     },
     {
@@ -8437,5 +8447,169 @@
   "refresh": {
     "text": "Refresh",
     "scope": "instance_overview"
-  }
+  },
+  "sections": [
+    {
+      "text": "Sections",
+      "scope": "spamservice"
+    }
+  ],
+  "installation_hint": [
+    {
+      "text": "Install, update or remove the abuse-protection service itself.",
+      "scope": "spamservice"
+    }
+  ],
+  "reputation_hint": [
+    {
+      "text": "Reputation scores per source, as the service currently sees them.",
+      "scope": "spamservice"
+    }
+  ],
+  "nav_hint": [
+    {
+      "text": "Fleet health at a glance: what needs attention, plus counts and recent changes.",
+      "scope": "admin"
+    },
+    {
+      "text": "Containers and virtual machines this installation runs for its tenants.",
+      "scope": "instance"
+    },
+    {
+      "text": "Reusable blueprints an instance is created from.",
+      "scope": "instance_template"
+    },
+    {
+      "text": "The websites and applications this proxy serves, with their domains and deployments.",
+      "scope": "site"
+    },
+    {
+      "text": "TLS certificates: uploaded PEM files and the ones Let's Encrypt issues and renews.",
+      "scope": "certificate"
+    },
+    {
+      "text": "Reusable IP allow and deny rules you can attach to a site.",
+      "scope": "access_list"
+    },
+    {
+      "text": "Connections to GitHub, GitLab and friends, used to clone and deploy source.",
+      "scope": "git_provider"
+    },
+    {
+      "text": "Hostnames recently detached from a site, held back so a new owner cannot claim them at once.",
+      "scope": "released_claim"
+    },
+    {
+      "text": "Groups that own sites, instances and databases, and the people who may manage them.",
+      "scope": "project"
+    },
+    {
+      "text": "The machines that run workloads, with their admission state and capacity.",
+      "scope": "server"
+    },
+    {
+      "text": "Managed database servers this installation provisions and backs up.",
+      "scope": "database"
+    },
+    {
+      "text": "Docker Compose stacks deployed and operated as one unit.",
+      "scope": "stack"
+    },
+    {
+      "text": "The DNS zones this server answers for, and the records inside them.",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "Where alerts are sent: Slack, Discord or a webhook of your own.",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "The abuse-protection service: whether it runs, and everything it has learned.",
+      "scope": "spamservice"
+    },
+    {
+      "text": "IP addresses currently blocked from reaching this server.",
+      "scope": "ban"
+    },
+    {
+      "text": "Who changed what, and when, across the whole installation.",
+      "scope": "activity"
+    },
+    {
+      "text": "Every configurable value of this installation, grouped by subsystem.",
+      "scope": "settings"
+    },
+    {
+      "text": "Where instance and database backups are written: local disk or a remote store.",
+      "scope": "backup_target"
+    },
+    {
+      "text": "How many instances, and how much of each resource, one owner may use.",
+      "scope": "instance_quota"
+    },
+    {
+      "text": "Public game hostnames, each routed to the instance that answers for it.",
+      "scope": "game_domain"
+    },
+    {
+      "text": "Login requirements a site can put in front of its visitors.",
+      "scope": "auth_provider"
+    },
+    {
+      "text": "Throwaway deployments of a branch or pull request, each on its own hostname.",
+      "scope": "preview_deployment"
+    },
+    {
+      "text": "Every image build this installation ran, with the log it captured.",
+      "scope": "build_operation"
+    },
+    {
+      "text": "Every release that went live, and the image it pinned.",
+      "scope": "release_operation"
+    },
+    {
+      "text": "Workloads found on a host that this installation does not know about.",
+      "scope": "reconcile_finding"
+    },
+    {
+      "text": "The production, staging and other stages a project deploys into.",
+      "scope": "environment"
+    },
+    {
+      "text": "Configuration values shared by everything inside one environment.",
+      "scope": "environment_variable"
+    },
+    {
+      "text": "Other nameservers this server transfers zones to or from.",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "The applications allowed to submit content for spam checking.",
+      "scope": "spamservice_client"
+    },
+    {
+      "text": "Content submitted for checking, with the verdict it received.",
+      "scope": "spamservice_sample"
+    },
+    {
+      "text": "Abuse and authentication events the service recorded.",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "Words and phrases that weigh a submission towards spam.",
+      "scope": "spamservice_word"
+    },
+    {
+      "text": "What needs your attention, and the services you manage.",
+      "scope": "manage_dashboard"
+    },
+    {
+      "text": "Who else is in the projects you belong to.",
+      "scope": "project_member"
+    },
+    {
+      "text": "The DNS names you may edit, across every zone this server hosts.",
+      "scope": "dns_record"
+    }
+  ]
 }

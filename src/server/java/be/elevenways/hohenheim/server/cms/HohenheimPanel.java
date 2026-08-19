@@ -12,7 +12,6 @@ import be.elevenways.zenit.auth.server.cms.AuthUsersResource;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
-import be.elevenways.zenit.cms.common.resource.ActivityResource;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
@@ -46,6 +45,25 @@ public final class HohenheimPanel extends Panel {
     // screen. Do not re-weight a group ANOTHER module declares by re-declaring its id here:
     // NavGroup.equals is id-only and PanelNav keeps the first instance it sees, so the
     // winner would depend on peer declaration order.
+    //
+    // AIDEV-NOTE: the sidebar is CURATED, not a schema dump. 39 visible entries became 20:
+    // a peer stays visible only when an operator would go LOOKING for it by name. Every
+    // demoted peer is showInNav(false) -- which removes the sidebar entry and NOTHING else,
+    // the route and the record stay live -- and each one has a declared home: a record tab
+    // on its parent (instance snapshots/backups), a HeaderAction on the parent list
+    // (backup targets, quotas, game domains, auth providers, previews, build/release
+    // history, reconcile findings, environments, DNS peers), or a link on the surface that
+    // owns it (the spamservice sub-resources, off the abuse-protection overview). A peer
+    // whose demotion target does not exist stays VISIBLE with a description rather than
+    // becoming unreachable. Every visible peer carries a unique navOrder inside its group
+    // and a description() -- ties made the order depend on declaration order, and a bare
+    // label is what made this panel read as a table list.
+    //
+    // AIDEV-NOTE: the separator sits before SECURITY, not before SYSTEM, on purpose. It
+    // marks the same boundary (the daily product surfaces end here, background concerns
+    // follow) but declares it on a group THIS class owns. NavGroup.SYSTEM is zenit-cms's
+    // constant: re-declaring its id from here to add a fact would make the winning instance
+    // depend on peer declaration order, which the note above forbids.
 
     /** Compute group: the container/VM management surface -- instances, templates,
      *  quotas, snapshots, backups, backup targets, game domains. Servers and reconcile
@@ -61,9 +79,10 @@ public final class HohenheimPanel extends Panel {
     public static final NavGroup INFRA_GROUP =
         NavGroup.of("infra", Microcopy.of("infra").withFilter("scope", "nav"), 250, Icon.of("server"));
 
-    /** Security group: IP bans, plus the spamservice module's own peers. */
+    /** Security group: abuse protection, IP bans, users and roles; opens the background tail. */
     public static final NavGroup SECURITY_GROUP =
-        NavGroup.of("security", Microcopy.of("security").withFilter("scope", "nav"), 800, Icon.of("shield-halved"));
+        NavGroup.of("security", Microcopy.of("security").withFilter("scope", "nav"), 800, Icon.of("shield-halved"))
+            .withSeparatorBefore(true);
 
     public HohenheimPanel() {
         super(Identifier.of("hohenheim", "admin"), "admin", Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
@@ -145,8 +164,12 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new BanResource(), Role.FIREWALL);
         // zenit-auth's generated admin resources, wired into THIS panel (the
         // module's own default panel is disabled via auth.cms.auto_panel).
-        peers.add(new AuthUsersResource(SECURITY_GROUP, 2));
-        peers.add(new AuthRolesResource(SECURITY_GROUP, 3));
+        // AIDEV-NOTE: no description() reaches these two -- AuthUsersResource and
+        // AuthRolesResource are FINAL and expose no description seam, so their sidebar
+        // entries stay label-only until zenit-auth grows one. Everything else visible in
+        // this panel carries one (AdminNavigationJourneyTest step 2 skips exactly these).
+        peers.add(new AuthUsersResource(SECURITY_GROUP, 30));
+        peers.add(new AuthRolesResource(SECURITY_GROUP, 40));
         addIf(peers, new SpamserviceOverviewPage(), Role.FIREWALL);
         addIf(peers, new SpamserviceInstallationResource(), Role.FIREWALL);
         addIf(peers, new SpamserviceSamplesResource(), Role.FIREWALL);
@@ -155,7 +178,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new SpamserviceSecurityEventsResource(), Role.FIREWALL);
         addIf(peers, new SpamserviceWordsResource(), Role.FIREWALL);
         addIf(peers, new SpamserviceReputationPage(), Role.FIREWALL);
-        peers.add(new ActivityResource());
+        peers.add(new AdminActivityResource());
         SettingsPage settings = settingsPage();
         if (settings != null) {
             peers.add(settings);
@@ -202,8 +225,6 @@ public final class HohenheimPanel extends Panel {
         if (mounts.isEmpty()) {
             return null;
         }
-        return new SettingsPage(
-            Identifier.of("hohenheim", "settings"), "settings",
-            Microcopy.of("title").withFilter("scope", "settings"), Icon.of("gear"), mounts);
+        return new AdminSettingsPage(mounts);
     }
 }

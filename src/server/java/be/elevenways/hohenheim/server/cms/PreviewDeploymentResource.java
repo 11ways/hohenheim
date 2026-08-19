@@ -25,6 +25,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -68,6 +69,25 @@ public class PreviewDeploymentResource extends RowResource {
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.PROXY_GROUP; }
     @Override public int navOrder() { return 20; }
+
+    @Override public boolean showInNav() { return false; }
+
+
+    /**
+
+     * Declared even though /admin hides this peer: the DELEGATED subclass shows it (a tenant
+
+     * panel has no Sites list to hang the header link on) and inherits this sentence.
+
+     */
+
+    @Override
+
+    public @Nullable Microcopy description() {
+
+        return CmsSupport.navHint("preview_deployment");
+
+    }
     @Override public @NonNull Icon icon() { return Icon.of("flask"); }
 
     @Override public boolean creatable() { return true; }

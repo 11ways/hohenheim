@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.AccessListModel;
-
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.PasswordHasher;
@@ -11,11 +10,12 @@ import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -46,7 +46,12 @@ public final class AccessListResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(AccessListModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.PROXY_GROUP; }
-    @Override public int navOrder() { return 40; }
+    @Override public int navOrder() { return 30; }
+
+    @Override
+    public @Nullable Microcopy description() {
+        return Microcopy.of("nav_hint").withFilter("scope", "access_list");
+    }
     @Override public @NonNull Icon icon() { return Icon.of("shield-halved"); }
 
     @Override

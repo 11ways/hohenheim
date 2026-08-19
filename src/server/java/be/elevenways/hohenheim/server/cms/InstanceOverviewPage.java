@@ -23,6 +23,8 @@ import be.elevenways.zenit.cms.common.resource.RecordDashboardPage;
 import be.elevenways.zenit.cms.common.widget.RecordActionsWidget;
 import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ActivityRules;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -35,6 +37,7 @@ import be.elevenways.zenit.widget.common.builtin.ActionButtonWidget;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
 import be.elevenways.zenit.widget.common.builtin.AlertWidget;
 import be.elevenways.zenit.widget.common.builtin.FactWidget;
+import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import be.elevenways.zenit.widget.common.builtin.StatusWidget;
 import be.elevenways.zenit.widget.common.builtin.UsageBarWidget;
@@ -165,15 +168,31 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
             new WidgetInstance(InstanceEndpointsWidget.ID, Map.of())
                 .withData(endpointsOf(instanceId))))));
 
-        // AIDEV-NOTE: a per-record RECENT ACTIVITY band is NOT here, and the reason is
-        // upstream: zenit-cms's `zenit.activity` record source deliberately does not
-        // PROJECT record_id (ActivitySources.register), and a source's rule vocabulary is
-        // derived from its projection -- so `ActivityRules.forRecord` cannot validate
-        // against it and every render 500s on `unknown_variable: record_id`. Filtering on
-        // the model alone would list every instance's activity on one instance's page,
-        // which is worse than absence. Projecting record_id (or giving the source an
-        // explicit vocabulary) is the framework-side fix; do not work around it here by
-        // re-registering the shared source, which would replace its gates wholesale.
+        // AIDEV-NOTE: the per-record RECENT ACTIVITY band. It was blocked until zenit-cms's
+        // `zenit.activity` source started PROJECTING record_id: a source's rule vocabulary is
+        // derived from its projection, so `ActivityRules.forRecord` failed validation with
+        // `unknown_variable: record_id` and every render 500'd. The pairing itself stays
+        // ActivityRules' -- never a hand-spelled model token plus a stringified id here.
+        //
+        // AIDEV-NOTE: OPERATOR-ONLY, and deliberately by omission rather than by an empty
+        // list. The shared source is registered with HohenheimSources.ADMIN_ACCESS
+        // (HohenheimSources.register -> ActivitySources.register("admin", ADMIN_ACCESS)), so
+        // a tenant fails the source's own gate and would be shown a band that is always empty --
+        // a censoring that looks like a bug. This matches the host fact and the install error
+        // above: the delegated tree simply never grows the widget. Widening the audience is a
+        // decision about the AUDIT LOG, not about this page: the log carries every operator's
+        // actions on every record, including admin-only detail text.
+        if (!delegated) {
+            bands.add(band(new WidgetTree(List.of(
+                new WidgetInstance(RecordsWidget.ID, Map.of(
+                    "title", HohenheimWidgetCopy.localized("recent_activity", "instance_overview"),
+                    "source", CmsSupport.ACTIVITY_SOURCE,
+                    "rules", ActivityRules.forRecord(this.resource.model(), instanceId),
+                    "sort", ActivityModel.CREATED_AT.getName(),
+                    "descending", true,
+                    "limit", 10))))));
+        }
+
         return new WidgetTree(List.of(new WidgetInstance(SectionWidget.ID,
             Map.of("css_class", "hh-instance-overview"), new WidgetTree(bands))));
     }

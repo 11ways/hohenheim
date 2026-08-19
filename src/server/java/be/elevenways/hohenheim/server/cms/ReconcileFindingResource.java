@@ -66,6 +66,8 @@ public final class ReconcileFindingResource extends RowResource {
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.INFRA_GROUP; }
     @Override public int navOrder() { return 25; }
+
+    @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("magnifying-glass"); }
     @Override public boolean creatable() { return false; }
     @Override public boolean updatable() { return false; }
