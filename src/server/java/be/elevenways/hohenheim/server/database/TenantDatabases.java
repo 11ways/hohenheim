@@ -215,13 +215,12 @@ public final class TenantDatabases {
     }
 
     private static ManagedDatabase.@NonNull Engine engineOf(@NonNull String token) {
-        for (ManagedDatabase.Engine candidate : ManagedDatabase.Engine.values()) {
-            if (candidate.token().equals(token)) {
-                return candidate;
-            }
+        ManagedDatabase.Engine engine = ManagedDatabase.Engine.forToken(token);
+        if (engine == null) {
+            throw Violations.ofField(DatabaseModel.ENGINE.getName(), token,
+                CmsSupport.violationText("unknown_engine").withArg("engine", token));
         }
-        throw Violations.ofField(DatabaseModel.ENGINE.getName(), token,
-            CmsSupport.violationText("unknown_engine").withArg("engine", token));
+        return engine;
     }
 
     /** The label as an in-engine database name: hyphens are not portable identifiers. */

@@ -13,9 +13,12 @@ import be.elevenways.zenit.common.orm.model.Schema;
 /**
  * A managed database provisioned as a container by ManagedDatabase. Stores the desired
  * configuration (engine, image, credentials, initial database); runtime state (published
- * port, container id) is read from Docker on demand, not persisted. {@code engine} is the
- * lowercase token of {@code ManagedDatabase.Engine} ({@code "postgres"}, ...) -- kept as a
- * string because this model lives in the common source set, which can't see the server enum.
+ * port, container id) is read from Docker on demand, not persisted.
+ *
+ * AIDEV-NOTE: the ENGINE tokens declared here are the vocabulary's one home. The server's
+ * {@code ManagedDatabase.Engine} (which this common class cannot see) carries each token
+ * as its own constant and resolves through {@code Engine.forToken}; a drift test binds the
+ * two sets, so adding an engine on one side alone fails the build.
  */
 public class DatabaseModel extends Model {
 
@@ -43,11 +46,23 @@ public class DatabaseModel extends Model {
         .label(HohenheimFormCopy.label("name"))
         .help(HohenheimFormCopy.help("database_name"))
         .build());
+    /** {@link #ENGINE} token of the PostgreSQL engine. */
+    public static final String ENGINE_POSTGRES = "postgres";
+
+    /** {@link #ENGINE} token of the MySQL engine. */
+    public static final String ENGINE_MYSQL = "mysql";
+
+    /** {@link #ENGINE} token of the Redis engine. */
+    public static final String ENGINE_REDIS = "redis";
+
+    /** {@link #ENGINE} token of the MongoDB engine. */
+    public static final String ENGINE_MONGO = "mongo";
+
     public static final EnumField ENGINE = SCHEMA.addField(EnumField.builder("engine")
-        .value("postgres", v -> v.displayName("PostgreSQL").icon("database").color("blue"))
-        .value("mysql", v -> v.displayName("MySQL").icon("database").color("orange"))
-        .value("redis", v -> v.displayName("Redis").icon("bolt").color("red"))
-        .value("mongo", v -> v.displayName("MongoDB").icon("leaf").color("green"))
+        .value(ENGINE_POSTGRES, v -> v.displayName("PostgreSQL").icon("database").color("blue"))
+        .value(ENGINE_MYSQL, v -> v.displayName("MySQL").icon("database").color("orange"))
+        .value(ENGINE_REDIS, v -> v.displayName("Redis").icon("bolt").color("red"))
+        .value(ENGINE_MONGO, v -> v.displayName("MongoDB").icon("leaf").color("green"))
         .label(HohenheimFormCopy.label("engine"))
         .help(HohenheimFormCopy.help("engine"))
         .build());

@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
-import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.IOException;
@@ -39,23 +38,49 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public class ManagedDatabase {
 
-    /** Supported engines with their default image, port, data path, footprint, and env mapping. */
+    /**
+     * Supported engines with their stored token, default image, port, data path,
+     * footprint, and env mapping.
+     *
+     * AIDEV-NOTE: the token is DECLARED from {@link DatabaseModel}'s constant rather than
+     * derived from the enum name, so the stored vocabulary and this table are bound at the
+     * source. Resolution goes through {@link #forToken}, never {@code valueOf}: an unknown
+     * token must fail closed by name, and a rename of a constant here must not silently
+     * stop resolving stored rows.
+     */
     public enum Engine {
-        POSTGRES("postgres:17-alpine", 5432, "/var/lib/postgresql/data", 512),
-        MYSQL("mysql:8.0", 3306, "/var/lib/mysql", 1024),
-        REDIS("redis:7-alpine", 6379, "/data", 512),
-        MONGO("mongo:7", 27017, "/data/db", 1280);
+        POSTGRES(DatabaseModel.ENGINE_POSTGRES, "postgres:17-alpine", 5432,
+            "/var/lib/postgresql/data", 512),
+        MYSQL(DatabaseModel.ENGINE_MYSQL, "mysql:8.0", 3306, "/var/lib/mysql", 1024),
+        REDIS(DatabaseModel.ENGINE_REDIS, "redis:7-alpine", 6379, "/data", 512),
+        MONGO(DatabaseModel.ENGINE_MONGO, "mongo:7", 27017, "/data/db", 1280);
 
+        final String token;
         final String defaultImage;
         final int port;
         final String dataPath;
         final int footprintMb;
 
-        Engine(String defaultImage, int port, String dataPath, int footprintMb) {
+        Engine(String token, String defaultImage, int port, String dataPath, int footprintMb) {
+            this.token = token;
             this.defaultImage = defaultImage;
             this.port = port;
             this.dataPath = dataPath;
             this.footprintMb = footprintMb;
+        }
+
+        /**
+         * THE token-to-engine lookup.
+         *
+         * @return the engine storing this exact token, or null when no engine does
+         */
+        public static @Nullable Engine forToken(@Nullable String token) {
+            for (Engine engine : values()) {
+                if (engine.token.equals(token)) {
+                    return engine;
+                }
+            }
+            return null;
         }
 
         /**
@@ -105,7 +130,7 @@ public class ManagedDatabase {
 
         /** The lowercase token this engine is stored as ({@link DatabaseModel#ENGINE}). */
         public String token() {
-            return BlastString.lower(name());
+            return this.token;
         }
 
         /** The engine's own port INSIDE the container. */
@@ -322,11 +347,15 @@ public class ManagedDatabase {
     /**
      * The engine a database record declares.
      *
-     * @throws IllegalArgumentException when the stored token names no known engine
+     * @throws IllegalArgumentException naming the token when it matches no known engine
      */
     public static @NonNull Engine engineOf(@NonNull Row database) {
-        return Engine.valueOf(BlastString.upper(
-            String.valueOf((Object) database.get(DatabaseModel.ENGINE))));
+        String token = database.get(DatabaseModel.ENGINE);
+        Engine engine = Engine.forToken(token);
+        if (engine == null) {
+            throw new IllegalArgumentException("Unknown database engine token: " + token);
+        }
+        return engine;
     }
 
     private final DockerClient docker;
