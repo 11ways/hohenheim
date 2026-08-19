@@ -136,13 +136,13 @@ public final class SpamserviceClientsResource extends SpamserviceRemoteResource<
 
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> values, @NonNull AccessContext context) {
-        return this.requireClient().createClient(input(values)).id();
+        return this.requireClient().createClient(input(values, null)).id();
     }
 
     @Override
     public void updateRow(@NonNull ManagedClient existing, @NonNull Map<String, Object> values,
                           @NonNull AccessContext context) {
-        this.requireClient().updateClient(existing.id(), input(values), existing.revision());
+        this.requireClient().updateClient(existing.id(), input(values, existing), existing.revision());
     }
 
     @Override
@@ -184,23 +184,45 @@ public final class SpamserviceClientsResource extends SpamserviceRemoteResource<
 
     @Override public @Nullable String recordTitle(@NonNull ManagedClient row) { return row.name(); }
 
-    private static ManagedClientInput input(Map<String, Object> values) {
-        return new ManagedClientInput(String.valueOf(values.getOrDefault("name", "")),
-            bool(values, "enabled"), bool(values, "trusted"), bool(values, "provisioner"),
-            bool(values, "manager"), nullable(values, "allowed_languages"),
-            integer(values, "spam_threshold", 50), nullable(values, "notes"));
+    /**
+     * The whole remote client, filled from the STORED record wherever this write carries
+     * no value for a field.
+     *
+     * AIDEV-NOTE: the remote update is a revision-guarded full-DTO PUT, and the inline cell
+     * lane hands updateRow a map holding EXACTLY ONE entry. Building the DTO off that map
+     * alone would have DISABLED the client, dropped its language whitelist and reset its
+     * threshold to 50 on any single edit -- a live filter reconfigured by a rename. The
+     * stored record is the fallback here rather than a remote merge semantic, which the
+     * service's own API does not promise.
+     *
+     * @param stored the client being edited, or null on a create
+     */
+    private static ManagedClientInput input(Map<String, Object> values,
+                                            @Nullable ManagedClient stored) {
+        return new ManagedClientInput(
+            String.valueOf(CmsSupport.valueOf(values, "name", stored == null ? "" : stored.name())),
+            bool(values, "enabled", stored == null ? null : stored.enabled()),
+            bool(values, "trusted", stored == null ? null : stored.trusted()),
+            bool(values, "provisioner", stored == null ? null : stored.provisioner()),
+            bool(values, "manager", stored == null ? null : stored.manager()),
+            nullable(values, "allowed_languages", stored == null ? null : stored.allowedLanguages()),
+            integer(values, "spam_threshold", stored == null ? null : stored.spamThreshold(), 50),
+            nullable(values, "notes", stored == null ? null : stored.notes()));
     }
 
-    private static boolean bool(Map<String, Object> values, String name) {
-        return Boolean.TRUE.equals(values.get(name));
+    private static boolean bool(Map<String, Object> values, String name, @Nullable Object stored) {
+        return Boolean.TRUE.equals(CmsSupport.valueOf(values, name, stored));
     }
 
-    private static int integer(Map<String, Object> values, String name, int fallback) {
-        return values.get(name) instanceof Number number ? number.intValue() : fallback;
+    private static int integer(Map<String, Object> values, String name, @Nullable Object stored,
+                               int fallback) {
+        return CmsSupport.valueOf(values, name, stored) instanceof Number number
+            ? number.intValue() : fallback;
     }
 
-    private static @Nullable String nullable(Map<String, Object> values, String name) {
-        Object value = values.get(name);
+    private static @Nullable String nullable(Map<String, Object> values, String name,
+                                             @Nullable Object stored) {
+        Object value = CmsSupport.valueOf(values, name, stored);
         return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value).trim();
     }
 

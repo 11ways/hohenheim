@@ -77,7 +77,7 @@ public final class AuthProviderResource extends RowResource {
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
-        normalizeConfig(values, null);
+        normalizeConfig(values, null, null);
         return super.persistRow(values, accessContext);
     }
 
@@ -87,14 +87,27 @@ public final class AuthProviderResource extends RowResource {
         @SuppressWarnings("unchecked")
         Map<String, Object> existingConfig = (Map<String, Object>) existing.get(SiteAuthProviderModel.CONFIG);
         Map<String, Object> values = CmsSupport.mutable(coerced);
-        normalizeConfig(values, existingConfig);
+        normalizeConfig(values, existing, existingConfig);
         super.updateRow(existing, values, accessContext);
     }
 
+    /**
+     * Store the config in the shape its provider type declares.
+     *
+     * AIDEV-NOTE: the inline cell lane hands updateRow a map holding EXACTLY ONE entry.
+     * The type is therefore read through the stored value (reading it off the map refused
+     * a rename with "unknown_provider_type"), and a write that carries no {@code config}
+     * key leaves the column alone entirely -- normalizing an ABSENT config would have run
+     * the provider's storage shape over an empty submission and written the result.
+     *
+     * @param existing the stored row, or null on a create
+     */
     @SuppressWarnings("unchecked")
     private static void normalizeConfig(@NonNull Map<String, Object> coerced,
+                                        @Nullable Row existing,
                                         @Nullable Map<String, Object> existingConfig) {
-        Object typeValue = coerced.get("provider_type");
+        Object typeValue = CmsSupport.valueOf(coerced, existing,
+            SiteAuthProviderModel.PROVIDER_TYPE);
         String providerType = typeValue != null ? String.valueOf(typeValue) : null;
         SiteAuthProviderTypeHandler handler = SiteAuthProviders.getHandler(providerType);
         if (handler == null) {
@@ -103,7 +116,10 @@ public final class AuthProviderResource extends RowResource {
             throw Violations.ofField("provider_type", providerType,
                 CmsSupport.violationText("unknown_provider_type").withArg("type", providerType));
         }
-        Object rawConfig = coerced.get("config");
+        if (existing != null && !coerced.containsKey(SiteAuthProviderModel.CONFIG.getName())) {
+            return;
+        }
+        Object rawConfig = coerced.get(SiteAuthProviderModel.CONFIG.getName());
         Map<String, Object> submitted = rawConfig instanceof Map<?, ?> map
             ? (Map<String, Object>) map : Map.of();
         coerced.put("config", handler.normalizeConfigForSave(submitted, existingConfig));

@@ -153,7 +153,7 @@ public class CertificateResource extends RowResource {
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
-        validatePems(values);
+        validatePems(values, null);
         values.put("provider", "custom");
         values.put("status", CertificateModel.STATUS_ACTIVE);
         values.put(CertificateModel.AUTO_RENEW.getName(), false);
@@ -164,17 +164,30 @@ public class CertificateResource extends RowResource {
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
-        validatePems(values);
+        validatePems(values, existing);
         if (CertificateModel.DNS_PUBLISHER_MANUAL.equals(existing.get(CertificateModel.DNS_PUBLISHER))) {
             values.put(CertificateModel.AUTO_RENEW.getName(), false);
         }
         super.updateRow(existing, values, accessContext);
     }
 
-    private static void validatePems(@NonNull Map<String, Object> coerced) {
-        String certPem = trimmed(coerced.get("certificate_pem"));
-        String keyPem = trimmed(coerced.get("private_key_pem"));
-        String name = trimmed(coerced.get("nice_name"));
+    /**
+     * All three parts must be present and parseable, submitted or stored.
+     *
+     * AIDEV-NOTE: each read takes the STORED value when the write does not carry the key.
+     * The inline cell lane hands updateRow a map holding EXACTLY ONE entry, so demanding
+     * all three off that map refused every partial write with "cert_fields_required" --
+     * about a certificate body that was sitting in the row all along. Re-parsing the
+     * stored PEMs on an unrelated edit is deliberate: they are the record's whole point,
+     * and a row that cannot parse must not be saved further.
+     *
+     * @param existing the stored certificate, or null on a create
+     */
+    private static void validatePems(@NonNull Map<String, Object> coerced,
+                                     @Nullable Row existing) {
+        String certPem = CmsSupport.textOf(coerced, existing, CertificateModel.CERTIFICATE_PEM);
+        String keyPem = CmsSupport.textOf(coerced, existing, CertificateModel.PRIVATE_KEY_PEM);
+        String name = CmsSupport.textOf(coerced, existing, CertificateModel.NICE_NAME);
         if (name.isEmpty() || certPem.isEmpty() || keyPem.isEmpty()) {
             throw Violations.ofForm(CmsSupport.violationText("cert_fields_required"));
         }
@@ -193,9 +206,6 @@ public class CertificateResource extends RowResource {
         }
     }
 
-    private static @NonNull String trimmed(@Nullable Object value) {
-        return value != null ? String.valueOf(value).trim() : "";
-    }
 
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {

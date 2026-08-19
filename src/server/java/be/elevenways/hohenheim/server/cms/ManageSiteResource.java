@@ -85,11 +85,20 @@ public final class ManageSiteResource extends SiteResource {
         return Set.of();
     }
 
-    /** Apply only the explicit delegated form values; never run the admin source/type normalizers. */
+    /**
+     * Apply only the explicit delegated form values; never run the admin source/type
+     * normalizers.
+     *
+     * AIDEV-NOTE: all three reads take the STORED value when the write does not carry the
+     * key. The inline cell lane hands updateRow a map holding EXACTLY ONE entry, and this
+     * body set all three columns unconditionally: a description edit refused with
+     * "name_required", and an enabled site whose name was corrected was set enabled=null
+     * on the way through.
+     */
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        String name = coerced.get(SiteModel.NAME.getName()) instanceof String value ? value.trim() : "";
+        String name = CmsSupport.textOf(coerced, existing, SiteModel.NAME);
         if (name.isEmpty()) {
             throw Violations.ofField(SiteModel.NAME.getName(), name, CmsSupport.violationText("name_required"));
         }
@@ -98,10 +107,11 @@ public final class ManageSiteResource extends SiteResource {
         // flipping this checkbox goes live through model.save below, which the
         // write-pipeline enable invariant (SiteResource.installEnableInvariant)
         // funnels through exactly like every other writer.
-        Boolean enabled = (Boolean) coerced.get(SiteModel.ENABLED.getName());
         existing.set(SiteModel.NAME, name);
-        existing.set(SiteModel.ENABLED, enabled);
-        existing.set(SiteModel.DESCRIPTION, (String) coerced.get(SiteModel.DESCRIPTION.getName()));
+        existing.set(SiteModel.ENABLED,
+            (Boolean) CmsSupport.valueOf(coerced, existing, SiteModel.ENABLED));
+        existing.set(SiteModel.DESCRIPTION,
+            (String) CmsSupport.valueOf(coerced, existing, SiteModel.DESCRIPTION));
         this.model().save(existing);
     }
 

@@ -6,6 +6,7 @@ import be.elevenways.spamservice.client.ManagedClientKey;
 import be.elevenways.spamservice.client.SampleSummary;
 import be.elevenways.spamservice.client.SecurityEventEntry;
 import be.elevenways.spamservice.client.SpamserviceApiException;
+import be.elevenways.spamservice.client.SpamWordEntry;
 import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.RowAction;
@@ -180,6 +181,64 @@ class SpamserviceCmsContractTest {
         assertThat(method.get()).isEqualTo("PUT");
         assertThat(body.get()).contains("\"revision\":\"r1\"")
             .doesNotContain("external_id").doesNotContain("provisioned_by_client_id");
+    }
+
+    /**
+     * Steps 1-3: a one-entry write never blanks the rest of a remote record.
+     *
+     * AIDEV-NOTE: these three resources rebuild a FULL remote DTO from the coerced map, and
+     * the inline cell lane hands updateRow a map holding EXACTLY ONE entry -- so a rename
+     * used to PUT a disabled client with no language whitelist and a reset threshold to the
+     * live spam filter. The fix fills every field the write does not carry from the STORED
+     * record rather than assuming the remote API treats absence as unchanged; its source is
+     * outside this workspace and promises no such thing. The one place absence IS a
+     * documented "leave alone" is updateKey's nullable arguments, which the enable/revoke
+     * row actions already rely on.
+     */
+    @Test
+    void aOneEntryWriteKeepsEveryRemoteFieldItDoesNotCarry() throws Exception {
+        AtomicReference<String> body = new AtomicReference<>();
+        String clientId = UUID.randomUUID().toString();
+        String wordId = UUID.randomUUID().toString();
+        String keyId = UUID.randomUUID().toString();
+        SpamserviceClient client = client(exchange -> {
+            body.set(readBody(exchange));
+            return "{\"id\":\"" + clientId + "\",\"name\":\"Renamed\",\"enabled\":true,"
+                + "\"trusted\":true,\"provisioner\":true,\"manager\":false,\"external_id\":\"owned\","
+                + "\"provisioned_by_client_id\":null,\"allowed_languages\":\"eng,nld\","
+                + "\"spam_threshold\":80,\"notes\":\"keep this note\",\"created_at\":null,"
+                + "\"updated_at\":null,\"revision\":\"r2\"}";
+        });
+
+        // 1. A trusted, provisioning client with a language whitelist and a raised
+        //    threshold -- every one of them a setting a blank PUT would silently drop.
+        ManagedClient existing = new ManagedClient(clientId, "Original", true, true, true, false,
+            "owned", null, "eng,nld", 80, "keep this note", null, null, "r1");
+        new SpamserviceClientsResource(() -> client).updateRow(existing,
+            Map.of("name", "Renamed"), AccessContext.anonymous());
+
+        assertThat(body.get()).as("step 1: the rename is the only field that moved")
+            .contains("\"name\":\"Renamed\"").contains("\"enabled\":true")
+            .contains("\"trusted\":true").contains("\"provisioner\":true")
+            .contains("eng,nld").contains("\"spam_threshold\":80").contains("keep this note");
+
+        // 2. Same for a spam word: score, language and leet survive a correction of the
+        //    word itself.
+        new SpamserviceWordsResource(() -> client).updateRow(
+            new SpamWordEntry(wordId, "viagraa", 70, "eng", true, null, null),
+            Map.of("word", "viagra"), AccessContext.anonymous());
+
+        assertThat(body.get()).as("step 2: the word's score, language and leet flag survive")
+            .contains("\"word\":\"viagra\"").contains("\"score\":70")
+            .contains("eng").contains("\"leet\":true");
+
+        // 3. And a key write that carries no name must not rename the key to "null".
+        new SpamserviceClientKeysResource(() -> client).updateRow(
+            new ManagedClientKey(keyId, clientId, "primary", true, null, null),
+            Map.of("active", false), AccessContext.anonymous());
+
+        assertThat(body.get()).as("step 3: an absent name is sent as absent, never as \"null\"")
+            .doesNotContain("\"name\":\"null\"");
     }
 
     @Test

@@ -165,7 +165,7 @@ public class InstanceDeviceResource extends RowResource {
         String type = String.valueOf(coerced.get("type"));
 
         if (InstanceDeviceModel.TYPE_DISK.equals(type)) {
-            this.devices.attachDisk(instanceId, name, sizeOf(coerced));
+            this.devices.attachDisk(instanceId, name, sizeOf(coerced, null));
         } else if (InstanceDeviceModel.TYPE_NIC.equals(type)) {
             this.devices.attachNic(instanceId, name);
         } else if (InstanceDeviceModel.TYPE_CDROM.equals(type)) {
@@ -194,6 +194,12 @@ public class InstanceDeviceResource extends RowResource {
      * The only editable dimension is a disk's SIZE: a device's name, type and owning
      * instance are its identity at the daemon, and there is no rename or re-home
      * operation to honour a change of them with.
+     *
+     * AIDEV-NOTE: the three identity reads take the STORED value when the write does not
+     * carry the key, which on those keys means "unchanged" and passes. The inline cell
+     * lane hands updateRow a map holding EXACTLY ONE entry, so reading them straight off
+     * it made a resize refuse with "device_rename_unsupported" -- a refusal about a rename
+     * nobody asked for.
      */
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
@@ -202,13 +208,16 @@ public class InstanceDeviceResource extends RowResource {
         String name = existing.get(InstanceDeviceModel.NAME);
         String type = existing.get(InstanceDeviceModel.TYPE);
 
-        if (!String.valueOf(name).equals(String.valueOf(coerced.get("name")))) {
-            throw Violations.ofField("name", coerced.get("name"),
+        Object submittedName = CmsSupport.valueOf(coerced, existing, InstanceDeviceModel.NAME);
+        if (!String.valueOf(name).equals(String.valueOf(submittedName))) {
+            throw Violations.ofField("name", submittedName,
                 CmsSupport.violationText("device_rename_unsupported"));
         }
-        if (!String.valueOf(type).equals(String.valueOf(coerced.get("type")))
-                || instanceId != requireInstance(coerced.get("instance_id"))) {
-            throw Violations.ofField("type", coerced.get("type"),
+        Object submittedType = CmsSupport.valueOf(coerced, existing, InstanceDeviceModel.TYPE);
+        if (!String.valueOf(type).equals(String.valueOf(submittedType))
+                || instanceId != requireInstance(
+                    CmsSupport.valueOf(coerced, existing, InstanceDeviceModel.INSTANCE_ID))) {
+            throw Violations.ofField("type", submittedType,
                 CmsSupport.violationText("device_retype_unsupported"));
         }
         String storedMedia = existing.get(InstanceDeviceModel.SOURCE_MEDIA);
@@ -224,7 +233,7 @@ public class InstanceDeviceResource extends RowResource {
         if (!InstanceDeviceModel.TYPE_DISK.equals(type)) {
             throw Violations.ofForm(CmsSupport.violationText("device_resize_not_a_disk"));
         }
-        this.devices.resizeDisk(instanceId, name, sizeOf(coerced));
+        this.devices.resizeDisk(instanceId, name, sizeOf(coerced, existing));
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_resized", null);
     }
 
@@ -260,8 +269,9 @@ public class InstanceDeviceResource extends RowResource {
         return instanceId;
     }
 
-    private static int sizeOf(@NonNull Map<String, Object> coerced) {
-        Object size = coerced.get("size_gb");
+    /** The submitted size, else the stored one -- a write that carries no size resizes nothing. */
+    private static int sizeOf(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
+        Object size = CmsSupport.valueOf(coerced, existing, InstanceDeviceModel.SIZE_GB);
         if (size instanceof Number number) {
             return number.intValue();
         }

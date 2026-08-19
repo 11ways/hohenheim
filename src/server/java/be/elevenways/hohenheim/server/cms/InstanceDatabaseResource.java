@@ -177,14 +177,12 @@ public class InstanceDatabaseResource extends RowResource {
      * operator learns it while attaching rather than at the next start.
      */
     private void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
-        Integer instanceId = intOf(coerced.get("instance_id"),
-            existing != null ? existing.get(InstanceDatabaseModel.INSTANCE_ID) : null);
+        Integer instanceId = CmsSupport.intOf(coerced, existing, InstanceDatabaseModel.INSTANCE_ID);
         if (instanceId == null) {
             throw Violations.ofField("instance_id", null,
                 CmsSupport.violationText("instance_required"));
         }
-        Integer databaseId = intOf(coerced.get("database_id"),
-            existing != null ? existing.get(InstanceDatabaseModel.DATABASE_ID) : null);
+        Integer databaseId = CmsSupport.intOf(coerced, existing, InstanceDatabaseModel.DATABASE_ID);
         // AIDEV-NOTE: for a TENANT the authority decision comes BEFORE any lookup below,
         // because the lookups are UNSCOPED and their refusals used to be a cross-tenant
         // oracle: absent answered database_missing, wrong-host answered
@@ -266,13 +264,8 @@ public class InstanceDatabaseResource extends RowResource {
 
     private static @NonNull String prefixOf(@NonNull Map<String, Object> coerced,
                                             @Nullable Row existing) {
-        Object submitted = coerced.containsKey("env_prefix") ? coerced.get("env_prefix")
-            : existing != null ? existing.get(InstanceDatabaseModel.ENV_PREFIX) : null;
-        String prefix = submitted != null ? String.valueOf(submitted).trim() : "";
+        String prefix = CmsSupport.textOf(coerced, existing, InstanceDatabaseModel.ENV_PREFIX);
         return prefix.isEmpty() ? InstanceDatabaseModel.DEFAULT_PREFIX : prefix;
     }
 
-    private static @Nullable Integer intOf(@Nullable Object submitted, @Nullable Integer fallback) {
-        return submitted instanceof Integer i ? i : fallback;
-    }
 }

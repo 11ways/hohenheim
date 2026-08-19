@@ -169,10 +169,20 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
         return created.clientId() + "~" + created.id();
     }
 
+    /**
+     * Rename and enable/disable, each sent only when this write actually carries it.
+     *
+     * AIDEV-NOTE: the remote call already reads null as "leave alone" (the enable/revoke
+     * row actions rely on it), but the name was passed through String.valueOf, so a write
+     * that did not carry the key -- the inline cell lane hands updateRow a map holding
+     * EXACTLY ONE entry -- renamed the key to the literal text "null".
+     */
     @Override
     public void updateRow(@NonNull ManagedClientKey existing, @NonNull Map<String, Object> values,
                           @NonNull AccessContext context) {
-        this.requireClient().updateKey(existing.id(), String.valueOf(values.get("name")),
+        Object name = values.get("name");
+        this.requireClient().updateKey(existing.id(),
+            values.containsKey("name") && name != null ? String.valueOf(name) : null,
             values.get("active") instanceof Boolean active ? active : null);
     }
 

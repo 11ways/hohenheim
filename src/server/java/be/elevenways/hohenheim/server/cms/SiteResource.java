@@ -13,7 +13,6 @@ import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteTypes;
 import be.elevenways.hohenheim.server.sitetype.types.DevNamespaceSiteType;
 import be.elevenways.hohenheim.server.sitetype.types.DockerSiteType;
-import be.elevenways.hohenheim.server.sitetype.types.TlsPassthroughSiteType;
 import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -172,9 +171,8 @@ public class SiteResource extends RowResource {
         }
         values.put("slug", slugify(name));
         values.put("status", SiteModel.STATUS_ACTIVE);
-        normalizeSource(values);
-        normalizeDevNamespace(values);
-        validateTlsPassthrough(values);
+        normalizeSource(values, null);
+        normalizeDevNamespace(values, null);
         return super.persistRow(values, accessContext);
     }
 
@@ -182,16 +180,25 @@ public class SiteResource extends RowResource {
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
-        String name = trimmed(values.get("name"));
+        // AIDEV-NOTE: every read below goes through CmsSupport's stored-value fallback
+        // because the inline cell lane hands this a map with EXACTLY ONE entry: reading
+        // "name" off the map alone refused a save that never touched it, and
+        // normalizeSource's unconditional put blanked a git site's source.
+        String name = CmsSupport.textOf(values, existing, SiteModel.NAME);
         if (name.isEmpty()) {
             throw Violations.ofField("name", name, CmsSupport.violationText("name_required"));
         }
-        normalizeSource(values);
-        normalizeDevNamespace(values);
-        validateTlsPassthrough(values);
+        normalizeSource(values, existing);
+        normalizeDevNamespace(values, existing);
         // The enable invariant is NOT re-checked here: it runs in the SiteModel
         // write pipeline (installEnableInvariant), which super.updateRow's save
         // funnels through -- one enforcement point for every writer.
+        // AIDEV-NOTE: the tls-passthrough refusals are enforced there too, by the
+        // SiteModel beforeValidate hook, which reads through partial rows (effective())
+        // and throws the very same three violations. The copy that used to stand here
+        // read auth_provider_id/access_list_id/source straight off the coerced map, so on
+        // a one-entry map it PASSED a combination the row already held -- a duplicate
+        // vocabulary that was also the weaker of the two. Do not reintroduce it.
         super.updateRow(existing, values, accessContext);
     }
 
@@ -307,30 +314,30 @@ public class SiteResource extends RowResource {
         SiteDomainResource.refuseEnableRouteConflicts(existing.get(SiteModel.ID));
     }
 
-    private static void validateTlsPassthrough(Map<String, Object> values) {
-        if (!TlsPassthroughSiteType.ID.toString().equals(values.get("site_type"))) return;
-        if (values.get("auth_provider_id") != null) {
-            throw Violations.ofField("auth_provider_id", values.get("auth_provider_id"),
-                CmsSupport.violationText("tls_passthrough_no_http_auth"));
-        }
-        if (values.get("access_list_id") != null) {
-            throw Violations.ofField("access_list_id", values.get("access_list_id"),
-                CmsSupport.violationText("tls_passthrough_no_access_list"));
-        }
-        if (values.get("source") != null) {
-            throw Violations.ofField("source", values.get("source"),
-                CmsSupport.violationText("tls_passthrough_local_only"));
-        }
-    }
-
     /**
      * Normalize the source discriminator: "local" stores as null and clears
      * the git settings; "git" keeps them and mints a webhook secret when none
      * exists yet (keep-on-blank for an existing secret is the framework's
      * FormSecrets contract -- webhook_secret is a .secret() field).
+     *
+     * AIDEV-NOTE: reading the discriminator through the STORED value is what makes this
+     * safe, and it is load-bearing: the inline cell lane hands updateRow a map with EXACTLY
+     * ONE entry, so reading {@code source} off that map alone made the branch below fire
+     * {@code put("source", null)} on a rename -- a silent de-provisioning of a
+     * git-provisioned site, no refusal, no log, the repository simply gone from the record
+     * (falsified 2026-08-19: restoring the map-only read makes the guard name the lost
+     * column). The early return on top is the second half: a write carrying neither key is
+     * not a source edit and should not rewrite either column at all.
+     *
+     * @param existing the stored row, or null on a create
      */
-    private static void normalizeSource(@NonNull Map<String, Object> coerced) {
-        String source = trimmed(coerced.get("source"));
+    private static void normalizeSource(@NonNull Map<String, Object> coerced,
+                                        @Nullable Row existing) {
+        if (existing != null && !coerced.containsKey(SiteModel.SOURCE.getName())
+                && !coerced.containsKey(SiteModel.SOURCE_SETTINGS.getName())) {
+            return;
+        }
+        String source = CmsSupport.textOf(coerced, existing, SiteModel.SOURCE);
         if (!SiteModel.SOURCE_GIT.equals(source)) {
             coerced.put("source", null);
             coerced.put("source_settings", null);
@@ -338,9 +345,10 @@ public class SiteResource extends RowResource {
         }
         coerced.put("source", SiteModel.SOURCE_GIT);
         @SuppressWarnings("unchecked")
-        Map<String, Object> sourceSettings = coerced.get("source_settings") instanceof Map<?, ?> map
-            ? new HashMap<>((Map<String, Object>) map)
-            : new HashMap<>();
+        Map<String, Object> sourceSettings =
+            CmsSupport.valueOf(coerced, existing, SiteModel.SOURCE_SETTINGS) instanceof Map<?, ?> map
+                ? new HashMap<>((Map<String, Object>) map)
+                : new HashMap<>();
         if (isBlank(sourceSettings.get("webhook_secret"))) {
             sourceSettings.put("webhook_secret", UUID.randomUUID().toString());
         }
@@ -351,15 +359,25 @@ public class SiteResource extends RowResource {
      * Mint a registration token for a dev-namespace site that has none yet (a
      * blank submit on an existing secret was already restored by the secrets
      * contract before this runs, so blank here really means absent).
+     *
+     * AIDEV-NOTE: both reads take the stored value when the write does not carry the key
+     * (the one-entry immutable cell map). Seeding the settings from an absent key would
+     * have written a map holding nothing but a freshly minted token over the site's whole
+     * configuration.
+     *
+     * @param existing the stored row, or null on a create
      */
-    private static void normalizeDevNamespace(@NonNull Map<String, Object> coerced) {
-        if (!DevNamespaceSiteType.ID.toString().equals(coerced.get("site_type"))) {
+    private static void normalizeDevNamespace(@NonNull Map<String, Object> coerced,
+                                              @Nullable Row existing) {
+        if (!DevNamespaceSiteType.ID.toString().equals(
+                CmsSupport.valueOf(coerced, existing, SiteModel.SITE_TYPE))) {
             return;
         }
         @SuppressWarnings("unchecked")
-        Map<String, Object> settings = coerced.get("settings") instanceof Map<?, ?> map
-            ? new HashMap<>((Map<String, Object>) map)
-            : new HashMap<>();
+        Map<String, Object> settings =
+            CmsSupport.valueOf(coerced, existing, SiteModel.SETTINGS) instanceof Map<?, ?> map
+                ? new HashMap<>((Map<String, Object>) map)
+                : new HashMap<>();
         if (isBlank(settings.get(DevNamespaceSiteType.REGISTRATION_TOKEN_KEY))) {
             settings.put(DevNamespaceSiteType.REGISTRATION_TOKEN_KEY,
                 "zdev_" + SecureTokens.randomToken(24));
