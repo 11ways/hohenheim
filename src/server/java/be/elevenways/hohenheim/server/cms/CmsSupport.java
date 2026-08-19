@@ -73,14 +73,11 @@ public final class CmsSupport {
         return existing != null ? existing.get(field) : null;
     }
 
-    /**
-     * {@link #valueOf} for a resource whose stored record is not a {@link Row} (the typed
-     * remote resources): the caller reads the stored value off its own record type.
-     */
-    public static @Nullable Object valueOf(@NonNull Map<String, Object> coerced,
-                                           @NonNull String name, @Nullable Object stored) {
-        return coerced.containsKey(name) ? coerced.get(name) : stored;
-    }
+    // AIDEV-NOTE: there is deliberately NO valueOf(coerced, String, Object) overload for
+    // record types that are not a Row: that shape is exactly Map.getOrDefault (a present
+    // null value reads as null in both, so the deliberate-clear rule above holds), and
+    // getOrDefault is the framework's own documented sibling-read spelling. The Row form
+    // stays because a Row keyed by Field cannot express it.
 
     /** {@link #valueOf} as a trimmed string; absent, null and blank all read as {@code ""}. */
     public static @NonNull String textOf(@NonNull Map<String, Object> coerced,
