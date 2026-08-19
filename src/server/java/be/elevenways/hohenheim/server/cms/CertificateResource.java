@@ -215,6 +215,8 @@ public class CertificateResource extends RowResource {
             .icon(Icon.of("download"))
             .url(row -> new Uri(HohenheimEndpoints.CERTIFICATES_DOWNLOAD
                 .with(HohenheimEndpoints.CERT_ID, row.get(CertificateModel.ID)).toUrl()))
+            // Exporting the PEM is rare next to edit/delete: overflow, not inline.
+            .inlineInRow(false)
             .build());
         return actions;
     }

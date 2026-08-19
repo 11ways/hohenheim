@@ -32,7 +32,7 @@ class CmsAdminSmokeTest extends HohenheimTestBase {
         // AdminNavigationJourneyTest owns the full curated inventory and its reachability.
         assertThat(sidebar).doesNotContain("Auth providers");
         assertThat(sidebar).contains("Databases");
-        assertThat(sidebar).contains("Servers");
+        assertThat(sidebar).contains("Hosts");
         assertThat(sidebar).contains("Notification channels");
         assertThat(sidebar).contains("Activity");
         assertThat(sidebar).contains("Settings");

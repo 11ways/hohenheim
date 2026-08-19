@@ -37,11 +37,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class SecondaryZoneService {
 
-    /** {@link DnsZoneModel#TRANSFER_STATUS} values. */
-    public static final String STATUS_OK = "ok";
-    public static final String STATUS_ERROR = "error";
-    public static final String STATUS_EXPIRED = "expired";
-
     private static final Duration TICK = Duration.ofSeconds(30);
 
     private final DnsZoneStore store;
@@ -95,7 +90,7 @@ public final class SecondaryZoneService {
             int expire = valueOr(zone.get(DnsZoneModel.SOA_EXPIRE), 1209600);
             if (System.currentTimeMillis() - zs.lastSuccessEpochMs > expire * 1000L) {
                 // The replica outlived its SOA expire while we were down: do not serve it.
-                zone.set(DnsZoneModel.TRANSFER_STATUS, STATUS_EXPIRED);
+                zone.set(DnsZoneModel.TRANSFER_STATUS, DnsZoneModel.TRANSFER_EXPIRED);
                 Models.get(DnsZoneModel.class).save(zone);
                 continue;
             }
@@ -204,7 +199,7 @@ public final class SecondaryZoneService {
                 Long remoteSerial = DnsSoaProbe.serial(host.trim(), port, origin);
                 stampChecked(zone);
                 if (remoteSerial != null && serialNotNewer(remoteSerial, localSerial)
-                        && STATUS_OK.equals(zone.get(DnsZoneModel.TRANSFER_STATUS))) {
+                        && DnsZoneModel.TRANSFER_OK.equals(zone.get(DnsZoneModel.TRANSFER_STATUS))) {
                     scheduleRefresh(zone, zs);
                     return true; // already current
                 }
@@ -220,7 +215,7 @@ public final class SecondaryZoneService {
 
             zs.lastSuccessEpochMs = System.currentTimeMillis();
             applySoa(zone, snapshot.getSoa());
-            zone.set(DnsZoneModel.TRANSFER_STATUS, STATUS_OK);
+            zone.set(DnsZoneModel.TRANSFER_STATUS, DnsZoneModel.TRANSFER_OK);
             zone.set(DnsZoneModel.TRANSFER_MESSAGE, null);
             zone.set(DnsZoneModel.LAST_TRANSFER_AT, Instant.now());
             zone.set(DnsZoneModel.LAST_CHECKED_AT, Instant.now());
@@ -254,11 +249,11 @@ public final class SecondaryZoneService {
         if (lastSuccess != 0 && System.currentTimeMillis() - lastSuccess > expire * 1000L) {
             // Past the expire window: stop serving stale data (keep retrying).
             store.removeSecondarySnapshot(zone.get(DnsZoneModel.ORIGIN));
-            zone.set(DnsZoneModel.TRANSFER_STATUS, STATUS_EXPIRED);
+            zone.set(DnsZoneModel.TRANSFER_STATUS, DnsZoneModel.TRANSFER_EXPIRED);
             Blast.log("DNS: secondary zone", zone.get(DnsZoneModel.ORIGIN), "expired -", message);
         }
         else {
-            zone.set(DnsZoneModel.TRANSFER_STATUS, STATUS_ERROR);
+            zone.set(DnsZoneModel.TRANSFER_STATUS, DnsZoneModel.TRANSFER_ERROR);
             Blast.log("DNS: secondary transfer of", zone.get(DnsZoneModel.ORIGIN), "failed -", message);
         }
         zone.set(DnsZoneModel.TRANSFER_MESSAGE, truncate(message));
@@ -270,7 +265,7 @@ public final class SecondaryZoneService {
     }
 
     private void markError(@NonNull Row zone, @NonNull ZoneState zs, @NonNull String message) {
-        zone.set(DnsZoneModel.TRANSFER_STATUS, STATUS_ERROR);
+        zone.set(DnsZoneModel.TRANSFER_STATUS, DnsZoneModel.TRANSFER_ERROR);
         zone.set(DnsZoneModel.TRANSFER_MESSAGE, truncate(message));
         zone.set(DnsZoneModel.LAST_CHECKED_AT, Instant.now());
         Models.get(DnsZoneModel.class).save(zone);

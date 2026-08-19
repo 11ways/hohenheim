@@ -122,7 +122,7 @@ public final class IncusContainerKind implements InstanceKindHandler {
     public @NonNull Identifier typeId() { return ID; }
 
     @Override
-    public @NonNull String getDisplayName() { return "Incus container"; }
+    public @NonNull String getDisplayName() { return "System container (LXC)"; }
 
     @Override
     public @NonNull Microcopy getLabel() {

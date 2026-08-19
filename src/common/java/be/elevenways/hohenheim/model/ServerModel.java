@@ -135,6 +135,7 @@ public class ServerModel extends Model {
         .value(POSTURE_VM_ISOLATED, v -> v.displayName("VM isolated").icon("boxes-stacked")
             .label(Microcopy.of("vm_isolated").withFilter("scope", "host_posture")).color("green"))
         .defaultValue(POSTURE_TRUSTED_ONLY)
+        .label(HohenheimFormCopy.label("posture")).help(HohenheimFormCopy.help("posture"))
         .build());
 
     /**
@@ -158,6 +159,7 @@ public class ServerModel extends Model {
         .value(ADMISSION_CORDONED, v -> v.displayName("Cordoned").icon("circle-pause")
             .label(Microcopy.of("cordoned").withFilter("scope", "host_admission")).color("orange"))
         .defaultValue(ADMISSION_BLOCKED)
+        .label(HohenheimFormCopy.label("admission")).help(HohenheimFormCopy.help("admission"))
         .build());
 
     /** The stored preflight report: one JSON map of named checks plus probed facts. */

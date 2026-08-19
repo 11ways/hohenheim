@@ -27,7 +27,7 @@ public class DnsZoneModel extends Model {
     public static final StringField SOA_CONTACT = SCHEMA.addField(StringField.builder().name("soa_contact")
         .label(HohenheimFormCopy.label("soa_contact")).help(HohenheimFormCopy.help("soa_contact")).build());
     public static final IntegerField SERIAL = SCHEMA.addField(IntegerField.builder().name("serial").defaultValue(1)
-        .label(HohenheimFormCopy.label("serial")).build());
+        .label(HohenheimFormCopy.label("serial")).help(HohenheimFormCopy.help("serial")).build());
     public static final IntegerField DEFAULT_TTL = SCHEMA.addField(IntegerField.builder().name("default_ttl").defaultValue(3600)
         .suffix("s").label(HohenheimFormCopy.label("default_ttl")).help(HohenheimFormCopy.help("default_ttl")).build());
     public static final IntegerField NEGATIVE_TTL = SCHEMA.addField(IntegerField.builder().name("negative_ttl").defaultValue(300)
@@ -58,14 +58,38 @@ public class DnsZoneModel extends Model {
         IntegerField.builder().name("primary_peer_id")
             .label(HohenheimFormCopy.label("primary_peer"))
             .help(HohenheimFormCopy.help("primary_peer")).build());
-    public static final StringField TRANSFER_STATUS = SCHEMA.addField(
-        StringField.builder().name("transfer_status").build());
+    /** {@link #TRANSFER_STATUS} value: the last AXFR from the primary peer succeeded. */
+    public static final String TRANSFER_OK = "ok";
+    /** {@link #TRANSFER_STATUS} value: the last AXFR attempt failed; the replica still serves. */
+    public static final String TRANSFER_ERROR = "error";
+    /** {@link #TRANSFER_STATUS} value: the SOA expire window elapsed, so the replica stopped serving. */
+    public static final String TRANSFER_EXPIRED = "expired";
+
+    /**
+     * Replication outcome of a SECONDARY zone; a primary zone never carries one.
+     *
+     * AIDEV-NOTE: this is the vocabulary's ONE declaring home -- {@code SecondaryZoneService}
+     * writes these constants, it does not keep its own spelling of them.
+     */
+    public static final EnumField TRANSFER_STATUS = SCHEMA.addField(EnumField.builder("transfer_status")
+        .value(TRANSFER_OK, v -> v.displayName("Transferred").icon("circle-check")
+            .label(Microcopy.of("transferred").withFilter("scope", "dns_transfer")).color("green"))
+        .value(TRANSFER_ERROR, v -> v.displayName("Transfer failed").icon("triangle-exclamation")
+            .label(Microcopy.of("failed").withFilter("scope", "dns_transfer")).color("red"))
+        .value(TRANSFER_EXPIRED, v -> v.displayName("Expired").icon("hourglass-end")
+            .label(Microcopy.of("expired").withFilter("scope", "dns_transfer")).color("orange"))
+        .label(HohenheimFormCopy.label("transfer_status"))
+        .help(HohenheimFormCopy.help("transfer_status")).build());
     public static final StringField TRANSFER_MESSAGE = SCHEMA.addField(
-        StringField.builder().name("transfer_message").build());
+        StringField.builder().name("transfer_message")
+            .label(HohenheimFormCopy.label("transfer_message"))
+            .help(HohenheimFormCopy.help("transfer_message")).build());
     public static final DateTimeField LAST_CHECKED_AT = SCHEMA.addField(
         DateTimeField.builder().name("last_checked_at").build());
     public static final DateTimeField LAST_TRANSFER_AT = SCHEMA.addField(
-        DateTimeField.builder().name("last_transfer_at").build());
+        DateTimeField.builder().name("last_transfer_at")
+            .label(HohenheimFormCopy.label("last_transfer_at"))
+            .help(HohenheimFormCopy.help("last_transfer_at")).build());
     public static final StringField REPLICA_RECORDS = SCHEMA.addField(
         StringField.builder().name("replica_records").build());
 
