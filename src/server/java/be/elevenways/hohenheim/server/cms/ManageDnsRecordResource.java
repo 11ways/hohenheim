@@ -128,20 +128,46 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
      * substring, so asking for them costs every other zone's apex.
      */
     private static @Nullable String relativeTerm(@NonNull String term) {
-        String best = null;
-        int bestOrigin = -1;
-        for (Row zone : Models.get(DnsZoneModel.class).find().all()) {
+        ZoneMatch match = hostingZone(term);
+        return match == null || DnsNames.APEX.equals(match.owner()) ? null : match.owner();
+    }
+
+    /** A hosted zone paired with the owner a name resolves to inside it. */
+    private record ZoneMatch(@NonNull Row zone, @NonNull String owner) {}
+
+    /**
+     * The hosted zone whose origin is the longest suffix of {@code fqdn}, and the owner the
+     * name resolves to inside it.
+     *
+     * AIDEV-NOTE: the candidates are the SUFFIXES of the typed name -- at most one per label,
+     * resolved through the {@code dns_zones_origin_unique} index. Both callers used to read
+     * the WHOLE dns_zones table instead: on the search path that was a full table scan per
+     * rendered list, walking zones the caller has no access to in order to compute a string
+     * prefix.
+     */
+    private static @Nullable ZoneMatch hostingZone(@NonNull String fqdn) {
+        String name = DnsNames.canonicalName(fqdn);
+        List<String> origins = DnsNames.candidateOrigins(name);
+        if (origins.isEmpty()) {
+            return null;
+        }
+
+        Row best = null;
+        int bestLength = -1;
+        for (Row zone : Models.get(DnsZoneModel.class).find()
+                .where(DnsZoneModel.ORIGIN.in(origins)).all()) {
             String origin = zone.get(DnsZoneModel.ORIGIN);
-            if (origin == null) {
-                continue;
-            }
-            String owner = DnsNames.relative(origin, term.trim());
-            if (owner != null && !DnsNames.APEX.equals(owner) && origin.length() > bestOrigin) {
-                best = owner;
-                bestOrigin = origin.length();
+            // Longest matching origin wins: a delegated child zone owns its own names.
+            if (origin != null && origin.length() > bestLength) {
+                best = zone;
+                bestLength = origin.length();
             }
         }
-        return best;
+        if (best == null) {
+            return null;
+        }
+        String owner = DnsNames.relative(best.get(DnsZoneModel.ORIGIN), name);
+        return owner == null ? null : new ZoneMatch(best, owner);
     }
 
     /** The list renders the absolute name; a tenant has no relative-to-what to read it against. */
@@ -203,36 +229,18 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
         String fqdn = raw != null ? String.valueOf(raw).trim()
             : existing != null ? absoluteName(existing) : "";
 
-        Row bestZone = null;
-        String bestOwner = null;
-        for (Row zone : Models.get(DnsZoneModel.class).find().all()) {
-            String origin = zone.get(DnsZoneModel.ORIGIN);
-            if (origin == null) {
-                continue;
-            }
-            String owner = DnsNames.relative(origin, fqdn);
-            if (owner == null) {
-                continue;
-            }
-            // Longest matching origin wins: a delegated child zone owns its own names.
-            if (bestZone == null || origin.length()
-                    > String.valueOf(bestZone.get(DnsZoneModel.ORIGIN)).length()) {
-                bestZone = zone;
-                bestOwner = owner;
-            }
-        }
-
-        if (bestZone == null) {
+        ZoneMatch match = hostingZone(fqdn);
+        if (match == null) {
             throw Violations.ofField(DnsRecordModel.NAME.getName(), fqdn,
                 CmsSupport.violationText("tenant_record_no_zone"));
         }
-        Integer zoneId = bestZone.get(DnsZoneModel.ID);
+        Integer zoneId = match.zone().get(DnsZoneModel.ID);
         if (existing != null && !zoneId.equals(existing.get(DnsRecordModel.ZONE_ID))) {
             throw Violations.ofField(DnsRecordModel.NAME.getName(), fqdn,
                 CmsSupport.violationText("tenant_zone_frozen"));
         }
 
-        values.put(DnsRecordModel.NAME.getName(), bestOwner);
+        values.put(DnsRecordModel.NAME.getName(), match.owner());
         values.put(DnsRecordModel.ZONE_ID.getName(), zoneId);
         return values;
     }
