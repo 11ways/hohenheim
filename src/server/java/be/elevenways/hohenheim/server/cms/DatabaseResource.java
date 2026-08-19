@@ -140,10 +140,8 @@ public class DatabaseResource extends RowResource {
             throw Violations.ofField("name", name, CmsSupport.violationText("name_format"));
         }
         String engineToken = trimmed(coerced.get("engine")).toLowerCase(Locale.ROOT);
-        ManagedDatabase.Engine engine;
-        try {
-            engine = ManagedDatabase.Engine.valueOf(engineToken.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
+        ManagedDatabase.Engine engine = ManagedDatabase.Engine.forToken(engineToken);
+        if (engine == null) {
             throw Violations.ofField("engine", engineToken,
                 CmsSupport.violationText("unknown_engine").withArg("engine", engineToken));
         }

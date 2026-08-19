@@ -17,7 +17,6 @@ import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DoubleField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
@@ -203,13 +202,13 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
      */
     static ManagedDatabase.@NonNull Engine engineOf(@NonNull Map<String, Object> settings) {
         String token = str(settings.get("engine"));
-        try {
-            return ManagedDatabase.Engine.valueOf(BlastString.upper(token));
-        } catch (IllegalArgumentException unknown) {
+        ManagedDatabase.Engine engine = ManagedDatabase.Engine.forToken(token);
+        if (engine == null) {
             throw Violations.ofField("settings.engine", token,
                 Microcopy.of("database_engine_unknown").withFilter("scope", "violations")
                     .withArg("engine", token));
         }
+        return engine;
     }
 
     private static String str(Object value) {
