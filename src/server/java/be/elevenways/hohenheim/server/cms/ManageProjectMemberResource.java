@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -74,6 +75,8 @@ public final class ManageProjectMemberResource extends Resource<ManageProjectMem
         return CmsSupport.navHint("project_member");
     }
     @Override public @NonNull Icon icon() { return Icon.of("users"); }
+
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     @Override public boolean creatable() { return false; }
     @Override public boolean updatable() { return false; }

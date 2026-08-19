@@ -27,6 +27,7 @@ import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -86,7 +87,10 @@ public class InstanceResource extends RowResource {
             .clearable(!Boolean.TRUE.equals(InstanceModel.KIND.getAttribute(FieldAttributes.REQUIRED)))
             .build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
-        .add(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID).build())
+        // A host is admitted, preflighted and trusted before it can carry anything, so it
+        // is never created from inside another record's form.
+        .add(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID)
+            .creatable(false).build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
         .add(RelationPick.of(InstanceModel.BACKUP_TARGET_ID, BackupTargetModel.MODEL_ID)
             .clearable(true).build())
@@ -142,6 +146,11 @@ public class InstanceResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    /**
+     * Same shape as sites: an instance fleet is the other list that outgrows a filter row,
+     * so it keeps both the rule builder and per-operator saved views.
+     */
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.DEFAULT; }
 
     /** The name is the only text an instance carries; everything else is structure. */
     @Override

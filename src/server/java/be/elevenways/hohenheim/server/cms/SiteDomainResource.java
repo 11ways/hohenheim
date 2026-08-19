@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.sitetype.types.TlsPassthroughSiteType;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -111,6 +112,7 @@ public class SiteDomainResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(SiteDomainModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     /** A route is looked up by the host it answers on and the path it claims. */
     @Override

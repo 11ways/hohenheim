@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -58,6 +59,7 @@ public final class ReleaseOperationResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(ReleaseOperationModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+    @Override public @NonNull ListChrome listChrome() { return CmsSupport.WIDE_LIST; }
 
     /** A release is traced back from the image it shipped or the reason it did not. */
     @Override
