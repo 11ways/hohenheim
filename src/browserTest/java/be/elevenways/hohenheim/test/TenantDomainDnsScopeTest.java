@@ -7,8 +7,12 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
+import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
+import be.elevenways.zenit.cms.common.schema.TableView;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -944,6 +948,131 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             .isIn(403, 404);
 
         certModel.delete(certModel.findById(mineId));
+    }
+
+    /**
+     * The delegated list's search rewrite, asserted on the ROWS IT RETURNS.
+     *
+     * AIDEV-NOTE: the previous coverage checked the rewritten STRING and was green while the
+     * rewrite was returning the wrong rows -- a term equal to a hosted origin relativized to
+     * the apex marker "@", which harvested every zone's apex and dropped every genuine hit.
+     * Every assertion below therefore names a row, and both equals-origin shapes (the plain
+     * one and the nested-origin one the longest-origin tie-break used to collapse) are here
+     * explicitly.
+     */
+    @Test
+    @Order(11)
+    void searchingAHostedOriginReturnsItsMatchesAndNoOtherZonesApex() {
+        var zoneModel = Models.get(DnsZoneModel.class);
+        var recordModel = Models.get(DnsRecordModel.class);
+
+        Integer outerId = searchZone(zoneModel, "searchscope.test");
+        Integer nestedId = searchZone(zoneModel, "sub.searchscope.test");
+        Integer unrelatedId = searchZone(zoneModel, "apexleak.test");
+
+        // The apex rows: stored as "@", and the ones a "@" search used to harvest wholesale.
+        searchRecord(recordModel, outerId, DnsNames.APEX, "10.5.0.71");
+        searchRecord(recordModel, nestedId, DnsNames.APEX, "10.5.0.72");
+        searchRecord(recordModel, unrelatedId, DnsNames.APEX, "10.5.0.73");
+        // An ordinary owner, and the genuine VALUE hits an apex rewrite destroyed.
+        searchRecord(recordModel, outerId, "www", "10.5.0.74");
+        Row aliasOuter = searchAlias(recordModel, outerId, "alias-outer", "searchscope.test");
+        Row aliasNested = searchAlias(recordModel, outerId, "alias-nested", "sub.searchscope.test");
+
+        try {
+            // 1. A term EQUAL to a hosted origin: the genuine value hit comes back...
+            List<Row> outer = manageSearch("searchscope.test");
+            assertThat(ids(outer))
+                .as("a CNAME whose value is the typed origin is a genuine match")
+                .contains(aliasOuter.get(DnsRecordModel.ID));
+
+            // 2. ...and no other zone's apex row rides along with it.
+            assertThat(ids(outer))
+                .as("an unrelated zone's apex row is not an answer to this search")
+                .doesNotContain(apexId(recordModel, unrelatedId));
+
+            // 3. The NESTED-origin shape, which the longest-origin tie-break collapsed the
+            //    same way even though a shorter hosted origin could still relativize it.
+            List<Row> nested = manageSearch("sub.searchscope.test");
+            assertThat(ids(nested))
+                .as("the nested origin's genuine value hit survives too")
+                .contains(aliasNested.get(DnsRecordModel.ID));
+            assertThat(ids(nested))
+                .as("and it still harvests no unrelated apex")
+                .doesNotContain(apexId(recordModel, unrelatedId));
+
+            // 4. The rewrite the whole method exists for is untouched: an absolute name below
+            //    a hosted origin still finds the row stored under its relative owner.
+            assertThat(names(manageSearch("www.searchscope.test")))
+                .as("an ordinary absolute name still resolves to its stored relative owner")
+                .contains("www");
+        } finally {
+            for (Row row : recordModel.find()
+                    .where(DnsRecordModel.ZONE_ID.in(List.of(outerId, nestedId, unrelatedId))).all()) {
+                recordModel.delete(row);
+            }
+            for (Integer id : List.of(outerId, nestedId, unrelatedId)) {
+                zoneModel.delete(zoneModel.findById(id));
+            }
+            DnsZoneStore.INSTANCE.reload();
+        }
+    }
+
+    /** The delegated list's own read path, driven as the operator (who is scoped to everything). */
+    private static List<Row> manageSearch(String term) {
+        ManageDnsRecordResource resource = new ManageDnsRecordResource();
+        TableView.Applied<Row> applied = TableView
+            .forPrincipal(adminPrincipal.id(), resource.id()).build()
+            .apply(resource.tableSpec())
+            .withSearch(term);
+        return resource.listRows(applied,
+            AccessContext.of(TenantConduits.stubFor(adminPrincipal)));
+    }
+
+    private static List<Object> ids(List<Row> rows) {
+        return rows.stream().map(row -> (Object) row.get(DnsRecordModel.ID)).toList();
+    }
+
+    private static List<String> names(List<Row> rows) {
+        return rows.stream().map(row -> (String) row.get(DnsRecordModel.NAME)).toList();
+    }
+
+    private static Object apexId(Model model, Integer zone) {
+        return model.find().where(DnsRecordModel.ZONE_ID.eq(zone))
+            .where(DnsRecordModel.NAME.eq(DnsNames.APEX)).first().get(DnsRecordModel.ID);
+    }
+
+    private static Integer searchZone(Model model, String origin) {
+        Row zone = model.createEmptyRow();
+        zone.set(DnsZoneModel.ORIGIN, origin);
+        zone.set(DnsZoneModel.ENABLED, true);
+        zone.set(DnsZoneModel.DEFAULT_TTL, 3600);
+        model.save(zone);
+        return zone.get(DnsZoneModel.ID);
+    }
+
+    private static Row searchRecord(Model model, Integer zone, String name, String value) {
+        Row row = model.createEmptyRow();
+        row.set(DnsRecordModel.ZONE_ID, zone);
+        row.set(DnsRecordModel.NAME, name);
+        row.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_A);
+        row.set(DnsRecordModel.VALUE, value);
+        row.set(DnsRecordModel.TTL, 300);
+        row.set(DnsRecordModel.ENABLED, true);
+        TenantConduits.as(adminPrincipal, () -> model.save(row));
+        return row;
+    }
+
+    private static Row searchAlias(Model model, Integer zone, String name, String target) {
+        Row row = model.createEmptyRow();
+        row.set(DnsRecordModel.ZONE_ID, zone);
+        row.set(DnsRecordModel.NAME, name);
+        row.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_CNAME);
+        row.set(DnsRecordModel.VALUE, target);
+        row.set(DnsRecordModel.TTL, 300);
+        row.set(DnsRecordModel.ENABLED, true);
+        TenantConduits.as(adminPrincipal, () -> model.save(row));
+        return row;
     }
 
     /** Grant and PROVE it landed: grant() over a live deny is a documented silent no-op. */

@@ -98,9 +98,17 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
      * AIDEV-NOTE: this list RENDERS absolute names while the column STORES relative owners,
      * so the inherited searchFields(NAME, VALUE) matched nothing for anyone who typed what
      * they were looking at. The term is rewritten to the owner relative to its hosted zone
-     * before the query sees it. That widens rather than narrows the VALUE arm too -- the
-     * relative form is a substring of the absolute one and the match is a contains -- so no
-     * row that matched before stops matching.
+     * before the query sees it, and ONLY when that owner is a real substring of the typed
+     * text -- which is what makes the rewrite a widening: the match is a contains, so every
+     * row the typed term matched still matches.
+     *
+     * AIDEV-NOTE: that property was CLAIMED here before and was FALSE. A term equal to a
+     * hosted origin relativizes to the APEX marker "@", which is not a substring of anything
+     * the operator typed: searching "example.com" rewrote to "@" and returned the apex rows
+     * of EVERY visible zone while losing every genuine hit (a CNAME whose value is
+     * "example.com" does not contain "@"). The longest-origin tie-break made it worse -- with
+     * example.com and sub.example.com both hosted, "sub.example.com" collapsed the same way.
+     * An apex owner is therefore NOT a rewrite; see {@link #relativeTerm}.
      */
     @Override
     public @NonNull List<Row> listRows(TableView.@NonNull Applied<Row> applied,
@@ -110,7 +118,15 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
         return super.listRows(relative == null ? applied : applied.withSearch(relative), accessContext);
     }
 
-    /** @return the term relative to the longest hosted zone containing it, or null when none does */
+    /**
+     * The typed term rewritten to the owner relative to the longest hosted zone containing
+     * it, or null when no rewrite applies.
+     *
+     * AIDEV-NOTE: null for an APEX owner is the whole point, not an oversight. The residual
+     * is deliberate and narrow: an exact-origin search matches by VALUE only, because the
+     * apex rows a tenant would also want are stored as "@" and the search lane carries one
+     * substring, so asking for them costs every other zone's apex.
+     */
     private static @Nullable String relativeTerm(@NonNull String term) {
         String best = null;
         int bestOrigin = -1;
@@ -120,7 +136,7 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
                 continue;
             }
             String owner = DnsNames.relative(origin, term.trim());
-            if (owner != null && !owner.isEmpty() && origin.length() > bestOrigin) {
+            if (owner != null && !DnsNames.APEX.equals(owner) && origin.length() > bestOrigin) {
                 best = owner;
                 bestOrigin = origin.length();
             }
