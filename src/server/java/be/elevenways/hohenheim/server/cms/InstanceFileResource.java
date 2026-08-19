@@ -90,17 +90,33 @@ public final class InstanceFileResource extends RowResource {
         return Map.copyOf(values);
     }
 
+
+    /**
+     * The path a file lands on and the mode it lands with -- the two answers an operator
+     * corrects while reading the list, and both staged into the container at the next
+     * DEPLOY rather than at this click.
+     *
+     * AIDEV-NOTE: CONTENT is excluded and always will be: it is the file BODY, encrypted
+     * at rest and routinely multi-line, so a one-line cell is the wrong instrument for
+     * it. Both cells still run {@code validatePathAndMode}, which is written
+     * containsKey-first and therefore correct on the one-entry map this lane sends.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(InstanceFileModel.CONTAINER_PATH, InstanceFileModel.MODE);
+    }
+
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        InstanceTemplateFileResource.validatePathAndMode(coerced);
-        return super.persistRow(coerced, accessContext);
+        return super.persistRow(
+            InstanceTemplateFileResource.validatePathAndMode(coerced), accessContext);
     }
 
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        InstanceTemplateFileResource.validatePathAndMode(coerced);
-        super.updateRow(existing, coerced, accessContext);
+        super.updateRow(existing,
+            InstanceTemplateFileResource.validatePathAndMode(coerced), accessContext);
     }
 }
