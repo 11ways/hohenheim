@@ -8973,5 +8973,33 @@
   "access_rule_provider_missing": {
     "text": "Kies de aanmeldbron die deze regel vereist",
     "scope": "violations"
+  },
+  "reissue": {
+    "text": "Aanpassen & opnieuw uitgeven",
+    "scope": "certificate"
+  },
+  "reissue_certificate": {
+    "text": "Certificaat aanpassen & opnieuw uitgeven",
+    "scope": "certificate_request"
+  },
+  "reissue_submit": {
+    "text": "Certificaat opnieuw uitgeven",
+    "scope": "certificate_request"
+  },
+  "reissue_notice": {
+    "text": "Dit vervangt het certificaat op het bestaande record. Er verandert niets tot het nieuwe certificaat is uitgegeven: mislukt de aanvraag, dan blijft het huidige certificaat dienen en vernieuwen.",
+    "scope": "certificate_request"
+  },
+  "reissue_unavailable": {
+    "text": "Dat certificaat kan niet opnieuw uitgegeven worden; enkel Let's Encrypt-certificaten kunnen opnieuw besteld worden.",
+    "scope": "certificate_request_error"
+  },
+  "reissue_manual_unsupported": {
+    "text": "Handmatige TXT-records kunnen een bestaand certificaat niet opnieuw uitgeven. Kies een andere DNS-publicatiemodus of start een nieuwe aanvraag.",
+    "scope": "certificate_request_error"
+  },
+  "reissue_failed": {
+    "text": "Opnieuw uitgeven mislukt, het bestaande certificaat is behouden: {$reason}",
+    "scope": "certificate_request_error"
   }
 }

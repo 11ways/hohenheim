@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -216,6 +217,21 @@ public class CertificateResource extends RowResource {
             .url(row -> new Uri(HohenheimEndpoints.CERTIFICATES_DOWNLOAD
                 .with(HohenheimEndpoints.CERT_ID, row.get(CertificateModel.ID)).toUrl()))
             // Exporting the PEM is rare next to edit/delete: overflow, not inline.
+            .inlineInRow(false)
+            .build());
+        // Re-ordering a certificate is how a domain is added or HTTP-01/DNS-01 is switched:
+        // the row's own domain list and challenge are readonly on the form because they
+        // describe what the CA actually issued, and only a new order may change them.
+        actions.add(RowAction.Url.<Row>builder(Identifier.of("hohenheim", "reissue_certificate"))
+            .label(Microcopy.of("reissue").withFilter("scope", "certificate"))
+            .icon(Icon.of("rotate"))
+            .url(row -> new Uri(CmsRoutes.list("admin", "certificates-request")
+                .with(HohenheimParams.CERTIFICATE_REISSUE, row.get(CertificateModel.ID)).toUrl()))
+            // A manual upload has no order to repeat, and the ACME account row is not a
+            // certificate at all. The page and the handler refuse them again -- this only
+            // stops offering an action that could never succeed.
+            .visibleFor((row, ctx) -> CertificateModel.PROVIDER_LETSENCRYPT
+                .equals(row.get(CertificateModel.PROVIDER)))
             .inlineInRow(false)
             .build());
         return actions;

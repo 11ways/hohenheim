@@ -94,6 +94,17 @@ public final class HohenheimParams {
         ParameterDefinition.builder(String.class).name("record")
             .stringResolver(value -> value).build();
 
+    /**
+     * The query name of {@link #CERTIFICATE_REISSUE}, which the page READS by name --
+     * a definition composes a URL but exposes no accessor to read one back.
+     */
+    public static final String CERTIFICATE_REISSUE_NAME = "cert_id";
+
+    /** The stored certificate the request page re-issues instead of creating a new one. */
+    public static final ParameterDefinition<Integer> CERTIFICATE_REISSUE =
+        ParameterDefinition.builder(Integer.class).name(CERTIFICATE_REISSUE_NAME)
+            .stringResolver(Integer::parseInt).build();
+
     /** The manual-DNS challenge token the certificate request page resumes with. */
     public static final ParameterDefinition<String> MANUAL_CHALLENGE =
         ParameterDefinition.builder(String.class).name("manual")
