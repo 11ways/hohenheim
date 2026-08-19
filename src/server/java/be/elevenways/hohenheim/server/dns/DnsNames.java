@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.dns;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -75,12 +77,37 @@ public final class DnsNames {
         return owner + "." + origin;
     }
 
-    /** @return the relative owner for a fully qualified name, or null when outside the zone */
-    public static @Nullable String relative(@NonNull String origin, @NonNull String fqdn) {
-        String name = fqdn.toLowerCase(Locale.ROOT);
+    /** @return the name folded and stripped of trailing dots, comparable against an origin */
+    public static @NonNull String canonicalName(@NonNull String fqdn) {
+        String name = fqdn.trim().toLowerCase(Locale.ROOT);
         while (name.endsWith(".")) {
             name = name.substring(0, name.length() - 1);
         }
+        return name;
+    }
+
+    /**
+     * Every suffix of a name that could be the origin of a zone containing it, itself
+     * included, longest first -- one candidate per label, so an indexed origin lookup
+     * replaces a walk over every hosted zone.
+     */
+    public static @NonNull List<String> candidateOrigins(@NonNull String fqdn) {
+        List<String> origins = new ArrayList<>();
+        String rest = canonicalName(fqdn);
+        while (!rest.isEmpty()) {
+            origins.add(rest);
+            int dot = rest.indexOf('.');
+            if (dot < 0) {
+                break;
+            }
+            rest = rest.substring(dot + 1);
+        }
+        return origins;
+    }
+
+    /** @return the relative owner for a fully qualified name, or null when outside the zone */
+    public static @Nullable String relative(@NonNull String origin, @NonNull String fqdn) {
+        String name = canonicalName(fqdn);
         if (name.equals(origin)) {
             return APEX;
         }

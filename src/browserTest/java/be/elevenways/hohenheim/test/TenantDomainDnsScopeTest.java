@@ -1006,6 +1006,17 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             assertThat(names(manageSearch("www.searchscope.test")))
                 .as("an ordinary absolute name still resolves to its stored relative owner")
                 .contains("www");
+
+            // 5. And the term is resolved through an INDEXED origin lookup rather than a walk
+            //    over every hosted zone: the rewrite used to read the whole dns_zones table on
+            //    every searched render, including zones the caller cannot see.
+            assertThat(zoneModel.find().count())
+                .as("the budget below is only meaningful against several hosted zones")
+                .isGreaterThanOrEqualTo(4);
+            assertThat(zoneRowsLoadedBy(() -> manageSearch("www.searchscope.test")))
+                .as("zone rows read to relativize one search term: at most one per label of "
+                    + "the typed name, never the whole table")
+                .isLessThanOrEqualTo(3);
         } finally {
             for (Row row : recordModel.find()
                     .where(DnsRecordModel.ZONE_ID.in(List.of(outerId, nestedId, unrelatedId))).all()) {
@@ -1015,6 +1026,33 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
                 zoneModel.delete(zoneModel.findById(id));
             }
             DnsZoneStore.INSTANCE.reload();
+        }
+    }
+
+    private static final java.util.concurrent.atomic.AtomicInteger ZONE_ROWS =
+        new java.util.concurrent.atomic.AtomicInteger(-1);
+    private static final java.util.concurrent.atomic.AtomicBoolean ZONE_HOOK =
+        new java.util.concurrent.atomic.AtomicBoolean();
+
+    /**
+     * @return how many dns_zones ROWS the body loaded -- the budget a full table read breaks,
+     *         which a find COUNT cannot see (the old walk and the indexed lookup are both one
+     *         query; only the rows they return differ)
+     */
+    private static int zoneRowsLoadedBy(Runnable body) {
+        if (ZONE_HOOK.compareAndSet(false, true)) {
+            DnsZoneModel.SCHEMA.addAfterFindHook(found -> {
+                if (ZONE_ROWS.get() >= 0) {
+                    ZONE_ROWS.addAndGet(found.getRows().size());
+                }
+            });
+        }
+        ZONE_ROWS.set(0);
+        try {
+            body.run();
+            return ZONE_ROWS.get();
+        } finally {
+            ZONE_ROWS.set(-1);
         }
     }
 
