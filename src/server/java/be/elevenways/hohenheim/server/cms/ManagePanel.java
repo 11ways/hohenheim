@@ -222,9 +222,16 @@ public final class ManagePanel extends Panel {
         // DNS records have no display fields and therefore no derived source. This one scopes
         // child rows by their parent zone: a tenant reaches names inside a zone it cannot
         // otherwise enumerate.
+        // The create half serves the list pages' quick-add bar. It is ADMIN-gated on top
+        // of the source's own read scope, because its form carries zone_id: adding "into
+        // an arbitrary zone" is an operator act, while a tenant's create lane is
+        // ManageDnsRecordResource's form, which resolves the zone from the name it typed.
+        // The write pipeline (TenantWrites) stays the gate either way -- this only decides
+        // which surface is OFFERED.
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(DnsRecordModel.class)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
             .accessCriteria(ManagePanel::dnsRecordScope)
+            .creatable(new DnsQuickCreateProvider(), HohenheimSources.ADMIN_ACCESS)
             .build());
 
         // Certificates: this REPLACES the common ADMIN_ACCESS-gated registration (which the

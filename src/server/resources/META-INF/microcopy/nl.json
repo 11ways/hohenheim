@@ -2837,6 +2837,10 @@
     "text": "Voeg A/AAAA-records toe voor je hosts en NS-records voor de zone zelf.",
     "scope": "dns_zone"
   },
+  "records_unavailable": {
+    "text": "De DNS-rol staat uit op deze node, dus records zijn hier niet op te lijsten.",
+    "scope": "dns_zone"
+  },
   "zone_file_description": {
     "text": "De zone in standaard master-bestandsformaat; uitgeschakelde rijen staan als commentaar.",
     "scope": "dns_zone"

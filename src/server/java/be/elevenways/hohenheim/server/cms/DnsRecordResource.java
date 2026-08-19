@@ -12,6 +12,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -24,6 +25,7 @@ import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -32,6 +34,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,6 +47,12 @@ import java.util.Map;
  * exist only on address records.
  */
 public class DnsRecordResource extends RowResource {
+
+    /** The list's quick-add entries; the zone rides along as a host-supplied preset. */
+    private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
+        .of(DnsRecordModel.TYPE.getName(), DnsRecordModel.NAME.getName(),
+            DnsRecordModel.VALUE.getName(), DnsRecordModel.TTL.getName())
+        .presets(DnsRecordModel.ZONE_ID.getName());
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(DnsRecordModel.ZONE_ID, DnsZoneModel.MODEL_ID).build())
@@ -58,8 +67,16 @@ public class DnsRecordResource extends RowResource {
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(DnsRecordModel.NAME).filterable().build())
         .column(ColumnSpec.fromField(DnsRecordModel.TYPE).filterable().build())
-        .column(ColumnSpec.fromField(DnsRecordModel.VALUE).filterable().build())
+        // An operator copies a record's value into a resolver check far more often
+        // than they read it, so the cell carries the copy chip.
+        .column(ColumnSpec.fromField(DnsRecordModel.VALUE).filterable().copyable().build())
+        .column(ColumnSpec.fromField(DnsRecordModel.TTL).build())
         .column(ColumnSpec.fromField(DnsRecordModel.ENABLED).filterable().build())
+        // AIDEV-NOTE: managed_by is a COLUMN rather than a badge because the zone's
+        // Records tab renders this same spec: the tab used to show a bare "managed"
+        // pill, which named neither the owner nor the reason. A column that says
+        // "acme" says both, and the inline-cell lane re-renders from these columns.
+        .column(ColumnSpec.fromField(DnsRecordModel.MANAGED_BY).build())
         .column(ColumnSpec.fromField(DnsRecordModel.ZONE_ID)
             .relation(RelationPick.of(DnsRecordModel.ZONE_ID, DnsZoneModel.MODEL_ID).build()).build())
         .filter(FilterSpec.forField(DnsRecordModel.NAME, FilterSpec.Kind.TEXT)
@@ -94,18 +111,85 @@ public class DnsRecordResource extends RowResource {
         return TenantWrites.mayAuthorRecord(accessContext, record);
     }
 
-    /** The zone's Records tab links here with ?zone_id= so the pick is preselected. */
+    /**
+     * The zone's Records tab links here with ?zone_id= so the pick is preselected.
+     *
+     * AIDEV-NOTE: the field-declared defaults are merged back in. Overriding this hook
+     * REPLACES the base implementation, which is what serves them, so the create form
+     * used to open with Enabled unticked and create a disabled record.
+     */
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
-        String zoneId = conduit.getQueryParam("zone_id");
-        if (zoneId != null && !zoneId.isEmpty()) {
-            try {
-                return Map.of("zone_id", Integer.parseInt(zoneId));
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
-            }
+        Map<String, Object> values = new LinkedHashMap<>(this.formSpec().defaultValues());
+        Integer zoneId = prefilledZoneId(conduit);
+        if (zoneId != null) {
+            values.put(DnsRecordModel.ZONE_ID.getName(), zoneId);
         }
-        return Map.of();
+        return values;
+    }
+
+    /** Name and value are what an operator scans a zone for; the rest is structure. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(DnsRecordModel.NAME, DnsRecordModel.VALUE);
+    }
+
+    /**
+     * The list's quick-add bar. The zone is a PRESET rather than a rendered pick:
+     * every surface that offers this bar is already scoped to one zone.
+     *
+     * AIDEV-NOTE: TYPE renders even though MX and SRV cannot be completed here --
+     * their sub-schema ({@code SchemaField.schemaFrom("type")}) has no room in a
+     * one-line bar. That is not a DNS special case in the bar: the type option
+     * carries the sub-schema fact off its own enum member, so the framework flips
+     * Add into a link to the full form on its own. Adding a type here therefore
+     * needs no change in either place.
+     */
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return QUICK_CREATE;
+    }
+
+    /**
+     * The zone the bar adds into, from the same {@code ?zone_id=} the create link
+     * carries. The generated list without one renders no bar (an unanswered preset
+     * would fail every add on a field nothing shows); the zone's Records tab hands
+     * the element its own preset map instead.
+     */
+    @Override
+    public @NonNull Map<String, Object> quickCreatePresetValues(@NonNull AccessContext accessContext) {
+        Conduit conduit = accessContext.conduit();
+        Integer zoneId = conduit != null ? prefilledZoneId(conduit) : null;
+        return zoneId != null ? Map.of(DnsRecordModel.ZONE_ID.getName(), zoneId) : Map.of();
+    }
+
+    /**
+     * The columns an operator retypes without opening the record: a TTL bump and a
+     * value correction are the everyday DNS edits.
+     *
+     * AIDEV-NOTE: TYPE is deliberately absent. Switching it swaps the DATA
+     * sub-schema the type declares, so the write drops or demands typed extras a
+     * one-cell editor never showed -- that belongs on the full form, where those
+     * fields render.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(DnsRecordModel.NAME, DnsRecordModel.VALUE,
+            DnsRecordModel.TTL, DnsRecordModel.ENABLED);
+    }
+
+    /** @return the zone a request is scoped to through its {@code ?zone_id=} prefill, or null */
+    private static @Nullable Integer prefilledZoneId(@NonNull Conduit conduit) {
+        String zoneId = conduit.getQueryParam(DnsRecordModel.ZONE_ID.getName());
+        if (zoneId == null || zoneId.isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(zoneId);
+        } catch (NumberFormatException malformed) {
+            // Malformed prefill: no preselection, never a broken form.
+            return null;
+        }
     }
 
     @Override

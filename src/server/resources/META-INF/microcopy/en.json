@@ -2837,6 +2837,10 @@
     "text": "Add A/AAAA records for your hosts and NS records for the zone itself.",
     "scope": "dns_zone"
   },
+  "records_unavailable": {
+    "text": "The DNS role is off on this node, so records cannot be listed here.",
+    "scope": "dns_zone"
+  },
   "zone_file_description": {
     "text": "The zone in standard master-file format; disabled rows appear as comments.",
     "scope": "dns_zone"

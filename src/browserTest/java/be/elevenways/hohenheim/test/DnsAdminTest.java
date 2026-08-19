@@ -151,7 +151,13 @@ class DnsAdminTest extends HohenheimTestBase {
         navigateToApp("/admin/dns-zones/" + zoneId + "/page/records");
         waitForHydration();
         assertThat(page.locator("body").textContent()).contains("www").contains("192.0.2.10");
-        assertThat(page.locator("a[href='/admin/dns-records/" + recordId + "']").count()).isEqualTo(1);
+        // The tab renders the record RESOURCE's own row surface, so the record is reachable
+        // twice by design: the title cell links to it, and so does the synthesized Edit row
+        // action beside it (the shape every generated list has).
+        assertThat(page.locator("a[href='/admin/dns-records/" + recordId + "']").count())
+            .as("the title link plus the synthesized edit action").isEqualTo(2);
+        assertThat(page.locator("cms-inline-cell").count())
+            .as("and its editable cells are offered in place").isGreaterThan(0);
         assertThat(page.locator("#add-record-link").count()).isEqualTo(1);
 
         navigateToApp("/admin/dns-zones/" + zoneId + "/page/zonefile");

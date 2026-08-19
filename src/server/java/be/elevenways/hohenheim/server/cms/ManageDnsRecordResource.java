@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -74,6 +75,17 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
         };
     }
 
+    /**
+     * No quick-add bar here: the admin declaration presets {@code zone_id}, which this
+     * form does not carry at all -- a tenant names the record absolutely and the zone is
+     * RESOLVED from it (a zone picker is the permanent non-goal this resource exists to
+     * avoid). Inheriting that declaration would refuse this peer's registration outright.
+     */
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return null;
+    }
+
     /** The list renders the absolute name; a tenant has no relative-to-what to read it against. */
     @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
@@ -115,6 +127,12 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
     /**
      * Split the submitted absolute name into (zone, relative owner).
      *
+     * AIDEV-NOTE: a submitted name WINS, an absent one falls back to the stored row's own
+     * absolute name -- the per-key partial-update semantic DnsRecordEdits already applies.
+     * Without the fallback an update carrying only some entries (the inline cell lane
+     * commits exactly ONE) resolved an empty name and refused with "no hosted zone contains
+     * this name", which is a message about a field the operator never touched.
+     *
      * @throws Violations when no hosted zone contains the name, or when an edit would move
      *         the row into a different zone (a re-home is a takeover primitive the write
      *         pipeline refuses anyway; refusing it here keeps the row and its owner label
@@ -124,7 +142,8 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
                                                      @Nullable Row existing) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         Object raw = values.get(DnsRecordModel.NAME.getName());
-        String fqdn = raw != null ? String.valueOf(raw).trim() : "";
+        String fqdn = raw != null ? String.valueOf(raw).trim()
+            : existing != null ? absoluteName(existing) : "";
 
         Row bestZone = null;
         String bestOwner = null;

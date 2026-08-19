@@ -11,39 +11,85 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.cms.common.schema.TableView;
+import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.edit.FieldAccess;
+import be.elevenways.zenit.common.edit.FormEntry;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.field.TextSearchable;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.BoundEndpoint;
+import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Records tab on a DNS zone, linking into the (nav-hidden) record resource
- * forms.
+ * Records tab on a DNS zone: the zone's own records rendered through the record
+ * resource's declarations (search, quick-add, inline-editable cells, row actions),
+ * or -- on a SECONDARY zone -- the owning peer's records read through its API.
  */
 public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
+
+    /** This page's template, shared by the available and unavailable branches. */
+    private static final Identifier TEMPLATE = Identifier.of("hohenheim", "cms/dns-zone-records");
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_records"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("records").withFilter("scope", "dns_zone"); }
     @Override public @NonNull String slug() { return "records"; }
     @Override public @NonNull Icon icon() { return Icon.of("list-ul"); }
+
+    /** The DNS record resource lives only on the admin panel. */
+    private static final String PANEL = "admin";
+
+    /** The record resource's slug, for the panel lookup this page's links then read off it. */
+    private static final String RECORD_SLUG = "dns-records";
+
+    /**
+     * The plain search term, named after the framework's own {@code cms-list-search} input:
+     * the box on this page is that element, so the page reads and re-binds the parameter it
+     * submits rather than inventing one.
+     */
+    private static final String SEARCH = "search";
+
+    private static final ParameterDefinition<String> SEARCH_PARAM =
+        ParameterDefinition.builder(String.class).name(SEARCH).build();
+
+    /**
+     * The columns this tab shows, in this order: the zone itself is the page, so the
+     * resource's zone column would repeat the heading on every row.
+     */
+    private static final List<String> COLUMNS = List.of(
+        DnsRecordModel.NAME.getName(), DnsRecordModel.TYPE.getName(),
+        DnsRecordModel.VALUE.getName(), DnsRecordModel.TTL.getName(),
+        DnsRecordModel.ENABLED.getName(), DnsRecordModel.MANAGED_BY.getName());
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
@@ -52,40 +98,193 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
             return renderRemote(conduit, zone);
         }
+        return renderLocal(conduit, accessContext, zone);
+    }
+
+    /**
+     * A PRIMARY zone's own records, rendered through the record resource's declarations:
+     * its table spec (typed cells, the per-type badge the TYPE enum declares, the copy
+     * chip), its row actions, its search fields, its quick-add bar and its inline-editable
+     * cells. The page stays bespoke ONLY for what the generated list cannot know: the zone
+     * scope and the zone preset the add bar carries.
+     */
+    private @NonNull ActionResult<?> renderLocal(@NonNull Conduit conduit,
+                                                 @NonNull AccessContext accessContext,
+                                                 @NonNull Row zone) {
         Integer zoneId = zone.get(DnsZoneModel.ID);
         String origin = zone.get(DnsZoneModel.ORIGIN);
 
-        List<DnsRecordView> records = new ArrayList<>();
-        for (Row record : Models.get(DnsRecordModel.class).find()
-                .where(DnsRecordModel.ZONE_ID.eq(zoneId))
-                .orderBy(DnsRecordModel.NAME, SortOrder.ASC)
-                .all()) {
-            Integer recordId = record.get(DnsRecordModel.ID);
-            records.add(new DnsRecordView(
-                text(recordId),
-                text(record.get(DnsRecordModel.NAME)),
-                text(record.get(DnsRecordModel.TYPE)),
-                text(record.get(DnsRecordModel.TTL)),
-                displayValue(record),
-                Boolean.TRUE.equals(record.get(DnsRecordModel.ENABLED)),
-                record.get(DnsRecordModel.MANAGED_BY) != null,
-                // The DNS record resource lives only on the admin panel.
-                CmsRoutes.detail("admin", "dns-records", recordId)));
+        Panel panel = PanelRegistry.getBySlug(PANEL);
+        DnsRecordResource resource = panel != null
+            && panel.peerBySlug(RECORD_SLUG) instanceof DnsRecordResource peer ? peer : null;
+        if (resource == null) {
+            // The DNS role is off, so the record resource is not on the panel at all.
+            return new RenderTemplateResult(TEMPLATE, unavailableVars(conduit, zone));
         }
+
+        String search = trimmedSearch(conduit);
+        List<Row> records = zoneRecords(zoneId, search, resource.searchFields());
+        TableView.Applied<Row> applied = TableView
+            .forPrincipal(accessContext.principal().id(), resource.id())
+            .visibleColumns(COLUMNS)
+            .build()
+            .apply(resource.tableSpec());
+
+        BoundEndpoint<?> listTarget = CmsRoutes.subpage(PANEL, "dns-zones", zoneId, this.slug());
+        String listUrl = listTarget.toUrl();
+        // An add returns to the listing AS IT STANDS, so a search made before it survives.
+        // Rebuilt from the state this render knows rather than echoed from the request URL:
+        // the kept select picks are appended to it per add, and echoing would stack them.
+        String refreshUrl = search != null
+            ? listTarget.with(SEARCH_PARAM, search).toUrl() : listUrl;
+        // Outgoing record links carry a return target only when this listing carries state
+        // worth coming back TO (a search): the bare tab URL is already the record form's
+        // recomputed fallback, so a stateless page keeps clean links. Same rule the
+        // generated list applies.
+        String returnTo = search != null ? ReturnTarget.capture(conduit) : null;
+        TableState table = new TableStateTranslator().translate(
+            applied,
+            records,
+            resource::rowKey,
+            row -> resource.rowCells(applied, row),
+            resource.rowActions(),
+            (actionId, row) -> new Uri(ReturnTarget.bind(
+                CmsRoutes.invokeRow(PANEL, resource.slug(), resource.rowKey(row), actionId),
+                returnTo).toUrl()),
+            column -> null,
+            row -> recordUrl(resource, row, returnTo),
+            row -> resource.updatable() && resource.updatableBy(row, accessContext)
+                ? recordUrl(resource, row, returnTo) : null,
+            row -> resource.deletable() && resource.deletableBy(row, accessContext)
+                ? ReturnTarget.bind(CmsRoutes.delete(PANEL, resource.slug(), resource.rowKey(row)),
+                    returnTo).toUrl()
+                : null,
+            resource.deleteConfirmation(),
+            row -> editableCells(resource, applied, row, accessContext),
+            accessContext);
+
+        RouteTarget addRecordTarget = CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, PANEL)
+            .with(CmsEndpoints.RESOURCE_PARAM, resource.slug())
+            .with(HohenheimParams.ZONE_ID_PREFILL, zoneId);
 
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, "dns_zone_records", origin));
         vars.put("zoneId", zoneId);
         vars.put("origin", origin);
-        vars.put("records", records);
-        // Create form + prefill query parameter: composed off CmsEndpoints, since
-        // CmsRoutes.create returns the RouteTarget interface (no with(...)).
-        vars.put("addRecordTarget", CmsEndpoints.CREATE_FORM
-            .with(CmsEndpoints.PANEL_PARAM, "admin")
-            .with(CmsEndpoints.RESOURCE_PARAM, "dns-records")
-            .with(HohenheimParams.ZONE_ID_PREFILL, zoneId));
+        vars.put("available", true);
+        vars.put("table", table);
+        vars.put("hasRowActions", table.rows().stream().anyMatch(TableState.RowState::hasAnyActions));
+        vars.put("panelSlug", PANEL);
+        vars.put("resourceSlug", resource.slug());
+        vars.put("listUrl", listUrl);
+        vars.put("searchValue", search != null ? search : "");
+        vars.put("searchEnabled", resource.searchOffered());
+        vars.put("searchActive", search != null);
+        vars.put("addRecordTarget", addRecordTarget);
         vars.put("recordTabs", recordTabs(conduit));
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/dns-zone-records"), vars);
+        QuickAdd.putVars(vars, resource, accessContext, refreshUrl, addRecordTarget.toUrl(),
+            Map.of(DnsRecordModel.ZONE_ID.getName(), zoneId));
+        return new RenderTemplateResult(TEMPLATE, vars);
+    }
+
+    /** Everything the template declares, for the branch that has no record resource to read. */
+    private @NonNull Map<String, Object> unavailableVars(@NonNull Conduit conduit, @NonNull Row zone) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("title", CmsSupport.pageTitle(conduit, "dns_zone_records",
+            zone.get(DnsZoneModel.ORIGIN)));
+        vars.put("origin", zone.get(DnsZoneModel.ORIGIN));
+        vars.put("zoneId", zone.get(DnsZoneModel.ID));
+        vars.put("available", false);
+        vars.put("recordTabs", recordTabs(conduit));
+        return vars;
+    }
+
+    /**
+     * The zone's records, narrowed by the plain search term over the fields the resource
+     * declared searchable.
+     *
+     * AIDEV-NOTE: a hand-built query rather than {@code resource.listRows}, because the
+     * zone scope is not expressible as a table-view filter and the generated list has no
+     * zone to scope by. Only the TERM is interpreted here, and only for text fields --
+     * which is every field this resource declares searchable.
+     */
+    private static @NonNull List<Row> zoneRecords(@NonNull Integer zoneId, @Nullable String search,
+                                                  @NonNull List<Field<?, ?>> searchFields) {
+        QueryBuilder<Row> query = Models.get(DnsRecordModel.class).find()
+            .where(DnsRecordModel.ZONE_ID.eq(zoneId));
+        if (search != null) {
+            List<Criteria> candidates = new ArrayList<>(searchFields.size());
+            for (Field<?, ?> field : searchFields) {
+                if (field instanceof TextSearchable searchable) {
+                    candidates.add(searchable.icontains(search));
+                }
+            }
+            // A term no declared field can match narrows to nothing: an unfiltered list
+            // would read as "everything matches", which is the opposite of the truth.
+            query.where(candidates.isEmpty()
+                ? Models.get(DnsRecordModel.class).matchNone()
+                : candidates.size() == 1 ? candidates.get(0)
+                    : Criteria.or(candidates.toArray(new Criteria[0])));
+        }
+        return query.orderBy(DnsRecordModel.NAME, SortOrder.ASC).all();
+    }
+
+    /** @return the submitted search term, or null when the box is empty */
+    private static @Nullable String trimmedSearch(@NonNull Conduit conduit) {
+        String raw = conduit.getQueryParam(SEARCH);
+        if (raw == null) {
+            return null;
+        }
+        String term = raw.trim();
+        return term.isEmpty() ? null : term;
+    }
+
+    private static @NonNull String recordUrl(@NonNull DnsRecordResource resource, @NonNull Row row,
+                                             @Nullable String returnTo) {
+        return ReturnTarget.bind(
+            CmsRoutes.detail(PANEL, resource.slug(), resource.rowKey(row)), returnTo).toUrl();
+    }
+
+    /**
+     * Which of a row's cells this principal may edit in place, mapped to the form entry
+     * each writes through -- the affordance half of the verdict the cell endpoints enforce.
+     *
+     * AIDEV-NOTE: composed from the resource's own public verdicts because zenit-cms's
+     * identical helper (InlineEditStates.editableCellsFor) is package-private -- the
+     * generated list page is its only caller, and a bespoke page over the SAME resource
+     * needs it too. Promoting it is a framework follow-up. Drift can only offer or hide a
+     * pencil: the cell element re-fetches the verdict on activation and CELL_SUBMIT decides
+     * again, so nothing here can widen what a commit may write.
+     */
+    private static @NonNull Map<String, String> editableCells(@NonNull DnsRecordResource resource,
+                                                              TableView.@NonNull Applied<Row> applied,
+                                                              @NonNull Row row,
+                                                              @NonNull AccessContext accessContext) {
+        if (!resource.updatable() || !resource.updatableBy(row, accessContext)) {
+            return Map.of();
+        }
+        Map<String, String> cells = new LinkedHashMap<>();
+        for (ColumnSpec column : applied.columns()) {
+            Field<?, ?> source = column.source();
+            // A renderer column's value is a hand-built render state; editing it in place
+            // would write through a shape this lane never saw.
+            if (source == null || column.renderer() != null) {
+                continue;
+            }
+            for (Field<?, ?> field : resource.inlineEditableFields()) {
+                if (!field.getName().equals(source.getName())) {
+                    continue;
+                }
+                FormEntry entry = resource.inlineEntryFor(field);
+                if (entry != null && resource.fieldAccessFor(entry.name()).decide(accessContext, row)
+                        == FieldAccess.Decision.EDITABLE) {
+                    cells.put(column.name(), entry.name());
+                }
+                break;
+            }
+        }
+        return cells;
     }
 
     /**
@@ -238,22 +437,4 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         return value != null ? value : 0;
     }
 
-    /** MX/SRV rows fold priority/weight/port into the display so the list reads like a zone file. */
-    private static @NonNull String displayValue(@NonNull Row record) {
-        String value = record.get(DnsRecordModel.VALUE);
-        if (value == null) {
-            value = "";
-        }
-        String type = record.get(DnsRecordModel.TYPE);
-        Integer priority = DnsRecordModel.priorityOf(record);
-        if (DnsRecordModel.TYPE_MX.equals(type) && priority != null) {
-            return priority + " " + value;
-        }
-        if (DnsRecordModel.TYPE_SRV.equals(type)) {
-            Integer weight = DnsRecordModel.weightOf(record);
-            Integer port = DnsRecordModel.portOf(record);
-            return zeroIfNull(priority) + " " + zeroIfNull(weight) + " " + zeroIfNull(port) + " " + value;
-        }
-        return value;
-    }
 }
