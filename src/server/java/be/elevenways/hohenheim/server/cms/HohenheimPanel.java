@@ -164,12 +164,13 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new BanResource(), Role.FIREWALL);
         // zenit-auth's generated admin resources, wired into THIS panel (the
         // module's own default panel is disabled via auth.cms.auto_panel).
-        // AIDEV-NOTE: no description() reaches these two -- AuthUsersResource and
-        // AuthRolesResource are FINAL and expose no description seam, so their sidebar
-        // entries stay label-only until zenit-auth grows one. Everything else visible in
-        // this panel carries one (AdminNavigationJourneyTest step 2 skips exactly these).
-        peers.add(new AuthUsersResource(SECURITY_GROUP, 30));
-        peers.add(new AuthRolesResource(SECURITY_GROUP, 40));
+        // AIDEV-NOTE: zenit-auth grew the description seam (a third constructor argument),
+        // so these two describe themselves like every other entry and
+        // AdminNavigationJourneyTest step 2 no longer exempts anything.
+        peers.add(new AuthUsersResource(SECURITY_GROUP, 30,
+            Microcopy.of("nav_hint").withFilter("scope", "user")));
+        peers.add(new AuthRolesResource(SECURITY_GROUP, 40,
+            Microcopy.of("nav_hint").withFilter("scope", "role")));
         addIf(peers, new SpamserviceOverviewPage(), Role.FIREWALL);
         addIf(peers, new SpamserviceInstallationResource(), Role.FIREWALL);
         addIf(peers, new SpamserviceSamplesResource(), Role.FIREWALL);
