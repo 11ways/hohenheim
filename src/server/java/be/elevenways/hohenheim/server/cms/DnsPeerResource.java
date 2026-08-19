@@ -79,6 +79,20 @@ public final class DnsPeerResource extends RowResource {
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("handshake"); }
 
+    /**
+     * The name only.
+     *
+     * AIDEV-NOTE: TRANSFER_HOST and TRANSFER_PORT are the live AXFR endpoint this server
+     * ships zone data to, and the TSIG triple is the authentication identity it ships it
+     * under -- retyping either in a cell re-points or unauthenticates a running transfer
+     * relationship. ENABLED is excluded because it arms that relationship. The peer's name
+     * is the one thing about it that is purely operator wording.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(DnsPeerModel.NAME);
+    }
+
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {

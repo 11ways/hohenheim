@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -33,6 +34,14 @@ import java.util.Map;
  * settings sub-form client-side.
  */
 public final class InstanceTemplateVariableResource extends RowResource {
+
+    /** The Contents tab's quick-add entries; the template rides along as a preset. */
+    private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
+        .of(InstanceTemplateVariableModel.KEY.getName(),
+            InstanceTemplateVariableModel.LABEL.getName(),
+            InstanceTemplateVariableModel.TYPE.getName(),
+            InstanceTemplateVariableModel.REQUIRED.getName())
+        .presets(InstanceTemplateVariableModel.TEMPLATE_ID.getName());
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(InstanceTemplateVariableModel.TEMPLATE_ID,
@@ -82,6 +91,51 @@ public final class InstanceTemplateVariableResource extends RowResource {
     public @Nullable ResourceParent<Row> parent() {
         return ResourceParent.<Row>of("instance-templates",
             row -> row.get(InstanceTemplateVariableModel.TEMPLATE_ID)).tab("contents");
+    }
+
+    /**
+     * The Contents tab's quick-add bar: the four answers a variable needs to exist, with
+     * the template riding along as a host-supplied preset.
+     *
+     * AIDEV-NOTE: TYPE renders even though a type declaring per-type SETTINGS cannot be
+     * completed here -- the sub-schema fact rides the type option itself, so the framework
+     * flips Add into a link to the full form on its own. Adding a variable type therefore
+     * needs no change here.
+     */
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return QUICK_CREATE;
+    }
+
+    /** The template the bar adds into: the {@code ?template_id=} prefill, else the tab's own record. */
+    @Override
+    public @NonNull Map<String, Object> quickCreatePresetValues(@NonNull AccessContext accessContext) {
+        Conduit conduit = accessContext.conduit();
+        if (conduit == null) {
+            return Map.of();
+        }
+        Integer templateId = CmsSupport.scopedParentId(conduit,
+            InstanceTemplateVariableModel.TEMPLATE_ID.getName(), "instance-templates");
+        return templateId != null
+            ? Map.of(InstanceTemplateVariableModel.TEMPLATE_ID.getName(), templateId) : Map.of();
+    }
+
+    /**
+     * The wording and the optionality of a variable, which are what an operator retypes
+     * while reading a template's Contents tab.
+     *
+     * AIDEV-NOTE: TYPE is deliberately absent -- switching it swaps the SETTINGS
+     * sub-schema the type declares, so the write would drop or demand typed extras a
+     * one-cell editor never showed. KEY is absent because it is the {@code {{KEY}}}
+     * substitution token: every file body and command that names it keeps naming the OLD
+     * spelling, so a rename is a full-form act with the rest of the template in view.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(InstanceTemplateVariableModel.LABEL,
+            InstanceTemplateVariableModel.DESCRIPTION,
+            InstanceTemplateVariableModel.REQUIRED,
+            InstanceTemplateVariableModel.DEFAULT_VALUE);
     }
 
     /** The Contents tab links here with ?template_id= so the pick arrives preselected. */

@@ -123,6 +123,22 @@ public class InstanceDatabaseResource extends RowResource {
                 HohenheimAccess.MANAGE);
     }
 
+    /**
+     * The env prefix only: renaming the injected variable family is the one thing about an
+     * attachment that is text rather than a pick.
+     *
+     * AIDEV-NOTE: it bites at the NEXT DEPLOY, not at this click -- injection reads the
+     * prefix when the workload starts, so a running container keeps the old variable names
+     * until it is redeployed. Only remove-hooks exist on this join
+     * ({@code InstanceDatabaseLinks}), so nothing else moves. INSTANCE_ID and DATABASE_ID
+     * are RelationPicks, outside the compact cell subset, and re-pointing either is what
+     * the two-sided authority gate exists to judge on a form.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(InstanceDatabaseModel.ENV_PREFIX);
+    }
+
     /** The instance's Databases tab links here with ?instance_id= so the pick is preselected. */
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {

@@ -14,6 +14,7 @@ import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -67,6 +68,26 @@ public class ProjectResource extends RowResource {
     /** Name and description are all a project carries. */
     @Override
     public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(ProjectModel.NAME, ProjectModel.DESCRIPTION);
+    }
+
+    /** Name and description are also everything a project needs to exist. */
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return QuickCreateSpec.of(ProjectModel.NAME.getName(), ProjectModel.DESCRIPTION.getName());
+    }
+
+    /**
+     * Both, and there is nothing else on the record.
+     *
+     * AIDEV-NOTE: a rename is not purely cosmetic -- {@code ProjectGuards} mirrors it onto
+     * the backing permission group's TITLE. That is a label, not authority: the group SLUG
+     * every grant references is untouched, and the hook is {@code row.has(...)}-guarded, so
+     * a one-entry map moves exactly the column it names and leaves the group alone when it
+     * does not name the project's own name.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
         return List.of(ProjectModel.NAME, ProjectModel.DESCRIPTION);
     }
 

@@ -69,6 +69,20 @@ public final class GitProviderResource extends RowResource {
     }
     @Override public @NonNull Icon icon() { return Icon.of("code-branch"); }
 
+    /**
+     * The name only.
+     *
+     * AIDEV-NOTE: BASE_URL is excluded and that is a credential decision, not a tidiness
+     * one -- it is WHERE the stored access token gets sent, so retyping it in a cell
+     * redirects a live secret to another host. KIND is excluded because it selects the
+     * AUTH SCHEME (token versus App key), so changing it re-interprets which stored
+     * credential columns are even read. Everything else on the record is secret.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(GitProviderModel.NAME);
+    }
+
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());

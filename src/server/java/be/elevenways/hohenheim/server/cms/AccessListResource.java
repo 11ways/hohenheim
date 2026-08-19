@@ -5,6 +5,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.PasswordHasher;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -84,6 +85,35 @@ public final class AccessListResource extends RowResource {
         return Microcopy.of("nav_hint").withFilter("scope", "access_list");
     }
     @Override public @NonNull Icon icon() { return Icon.of("shield-halved"); }
+
+    /**
+     * The list's quick-add bar: a NAME, and nothing else.
+     *
+     * AIDEV-NOTE: a list created empty is INERT, not a lockout. {@code AccessListGate}
+     * short-circuits to ALLOW when a list carries no rules and no credential, so the row
+     * this bar creates blocks nobody until an operator opens it and writes the rules --
+     * which is why a one-field bar is safe here and would not be on a deny-by-default
+     * gate.
+     */
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return QuickCreateSpec.of(AccessListModel.NAME.getName());
+    }
+
+    /**
+     * The name only.
+     *
+     * AIDEV-NOTE: SATISFY is excluded because it is the AND/OR of the REQUEST-TIME gate
+     * -- flipping it in a cell changes, on the next request, whether an address rule and
+     * the basic-auth credential must BOTH pass or only one. ALLOWED_IPS/DENIED_IPS are
+     * excluded for the same reason one level down: they are enforced per request, so a
+     * mistyped line locks out live traffic with no form and no refusal to explain it.
+     * BASIC_AUTH_PASS is a hashed credential and never leaves the form layer at all.
+     */
+    @Override
+    public @NonNull List<Field<?, ?>> inlineEditableFields() {
+        return List.of(AccessListModel.NAME);
+    }
 
     @Override
     public void applyValuesToRow(@NonNull Row row, @NonNull Map<String, Object> coerced) {

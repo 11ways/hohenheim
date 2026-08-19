@@ -10,6 +10,7 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
+import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -48,6 +49,12 @@ import java.util.Map;
  * at all requires manage on its instance NOW.
  */
 public class InstanceScheduleResource extends RowResource {
+
+    /** The Schedules tab's quick-add entries; the instance rides along as a preset. */
+    private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
+        .of(RecordScheduleModel.NAME.getName(), RecordScheduleModel.CRON.getName(),
+            RecordScheduleModel.TIMEZONE.getName(), RecordScheduleModel.ENABLED.getName())
+        .presets(RecordScheduleModel.RECORD_ID.getName());
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(RecordScheduleModel.RECORD_ID)
@@ -118,6 +125,42 @@ public class InstanceScheduleResource extends RowResource {
             values.put("record_id", recordId);
         }
         return Map.copyOf(values);
+    }
+
+    /**
+     * The Schedules tab's quick-add bar; the instance rides along as a host-supplied
+     * preset, and every add still passes {@link #validated} (target, cron, zone, the
+     * CONFIG demand and the run_as stamp).
+     *
+     * AIDEV-NOTE: there is deliberately NO inline counterpart here, for two independent
+     * reasons. ENABLED makes the row DUE for a sweeper that polls every minute, so one
+     * click fires a real chain against a live instance within 60s -- that wants a form and
+     * a deliberate save. And this resource's own {@code updateRow} re-stamps run_as and
+     * clears disabled_reason on every write while reading record_id and cron straight off
+     * the coerced map, so a one-entry map would refuse anyway. Fixing the second without
+     * the first would ship the dangerous half.
+     */
+    @Override
+    public @Nullable QuickCreateSpec quickCreate() {
+        return QUICK_CREATE;
+    }
+
+    /**
+     * The instance the bar schedules against: the {@code ?record_id=} prefill, else the
+     * tab's own record. Rendered as a STRING because record schedules key their target
+     * polymorphically.
+     */
+    @Override
+    public @NonNull Map<String, Object> quickCreatePresetValues(@NonNull AccessContext accessContext) {
+        Conduit conduit = accessContext.conduit();
+        if (conduit == null) {
+            return Map.of();
+        }
+        Integer instanceId = CmsSupport.scopedParentId(conduit,
+            RecordScheduleModel.RECORD_ID.getName(), "instances");
+        return instanceId != null
+            ? Map.of(RecordScheduleModel.RECORD_ID.getName(), String.valueOf(instanceId))
+            : Map.of();
     }
 
     @Override
