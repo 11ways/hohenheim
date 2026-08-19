@@ -1189,7 +1189,7 @@
       "scope": "site_deployments"
     },
     {
-      "text": "Add a service to describe what this stack runs.",
+      "text": "A stack is composed of services, one container image each. Add the first one to describe what this stack runs.",
       "scope": "stack_services"
     },
     {
@@ -8596,7 +8596,7 @@
       "scope": "database"
     },
     {
-      "text": "Docker Compose stacks deployed and operated as one unit.",
+      "text": "Multi-container deployments you compose here: a stack is a name plus the services it runs.",
       "scope": "stack"
     },
     {
