@@ -9,12 +9,16 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.Plain;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -76,18 +80,34 @@ public final class BanResource extends RowResource {
     @Override public boolean updatable() { return false; }
     @Override public boolean deletable() { return false; }
 
+    // AIDEV-NOTE: this list had NO filters at all despite three columns that are pure
+    // classification. "Which active auto-bans came from the login probe" was a question
+    // only answerable by paging.
+    private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
+        .column(ColumnSpec.fromField(BanModel.IP).filterable().subtext("reason").copyable().build())
+        .column(ColumnSpec.fromField(BanModel.REASON).hidden().build())
+        .column(ColumnSpec.fromField(BanModel.SOURCE).filterable().build())
+        .column(ColumnSpec.fromField(BanModel.ACTIVE).filterable().build())
+        .column(ColumnSpec.fromField(BanModel.EVENT_TYPE).filterable().build())
+        .column(ColumnSpec.fromField(BanModel.EXPIRES_AT).build())
+        .column(ColumnSpec.fromField(BanModel.CREATED_AT).build())
+        .filter(FilterSpec.forField(BanModel.IP, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(BanModel.IP)).build())
+        .filter(FilterSpec.forField(BanModel.SOURCE, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(BanModel.SOURCE)).build())
+        .filter(FilterSpec.forField(BanModel.ACTIVE, FilterSpec.Kind.BOOLEAN)
+            .label(FieldLabels.labelFor(BanModel.ACTIVE)).build())
+        .filter(FilterSpec.forField(BanModel.EVENT_TYPE, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(BanModel.EVENT_TYPE)).build())
+        .defaultSort(SortSpec.desc("created_at"))
+        .build();
+
+    @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The address is what an operator arrived with and what they leave with. */
     @Override
-    public @NonNull TableSpec<Row> tableSpec() {
-        return TableSpec.<Row>builder()
-            .columnFromField(BanModel.IP)
-            .columnFromField(BanModel.SOURCE)
-            .columnFromField(BanModel.REASON)
-            .columnFromField(BanModel.ACTIVE)
-            .columnFromField(BanModel.EVENT_TYPE)
-            .columnFromField(BanModel.EXPIRES_AT)
-            .columnFromField(BanModel.CREATED_AT)
-            .defaultSort(SortSpec.desc("created_at"))
-            .build();
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(BanModel.IP, BanModel.REASON);
     }
 
     /** The manual "Ban an IP" flow: validate, then create through BanService. */

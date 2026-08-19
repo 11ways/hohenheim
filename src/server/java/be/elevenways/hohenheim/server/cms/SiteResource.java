@@ -39,6 +39,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -77,20 +78,29 @@ public class SiteResource extends RowResource {
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SOURCE_SETTINGS))
         .build();
 
+    // AIDEV-NOTE: STATUS is deliberately absent. SiteModel.STATUS declares exactly ONE
+    // member ("active") and every write sets it, so the column rendered the same pill on
+    // every row forever -- a filter over it could only ever return the whole list.
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(SiteModel.NAME).filterable().build())
-        .column(ColumnSpec.fromField(SiteModel.SITE_TYPE).filterable().build())
+        // The slug names this site in every generated path, container name and log line,
+        // so it reads under the name instead of costing a column of its own.
+        .column(ColumnSpec.fromField(SiteModel.NAME).filterable().subtext("slug").build())
+        .column(ColumnSpec.fromField(SiteModel.SLUG).hidden().build())
+        // AIDEV-NOTE: SOURCE decides how every deployment of this site is PRODUCED (local
+        // files vs a git checkout) and was invisible in the list. It rides under the type
+        // rather than widening the table, and keeps its own filter.
+        .column(ColumnSpec.fromField(SiteModel.SITE_TYPE).filterable().subtext("source").build())
+        .column(ColumnSpec.fromField(SiteModel.SOURCE).filterable().hidden().build())
         .column(ColumnSpec.fromField(SiteModel.ENABLED).filterable().build())
-        .column(ColumnSpec.fromField(SiteModel.STATUS).filterable().build())
         .column(ColumnSpec.fromField(SiteModel.CREATED_AT).filterable().build())
         .filter(FilterSpec.forField(SiteModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(SiteModel.NAME)).build())
         .filter(FilterSpec.forField(SiteModel.SITE_TYPE, FilterSpec.Kind.SELECT)
             .label(FieldLabels.labelFor(SiteModel.SITE_TYPE)).build())
+        .filter(FilterSpec.forField(SiteModel.SOURCE, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(SiteModel.SOURCE)).build())
         .filter(FilterSpec.forField(SiteModel.ENABLED, FilterSpec.Kind.BOOLEAN)
             .label(FieldLabels.labelFor(SiteModel.ENABLED)).build())
-        .filter(FilterSpec.forField(SiteModel.STATUS, FilterSpec.Kind.SELECT)
-            .label(FieldLabels.labelFor(SiteModel.STATUS)).build())
         .filter(FilterSpec.forField(SiteModel.CREATED_AT, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(SiteModel.CREATED_AT)).build())
         .defaultSort(SortSpec.desc(SiteModel.CREATED_AT.getName()))
@@ -102,6 +112,13 @@ public class SiteResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(SiteModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** An operator looks a site up by what they call it, by what the paths call it, or by the note they left on it. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(SiteModel.NAME, SiteModel.SLUG, SiteModel.DESCRIPTION);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 20; }
 

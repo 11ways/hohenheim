@@ -47,11 +47,11 @@ public final class ManageCertificateResource extends CertificateResource {
         .build();
 
     private final TableSpec<Row> manageTableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).build())
-        .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).build())
-        .column(ColumnSpec.fromField(CertificateModel.STATUS).build())
+        .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).subtext("domain_names_text").build())
+        .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).hidden().build())
+        .column(ColumnSpec.fromField(CertificateModel.STATUS).subtext("renewal_error").build())
+        .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.EXPIRES_ON).build())
-        .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).build())
         .defaultSort(SortSpec.desc(CertificateModel.EXPIRES_ON.getName()))
         .build();
 

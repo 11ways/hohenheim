@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.Nested;
@@ -55,7 +56,7 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
     private final TableSpec<Row> manageTableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(DnsRecordModel.NAME).build())
         .column(ColumnSpec.fromField(DnsRecordModel.TYPE).build())
-        .column(ColumnSpec.fromField(DnsRecordModel.VALUE).build())
+        .column(ColumnSpec.fromField(DnsRecordModel.VALUE).copyable().build())
         .column(ColumnSpec.fromField(DnsRecordModel.ENABLED).build())
         .build();
 
@@ -89,6 +90,42 @@ public final class ManageDnsRecordResource extends DnsRecordResource {
     @Override
     public @Nullable QuickCreateSpec quickCreate() {
         return null;
+    }
+
+    /**
+     * Answer the search a tenant actually types.
+     *
+     * AIDEV-NOTE: this list RENDERS absolute names while the column STORES relative owners,
+     * so the inherited searchFields(NAME, VALUE) matched nothing for anyone who typed what
+     * they were looking at. The term is rewritten to the owner relative to its hosted zone
+     * before the query sees it. That widens rather than narrows the VALUE arm too -- the
+     * relative form is a substring of the absolute one and the match is a contains -- so no
+     * row that matched before stops matching.
+     */
+    @Override
+    public @NonNull List<Row> listRows(TableView.@NonNull Applied<Row> applied,
+                                       @NonNull AccessContext accessContext) {
+        String term = applied.searchTerm();
+        String relative = term == null ? null : relativeTerm(term);
+        return super.listRows(relative == null ? applied : applied.withSearch(relative), accessContext);
+    }
+
+    /** @return the term relative to the longest hosted zone containing it, or null when none does */
+    private static @Nullable String relativeTerm(@NonNull String term) {
+        String best = null;
+        int bestOrigin = -1;
+        for (Row zone : Models.get(DnsZoneModel.class).find().all()) {
+            String origin = zone.get(DnsZoneModel.ORIGIN);
+            if (origin == null) {
+                continue;
+            }
+            String owner = DnsNames.relative(origin, term.trim());
+            if (owner != null && !owner.isEmpty() && origin.length() > bestOrigin) {
+                best = owner;
+                bestOrigin = origin.length();
+            }
+        }
+        return best;
     }
 
     /** The list renders the absolute name; a tenant has no relative-to-what to read it against. */

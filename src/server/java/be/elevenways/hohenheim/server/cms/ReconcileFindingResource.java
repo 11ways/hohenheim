@@ -17,6 +17,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
@@ -47,9 +48,12 @@ public final class ReconcileFindingResource extends RowResource {
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(ReconcileFindingModel.SERVER_NAME).filterable().build())
         .column(ColumnSpec.fromField(ReconcileFindingModel.KIND).filterable().build())
-        .column(ColumnSpec.fromField(ReconcileFindingModel.RESOURCE_NAME).filterable().build())
+        // The chip carries the resource name: reconciling means pasting it into a docker
+        // or incus command on the host it was found on.
+        .column(ColumnSpec.fromField(ReconcileFindingModel.RESOURCE_NAME).filterable()
+            .subtext("detail").copyable().build())
+        .column(ColumnSpec.fromField(ReconcileFindingModel.DETAIL).hidden().build())
         .column(ColumnSpec.fromField(ReconcileFindingModel.BUCKET).filterable().build())
-        .column(ColumnSpec.fromField(ReconcileFindingModel.DETAIL).build())
         .filter(FilterSpec.forField(ReconcileFindingModel.SERVER_NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(ReconcileFindingModel.SERVER_NAME)).build())
         .filter(FilterSpec.forField(ReconcileFindingModel.BUCKET, FilterSpec.Kind.SELECT)
@@ -64,6 +68,13 @@ public final class ReconcileFindingResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(ReconcileFindingModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** A finding is hunted for by the host it was seen on, the thing it names, or the words explaining it. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(ReconcileFindingModel.SERVER_NAME, ReconcileFindingModel.RESOURCE_NAME, ReconcileFindingModel.DETAIL);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return NavGroup.SYSTEM; }
     @Override public int navOrder() { return 25; }
 

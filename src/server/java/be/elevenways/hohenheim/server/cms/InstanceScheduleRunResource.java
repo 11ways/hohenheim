@@ -12,6 +12,7 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
@@ -40,12 +41,16 @@ public class InstanceScheduleRunResource extends RowResource {
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(RecordScheduleRunModel.SCHEDULE_ID).build())
         .column(ColumnSpec.fromField(RecordScheduleRunModel.RECORD_ID).build())
-        .column(ColumnSpec.fromField(RecordScheduleRunModel.STATUS).filterable().build())
+        .column(ColumnSpec.fromField(RecordScheduleRunModel.STATUS).filterable()
+            .subtext("error").build())
+        .column(ColumnSpec.fromField(RecordScheduleRunModel.ERROR)
+            .label(Microcopy.of("error").withFilter("scope", "instance_schedule"))
+            .hidden().build())
         .column(ColumnSpec.fromField(RecordScheduleRunModel.TRIGGER).build())
         .column(ColumnSpec.virtual("steps",
             Microcopy.of("steps").withFilter("scope", "instance_schedule")).build())
-        .column(ColumnSpec.fromField(RecordScheduleRunModel.STARTED_AT).build())
-        .column(ColumnSpec.fromField(RecordScheduleRunModel.ENDED_AT).build())
+        .column(ColumnSpec.fromField(RecordScheduleRunModel.STARTED_AT).subtext("ended_at").build())
+        .column(ColumnSpec.fromField(RecordScheduleRunModel.ENDED_AT).hidden().build())
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedule_run"); }
@@ -54,6 +59,13 @@ public class InstanceScheduleRunResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(RecordScheduleRunModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The failure text is the only thing a run says in words. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(RecordScheduleRunModel.ERROR);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 20; }
     @Override public @NonNull Icon icon() { return Icon.of("clock-rotate-left"); }

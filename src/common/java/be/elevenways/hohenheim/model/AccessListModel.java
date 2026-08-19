@@ -27,6 +27,7 @@ public class AccessListModel extends Model {
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
     public static final StringField SATISFY = SCHEMA.addField(StringField.builder().name("satisfy")
         .defaultValue(SATISFY_ANY)
+        .label(HohenheimFormCopy.label("satisfy"))
         .build());
     public static final StringField BASIC_AUTH_USER = SCHEMA.addField(StringField.builder().name("basic_auth_user")
         .label(HohenheimFormCopy.label("basic_auth_user"))

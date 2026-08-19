@@ -28,6 +28,7 @@ import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -71,9 +72,10 @@ public class InstanceTemplateResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(InstanceTemplateModel.NAME).filterable().build())
+        .column(ColumnSpec.fromField(InstanceTemplateModel.NAME).filterable().subtext("version").build())
+        .column(ColumnSpec.fromField(InstanceTemplateModel.VERSION).hidden().build())
         .column(ColumnSpec.fromField(InstanceTemplateModel.KIND).filterable().build())
-        .column(ColumnSpec.fromField(InstanceTemplateModel.VERSION).build())
+        .column(ColumnSpec.fromField(InstanceTemplateModel.INSTALL_IMAGE).copyable().build())
         .column(ColumnSpec.fromField(InstanceTemplateModel.REINSTALL_POLICY).build())
         .column(ColumnSpec.fromField(InstanceTemplateModel.APPROVED_AT).build())
         .column(ColumnSpec.fromField(InstanceTemplateModel.SOURCE).build())
@@ -89,6 +91,13 @@ public class InstanceTemplateResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceTemplateModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** Templates are hunted for by name, by the image they install from, and by where they were imported from. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(InstanceTemplateModel.NAME, InstanceTemplateModel.DESCRIPTION, InstanceTemplateModel.INSTALL_IMAGE, InstanceTemplateModel.SOURCE);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 60; }
 

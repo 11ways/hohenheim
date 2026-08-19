@@ -13,6 +13,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
@@ -37,7 +38,7 @@ public final class BackupTargetResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(BackupTargetModel.NAME).filterable().build())
+        .column(ColumnSpec.fromField(BackupTargetModel.NAME).filterable().copyable().build())
         .column(ColumnSpec.fromField(BackupTargetModel.KIND).filterable().build())
         .column(ColumnSpec.fromField(BackupTargetModel.CREATED_AT).build())
         .build();
@@ -48,6 +49,13 @@ public final class BackupTargetResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(BackupTargetModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The name is the only text a target carries; the credentials live in a secret settings blob. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(BackupTargetModel.NAME);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 18; }
 

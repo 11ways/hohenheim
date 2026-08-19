@@ -73,8 +73,12 @@ public final class SpamserviceSecurityEventsResource extends SpamserviceRemoteRe
     @Override
     public @NonNull TableSpec<SecurityEventEntry> tableSpec() {
         return TableSpec.<SecurityEventEntry>builder()
-            .column(ColumnSpec.fromField(TYPE).filterable().build())
-            .column(ColumnSpec.fromField(IP).filterable().build())
+            // AIDEV-NOTE: last_detail was in the cellValue switch and in the form, but was
+            // not a column -- so the one sentence saying WHAT was seen was invisible on the
+            // surface operators actually watch.
+            .column(ColumnSpec.fromField(TYPE).filterable().subtext("last_detail").build())
+            .column(ColumnSpec.fromField(DETAIL).hidden().build())
+            .column(ColumnSpec.fromField(IP).filterable().copyable().build())
             .column(ColumnSpec.fromField(DAY).build())
             .column(ColumnSpec.fromField(COUNT).build())
             .column(ColumnSpec.fromField(CLIENT_ID).filterable().build())

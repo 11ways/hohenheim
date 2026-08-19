@@ -33,6 +33,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -71,9 +72,11 @@ public class DatabaseResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(DatabaseModel.NAME).filterable().build())
-        .column(ColumnSpec.fromField(DatabaseModel.ENGINE).filterable().build())
-        .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).filterable().build())
+        // The engine qualifies the managed name; the name INSIDE the engine is what goes
+        // into a connection string, so it keeps a column of its own plus the copy chip.
+        .column(ColumnSpec.fromField(DatabaseModel.NAME).filterable().subtext("engine").build())
+        .column(ColumnSpec.fromField(DatabaseModel.ENGINE).filterable().hidden().build())
+        .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).filterable().copyable().build())
         .column(ColumnSpec.fromField(DatabaseModel.SERVER_ID)
             .relation(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
         .column(ColumnSpec.fromField(DatabaseModel.EPHEMERAL).filterable().build())
@@ -104,6 +107,13 @@ public class DatabaseResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(DatabaseModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The managed name and the name inside the engine are different strings; a connection string only ever carries the second. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(DatabaseModel.NAME, DatabaseModel.DB_NAME);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 50; }
 

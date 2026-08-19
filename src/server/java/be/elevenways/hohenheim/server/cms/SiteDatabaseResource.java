@@ -50,7 +50,7 @@ public final class SiteDatabaseResource extends RowResource {
             .relation(RelationPick.of(SiteDatabaseModel.SITE_ID, SiteModel.MODEL_ID).build()).build())
         .column(ColumnSpec.fromField(SiteDatabaseModel.DATABASE_ID)
             .relation(RelationPick.of(SiteDatabaseModel.DATABASE_ID, DatabaseModel.MODEL_ID).build()).build())
-        .column(ColumnSpec.fromField(SiteDatabaseModel.ENV_PREFIX).build())
+        .column(ColumnSpec.fromField(SiteDatabaseModel.ENV_PREFIX).copyable().build())
         .build();
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_database"); }

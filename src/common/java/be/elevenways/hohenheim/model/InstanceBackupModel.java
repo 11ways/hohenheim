@@ -61,7 +61,9 @@ public class InstanceBackupModel extends Model {
 
     /** The committed key on the target (the .part staging key is never recorded). */
     public static final StringField REMOTE_KEY = SCHEMA.addField(
-        StringField.builder().name("remote_key").filterable(false).build());
+        StringField.builder().name("remote_key").filterable(false)
+            .label(HohenheimFormCopy.label("remote_key"))
+            .build());
 
     /** sha256 of the encrypted archive as re-read FROM THE TARGET after commit. */
     public static final StringField SHA256 = SCHEMA.addField(

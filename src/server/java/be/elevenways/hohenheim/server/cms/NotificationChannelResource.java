@@ -11,14 +11,19 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowResource;
+import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.cms.common.schema.FilterSpec;
+import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.edit.Array;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
+import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteLocales;
@@ -51,11 +56,56 @@ public final class NotificationChannelResource extends RowResource {
             .build())
         .build();
 
+    /** The virtual column holding the subscribed event tokens, and the name's subtext. */
+    private static final String EVENTS_COLUMN = "events";
+
+    // AIDEV-NOTE: an explicit spec. The derived one led with KIND, which every row stores
+    // as "webhook" (persistRow stamps it) -- a column of one repeated word. What an
+    // operator needs instead is WHAT each channel is subscribed to, which lived only
+    // inside the edit form.
+    private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
+        .column(ColumnSpec.fromField(NotificationChannelModel.NAME).filterable()
+            .subtext(EVENTS_COLUMN).build())
+        .column(ColumnSpec.virtual(EVENTS_COLUMN,
+            Microcopy.of("events").withFilter("scope", "notification_channel")).hidden().build())
+        .column(ColumnSpec.fromField(NotificationChannelModel.FORMAT).filterable().build())
+        .column(ColumnSpec.fromField(NotificationChannelModel.CREATED_AT).build())
+        .filter(FilterSpec.forField(NotificationChannelModel.NAME, FilterSpec.Kind.TEXT)
+            .label(FieldLabels.labelFor(NotificationChannelModel.NAME)).build())
+        .filter(FilterSpec.forField(NotificationChannelModel.FORMAT, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(NotificationChannelModel.FORMAT)).build())
+        .build();
+
+    @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /**
+     * The event summary under the name.
+     *
+     * @return the subscribed tokens, or null when the channel takes every event (an
+     *         empty subscription means "all", and a second line saying nothing is worse
+     *         than no second line)
+     */
+    @Override
+    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        if (!EVENTS_COLUMN.equals(column.name())) {
+            return super.cellValue(row, column);
+        }
+        List<String> events = row.get(NotificationChannelModel.EVENTS);
+        return events == null || events.isEmpty() ? null : String.join(", ", events);
+    }
+
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "notification_channel"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "notification_channel"); }
     @Override public @NonNull String slug() { return "notifications"; }
     @Override public @NonNull Model model() { return Models.get(NotificationChannelModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
+
+    /** The name only -- the URL is a bearer credential. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(NotificationChannelModel.NAME);
+    }
+
     // AIDEV-NOTE: System, between the activity log (90) and the settings editor (95): where
     // this installation talks about ITSELF. It is not a networking concern -- the channels
     // carry alerts, not traffic.

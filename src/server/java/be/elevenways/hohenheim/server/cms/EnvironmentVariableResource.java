@@ -16,12 +16,14 @@ import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -43,8 +45,10 @@ public final class EnvironmentVariableResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(InstanceVariableModel.KEY).filterable().build())
-        .column(ColumnSpec.fromField(InstanceVariableModel.KIND).filterable().build())
+        // The chip carries the KEY: it is what gets pasted into a compose file or a shell.
+        .column(ColumnSpec.fromField(InstanceVariableModel.KEY).filterable()
+            .subtext("kind").copyable().build())
+        .column(ColumnSpec.fromField(InstanceVariableModel.KIND).filterable().hidden().build())
         .column(ColumnSpec.fromField(InstanceVariableModel.ENVIRONMENT_ID)
             .relation(RelationPick.of(InstanceVariableModel.ENVIRONMENT_ID,
                 EnvironmentModel.MODEL_ID).build())
@@ -57,6 +61,13 @@ public final class EnvironmentVariableResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceVariableModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The key only: PLAIN_VALUE would leak a lookup over config values, and SECRET_VALUE is a secret the search layer refuses outright. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(InstanceVariableModel.KEY);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 15; }
 

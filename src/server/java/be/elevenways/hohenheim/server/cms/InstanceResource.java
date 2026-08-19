@@ -40,6 +40,7 @@ import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -96,12 +97,14 @@ public class InstanceResource extends RowResource {
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(InstanceModel.NAME).filterable().build())
-        .column(ColumnSpec.fromField(InstanceModel.KIND).filterable().build())
+        // The kind qualifies the name and the install state qualifies the status; both
+        // stay declared (and filterable) so the picker and the filter strip keep them.
+        .column(ColumnSpec.fromField(InstanceModel.NAME).filterable().subtext("kind").build())
+        .column(ColumnSpec.fromField(InstanceModel.KIND).filterable().hidden().build())
         .column(ColumnSpec.fromField(InstanceModel.SERVER_ID)
             .relation(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
-        .column(ColumnSpec.fromField(InstanceModel.STATUS).filterable().build())
-        .column(ColumnSpec.fromField(InstanceModel.INSTALL_STATE).filterable().build())
+        .column(ColumnSpec.fromField(InstanceModel.STATUS).filterable().subtext("install_state").build())
+        .column(ColumnSpec.fromField(InstanceModel.INSTALL_STATE).filterable().hidden().build())
         .column(ColumnSpec.fromField(InstanceModel.CREATED_AT).filterable().build())
         .filter(FilterSpec.forField(InstanceModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(InstanceModel.NAME)).build())
@@ -139,6 +142,13 @@ public class InstanceResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The name is the only text an instance carries; everything else is structure. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(InstanceModel.NAME);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 30; }
 

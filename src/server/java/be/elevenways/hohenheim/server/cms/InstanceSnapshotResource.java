@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -44,9 +45,10 @@ public class InstanceSnapshotResource extends RowResource {
         .column(ColumnSpec.fromField(InstanceSnapshotModel.INSTANCE_ID)
             .relation(RelationPick.of(InstanceSnapshotModel.INSTANCE_ID,
                 InstanceModel.MODEL_ID).build()).build())
-        .column(ColumnSpec.fromField(InstanceSnapshotModel.STATUS).filterable().build())
+        .column(ColumnSpec.fromField(InstanceSnapshotModel.STATUS).filterable()
+            .subtext("total_bytes").build())
         .column(ColumnSpec.fromField(InstanceSnapshotModel.NOTE).build())
-        .column(ColumnSpec.fromField(InstanceSnapshotModel.TOTAL_BYTES).build())
+        .column(ColumnSpec.fromField(InstanceSnapshotModel.TOTAL_BYTES).hidden().build())
         .column(ColumnSpec.fromField(InstanceSnapshotModel.CREATED_AT).build())
         .build();
 
@@ -56,6 +58,13 @@ public class InstanceSnapshotResource extends RowResource {
     @Override public @NonNull Model model() { return Models.get(InstanceSnapshotModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The note is the only thing an operator wrote here themselves. */
+    @Override
+    public @NonNull List<Field<?, ?>> searchFields() {
+        return List.of(InstanceSnapshotModel.NOTE);
+    }
+
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 16; }
 
