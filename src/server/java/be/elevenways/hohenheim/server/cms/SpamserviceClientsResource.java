@@ -200,7 +200,7 @@ public final class SpamserviceClientsResource extends SpamserviceRemoteResource<
     private static ManagedClientInput input(Map<String, Object> values,
                                             @Nullable ManagedClient stored) {
         return new ManagedClientInput(
-            String.valueOf(CmsSupport.valueOf(values, "name", stored == null ? "" : stored.name())),
+            String.valueOf(values.getOrDefault("name", stored == null ? "" : stored.name())),
             bool(values, "enabled", stored == null ? null : stored.enabled()),
             bool(values, "trusted", stored == null ? null : stored.trusted()),
             bool(values, "provisioner", stored == null ? null : stored.provisioner()),
@@ -211,18 +211,18 @@ public final class SpamserviceClientsResource extends SpamserviceRemoteResource<
     }
 
     private static boolean bool(Map<String, Object> values, String name, @Nullable Object stored) {
-        return Boolean.TRUE.equals(CmsSupport.valueOf(values, name, stored));
+        return Boolean.TRUE.equals(values.getOrDefault(name, stored));
     }
 
     private static int integer(Map<String, Object> values, String name, @Nullable Object stored,
                                int fallback) {
-        return CmsSupport.valueOf(values, name, stored) instanceof Number number
+        return values.getOrDefault(name, stored) instanceof Number number
             ? number.intValue() : fallback;
     }
 
     private static @Nullable String nullable(Map<String, Object> values, String name,
                                              @Nullable Object stored) {
-        Object value = CmsSupport.valueOf(values, name, stored);
+        Object value = values.getOrDefault(name, stored);
         return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value).trim();
     }
 
