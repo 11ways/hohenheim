@@ -54,14 +54,6 @@ import java.util.Objects;
  */
 public class SiteDomainResource extends RowResource {
 
-    static final List<FieldOption<String>> MATCH_OPTIONS = List.of(
-        FieldOption.of(SiteDomainModel.MATCH_EXACT,
-            Microcopy.of("exact").withFilter("scope", "domain_match")),
-        FieldOption.of(SiteDomainModel.MATCH_WILDCARD,
-            Microcopy.of("wildcard").withFilter("scope", "domain_match")),
-        FieldOption.of(SiteDomainModel.MATCH_REGEX,
-            Microcopy.of("regex").withFilter("scope", "domain_match")));
-
     /** The Domains tab's quick-add entries; the site rides along as a host-supplied preset. */
     private static final QuickCreateSpec QUICK_CREATE = QuickCreateSpec
         .of(SiteDomainModel.HOSTNAME.getName(), SiteDomainModel.FORCE_SSL.getName())
@@ -79,7 +71,9 @@ public class SiteDomainResource extends RowResource {
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build())
         .add(SiteDomainModel.HOSTNAME)
-        .add(Select.of(SiteDomainModel.MATCH_TYPE).options(OptionSource.of(MATCH_OPTIONS)).build())
+        // The select (options, labels, icons) derives from the MATCH_TYPE EnumField --
+        // the vocabulary's one declaring home (SiteDomainModel.matchTypeField).
+        .add(SiteDomainModel.MATCH_TYPE)
         .add(Select.of(SiteDomainModel.LISTEN_ON)
             .options(OptionSource.dynamic(ctx -> listenOnOptions()))
             .build())
@@ -105,7 +99,7 @@ public class SiteDomainResource extends RowResource {
             .relation(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build()).build())
         .filter(FilterSpec.forField(SiteDomainModel.HOSTNAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(SiteDomainModel.HOSTNAME)).build())
-        .filter(FilterSpec.forField(SiteDomainModel.MATCH_TYPE, FilterSpec.Kind.TEXT)
+        .filter(FilterSpec.forField(SiteDomainModel.MATCH_TYPE, FilterSpec.Kind.SELECT)
             .label(FieldLabels.labelFor(SiteDomainModel.MATCH_TYPE)).build())
         .filter(FilterSpec.forField(SiteDomainModel.FORCE_SSL, FilterSpec.Kind.BOOLEAN)
             .label(FieldLabels.labelFor(SiteDomainModel.FORCE_SSL)).build())

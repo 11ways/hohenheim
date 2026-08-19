@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -45,7 +46,13 @@ public class DnsZoneModel extends Model {
     /** {@link #ROLE} value for a zone replicated from a peer via AXFR. */
     public static final String ROLE_SECONDARY = "secondary";
 
-    public static final StringField ROLE = SCHEMA.addField(StringField.builder().name("role")
+    public static final EnumField ROLE = SCHEMA.addField(EnumField.builder("role")
+        .value(ROLE_PRIMARY, v -> v.displayName("Primary")
+            .label(Microcopy.of("role_primary").withFilter("scope", "dns_role"))
+            .icon("star").color("blue"))
+        .value(ROLE_SECONDARY, v -> v.displayName("Secondary")
+            .label(Microcopy.of("role_secondary").withFilter("scope", "dns_role"))
+            .icon("copy").color("gray"))
         .label(HohenheimFormCopy.label("zone_role")).help(HohenheimFormCopy.help("zone_role")).build());
     public static final IntegerField PRIMARY_PEER_ID = SCHEMA.addField(
         IntegerField.builder().name("primary_peer_id")

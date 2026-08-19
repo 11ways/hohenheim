@@ -25,7 +25,13 @@ public class AccessListModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
-    public static final StringField SATISFY = SCHEMA.addField(StringField.builder().name("satisfy")
+    public static final EnumField SATISFY = SCHEMA.addField(EnumField.builder("satisfy")
+        .value(SATISFY_ANY, v -> v.displayName("Any")
+            .label(Microcopy.of("any").withFilter("scope", "access_satisfy"))
+            .icon("check").color("blue"))
+        .value(SATISFY_ALL, v -> v.displayName("All")
+            .label(Microcopy.of("all").withFilter("scope", "access_satisfy"))
+            .icon("list-check").color("orange"))
         .defaultValue(SATISFY_ANY)
         .label(HohenheimFormCopy.label("satisfy"))
         .build());
@@ -62,7 +68,9 @@ public class AccessListModel extends Model {
                 row.set(SATISFY, SATISFY_ANY);
                 return;
             }
-            if (!SATISFY_ANY.equals(satisfy) && !SATISFY_ALL.equals(satisfy)) {
+            // Membership derives from the field's own value set, so the vocabulary
+            // has exactly one declaring home (the SATISFY EnumField above).
+            if (!SATISFY.isValidValue(satisfy)) {
                 throw Violations.ofField(SATISFY.getName(), satisfy,
                     Microcopy.of("access_satisfy_invalid").withFilter("scope", "violations"));
             }

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.InputType;
@@ -94,8 +95,14 @@ public class CertificateModel extends Model {
         .help(HohenheimFormCopy.help("cert_challenge_type"))
         .visibleIn(EditView.EDIT)
         .build());
-    public static final StringField DNS_PUBLISHER = SCHEMA.addField(
-        StringField.builder().name("dns_publisher")
+    public static final EnumField DNS_PUBLISHER = SCHEMA.addField(
+        EnumField.builder("dns_publisher")
+            .value(DNS_PUBLISHER_MANUAL, v -> v.displayName("Manual")
+                .label(Microcopy.of("manual").withFilter("scope", "dns_publisher"))
+                .icon("pen").color("gray"))
+            .value(DNS_PUBLISHER_INTERNAL, v -> v.displayName("Internal")
+                .label(Microcopy.of("internal").withFilter("scope", "dns_publisher"))
+                .icon("server").color("green"))
             .visibleIn(EditView.EDIT)
             .label(HohenheimFormCopy.label("cert_dns_publisher"))
             .help(HohenheimFormCopy.help("cert_dns_publisher")).build());

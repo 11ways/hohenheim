@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.model;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -54,8 +55,8 @@ public class ReleasedRouteClaimModel extends Model {
      * tenant carves a host straight out of the space -- see HostnamePatterns.intersect.
      * Null on rows written before M076, which are then judged on the hostname alone.
      */
-    public static final StringField MATCH_TYPE = SCHEMA.addField(
-        StringField.builder().name("match_type")
+    public static final EnumField MATCH_TYPE = SCHEMA.addField(
+        SiteDomainModel.matchTypeField()
             .label(HohenheimFormCopy.label("match_type"))
             .build());
 
