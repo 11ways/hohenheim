@@ -160,6 +160,16 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
             assertThat(group.icon().name())
                 .as("step 3: the '" + group.id() + "' group carries an icon")
                 .isNotBlank();
+            // A heading is the landmark an operator scans for, so an unresolved key here is
+            // worse than a missing description: it is the WORD the section is known by.
+            for (String tag : List.of("en", "nl")) {
+                assertThat(group.label().tryResolve(
+                        LocaleChain.ofTags(tag), MessageResolvers.getDefault()))
+                    .as("step 3: the '" + group.id() + "' heading has " + tag + " copy")
+                    .isNotNull()
+                    .isNotBlank()
+                    .isNotEqualTo(group.label().key());
+            }
         }
         // AIDEV-NOTE: the System group is deliberately absent from that loop. It is
         // zenit-cms's own NavGroup.SYSTEM constant, which ships Icon.NONE; hohenheim adding
