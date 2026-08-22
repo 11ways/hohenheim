@@ -29,6 +29,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -71,6 +72,13 @@ public class DatabaseResource extends RowResource {
         .add(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID)
             .creatable(false).build())
         .add(DatabaseModel.STATUS)
+        // A managed database is an engine, a database name and its credentials. The image
+        // override, the ephemeral flag and the resource ceilings all have defaults.
+        .section(FormSection.advanced(
+            DatabaseModel.IMAGE.getName(),
+            DatabaseModel.EPHEMERAL.getName(),
+            DatabaseModel.MEMORY_LIMIT_MB.getName(),
+            DatabaseModel.CPU_LIMIT.getName()))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()

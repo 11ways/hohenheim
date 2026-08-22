@@ -26,6 +26,7 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -87,6 +88,15 @@ public class SiteDomainResource extends RowResource {
         .add(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteDomainModel.CUSTOM_HEADERS))
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteDomainModel.RESPONSE_HEADERS))
+        // A domain is a hostname, how it matches and what serves TLS for it. HSTS, the
+        // ACME opt-out, path stripping and the two header maps are tuning.
+        .section(FormSection.advanced(
+            SiteDomainModel.STRIP_PATH.getName(),
+            SiteDomainModel.HSTS_ENABLED.getName(),
+            SiteDomainModel.HSTS_SUBDOMAINS.getName(),
+            SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(),
+            SiteDomainModel.CUSTOM_HEADERS.getName(),
+            SiteDomainModel.RESPONSE_HEADERS.getName()))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()

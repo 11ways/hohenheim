@@ -10,6 +10,7 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
+import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -17,6 +18,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +51,17 @@ public final class BuildOperationResource extends RowResource {
         .add(BuildOperationModel.ARTIFACT_BYTES)
         .add(BuildOperationModel.DURATION_MS)
         .add(BuildOperationModel.LOG)
+        // A build read-out answers "what ran and how did it end" first; the sandbox
+        // ceilings it ran under and what it measured are the second question.
+        .section(FormSection.advanced(
+            BuildOperationModel.CPU_LIMIT.getName(),
+            BuildOperationModel.MEMORY_LIMIT_MB.getName(),
+            BuildOperationModel.DISK_LIMIT_MB.getName(),
+            BuildOperationModel.PIDS_LIMIT.getName(),
+            BuildOperationModel.TIMEOUT_SECONDS.getName(),
+            BuildOperationModel.PEAK_DISK_BYTES.getName(),
+            BuildOperationModel.ARTIFACT_BYTES.getName(),
+            BuildOperationModel.DURATION_MS.getName()))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -79,6 +92,12 @@ public final class BuildOperationResource extends RowResource {
 
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 17; }
+
+    /**
+     * Demoted out of the sidebar, so this sentence reaches a reader through the panel
+     * index and the related-pages menu of the list that names it.
+     */
+    @Override public @Nullable Microcopy description() { return CmsSupport.navHint("build_operation"); }
 
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("hammer"); }
