@@ -37,15 +37,15 @@ import java.util.Set;
 
 /**
  * The hermetic Docker daemon of the site tier: ONE in-memory container/volume/image store
- * with TWO faces onto the same state -- an {@link InstanceRuntime} the site kind deploys
+ * with TWO faces onto the same state -- an {@link InstanceRuntime} the release kind deploys
  * through, and a {@link DockerTransport} every {@code new DockerClient()} in the release
  * engine speaks raw HTTP/1.1 to. The two faces must agree, because the product itself
  * reads BOTH: a release deploys through the runtime and the fast-reuse lane
- * ({@code SiteInstances.reusableStatus}) inspects the daemon directly.
+ * ({@code ApplicationReleases.reusableStatus}) inspects the daemon directly.
  *
  * AIDEV-NOTE: this is the FakeIncusTransport doctrine applied to the docker lane, and it
  * generalizes FakeNativeDaemons rather than duplicating it: FakeNativeDaemons fakes a
- * whole KIND of its own (nothing production-shaped points at it), while a site release is
+ * whole KIND of its own (nothing production-shaped points at it), while an application release is
  * always a {@code hohenheim:release}, so the fake has to stand in for that kind's
  * runtime instead -- {@link #install()} re-registers the real kind's identifier with a
  * handler that differs in {@code runtimeFor} alone. An unhandled HTTP path throws loudly
@@ -67,10 +67,10 @@ import java.util.Set;
  * running container's real port binding is a real {@link HttpServer} on loopback (so the
  * engine's health probe is a genuine HTTP round trip), but there is no image, no cgroup,
  * no network namespace and no nftables. {@code DockerInstanceRuntime}, WorkloadNetworks
- * and the kernel policy are NOT exercised here -- SiteReleaseLiveTest remains their only
- * proof, along with "zero dropped requests through a real proxy".
+ * and the kernel policy are NOT exercised here -- ApplicationReleaseLiveTest remains their
+ * only proof, along with "zero dropped requests through a real proxy".
  */
-final class FakeDockerDaemon implements DockerTransport {
+public final class FakeDockerDaemon implements DockerTransport {
 
     /** One fake container; its published port is a REAL loopback listener. */
     static final class Workload {
@@ -120,7 +120,7 @@ final class FakeDockerDaemon implements DockerTransport {
      * candidate row, so the handle to script does not exist yet when the test decides the
      * candidate must be unhealthy -- this is the only honest way to say it in advance.
      */
-    void answerWithForNextWorkload(int httpStatus) {
+    public void answerWithForNextWorkload(int httpStatus) {
         this.nextHealth = httpStatus;
     }
 
@@ -129,12 +129,12 @@ final class FakeDockerDaemon implements DockerTransport {
      * datasource scope: the only honest way to place a rival writer in the middle of an
      * operation, where a real one lands while the daemon spends its minutes.
      */
-    void duringNextStart(@NonNull Runnable work) {
+    public void duringNextStart(@NonNull Runnable work) {
         this.duringNextStart = work;
     }
 
     /** Report this workload as RUNNING with a dead process inside (the OOM-kill shape). */
-    void reportWorkloadDead(@NonNull String handle) {
+    public void reportWorkloadDead(@NonNull String handle) {
         this.workloadDead.add(handle);
     }
 
@@ -144,17 +144,17 @@ final class FakeDockerDaemon implements DockerTransport {
      * settle (a wedged runtime, a busy device); the release that just took traffic must
      * survive it.
      */
-    void refuseStopOf(@NonNull String handle) {
+    public void refuseStopOf(@NonNull String handle) {
         this.stopFails.add(handle);
     }
 
     /** Let this handle be stopped again; the refusal is per-daemon and must not leak. */
-    void allowStopOf(@NonNull String handle) {
+    public void allowStopOf(@NonNull String handle) {
         this.stopFails.remove(handle);
     }
 
     /** Every recorded act against ONE handle, in order: the workload's whole life. */
-    @NonNull List<String> callsFor(@NonNull String handle) {
+    public @NonNull List<String> callsFor(@NonNull String handle) {
         List<String> mine = new ArrayList<>();
         for (String call : List.copyOf(this.calls)) {
             if (call.endsWith(":" + handle)) {
@@ -165,7 +165,7 @@ final class FakeDockerDaemon implements DockerTransport {
     }
 
     /** How many times one exact recorded act happened. */
-    int callCount(@NonNull String call) {
+    public int callCount(@NonNull String call) {
         int count = 0;
         for (String recorded : List.copyOf(this.calls)) {
             if (recorded.equals(call)) {
@@ -176,18 +176,18 @@ final class FakeDockerDaemon implements DockerTransport {
     }
 
     /** Whether the daemon still holds a container under this handle. */
-    boolean exists(@NonNull String handle) {
+    public boolean exists(@NonNull String handle) {
         return this.workloads.containsKey(handle);
     }
 
     /** Whether the container under this handle is running. */
-    boolean isRunning(@NonNull String handle) {
+    public boolean isRunning(@NonNull String handle) {
         Workload workload = this.workloads.get(handle);
         return workload != null && workload.running;
     }
 
     /** Release every real loopback listener this daemon opened. */
-    void close() {
+    public void close() {
         for (Workload workload : this.workloads.values()) {
             unbind(workload);
         }
@@ -196,12 +196,12 @@ final class FakeDockerDaemon implements DockerTransport {
 
     // -- the runtime face -----------------------------------------------------
 
-    /** The runtime the site kind deploys through while {@link #install()} is in force. */
+    /** The runtime the release kind deploys through while {@link #install()} is in force. */
     @NonNull InstanceRuntime runtime() {
-        return new FakeSiteRuntime();
+        return new FakeReleaseRuntime();
     }
 
-    private final class FakeSiteRuntime implements InstanceRuntime {
+    private final class FakeReleaseRuntime implements InstanceRuntime {
 
         @Override
         public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
@@ -333,28 +333,28 @@ final class FakeDockerDaemon implements DockerTransport {
      * return the restore hook. The kind registry maps identifier to handler, so a
      * re-register REPLACES -- and {@link #restore()} puts the production pair back.
      */
-    void install() {
-        InstanceKinds.register(new FakeSiteKind(this));
+    public void install() {
+        InstanceKinds.register(new FakeReleaseKind(this));
         DockerClient.overrideLocalTransportForTest(() -> this);
     }
 
     /** Undo {@link #install()}; safe to call when it was never installed. */
-    static void restore() {
+    public static void restore() {
         InstanceKinds.register(new ReleaseKind());
         DockerClient.overrideLocalTransportForTest(null);
     }
 
     /**
-     * The real site kind in every respect but its runtime: schema, spec derivation,
+     * The real release kind in every respect but its runtime: schema, spec derivation,
      * generated-only refusal and footprint all come from production, so a spec bug still
      * fails here.
      */
-    private static final class FakeSiteKind implements InstanceKindHandler {
+    private static final class FakeReleaseKind implements InstanceKindHandler {
 
         private final ReleaseKind real = new ReleaseKind();
         private final FakeDockerDaemon daemon;
 
-        FakeSiteKind(@NonNull FakeDockerDaemon daemon) {
+        FakeReleaseKind(@NonNull FakeDockerDaemon daemon) {
             this.daemon = daemon;
         }
 
@@ -577,7 +577,7 @@ final class FakeDockerDaemon implements DockerTransport {
     }
 
     /** A stable content-addressed identity per reference; the digest pin reads this. */
-    static @NonNull String digestOf(@NonNull String reference) {
+    public static @NonNull String digestOf(@NonNull String reference) {
         if (reference.startsWith("sha256:")) {
             return reference;
         }
@@ -628,7 +628,7 @@ final class FakeDockerDaemon implements DockerTransport {
     }
 
     /** The instance handle spelling every assertion here shares. */
-    static @NonNull String handleOf(int instanceId) {
+    public static @NonNull String handleOf(int instanceId) {
         return be.elevenways.hohenheim.server.ControllerScope.handle(
             be.elevenways.hohenheim.server.ControllerScope.KIND_INSTANCE, instanceId);
     }

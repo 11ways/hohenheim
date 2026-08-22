@@ -13,9 +13,9 @@ import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -150,20 +150,24 @@ class ContainerHardeningTest {
             netns.close();
         }
 
-        // 2. DOCKER SITE -- declares SERVICE (web-server images chown and drop privileges).
-        //    Lowered onto the instance contract: the running release is a release
-        //    instance, so the kernel state is asserted on the INSTANCE handle and the
-        //    teardown is the verified destroyFor (handler.destroy is only a stop now).
-        int siteId = 999_102;
-        DockerSiteRequestHandler site = new DockerSiteRequestHandler(siteId, Map.of(
-            "image", "alpine", "tag", "latest", "container_port", 8080, "command", "sleep 600"));
+        // 2. APPLICATION RELEASE -- declares SERVICE (web-server images chown and drop
+        //    privileges). Lowered onto the instance contract: the running release is a
+        //    release instance, so the kernel state is asserted on the INSTANCE handle and
+        //    the teardown is the verified destroyFor.
+        int applicationId = application("hardening-app", Map.of(
+            "image", "alpine", "tag", "latest", "container_port", 8080,
+            "command", "sleep 600"));
         try {
-            assertThat(site.getInstanceId())
-                .as("step 2: the site runtime went through the contract").isNotNull();
-            assertKernelState(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, site.getInstanceId()),
-                "step 2: docker site", SERVICE_CAPS, pids);
+            ApplicationReleases.Release release =
+                ApplicationReleases.converge(applicationId, Map.of());
+            assertThat(ApplicationReleases.ownedServing(applicationId))
+                .as("step 2: the application's release went through the contract")
+                .isNotNull();
+            assertKernelState(docker, ControllerScope.handle(
+                    ControllerScope.KIND_INSTANCE, release.instanceId()),
+                "step 2: application release", SERVICE_CAPS, pids);
         } finally {
-            SiteInstances.destroyFor(siteId);
+            ApplicationReleases.destroyFor(applicationId);
         }
 
         // 3. MANAGED DATABASE -- declares SERVICE per ENGINE (the kind reads
@@ -209,6 +213,17 @@ class ContainerHardeningTest {
      * Stack + service records for the hardening journeys; the returned array is
      * {@code [stackId, serviceId...]} in declaration order.
      */
+    /** The application instance whose converge produces the release under test. */
+    private static int application(String name, Map<String, Object> settings) {
+        Row application = Models.get(InstanceModel.class).createEmptyRow();
+        application.set(InstanceModel.NAME, name);
+        application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        application.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
+        Models.get(InstanceModel.class).save(application);
+        return application.get(InstanceModel.ID);
+    }
+
     private static int[] stackRecords(String stackName, Map<String, List<String>> services) {
         int[] ids = new int[services.size() + 1];
         Db.run(Datasources.getDefault(), () -> {

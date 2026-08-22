@@ -44,6 +44,7 @@ class InstanceSpecDeclarationTest {
         assertThat(bare.command()).as("step 1: no command override").isNull();
         assertThat(bare.env()).as("step 1: no environment").isEmpty();
         assertThat(bare.volumes()).as("step 1: no named volumes").isEmpty();
+        assertThat(bare.binds()).as("step 1: no host bind mounts").isEmpty();
         assertThat(bare.publications()).as("step 1: no port publication").isEmpty();
         assertThat(bare.publication()).as("step 1: and its single-publication reading agrees")
             .isNull();
@@ -82,6 +83,9 @@ class InstanceSpecDeclarationTest {
         assertThat(declared.env()).as("step 2: the declared environment").containsEntry("TZ", "UTC");
         assertThat(declared.volumes()).as("step 2: the volume is handle-scoped")
             .containsValue("/data");
+        assertThat(declared.binds())
+            .as("step 2: a named volume is not a bind mount -- the two components are"
+                + " declared separately and neither leaks into the other").isEmpty();
         assertThat(declared.publication()).as("step 2: the declared port").isNotNull();
         assertThat(declared.publication().containerPort()).as("step 2: on its number")
             .isEqualTo(6379);

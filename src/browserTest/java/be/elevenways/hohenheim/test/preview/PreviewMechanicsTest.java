@@ -42,6 +42,9 @@ class PreviewMechanicsTest extends HohenheimTestBase {
 
     private static Integer siteId;
 
+    /** The APPLICATION a preview is built from; the site beside it lends the hostname. */
+    private static Integer applicationId;
+
     @BeforeAll
     static void setUpSite() {
         HohenheimSettings.VALUES.setValue(
@@ -60,6 +63,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         site.set(SiteModel.ENABLED, true);
         siteModel.save(site);
         siteId = site.get(SiteModel.ID);
+        applicationId = site.get(SiteModel.INSTANCE_ID);
     }
 
     @Test
@@ -259,8 +263,8 @@ class PreviewMechanicsTest extends HohenheimTestBase {
 
     /**
      * The generated preview hostname is a REAL claim, driven end to end: reclaiming a
-     * preview ledgers its hostname under the SITE's owner, a stranger is quarantined out of
-     * it, and the same owner's next preview retakes it.
+     * preview ledgers its hostname under the owner of the site that LENDS it, a stranger is
+     * quarantined out of it, and the same owner's next preview retakes it.
      *
      * DECISION (2026-08-06): previews are quarantined, NOT exempted, even though the
      * hostname sits under a base domain we host and so carries no dangling third-party
@@ -280,8 +284,10 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         var sites = Models.get(SiteModel.class);
         String hostname = "prev-mech--quarantine-ref.preview.test";
         try {
-            // 1. The preview's site belongs to a TENANT, so the ledger has an owner to
-            //    record that is not the operator's empty set.
+            // 1. The site that lends the hostname belongs to a TENANT, so the ledger has
+            //    an owner to record that is not the operator's empty set. The domain row
+            //    hangs off the SITE, which is why the grant stays site-keyed here while
+            //    the preview's own quota charge follows the APPLICATION.
             int owner = tenantUser("preview-owner@test");
             RecordGrants.grant(GrantSubjectType.USER, owner, SiteModel.MODEL_ID, siteId,
                 HohenheimAccess.MANAGE, true);
@@ -354,7 +360,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         }
     }
 
-    /** A user holding manage on a site, so the ledger records a tenant and not the operator. */
+    /** A user holding manage on the site, so the ledger records a tenant, not the operator. */
     private static int tenantUser(String email) {
         Row user = AuthModels.users().createEmptyRow();
         user.set(UserModel.EMAIL, email);
@@ -391,7 +397,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
     private static Row newPreviewRow(String ref, String hostname, Instant expiresAt) {
         var model = Models.get(PreviewDeploymentModel.class);
         Row preview = model.createEmptyRow();
-        preview.set(PreviewDeploymentModel.SITE_ID, siteId);
+        preview.set(PreviewDeploymentModel.APPLICATION_ID, applicationId);
         preview.set(PreviewDeploymentModel.REF, ref);
         preview.set(PreviewDeploymentModel.HOSTNAME, hostname);
         preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_RUNNING);

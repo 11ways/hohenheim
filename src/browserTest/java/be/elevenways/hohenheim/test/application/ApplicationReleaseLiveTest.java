@@ -1,21 +1,24 @@
-package be.elevenways.hohenheim.test.docker;
+package be.elevenways.hohenheim.test.application;
 
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.application.InstanceUpstreamHandler;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
-import be.elevenways.hohenheim.server.docker.SiteInstances;
-import be.elevenways.hohenheim.server.docker.SiteReleases;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
+import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -52,10 +55,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * daemon socket or the alpine base image is absent.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
-class SiteReleaseLiveTest {
+class ApplicationReleaseLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
-    private static final String SITE_MODEL = SiteModel.MODEL_ID.toString();
+    private static final String OWNER_MODEL = InstanceModel.MODEL_ID.toString();
+
+    /** A site id no record carries: the upstream handler stores it and resolves nothing by it. */
+    private static final int UNROUTED_SITE_ID = 955_001;
 
     private static boolean booted;
     private static Integer savedProbeTimeout;
@@ -63,11 +69,11 @@ class SiteReleaseLiveTest {
     private static Integer savedDrain;
 
     // AIDEV-NOTE: the netns fixture is what lets the release engine deploy at all on a
-    // developer machine. Since the isolation wave every site release container is
+    // developer machine. Since the isolation wave every release container is
     // NetworkPosture.PRIVATE and its deploy/destroy REFUSES where the network policy
     // cannot be enforced; that refusal is correct product behaviour and stays -- the
     // fixture points the PRODUCTION applier at a real nftables in a private namespace
-    // instead of weakening anything (same pattern as DockerSiteHandlerTest).
+    // instead of weakening anything (the pattern the deleted DockerSiteHandlerTest used).
     private static PrivateNetns netns;
 
     @BeforeAll
@@ -121,10 +127,11 @@ class SiteReleaseLiveTest {
         String digestA = TestImages.loadHttpServer(docker, repoA + ":latest", "release-one");
         String digestB = TestImages.loadHttpServer(docker, repoB + ":latest", "release-two");
 
-        Row site = ProxyTestSupport.setupSite("hohenheim:static", "Release journey site",
-            "release-journey", settingsFor(repoA));
+        int applicationId = application("release-journey-app", settingsFor(repoA));
+        Row site = exposingSite(applicationId, "Release journey site", "release-journey");
         ProxyTestSupport.addDomain(site, "release.test", "exact", null, false);
-        int siteId = site.get(SiteModel.ID);
+        // Routing only RESOLVES now, so the first release is the test's own deploy verb.
+        converge(applicationId, settingsFor(repoA));
 
         ProxyServer proxy = ProxyTestSupport.startProxy();
         Hammer hammer = null;
@@ -135,7 +142,7 @@ class SiteReleaseLiveTest {
             String first = ProxyTestSupport.rawRequest(port, "release.test", "/");
             assertThat(first).as("step 1: the initial release answers through the proxy")
                 .contains("200").contains("release-one");
-            Row serving1 = servingOf(siteId);
+            Row serving1 = servingOf(applicationId);
             assertThat(serving1).as("step 1: a serving-role instance exists").isNotNull();
             int firstInstanceId = serving1.get(InstanceModel.ID);
             assertThat(settingsOf(serving1).get("image"))
@@ -145,9 +152,7 @@ class SiteReleaseLiveTest {
             // 2. Swap to release B under CONTINUOUS traffic.
             Hammer swapHammer = new Hammer(port, "release.test", 3);
             hammer = swapHammer;
-            site.set(SiteModel.SETTINGS, settingsFor(repoB));
-            Models.get(SiteModel.class).save(site);
-            proxy.reload();
+            converge(applicationId, settingsFor(repoB));
             // Bounded wait instead of a fixed sleep: under parallel forks a starved
             // lane can legitimately still be on release-one after 400ms, which is a
             // scheduling artifact, not a routing regression. The zero-failed-requests
@@ -178,7 +183,7 @@ class SiteReleaseLiveTest {
 
             // 3. The superseded release is RETAINED as the rollback target: role
             //    retired, container kept, stopped once the drain window passed.
-            Row retired = onlyWithRole(siteId, InstanceModel.ROLE_RETIRED);
+            Row retired = onlyWithRole(applicationId, InstanceModel.ROLE_RETIRED);
             assertThat(retired.get(InstanceModel.ID))
                 .as("step 3: the retired release is the previously-serving instance")
                 .isEqualTo(firstInstanceId);
@@ -188,7 +193,7 @@ class SiteReleaseLiveTest {
             assertThat(inspectImageOf(docker, retiredHandle))
                 .as("step 3: the retained container still runs the OLD digest")
                 .isEqualTo(digestA);
-            Row swapOp = latestOp(siteId);
+            Row swapOp = latestOp(applicationId);
             await("step 3: the release operation completes after drain",
                 12_000, () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
                     reload(swapOp).get(ReleaseOperationModel.STATUS)));
@@ -199,17 +204,16 @@ class SiteReleaseLiveTest {
                 .contains("retained as the rollback target").contains("release complete");
 
             // 4. Roll back: one durable operation over the retained digest-pinned spec.
-            SiteReleases.rollback(siteId);
-            proxy.reload();
+            ReleaseEngine.rollback(applicationId);
             String rolledBack = ProxyTestSupport.rawRequest(port, "release.test", "/");
             assertThat(rolledBack)
                 .as("step 4: after the rollback the proxy serves the PRIOR release")
                 .contains("200").contains("release-one");
-            Row servingBack = servingOf(siteId);
+            Row servingBack = servingOf(applicationId);
             assertThat(settingsOf(servingBack).get("image"))
                 .as("step 4: the rolled-back release runs the pinned OLD digest")
                 .isEqualTo(digestA);
-            Row rollbackOp = latestOp(siteId);
+            Row rollbackOp = latestOp(applicationId);
             assertThat(rollbackOp.get(ReleaseOperationModel.KIND))
                 .as("step 4: the rollback is its own recorded operation")
                 .isEqualTo(ReleaseOperationModel.KIND_ROLLBACK);
@@ -225,28 +229,27 @@ class SiteReleaseLiveTest {
                 .as("step 5: the older retired release was reclaimed (record)").isNotNull();
             assertThat(containerExists(docker, retiredHandle))
                 .as("step 5: the older retired release was reclaimed (daemon)").isFalse();
-            Row newTarget = onlyWithRole(siteId, InstanceModel.ROLE_RETIRED);
+            Row newTarget = onlyWithRole(applicationId, InstanceModel.ROLE_RETIRED);
             assertThat(settingsOf(newTarget).get("image"))
                 .as("step 5: the v2 release is the NEW rollback target")
                 .isEqualTo(digestB);
 
-            // 6. The rollback PINS: a routing reload with unchanged site settings must
-            //    not converge back onto the rejected spec.
-            int opsBefore = opCount(siteId);
+            // 6. The rollback PINS: converging the application again on the UNCHANGED
+            //    rejected spec must not release it back on.
+            int opsBefore = opCount(applicationId);
+            converge(applicationId, settingsFor(repoB));
             proxy.reload();
             assertThat(ProxyTestSupport.rawRequest(port, "release.test", "/"))
-                .as("step 6: a reload does not undo the rollback")
+                .as("step 6: neither the converge nor a reload undoes the rollback")
                 .contains("release-one");
-            assertThat(opCount(siteId))
-                .as("step 6: the pinned reload released nothing").isEqualTo(opsBefore);
+            assertThat(opCount(applicationId))
+                .as("step 6: the pinned converge released nothing").isEqualTo(opsBefore);
 
             // 7. A SOURCE CHANGE dissolves the pin: the operator changed something, so
             //    the declared spec wins again through a fresh gated release.
             Map<String, Object> changed = settingsFor(repoB);
             changed.put("health_path", "/index.html");
-            site.set(SiteModel.SETTINGS, changed);
-            Models.get(SiteModel.class).save(site);
-            proxy.reload();
+            converge(applicationId, changed);
             assertThat(ProxyTestSupport.rawRequest(port, "release.test", "/"))
                 .as("step 7: a changed source dissolves the pin and releases forward")
                 .contains("release-two");
@@ -255,7 +258,7 @@ class SiteReleaseLiveTest {
                 hammer.close();
             }
             proxy.stop();
-            cleanupSite(site);
+            cleanup(site, applicationId);
             removeQuietly(docker, repoA + ":latest");
             removeQuietly(docker, repoB + ":latest");
             removeQuietly(docker, digestA);
@@ -283,10 +286,10 @@ class SiteReleaseLiveTest {
         String digestEvil = TestImages.loadResponder(docker, repoEvil + ":latest",
             "HTTP/1.1 500 Broken", "evil-answer");
 
-        Row site = ProxyTestSupport.setupSite("hohenheim:static", "Gate site",
-            "release-gate", settingsFor(repoGood));
+        int applicationId = application("release-gate-app", settingsFor(repoGood));
+        Row site = exposingSite(applicationId, "Gate site", "release-gate");
         ProxyTestSupport.addDomain(site, "gate.test", "exact", null, false);
-        int siteId = site.get(SiteModel.ID);
+        converge(applicationId, settingsFor(repoGood));
 
         ProxyServer proxy = ProxyTestSupport.startProxy();
         Hammer hammer = null;
@@ -294,14 +297,12 @@ class SiteReleaseLiveTest {
             int port = ProxyTestSupport.httpPort(proxy);
             assertThat(ProxyTestSupport.rawRequest(port, "gate.test", "/"))
                 .as("step 1: the good release serves").contains("200").contains("keep-serving");
-            Row serving = servingOf(siteId);
+            Row serving = servingOf(applicationId);
             int servingId = serving.get(InstanceModel.ID);
 
             // 2. Release the unhealthy candidate under continuous traffic.
             hammer = new Hammer(port, "gate.test", 3);
-            site.set(SiteModel.SETTINGS, settingsFor(repoEvil));
-            Models.get(SiteModel.class).save(site);
-            proxy.reload();
+            converge(applicationId, settingsFor(repoEvil));
             Thread.sleep(400);
             hammer.close();
 
@@ -318,7 +319,7 @@ class SiteReleaseLiveTest {
             }
 
             // 4. The operation records the refusal durably.
-            Row op = latestOp(siteId);
+            Row op = latestOp(applicationId);
             assertThat(op.get(ReleaseOperationModel.STATUS))
                 .as("step 4: the operation is FAILED, never silently forgotten")
                 .isEqualTo(ReleaseOperationModel.STATUS_FAILED);
@@ -337,7 +338,7 @@ class SiteReleaseLiveTest {
                 .as("step 5: the refused candidate's container is gone").isFalse();
             assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, candidateId))
                 .as("step 5: the refused candidate holds no port claim").isEmpty();
-            Row still = servingOf(siteId);
+            Row still = servingOf(applicationId);
             assertThat(still.get(InstanceModel.ID))
                 .as("step 5: the serving release is the SAME instance").isEqualTo(servingId);
             assertThat(settingsOf(still).get("image"))
@@ -349,7 +350,7 @@ class SiteReleaseLiveTest {
                 hammer.close();
             }
             proxy.stop();
-            cleanupSite(site);
+            cleanup(site, applicationId);
             removeQuietly(docker, repoGood + ":latest");
             removeQuietly(docker, repoEvil + ":latest");
             removeQuietly(docker, digestGood);
@@ -369,20 +370,23 @@ class SiteReleaseLiveTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, "alpine:latest");
 
-        int siteId = 955_101;
         String repo = "hohenheim-rel-mv-" + System.nanoTime();
         String tagRef = repo + ":latest";
         String digest1 = TestImages.loadHttpServer(docker, tagRef, "moved-one");
         String decoy = null;
         String digest2 = null;
+        Map<String, Object> settings = settingsFor(repo);
+        int applicationId = application("mv-app", settings);
         try {
-            // 1. Release v1 from the tag; the instance pins the digest behind it.
-            Map<String, Object> settings = settingsFor(repo);
-            DockerSiteRequestHandler first =
-                new DockerSiteRequestHandler(siteId, "mv-site", settings);
-            assertThat(first.getUpstream()).as("step 1: v1 serves").isNotNull();
-            assertThat(get(first.getUpstream())).contains("moved-one");
-            Row serving1 = servingOf(siteId);
+            // 1. Release v1 from the tag; the instance pins the digest behind it. The
+            //    upstream handler CONVERGES NOTHING any more, so the deploy verb is the
+            //    test's own step and the handler is only asked to resolve what it left.
+            converge(applicationId, settings);
+            InstanceUpstreamHandler first =
+                new InstanceUpstreamHandler(UNROUTED_SITE_ID, applicationId);
+            assertThat(first.current()).as("step 1: v1 serves").isNotNull();
+            assertThat(get(first.current())).contains("moved-one");
+            Row serving1 = servingOf(applicationId);
             assertThat(settingsOf(serving1).get("image"))
                 .as("step 1: pinned to the digest the tag pointed at").isEqualTo(digest1);
 
@@ -390,14 +394,15 @@ class SiteReleaseLiveTest {
             digest2 = TestImages.loadHttpServer(docker, tagRef, "moved-two");
             Map<String, Object> changed = settingsFor(repo);
             changed.put("health_path", "/index.html");
-            DockerSiteRequestHandler second =
-                new DockerSiteRequestHandler(siteId, "mv-site", changed);
-            assertThat(get(second.getUpstream())).as("step 2: v2 serves").contains("moved-two");
-            assertThat(settingsOf(servingOf(siteId)).get("image")).isEqualTo(digest2);
-            Row retired = onlyWithRole(siteId, InstanceModel.ROLE_RETIRED);
+            converge(applicationId, changed);
+            InstanceUpstreamHandler second =
+                new InstanceUpstreamHandler(UNROUTED_SITE_ID, applicationId);
+            assertThat(get(second.current())).as("step 2: v2 serves").contains("moved-two");
+            assertThat(settingsOf(servingOf(applicationId)).get("image")).isEqualTo(digest2);
+            Row retired = onlyWithRole(applicationId, InstanceModel.ROLE_RETIRED);
             assertThat(retired.get(InstanceModel.ID))
                 .isEqualTo(serving1.get(InstanceModel.ID));
-            Row swapOp = latestOp(siteId);
+            Row swapOp = latestOp(applicationId);
             await("step 2: the swap completes after drain", 12_000,
                 () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
                     reload(swapOp).get(ReleaseOperationModel.STATUS)));
@@ -410,8 +415,8 @@ class SiteReleaseLiveTest {
                 .as("step 3: the tag is GONE").isFalse();
 
             // 4. Roll back: the retained spec deploys BY DIGEST -- no tag, no source.
-            SiteReleases.rollback(siteId);
-            Row servingBack = servingOf(siteId);
+            ReleaseEngine.rollback(applicationId);
+            Row servingBack = servingOf(applicationId);
             assertThat(settingsOf(servingBack).get("image"))
                 .as("step 4: the rolled-back release is the pinned v1 digest")
                 .isEqualTo(digest1);
@@ -423,14 +428,14 @@ class SiteReleaseLiveTest {
             int backPort = docker.publishedPort(backHandle, 8080);
             assertThat(get(URI.create("http://127.0.0.1:" + backPort + "/")))
                 .as("step 4: and it serves the v1 content").contains("moved-one");
-            Row rollbackOp = latestOp(siteId);
+            Row rollbackOp = latestOp(applicationId);
             assertThat(rollbackOp.get(ReleaseOperationModel.KIND))
                 .isEqualTo(ReleaseOperationModel.KIND_ROLLBACK);
             assertThat((String) rollbackOp.get(ReleaseOperationModel.IMAGE_ID))
                 .as("step 4: the operation pins the artifact it released")
                 .isEqualTo(digest1);
         } finally {
-            SiteInstances.destroyFor(siteId);
+            ApplicationReleases.destroyFor(applicationId);
             removeQuietly(docker, tagRef);
             removeQuietly(docker, digest1);
             if (digest2 != null) {
@@ -454,29 +459,29 @@ class SiteReleaseLiveTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, "alpine:latest");
 
-        int siteId = 955_201;
         String repo1 = "hohenheim-rel-rc1-" + System.nanoTime();
         String repo2 = "hohenheim-rel-rc2-" + System.nanoTime();
         String digest1 = TestImages.loadHttpServer(docker, repo1 + ":latest", "rec-one");
         String digest2 = TestImages.loadHttpServer(docker, repo2 + ":latest", "rec-two");
+        int applicationId = application("rc-app", settingsFor(repo1));
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 600);
         try {
             // 1. A real release whose drain will NOT run for 600s -- the lost-drain shape.
-            new DockerSiteRequestHandler(siteId, "rc-site", settingsFor(repo1));
-            new DockerSiteRequestHandler(siteId, "rc-site", settingsFor(repo2));
-            Row retired = onlyWithRole(siteId, InstanceModel.ROLE_RETIRED);
+            converge(applicationId, settingsFor(repo1));
+            converge(applicationId, settingsFor(repo2));
+            Row retired = onlyWithRole(applicationId, InstanceModel.ROLE_RETIRED);
             int retiredId = retired.get(InstanceModel.ID);
             assertThat(isRunning(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, retiredId)))
                 .as("step 1: the superseded release is still draining (running)").isTrue();
-            Row op = latestOp(siteId);
+            Row op = latestOp(applicationId);
             assertThat(op.get(ReleaseOperationModel.STATUS))
                 .isEqualTo(ReleaseOperationModel.STATUS_DRAINING);
 
             // 2. A fabricated pre-switch operation with a live candidate (the shape a
             //    crash during probing leaves).
             int[] candidateId = new int[1];
-            GeneratedRows.as(new GeneratedRows.Attribution(SiteInstances.SOURCE,
-                SITE_MODEL, siteId), () -> {
+            GeneratedRows.as(new GeneratedRows.Attribution(ApplicationReleases.SOURCE,
+                OWNER_MODEL, applicationId), () -> {
                 Row candidate = Models.get(InstanceModel.class).createEmptyRow();
                 candidate.set(InstanceModel.NAME, "rc-candidate");
                 candidate.set(InstanceModel.KIND, "hohenheim:release");
@@ -489,15 +494,15 @@ class SiteReleaseLiveTest {
             });
             Row staleOp = Models.get(ReleaseOperationModel.class).createEmptyRow();
             staleOp.set(ReleaseOperationModel.KIND, ReleaseOperationModel.KIND_RELEASE);
-            staleOp.set(ReleaseOperationModel.FOR_MODEL, SITE_MODEL);
-            staleOp.set(ReleaseOperationModel.FOR_ID, siteId);
+            staleOp.set(ReleaseOperationModel.FOR_MODEL, OWNER_MODEL);
+            staleOp.set(ReleaseOperationModel.FOR_ID, applicationId);
             staleOp.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_PROBING);
             staleOp.set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId[0]);
             staleOp.set(ReleaseOperationModel.STARTED_AT, Instant.now());
             Models.get(ReleaseOperationModel.class).save(staleOp);
 
             // 3. Recovery settles BOTH: drain finished, candidate destroyed.
-            SiteReleases.recoverInterrupted();
+            ReleaseEngine.recoverInterrupted();
 
             assertThat(isRunning(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, retiredId)))
                 .as("step 3: recovery stopped the draining release at the daemon").isFalse();
@@ -515,12 +520,12 @@ class SiteReleaseLiveTest {
                 .as("step 3: the orphaned candidate's record died").isNotNull();
             assertThat(containerExists(docker, ControllerScope.handle(ControllerScope.KIND_INSTANCE, candidateId[0])))
                 .as("step 3: and its container is gone at the daemon").isFalse();
-            assertThat(servingOf(siteId).get(InstanceModel.SETTINGS)).isNotNull();
-            assertThat(settingsOf(servingOf(siteId)).get("image"))
+            assertThat(servingOf(applicationId).get(InstanceModel.SETTINGS)).isNotNull();
+            assertThat(settingsOf(servingOf(applicationId)).get("image"))
                 .as("step 3: the serving release was never touched").isEqualTo(digest2);
         } finally {
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 2);
-            SiteInstances.destroyFor(siteId);
+            ApplicationReleases.destroyFor(applicationId);
             removeQuietly(docker, repo1 + ":latest");
             removeQuietly(docker, repo2 + ":latest");
             removeQuietly(docker, digest1);
@@ -538,9 +543,40 @@ class SiteReleaseLiveTest {
         return settings;
     }
 
-    private static void cleanupSite(Row site) {
+    /** An application instance on the local server carrying this release spec. */
+    private static int application(String name, Map<String, Object> settings) {
+        Row application = Models.get(InstanceModel.class).createEmptyRow();
+        application.set(InstanceModel.NAME, name);
+        application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        application.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
+        Models.get(InstanceModel.class).save(application);
+        return application.get(InstanceModel.ID);
+    }
+
+    /** The site that LENDS the application its hostname: the {@code instance} upstream. */
+    private static Row exposingSite(int applicationId, String name, String slug) {
+        Row site = ProxyTestSupport.setupSite("hohenheim:instance", name, slug,
+            new LinkedHashMap<>());
+        site.set(SiteModel.INSTANCE_ID, applicationId);
+        Models.get(SiteModel.class).save(site);
+        return site;
+    }
+
+    /**
+     * Declare a spec on the application and converge it -- the engine reads the
+     * application row's OWN settings, so the spec is a WRITE, never a converge argument.
+     */
+    private static void converge(int applicationId, Map<String, Object> settings) {
+        Row application = Models.get(InstanceModel.class).findById(applicationId);
+        application.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
+        Models.get(InstanceModel.class).save(application);
+        ApplicationReleases.converge(applicationId, Map.of());
+    }
+
+    private static void cleanup(Row site, int applicationId) {
         try {
-            SiteInstances.destroyFor(site.get(SiteModel.ID));
+            ApplicationReleases.destroyFor(applicationId);
         } catch (RuntimeException ignored) {
             // teardown best effort; the assertions are the outcome
         }
@@ -549,24 +585,26 @@ class SiteReleaseLiveTest {
         Models.get(SiteModel.class).save(site);
     }
 
-    private static Row servingOf(int siteId) {
+    private static Row servingOf(int applicationId) {
         return Models.get(InstanceModel.class).find()
-            .where(InstanceModel.GENERATED_FOR_MODEL.eq(SITE_MODEL))
-            .where(InstanceModel.GENERATED_FOR_ID.eq(siteId))
+            .where(InstanceModel.GENERATED_FOR_MODEL.eq(OWNER_MODEL))
+            .where(InstanceModel.GENERATED_FOR_ID.eq(applicationId))
             .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_SERVING))
             .where(InstanceModel.DELETED_AT.isNull())
             .orderBy(InstanceModel.ID, SortOrder.DESC)
             .first();
     }
 
-    private static Row onlyWithRole(int siteId, String role) {
+    private static Row onlyWithRole(int applicationId, String role) {
         List<Row> rows = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.GENERATED_FOR_MODEL.eq(SITE_MODEL))
-            .where(InstanceModel.GENERATED_FOR_ID.eq(siteId))
+            .where(InstanceModel.GENERATED_FOR_MODEL.eq(OWNER_MODEL))
+            .where(InstanceModel.GENERATED_FOR_ID.eq(applicationId))
             .where(InstanceModel.RUNTIME_ROLE.eq(role))
             .where(InstanceModel.DELETED_AT.isNull())
             .all();
-        assertThat(rows).as("exactly one %s-role release of site %s", role, siteId).hasSize(1);
+        assertThat(rows)
+            .as("exactly one %s-role release of application %s", role, applicationId)
+            .hasSize(1);
         return rows.get(0);
     }
 
@@ -575,16 +613,17 @@ class SiteReleaseLiveTest {
         return (Map<String, Object>) instance.get(InstanceModel.SETTINGS);
     }
 
-    private static Row latestOp(int siteId) {
+    private static Row latestOp(int applicationId) {
         List<Row> ops = Models.get(ReleaseOperationModel.class)
-            .findForOwner(SITE_MODEL, siteId, 1);
-        assertThat(ops).as("a release operation exists for site %s", siteId).isNotEmpty();
+            .findForOwner(OWNER_MODEL, applicationId, 1);
+        assertThat(ops).as("a release operation exists for application %s", applicationId)
+            .isNotEmpty();
         return ops.get(0);
     }
 
-    private static int opCount(int siteId) {
+    private static int opCount(int applicationId) {
         return Models.get(ReleaseOperationModel.class)
-            .findForOwner(SITE_MODEL, siteId, 1000).size();
+            .findForOwner(OWNER_MODEL, applicationId, 1000).size();
     }
 
     private static Row reload(Row op) {

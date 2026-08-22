@@ -4,12 +4,13 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
@@ -81,6 +82,8 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
     private static Integer siteAId;
     private static Integer siteBId;
+    private static Integer applicationAId;
+    private static Integer applicationBId;
     private static Integer admittedHostId;
     private static Integer capRowId;
 
@@ -108,6 +111,15 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, tenantBId, SiteModel.MODEL_ID, siteBId,
             HohenheimAccess.MANAGE, true);
 
+        // A database attaches to the WORKLOAD that consumes it, which since brief 7 is an
+        // application instance rather than a site.
+        applicationAId = application(PREFIX + "app-a");
+        applicationBId = application(PREFIX + "app-b");
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
+            applicationAId, HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, tenantBId, InstanceModel.MODEL_ID,
+            applicationBId, HohenheimAccess.MANAGE, true);
+
         admittedHostId = admittedHost();
     }
 
@@ -131,12 +143,12 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
                     instances.delete(instance.get(InstanceModel.ID));
                 }
             });
-            SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
+            InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
             for (Row row : databases.find()
                     .where(DatabaseModel.SERVER_ID.eq(admittedHostId)).all()) {
                 Integer id = row.get(DatabaseModel.ID);
                 for (Row link : links.findByDatabaseId(id)) {
-                    links.delete(link.get(SiteDatabaseModel.ID));
+                    links.delete(link.get(InstanceDatabaseModel.ID));
                 }
                 databases.delete(id);
             }
@@ -183,6 +195,17 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         row.set(SiteModel.ENABLED, false);
         sites.save(row);
         return row.get(SiteModel.ID);
+    }
+
+    /** An application instance: the record a database link now hangs off. */
+    private static int application(String name) {
+        Model instances = Models.get(InstanceModel.class);
+        Row row = instances.createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        row.set(InstanceModel.SETTINGS, Map.of("image", "alpine"));
+        instances.save(row);
+        return row.get(InstanceModel.ID);
     }
 
     private static int admittedHost() {
@@ -494,19 +517,19 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             .as("step 3: and nothing landed").isNull();
     }
 
-    /** Attaching a database to a site needs authority over BOTH sides. */
+    /** Attaching a database to an application needs authority over BOTH sides. */
     @Test
     @Order(6)
-    void attachingADatabaseToASiteNeedsAuthorityOverBothRecords() {
-        SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
+    void attachingADatabaseToAnApplicationNeedsAuthorityOverBothRecords() {
+        InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
 
-        // 1. THE ATTACK: tenant B points THEIR OWN site at tenant A's database, which
-        //    would inject A's credentials into B's runtime.
+        // 1. THE ATTACK: tenant B points THEIR OWN application at tenant A's database,
+        //    which would inject A's credentials into B's runtime.
         Throwable stolenCredential = catchThrowable(() -> TenantConduits.as(principalB, () -> {
             Row link = links.createEmptyRow();
-            link.set(SiteDatabaseModel.SITE_ID, siteBId);
-            link.set(SiteDatabaseModel.DATABASE_ID, databaseAId);
-            link.set(SiteDatabaseModel.ENV_PREFIX, "DB");
+            link.set(InstanceDatabaseModel.INSTANCE_ID, applicationBId);
+            link.set(InstanceDatabaseModel.DATABASE_ID, databaseAId);
+            link.set(InstanceDatabaseModel.ENV_PREFIX, "DB");
             links.save(link);
         }));
         assertThat(violationKeys(stolenCredential))
@@ -515,27 +538,27 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         assertThat(links.findByDatabaseId(databaseAId))
             .as("step 1: and no link row landed").isEmpty();
 
-        // 2. THE MIRROR ATTACK: tenant A points a site they do NOT manage at their own
-        //    database, which would hand their credentials to somebody else's workload.
-        Throwable foreignSite = catchThrowable(() -> TenantConduits.as(principalA, () -> {
+        // 2. THE MIRROR ATTACK: tenant A points an application they do NOT manage at
+        //    their own database, handing their credentials to somebody else's workload.
+        Throwable foreignWorkload = catchThrowable(() -> TenantConduits.as(principalA, () -> {
             Row link = links.createEmptyRow();
-            link.set(SiteDatabaseModel.SITE_ID, siteBId);
-            link.set(SiteDatabaseModel.DATABASE_ID, databaseAId);
-            link.set(SiteDatabaseModel.ENV_PREFIX, "DB");
+            link.set(InstanceDatabaseModel.INSTANCE_ID, applicationBId);
+            link.set(InstanceDatabaseModel.DATABASE_ID, databaseAId);
+            link.set(InstanceDatabaseModel.ENV_PREFIX, "DB");
             links.save(link);
         }));
-        assertThat(violationKeys(foreignSite))
-            .as("step 2: the site half refuses")
-            .contains("tenant_site_not_managed");
+        assertThat(violationKeys(foreignWorkload))
+            .as("step 2: the workload half refuses")
+            .contains("tenant_instance_not_managed");
         assertThat(links.findByDatabaseId(databaseAId))
             .as("step 2: still no link row").isEmpty();
 
         // 3. THE POSITIVE ANCHOR: both sides theirs, and the link lands.
         TenantConduits.as(principalA, () -> {
             Row link = links.createEmptyRow();
-            link.set(SiteDatabaseModel.SITE_ID, siteAId);
-            link.set(SiteDatabaseModel.DATABASE_ID, databaseAId);
-            link.set(SiteDatabaseModel.ENV_PREFIX, "DB");
+            link.set(InstanceDatabaseModel.INSTANCE_ID, applicationAId);
+            link.set(InstanceDatabaseModel.DATABASE_ID, databaseAId);
+            link.set(InstanceDatabaseModel.ENV_PREFIX, "DB");
             links.save(link);
         });
         assertThat(links.findByDatabaseId(databaseAId))
@@ -543,13 +566,13 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
         // 4. And tenant B cannot detach what they could not attach.
         Throwable detach = catchThrowable(() -> TenantConduits.as(principalB, () ->
-            links.find().where(SiteDatabaseModel.DATABASE_ID.eq(databaseAId)).delete()));
-        // The SITE half answers first here (the link hangs off tenant A's site), which is
-        // the honest first refusal -- both halves are asked, and either one refusing is
-        // what keeps a link from being detached by someone who owns neither side.
+            links.find().where(InstanceDatabaseModel.DATABASE_ID.eq(databaseAId)).delete()));
+        // The WORKLOAD half answers first here (the link hangs off tenant A's application),
+        // which is the honest first refusal -- both halves are asked, and either one
+        // refusing is what keeps a link from being detached by someone who owns neither.
         assertThat(violationKeys(detach))
             .as("step 4: removing the link asks the same two-sided question")
-            .contains("tenant_site_not_managed");
+            .contains("tenant_instance_not_managed");
         assertThat(links.findByDatabaseId(databaseAId))
             .as("step 4: the link survived the attempt").hasSize(1);
     }
@@ -614,11 +637,11 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
     @Test
     @Order(8)
     void onlyTheOwnerDestroysAndTheSlotComesBack() throws Exception {
-        // The link from journey 6 blocks a destroy by design (a live site depends on the
-        // injected credentials); remove it as the owner first.
-        SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
+        // The link from journey 6 blocks a destroy by design (a live workload depends on
+        // the injected credentials); remove it as the owner first.
+        InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
         TenantConduits.as(principalA, () ->
-            links.find().where(SiteDatabaseModel.DATABASE_ID.eq(databaseAId)).delete());
+            links.find().where(InstanceDatabaseModel.DATABASE_ID.eq(databaseAId)).delete());
 
         // 1. THE ATTACK: tenant B destroys tenant A's database through the service every
         //    surface funnels into.

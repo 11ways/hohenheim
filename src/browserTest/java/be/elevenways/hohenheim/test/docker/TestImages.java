@@ -27,7 +27,7 @@ import java.util.stream.Stream;
  * takes milliseconds, needs no network, and costs a few hundred BYTES of disk instead of
  * a base image per case. Tests that need a REAL build go through the sandbox on purpose.
  */
-final class TestImages {
+public final class TestImages {
 
     private TestImages() {}
 
@@ -36,7 +36,7 @@ final class TestImages {
      *
      * @return the loaded image's content-addressed id
      */
-    static String load(DockerClient docker, String tag, String marker) throws IOException {
+    public static String load(DockerClient docker, String tag, String marker) throws IOException {
         Path work = Files.createTempDirectory("hohenheim-test-image");
         try {
             Path layerRoot = work.resolve("layerdir");
@@ -148,7 +148,7 @@ final class TestImages {
     }
 
     /** The content-addressed id behind a local tag, or null. */
-    static String idOf(DockerClient docker, String tag) throws IOException {
+    public static String idOf(DockerClient docker, String tag) throws IOException {
         for (Object entry : docker.listImages()) {
             if (entry instanceof Map<?, ?> image
                     && image.get("RepoTags") instanceof List<?> tags && tags.contains(tag)) {

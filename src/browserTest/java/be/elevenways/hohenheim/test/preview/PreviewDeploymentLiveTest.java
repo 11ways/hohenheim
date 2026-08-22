@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test.preview;
 
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -13,7 +12,8 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.application.ApplicationDeploys;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
 import be.elevenways.hohenheim.server.preview.PreviewQuota;
@@ -62,6 +62,9 @@ class PreviewDeploymentLiveTest {
     private static ProxyServer proxy;
     private static Path upstreamRepo;
     private static Integer siteId;
+
+    /** The APPLICATION previews and production releases are both built from. */
+    private static Integer applicationId;
     private static Row handRow;
 
     /** Unique per run: stale checkouts of earlier runs must never collide on a digest. */
@@ -117,15 +120,17 @@ class PreviewDeploymentLiveTest {
         gitIn(upstreamRepo, "commit", "-q", "-m", "preview branch content");
 
         Row site = ProxyTestSupport.setupSite("hohenheim:static", "Preview Live Site",
-            "prev-live", dockerSettings());
-        
-        Map<String, Object> sourceSettings = new LinkedHashMap<>();
-        sourceSettings.put("repository_url", upstreamRepo.toString());
-        sourceSettings.put("branch", "main");
-        sourceSettings.put("previews_enabled", true);
-        sourceSettings.put("preview_environment_variables",
+            "prev-live", new LinkedHashMap<>());
+
+        // ONE settings map: the APPLICATION carries both the source and the runtime spec
+        // now, so the production environment a preview must never inherit lives there too.
+        Map<String, Object> applicationSettings = new LinkedHashMap<>(dockerSettings());
+        applicationSettings.put("repository_url", upstreamRepo.toString());
+        applicationSettings.put("branch", "main");
+        applicationSettings.put("previews_enabled", true);
+        applicationSettings.put("preview_environment_variables",
             Map.of("PREVIEW_MARKER", "preview-only-value"));
-        TestSources.attachGitSource(site, sourceSettings);
+        applicationId = TestSources.attachGitSource(site, applicationSettings);
         Models.get(SiteModel.class).save(site);
         siteId = site.get(SiteModel.ID);
         ProxyTestSupport.addDomain(site, "prev-live.test", "exact", null, false);
@@ -147,18 +152,18 @@ class PreviewDeploymentLiveTest {
         // Reclaim everything this class put on the daemon, THROUGH the product
         // funnels, even when a test failed mid-journey: live previews first (a failed
         // run otherwise leaves its preview container RUNNING forever), then the
-        // fixture site's production release (otherwise every run leaves an exited
-        // container plus the hohenheim-site image behind).
-        if (siteId != null) {
+        // fixture application's production release (otherwise every run leaves an exited
+        // container plus its built image behind).
+        if (applicationId != null) {
             try {
-                PreviewDeployments.destroyForSite(siteId);
+                PreviewDeployments.destroyForApplication(applicationId);
             } catch (RuntimeException e) {
                 System.err.println("teardown: preview reclaim failed - " + e.getMessage());
             }
             try {
-                SiteInstances.destroyFor(siteId);
+                ApplicationReleases.destroyFor(applicationId);
             } catch (RuntimeException e) {
-                System.err.println("teardown: site release reclaim failed - " + e.getMessage());
+                System.err.println("teardown: release reclaim failed - " + e.getMessage());
             }
         }
         ServerMain.adoptProxyServer(null);
@@ -184,20 +189,6 @@ class PreviewDeploymentLiveTest {
         return settings;
     }
 
-    /** Wait for the fixture site's async initial git deploy so its host lease is free. */
-    private static void awaitInitialDeployFinished() throws InterruptedException {
-        var deployments = Models.get(DeploymentModel.class);
-        for (int i = 0; i < 240; i++) {
-            List<Row> rows = deployments.findBySiteId(siteId, 5);
-            if (!rows.isEmpty() && !DeploymentModel.STATUS_RUNNING
-                    .equals(rows.get(0).get(DeploymentModel.STATUS))) {
-                return;
-            }
-            Thread.sleep(250);
-        }
-        throw new AssertionError("Timed out waiting for the fixture site's initial deploy");
-    }
-
     @Test
     void aPreviewIsCreatedServesIsolatedAndIsFullyReclaimedOnExpiry() throws Exception {
         LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
@@ -206,17 +197,15 @@ class PreviewDeploymentLiveTest {
             "no private netns: the sandbox refuses to build unprotected");
         DockerClient docker = new DockerClient();
 
-        // AIDEV-NOTE: the git handler kicks off an ASYNC initial deploy of the fixture
-        // site at proxy start, and that deploy holds the host-1 lease for its whole
-        // build (~5s measured). The preview deploy's lease acquire budget is 5s, so
-        // starting it while the initial deploy runs loses the race by milliseconds
-        // (host_lease_unavailable). Await the initial deploy first, like
-        // GitDeploymentFlowTest does -- the serialization itself is intended product
-        // behaviour, the race was the test's.
-        awaitInitialDeployFinished();
+        // AIDEV-NOTE: routing no longer deploys anything (the upstream handler only
+        // RESOLVES since brief 7), so the production release is this test's own explicit
+        // step rather than an async side effect of proxy start. It runs FIRST and
+        // SYNCHRONOUSLY: both deploys take the same host lease, and the ordering is what
+        // the old awaitInitialDeployFinished() bought by waiting on a race.
+        ApplicationDeploys.deploy(applicationId, "main", "preview live fixture");
 
         // 1. CREATE: build the feature ref through the sandbox and deploy it.
-        Row preview = PreviewDeployments.deploy(siteId, "feature-x", null, 41);
+        Row preview = PreviewDeployments.deploy(applicationId, "feature-x", null, 41);
         int previewId = preview.get(PreviewDeploymentModel.ID);
         Integer instanceId = preview.get(PreviewDeploymentModel.INSTANCE_ID);
         String hostname = preview.get(PreviewDeploymentModel.HOSTNAME);

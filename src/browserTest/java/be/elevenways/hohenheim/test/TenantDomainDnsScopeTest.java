@@ -798,10 +798,17 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         // (2026-08-04): the panel asks about six distinct capability sets per render
         // now, not three. Each is still enumerated ONCE per request; the number this
         // pins against is the un-memoized one, which is per CALLER and far outside it.
+        // AIDEV-NOTE: the cap moved 12 -> 14 in phase-0 brief 7. Previews are keyed to
+        // the APPLICATION now, so the preview peer's nav probe asks about
+        // instance#manage where it used to ask about site#manage -- the same number of
+        // distinct sets, but on a render that had not yet enumerated the instance one
+        // it pays that set's first fetch. It is still ONE enumeration per distinct set
+        // per request; the un-memoized shape this pins against is per CALLER and an
+        // order of magnitude outside this range.
         assertThat(finds.get())
             .as("record-grant finds during one scoped /manage/domains render "
                 + "(6 distinct capability sets + walk confirmations)")
-            .isBetween(1, 12);
+            .isBetween(1, 14);
     }
 
     /**

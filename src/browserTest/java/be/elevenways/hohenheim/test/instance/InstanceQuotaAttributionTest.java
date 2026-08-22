@@ -116,7 +116,7 @@ class InstanceQuotaAttributionTest extends HohenheimTestBase {
     }
 
     /**
-     * Converge an instance OWNED by a site, exactly the way SiteInstances and
+     * Converge an instance OWNED by a site, exactly the way ApplicationReleases and
      * DatabaseInstances do it: inside the owning record's GeneratedRows attribution scope,
      * on a thread that is carrying a tenant's request.
      */

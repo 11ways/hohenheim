@@ -1,12 +1,14 @@
 package be.elevenways.hohenheim.test.preview;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManagePreviewDeploymentResource;
 import be.elevenways.hohenheim.server.cms.PreviewDeploymentResource;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.preview.PreviewBranches;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -44,6 +46,9 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
 
     private static Integer siteId;
 
+    /** The APPLICATION previews are built from; the site beside it only lends a hostname. */
+    private static Integer applicationId;
+
     @BeforeAll
     static void setUpSite() {
         HohenheimSettings.VALUES.setValue(
@@ -62,6 +67,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         site.set(SiteModel.ENABLED, true);
         siteModel.save(site);
         siteId = site.get(SiteModel.ID);
+        applicationId = site.get(SiteModel.INSTANCE_ID);
     }
 
     @Test
@@ -107,12 +113,12 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             // 1. queue() returns SYNCHRONOUSLY with a claimed, quota-charged row: the
             //    manual lane's refusals and charges happen before the caller's form
             //    round-trip ends, not in a background job nobody sees.
-            Row first = PreviewDeployments.queue(siteId, "manual-a", null, null);
+            Row first = PreviewDeployments.queue(applicationId, "manual-a", null, null);
             assertThat((String) first.get(PreviewDeploymentModel.STATUS))
                 .as("step 1: the claim is stamped deploying before any build ran")
                 .isEqualTo(PreviewDeploymentModel.STATUS_DEPLOYING);
             assertThat((String) first.get(PreviewDeploymentModel.QUOTA_BUCKET))
-                .as("step 1: charged to the site owner's preview bucket")
+                .as("step 1: charged to the owner's preview bucket")
                 .startsWith("hohenheim:previews:");
             assertThat((Object) first.get(PreviewDeploymentModel.PR_NUMBER))
                 .as("step 1: a manual preview carries no PR number").isNull();
@@ -120,12 +126,12 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             // 2. THE CAP DECISION: the second manual preview is refused BY NAME,
             //    synchronously -- never an eviction of the running first one.
             Throwable refused = catchThrowable(() ->
-                PreviewDeployments.queue(siteId, "manual-b", null, null));
+                PreviewDeployments.queue(applicationId, "manual-b", null, null));
             assertThat(refused).as("step 2: over-cap manual create refused by name")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("preview_quota_reached");
             assertThat(Models.get(PreviewDeploymentModel.class).find()
-                    .where(PreviewDeploymentModel.SITE_ID.eq(siteId))
+                    .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
                     .where(PreviewDeploymentModel.REF.eq("manual-a"))
                     .where(PreviewDeploymentModel.DELETED_AT.isNull()).first())
                 .as("step 2: and the FIRST preview was not evicted to make room")
@@ -143,7 +149,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             //    schedule armed at claim time is the backstop); destroying it releases
             //    the slot and the refused ref now fits.
             PreviewDeployments.destroy(firstId, "operator");
-            Row second = PreviewDeployments.queue(siteId, "manual-b", null, null);
+            Row second = PreviewDeployments.queue(applicationId, "manual-b", null, null);
             assertThat(second.get(PreviewDeploymentModel.ID))
                 .as("step 4: the released slot is claimable again").isNotNull();
             PreviewDeployments.destroy(second.get(PreviewDeploymentModel.ID), "operator");
@@ -154,51 +160,51 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
     }
 
     /**
-     * The /manage authority gate: site-level MANAGE is the verb (a preview is a
-     * projection of its site; no new capability exists for it), and the COUNTERFACTUAL
-     * proves the gate is load-bearing -- the base admin resource, which does not carry
-     * it, happily creates a preview for the same stranger.
+     * The /manage authority gate: MANAGE on the APPLICATION is the verb (a preview is a
+     * projection of the application it is built from; no new capability exists for it),
+     * and the COUNTERFACTUAL proves the gate is load-bearing -- the base admin resource,
+     * which does not carry it, happily creates a preview for the same stranger.
      */
     @Test
-    void manualCreationFromManageRequiresManageOnTheChosenSite() throws Exception {
+    void manualCreationFromManageRequiresManageOnTheChosenApplication() throws Exception {
         int strangerId = tenantUser("preview-stranger@test");
         int managerId = tenantUser("preview-manager@test");
-        RecordGrants.grant(GrantSubjectType.USER, managerId, SiteModel.MODEL_ID, siteId,
-            HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID,
+            applicationId, HohenheimAccess.MANAGE, true);
         AccessContext stranger = contextOf(strangerId, "Stranger");
         AccessContext manager = contextOf(managerId, "Manager");
         Map<String, Object> coerced = new LinkedHashMap<>();
-        coerced.put(PreviewDeploymentModel.SITE_ID.getName(), siteId);
+        coerced.put(PreviewDeploymentModel.APPLICATION_ID.getName(), applicationId);
         coerced.put(PreviewDeploymentModel.REF.getName(), "gate-ref");
 
-        // 1. COUNTERFACTUAL: the base ADMIN resource carries no per-site gate (its
+        // 1. COUNTERFACTUAL: the base ADMIN resource carries no per-record gate (its
         //    surface is behind the admin panel permission), so the stranger context
         //    sails through it. This is exactly what /manage must NOT allow.
         Object ungated = new PreviewDeploymentResource().persistRow(coerced, stranger);
         assertThat(ungated)
-            .as("step 1: without the gate a stranger creates a preview on a foreign site")
+            .as("step 1: ungated, a stranger creates a preview on a foreign application")
             .isNotNull();
         PreviewDeployments.destroy(((Number) ungated).intValue(), "operator");
 
         // 2. The /manage resource refuses the SAME submission as its FIRST act: no row,
         //    no quota charge, no schedule -- and the refusal does not distinguish
-        //    "exists but not yours" from "no such site".
+        //    "exists but not yours" from "no such application".
         Throwable refusedForeign = catchThrowable(() ->
             new ManagePreviewDeploymentResource().persistRow(coerced, stranger));
         assertThat(refusedForeign)
             .as("step 2: a stranger is refused on /manage")
             .isInstanceOf(Violations.class)
-            .hasMessageContaining("preview_site_required");
-        Map<String, Object> unknownSite = new LinkedHashMap<>(coerced);
-        unknownSite.put(PreviewDeploymentModel.SITE_ID.getName(), 999999);
+            .hasMessageContaining("preview_application_required");
+        Map<String, Object> unknownApplication = new LinkedHashMap<>(coerced);
+        unknownApplication.put(PreviewDeploymentModel.APPLICATION_ID.getName(), 999999);
         Throwable refusedUnknown = catchThrowable(() ->
-            new ManagePreviewDeploymentResource().persistRow(unknownSite, stranger));
+            new ManagePreviewDeploymentResource().persistRow(unknownApplication, stranger));
         assertThat(refusedUnknown)
-            .as("step 2: an unknown site refuses IDENTICALLY (no existence oracle)")
+            .as("step 2: an unknown application refuses IDENTICALLY (no existence oracle)")
             .isInstanceOf(Violations.class)
-            .hasMessageContaining("preview_site_required");
+            .hasMessageContaining("preview_application_required");
         assertThat(Models.get(PreviewDeploymentModel.class).find()
-                .where(PreviewDeploymentModel.SITE_ID.eq(siteId))
+                .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
                 .where(PreviewDeploymentModel.REF.eq("gate-ref"))
                 .where(PreviewDeploymentModel.DELETED_AT.isNull()).first())
             .as("step 2: the refusal claimed nothing").isNull();
@@ -209,7 +215,64 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         PreviewDeployments.destroy(((Number) created).intValue(), "operator");
     }
 
+    /**
+     * A preview is built from the APPLICATION but must be REACHABLE, and a hostname only
+     * routes when some site's domain table carries it -- so an application no site exposes
+     * is refused BY NAME rather than building an environment nobody can open.
+     */
+    @Test
+    void anApplicationNoSiteExposesCannotHaveAPreview() throws Exception {
+        int orphan = application("prev-orphan-app");
+
+        // 1. No site names this application, so the claim refuses by name -- before any
+        //    quota charge, any checkout and any build.
+        Throwable refused = catchThrowable(() ->
+            PreviewDeployments.queue(orphan, "orphan-ref", null, null));
+        assertThat(refused)
+            .as("step 1: an application with no exposing site is refused by name")
+            .isInstanceOf(Violations.class)
+            .hasMessageContaining("preview_no_exposing_site");
+        assertThat(Models.get(PreviewDeploymentModel.class).find()
+                .where(PreviewDeploymentModel.APPLICATION_ID.eq(orphan))
+                .where(PreviewDeploymentModel.DELETED_AT.isNull()).first())
+            .as("step 1: and the refusal claimed no row").isNull();
+
+        // 2. THE FALSIFICATION: give the SAME application a site to lend it a hostname
+        //    and the very same call now claims -- so step 1 refused for the missing
+        //    site, never for some other property of this fixture.
+        var siteModel = Models.get(SiteModel.class);
+        Row lender = siteModel.createEmptyRow();
+        lender.set(SiteModel.NAME, "Preview Orphan Lender");
+        lender.set(SiteModel.SLUG, "prev-orphan");
+        lender.set(SiteModel.UPSTREAM_KIND, "hohenheim:instance");
+        lender.set(SiteModel.INSTANCE_ID, orphan);
+        lender.set(SiteModel.STATUS, "active");
+        lender.set(SiteModel.ENABLED, true);
+        siteModel.save(lender);
+
+        Row claimed = PreviewDeployments.queue(orphan, "orphan-ref", null, null);
+        assertThat((String) claimed.get(PreviewDeploymentModel.STATUS))
+            .as("step 2: with an exposing site the same claim lands")
+            .isEqualTo(PreviewDeploymentModel.STATUS_DEPLOYING);
+        assertThat((String) claimed.get(PreviewDeploymentModel.HOSTNAME))
+            .as("step 2: and the hostname is derived from the LENDING site's slug")
+            .startsWith("prev-orphan--").endsWith(".preview.test");
+        PreviewDeployments.destroy(claimed.get(PreviewDeploymentModel.ID), "operator");
+    }
+
     // -- helpers --------------------------------------------------------------
+
+    /** A git-sourced application instance, with no site exposing it. */
+    private static int application(String name) {
+        Row row = Models.get(InstanceModel.class).createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
+            "image", "alpine", "container_port", 8080,
+            "repository_url", "/nonexistent/repo")));
+        Models.get(InstanceModel.class).save(row);
+        return row.get(InstanceModel.ID);
+    }
 
     private static AccessContext contextOf(int userId, String name) {
         return AccessContext.of(TenantConduits.stubFor(new UserPrincipal(userId, name)));
