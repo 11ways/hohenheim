@@ -200,6 +200,32 @@ dependencies {
     browserTestImplementation 'dnsjava:dnsjava:3.6.5'
 }
 
+// The runtime-image build contexts ride the SERVER resources, so a host that has to
+// build `hohenheim/node-22:1` at first use can do it from the deployed jar and never
+// from a checkout nobody promised is there. The manifest is generated because a
+// directory inside a jar cannot be listed.
+def runtimeImageManifest = layout.buildDirectory.file('generated/runtime-images/manifest.txt')
+
+tasks.register('runtimeImageManifest') {
+    inputs.dir('images')
+    outputs.file(runtimeImageManifest)
+    doLast {
+        def root = file('images').toPath()
+        def target = runtimeImageManifest.get().asFile
+        target.parentFile.mkdirs()
+        target.text = fileTree('images').files
+                .collect { root.relativize(it.toPath()).toString() }
+                .sort()
+                .join('\n') + '\n'
+    }
+}
+
+tasks.named('processServerResources') {
+    dependsOn 'runtimeImageManifest'
+    from('images') { into 'hohenheim-images' }
+    from(runtimeImageManifest) { into 'hohenheim-images' }
+}
+
 // --- JAR Tasks ---
 // The whole assembly doctrine (merged services/resources/microcopy/tsv/
 // teavm.properties, the TeaVmPatchLane strip, DuplicatesStrategy.FAIL, the

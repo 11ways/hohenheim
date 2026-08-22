@@ -9006,10 +9006,6 @@
     "text": "Host '{$name}' cannot enforce a volume quota (backend: {$backend}), so it cannot run a {$kind}. Mount a btrfs or zfs filesystem at the volume root, or pick another host.",
     "scope": "violations"
   },
-  "workspace_runtime_not_wired": {
-    "text": "Workspaces cannot be deployed yet: the workspace runtime lands in a later phase-0 step",
-    "scope": "violations"
-  },
   "volume_backend_unimplemented": {
     "text": "Volume backend {$backend} is not implemented yet; only btrfs can create, quota and snapshot a volume today.",
     "scope": "violations"
@@ -9307,5 +9303,91 @@
   "template_runtime_image": {
     "text": "The runtime image this template layers its hooks over; empty means the settings name the image.",
     "scope": "help"
+  },
+  "workspace_uid_base_invalid": {
+    "text": "The configured workspace uid base {$base} is outside the safe range {$lowest}-{$highest}; a workspace would share a host identity with another container.",
+    "scope": "violations"
+  },
+  "workspace_uid_out_of_range": {
+    "text": "Workspace uid {$uid} reaches into the range Incus hands unprivileged containers ({$highest}); lower the uid base or move this workspace.",
+    "scope": "violations"
+  },
+  "workspace_build_failed": {
+    "text": "The workspace build command failed: {$reason}",
+    "scope": "violations"
+  },
+  "workspace_exec_failed": {
+    "text": "The command could not be run inside the workspace: {$reason}",
+    "scope": "violations"
+  },
+  "workspace_kind_required": {
+    "text": "This deploy verb only applies to a workspace",
+    "scope": "violations"
+  },
+  "runtime_image_required": {
+    "text": "Pick a runtime image: it decides what this workload runs inside",
+    "scope": "violations"
+  },
+  "runtime_image_unknown": {
+    "text": "Runtime image {$id} does not exist or is disabled",
+    "scope": "violations"
+  },
+  "runtime_image_no_variant": {
+    "text": "Runtime image '{$name}' has no {$runtime} variant, so it cannot run on a {$runtime} host",
+    "scope": "violations"
+  },
+  "runtime_image_build_failed": {
+    "text": "Runtime image '{$name}' could not be built on this host: {$reason}",
+    "scope": "violations"
+  },
+  "runtime_image_import_failed": {
+    "text": "Runtime image '{$name}' could not be imported into the Incus image store: {$reason}",
+    "scope": "violations"
+  },
+  "runtime_image_context_missing": {
+    "text": "The build context of runtime image '{$name}' is not packaged with this server: {$reason}",
+    "scope": "violations"
+  },
+  "volume_own_failed": {
+    "text": "Volume '{$path}' could not be given to the workload's uid on the {$backend} backend: {$reason}",
+    "scope": "violations"
+  },
+  "readiness_timed_out": {
+    "text": "'{$name}' never became ready ({$kind}): {$reason}",
+    "scope": "violations"
+  },
+  "readiness_needs_port": {
+    "text": "'{$name}' declares {$kind} readiness but publishes no port to probe",
+    "scope": "violations"
+  },
+  "delete_with_data": {
+    "text": "Delete with data",
+    "scope": "instance"
+  },
+  "delete_with_data_confirm": {
+    "text": "This removes the container of '{$name}' AND every volume it owns. The files are gone for good. Type the name to confirm.",
+    "scope": "instance"
+  },
+  "deleted_with_data_toast": {
+    "text": "'{$name}' and its data were deleted",
+    "scope": "instance"
+  },
+  "home_quota": [
+    {
+      "text": "Home size limit (MB)",
+      "scope": "field"
+    },
+    {
+      "text": "Size cap of the workspace's /home/site volume; blank leaves it uncapped.",
+      "scope": "help"
+    }
+  ],
+  "workspace_host_no_subuid_range": {
+    "text": "Host '{$name}' delegates no subordinate uid range to root, so no unprivileged container on it can be mapped and a workspace cannot own its data directory.",
+    "scope": "violations"
+  },
+  "runtime_image_no_builder": {
+    "text": "Runtime image '{$name}' cannot be prepared on host '{$host}': an Incus host that carries workspaces also needs Docker, which is what builds the rootfs the image is imported from.",
+    "scope": "violations"
   }
 }

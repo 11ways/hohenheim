@@ -112,6 +112,19 @@ public final class InstanceVolumes {
      */
     public static @NonNull Map<String, String> mountsFor(int ownerInstanceId,
                                                          @NonNull String serverName) {
+        return mountsFor(ownerInstanceId, serverName, null);
+    }
+
+    /**
+     * {@link #mountsFor(int, String)}, giving every created directory to a uid.
+     *
+     * @param ownerUid the host uid the workload runs as, or null to leave the directory
+     *                 owned by the controller -- a workspace passes its derived uid, so
+     *                 its home is writable by the only identity that ever runs in it
+     */
+    public static @NonNull Map<String, String> mountsFor(int ownerInstanceId,
+                                                         @NonNull String serverName,
+                                                         @Nullable Integer ownerUid) {
 
         List<Row> declared = declaredFor(ownerInstanceId);
         Map<String, String> mounts = new LinkedHashMap<>();
@@ -141,6 +154,9 @@ public final class InstanceVolumes {
             if (!hostPath.equals(volume.get(InstanceVolumeModel.HOST_PATH))) {
                 volume.set(InstanceVolumeModel.HOST_PATH, hostPath);
                 Models.get(InstanceVolumeModel.class).save(volume);
+            }
+            if (ownerUid != null) {
+                operations.own(hostPath, ownerUid);
             }
             mounts.put(hostPath, containerPath);
         }
@@ -214,7 +230,47 @@ public final class InstanceVolumes {
     }
 
     /**
-     * AIDEV-NOTE: there is deliberately NO destroy here, and that is a decision, not a gap.
+     * Destroy every declared volume of an instance and forget the declarations.
+     *
+     * AIDEV-NOTE: the ONE irreversible verb of this tier, and it exists only because a
+     * consumer asked for it by name (the workspace's "delete data" destroy, phase-0 brief
+     * 8). It is never reached by an ordinary destroy: {@code InstanceService.destroy}
+     * keeps volumes, because a soft-deleted record's data must survive the record.
+     *
+     * @return the host paths that were removed
+     */
+    public static @NonNull List<String> destroyAll(int ownerInstanceId,
+                                                   @NonNull String serverName) {
+
+        List<Row> declared = declaredFor(ownerInstanceId);
+        List<String> removed = new ArrayList<>();
+
+        if (declared.isEmpty()) {
+            return removed;
+        }
+
+        Row server = requireServer(serverName);
+        VolumeOperations operations = operationsFor(server);
+        InstanceVolumeModel model = Models.get(InstanceVolumeModel.class);
+
+        for (Row volume : declared) {
+            String name = volume.get(InstanceVolumeModel.NAME);
+            if (name == null) {
+                continue;
+            }
+            String hostPath = hostPathFor(ownerInstanceId, name);
+            operations.destroy(hostPath);
+            removed.add(hostPath);
+        }
+
+        model.find().where(InstanceVolumeModel.INSTANCE_ID.eq(ownerInstanceId)).delete();
+
+        return removed;
+    }
+
+    /**
+     * AIDEV-NOTE: an ordinary destroy deliberately keeps volumes, and that is a decision,
+     * not a gap.
      * An application delete is a SOFT delete (deleted_at), so its data must survive it --
      * the same rule the site tier already applied to its volumes, and for the same reason:
      * a volume is unrecoverable, so removing one is a human act with the data still there.

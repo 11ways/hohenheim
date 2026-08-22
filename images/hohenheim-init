@@ -1,0 +1,71 @@
+#!/bin/bash
+# PID 1 of the INCUS lane of every runtime image.
+#
+# Docker starts the workload command itself (tini as the entrypoint, the container's
+# User field for the identity), so nothing here runs on that runtime. An Incus system
+# container has no such contract: it execs /sbin/init, so the controller points
+# lxc.init.cmd at this script and hands it the facts it needs through the container's
+# environment. Keeping the command in the ENVIRONMENT rather than in lxc.init.cmd
+# arguments is deliberate -- lxc.init.cmd is whitespace-split and does not honour
+# quoting, so a start command with a space would silently become two.
+#
+# The workdir is entered by the CHILD, after it has dropped to the workspace uid, and
+# never by this script: measured on nightstrom 2026-08-22, root inside the container
+# cannot enter its own 0700 home. A bind-mounted host directory belongs to the INIT
+# user namespace's superblock, so container-root's CAP_DAC_OVERRIDE does not apply to
+# it -- only a process whose uid actually MATCHES the directory's owner gets in, which
+# is precisely the workspace uid.
+#
+# The workload runs as a CHILD and the signals are forwarded, because PID 1 in a
+# namespace ignores every signal it has no handler for: measured on the same host, an
+# exec'd workload made `incus stop` hang for its whole timeout and then kill the
+# container, so every graceful stop was a hard kill wearing a delay.
+#
+# There is no restart loop here ON PURPOSE: crash policy is the controller's
+# (InstanceModel.CRASH_POLICY, observed through the console hub), and a second
+# supervisor in the image would restart a workload the operator asked to stay down.
+set -u
+
+command=${HOHENHEIM_START_COMMAND:-sleep infinity}
+uid=${HOHENHEIM_RUN_UID:-0}
+workdir=${HOHENHEIM_WORKDIR:-/home/site}
+
+export HOME="$workdir"
+
+# Bring the NIC up before the workload runs. A rootfs exported from a Docker image has
+# no init system and therefore nothing that would configure eth0, so an Incus workspace
+# had a link and no address: the first thing it did (a git clone) failed with "Could not
+# resolve host", which reads as a broken repository rather than as a missing DHCP client.
+# Docker configures the interface itself, so nothing here runs on that runtime.
+if [ -d /sys/class/net/eth0 ] && command -v ip >/dev/null 2>&1; then
+    ip link set eth0 up 2>/dev/null
+    if ! ip -4 addr show dev eth0 | grep -q 'inet '; then
+        busybox udhcpc -i eth0 -q -t 5 -n -s /sbin/hohenheim-dhcp >/dev/null 2>&1 || true
+    fi
+fi
+
+child=0
+
+forward() {
+    if [ "$child" -ne 0 ]; then
+        kill -TERM "$child" 2>/dev/null
+    fi
+}
+
+trap forward TERM INT PWR
+
+if [ "$uid" = "0" ]; then
+    /bin/bash -lc "cd \"$workdir\" && $command" &
+else
+    /usr/bin/setpriv --reuid "$uid" --regid "$uid" --clear-groups \
+        /bin/bash -lc "cd \"$workdir\" && $command" &
+fi
+
+child=$!
+
+# Two waits: the first returns as soon as a trapped signal arrives, the second lets the
+# workload finish shutting down instead of the container dying under it.
+wait "$child"
+status=$?
+wait "$child" 2>/dev/null
+exit "$status"

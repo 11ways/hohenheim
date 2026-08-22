@@ -51,6 +51,17 @@ public interface VolumeOperations {
     void destroy(@NonNull String hostPath);
 
     /**
+     * Give the volume directory itself to a uid, so the workload can write in its own home.
+     *
+     * AIDEV-NOTE: the DIRECTORY only, never a recursive chown. A workspace's home holds a
+     * checkout and a node_modules tree; walking it on every deploy is minutes of host I/O,
+     * and a recursive chown would also rewrite ownership a build deliberately set. The
+     * files inside are already the workload's own, because the workload is the only thing
+     * that ever writes them.
+     */
+    void own(@NonNull String hostPath, int uid);
+
+    /**
      * The operations of one host's backend.
      *
      * @throws Violations for a backend nothing implements yet, naming it
@@ -94,5 +105,7 @@ public interface VolumeOperations {
         @Override public void deleteSnapshot(@NonNull String snapshotPath) { throw refuse(); }
 
         @Override public void destroy(@NonNull String hostPath) { throw refuse(); }
+
+        @Override public void own(@NonNull String hostPath, int uid) { throw refuse(); }
     }
 }

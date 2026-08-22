@@ -18,8 +18,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  *
  * AIDEV-NOTE: the image references are LOCAL tags, never registry paths (Jelle's decision
  * on phase-0 open question 5): each host builds them from {@code build_context} at first
- * use. {@code incus_image} stays null until the Incus variants are published in phase 1;
- * the runtime-image picker reads that null as "cannot run on an Incus host".
+ * use. {@code incus_image} is a LOCAL alias for the same reason -- phase-0 brief 8 imports
+ * the built Docker image into the host's Incus store rather than publishing a second image
+ * ({@code RuntimeImages}), so both runtimes carry the same package list. The column stays
+ * nullable because an operator-authored row may legitimately have no Incus variant, and the
+ * picker reads that null as "cannot run on an Incus host".
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -61,6 +64,11 @@ public final class RuntimeImageSeeder implements Seeder {
             null, 8080, null));
     }
 
+    /** The Incus image store alias a converted runtime image is imported under. */
+    static String incusAlias(String name) {
+        return "hohenheim/" + name;
+    }
+
     private static void image(Row row, String name, String description, String icon,
                               String dockerImage, String buildContext,
                               String defaultCommand, Integer defaultPort,
@@ -69,7 +77,7 @@ public final class RuntimeImageSeeder implements Seeder {
         row.set(RuntimeImageModel.DESCRIPTION, description);
         row.set(RuntimeImageModel.ICON, icon);
         row.set(RuntimeImageModel.DOCKER_IMAGE, dockerImage);
-        row.set(RuntimeImageModel.INCUS_IMAGE, null);
+        row.set(RuntimeImageModel.INCUS_IMAGE, incusAlias(name));
         row.set(RuntimeImageModel.BUILD_CONTEXT, buildContext);
         row.set(RuntimeImageModel.DEFAULT_COMMAND, defaultCommand);
         row.set(RuntimeImageModel.DEFAULT_PORT, defaultPort);

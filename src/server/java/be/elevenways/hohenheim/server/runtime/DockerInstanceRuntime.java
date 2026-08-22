@@ -727,10 +727,18 @@ public final class DockerInstanceRuntime
     @Override
     public ExecSupport.@NonNull ExecOutcome runExec(@NonNull InstanceSpec spec,
                                                     @NonNull List<String> command,
+                                                    ExecSupport.@NonNull ExecOptions options,
                                                     long timeoutMs) throws IOException {
         DockerClient.ExecResult result;
+        List<String> env = new ArrayList<>();
+        options.env().forEach((name, value) -> env.add(name + "=" + value));
         try {
-            result = this.docker.exec(spec.handle(), command, List.of());
+            // The identity is the WORKLOAD's, never the caller's: an exec into a workspace
+            // lands as the same uid its files are owned by, which is what makes a shell
+            // there usable at all.
+            result = this.docker.exec(spec.handle(), command, env,
+                spec.runUser() == null ? null : String.valueOf(spec.runUser()),
+                options.workdir());
         } catch (DockerClient.ApiException e) {
             // 409 = not running; 404 on the exec create = no such container. Named, so an
             // operator can tell "the workload refused" from "the daemon is gone".
@@ -970,6 +978,12 @@ public final class DockerInstanceRuntime
         }
         if (spec.command() != null && !spec.command().isEmpty()) {
             containerSpec.put("Cmd", spec.command());
+        }
+        // The DECLARED identity, as a bare number. Docker resolves a numeric User with no
+        // /etc/passwd entry, which is the whole point: a workspace's uid exists on the host
+        // only as the owner of its volume directory, never as an account.
+        if (spec.runUser() != null) {
+            containerSpec.put("User", String.valueOf(spec.runUser()));
         }
         List<String> env = new ArrayList<>();
         spec.env().forEach((name, value) -> env.add(name + "=" + value));

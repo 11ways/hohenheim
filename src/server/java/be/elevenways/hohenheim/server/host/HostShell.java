@@ -38,7 +38,19 @@ public interface HostShell {
     }
 
     /** Run one shell snippet and report its outcome; never throws for a failing command. */
-    @NonNull Result run(@NonNull String script);
+    default @NonNull Result run(@NonNull String script) {
+        return run(script, TIMEOUT_SECONDS);
+    }
+
+    /**
+     * Run one shell snippet under an explicit wall-clock cap.
+     *
+     * AIDEV-NOTE: the cap is an ARGUMENT because building a runtime image on a host takes
+     * minutes while a filesystem probe must never hang a preflight for more than seconds.
+     * One constant could only be wrong for one of them, and the direction it would be
+     * wrong in (a probe that blocks boot) is the worse one.
+     */
+    @NonNull Result run(@NonNull String script, long timeoutSeconds);
 
     /** The shell for an inventoried host record. */
     static @NonNull HostShell forServer(@NonNull Row server) {
@@ -66,7 +78,7 @@ public interface HostShell {
         }
 
         @Override
-        public @NonNull Result run(@NonNull String script) {
+        public @NonNull Result run(@NonNull String script, long timeoutSeconds) {
 
             List<String> argv = this.server != null && ServerModel.hasSshLane(this.server)
                 ? sshArgv(this.server, script)
@@ -78,14 +90,31 @@ public interface HostShell {
 
             try {
                 Process process = new ProcessBuilder(argv).redirectErrorStream(true).start();
+                // AIDEV-NOTE: the output is drained on its OWN thread. Reading it inline
+                // made the timeout decorative -- readAllBytes blocks until the pipe closes,
+                // so a snippet that never finishes was waited on forever and the
+                // waitFor(...) below was only ever reached by a process that had already
+                // exited. A runtime-image build runs for minutes through here, which is
+                // where that would have shown up as a controller thread nobody can free.
+                StringBuilder collected = new StringBuilder();
+                Thread drain = new Thread(() -> {
+                    try {
+                        collected.append(new String(process.getInputStream().readAllBytes(),
+                            StandardCharsets.UTF_8));
+                    } catch (IOException closed) {
+                        // the stream died with the process; whatever arrived is the output
+                    }
+                }, "host-shell-output");
+                drain.setDaemon(true);
+                drain.start();
                 try {
-                    byte[] output = process.getInputStream().readAllBytes();
-                    if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
                         process.destroyForcibly();
                         return new Result(1, "the host command timed out");
                     }
+                    drain.join(TimeUnit.SECONDS.toMillis(2));
                     return new Result(process.exitValue(),
-                        new String(output, StandardCharsets.UTF_8).trim());
+                        collected.toString().trim());
                 } finally {
                     process.destroyForcibly();
                 }

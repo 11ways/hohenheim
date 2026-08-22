@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.server.preview.PreviewBranches;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
+import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.dry.Dry;
@@ -257,8 +259,18 @@ public class GitWebhookHandler {
         // The build takes minutes; the provider expects an answer in seconds.
         Datasource deployDatasource = Db.current();
         String deployBranch = configuredBranch;
-        JobRunner.startVirtualThread(() -> withScope(deployDatasource, () ->
-            ApplicationDeploys.deployQuietly(applicationId, deployBranch, "webhook")));
+        // Which deploy verb depends on WHAT the record is: an application converges a
+        // release, a workspace checks out and builds inside its own container. The branch
+        // is on the KIND, not on a name -- a third source-driven kind wires itself here.
+        boolean workspace = WorkspaceKind.ID.toString()
+            .equals(application.get(InstanceModel.KIND));
+        JobRunner.startVirtualThread(() -> withScope(deployDatasource, () -> {
+            if (workspace) {
+                new WorkspaceBuilds().deployQuietly(applicationId, deployBranch, "webhook");
+            } else {
+                ApplicationDeploys.deployQuietly(applicationId, deployBranch, "webhook");
+            }
+        }));
         WebhookDeliveries.stampAction(claimed, "deploy_queued");
         Blast.log("GIT WEBHOOK: deploy queued for application",
             application.get(InstanceModel.NAME), "(id:", applicationId + ")");
@@ -282,8 +294,14 @@ public class GitWebhookHandler {
             .where(InstanceModel.ID.eq(applicationId))
             .where(InstanceModel.DELETED_AT.isNull())
             .first();
-        return application != null && InstanceKinds.isReleaseManaged(
-            application.get(InstanceModel.KIND)) ? application : null;
+        if (application == null) {
+            return null;
+        }
+        // A source-driven record: one that converges releases, or a workspace that checks
+        // its source out inside itself.
+        String kind = application.get(InstanceModel.KIND);
+        return InstanceKinds.isReleaseManaged(kind) || WorkspaceKind.ID.toString().equals(kind)
+            ? application : null;
     }
 
     /** All three providers zero out {@code after} on a ref delete; GitHub/Gitea also flag it. */
