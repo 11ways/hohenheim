@@ -171,11 +171,11 @@ public class InstanceResource extends RowResource {
             //
             // AIDEV-NOTE: this section can only name TOP-LEVEL entries. The long tail of
             // this form is the per-kind SETTINGS sub-form, whose spec is DERIVED from the
-            // kind's Schema (FieldFormEntryRegistry.deriveSpec) and therefore has no
-            // declaration site a FormSection could be attached to. Folding those needs a
-            // framework seam (a schema-declared section, or a per-variant sub-spec hook on
-            // Nested.schemaFrom); do not work around it by hiding fields with visibleIn --
-            // that makes them unwritable, which is a different and worse thing.
+            // kind's Schema, and it folds through the schema-declared sections each kind
+            // adds (Schema.addSection, carried onto the derived spec by
+            // FieldFormEntryRegistry.deriveSpec) -- see HohenheimFormSections. Never fold
+            // a field by hiding it with visibleIn: that makes it unwritable, which is a
+            // different and worse thing than a disclosure.
             .section(FormSection.advanced(
                 InstanceModel.CRASH_POLICY.getName(),
                 InstanceModel.BACKUP_TARGET_ID.getName()))
@@ -823,10 +823,12 @@ public class InstanceResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "deploy_instance"))
             .label(Microcopy.of("deploy").withFilter("scope", "instance"))
             .icon(Icon.of("play"))
-            // PRIMARY is a declaration about the RECORD surface: RecordActionBands leads
-            // the inline band with it, so the one verb an instance page exists for keeps
-            // its slot however many housekeeping actions are declared after it.
-            .style(ActionStyle.PRIMARY)
+            // AIDEV-NOTE: deliberately NOT ActionStyle.PRIMARY (reverted 2026-08-22). The
+            // style is what makes a button render FILLED, and on a list row that put a
+            // solid accent-coloured Deploy beside the red Delete on every single row --
+            // louder than a row deserves. It bought nothing on the record surface either:
+            // Deploy is the FIRST action rowActions() declares, and RecordActionBands
+            // keeps declaration order inside the inline band, so it already leads.
             .visibleFor((row, ctx) -> !isGenerated(row)
                 && InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND))
                 && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,

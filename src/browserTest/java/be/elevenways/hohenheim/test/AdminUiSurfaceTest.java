@@ -559,7 +559,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
     }
 
     /**
-     * The record action band: the declared primary verb leads, at most three verbs sit
+     * The record action band: the first-declared verb leads, at most three verbs sit
      * inline, and a destructive one never does. Step 3 is the falsification.
      */
     @Test
@@ -574,10 +574,18 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         String inline = page.substring(band, menu);
         String overflow = page.substring(menu);
 
-        // 2. Deploy is the DECLARED primary verb, so it leads the inline band, and the
-        //    band never grows past its cap however many actions the resource declares.
-        assertThat(inline).as("step 2: the primary verb is inline")
+        // 2. Deploy is the FIRST action rowActions() declares, and the band keeps
+        //    declaration order, so it leads without any style saying so -- which is why
+        //    it no longer declares ActionStyle.PRIMARY (that only made it render filled,
+        //    on every list row, next to the red Delete). The band never grows past its
+        //    cap however many actions the resource declares.
+        assertThat(inline).as("step 2: the leading verb is inline")
             .contains("deploy_instance");
+        int secondAction = inline.indexOf("data-action-id=",
+            inline.indexOf("data-action-id=") + 1);
+        assertThat(inline.indexOf("deploy_instance"))
+            .as("step 2: and it is the FIRST one, on declaration order alone")
+            .isLessThan(secondAction < 0 ? inline.length() : secondAction);
         assertThat(countOf(inline, "data-action-id="))
             .as("step 2: at most three verbs sit inline")
             .isLessThanOrEqualTo(3);
