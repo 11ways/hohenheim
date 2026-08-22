@@ -44,6 +44,11 @@ public final class InstanceMigratePage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_migrate"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("migrate").withFilter("scope", "instance"); }
+    /**
+     * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
+     * menu so the visible strip stays the handful of tabs an operator opens daily.
+     */
+    @Override public boolean secondaryTab() { return true; }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("truck-fast"); }
 

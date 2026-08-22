@@ -58,6 +58,12 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
         this.resource = resource;
     }
 
+    /**
+     * Snapshots and backups are housekeeping: both tabs live in the strip's "More"
+     * menu, declared once here because both subclasses answer the same way.
+     */
+    @Override public boolean secondaryTab() { return true; }
+
     /** The record capability this tab and its operations answer to. */
     abstract @NonNull String capability();
 
