@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.server.process;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.security.SecurityReportEnv;
-import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -130,7 +130,7 @@ public final class ReservedEnv {
                 return;
             }
             String siteType = effectiveSiteType(row);
-            SiteTypeHandler type = SiteTypes.getHandler(siteType);
+            UpstreamKindHandler type = UpstreamKindHandlers.getHandler(siteType);
             if (type == null || !type.managedProcessEnvironment()) {
                 return;
             }
@@ -146,13 +146,13 @@ public final class ReservedEnv {
     }
 
     private static @Nullable String effectiveSiteType(@NonNull Row row) {
-        if (row.has(SiteModel.SITE_TYPE.getName())) {
-            return row.get(SiteModel.SITE_TYPE);
+        if (row.has(SiteModel.UPSTREAM_KIND.getName())) {
+            return row.get(SiteModel.UPSTREAM_KIND);
         }
         if (!row.has(SiteModel.ID.getName())) {
             return null;
         }
         Row stored = Models.get(SiteModel.class).findById(row.get(SiteModel.ID));
-        return stored != null ? stored.get(SiteModel.SITE_TYPE) : null;
+        return stored != null ? stored.get(SiteModel.UPSTREAM_KIND) : null;
     }
 }

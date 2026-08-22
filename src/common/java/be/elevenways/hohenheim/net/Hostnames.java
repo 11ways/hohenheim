@@ -67,7 +67,7 @@ public final class Hostnames {
      * AIDEV-NOTE: the naive {@code host.indexOf(':')} this replaces turned {@code [::1]:80}
      * into {@code "["}, because an IPv6 literal's port separator is the colon AFTER the
      * closing bracket, not the first colon in the string. Two dispatchers carried their own
-     * copy of that parse (SiteDispatcher and DevNamespaceSiteType); there is ONE here now.
+     * copy of that parse (SiteDispatcher and DevNamespaceUpstreamKind); there is ONE here now.
      * A malformed authority yields "" -- an empty hostname resolves to no route at all,
      * which is the only safe answer to a Host header we could not read.
      *

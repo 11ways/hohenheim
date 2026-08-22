@@ -27,7 +27,9 @@ public final class GitlabProviderKind implements GitProviderKind {
     }
 
     @Override
-    public String getDescription() { return "gitlab.com or a self-hosted GitLab installation"; }
+    public @NonNull Microcopy getDescription() {
+        return Microcopy.of("gitlab").withFilter("scope", "git_provider_kind_description");
+    }
 
     @Override public Icon getIcon() { return Icon.of("gitlab"); }
 

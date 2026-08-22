@@ -520,7 +520,7 @@ public final class IncusInstanceRuntime
      * exist in this daemon's own image store.
      *
      * AIDEV-NOTE: extracted from create() so PLACEMENT can consult the same rule before
-     * choosing this host (IncusContainerKind/IncusVmKind.requirePlaceableOn). Placement
+     * choosing this host (SystemContainerKind/VmKind.requirePlaceableOn). Placement
      * choosing a host whose deploy then refuses by name was a wrong ELIGIBLE SET, and the
      * fix is one authority with two callers -- never a second copy of the rule in the
      * chooser. A CATALOG image returns immediately without touching the daemon, so the

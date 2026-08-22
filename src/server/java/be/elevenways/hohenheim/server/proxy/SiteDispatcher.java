@@ -18,11 +18,10 @@ import be.elevenways.zenit.common.security.SecurityEventTypes;
 import be.elevenways.zenit.server.security.SecurityEvents;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.auth.SiteAuthGates;
-import be.elevenways.hohenheim.server.source.GitProvisioner;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
-import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.protoblast.common.Blast;
@@ -227,11 +226,11 @@ public class SiteDispatcher implements HttpHandler {
         }
 
         for (Row site : sites) {
-            String siteTypeStr = site.get(SiteModel.SITE_TYPE);
+            String siteTypeStr = site.get(SiteModel.UPSTREAM_KIND);
             Integer siteId = site.get(SiteModel.ID);
             String siteName = site.get(SiteModel.NAME);
 
-            SiteTypeHandler typeHandler = SiteTypes.getHandler(siteTypeStr);
+            UpstreamKindHandler typeHandler = UpstreamKindHandlers.getHandler(siteTypeStr);
             if (typeHandler == null) {
                 Blast.log("SiteDispatcher: unknown site type", siteTypeStr, "for site", siteName);
                 continue;
@@ -291,23 +290,16 @@ public class SiteDispatcher implements HttpHandler {
             List<SiteAuthGate> treeGates = accessTree != null ? accessTree.gates() : List.of();
             ownedGates.addAll(treeGates);
 
-            // Check for git provisioning. Isolate per-site handler creation so one
-            // misconfigured site (e.g. a dangling system_user_id, which now fails
-            // closed) is skipped with a log line instead of aborting the whole load.
+            // Isolate per-site handler creation so one misconfigured site is skipped with
+            // a log line instead of aborting the whole load.
+            //
+            // AIDEV-NOTE: the git-provisioned branch is GONE with sites.source (phase-0
+            // design section 3): a checkout no longer lives beside the site, it lives in
+            // the workspace volume or the build context of the instance the site exposes.
+            // GitProvisioner's site-directory layout dies with the host-user lane.
             SiteRequestHandler requestHandler;
             try {
-                String source = site.get(SiteModel.SOURCE);
-                if ("git".equals(source)) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> sourceSettings = (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS);
-                    if (sourceSettings != null) {
-                        requestHandler = GitProvisioner.createHandler(site, typeHandler, settings, sourceSettings, siteId);
-                    } else {
-                        requestHandler = typeHandler.createHandler(site, settings);
-                    }
-                } else {
-                    requestHandler = typeHandler.createHandler(site, settings);
-                }
+                requestHandler = typeHandler.createHandler(site, settings);
             } catch (Exception e) {
                 Blast.log("SiteDispatcher: failed to create handler for site", siteName, "-", e.getMessage());
                 continue;

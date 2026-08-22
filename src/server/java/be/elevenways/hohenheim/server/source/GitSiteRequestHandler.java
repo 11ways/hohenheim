@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
-import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -27,7 +27,7 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
 
     private final int siteId;
     private final Row site;
-    private final SiteTypeHandler typeHandler;
+    private final UpstreamKindHandler typeHandler;
     private final Map<String, Object> typeSettings;
     private final Map<String, Object> sourceSettings;
     private final File siteDir;
@@ -40,7 +40,7 @@ public class GitSiteRequestHandler implements SiteRequestHandler {
     private volatile boolean lastDeployFailed = false;
     private ScheduledFuture<?> pollFuture;
 
-    GitSiteRequestHandler(int siteId, Row site, SiteTypeHandler typeHandler,
+    GitSiteRequestHandler(int siteId, Row site, UpstreamKindHandler typeHandler,
                           Map<String, Object> typeSettings, Map<String, Object> sourceSettings,
                           File siteDir) {
         this.siteId = siteId;

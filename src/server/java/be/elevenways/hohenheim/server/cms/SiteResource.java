@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -9,11 +10,10 @@ import be.elevenways.hohenheim.server.docker.SiteReleases;
 import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.hohenheim.server.proxy.RouteClaims.ClaimConflict;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
-import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
-import be.elevenways.hohenheim.server.sitetype.types.DevNamespaceSiteType;
-import be.elevenways.hohenheim.server.sitetype.types.DockerSiteType;
-import be.elevenways.hohenheim.server.source.GitProvisioner;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
+import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
@@ -68,7 +68,7 @@ public class SiteResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(SiteModel.NAME)
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SITE_TYPE))
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.UPSTREAM_KIND))
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SETTINGS))
         .add(SiteModel.ENABLED)
         .add(SiteModel.DESCRIPTION)
@@ -78,8 +78,8 @@ public class SiteResource extends RowResource {
             .creatable(false).build())
         .add(RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID)
             .creatable(false).build())
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SOURCE))
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SOURCE_SETTINGS))
+        .add(RelationPick.of(SiteModel.INSTANCE_ID, InstanceModel.MODEL_ID)
+            .creatable(false).build())
         .build();
 
     // AIDEV-NOTE: STATUS is deliberately absent. SiteModel.STATUS declares exactly ONE
@@ -90,19 +90,13 @@ public class SiteResource extends RowResource {
         // so it reads under the name instead of costing a column of its own.
         .column(ColumnSpec.fromField(SiteModel.NAME).filterable().subtext("slug").build())
         .column(ColumnSpec.fromField(SiteModel.SLUG).hidden().build())
-        // AIDEV-NOTE: SOURCE decides how every deployment of this site is PRODUCED (local
-        // files vs a git checkout) and was invisible in the list. It rides under the type
-        // rather than widening the table, and keeps its own filter.
-        .column(ColumnSpec.fromField(SiteModel.SITE_TYPE).filterable().subtext("source").build())
-        .column(ColumnSpec.fromField(SiteModel.SOURCE).filterable().hidden().build())
+        .column(ColumnSpec.fromField(SiteModel.UPSTREAM_KIND).filterable().build())
         .column(ColumnSpec.fromField(SiteModel.ENABLED).filterable().build())
         .column(ColumnSpec.fromField(SiteModel.CREATED_AT).filterable().build())
         .filter(FilterSpec.forField(SiteModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(SiteModel.NAME)).build())
-        .filter(FilterSpec.forField(SiteModel.SITE_TYPE, FilterSpec.Kind.SELECT)
-            .label(FieldLabels.labelFor(SiteModel.SITE_TYPE)).build())
-        .filter(FilterSpec.forField(SiteModel.SOURCE, FilterSpec.Kind.SELECT)
-            .label(FieldLabels.labelFor(SiteModel.SOURCE)).build())
+        .filter(FilterSpec.forField(SiteModel.UPSTREAM_KIND, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(SiteModel.UPSTREAM_KIND)).build())
         .filter(FilterSpec.forField(SiteModel.ENABLED, FilterSpec.Kind.BOOLEAN)
             .label(FieldLabels.labelFor(SiteModel.ENABLED)).build())
         .filter(FilterSpec.forField(SiteModel.CREATED_AT, FilterSpec.Kind.TEXT)
@@ -181,7 +175,6 @@ public class SiteResource extends RowResource {
         }
         values.put("slug", slugify(name));
         values.put("status", SiteModel.STATUS_ACTIVE);
-        normalizeSource(values, null);
         normalizeDevNamespace(values, null);
         return super.persistRow(values, accessContext);
     }
@@ -192,13 +185,11 @@ public class SiteResource extends RowResource {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         // AIDEV-NOTE: every read below goes through CmsSupport's stored-value fallback
         // because the inline cell lane hands this a map with EXACTLY ONE entry: reading
-        // "name" off the map alone refused a save that never touched it, and
-        // normalizeSource's unconditional put blanked a git site's source.
+        // "name" off the map alone refused a save that never touched it.
         String name = CmsSupport.textOf(values, existing, SiteModel.NAME);
         if (name.isEmpty()) {
             throw Violations.ofField("name", name, CmsSupport.violationText("name_required"));
         }
-        normalizeSource(values, existing);
         normalizeDevNamespace(values, existing);
         // The enable invariant is NOT re-checked here: it runs in the SiteModel
         // write pipeline (installEnableInvariant), which super.updateRow's save
@@ -325,47 +316,6 @@ public class SiteResource extends RowResource {
     }
 
     /**
-     * Normalize the source discriminator: "local" stores as null and clears
-     * the git settings; "git" keeps them and mints a webhook secret when none
-     * exists yet (keep-on-blank for an existing secret is the framework's
-     * FormSecrets contract -- webhook_secret is a .secret() field).
-     *
-     * AIDEV-NOTE: reading the discriminator through the STORED value is what makes this
-     * safe, and it is load-bearing: the inline cell lane hands updateRow a map with EXACTLY
-     * ONE entry, so reading {@code source} off that map alone made the branch below fire
-     * {@code put("source", null)} on a rename -- a silent de-provisioning of a
-     * git-provisioned site, no refusal, no log, the repository simply gone from the record
-     * (falsified 2026-08-19: restoring the map-only read makes the guard name the lost
-     * column). The early return on top is the second half: a write carrying neither key is
-     * not a source edit and should not rewrite either column at all.
-     *
-     * @param existing the stored row, or null on a create
-     */
-    private static void normalizeSource(@NonNull Map<String, Object> coerced,
-                                        @Nullable Row existing) {
-        if (existing != null && !coerced.containsKey(SiteModel.SOURCE.getName())
-                && !coerced.containsKey(SiteModel.SOURCE_SETTINGS.getName())) {
-            return;
-        }
-        String source = CmsSupport.textOf(coerced, existing, SiteModel.SOURCE);
-        if (!SiteModel.SOURCE_GIT.equals(source)) {
-            coerced.put("source", null);
-            coerced.put("source_settings", null);
-            return;
-        }
-        coerced.put("source", SiteModel.SOURCE_GIT);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> sourceSettings =
-            CmsSupport.valueOf(coerced, existing, SiteModel.SOURCE_SETTINGS) instanceof Map<?, ?> map
-                ? new HashMap<>((Map<String, Object>) map)
-                : new HashMap<>();
-        if (isBlank(sourceSettings.get("webhook_secret"))) {
-            sourceSettings.put("webhook_secret", UUID.randomUUID().toString());
-        }
-        coerced.put("source_settings", sourceSettings);
-    }
-
-    /**
      * Mint a registration token for a dev-namespace site that has none yet (a
      * blank submit on an existing secret was already restored by the secrets
      * contract before this runs, so blank here really means absent).
@@ -379,8 +329,8 @@ public class SiteResource extends RowResource {
      */
     private static void normalizeDevNamespace(@NonNull Map<String, Object> coerced,
                                               @Nullable Row existing) {
-        if (!DevNamespaceSiteType.ID.toString().equals(
-                CmsSupport.valueOf(coerced, existing, SiteModel.SITE_TYPE))) {
+        if (!DevNamespaceUpstreamKind.ID.toString().equals(
+                CmsSupport.valueOf(coerced, existing, SiteModel.UPSTREAM_KIND))) {
             return;
         }
         @SuppressWarnings("unchecked")
@@ -388,8 +338,8 @@ public class SiteResource extends RowResource {
             CmsSupport.valueOf(coerced, existing, SiteModel.SETTINGS) instanceof Map<?, ?> map
                 ? new HashMap<>((Map<String, Object>) map)
                 : new HashMap<>();
-        if (isBlank(settings.get(DevNamespaceSiteType.REGISTRATION_TOKEN_KEY))) {
-            settings.put(DevNamespaceSiteType.REGISTRATION_TOKEN_KEY,
+        if (isBlank(settings.get(DevNamespaceUpstreamKind.REGISTRATION_TOKEN_KEY))) {
+            settings.put(DevNamespaceUpstreamKind.REGISTRATION_TOKEN_KEY,
                 "zdev_" + SecureTokens.randomToken(24));
         }
         coerced.put("settings", settings);
@@ -422,9 +372,6 @@ public class SiteResource extends RowResource {
         existing.set(SiteModel.DELETED_AT, Instant.now());
         ActivityLog.withAction(ActivityLog.ACTION_DELETE, "soft-delete",
             () -> this.model().save(existing));
-        if (SiteModel.SOURCE_GIT.equals(existing.get(SiteModel.SOURCE))) {
-            GitProvisioner.deleteSiteDirectory(siteId);
-        }
     }
 
     @Override
@@ -452,8 +399,8 @@ public class SiteResource extends RowResource {
                 .body(Microcopy.of("rollback_confirm").withFilter("scope", "site"))
                 .style(ActionStyle.DESTRUCTIVE)
                 .build())
-            .visibleFor((row, ctx) -> DockerSiteType.ID.toString()
-                .equals(row.get(SiteModel.SITE_TYPE)))
+            .visibleFor((row, ctx) -> InstanceUpstreamKind.ID.toString()
+                .equals(row.get(SiteModel.UPSTREAM_KIND)))
             .handler((row, ctx) -> {
                 SiteReleases.rollback(row.get(SiteModel.ID));
                 return CmsActionResult.refreshWithToast(
@@ -478,7 +425,7 @@ public class SiteResource extends RowResource {
 
     /** @return true when this site's type declares an {@code api_keys} setting */
     private static boolean supportsApiKeys(@NonNull Row site) {
-        SiteTypeHandler handler = SiteTypes.getHandler((String) site.get(SiteModel.SITE_TYPE));
+        UpstreamKindHandler handler = UpstreamKindHandlers.getHandler((String) site.get(SiteModel.UPSTREAM_KIND));
         return handler != null && handler.getSchema().getField(SiteApiKeys.SETTING_NAME) != null;
     }
 
@@ -554,7 +501,7 @@ public class SiteResource extends RowResource {
         Row clone = siteModel.createEmptyRow();
         clone.set(SiteModel.NAME, name);
         clone.set(SiteModel.SLUG, slugify(name));
-        clone.set(SiteModel.SITE_TYPE, site.get(SiteModel.SITE_TYPE));
+        clone.set(SiteModel.UPSTREAM_KIND, site.get(SiteModel.UPSTREAM_KIND));
         @SuppressWarnings("unchecked")
         Map<String, Object> clonedSettings = site.get(SiteModel.SETTINGS) != null
             ? new LinkedHashMap<>((Map<String, Object>) site.get(SiteModel.SETTINGS))
@@ -565,15 +512,10 @@ public class SiteResource extends RowResource {
             clonedSettings.remove(SiteApiKeys.SETTING_NAME);
         }
         clone.set(SiteModel.SETTINGS, clonedSettings);
-        clone.set(SiteModel.SOURCE, site.get(SiteModel.SOURCE));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> clonedSourceSettings = site.get(SiteModel.SOURCE_SETTINGS) != null
-            ? new HashMap<>((Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS))
-            : null;
-        if (clonedSourceSettings != null) {
-            clonedSourceSettings.put("webhook_secret", UUID.randomUUID().toString());
-        }
-        clone.set(SiteModel.SOURCE_SETTINGS, clonedSourceSettings);
+        // AIDEV-NOTE: the clone deliberately does NOT copy instance_id. The source and
+        // the workload now live on the instance (phase-0 design section 3), and two sites
+        // pointing at one instance is a second front door to the same workload, not a
+        // copy of it -- the operator picks or creates the instance for the clone.
         clone.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         clone.set(SiteModel.ENABLED, false);
         clone.set(SiteModel.AUTH_PROVIDER_ID, site.get(SiteModel.AUTH_PROVIDER_ID));
@@ -610,8 +552,7 @@ public class SiteResource extends RowResource {
         // The "access" tab is the GENERIC record-access page, contributed by
         // zenit-auth through RecordSubpageRegistry (part of frameworkSubpages).
         List<RecordScopedPage<Row>> pages = new ArrayList<>(
-            List.of(new SiteDomainsPage(), new SiteDatabasesPage(), new SiteProcessesPage(),
-                new SiteDeploymentsPage(), new SiteDevSessionsPage()));
+            List.of(new SiteDomainsPage(), new SiteDeploymentsPage(), new SiteDevSessionsPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
     }

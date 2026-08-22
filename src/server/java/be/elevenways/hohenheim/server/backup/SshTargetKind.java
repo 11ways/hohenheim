@@ -61,9 +61,8 @@ public final class SshTargetKind implements BackupTargetKindHandler {
     }
 
     @Override
-    public String getDescription() {
-        return "A directory on another host over ssh; a different failure domain when "
-            + "the host actually is one";
+    public @NonNull Microcopy getDescription() {
+        return Microcopy.of("ssh").withFilter("scope", "backup_target_kind_description");
     }
 
     @Override

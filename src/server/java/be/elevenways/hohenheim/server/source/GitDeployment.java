@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
 import be.elevenways.hohenheim.server.security.ProcessNetworkPolicy;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
-import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -32,7 +32,7 @@ public class GitDeployment {
 
     private final int siteId;
     private final Row site;
-    private final SiteTypeHandler typeHandler;
+    private final UpstreamKindHandler typeHandler;
     private final Map<String, Object> typeSettings;
     private final Map<String, Object> sourceSettings;
     private final GitRepository gitRepo;
@@ -43,7 +43,7 @@ public class GitDeployment {
     private final StringBuilder deployLog = new StringBuilder();
     private static final int DEPLOY_LOG_CAP = 200_000;
 
-    public GitDeployment(int siteId, Row site, SiteTypeHandler typeHandler,
+    public GitDeployment(int siteId, Row site, UpstreamKindHandler typeHandler,
                           Map<String, Object> typeSettings, Map<String, Object> sourceSettings,
                           GitRepository gitRepo, File siteDir, SystemUsers.@Nullable RunAsUser runAs) {
         this.siteId = siteId;

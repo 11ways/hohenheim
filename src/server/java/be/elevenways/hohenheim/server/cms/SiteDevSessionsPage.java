@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.devtunnel.DevLease;
 import be.elevenways.hohenheim.server.devtunnel.DevLeases;
-import be.elevenways.hohenheim.server.sitetype.types.DevNamespaceSiteType;
+import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -33,7 +33,7 @@ public final class SiteDevSessionsPage implements RecordScopedPage<Row> {
 
     @Override
     public boolean visibleFor(@NonNull Row site) {
-        return DevNamespaceSiteType.ID.toString().equals(site.get(SiteModel.SITE_TYPE));
+        return DevNamespaceUpstreamKind.ID.toString().equals(site.get(SiteModel.UPSTREAM_KIND));
     }
 
     @Override

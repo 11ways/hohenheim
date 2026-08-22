@@ -38,7 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The wiring between the SITE tier and the canonical runtime-resource contract: every
- * Docker site's running release IS an owned {@code hohenheim:site_container} instance,
+ * Docker site's running release IS an owned {@code hohenheim:release} instance,
  * deployed/stopped/destroyed through {@link InstanceService} -- the site tier keeps
  * routing, domains, TLS and revisions, and no longer talks to the daemon about its own
  * container. The instance row is a GENERATED row attributed to the site (the
@@ -78,8 +78,8 @@ public final class SiteInstances {
      *
      * AIDEV-NOTE: the mechanics moved to {@link OwnedInstances} when the database tier
      * lowered onto the same contract -- the guard, the generated-only kind refusal and
-     * the scope are shared by every owning tier. What kept {@code site_container}
-     * unwritable from the admin form is now {@code SiteContainerKind.generatedOnly()},
+     * the scope are shared by every owning tier. What kept {@code release}
+     * unwritable from the admin form is now {@code ReleaseKind.generatedOnly()},
      * a declaration on the kind rather than a name in a hook.
      */
     public static synchronized void install() {
@@ -298,7 +298,7 @@ public final class SiteInstances {
     }
 
     /**
-     * Map the SITE settings onto the site_container kind settings. Git-sourced sites
+     * Map the SITE settings onto the release kind settings. Git-sourced sites
      * ({@code build_context} staged by GitDeployment) build the image in a SANDBOX here
      * and pin the instance to the artifact's DIGEST.
      *

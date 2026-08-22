@@ -36,7 +36,7 @@ public class InitialMigration extends HohenheimMigration {
                 column -> column.nullable(true).maxLength(255));
             table.addColumn("slug", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(255));
-            table.addColumn("site_type", ColumnType.STRING,
+            table.addColumn("upstream_kind", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(50));
             table.addColumn("enabled", ColumnType.BOOLEAN,
                 column -> column.nullable(true).defaultValue(true));
@@ -51,9 +51,11 @@ public class InitialMigration extends HohenheimMigration {
                 column -> column.nullable(true));
             table.addColumn("access_list_id", ColumnType.INTEGER,
                 column -> column.nullable(true));
-            table.addColumn("source", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(20));
-            table.addColumn("source_settings", ColumnType.JSON,
+            // The instance an upstream_kind=instance site serves. No declared FK: the
+            // instances table is created further down, and this file follows the
+            // instances.environment_id precedent -- a forward reference is a plain
+            // indexed column, the invariant lives in SiteModel's before-validate hook.
+            table.addColumn("instance_id", ColumnType.INTEGER,
                 column -> column.nullable(true));
             table.addColumn("auth_provider_id", ColumnType.INTEGER,
                 column -> column.nullable(true));
@@ -62,7 +64,8 @@ public class InitialMigration extends HohenheimMigration {
             table.addColumn("quota_bucket", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(191));
             table.unique("sites_slug_unique", List.of("slug"));
-            table.addIndex("sites_site_type_index", List.of("site_type"));
+            table.addIndex("sites_upstream_kind_index", List.of("upstream_kind"));
+            table.addIndex("sites_instance_id_index", List.of("instance_id"));
         });
 
         schema.createTable("site_domains", table -> {
@@ -319,6 +322,16 @@ public class InitialMigration extends HohenheimMigration {
                 column -> column.nullable(true).maxLength(100));
             table.addColumn("acknowledged_by_label", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(200));
+            // What the filesystem under this host's volume root can do, DETECTED by the
+            // preflight probe (VolumeBackends) and never operator-declared.
+            table.addColumn("volume_backend", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(32).defaultValue("none"));
+            table.addColumn("volume_root", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(512));
+            table.addColumn("volume_backend_detail", ColumnType.TEXT,
+                column -> column.nullable(true));
+            table.addColumn("volume_probed_at", ColumnType.DATETIME,
+                column -> column.nullable(true));
             table.unique("servers_name_unique", List.of("name"));
         });
 
@@ -874,6 +887,72 @@ public class InitialMigration extends HohenheimMigration {
             table.timestamps();
             table.addColumn("update_script", ColumnType.TEXT,
                 column -> column.nullable(true));
+            // The yolk/egg split: a template may name the runtime image it layers hooks
+            // over instead of re-declaring the image (phase-0 design section 4.6).
+            table.addColumn("runtime_image_id", ColumnType.INTEGER,
+                column -> column.nullable(true));
+            table.addColumn("start_command", ColumnType.STRING,
+                column -> column.nullable(true));
+            table.addColumn("readiness_kind", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(32).defaultValue("port"));
+            table.addColumn("readiness_target", ColumnType.STRING,
+                column -> column.nullable(true));
+            table.addColumn("stop_kind", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(32).defaultValue("signal"));
+            table.addColumn("stop_grace_seconds", ColumnType.INTEGER,
+                column -> column.nullable(true).defaultValue(10));
+            table.addColumn("console_kind", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(32).defaultValue("plain"));
+        });
+
+        schema.createTable("runtime_images", table -> {
+            table.id();
+            table.addColumn("name", ColumnType.STRING,
+                column -> column.nullable(false).maxLength(128));
+            table.addColumn("description", ColumnType.TEXT,
+                column -> column.nullable(true));
+            table.addColumn("icon", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(64));
+            table.addColumn("docker_image", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(255));
+            table.addColumn("incus_image", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(255));
+            table.addColumn("build_context", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(255));
+            table.addColumn("default_command", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(512));
+            table.addColumn("default_port", ColumnType.INTEGER,
+                column -> column.nullable(true));
+            table.addColumn("default_build_command", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(512));
+            table.addColumn("workdir", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(255));
+            table.addColumn("shell", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(128).defaultValue("/bin/bash"));
+            table.addColumn("uid_mode", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(32).defaultValue("mapped"));
+            table.addColumn("builtin", ColumnType.BOOLEAN,
+                column -> column.nullable(true).defaultValue(false));
+            table.addColumn("enabled", ColumnType.BOOLEAN,
+                column -> column.nullable(true).defaultValue(true));
+            table.timestamps();
+            table.unique("runtime_images_name_unique", List.of("name"));
+        });
+
+        schema.createTable("instance_template_volumes", table -> {
+            table.id();
+            table.addColumn("template_id", ColumnType.INTEGER,
+                column -> column.nullable(false).references("instance_templates", "id"));
+            table.addColumn("name", ColumnType.STRING,
+                column -> column.nullable(false).maxLength(128));
+            table.addColumn("container_path", ColumnType.STRING,
+                column -> column.nullable(false).maxLength(512));
+            table.addColumn("quota_bytes", ColumnType.LONG,
+                column -> column.nullable(true));
+            table.addColumn("exclusive", ColumnType.BOOLEAN,
+                column -> column.nullable(true).defaultValue(false));
+            table.timestamps();
+            table.unique("instance_template_volumes_unique", List.of("template_id", "name"));
         });
 
         schema.createTable("instances", table -> {
@@ -935,8 +1014,34 @@ public class InitialMigration extends HohenheimMigration {
                 column -> column.nullable(true));
             table.addColumn("migrate_reserved_mb", ColumnType.INTEGER,
                 column -> column.nullable(true));
+            table.addColumn("runtime_image_id", ColumnType.INTEGER,
+                column -> column.nullable(true).references("runtime_images", "id"));
             table.addIndex("instances_server_id_index", List.of("server_id"));
             table.addIndex("idx_instances_generated_for_id", List.of("generated_for_id"));
+        });
+
+        schema.createTable("instance_volumes", table -> {
+            table.id();
+            table.addColumn("instance_id", ColumnType.INTEGER,
+                column -> column.nullable(false).references("instances", "id"));
+            table.addColumn("name", ColumnType.STRING,
+                column -> column.nullable(false).maxLength(128));
+            table.addColumn("container_path", ColumnType.STRING,
+                column -> column.nullable(false).maxLength(512));
+            table.addColumn("quota_bytes", ColumnType.LONG,
+                column -> column.nullable(true));
+            table.addColumn("exclusive", ColumnType.BOOLEAN,
+                column -> column.nullable(true).defaultValue(false));
+            // Derived from <data_path>/volumes/<instance>/<name> and stored as EVIDENCE of
+            // the directory a reclaim would remove; the deploy path re-derives.
+            table.addColumn("host_path", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(1024));
+            table.addColumn("used_bytes", ColumnType.LONG,
+                column -> column.nullable(true));
+            table.addColumn("observed_at", ColumnType.DATETIME,
+                column -> column.nullable(true));
+            table.timestamps();
+            table.unique("instance_volumes_unique", List.of("instance_id", "name"));
         });
 
         schema.createTable("instance_snapshots", table -> {
@@ -1342,8 +1447,11 @@ public class InitialMigration extends HohenheimMigration {
         schema.dropTable("instance_template_variables");
         schema.dropTable("instance_backups");
         schema.dropTable("instance_snapshots");
+        schema.dropTable("instance_volumes");
         schema.dropTable("instances");
+        schema.dropTable("instance_template_volumes");
         schema.dropTable("instance_templates");
+        schema.dropTable("runtime_images");
         schema.dropTable("backup_targets");
         schema.dropTable("instance_quotas");
         schema.dropTable("released_route_claims");

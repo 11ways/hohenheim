@@ -33,7 +33,7 @@ import java.util.Map;
 /**
  * The first instance kind: a Docker container on an inventoried host. The kind key is
  * deliberately {@code docker_container}, not {@code docker} -- kind is the ONE
- * discriminator, so it must leave room for {@code incus_container} and {@code vm}
+ * discriminator, so it must leave room for {@code system_container} and {@code vm}
  * without a second runtime field.
  */
 public final class DockerContainerKind implements InstanceKindHandler {
@@ -155,7 +155,9 @@ public final class DockerContainerKind implements InstanceKindHandler {
     }
 
     @Override
-    public String getDescription() { return "Run a container image as a managed instance"; }
+    public @NonNull Microcopy getDescription() {
+        return Microcopy.of("docker_container").withFilter("scope", "instance_kind_description");
+    }
 
     @Override
     public Icon getIcon() { return Icon.of("box"); }

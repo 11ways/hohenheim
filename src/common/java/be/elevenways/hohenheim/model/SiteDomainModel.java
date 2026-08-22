@@ -258,8 +258,8 @@ public class SiteDomainModel extends Model {
             }
             Integer siteId = (Integer) effective(row, SITE_ID);
             Row site = siteId != null ? Models.get(SiteModel.class).findById(siteId) : null;
-            if (site == null || !SiteModel.SITE_TYPE_TLS_PASSTHROUGH
-                    .equals(site.get(SiteModel.SITE_TYPE))) return;
+            if (site == null || !SiteModel.UPSTREAM_TLS_PASSTHROUGH
+                    .equals(site.get(SiteModel.UPSTREAM_KIND))) return;
             row.set(FORCE_SSL, false);
             row.set(EXCLUDE_FROM_LETSENCRYPT, true);
             validateTlsPassthroughValues(row);

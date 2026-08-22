@@ -9,12 +9,13 @@ import be.elevenways.protoblast.common.annotation.BlastDiscoverable;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Server-side half of an instance kind: builds the driver and the driver-facing spec
  * for records of this kind. Implementations are discovered at compile time and
  * register themselves via {@code typeId()} -- adding a kind ships one class,
- * registered nowhere manually (the SiteTypeHandler shape).
+ * registered nowhere manually (the UpstreamKindHandler shape).
  */
 @BlastDiscoverable(registrar = "be.elevenways.hohenheim.server.instance.InstanceKinds#register")
 public interface InstanceKindHandler extends InstanceKindInfo {
@@ -34,7 +35,7 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     /**
      * Whether records of this kind carry tenant-authored workloads. Tenant-authored
      * kinds place only on an ADMITTED host (HostAdmission.requireInstancePlacement);
-     * an operator-authored kind (SiteContainerKind, writable only through the site
+     * an operator-authored kind (ReleaseKind, writable only through the site
      * tier's system scope) predates host admission and deliberately skips that gate --
      * the same declared difference as its SHARED_BRIDGE network posture.
      */
@@ -71,7 +72,7 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      * AIDEV-NOTE: this is a DECLARATION on the kind, not an if-chain in the write hook.
      * The hook that enforces it ({@code OwnedInstances.install}) names no kind, so a new
      * owned kind is one line here and is protected from the moment it registers -- the
-     * previous shape hard-coded {@code site_container} in the hook and would have needed
+     * previous shape hard-coded {@code release} in the hook and would have needed
      * editing for every tier the lowering reaches.
      */
     default boolean generatedOnly() {
@@ -79,12 +80,17 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
-     * The host runtime ({@code ServerModel.RUNTIME_*}) records of this kind run on.
+     * The host runtimes ({@code ServerModel.RUNTIME_*}) records of this kind can run on.
      * Placement only offers matching hosts, and a mismatched deploy refuses at client
-     * construction -- a Docker kind can never land on an Incus daemon or vice versa.
+     * construction -- a Docker-only kind can never land on an Incus daemon or vice versa.
+     *
+     * AIDEV-NOTE: a SET since the workspace kind landed (phase-0 design section 4.1), which
+     * runs on both runtimes at the operator's choice. The dependent host picker derives its
+     * rules from this same declaration, so adding a runtime to a kind stays ONE edit -- the
+     * reason it is a declaration here and not a table in the picker.
      */
-    default @NonNull String requiredRuntime() {
-        return ServerModel.RUNTIME_DOCKER;
+    default @NonNull Set<String> supportedRuntimes() {
+        return Set.of(ServerModel.RUNTIME_DOCKER);
     }
 
     /**

@@ -142,7 +142,7 @@ public final class ManageSiteResource extends SiteResource {
         // Deliberately NOT frameworkSubpages(): the admin activity/revision
         // history pages stay off the delegated surface.
         List<RecordScopedPage<Row>> pages = new ArrayList<>(
-            List.of(new SiteDomainsPage(), new SiteDeploymentsPage(), new SiteProcessesPage()));
+            List.of(new SiteDomainsPage(), new SiteDeploymentsPage()));
         pages.addAll(RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));
         return pages;
     }

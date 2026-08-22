@@ -44,7 +44,7 @@ public final class UnixSocketBridge {
     /**
      * @param verifyReachable when true, prove the AF_UNIX upstream ANSWERS before the bridge
      *        exists, closing the loopback listener and throwing when it does not. Callers that
-     *        CACHE a bridge keyed by an externally-influenced path ({@code ProxySiteType
+     *        CACHE a bridge keyed by an externally-influenced path ({@code AddressUpstreamKind
      *        .bridgeFor}) pass true so an unreachable path is never cached as a permanent
      *        listener + accept thread; the process-lifecycle caller passes false because its
      *        failure path releases but does not kill the child, and a still-binding child must

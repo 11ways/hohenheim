@@ -23,7 +23,7 @@ import java.util.Map;
  * {@code myapp:latest} at the daemon changes what that string means without changing one
  * byte of any record, so a release pinned to a tag runs whatever last claimed the name.
  * The tag is applied anyway, because a human needs to find the artifact -- but it is a
- * LABEL, never the identity, and {@code SiteContainerKind} deploys the id.
+ * LABEL, never the identity, and {@code ReleaseKind} deploys the id.
  */
 public final class BuildArtifacts {
 

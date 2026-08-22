@@ -221,7 +221,9 @@ public final class StackServiceKind implements InstanceKindHandler {
     }
 
     @Override
-    public String getDescription() { return "One service of a managed stack (managed by its stack)"; }
+    public @NonNull Microcopy getDescription() {
+        return Microcopy.of("stack_service").withFilter("scope", "instance_kind_description");
+    }
 
     @Override
     public Icon getIcon() { return Icon.of("layer-group"); }

@@ -36,6 +36,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -142,7 +143,7 @@ public final class InstanceMigrations {
      */
     public @NonNull List<Destination> destinationsFor(int instanceId) {
         Resolved resolved = this.instances.resolve(instanceId);
-        String requiredRuntime = resolved.handler().requiredRuntime();
+        Set<String> supportedRuntimes = resolved.handler().supportedRuntimes();
         boolean sourceTransportable = hasTransport(resolved.runtime());
         List<Destination> destinations = new ArrayList<>();
         for (Row server : Models.get(ServerModel.class).find().all()) {
@@ -152,7 +153,7 @@ public final class InstanceMigrations {
             }
             String name = String.valueOf((Object) server.get(ServerModel.NAME));
             Microcopy refusal = refusalFor(server, serverId, name, resolved,
-                requiredRuntime, sourceTransportable);
+                supportedRuntimes, sourceTransportable);
             Long budget = InstanceCapacity.budgetMbOf(server);
             destinations.add(new Destination(serverId, name, refusal == null, refusal,
                 clampInt(InstanceCapacity.bookedMbOn(serverId)),
@@ -173,10 +174,10 @@ public final class InstanceMigrations {
     private static @Nullable Microcopy refusalFor(@NonNull Row server, int serverId,
                                                   @NonNull String name,
                                                   @NonNull Resolved resolved,
-                                                  @NonNull String requiredRuntime,
+                                                  @NonNull Set<String> supportedRuntimes,
                                                   boolean sourceTransportable) {
         Microcopy runtimeRefusal = InstanceKinds.runtimeMismatch(name,
-            ServerModel.runtimeOf(server), requiredRuntime);
+            ServerModel.runtimeOf(server), supportedRuntimes);
         if (runtimeRefusal != null) {
             return runtimeRefusal;
         }
@@ -267,7 +268,7 @@ public final class InstanceMigrations {
         Row target = Models.get(ServerModel.class).findById(targetServerId);
         InstanceKinds.requireRuntimeMatch(ServerModel.nameOf(targetServerId),
             target != null ? ServerModel.runtimeOf(target) : "absent",
-            resolved.handler().requiredRuntime());
+            resolved.handler().supportedRuntimes());
         HostAdmission.requireInstancePlacement(targetServerId, resolved.handler().isolation(),
             resolved.row().get(InstanceModel.QUOTA_BUCKET));
 

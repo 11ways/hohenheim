@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
-import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
-import be.elevenways.hohenheim.source.GitSourceSchema;
+import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
+import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.RevisionableBehaviour;
@@ -27,12 +27,9 @@ public class SiteModel extends Model {
     public static final Identifier MODEL_ID = Identifier.of("hohenheim", "site");
     public static final Schema SCHEMA = new Schema();
 
-    /** {@link #SOURCE} value for git-provisioned sites. */
-    public static final String SOURCE_GIT = "git";
-
     /** {@link #STATUS} value for an active site. */
     public static final String STATUS_ACTIVE = "active";
-    public static final String SITE_TYPE_TLS_PASSTHROUGH = "hohenheim:tls_passthrough";
+    public static final String UPSTREAM_TLS_PASSTHROUGH = "hohenheim:tls_passthrough";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
@@ -42,12 +39,12 @@ public class SiteModel extends Model {
         .label(HohenheimFormCopy.label("slug"))
         .build());
 
-    // RegistryEnumField: values come from SiteTypeRegistry at runtime
-    public static final EnumField SITE_TYPE = SCHEMA.addField(
-        RegistryEnumField.builder("site_type")
-            .registry(SiteTypeRegistry.REGISTRY)
-            .label(HohenheimFormCopy.label("site_type"))
-            .help(HohenheimFormCopy.help("site_type"))
+    // RegistryEnumField: values come from UpstreamKinds at runtime
+    public static final EnumField UPSTREAM_KIND = SCHEMA.addField(
+        RegistryEnumField.builder("upstream_kind")
+            .registry(UpstreamKinds.REGISTRY)
+            .label(HohenheimFormCopy.label("upstream_kind"))
+            .help(HohenheimFormCopy.help("upstream_kind"))
             .build());
 
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled")
@@ -56,33 +53,25 @@ public class SiteModel extends Model {
         .help(HohenheimFormCopy.help("enabled"))
         .build());
 
-    // Polymorphic settings: schema resolved dynamically from site_type
+    // Polymorphic settings: schema resolved dynamically from upstream_kind
     public static final SchemaField SETTINGS = SCHEMA.addField(
         SchemaField.builder("settings")
-            .schemaFrom("site_type")
+            .schemaFrom("upstream_kind")
             .label(HohenheimFormCopy.label("settings"))
             .build());
 
-    // Source provisioning: null/"local" = local files, "git" = git-provisioned
-    public static final EnumField SOURCE = SCHEMA.addField(
-        EnumField.builder("source")
-            .value("local", value -> value.displayName("Local files")
-                .label(Microcopy.of("local_files").withFilter("scope", "site_source"))
-                .icon("folder"))
-            .value(SOURCE_GIT, value -> value.displayName("Git repository")
-                .label(Microcopy.of("git_repository").withFilter("scope", "site_source"))
-                .icon("code-branch")
-                .schema(GitSourceSchema.SCHEMA))
-            .defaultValue("local")
-            .label(HohenheimFormCopy.label("source"))
-            .help(HohenheimFormCopy.help("source"))
-            .build());
-
-    // Git-specific settings, only relevant when source == "git"
-    public static final SchemaField SOURCE_SETTINGS = SCHEMA.addField(
-        SchemaField.builder("source_settings")
-            .schemaFrom(SOURCE)
-            .label(HohenheimFormCopy.label("source_settings"))
+    /**
+     * The instance this site serves, when {@link #UPSTREAM_KIND} says so.
+     *
+     * AIDEV-NOTE: a REAL column and not a settings key, deliberately (phase-0 design
+     * section 3): the instance detail page needs the reverse "exposed by" lookup, the
+     * delete cascades need it, and the tenant scope ({@code HohenheimAccess.reachesRecord})
+     * joins on it. A key inside the polymorphic SETTINGS map is invisible to all three.
+     */
+    public static final IntegerField INSTANCE_ID = SCHEMA.addField(
+        IntegerField.builder().name("instance_id")
+            .label(HohenheimFormCopy.label("instance"))
+            .help(HohenheimFormCopy.help("site_instance"))
             .build());
 
     public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description")
@@ -140,9 +129,30 @@ public class SiteModel extends Model {
         // certificates back.
         SCHEMA.addLifecycleField(DELETED_AT);
 
+        // THE instance-link invariant: the kind DECLARES whether it resolves to an
+        // instance (UpstreamKindInfo.requiresInstance), and this is the only place that
+        // enforces it in both directions -- an instance upstream without a record to serve
+        // is a site that can only 502, and an instance_id on a static site is a dangling
+        // reference the "exposed by" reverse lookup would render as a lie.
         SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
-            if (row == null || !SITE_TYPE_TLS_PASSTHROUGH.equals(effective(row, SITE_TYPE))) return;
+            if (row == null) return;
+            Object kind = effective(row, UPSTREAM_KIND);
+            if (kind == null) return;
+            UpstreamKindInfo info = UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind.toString()));
+            if (info == null) return;
+            Object instanceId = effective(row, INSTANCE_ID);
+            if (info.requiresInstance() && instanceId == null) {
+                throw violation("instance_id", null, "upstream_instance_required");
+            }
+            if (!info.requiresInstance() && instanceId != null) {
+                throw violation("instance_id", instanceId, "upstream_instance_unexpected");
+            }
+        });
+
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row == null || !UPSTREAM_TLS_PASSTHROUGH.equals(effective(row, UPSTREAM_KIND))) return;
             Object authProvider = effective(row, AUTH_PROVIDER_ID);
             if (authProvider != null) {
                 throw violation("auth_provider_id", authProvider, "tls_passthrough_no_http_auth");
@@ -150,10 +160,6 @@ public class SiteModel extends Model {
             Object accessList = effective(row, ACCESS_LIST_ID);
             if (accessList != null) {
                 throw violation("access_list_id", accessList, "tls_passthrough_no_access_list");
-            }
-            Object source = effective(row, SOURCE);
-            if (source != null && !"local".equals(source)) {
-                throw violation("source", source, "tls_passthrough_local_only");
             }
             Integer id = row.has(ID.getName()) ? row.get(ID) : null;
             if (id != null) {
@@ -172,7 +178,7 @@ public class SiteModel extends Model {
         SCHEMA.addBeforeRemoveHook(SiteModel::cascadeDomainRows);
         SCHEMA.addAfterSaveHook(context -> {
             Row site = context.getRow();
-            if (site == null || !SITE_TYPE_TLS_PASSTHROUGH.equals(effective(site, SITE_TYPE))) return;
+            if (site == null || !UPSTREAM_TLS_PASSTHROUGH.equals(effective(site, UPSTREAM_KIND))) return;
             Integer id = site.get(ID);
             if (id == null) return;
             SiteDomainModel domains = Models.get(SiteDomainModel.class);

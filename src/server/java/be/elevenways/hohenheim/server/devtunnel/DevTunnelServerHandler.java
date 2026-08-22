@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.devtunnel;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.sitetype.types.DevNamespaceSiteType;
+import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.thread.ScheduledJob;
@@ -305,16 +305,16 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
      * registration and revalidation identically.
      */
     private static @Nullable Row findNamespaceSite(String tokenDigest) {
-        String typeId = DevNamespaceSiteType.ID.toString();
+        String typeId = DevNamespaceUpstreamKind.ID.toString();
         Row match = null;
         for (Row site : Models.get(SiteModel.class).findEnabled()) {
-            if (!typeId.equals(site.get(SiteModel.SITE_TYPE))) {
+            if (!typeId.equals(site.get(SiteModel.UPSTREAM_KIND))) {
                 continue;
             }
             @SuppressWarnings("unchecked")
             Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
             String siteToken = settings != null
-                ? (String) settings.get(DevNamespaceSiteType.REGISTRATION_TOKEN_KEY) : null;
+                ? (String) settings.get(DevNamespaceUpstreamKind.REGISTRATION_TOKEN_KEY) : null;
             String siteDigest = siteToken != null ? SecureTokens.sha256Hex(siteToken) : null;
             // No early break: every candidate is compared so timing does not leak which
             // site (if any) matched.

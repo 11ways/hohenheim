@@ -8,7 +8,7 @@ import java.util.Map;
 
 /**
  * Server-side extension of SiteAuthProviderType that builds the actual gate. Lives in src/server
- * because the gate depends on Undertow. Parallel to SiteTypeHandler extends SiteTypeInfo.
+ * because the gate depends on Undertow. Parallel to UpstreamKindHandler extends UpstreamKindInfo.
  * Implementations are discovered at compile time and self-register via {@code typeId()}.
  *
  * @author Jelle De Loecker <jelle@elevenways.be>

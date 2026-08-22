@@ -41,8 +41,8 @@ public final class FilesystemTargetKind implements BackupTargetKindHandler {
     }
 
     @Override
-    public String getDescription() {
-        return "A directory on this controller; only off-host if the directory itself is";
+    public @NonNull Microcopy getDescription() {
+        return Microcopy.of("filesystem").withFilter("scope", "backup_target_kind_description");
     }
 
     @Override

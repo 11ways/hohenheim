@@ -30,8 +30,7 @@ import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessCapacity;
 import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
 import be.elevenways.hohenheim.server.process.ProcessReaper;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
-import be.elevenways.hohenheim.server.sitetype.types.NodeSiteType;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -71,7 +70,7 @@ public class ServerMain {
         // Load Hohenheim's own settings (settings/hohenheim.dry + HOHENHEIM__*
         // env). The context roots at the hohenheim group, so file keys keep the
         // flat proxy/ssl/... shape. Also captures the HohenheimRoles snapshot,
-        // which every role gate below reads. BEFORE SiteTypes.boot(): the
+        // which every role gate below reads. BEFORE UpstreamKindHandlers.boot(): the
         // process-monitor thread is a roles.processes side effect and nothing
         // between the old order and this one read a setting.
         HohenheimSettingsFiles.load();
@@ -81,7 +80,7 @@ public class ServerMain {
         // needs an explicit boot before the proxy loads its routes -- and only
         // on a node that actually runs managed processes.
         if (HohenheimRoles.enabled(HohenheimRoles.Role.PROCESSES)) {
-            SiteTypes.boot();
+            UpstreamKindHandlers.boot();
         } else {
             roleSkip(HohenheimRoles.Role.PROCESSES,
                 "process monitor and port/socket allocators not started");
@@ -98,7 +97,7 @@ public class ServerMain {
         HohenheimDatabase.init();   // also registers the SQLite datasource as the framework default
 
         // Managed-process port claims outlive the JVM that made them, so a previous run's
-        // rows are reconciled HERE: after the database exists (SiteTypes.boot() runs long
+        // rows are reconciled HERE: after the database exists (UpstreamKindHandlers.boot() runs long
         // before it) and before anything can load a site and allocate. A port still bound
         // by a child that outlived its controller keeps its claim -- see the sweep's note.
         PortAllocator allocator = ProcessInfrastructure.portAllocator();

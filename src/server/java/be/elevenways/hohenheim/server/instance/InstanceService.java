@@ -682,7 +682,7 @@ public final class InstanceService {
         Row server = Models.get(ServerModel.class).findById(serverId);
         String hostRuntime = server != null ? ServerModel.runtimeOf(server)
             : ServerModel.RUNTIME_DOCKER;
-        InstanceKinds.requireRuntimeMatch(serverName, hostRuntime, handler.requiredRuntime());
+        InstanceKinds.requireRuntimeMatch(serverName, hostRuntime, handler.supportedRuntimes());
         return new Resolved(row, handler, runtimeFor(handler, serverName), spec, serverId,
             variables);
     }

@@ -14,6 +14,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * WHERE a new instance lands, and who gets to decide.
@@ -86,19 +87,19 @@ public final class InstancePlacement {
      *
      * @param handler the kind, or null when the caller could not resolve one
      * @param settings the workload's settings, as the record will carry them
-     * @param requiredRuntime the daemon flavour it needs; derived from the kind by
-     *        {@link #of}, and carried explicitly only so a kind-less caller can still
+     * @param supportedRuntimes the daemon flavours it can run on; derived from the kind
+     *        by {@link #of}, and carried explicitly only so a kind-less caller can still
      *        route by runtime
      */
     public record Workload(@Nullable InstanceKindHandler handler,
                            @NonNull Map<String, Object> settings,
-                           @NonNull String requiredRuntime) {
+                           @NonNull Set<String> supportedRuntimes) {
 
         /** The workload a create is about: the kind decides the runtime and the price. */
         public static @NonNull Workload of(@Nullable InstanceKindHandler handler,
                                            @NonNull Map<String, Object> settings) {
             return new Workload(handler, settings, handler != null
-                ? handler.requiredRuntime() : ServerModel.RUNTIME_DOCKER);
+                ? handler.supportedRuntimes() : Set.of(ServerModel.RUNTIME_DOCKER));
         }
 
         /** The workload an EXISTING record describes (the migration/drain lane). */
@@ -115,7 +116,7 @@ public final class InstancePlacement {
          * left -- never reach for it on a create path, where the kind is always known.
          */
         public static @NonNull Workload forRuntime(@NonNull String runtime) {
-            return new Workload(null, Map.of(), runtime);
+            return new Workload(null, Map.of(), Set.of(runtime));
         }
 
         int footprintMb() {
@@ -153,9 +154,11 @@ public final class InstancePlacement {
             if (requested != null) {
                 return requested;
             }
-            // The implicit local daemon is a DOCKER host; a kind needing another runtime
-            // has no implicit default and walks the same chooser a tenant create does.
-            if (ServerModel.RUNTIME_DOCKER.equals(workload.requiredRuntime())) {
+            // The implicit local daemon is a DOCKER host; a kind that CANNOT run on Docker
+            // has no implicit default and walks the same chooser a tenant create does. A
+            // kind that supports both (workspace) legitimately lands here: Docker is one of
+            // the runtimes it declared, so the local daemon is a host it accepts.
+            if (workload.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
                 return ServerModel.localServerId();
             }
         }
@@ -204,7 +207,7 @@ public final class InstancePlacement {
                 .orderBy(ServerModel.ID, SortOrder.ASC).all()) {
             Integer serverId = server.get(ServerModel.ID);
             if (serverId == null || serverId.equals(excludeServerId)
-                    || !ServerModel.runtimeOf(server).equals(workload.requiredRuntime())) {
+                    || !workload.supportedRuntimes().contains(ServerModel.runtimeOf(server))) {
                 continue;
             }
             if (!acceptsTenantWorkload(serverId, bucket, workload)) {
