@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
 import java.net.http.HttpResponse;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -244,6 +245,123 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         assertThat(refused.body()).as("step 5: the section that holds the refusal is open")
             .contains("data-section=\"advanced\"")
             .contains("data-collapsed=\"false\"");
+    }
+
+    /**
+     * The per-kind SETTINGS sub-form folds the same way the record form does -- and it is
+     * the only half that COULD not, until schema-declared sections landed.
+     *
+     * Steps 1-3 walk the real create form (named folds, folded on first paint, their
+     * inputs live in the DOM), step 4 proves a submit that never opened one still carries
+     * the folded declarations, step 5 that a value typed inside one persists, and step 6
+     * is the falsification: a refusal about a folded setting forces ITS section open and
+     * leaves the others folded.
+     */
+    @Test
+    @Order(4)
+    void theKindSettingsFoldWithoutFilteringTheSubmit() throws Exception {
+        navigateToApp("/admin/instances/new");
+        waitForHydration();
+        clickKindCard("workspace");
+
+        // 1. Three named folds, each collapsed on first paint. Named, because this
+        //    sub-form sits inside a record form that ends in its own "Advanced" fold.
+        for (String section : List.of("build", "deployment", "runtime")) {
+            waitForSelector(SETTINGS + " pl-card[data-section='" + section + "']");
+            assertCount(SETTINGS + " pl-card[data-section='" + section
+                + "'][data-collapsed='true']", 1);
+        }
+
+        // 2. The decisions stay OUTSIDE every fold: the seven fields a person answers.
+        for (String visible : List.of("repository_url", "provider_id", "repository", "branch",
+                "build_command", "start_command", "container_port")) {
+            assertThat(page.locator(SETTINGS + " [name='settings." + visible + "']").count())
+                .as("step 2: " + visible + " renders").isGreaterThan(0);
+            assertThat(page.locator(SETTINGS + " pl-card [name='settings." + visible + "']").count())
+                .as("step 2: " + visible + " is not inside a fold").isZero();
+        }
+
+        // 3. Folded is not absent: pl-collapsible keeps its content MOUNTED, so a folded
+        //    input is in the DOM under its own name -- the whole difference between a
+        //    disclosure and hiding a field, which would make it unwritable.
+        for (String folded : List.of("memory_limit_mb", "home_quota_mb", "build_timeout",
+                "preview_branches")) {
+            assertThat(page.locator(SETTINGS + " pl-card[data-section] [name='settings."
+                + folded + "']").count())
+                .as("step 3: " + folded + " is in the DOM, inside its fold").isGreaterThan(0);
+        }
+
+        // 4. Submit with only a visible field touched: the folded declarations ride along,
+        //    because their inputs posted.
+        type("input[name='name']", "cf-folded-defaults");
+        type("input[name='settings.start_command']", "npm run dev");
+        chooseHostAndImage();
+        page.evaluate("document.querySelector('form.cms-form-layout').requestSubmit()");
+        page.waitForCondition(() -> findInstance("cf-folded-defaults") != null);
+
+        Map<String, Object> settings = settingsOf("cf-folded-defaults");
+        assertThat(settings.get("start_command"))
+            .as("step 4: the visible field persisted").isEqualTo("npm run dev");
+        assertThat(String.valueOf(settings.get("shallow_clone")))
+            .as("step 4: a folded boolean kept its declared default").isEqualTo("true");
+        assertThat(String.valueOf(settings.get("auto_deploy")))
+            .as("step 4: and so did the other one").isEqualTo("true");
+
+        // 5. A value typed INSIDE a fold persists like any other. Hand-posted, and on the
+        //    kind whose create needs no runtime image: what is under test is the fold, and
+        //    a hand-post is exactly a submit that never opened it.
+        HttpResponse<String> typed = httpPostForm("/admin/instances/new",
+            "name=cf-folded-typed&kind=hohenheim%3Adocker_container&server_id=" + dockerHostId
+                + "&settings.memory_limit_mb=2048", sessionToken, csrfToken);
+        assertThat(typed.statusCode()).as("step 5: the create redirects").isIn(302, 303);
+        assertThat(String.valueOf(settingsOf("cf-folded-typed").get("memory_limit_mb")))
+            .as("step 5: the folded value persisted").isEqualTo("2048");
+
+        // 6. FALSIFICATION: a refusal about a folded setting re-renders THAT section open
+        //    -- a refusal nobody can see reads as a save that silently did nothing.
+        HttpResponse<String> refused = httpPostForm("/admin/instances/new",
+            "name=cf-folded-refusal&kind=hohenheim%3Adocker_container&server_id=" + dockerHostId
+                + "&settings.memory_limit_mb=not-a-number", sessionToken, csrfToken);
+        assertThat(refused.statusCode()).as("step 6: a refusal re-renders, never redirects")
+            .isNotIn(302, 303);
+        assertThat(findInstance("cf-folded-refusal")).as("step 6: and nothing persisted").isNull();
+        assertThat(sectionOpenState(refused.body(), "limits"))
+            .as("step 6: the section holding the refusal is open").isEqualTo("false");
+        assertThat(sectionOpenState(refused.body(), "ports"))
+            .as("step 6: and the one that holds none stays folded").isEqualTo("true");
+    }
+
+    /** The kind settings sub-form: the one fieldset whose path is the settings field. */
+    private static final String SETTINGS = "pl-fieldset[data-path='settings']";
+
+    /** Pick the narrowed host and the first offered runtime image. */
+    private void chooseHostAndImage() {
+        openPlSelect(HOST_SELECT);
+        click(hostOption(dockerHostId));
+        page.waitForCondition(() -> page.locator(OPEN_SELECT_POPUP).count() == 0);
+        page.waitForCondition(() -> page.locator(IMAGE_SELECT + "[disabled]").count() == 0);
+        openPlSelect(IMAGE_SELECT);
+        page.waitForSelector(OPEN_SELECT_POPUP + " div[role='option']");
+        page.locator(OPEN_SELECT_POPUP + " div[role='option']").first().click();
+        page.waitForCondition(() -> page.locator(OPEN_SELECT_POPUP).count() == 0);
+    }
+
+    /** @return the {@code data-collapsed} value the re-rendered form gave one section */
+    private static String sectionOpenState(String html, String section) {
+        String marker = "data-section=\"" + section + "\"";
+        int at = html.indexOf(marker);
+        assertThat(at).as("the form renders a '" + section + "' section").isGreaterThan(-1);
+        String tail = html.substring(at, Math.min(html.length(), at + 300));
+        int collapsed = tail.indexOf("data-collapsed=\"");
+        assertThat(collapsed).as("that section declares its fold state").isGreaterThan(-1);
+        return tail.substring(collapsed + 16, tail.indexOf('"', collapsed + 16));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> settingsOf(String name) {
+        Row row = findInstance(name);
+        assertThat(row).as("instance '" + name + "' exists").isNotNull();
+        return (Map<String, Object>) row.get(InstanceModel.SETTINGS);
     }
 
     private static Row findInstance(String name) {
