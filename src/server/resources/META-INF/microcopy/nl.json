@@ -251,7 +251,7 @@
       "scope": "field"
     },
     {
-      "text": "E\u00e9n Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.",
+      "text": "Eén Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.",
       "scope": "help"
     },
     {
@@ -345,7 +345,7 @@
       "scope": "field"
     },
     {
-      "text": "Shellcommando na checkout en v\u00f3\u00f3r de deployment actief wordt.",
+      "text": "Shellcommando na checkout en vóór de deployment actief wordt.",
       "scope": "help"
     }
   ],
@@ -425,7 +425,7 @@
       "scope": "field"
     },
     {
-      "text": "Kunstmatige vertraging in milliseconden v\u00f3\u00f3r elke aanvraag.",
+      "text": "Kunstmatige vertraging in milliseconden vóór elke aanvraag.",
       "scope": "help"
     }
   ],
@@ -633,7 +633,7 @@
       "scope": "field"
     },
     {
-      "text": "Commandoregelargument v\u00f3\u00f3r het toegewezen poortnummer.",
+      "text": "Commandoregelargument vóór het toegewezen poortnummer.",
       "scope": "help"
     }
   ],
@@ -957,16 +957,10 @@
       "scope": "instance_from_template"
     }
   ],
-  "captured": [
-    {
-      "text": "Opgenomen",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Vastgelegd",
-      "scope": "instance_console"
-    }
-  ],
+  "captured": {
+    "text": "Vastgelegd",
+    "scope": "instance_console"
+  },
   "certificate": [
     {
       "text": "Certificaat",
@@ -985,16 +979,10 @@
       "scope": "help"
     }
   ],
-  "clients": [
-    {
-      "text": "Clients",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Clients",
-      "scope": "spamservice"
-    }
-  ],
+  "clients": {
+    "text": "Clients",
+    "scope": "spamservice"
+  },
   "commit": {
     "text": "Commit",
     "scope": "site_deployments"
@@ -1004,27 +992,21 @@
     "scope": "database_tab"
   },
   "copy_password": {
-    "text": "Wachtwoord kopi\u00ebren",
+    "text": "Wachtwoord kopiëren",
     "scope": "database_tab"
   },
   "copy_webhook_secret": {
-    "text": "Webhookgeheim kopi\u00ebren",
+    "text": "Webhookgeheim kopiëren",
     "scope": "site_deployments"
   },
   "copy_webhook_url": {
-    "text": "Webhook-URL kopi\u00ebren",
+    "text": "Webhook-URL kopiëren",
     "scope": "site_deployments"
   },
-  "cpu": [
-    {
-      "text": "CPU",
-      "scope": "site_processes"
-    },
-    {
-      "text": "CPU",
-      "scope": "instance_stats"
-    }
-  ],
+  "cpu": {
+    "text": "CPU",
+    "scope": "instance_stats"
+  },
   "current_commit": {
     "text": "Serveert momenteel commit {$commit}.",
     "scope": "site_deployments"
@@ -1289,36 +1271,14 @@
       "scope": "help"
     }
   ],
-  "isolate": {
-    "text": "Isoleren",
-    "scope": "site_processes"
-  },
-  "isolated": {
-    "text": "Ge\u00efsoleerd",
-    "scope": "site_processes"
-  },
-  "kill": {
-    "text": "Stoppen",
-    "scope": "site_processes"
-  },
-  "kill_confirm": {
-    "text": "Het proces wordt onmiddellijk be\u00ebindigd.",
-    "scope": "site_processes"
-  },
   "last_run_failed": {
     "text": "Laatste uitvoering mislukt",
     "scope": "attention_detail"
   },
-  "lines": [
-    {
-      "text": "Regels",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Regels",
-      "scope": "instance_console"
-    }
-  ],
+  "lines": {
+    "text": "Regels",
+    "scope": "instance_console"
+  },
   "match_type": [
     {
       "text": "Overeenkomsttype",
@@ -1336,10 +1296,6 @@
   "memory": [
     {
       "text": "Geheugen",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Geheugen",
       "scope": "instance_stats"
     },
     {
@@ -1347,16 +1303,10 @@
       "scope": "instance_migrate"
     }
   ],
-  "no_logs": [
-    {
-      "text": "Nog geen opgeslagen logs.",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Nog geen bewaarde console-uitvoer.",
-      "scope": "instance_console"
-    }
-  ],
+  "no_logs": {
+    "text": "Nog geen bewaarde console-uitvoer.",
+    "scope": "instance_console"
+  },
   "none": [
     {
       "text": "Geen",
@@ -1375,10 +1325,6 @@
       "scope": "volume_backend"
     }
   ],
-  "none_running": {
-    "text": "Er draaien geen processen.",
-    "scope": "site_processes"
-  },
   "off": {
     "text": "Uit",
     "scope": "site_domains"
@@ -1391,18 +1337,10 @@
     "text": "Payload-URL",
     "scope": "site_deployments"
   },
-  "pid": {
-    "text": "PID",
-    "scope": "site_processes"
-  },
   "port": [
     {
       "text": "Poort",
       "scope": "dns_remote"
-    },
-    {
-      "text": "Poort",
-      "scope": "site_processes"
     },
     {
       "text": "Poort",
@@ -1435,16 +1373,10 @@
     "text": "Aanmaken mislukt",
     "scope": "attention_detail"
   },
-  "ready": [
-    {
-      "text": "Gereed",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Gereed",
-      "scope": "spamservice"
-    }
-  ],
+  "ready": {
+    "text": "Gereed",
+    "scope": "spamservice"
+  },
   "request_certificate": [
     {
       "text": "Certificaat aanvragen",
@@ -1541,16 +1473,10 @@
     "text": "SSL",
     "scope": "site_domains"
   },
-  "start": [
-    {
-      "text": "Proces starten",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Starten",
-      "scope": "spamservice"
-    }
-  ],
+  "start": {
+    "text": "Starten",
+    "scope": "spamservice"
+  },
   "started": [
     {
       "text": "Gestart",
@@ -1566,10 +1492,6 @@
     }
   ],
   "starting": [
-    {
-      "text": "Start",
-      "scope": "site_processes"
-    },
     {
       "text": "Opstarten",
       "scope": "stack_state"
@@ -1594,10 +1516,6 @@
     },
     {
       "text": "Status",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Status",
       "scope": "spamservice"
     },
     {
@@ -1613,37 +1531,17 @@
       "scope": "instance_artifacts"
     }
   ],
-  "stored_log": [
-    {
-      "text": "Opgeslagen log {$title}",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Console-uitvoer van {$title}",
-      "scope": "instance_console"
-    }
-  ],
-  "stored_logs": [
-    {
-      "text": "Opgeslagen proceslogs",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Bewaarde consolelogs",
-      "scope": "instance_console"
-    }
-  ],
+  "stored_log": {
+    "text": "Console-uitvoer van {$title}",
+    "scope": "instance_console"
+  },
+  "stored_logs": {
+    "text": "Bewaarde consolelogs",
+    "scope": "instance_console"
+  },
   "task": {
     "text": "Taak {$name}",
     "scope": "attention_title"
-  },
-  "terminal": {
-    "text": "Terminal",
-    "scope": "site_processes"
-  },
-  "terminal_description": {
-    "text": "Live stdout/stderr voor pid {$pid}. Toetsaanslagen gaan naar stdin van het proces.",
-    "scope": "site_processes"
   },
   "trigger": [
     {
@@ -1655,18 +1553,6 @@
       "scope": "stack_deployments"
     }
   ],
-  "unisolate": {
-    "text": "Isolatie opheffen",
-    "scope": "site_processes"
-  },
-  "unmanaged": {
-    "text": "Geen beheerde site",
-    "scope": "site_processes"
-  },
-  "unmanaged_description": {
-    "text": "Alleen node-, alchemy-, command-, java- en docker-sites draaien beheerde processen.",
-    "scope": "site_processes"
-  },
   "used_by": {
     "text": "Gebruikt door",
     "scope": "database_tab"
@@ -1677,7 +1563,7 @@
   },
   "variables": [
     {
-      "text": "Ge\u00efnjecteerde variabelen",
+      "text": "Geïnjecteerde variabelen",
       "scope": "site_databases"
     },
     {
@@ -1701,10 +1587,6 @@
     {
       "text": "Deployments",
       "scope": "site_deployments"
-    },
-    {
-      "text": "Processen",
-      "scope": "site_processes"
     },
     {
       "text": "Maak je eerste site",
@@ -1736,10 +1618,6 @@
     }
   ],
   "description": [
-    {
-      "text": "Draaiende processen voor deze site.",
-      "scope": "site_processes"
-    },
     {
       "text": "Kies hoe de applicatie draait, voeg een domein toe en vraag daarna een certificaat aan. Hohenheim begeleidt elke stap vanaf de sitepagina.",
       "scope": "onboarding"
@@ -1806,11 +1684,11 @@
     }
   ],
   "copy_record_name": {
-    "text": "Naam van TXT-record kopi\u00ebren",
+    "text": "Naam van TXT-record kopiëren",
     "scope": "certificate_request"
   },
   "copy_record_value": {
-    "text": "Waarde van TXT-record kopi\u00ebren",
+    "text": "Waarde van TXT-record kopiëren",
     "scope": "certificate_request"
   },
   "verify_dns": {
@@ -1924,7 +1802,7 @@
     "scope": "certificate_request"
   },
   "any": {
-    "text": "E\u00e9n regel volstaat",
+    "text": "Eén regel volstaat",
     "scope": "access_satisfy"
   },
   "all": {
@@ -1960,7 +1838,7 @@
     "scope": "certificate_request_error"
   },
   "domain_required": {
-    "text": "Er is minstens \u00e9\u00e9n domein vereist",
+    "text": "Er is minstens één domein vereist",
     "scope": "certificate_request_error"
   },
   "unknown_validation": {
@@ -2327,22 +2205,6 @@
   },
   "clone_confirm": {
     "text": "Een kopie maken met dezelfde instellingen en domeinen (standaard uitgeschakeld)? API-sleutels worden niet gekopieerd.",
-    "scope": "site"
-  },
-  "generate_api_key": {
-    "text": "API-sleutel genereren",
-    "scope": "site"
-  },
-  "generate_api_key_hint": {
-    "text": "Genereer een sleutel voor de proces-API; hij wordt \u00e9\u00e9n keer getoond",
-    "scope": "site"
-  },
-  "api_key_minted": {
-    "text": "API-sleutel gegenereerd. Kopieer hem nu; hij wordt niet opnieuw getoond: {$key}",
-    "scope": "site"
-  },
-  "api_keys_unsupported": {
-    "text": "Dit sitetype heeft geen proces-API",
     "scope": "site"
   },
   "deployments": [
@@ -5228,7 +5090,7 @@
     "scope": "violations"
   },
   "host_kernel_lane_missing": {
-    "text": "Host '{$name}' aanvaardt tenant-workloads maar heeft geen kanaal om zijn eigen kernel te lezen, dus workload-isolatie valt er niet te verifi\u00ebren; geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet zijn houding op trusted-only",
+    "text": "Host '{$name}' aanvaardt tenant-workloads maar heeft geen kanaal om zijn eigen kernel te lezen, dus workload-isolatie valt er niet te verifiëren; geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet zijn houding op trusted-only",
     "scope": "violations"
   },
   "host_kernel_lane_unproven": {
@@ -5406,7 +5268,7 @@
     }
   ],
   "snapshot_confirm": {
-    "text": "Snapshot nemen? Drivers die volumes kopi\u00ebren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
+    "text": "Snapshot nemen? Drivers die volumes kopiëren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
     "scope": "instance"
   },
   "snapshot_taken": {
@@ -6712,12 +6574,10 @@
     "text": "De eigendomsattributie van een instance wordt door het systeem gezet, nooit ingediend",
     "scope": "violations"
   },
-  "site_volumes_unavailable": [
-    {
-      "text": "De permanente volumes van deze site konden niet worden voorbereid: {$reason}",
-      "scope": "violations"
-    }
-  ],
+  "site_volumes_unavailable": {
+    "text": "De permanente volumes van deze site konden niet worden voorbereid: {$reason}",
+    "scope": "violations"
+  },
   "site_image_build_failed": {
     "text": "Het bouwen van de site-image is mislukt: {$reason}",
     "scope": "violations"
@@ -6902,12 +6762,10 @@
     "text": "Domeineigendomsattributie wordt door het systeem gezet, nooit ingediend",
     "scope": "violations"
   },
-  "provider_name": [
-    {
-      "text": "Naam",
-      "scope": "field"
-    }
-  ],
+  "provider_name": {
+    "text": "Naam",
+    "scope": "field"
+  },
   "provider_kind": [
     {
       "text": "Soort",
@@ -6968,12 +6826,10 @@
       "scope": "help"
     }
   ],
-  "provider_settings": [
-    {
-      "text": "Instellingen per soort",
-      "scope": "field"
-    }
-  ],
+  "provider_settings": {
+    "text": "Instellingen per soort",
+    "scope": "field"
+  },
   "provider_shared": [
     {
       "text": "Gedeeld",
@@ -7054,24 +6910,18 @@
       "scope": "help"
     }
   ],
-  "preview_ref": [
-    {
-      "text": "Ref",
-      "scope": "field"
-    }
-  ],
-  "destroy_now": [
-    {
-      "text": "Nu verwijderen",
-      "scope": "preview_deployment"
-    }
-  ],
-  "destroyed": [
-    {
-      "text": "Preview {$hostname} verwijderd",
-      "scope": "preview_deployment"
-    }
-  ],
+  "preview_ref": {
+    "text": "Ref",
+    "scope": "field"
+  },
+  "destroy_now": {
+    "text": "Nu verwijderen",
+    "scope": "preview_deployment"
+  },
+  "destroyed": {
+    "text": "Preview {$hostname} verwijderd",
+    "scope": "preview_deployment"
+  },
   "destroy_failed": [
     {
       "text": "Preview-afbraak mislukt: {$reason}",
@@ -7860,10 +7710,6 @@
       "scope": "spamservice_sample"
     },
     {
-      "text": "{$name} - Processen",
-      "scope": "site_processes"
-    },
-    {
       "text": "{$name} - Deployments",
       "scope": "site_deployments"
     },
@@ -7888,10 +7734,6 @@
       "scope": "access_rule"
     }
   ],
-  "stored_log_heading": {
-    "text": "PID {$pid} ({$created})",
-    "scope": "site_processes"
-  },
   "not_found_title": {
     "text": "Geen site geconfigureerd",
     "scope": "proxy_error"
@@ -8214,10 +8056,6 @@
   },
   "bookable": {
     "text": "Boekbaar",
-    "scope": "server_overview"
-  },
-  "process_booked": {
-    "text": "Beheerde processen",
     "scope": "server_overview"
   },
   "unmeasured": [
@@ -8578,22 +8416,6 @@
     "text": "Herstel van '{$name}' is mislukt; bekijk het serverlog voor details.",
     "scope": "database_tab"
   },
-  "no_handler": {
-    "text": "Deze site heeft geen draaiende procesbeheerder; ze is uitgeschakeld of niet opgestart. Bekijk de status van de site voor de reden.",
-    "scope": "site_process"
-  },
-  "role_disabled": {
-    "text": "Deze node draait geen beheerde processen (roles.processes staat uit) en heeft dus geen proces voor deze site.",
-    "scope": "site_process"
-  },
-  "start_failed": {
-    "text": "Het proces is niet gestart; bekijk het proceslog van deze site.",
-    "scope": "site_process"
-  },
-  "gone": {
-    "text": "Proces {$pid} draait niet meer.",
-    "scope": "site_process"
-  },
   "refused": {
     "text": "De aanvraag werd geweigerd.",
     "scope": "violations"
@@ -8626,24 +8448,18 @@
     "text": "Vernieuwen",
     "scope": "instance_overview"
   },
-  "sections": [
-    {
-      "text": "Onderdelen",
-      "scope": "spamservice"
-    }
-  ],
-  "installation_hint": [
-    {
-      "text": "De misbruikbeschermingsdienst zelf installeren, bijwerken of verwijderen.",
-      "scope": "spamservice"
-    }
-  ],
-  "reputation_hint": [
-    {
-      "text": "Reputatiescores per bron, zoals de dienst ze nu ziet.",
-      "scope": "spamservice"
-    }
-  ],
+  "sections": {
+    "text": "Onderdelen",
+    "scope": "spamservice"
+  },
+  "installation_hint": {
+    "text": "De misbruikbeschermingsdienst zelf installeren, bijwerken of verwijderen.",
+    "scope": "spamservice"
+  },
+  "reputation_hint": {
+    "text": "Reputatiescores per bron, zoals de dienst ze nu ziet.",
+    "scope": "spamservice"
+  },
   "nav_hint": [
     {
       "text": "De toestand van de vloot in een oogopslag: wat aandacht vraagt, plus tellingen en recente wijzigingen.",
@@ -8798,7 +8614,7 @@
       "scope": "role"
     },
     {
-      "text": "De regelboom achter \u00e9\u00e9n toegangslijst.",
+      "text": "De regelboom achter één toegangslijst.",
       "scope": "access_rule"
     }
   ],
@@ -8873,7 +8689,7 @@
     "scope": "access_rule"
   },
   "root_any": {
-    "text": "Een verzoek wordt toegelaten zodra \u00c9\u00c9N van deze regels slaagt.",
+    "text": "Een verzoek wordt toegelaten zodra ÉÉN van deze regels slaagt.",
     "scope": "access_rule"
   },
   "root_all": {
@@ -8921,7 +8737,7 @@
     "scope": "access_rule"
   },
   "move_up_hint": {
-    "text": "Verplaats deze regel \u00e9\u00e9n plaats omhoog binnen haar eigen groep.",
+    "text": "Verplaats deze regel één plaats omhoog binnen haar eigen groep.",
     "scope": "access_rule"
   },
   "move_down": {
@@ -8929,7 +8745,7 @@
     "scope": "access_rule"
   },
   "move_down_hint": {
-    "text": "Verplaats deze regel \u00e9\u00e9n plaats omlaag binnen haar eigen groep.",
+    "text": "Verplaats deze regel één plaats omlaag binnen haar eigen groep.",
     "scope": "access_rule"
   },
   "moved": {
@@ -8957,7 +8773,7 @@
     "scope": "access_rule"
   },
   "summary_group_any": {
-    "text": "\u00c9\u00e9n van de regels hierin moet slagen",
+    "text": "Één van de regels hierin moet slagen",
     "scope": "access_rule"
   },
   "summary_group_all": {
@@ -9030,7 +8846,7 @@
       "scope": "field"
     },
     {
-      "text": "E\u00e9n IP-adres of CIDR-netwerk, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
+      "text": "Eén IP-adres of CIDR-netwerk, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
       "scope": "help"
     }
   ],
@@ -9049,7 +8865,7 @@
     "scope": "field"
   },
   "rule_satisfy": {
-    "text": "Of \u00e9\u00e9n regel in deze groep volstaat, of ze allemaal nodig zijn.",
+    "text": "Of één regel in deze groep volstaat, of ze allemaal nodig zijn.",
     "scope": "help"
   },
   "access_rule_type_invalid": {
@@ -9057,7 +8873,7 @@
     "scope": "violations"
   },
   "access_rule_network_invalid": {
-    "text": "Geef \u00e9\u00e9n IP-adres of CIDR-netwerk op, bijvoorbeeld 10.0.0.0/8",
+    "text": "Geef één IP-adres of CIDR-netwerk op, bijvoorbeeld 10.0.0.0/8",
     "scope": "violations"
   },
   "access_rule_credential_incomplete": {

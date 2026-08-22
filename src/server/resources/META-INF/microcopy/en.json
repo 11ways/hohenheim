@@ -957,16 +957,10 @@
       "scope": "instance_from_template"
     }
   ],
-  "captured": [
-    {
-      "text": "Captured",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Captured",
-      "scope": "instance_console"
-    }
-  ],
+  "captured": {
+    "text": "Captured",
+    "scope": "instance_console"
+  },
   "certificate": [
     {
       "text": "Certificate",
@@ -985,16 +979,10 @@
       "scope": "help"
     }
   ],
-  "clients": [
-    {
-      "text": "Clients",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Clients",
-      "scope": "spamservice"
-    }
-  ],
+  "clients": {
+    "text": "Clients",
+    "scope": "spamservice"
+  },
   "commit": {
     "text": "Commit",
     "scope": "site_deployments"
@@ -1015,16 +1003,10 @@
     "text": "Copy webhook URL",
     "scope": "site_deployments"
   },
-  "cpu": [
-    {
-      "text": "CPU",
-      "scope": "site_processes"
-    },
-    {
-      "text": "CPU",
-      "scope": "instance_stats"
-    }
-  ],
+  "cpu": {
+    "text": "CPU",
+    "scope": "instance_stats"
+  },
   "current_commit": {
     "text": "Currently serving commit {$commit}.",
     "scope": "site_deployments"
@@ -1289,36 +1271,14 @@
       "scope": "help"
     }
   ],
-  "isolate": {
-    "text": "Isolate",
-    "scope": "site_processes"
-  },
-  "isolated": {
-    "text": "Isolated",
-    "scope": "site_processes"
-  },
-  "kill": {
-    "text": "Kill",
-    "scope": "site_processes"
-  },
-  "kill_confirm": {
-    "text": "The process is terminated immediately.",
-    "scope": "site_processes"
-  },
   "last_run_failed": {
     "text": "Last run failed",
     "scope": "attention_detail"
   },
-  "lines": [
-    {
-      "text": "Lines",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Lines",
-      "scope": "instance_console"
-    }
-  ],
+  "lines": {
+    "text": "Lines",
+    "scope": "instance_console"
+  },
   "match_type": [
     {
       "text": "Match type",
@@ -1336,10 +1296,6 @@
   "memory": [
     {
       "text": "Memory",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Memory",
       "scope": "instance_stats"
     },
     {
@@ -1347,16 +1303,10 @@
       "scope": "instance_migrate"
     }
   ],
-  "no_logs": [
-    {
-      "text": "No stored logs yet.",
-      "scope": "site_processes"
-    },
-    {
-      "text": "No stored console output yet.",
-      "scope": "instance_console"
-    }
-  ],
+  "no_logs": {
+    "text": "No stored console output yet.",
+    "scope": "instance_console"
+  },
   "none": [
     {
       "text": "None",
@@ -1375,10 +1325,6 @@
       "scope": "volume_backend"
     }
   ],
-  "none_running": {
-    "text": "No processes running.",
-    "scope": "site_processes"
-  },
   "off": {
     "text": "Off",
     "scope": "site_domains"
@@ -1391,18 +1337,10 @@
     "text": "Payload URL",
     "scope": "site_deployments"
   },
-  "pid": {
-    "text": "PID",
-    "scope": "site_processes"
-  },
   "port": [
     {
       "text": "Port",
       "scope": "dns_remote"
-    },
-    {
-      "text": "Port",
-      "scope": "site_processes"
     },
     {
       "text": "Port",
@@ -1435,16 +1373,10 @@
     "text": "Provisioning failed",
     "scope": "attention_detail"
   },
-  "ready": [
-    {
-      "text": "Ready",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Ready",
-      "scope": "spamservice"
-    }
-  ],
+  "ready": {
+    "text": "Ready",
+    "scope": "spamservice"
+  },
   "request_certificate": [
     {
       "text": "Request certificate",
@@ -1541,16 +1473,10 @@
     "text": "SSL",
     "scope": "site_domains"
   },
-  "start": [
-    {
-      "text": "Start process",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Start",
-      "scope": "spamservice"
-    }
-  ],
+  "start": {
+    "text": "Start",
+    "scope": "spamservice"
+  },
   "started": [
     {
       "text": "Started",
@@ -1566,10 +1492,6 @@
     }
   ],
   "starting": [
-    {
-      "text": "Starting",
-      "scope": "site_processes"
-    },
     {
       "text": "Starting",
       "scope": "stack_state"
@@ -1594,10 +1516,6 @@
     },
     {
       "text": "Status",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Status",
       "scope": "spamservice"
     },
     {
@@ -1613,37 +1531,17 @@
       "scope": "instance_artifacts"
     }
   ],
-  "stored_log": [
-    {
-      "text": "Stored log {$title}",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Console output of {$title}",
-      "scope": "instance_console"
-    }
-  ],
-  "stored_logs": [
-    {
-      "text": "Stored process logs",
-      "scope": "site_processes"
-    },
-    {
-      "text": "Stored console logs",
-      "scope": "instance_console"
-    }
-  ],
+  "stored_log": {
+    "text": "Console output of {$title}",
+    "scope": "instance_console"
+  },
+  "stored_logs": {
+    "text": "Stored console logs",
+    "scope": "instance_console"
+  },
   "task": {
     "text": "Task {$name}",
     "scope": "attention_title"
-  },
-  "terminal": {
-    "text": "Terminal",
-    "scope": "site_processes"
-  },
-  "terminal_description": {
-    "text": "Live stdout/stderr for pid {$pid}. Keystrokes are sent to the process's stdin.",
-    "scope": "site_processes"
   },
   "trigger": [
     {
@@ -1655,18 +1553,6 @@
       "scope": "stack_deployments"
     }
   ],
-  "unisolate": {
-    "text": "Unisolate",
-    "scope": "site_processes"
-  },
-  "unmanaged": {
-    "text": "Not a managed site",
-    "scope": "site_processes"
-  },
-  "unmanaged_description": {
-    "text": "Only node, alchemy, command, java and docker sites run managed processes.",
-    "scope": "site_processes"
-  },
   "used_by": {
     "text": "Used by",
     "scope": "database_tab"
@@ -1703,10 +1589,6 @@
       "scope": "site_deployments"
     },
     {
-      "text": "Processes",
-      "scope": "site_processes"
-    },
-    {
       "text": "Create your first site",
       "scope": "onboarding"
     },
@@ -1736,10 +1618,6 @@
     }
   ],
   "description": [
-    {
-      "text": "Running child processes for this site.",
-      "scope": "site_processes"
-    },
     {
       "text": "Choose how the application runs, add a domain, then request a certificate. Hohenheim guides each step from the site page.",
       "scope": "onboarding"
@@ -2327,22 +2205,6 @@
   },
   "clone_confirm": {
     "text": "Create a copy with the same settings and domains (disabled by default)? API keys are not copied.",
-    "scope": "site"
-  },
-  "generate_api_key": {
-    "text": "Generate API key",
-    "scope": "site"
-  },
-  "generate_api_key_hint": {
-    "text": "Generate a key for the managed process API; it is shown once",
-    "scope": "site"
-  },
-  "api_key_minted": {
-    "text": "API key generated. Copy it now; it will not be shown again: {$key}",
-    "scope": "site"
-  },
-  "api_keys_unsupported": {
-    "text": "This site type has no managed process API",
     "scope": "site"
   },
   "deployments": [
@@ -6712,12 +6574,10 @@
     "text": "Instance ownership attribution is set by the system, never submitted",
     "scope": "violations"
   },
-  "site_volumes_unavailable": [
-    {
-      "text": "The site's persistent volumes could not be prepared: {$reason}",
-      "scope": "violations"
-    }
-  ],
+  "site_volumes_unavailable": {
+    "text": "The site's persistent volumes could not be prepared: {$reason}",
+    "scope": "violations"
+  },
   "site_image_build_failed": {
     "text": "Building the site image failed: {$reason}",
     "scope": "violations"
@@ -6902,12 +6762,10 @@
     "text": "Domain ownership attribution is set by the system, never submitted",
     "scope": "violations"
   },
-  "provider_name": [
-    {
-      "text": "Name",
-      "scope": "field"
-    }
-  ],
+  "provider_name": {
+    "text": "Name",
+    "scope": "field"
+  },
   "provider_kind": [
     {
       "text": "Kind",
@@ -6968,12 +6826,10 @@
       "scope": "help"
     }
   ],
-  "provider_settings": [
-    {
-      "text": "Kind settings",
-      "scope": "field"
-    }
-  ],
+  "provider_settings": {
+    "text": "Kind settings",
+    "scope": "field"
+  },
   "provider_shared": [
     {
       "text": "Shared",
@@ -7054,24 +6910,18 @@
       "scope": "help"
     }
   ],
-  "preview_ref": [
-    {
-      "text": "Ref",
-      "scope": "field"
-    }
-  ],
-  "destroy_now": [
-    {
-      "text": "Destroy now",
-      "scope": "preview_deployment"
-    }
-  ],
-  "destroyed": [
-    {
-      "text": "Preview {$hostname} destroyed",
-      "scope": "preview_deployment"
-    }
-  ],
+  "preview_ref": {
+    "text": "Ref",
+    "scope": "field"
+  },
+  "destroy_now": {
+    "text": "Destroy now",
+    "scope": "preview_deployment"
+  },
+  "destroyed": {
+    "text": "Preview {$hostname} destroyed",
+    "scope": "preview_deployment"
+  },
   "destroy_failed": [
     {
       "text": "Preview teardown failed: {$reason}",
@@ -7860,10 +7710,6 @@
       "scope": "spamservice_sample"
     },
     {
-      "text": "{$name} - Processes",
-      "scope": "site_processes"
-    },
-    {
       "text": "{$name} - Deployments",
       "scope": "site_deployments"
     },
@@ -7888,10 +7734,6 @@
       "scope": "access_rule"
     }
   ],
-  "stored_log_heading": {
-    "text": "PID {$pid} ({$created})",
-    "scope": "site_processes"
-  },
   "not_found_title": {
     "text": "No site configured",
     "scope": "proxy_error"
@@ -8214,10 +8056,6 @@
   },
   "bookable": {
     "text": "Bookable",
-    "scope": "server_overview"
-  },
-  "process_booked": {
-    "text": "Managed processes",
     "scope": "server_overview"
   },
   "unmeasured": [
@@ -8578,22 +8416,6 @@
     "text": "Restore of '{$name}' failed; see the server log for details.",
     "scope": "database_tab"
   },
-  "no_handler": {
-    "text": "This site has no running process handler; it is either disabled or failed to start. Check the site's status for the reason.",
-    "scope": "site_process"
-  },
-  "role_disabled": {
-    "text": "This node does not run managed processes (roles.processes is off), so it has no process to act on for this site.",
-    "scope": "site_process"
-  },
-  "start_failed": {
-    "text": "The process did not start; check this site's process log.",
-    "scope": "site_process"
-  },
-  "gone": {
-    "text": "Process {$pid} is no longer running.",
-    "scope": "site_process"
-  },
   "refused": {
     "text": "The request was refused.",
     "scope": "violations"
@@ -8626,24 +8448,18 @@
     "text": "Refresh",
     "scope": "instance_overview"
   },
-  "sections": [
-    {
-      "text": "Sections",
-      "scope": "spamservice"
-    }
-  ],
-  "installation_hint": [
-    {
-      "text": "Install, update or remove the abuse-protection service itself.",
-      "scope": "spamservice"
-    }
-  ],
-  "reputation_hint": [
-    {
-      "text": "Reputation scores per source, as the service currently sees them.",
-      "scope": "spamservice"
-    }
-  ],
+  "sections": {
+    "text": "Sections",
+    "scope": "spamservice"
+  },
+  "installation_hint": {
+    "text": "Install, update or remove the abuse-protection service itself.",
+    "scope": "spamservice"
+  },
+  "reputation_hint": {
+    "text": "Reputation scores per source, as the service currently sees them.",
+    "scope": "spamservice"
+  },
   "nav_hint": [
     {
       "text": "Fleet health at a glance: what needs attention, plus counts and recent changes.",
