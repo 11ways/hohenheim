@@ -337,6 +337,15 @@
             flex-direction: column;
             gap: var(--pl-space-sm);
             margin-bottom: var(--pl-space-md);
+
+            /* A bare button widget is a CONTROL, not a page element. The band is a
+               flex COLUMN, and its default stretch is what turned Refresh into a
+               full-width bar. This is the same call zenit-cms makes for a button
+               placed directly in .cms-dashboard-grid; that rule cannot reach a
+               button nested inside a section widget, so the band repeats it. */
+            > pl-button {
+                align-self: start;
+            }
         }
     }
 
