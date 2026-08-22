@@ -79,7 +79,7 @@ silently aborts used to make a run of nothing look green.
   editing `settings/hohenheim.dry`, plus zenit's `ServerSettings` editing
   `settings/local.dry`; DIFF-based save, secrets masked, restartRequired
   metadata drives the restart toast), and `RecordScopedPage` tabs on sites
-  (Domains, Processes incl. terminal + proclogs, Deployments on git sites)
+  (Domains, Deployments on a site whose instance carries a git source, Dev sessions)
   and databases (Restore). `HohenheimSettings` roots at its OWN `hohenheim`
   group (the standard consumer shape); its file keys stay flat
   (`proxy.http_port`) because the context root maps the file root. Tests
@@ -90,13 +90,22 @@ silently aborts used to make a run of nothing look green.
   there is no per-resource audit/reload plumbing. Host-declared endpoints
   beside the panel (downloads, uploads, process control, terminal WS) live in
   `HohenheimEndpoints` + `HohenheimHandlers`.
-- Site types are registered via `SiteTypeRegistry`. Each type declares its schema (which drives the type-discriminated settings sub-form in the CMS) and its request handler. Adding a type means implementing one class and registering it — no edits to existing dispatch code. See `docs/architecture-site-types.md`.
-- Current types in `src/server/java/be/elevenways/hohenheim/server/sitetype/types/` (eleven, corrected 2026-08-12 -- this list omitted three): `AlchemySiteType` (extends `NodeSiteType`), `CommandSiteType`, `DeadSiteType`, `DevNamespaceSiteType`, `DockerSiteType`, `JavaSiteType`, `NodeSiteType`, `ProxySiteType`, `RedirectSiteType`, `StaticSiteType`, `TlsPassthroughSiteType` (a `TlsPassthroughProvider`, not an HTTP handler). `StaticFileHandler` in the same package is NOT a type -- it is the handler `StaticSiteType` returns. See `docs/architecture-site-types.md` for the full table.
-- Site-type settings store env vars/headers/credentials as `StringMapField`
-  maps and reference discovered users/node versions via `RegistryEnumField`
-  keys (`hohenheim:<username>` / `hohenheim:<version>`, registries refreshed
-  by the discovery tasks). M025 migrated the legacy list/id shapes; readers
-  stay tolerant of both.
+- A site has ONE typed UPSTREAM: what its hostnames resolve to. Upstream kinds are
+  registered via `UpstreamKinds` (common) + `UpstreamKindHandlers` (server); each kind
+  declares its settings schema (which drives the discriminated settings sub-form in the
+  CMS) and its request handler. Adding a kind means implementing one class -- no edits to
+  existing dispatch code. See `docs/architecture-upstream-kinds.md`.
+- The six kinds live in `src/server/java/be/elevenways/hohenheim/server/upstream/kinds/`:
+  `StaticUpstreamKind`, `RedirectUpstreamKind`, `AddressUpstreamKind`,
+  `InstanceUpstreamKind`, `TlsPassthroughUpstreamKind` (a `TlsPassthroughProvider`, not an
+  HTTP handler) and `DevNamespaceUpstreamKind`. The request-handling PLUMBING stays in
+  `server/sitetype/` (forwarder, targets, health, bridges, `StaticFileHandler`) -- read
+  that package name as "request handling", not as "site type".
+- What a site RUNS is no longer a site question: the workload kinds (`docker`, `node`,
+  `java`, `command`, `alchemy`) were deleted on 2026-08-22 and their successor is the
+  INSTANCE kind (`hohenheim:workspace`, `hohenheim:application`, ...). A site that serves
+  one names it through the real `sites.instance_id` column, and the git SOURCE lives on
+  that instance's settings, never on the site.
 - Handlers are long-lived: created when a site loads, updated on config change, destroyed on removal. Not per-request.
 - ClientMain MUST call `HohenheimModels.registerAll()` + `HohenheimSources.register()` before `ClientZenitRuntime.main` (the browser has no MODELS/MODULES boot stage).
 
@@ -151,8 +160,11 @@ files you will find.
 - `database.migration_integrity` is `fail`, so a dev database that predates
   your edit refuses to boot. Delete and recreate it; never downgrade the
   setting to `warn` or `off`.
+- Adding a TABLE means editing BOTH `up()` and `down()`. `MigrationIntegrityTest`
+  rolls the whole schema back and counts what survived, so a table created and not
+  dropped fails the suite by name.
 - Default records are the `Seeder` SPI's job (SEED boot stage), never an
-  INSERT in the migration -- `SpamserviceInstallationSeeder` and
+  INSERT in the migration -- `SpamserviceInstallationSeeder`, `RuntimeImageSeeder` and
   `LocalServerSeeder` are the examples.
 
 ## Conventions
