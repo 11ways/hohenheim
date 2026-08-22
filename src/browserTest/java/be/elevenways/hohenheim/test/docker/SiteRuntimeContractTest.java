@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
-import be.elevenways.hohenheim.server.docker.SiteContainerKind;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.docker.SiteVolumes;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
@@ -107,7 +107,7 @@ class SiteRuntimeContractTest {
     /**
      * No second UI over the same records, enforced at the WRITE PIPELINE, not by
      * page layout: an owned instance refuses every out-of-scope write and delete,
-     * the site_container kind cannot be authored standalone at all, and the
+     * the release kind cannot be authored standalone at all, and the
      * standalone instance resource's own predicate excludes owned rows.
      */
     @Test
@@ -119,7 +119,7 @@ class SiteRuntimeContractTest {
                 SiteModel.MODEL_ID.toString(), siteId), () -> {
             Row row = Models.get(InstanceModel.class).createEmptyRow();
             row.set(InstanceModel.NAME, "contract-owned");
-            row.set(InstanceModel.KIND, SiteContainerKind.ID.toString());
+            row.set(InstanceModel.KIND, ReleaseKind.ID.toString());
             row.set(InstanceModel.SETTINGS, Map.of("image", "alpine"));
             Models.get(InstanceModel.class).save(row);
             created[0] = row.get(InstanceModel.ID);
@@ -144,9 +144,9 @@ class SiteRuntimeContractTest {
         //    create form would submit) is refused by name.
         Row standalone = Models.get(InstanceModel.class).createEmptyRow();
         standalone.set(InstanceModel.NAME, "contract-standalone");
-        standalone.set(InstanceModel.KIND, SiteContainerKind.ID.toString());
+        standalone.set(InstanceModel.KIND, ReleaseKind.ID.toString());
         assertThatThrownBy(() -> Models.get(InstanceModel.class).save(standalone))
-            .as("step 4: site_container cannot be authored outside the site tier")
+            .as("step 4: release cannot be authored outside the site tier")
             .isInstanceOf(Violations.class);
 
         // 5. The standalone instance resource's OWN predicate excludes owned rows
@@ -190,7 +190,7 @@ class SiteRuntimeContractTest {
                 SiteModel.MODEL_ID.toString(), siteId), () -> {
             Row row = Models.get(InstanceModel.class).createEmptyRow();
             row.set(InstanceModel.NAME, "contract-flip");
-            row.set(InstanceModel.KIND, SiteContainerKind.ID.toString());
+            row.set(InstanceModel.KIND, ReleaseKind.ID.toString());
             row.set(InstanceModel.SETTINGS, Map.of("image", "alpine",
                 "volumes", Map.of(legacyVolume, "/data")));
             row.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);

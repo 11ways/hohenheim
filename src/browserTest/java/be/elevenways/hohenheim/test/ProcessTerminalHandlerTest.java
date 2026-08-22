@@ -190,7 +190,7 @@ class ProcessTerminalHandlerTest extends HohenheimTestBase {
             Row site = siteModel.createEmptyRow();
             site.set(SiteModel.NAME, "Terminal " + label + " Site");
             site.set(SiteModel.SLUG, label + "-site");
-            site.set(SiteModel.SITE_TYPE, "hohenheim:static");
+            site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
             site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
             site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
             site.set(SiteModel.ENABLED, true);

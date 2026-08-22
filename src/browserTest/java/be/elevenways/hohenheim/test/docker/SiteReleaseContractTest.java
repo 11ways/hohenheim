@@ -620,7 +620,7 @@ class SiteReleaseContractTest {
         Row site = Models.get(SiteModel.class).createEmptyRow();
         site.set(SiteModel.NAME, "Release contract " + slug);
         site.set(SiteModel.SLUG, slug);
-        site.set(SiteModel.SITE_TYPE, "hohenheim:docker");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.SETTINGS, settingsFor("v1"));
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
@@ -642,7 +642,7 @@ class SiteReleaseContractTest {
         inSiteScope(siteId, () -> {
             Row row = Models.get(InstanceModel.class).createEmptyRow();
             row.set(InstanceModel.NAME, name);
-            row.set(InstanceModel.KIND, "hohenheim:site_container");
+            row.set(InstanceModel.KIND, "hohenheim:release");
             row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
                 "image", FakeDockerDaemon.digestOf("fake/app:" + tag),
                 "container_port", 8080)));

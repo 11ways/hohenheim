@@ -80,13 +80,13 @@ class PathRoutingTest {
         int apiV2Port = startUpstream("api-v2-upstream", null);
         int rootPort = startUpstream("root-upstream", null);
 
-        Row apiSite = setupSite("hohenheim:proxy", "Api Site", "api-site", proxySettings(apiPort));
+        Row apiSite = setupSite("hohenheim:address", "Api Site", "api-site", proxySettings(apiPort));
         addDomain(apiSite, "paths.test", "exact", "/api", false);
 
-        Row apiV2Site = setupSite("hohenheim:proxy", "Api V2 Site", "api-v2-site", proxySettings(apiV2Port));
+        Row apiV2Site = setupSite("hohenheim:address", "Api V2 Site", "api-v2-site", proxySettings(apiV2Port));
         addDomain(apiV2Site, "paths.test", "exact", "/api/v2", false);
 
-        Row rootSite = setupSite("hohenheim:proxy", "Root Site", "root-site", proxySettings(rootPort));
+        Row rootSite = setupSite("hohenheim:address", "Root Site", "root-site", proxySettings(rootPort));
         addDomain(rootSite, "paths.test", "exact", null, false);
 
         proxy = startProxy();
@@ -109,7 +109,7 @@ class PathRoutingTest {
             "https://fallback.example/");
 
         int apiPort = startUpstream("api-upstream", null);
-        Row apiSite = setupSite("hohenheim:proxy", "Api Only Site", "api-only-site",
+        Row apiSite = setupSite("hohenheim:address", "Api Only Site", "api-only-site",
             proxySettings(apiPort));
         addDomain(apiSite, "apionly.test", "exact", "/api", false);
 
@@ -137,7 +137,7 @@ class PathRoutingTest {
         AtomicReference<String> seenPath = new AtomicReference<>();
         int port = startUpstream("strip-upstream", seenPath);
 
-        Row site = setupSite("hohenheim:proxy", "Strip Site", "strip-site", proxySettings(port));
+        Row site = setupSite("hohenheim:address", "Strip Site", "strip-site", proxySettings(port));
         addDomain(site, "strip.test", "exact", "/service", true);
 
         proxy = startProxy();
@@ -158,14 +158,14 @@ class PathRoutingTest {
         int secondPort = startUpstream("second-upstream", null);
 
         // 1. "A Site" goes live on dup.test/api and claims that route.
-        Row first = setupSite("hohenheim:proxy", "A Site", "a-site", proxySettings(firstPort));
+        Row first = setupSite("hohenheim:address", "A Site", "a-site", proxySettings(firstPort));
         addDomain(first, "dup.test", "exact", "/api", false);
 
         // 2. A second LIVE site claiming the identical (hostname, path, listener) tuple is
         //    refused by the write pipeline. This used to be accepted and then resolved
         //    first-wins at the dispatcher, which left the second operator with a site that
         //    was enabled, reachable nowhere, and told nothing.
-        Row second = setupSite("hohenheim:proxy", "B Site", "b-site", proxySettings(secondPort));
+        Row second = setupSite("hohenheim:address", "B Site", "b-site", proxySettings(secondPort));
         assertThatThrownBy(() -> addDomain(second, "dup.test", "exact", "/api", false))
             .as("step 2: the duplicate route is refused, not silently shadowed")
             .isInstanceOf(Violations.class)
@@ -191,10 +191,10 @@ class PathRoutingTest {
         int apiPort = startUpstream("wild-api", null);
         int rootPort = startUpstream("wild-root", null);
 
-        Row apiSite = setupSite("hohenheim:proxy", "Wild Api", "wild-api", proxySettings(apiPort));
+        Row apiSite = setupSite("hohenheim:address", "Wild Api", "wild-api", proxySettings(apiPort));
         addDomain(apiSite, "*.wild.test", "wildcard", "/api", false);
 
-        Row rootSite = setupSite("hohenheim:proxy", "Wild Root", "wild-root", proxySettings(rootPort));
+        Row rootSite = setupSite("hohenheim:address", "Wild Root", "wild-root", proxySettings(rootPort));
         addDomain(rootSite, "*.wild.test", "wildcard", null, false);
 
         proxy = startProxy();

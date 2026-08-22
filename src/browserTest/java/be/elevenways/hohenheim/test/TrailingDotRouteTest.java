@@ -89,7 +89,7 @@ class TrailingDotRouteTest {
     }
 
     private Row proxySite(String name, String slug, String tag) throws Exception {
-        return setupSite("hohenheim:proxy", name, slug,
+        return setupSite("hohenheim:address", name, slug,
             Map.of("forward_host", "127.0.0.1", "forward_port", startUpstream(tag)));
     }
 

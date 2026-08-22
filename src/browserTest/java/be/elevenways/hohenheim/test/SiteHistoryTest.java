@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SiteHistoryTest extends HohenheimTestBase {
 
     private static final String SITE_FORM =
-        "site_type=hohenheim%3Aproxy&source=local"
+        "upstream_kind=hohenheim%3Aaddress"
         + "&settings.forward_host=127.0.0.1&settings.forward_port=9090";
 
     private HttpResponse<String> postForm(String path, String body) throws Exception {

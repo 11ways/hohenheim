@@ -180,7 +180,7 @@ class HostRuntimeTest {
             //    NEITHER seam and keeps its named-refusal contract.
             Row incusInstance = Models.get(InstanceModel.class).createEmptyRow();
             incusInstance.set(InstanceModel.NAME, "snapshotless");
-            incusInstance.set(InstanceModel.KIND, "hohenheim:incus_container");
+            incusInstance.set(InstanceModel.KIND, "hohenheim:system_container");
             incusInstance.set(InstanceModel.SETTINGS, Map.of("image", "alpine/3.22"));
             incusInstance.set(InstanceModel.SERVER_ID, admitted.get(ServerModel.ID));
             Models.get(InstanceModel.class).save(incusInstance);

@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -33,7 +33,7 @@ public final class ProxyTestSupport {
 
     /** One-time runtime boot for a test class; pair with a per-class initialized guard. */
     public static void bootRuntime() throws Exception {
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         // resetDatabase() already points the runtime at a fresh database AND initializes
         // it; the second HohenheimDatabase.init() this used to make was pure duplication.
@@ -62,7 +62,7 @@ public final class ProxyTestSupport {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, siteName);
         site.set(SiteModel.SLUG, slug);
-        site.set(SiteModel.SITE_TYPE, siteType);
+        site.set(SiteModel.UPSTREAM_KIND, siteType);
         site.set(SiteModel.SETTINGS, settings);
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);

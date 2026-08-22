@@ -74,7 +74,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         Row row = siteModel.createEmptyRow();
         row.set(SiteModel.NAME, name);
         row.set(SiteModel.SLUG, slug);
-        row.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        row.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         row.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         row.set(SiteModel.STATUS, "active");
         row.set(SiteModel.ENABLED, enabled);
@@ -316,7 +316,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Restore Gate Victim");
         site.set(SiteModel.SLUG, "restore-gate-victim");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
         site.set(SiteModel.SETTINGS, Map.of("forward_host", "127.0.0.1",
             "forward_port", upstream.getAddress().getPort()));
         site.set(SiteModel.STATUS, "active");

@@ -337,7 +337,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, slug);
         site.set(SiteModel.SLUG, slug);
-        site.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp/" + slug));
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);

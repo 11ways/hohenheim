@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -42,7 +42,7 @@ class AlertsTest {
     static void boot() throws Exception {
         // The shared browserTest runtime registers models and runs migrations
         // (comms tables included, via migration auto-discovery).
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();

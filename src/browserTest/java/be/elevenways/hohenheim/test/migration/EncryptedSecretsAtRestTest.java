@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -127,7 +128,7 @@ class EncryptedSecretsAtRestTest {
             Row site = sites.createEmptyRow();
             site.set(SiteModel.NAME, "At-rest site");
             site.set(SiteModel.SLUG, "at-rest-site");
-            site.set(SiteModel.SITE_TYPE, "hohenheim:dead");
+            site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
             site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
             site.set(SiteModel.ENABLED, false);
             site.set(SiteModel.SECURITY_REPORT_TOKEN, REPORT_TOKEN);
@@ -222,7 +223,8 @@ class EncryptedSecretsAtRestTest {
             .as("step 6: stack service environment is secret").isTrue();
         assertThat(StackServiceModel.ENVIRONMENT.isEncrypted())
             .as("step 6: stack service environment is encrypted").isTrue();
-        assertThat(GitSourceSchema.REPOSITORY_URL.isSecret())
+        assertThat(ApplicationKind.SETTINGS_SCHEMA.getField(GitSourceSchema.REPOSITORY_URL)
+                .isSecret())
             .as("step 6: git repository url (may embed user:TOKEN@) is secret").isTrue();
     }
 

@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
-import be.elevenways.hohenheim.server.instance.IncusContainerKind;
-import be.elevenways.hohenheim.server.instance.IncusVmKind;
+import be.elevenways.hohenheim.server.instance.SystemContainerKind;
+import be.elevenways.hohenheim.server.instance.VmKind;
 import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -92,7 +92,7 @@ class InstanceSpecDeclarationTest {
         // 3. THE PAIR THE ARITY TRAP DROPPED: an Incus VM declares root disk AND the
         //    bandwidth ceiling, plus the two booleans no other kind moves. All four are
         //    the components a call site one argument short used to mis-bind.
-        InstanceSpec vm = new IncusVmKind().specFor(7303, Map.of(
+        InstanceSpec vm = new VmKind().specFor(7303, Map.of(
             "image", "ubuntu/24.04", "root_disk_gb", 40, "network_limit_mbit", 100,
             "secure_boot", true, "guest_agent", false, "cloud_init", "#cloud-config\n"));
         assertThat(vm.rootDiskGb()).as("step 3: the declared root disk").isEqualTo(40);
@@ -108,7 +108,7 @@ class InstanceSpecDeclarationTest {
 
         // 4. An Incus container: the two quota components land, and the absences the kind
         //    calls structural really are absences on the spec the driver receives.
-        InstanceSpec container = new IncusContainerKind().specFor(7304, Map.of(
+        InstanceSpec container = new SystemContainerKind().specFor(7304, Map.of(
             "image", "images:debian/12", "root_disk_gb", 10, "network_limit_mbit", 50,
             "environment_variables", Map.of("LANG", "C.UTF-8")));
         assertThat(container.rootDiskGb()).as("step 4: the declared root disk").isEqualTo(10);

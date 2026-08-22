@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.NodeVersionModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
 import be.elevenways.zenit.common.Zenit;
@@ -34,7 +34,7 @@ class DiscoveryTaskTest {
         if (initialized) return;
         initialized = true;
 
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();

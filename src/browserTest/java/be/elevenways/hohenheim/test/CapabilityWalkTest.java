@@ -50,7 +50,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Walk Site");
         site.set(SiteModel.SLUG, "walk-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);

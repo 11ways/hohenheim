@@ -56,7 +56,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
         Row siteA = siteModel.createEmptyRow();
         siteA.set(SiteModel.NAME, "Access Site A");
         siteA.set(SiteModel.SLUG, "access-site-a");
-        siteA.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        siteA.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         siteA.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         siteA.set(SiteModel.STATUS, "active");
         siteA.set(SiteModel.ENABLED, true);
@@ -66,7 +66,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
         Row siteB = siteModel.createEmptyRow();
         siteB.set(SiteModel.NAME, "Access Site B");
         siteB.set(SiteModel.SLUG, "access-site-b");
-        siteB.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        siteB.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         siteB.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         siteB.set(SiteModel.STATUS, "active");
         siteB.set(SiteModel.ENABLED, true);

@@ -94,8 +94,8 @@ class PaasApiTest extends HohenheimTestBase {
         tenantAId = user("paas-tenant-a@surface.test", "Paas Tenant A");
         tenantBId = user("paas-tenant-b@surface.test", "Paas Tenant B");
 
-        siteAId = site(PREFIX + "alpha", "hohenheim:docker");
-        siteBId = site(PREFIX + "bravo", "hohenheim:docker");
+        siteAId = site(PREFIX + "alpha", "hohenheim:instance");
+        siteBId = site(PREFIX + "bravo", "hohenheim:static");
         staticSiteId = site(PREFIX + "static", "hohenheim:static");
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
@@ -210,11 +210,16 @@ class PaasApiTest extends HohenheimTestBase {
         Row row = Models.get(SiteModel.class).createEmptyRow();
         row.set(SiteModel.NAME, name);
         row.set(SiteModel.SLUG, name);
-        row.set(SiteModel.SITE_TYPE, type);
+        row.set(SiteModel.UPSTREAM_KIND, type);
         row.set(SiteModel.ENABLED, false);
         row.set(SiteModel.SETTINGS, new LinkedHashMap<>(Map.of(
             "image", "alpine", "tag", "latest",
             "environment_variables", Map.of("PLANTED", PLANTED_ENV_SECRET))));
+        // An instance upstream must name the instance it serves (SiteModel's
+        // before-validate invariant), and the rollback lane dispatches on exactly that.
+        if ("hohenheim:instance".equals(type)) {
+            row.set(SiteModel.INSTANCE_ID, instance(name + "-app"));
+        }
         Models.get(SiteModel.class).save(row);
         return row.get(SiteModel.ID);
     }
@@ -395,7 +400,7 @@ class PaasApiTest extends HohenheimTestBase {
         assertThat(deploy.statusCode()).as("step 1: refused, typed").isEqualTo(422);
         assertThat(deploy.body()).as("step 1: named").contains("deploy_not_available");
 
-        // 2. Rollback on a docker site DISPATCHES to the release engine: with no
+        // 2. Rollback on an INSTANCE-upstream site DISPATCHES to the release engine: with no
         //    retained release the engine's own named refusal comes back, which proves
         //    the call reached SiteReleases rather than a re-implementation.
         long opsBefore = Models.get(ReleaseOperationModel.class).find()
@@ -411,7 +416,7 @@ class PaasApiTest extends HohenheimTestBase {
             .as("step 2: and no operation row was minted for the refused rollback")
             .isEqualTo(opsBefore);
 
-        // 3. A non-docker site without a git wrapper has no rollback lane at all.
+        // 3. A site with no instance upstream and no git wrapper has no rollback lane at all.
         HttpResponse<String> staticRollback = keyPost(keyPaasA,
             "/api/v1/sites/" + staticSiteId + "/rollback", "");
         assertThat(staticRollback.statusCode()).as("step 3: refused, typed").isEqualTo(422);

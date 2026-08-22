@@ -73,11 +73,11 @@ class RegexCaseFoldTest {
         secondUpstream = respondingWith("second-claimant");
 
         // An UPPERCASE literal in the stored pattern, proving matching is insensitive.
-        Row first = ProxyTestSupport.setupSite("hohenheim:proxy", "Alpha Regex", "alpha-regex",
+        Row first = ProxyTestSupport.setupSite("hohenheim:address", "Alpha Regex", "alpha-regex",
             Map.of("forward_host", "127.0.0.1",
                    "forward_port", firstUpstream.getAddress().getPort()));
         ProxyTestSupport.addDomain(first, "^App\\.rc\\.test$", "regex", null, false);
-        Row second = ProxyTestSupport.setupSite("hohenheim:proxy", "Zeta Regex", "zeta-regex",
+        Row second = ProxyTestSupport.setupSite("hohenheim:address", "Zeta Regex", "zeta-regex",
             Map.of("forward_host", "127.0.0.1",
                    "forward_port", secondUpstream.getAddress().getPort()));
 

@@ -327,7 +327,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, slug);
         site.set(SiteModel.SLUG, slug);
-        site.set(SiteModel.SITE_TYPE, "hohenheim:dead");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
         siteModel.save(site);

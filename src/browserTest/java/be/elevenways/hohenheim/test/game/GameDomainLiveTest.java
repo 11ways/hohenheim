@@ -347,7 +347,7 @@ class GameDomainLiveTest {
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, "Game live site");
         site.set(SiteModel.SLUG, "game-live-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);

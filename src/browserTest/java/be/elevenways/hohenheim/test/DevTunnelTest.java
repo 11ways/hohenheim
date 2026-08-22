@@ -7,8 +7,8 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
-import be.elevenways.hohenheim.server.sitetype.types.DevNamespaceSiteType;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
+import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -86,7 +86,7 @@ class DevTunnelTest {
     static void boot() throws Exception {
         if (!initialized) {
             initialized = true;
-            SiteTypes.boot();
+            UpstreamKindHandlers.boot();
             HohenheimEndpoints.init();
             TestDatabases.freshDatabase();
             // The discovered HohenheimHostWiring module installs the client script
@@ -138,8 +138,8 @@ class DevTunnelTest {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Dev namespace");
         site.set(SiteModel.SLUG, "dev-namespace");
-        site.set(SiteModel.SITE_TYPE, DevNamespaceSiteType.ID.toString());
-        site.set(SiteModel.SETTINGS, Map.of(DevNamespaceSiteType.REGISTRATION_TOKEN_KEY, TOKEN));
+        site.set(SiteModel.UPSTREAM_KIND, DevNamespaceUpstreamKind.ID.toString());
+        site.set(SiteModel.SETTINGS, Map.of(DevNamespaceUpstreamKind.REGISTRATION_TOKEN_KEY, TOKEN));
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
         siteModel.save(site);
@@ -418,9 +418,9 @@ class DevTunnelTest {
     private static void setNamespaceToken(String token) {
         var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.find()
-            .where(SiteModel.SITE_TYPE.eq(DevNamespaceSiteType.ID.toString()))
+            .where(SiteModel.UPSTREAM_KIND.eq(DevNamespaceUpstreamKind.ID.toString()))
             .first();
-        site.set(SiteModel.SETTINGS, Map.of(DevNamespaceSiteType.REGISTRATION_TOKEN_KEY, token));
+        site.set(SiteModel.SETTINGS, Map.of(DevNamespaceUpstreamKind.REGISTRATION_TOKEN_KEY, token));
         siteModel.save(site);
     }
 

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -115,16 +116,16 @@ class PreviewDeploymentLiveTest {
         gitIn(upstreamRepo, "add", ".");
         gitIn(upstreamRepo, "commit", "-q", "-m", "preview branch content");
 
-        Row site = ProxyTestSupport.setupSite("hohenheim:docker", "Preview Live Site",
+        Row site = ProxyTestSupport.setupSite("hohenheim:static", "Preview Live Site",
             "prev-live", dockerSettings());
-        site.set(SiteModel.SOURCE, SiteModel.SOURCE_GIT);
+        
         Map<String, Object> sourceSettings = new LinkedHashMap<>();
         sourceSettings.put("repository_url", upstreamRepo.toString());
         sourceSettings.put("branch", "main");
         sourceSettings.put("previews_enabled", true);
         sourceSettings.put("preview_environment_variables",
             Map.of("PREVIEW_MARKER", "preview-only-value"));
-        site.set(SiteModel.SOURCE_SETTINGS, sourceSettings);
+        TestSources.attachGitSource(site, sourceSettings);
         Models.get(SiteModel.class).save(site);
         siteId = site.get(SiteModel.ID);
         ProxyTestSupport.addDomain(site, "prev-live.test", "exact", null, false);

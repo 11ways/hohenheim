@@ -151,7 +151,7 @@ class ContainerHardeningTest {
         }
 
         // 2. DOCKER SITE -- declares SERVICE (web-server images chown and drop privileges).
-        //    Lowered onto the instance contract: the running release is a site_container
+        //    Lowered onto the instance contract: the running release is a release
         //    instance, so the kernel state is asserted on the INSTANCE handle and the
         //    teardown is the verified destroyFor (handler.destroy is only a stop now).
         int siteId = 999_102;

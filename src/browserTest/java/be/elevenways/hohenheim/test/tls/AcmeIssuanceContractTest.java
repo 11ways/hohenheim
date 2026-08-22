@@ -313,7 +313,7 @@ class AcmeIssuanceContractTest {
         Row site = Models.get(SiteModel.class).createEmptyRow();
         site.set(SiteModel.NAME, "ACME contract " + slug);
         site.set(SiteModel.SLUG, slug);
-        site.set(SiteModel.SITE_TYPE, "hohenheim:redirect");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:redirect");
         site.set(SiteModel.SETTINGS, Map.of("target", "https://example.com"));
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);

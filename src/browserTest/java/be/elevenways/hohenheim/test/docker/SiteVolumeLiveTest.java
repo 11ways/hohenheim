@@ -108,7 +108,7 @@ class SiteVolumeLiveTest {
         String digestA = TestImages.loadHttpServer(docker, repoA + ":latest", "vol-release-one");
         String digestB = TestImages.loadHttpServer(docker, repoB + ":latest", "vol-release-two");
 
-        Row site = ProxyTestSupport.setupSite("hohenheim:docker", "Volume journey site",
+        Row site = ProxyTestSupport.setupSite("hohenheim:static", "Volume journey site",
             "volume-journey", settingsFor(repoA));
         int siteId = site.get(SiteModel.ID);
         String volume = SiteVolumes.volumeOf(siteId, "data");
@@ -221,7 +221,7 @@ class SiteVolumeLiveTest {
         String repo = "hohenheim-vol-legacy-" + System.nanoTime();
         String digest = TestImages.loadHttpServer(docker, repo + ":latest", "legacy-release");
 
-        Row site = ProxyTestSupport.setupSite("hohenheim:docker", "Volume adoption site",
+        Row site = ProxyTestSupport.setupSite("hohenheim:static", "Volume adoption site",
             "volume-adoption", settingsFor(repo));
         int siteId = site.get(SiteModel.ID);
         String siteVolume = SiteVolumes.volumeOf(siteId, "data");

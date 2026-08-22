@@ -152,7 +152,7 @@ class IncusSnapshotBackupLiveTest {
         settings.put("environment_variables", Map.of("GAME_TOKEN", "s3cret-token"));
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
-        row.set(InstanceModel.KIND, "hohenheim:incus_container");
+        row.set(InstanceModel.KIND, "hohenheim:system_container");
         row.set(InstanceModel.SETTINGS, settings);
         row.set(InstanceModel.SERVER_ID, host.get(ServerModel.ID));
         Models.get(InstanceModel.class).save(row);

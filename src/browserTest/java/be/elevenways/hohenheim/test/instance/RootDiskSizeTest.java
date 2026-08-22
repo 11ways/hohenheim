@@ -10,8 +10,8 @@ import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
-import be.elevenways.hohenheim.server.instance.IncusContainerKind;
-import be.elevenways.hohenheim.server.instance.IncusVmKind;
+import be.elevenways.hohenheim.server.instance.SystemContainerKind;
+import be.elevenways.hohenheim.server.instance.VmKind;
 import be.elevenways.hohenheim.server.instance.RootDisk;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
@@ -72,9 +72,9 @@ class RootDiskSizeTest extends HohenheimTestBase {
         // 1. The tiers whose driver really enforces a root quota DECLARE the field.
         //    Declaring it IS the capability declaration -- there is no second boolean
         //    that could disagree with it.
-        assertThat(IncusVmKind.SETTINGS_SCHEMA.getField(RootDisk.SETTING))
+        assertThat(VmKind.SETTINGS_SCHEMA.getField(RootDisk.SETTING))
             .as("step 1: the Incus VM kind offers a root disk size").isNotNull();
-        assertThat(IncusContainerKind.SETTINGS_SCHEMA.getField(RootDisk.SETTING))
+        assertThat(SystemContainerKind.SETTINGS_SCHEMA.getField(RootDisk.SETTING))
             .as("step 1: the Incus container kind offers one too").isNotNull();
 
         // 2. THE POINT OF THE ITEM: the Docker tier does NOT offer a number it would
@@ -85,10 +85,10 @@ class RootDiskSizeTest extends HohenheimTestBase {
             .isNull();
 
         // 3. The Incus VM kind carries a declared size onto the spec the driver sees.
-        InstanceSpec declared = new IncusVmKind().specFor(41, settings("alpine/3.22", 20));
+        InstanceSpec declared = new VmKind().specFor(41, settings("alpine/3.22", 20));
         assertThat(declared.rootDiskGb())
             .as("step 3: the declared size reaches the driver").isEqualTo(20);
-        InstanceSpec blank = new IncusVmKind().specFor(41, settings("alpine/3.22", null));
+        InstanceSpec blank = new VmKind().specFor(41, settings("alpine/3.22", null));
         assertThat(blank.rootDiskGb())
             .as("step 3: a blank declaration inherits the image, it does not become 0")
             .isNull();
@@ -157,7 +157,7 @@ class RootDiskSizeTest extends HohenheimTestBase {
 
         // 1. Creating a VM with a 10 GB root charges the SAME bucket an attached disk
         //    would -- the root disk is not a hole in the owner's disk cap.
-        Row row = instanceRow(PREFIX + "charged", "hohenheim:incus_vm", 10);
+        Row row = instanceRow(PREFIX + "charged", "hohenheim:vm", 10);
         Models.get(InstanceModel.class).save(row);
         int id = row.get(InstanceModel.ID);
         assertThat(Quotas.usedOf(DISK_BUCKET))
@@ -229,20 +229,20 @@ class RootDiskSizeTest extends HohenheimTestBase {
     void anUnusableOrUnenforceableDeclarationIsRefusedByName() {
         // 1. POSITIVE ANCHOR: a valid declaration on a tier that CAN enforce it is
         //    accepted, so the refusals below are refusing something specific.
-        Row good = instanceRow(PREFIX + "ok", "hohenheim:incus_vm", 5);
+        Row good = instanceRow(PREFIX + "ok", "hohenheim:vm", 5);
         Models.get(InstanceModel.class).save(good);
         assertThat((Integer) good.get(InstanceModel.ID))
             .as("step 1: an enforceable declaration is accepted").isNotNull();
 
         // 2. Zero is not "inherit the image", it is a mistake, and it is named.
-        Row zero = instanceRow(PREFIX + "zero", "hohenheim:incus_vm", 0);
+        Row zero = instanceRow(PREFIX + "zero", "hohenheim:vm", 0);
         assertThat(violationKeyOf(catchThrowable(() ->
             Models.get(InstanceModel.class).save(zero))))
             .as("step 2: a non-positive size is refused by name")
             .isEqualTo("root_disk_invalid");
 
         // 3. So is a value that is not a number at all.
-        Row bogus = instanceRow(PREFIX + "bogus", "hohenheim:incus_vm", null);
+        Row bogus = instanceRow(PREFIX + "bogus", "hohenheim:vm", null);
         Map<String, Object> settings = new LinkedHashMap<>(settings("alpine/3.22", null));
         settings.put(RootDisk.SETTING, "as big as possible");
         bogus.set(InstanceModel.SETTINGS, settings);

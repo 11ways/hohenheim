@@ -63,7 +63,7 @@ class TlsMultiplexerLifecycleTest {
         resetDatabase();
         Row certificate = installCertificate("remove.example.test");
         backend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
-        Row site = setupSite(SiteModel.SITE_TYPE_TLS_PASSTHROUGH,
+        Row site = setupSite(SiteModel.UPSTREAM_TLS_PASSTHROUGH,
             "TLS backend", "tls-backend", Map.of(
                 "forward_host", "127.0.0.1", "forward_port", backend.getLocalPort()));
         addDomain(site, "*.passthrough.test", "wildcard", null, false);

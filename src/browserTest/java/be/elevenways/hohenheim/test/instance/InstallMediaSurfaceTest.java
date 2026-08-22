@@ -11,7 +11,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.incus.IncusClient;
-import be.elevenways.hohenheim.server.instance.IncusContainerKind;
+import be.elevenways.hohenheim.server.instance.SystemContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -55,6 +55,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -170,11 +171,11 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             .as("step 2: and the refusal happened before any create reached the daemon")
             .isNull();
 
-        // 3. resolve() allows a BLANK image only for this origin: a real incus_vm
+        // 3. resolve() allows a BLANK image only for this origin: a real vm
         //    record with install_media resolves, the same record on catalog refuses.
         Row record = Models.get(InstanceModel.class).createEmptyRow();
         record.set(InstanceModel.NAME, PREFIX + "resolve");
-        record.set(InstanceModel.KIND, "hohenheim:incus_vm");
+        record.set(InstanceModel.KIND, "hohenheim:vm");
         record.set(InstanceModel.SETTINGS,
             Map.of("image_origin", ImageOrigin.INSTALL_MEDIA.key()));
         record.set(InstanceModel.SERVER_ID, hostId);
@@ -639,7 +640,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     @Test
     void aContainerKindCapturesIntoAPreparedTemplateToo() {
         InstanceKindHandler container = InstanceKinds.getHandler(
-            IncusContainerKind.ID.toString());
+            SystemContainerKind.ID.toString());
 
         assertThat(container)
             .as("the incus container kind is registered").isNotNull();
@@ -650,7 +651,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         // The declaration and its enforcement land together: the origin field exists,
         // offers exactly catalog and prepared, and specFor CARRIES the choice into the
         // spec -- an unwired vocabulary is what kept this kind out of capture before.
-        assertThat(IncusContainerKind.IMAGE_ORIGIN.getValues().keySet())
+        assertThat(SystemContainerKind.IMAGE_ORIGIN.getValues().keySet())
             .as("the container offers catalog and prepared, and NOT install media"
                 + " -- a shared-kernel workload has no firmware to boot an ISO with")
             .containsExactlyInAnyOrder(ImageOrigin.CATALOG.key(), ImageOrigin.PREPARED.key());
@@ -851,7 +852,9 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             return Microcopy.of("fake_media_capable").withFilter("scope", "instance_kind");
         }
 
-        @Override public String getDescription() { return "in-memory media-capable test kind"; }
+        @Override public @NonNull Microcopy getDescription() {
+        return Microcopy.of("fake_media_capable").withFilter("scope", "instance_kind_description");
+    }
 
         @Override public Icon getIcon() { return Icon.of("flask"); }
 
@@ -859,7 +862,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
 
         @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 
-        @Override public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
+        @Override public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
 
         @Override public boolean supportsDevices() { return true; }
 

@@ -174,7 +174,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         Row row = model.createEmptyRow();
         row.set(SiteModel.NAME, name);
         row.set(SiteModel.SLUG, slug);
-        row.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        row.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         row.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         row.set(SiteModel.STATUS, "active");
         row.set(SiteModel.ENABLED, true);

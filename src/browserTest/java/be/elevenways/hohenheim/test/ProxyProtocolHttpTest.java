@@ -148,7 +148,7 @@ class ProxyProtocolHttpTest {
         });
         backend.start();
 
-        Row site = setupSite("hohenheim:proxy", "Ingress " + hostname,
+        Row site = setupSite("hohenheim:address", "Ingress " + hostname,
             hostname.replaceAll("[^a-z0-9]+", "-"), Map.of(
                 "forward_host", "127.0.0.1", "forward_port", backend.getAddress().getPort()));
         addDomain(site, hostname, "exact", null, false);

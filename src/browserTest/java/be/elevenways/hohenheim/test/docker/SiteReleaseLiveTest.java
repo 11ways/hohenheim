@@ -121,7 +121,7 @@ class SiteReleaseLiveTest {
         String digestA = TestImages.loadHttpServer(docker, repoA + ":latest", "release-one");
         String digestB = TestImages.loadHttpServer(docker, repoB + ":latest", "release-two");
 
-        Row site = ProxyTestSupport.setupSite("hohenheim:docker", "Release journey site",
+        Row site = ProxyTestSupport.setupSite("hohenheim:static", "Release journey site",
             "release-journey", settingsFor(repoA));
         ProxyTestSupport.addDomain(site, "release.test", "exact", null, false);
         int siteId = site.get(SiteModel.ID);
@@ -283,7 +283,7 @@ class SiteReleaseLiveTest {
         String digestEvil = TestImages.loadResponder(docker, repoEvil + ":latest",
             "HTTP/1.1 500 Broken", "evil-answer");
 
-        Row site = ProxyTestSupport.setupSite("hohenheim:docker", "Gate site",
+        Row site = ProxyTestSupport.setupSite("hohenheim:static", "Gate site",
             "release-gate", settingsFor(repoGood));
         ProxyTestSupport.addDomain(site, "gate.test", "exact", null, false);
         int siteId = site.get(SiteModel.ID);
@@ -479,7 +479,7 @@ class SiteReleaseLiveTest {
                 SITE_MODEL, siteId), () -> {
                 Row candidate = Models.get(InstanceModel.class).createEmptyRow();
                 candidate.set(InstanceModel.NAME, "rc-candidate");
-                candidate.set(InstanceModel.KIND, "hohenheim:site_container");
+                candidate.set(InstanceModel.KIND, "hohenheim:release");
                 candidate.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
                     "image", "alpine:latest", "command", "sleep 300")));
                 candidate.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_CANDIDATE);

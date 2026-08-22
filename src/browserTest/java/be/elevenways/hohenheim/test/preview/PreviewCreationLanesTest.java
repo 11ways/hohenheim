@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.preview;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManagePreviewDeploymentResource;
 import be.elevenways.hohenheim.server.cms.PreviewDeploymentResource;
@@ -51,12 +52,12 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Preview Lanes Site");
         site.set(SiteModel.SLUG, "prev-lanes");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:docker");
+        
         site.set(SiteModel.SETTINGS, Map.of("image", "alpine", "container_port", 8080));
-        site.set(SiteModel.SOURCE, SiteModel.SOURCE_GIT);
+        
         Map<String, Object> sourceSettings = new LinkedHashMap<>();
         sourceSettings.put("repository_url", "/nonexistent/repo");
-        site.set(SiteModel.SOURCE_SETTINGS, sourceSettings);
+        TestSources.attachGitSource(site, sourceSettings);
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
         siteModel.save(site);

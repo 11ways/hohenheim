@@ -70,7 +70,7 @@ class SecurityReportEnvTest {
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, name);
         site.set(SiteModel.SLUG, name.toLowerCase().replaceAll("[^a-z0-9]+", "-"));
-        site.set(SiteModel.SITE_TYPE, "hohenheim:dead");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.ENABLED, true);
         sites.save(site);
         return site.get(SiteModel.ID);

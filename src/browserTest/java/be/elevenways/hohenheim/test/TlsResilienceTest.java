@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
@@ -37,7 +37,7 @@ class TlsResilienceTest {
         if (initialized) return;
         initialized = true;
 
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
@@ -169,7 +169,7 @@ class TlsResilienceTest {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Orphan Test Site");
         site.set(SiteModel.SLUG, "orphan-test-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
         site.set(SiteModel.ENABLED, true);
         site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         siteModel.save(site);
@@ -211,7 +211,7 @@ class TlsResilienceTest {
         Row disabledSite = siteModel.createEmptyRow();
         disabledSite.set(SiteModel.NAME, "Disabled Keep Site");
         disabledSite.set(SiteModel.SLUG, "disabled-keep-site");
-        disabledSite.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        disabledSite.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
         disabledSite.set(SiteModel.ENABLED, false);
         disabledSite.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         siteModel.save(disabledSite);
@@ -230,7 +230,7 @@ class TlsResilienceTest {
         Row deletedSite = siteModel.createEmptyRow();
         deletedSite.set(SiteModel.NAME, "Deleted Orphan Site");
         deletedSite.set(SiteModel.SLUG, "deleted-orphan-site");
-        deletedSite.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        deletedSite.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
         deletedSite.set(SiteModel.ENABLED, true);
         deletedSite.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         deletedSite.set(SiteModel.DELETED_AT, java.time.Instant.now());

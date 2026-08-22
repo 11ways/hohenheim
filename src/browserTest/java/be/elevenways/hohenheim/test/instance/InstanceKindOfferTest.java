@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.cms.InstanceTemplateResource;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -148,6 +150,47 @@ class InstanceKindOfferTest {
 
         // 3. An authorable kind passes both, so step 1 and 2 are not refusing everything.
         InstanceKinds.requireAuthorable(InstanceKinds.authorableOptions().get(0).value());
+    }
+
+    @Test
+    @DisplayName("every kind's supported runtimes are real host runtimes, and the set is never empty")
+    void supportedRuntimesBindToTheHostRuntimeVocabulary() {
+
+        // 1. The host-runtime vocabulary is declared ONCE, on ServerModel.RUNTIME. A kind
+        //    naming a runtime no host can declare places nowhere and says nothing about it.
+        Set<String> hostRuntimes = ServerModel.RUNTIME.getValues().keySet();
+        assertThat(hostRuntimes)
+            .as("step 1: hosts declare a populated runtime vocabulary")
+            .isNotEmpty();
+
+        boolean someKindRunsOnBoth = false;
+
+        for (String id : registeredIds()) {
+            InstanceKindHandler handler = InstanceKinds.getHandler(id);
+            Set<String> supported = handler.supportedRuntimes();
+
+            // 2. Never empty: an empty set is a kind whose placement chooser can only
+            //    return "nothing accepts this workload", with no reason an operator can act on.
+            assertThat(supported)
+                .as("step 2: '%s' declares at least one runtime", id)
+                .isNotEmpty();
+
+            // 3. And every member is a runtime a host can actually be.
+            assertThat(hostRuntimes)
+                .as("step 3: '%s' names only declared host runtimes", id)
+                .containsAll(supported);
+
+            someKindRunsOnBoth |= supported.size() > 1;
+        }
+
+        // 4. The set shape earns its keep: the workspace kind is the reason it stopped
+        //    being one string, so a regression back to a single runtime fails here.
+        assertThat(someKindRunsOnBoth)
+            .as("step 4: at least one kind runs on more than one runtime")
+            .isTrue();
+        assertThat(InstanceKinds.getHandler("hohenheim:workspace").supportedRuntimes())
+            .as("step 4: and it is the workspace, on both runtimes")
+            .containsExactlyInAnyOrder(ServerModel.RUNTIME_DOCKER, ServerModel.RUNTIME_INCUS);
     }
 
     @Test

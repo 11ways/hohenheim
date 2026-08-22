@@ -78,7 +78,7 @@ class TlsPassthroughPolicyTest {
     @Test
     void siteTypeTransitionValidatesExistingDomains() throws Exception {
         resetDatabase();
-        Row site = setupSite("hohenheim:proxy", "HTTP site", "http-site",
+        Row site = setupSite("hohenheim:address", "HTTP site", "http-site",
             Map.of("forward_host", "127.0.0.1", "forward_port", 8080));
         Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
         domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
@@ -87,7 +87,7 @@ class TlsPassthroughPolicyTest {
         domain.set(SiteDomainModel.PATH, "/api");
         Models.get(SiteDomainModel.class).save(domain);
 
-        site.set(SiteModel.SITE_TYPE, SiteModel.SITE_TYPE_TLS_PASSTHROUGH);
+        site.set(SiteModel.UPSTREAM_KIND, SiteModel.UPSTREAM_TLS_PASSTHROUGH);
         site.set(SiteModel.SETTINGS, Map.of("forward_host", "127.0.0.1", "forward_port", 8443));
         assertThatThrownBy(() -> Models.get(SiteModel.class).save(site))
             .isInstanceOf(Violations.class)
@@ -97,7 +97,7 @@ class TlsPassthroughPolicyTest {
     @Test
     void validSiteTypeTransitionNormalizesExistingDomains() throws Exception {
         resetDatabase();
-        Row site = setupSite("hohenheim:proxy", "HTTP site", "http-site",
+        Row site = setupSite("hohenheim:address", "HTTP site", "http-site",
             Map.of("forward_host", "127.0.0.1", "forward_port", 8080));
         SiteDomainModel domains = Models.get(SiteDomainModel.class);
         Row domain = domains.createEmptyRow();
@@ -108,7 +108,7 @@ class TlsPassthroughPolicyTest {
         domain.set(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, false);
         domains.save(domain);
 
-        site.set(SiteModel.SITE_TYPE, SiteModel.SITE_TYPE_TLS_PASSTHROUGH);
+        site.set(SiteModel.UPSTREAM_KIND, SiteModel.UPSTREAM_TLS_PASSTHROUGH);
         site.set(SiteModel.SETTINGS, Map.of("forward_host", "127.0.0.1", "forward_port", 8443));
         Models.get(SiteModel.class).save(site);
 
@@ -123,7 +123,7 @@ class TlsPassthroughPolicyTest {
         Row site = Models.get(SiteModel.class).createEmptyRow();
         site.set(SiteModel.NAME, "Invalid passthrough");
         site.set(SiteModel.SLUG, "invalid-passthrough");
-        site.set(SiteModel.SITE_TYPE, SiteModel.SITE_TYPE_TLS_PASSTHROUGH);
+        site.set(SiteModel.UPSTREAM_KIND, SiteModel.UPSTREAM_TLS_PASSTHROUGH);
         site.set(SiteModel.SETTINGS, Map.of("forward_host", "127.0.0.1", "forward_port", 8443));
         site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         site.set(SiteModel.ENABLED, true);
@@ -143,7 +143,7 @@ class TlsPassthroughPolicyTest {
     }
 
     private static Row passthroughSite() {
-        return setupSite(SiteModel.SITE_TYPE_TLS_PASSTHROUGH, "TLS passthrough", "tls-passthrough",
+        return setupSite(SiteModel.UPSTREAM_TLS_PASSTHROUGH, "TLS passthrough", "tls-passthrough",
             Map.of("forward_host", "127.0.0.1", "forward_port", 8443));
     }
 }

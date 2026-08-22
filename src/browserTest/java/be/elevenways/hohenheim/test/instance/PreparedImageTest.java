@@ -226,7 +226,7 @@ class PreparedImageTest extends HohenheimTestBase {
         Throwable mismatchedOrigin = catchThrowable(() -> TenantConduits.as(tenantPrincipal, () -> {
             Row row = instances.createEmptyRow();
             row.set(InstanceModel.NAME, PREFIX + "via-catalog-template");
-            row.set(InstanceModel.KIND, "hohenheim:incus_vm");
+            row.set(InstanceModel.KIND, "hohenheim:vm");
             row.set(InstanceModel.SETTINGS, settingsOf(sharedAlias, "prepared"));
             row.set(InstanceModel.TEMPLATE_ID, catalogTemplateId);
             instances.save(row);
@@ -242,7 +242,7 @@ class PreparedImageTest extends HohenheimTestBase {
         TenantConduits.as(tenantPrincipal, () -> {
             Row row = instances.createEmptyRow();
             row.set(InstanceModel.NAME, PREFIX + "via-prepared-template");
-            row.set(InstanceModel.KIND, "hohenheim:incus_vm");
+            row.set(InstanceModel.KIND, "hohenheim:vm");
             row.set(InstanceModel.SETTINGS, settingsOf(sharedAlias, "prepared"));
             row.set(InstanceModel.TEMPLATE_ID, preparedTemplateId);
             instances.save(row);
@@ -279,7 +279,7 @@ class PreparedImageTest extends HohenheimTestBase {
         Model templates = Models.get(InstanceTemplateModel.class);
         Row row = templates.createEmptyRow();
         row.set(InstanceTemplateModel.NAME, name);
-        row.set(InstanceTemplateModel.KIND, "hohenheim:incus_vm");
+        row.set(InstanceTemplateModel.KIND, "hohenheim:vm");
         row.set(InstanceTemplateModel.SETTINGS, settings);
         if (approved) {
             row.set(InstanceTemplateModel.APPROVED_AT, Instant.now());

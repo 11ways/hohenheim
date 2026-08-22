@@ -14,7 +14,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -36,7 +36,7 @@ class DatabaseEnvInjectionTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
@@ -57,7 +57,7 @@ class DatabaseEnvInjectionTest {
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, name);
         site.set(SiteModel.SLUG, name);
-        site.set(SiteModel.SITE_TYPE, "hohenheim:node");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.ENABLED, true);
         sites.save(site);
         return site.get(SiteModel.ID);

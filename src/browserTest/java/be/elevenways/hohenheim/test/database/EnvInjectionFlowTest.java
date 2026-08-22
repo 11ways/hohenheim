@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
 import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.process.ProcessMonitor;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -57,7 +57,7 @@ class EnvInjectionFlowTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, PG_IMAGE);
 
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
@@ -123,7 +123,7 @@ class EnvInjectionFlowTest {
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, "env-flow-site");
         site.set(SiteModel.SLUG, "env-flow-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:command");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.ENABLED, true);
         sites.save(site);
         Integer siteId = site.get(SiteModel.ID);

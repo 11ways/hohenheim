@@ -438,7 +438,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
 
         // 2. THE DEFECT: the tenant flips settings.privileged. The image policy judges
         //    image/tag/image_origin and nothing else, so before the per-key freeze existed
-        //    this write was accepted and IncusContainerKind lowered it onto an Incus
+        //    this write was accepted and SystemContainerKind lowered it onto an Incus
         //    security.privileged container. The CMS form not offering the field is a UX
         //    affordance, never a gate.
         Throwable escalation = catchThrowable(() -> TenantConduits.as(tenantPrincipal, () -> {

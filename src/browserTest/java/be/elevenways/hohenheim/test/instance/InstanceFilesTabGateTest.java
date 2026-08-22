@@ -61,7 +61,7 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
         incusHost.set(ServerModel.SSH_TARGET, "nobody@files-incus-host.invalid");
         servers.save(incusHost);
         int incusHostId = servers.findByName("files-incus-host").get(ServerModel.ID);
-        incusInstanceId = instance("files-incus", "hohenheim:incus_container", incusHostId);
+        incusInstanceId = instance("files-incus", "hohenheim:system_container", incusHostId);
 
         consoleSession = delegate("files-console@hohenheim.local", HohenheimAccess.CONSOLE);
         readerSession = delegate("files-reader@hohenheim.local", HohenheimAccess.FILES_READ);

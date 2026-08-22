@@ -90,7 +90,7 @@ class SocketFrontModeTest {
             ex.close();
         });
         upstream.start();
-        Row site = ProxyTestSupport.setupSite("hohenheim:proxy", "Socket Front Site",
+        Row site = ProxyTestSupport.setupSite("hohenheim:address", "Socket Front Site",
             "socket-front-site", Map.of("forward_host", "127.0.0.1",
                 "forward_port", upstream.getAddress().getPort()));
         ProxyTestSupport.addDomain(site, "front.sock.test", "exact", null, false);

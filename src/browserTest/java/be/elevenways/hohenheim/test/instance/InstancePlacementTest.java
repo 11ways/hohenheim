@@ -2,12 +2,14 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
+import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -363,7 +365,7 @@ class InstancePlacementTest {
 
             // 9. A runtime the fleet does not offer is a refusal, not a wrong-runtime pick.
             InstancePlacement.Workload incus = InstancePlacement.Workload.of(
-                InstanceKinds.getHandler("hohenheim:incus_container"), Map.of());
+                InstanceKinds.getHandler("hohenheim:system_container"), Map.of());
             assertThat(keyOf(catchThrowable(() ->
                     InstancePlacement.chooseForBucket(BUCKET, incus, null))))
                 .as("step 9: every host here is a docker host, so an incus workload"
@@ -551,7 +553,7 @@ class InstancePlacementTest {
                 .as("step 1: the host really is stored as ADMITTED")
                 .isEqualTo(ServerModel.ADMISSION_ADMITTED);
             InstancePlacement.Workload incus = InstancePlacement.Workload.of(
-                InstanceKinds.getHandler("hohenheim:incus_container"),
+                InstanceKinds.getHandler("hohenheim:system_container"),
                 Map.of("image", "images:debian/13"));
             Throwable refused = catchThrowable(() ->
                 InstancePlacement.chooseForBucket(BUCKET, incus, null));
@@ -628,7 +630,7 @@ class InstancePlacementTest {
 
     /**
      * A kind that refuses every host, by name -- the shape
-     * {@code IncusVmKind.requirePlaceableOn} has when a prepared alias is not published
+     * {@code VmKind.requirePlaceableOn} has when a prepared alias is not published
      * on the candidate, without needing a daemon to say so.
      */
     private record RefusingKind(InstanceKindHandler delegate) implements InstanceKindHandler {
@@ -650,7 +652,7 @@ class InstancePlacementTest {
         }
 
         @Override
-        public String getDescription() {
+        public @NonNull Microcopy getDescription() {
             return this.delegate.getDescription();
         }
 
@@ -761,14 +763,93 @@ class InstancePlacementTest {
      * does not happen. Nothing compared a workload's isolation to what the host declared
      * because no workload declared one.
      */
+    /**
+     * A workspace and an application need a host whose volume root can ENFORCE a quota, and
+     * the eligible set answers to the same declaration the deploy path does.
+     *
+     * AIDEV-NOTE: the refusal lives on the KIND ({@code requirePlaceableOn}) rather than in
+     * the chooser, for the reason that seam records: a second copy of a refusal is the
+     * drift defect it exists to remove. This journey therefore asserts BOTH ends -- the
+     * chooser will not offer the host, and asking the kind directly names the reason.
+     */
+    @Test
+    void aHostWithNoVolumeQuotaTakesNoWorkspaceOrApplication() {
+        Db.run(datasource, () -> {
+            int plain = host("vol-none", ServerModel.ADMISSION_ADMITTED,
+                ServerModel.POSTURE_SHARED_CONTAINER, 8192L);
+            setVolumeBackend(plain, VolumeBackend.NONE);
+
+            InstanceKindHandler workspace = InstanceKinds.getHandler("hohenheim:workspace");
+            InstanceKindHandler application = InstanceKinds.getHandler("hohenheim:application");
+            InstancePlacement.Workload workspaceLoad =
+                InstancePlacement.Workload.of(workspace, Map.of());
+            InstancePlacement.Workload applicationLoad =
+                InstancePlacement.Workload.of(application, Map.of());
+
+            // 1. The host is otherwise perfect -- admitted, acknowledged, measured -- so
+            //    what follows is about the filesystem and nothing else.
+            assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), null))
+                .as("step 1: an ordinary container places there")
+                .isEqualTo(plain);
+
+            // 2. Both new kinds refuse it BY NAME when asked directly.
+            for (InstanceKindHandler kind : List.of(workspace, application)) {
+                assertThat(keyOf(catchThrowable(() ->
+                        kind.requirePlaceableOn(ServerModel.nameOf(plain), Map.of()))))
+                    .as("step 2: %s names the missing quota", kind.typeId())
+                    .isEqualTo("host_no_volume_quota");
+            }
+
+            // 3. And the chooser never offers it either, so no record is ever created
+            //    pointing at a host the deploy would then refuse. It propagates the KIND's
+            //    own reason rather than the generic "nothing accepts this workload":
+            //    a host excluded only by the kind's requirement carries the one refusal an
+            //    operator can act on directly (mount a quota-capable filesystem there).
+            assertThat(keyOf(catchThrowable(() ->
+                    InstancePlacement.chooseForBucket(BUCKET, workspaceLoad, null))))
+                .as("step 3: the workspace is not placed, and is told why")
+                .isEqualTo("host_no_volume_quota");
+            assertThat(keyOf(catchThrowable(() ->
+                    InstancePlacement.chooseForBucket(BUCKET, applicationLoad, null))))
+                .as("step 3: nor the application")
+                .isEqualTo("host_no_volume_quota");
+
+            // 4. POSITIVE ANCHOR: give the SAME host a quota-capable backend and both land
+            //    there. The refusal is about the filesystem, not about the kinds.
+            setVolumeBackend(plain, VolumeBackend.BTRFS);
+            assertThat(InstancePlacement.chooseForBucket(BUCKET, workspaceLoad, null))
+                .as("step 4: a btrfs volume root takes a workspace")
+                .isEqualTo(plain);
+            assertThat(InstancePlacement.chooseForBucket(BUCKET, applicationLoad, null))
+                .as("step 4: and an application")
+                .isEqualTo(plain);
+
+            // 5. XFS with project quota can cap a volume but cannot snapshot one, and the
+            //    placement gate asks only about the quota -- so it is eligible here, and
+            //    the snapshot half stays a deploy-time question.
+            setVolumeBackend(plain, VolumeBackend.XFS_PRJQUOTA);
+            assertThat(InstancePlacement.chooseForBucket(BUCKET, workspaceLoad, null))
+                .as("step 5: quota is the placement question, snapshot is not")
+                .isEqualTo(plain);
+        });
+    }
+
+    /** Stamp a detected volume backend on a host the way the preflight probe does. */
+    private static void setVolumeBackend(int serverId, VolumeBackend backend) {
+        ServerModel model = Models.get(ServerModel.class);
+        Row row = model.findById(serverId);
+        VolumeBackends.store(row, new VolumeBackends.Detection(backend,
+            "/fixture/volumes", "fixture: " + backend.token()));
+    }
+
     @Test
     void aVmIsolatedHostRefusesAContainerWorkloadAndStillTakesAVirtualMachine() {
         Db.run(datasource, () -> {
             int vmOnly = incusHost("vm-isolated", 8192L, HostPreflight.STATUS_PASS,
                 ServerModel.POSTURE_VM_ISOLATED);
             InstanceKindHandler containerKind =
-                InstanceKinds.getHandler("hohenheim:incus_container");
-            InstanceKindHandler vmKind = InstanceKinds.getHandler("hohenheim:incus_vm");
+                InstanceKinds.getHandler("hohenheim:system_container");
+            InstanceKindHandler vmKind = InstanceKinds.getHandler("hohenheim:vm");
             InstancePlacement.Workload container = InstancePlacement.Workload.of(
                 containerKind, Map.of("image", "images:debian/13"));
             InstancePlacement.Workload machine = InstancePlacement.Workload.of(

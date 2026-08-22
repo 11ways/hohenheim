@@ -264,7 +264,7 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
             .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
             .header("X-Csrf-Token", csrfToken)
             .POST(HttpRequest.BodyPublishers.ofString(
-                "name=" + name + "&site_type=hohenheim%3Aproxy&source=local"
+                "name=" + name + "&upstream_kind=hohenheim%3Aaddress"
                     + "&settings.forward_host=127.0.0.1&settings.forward_port=8080"))
             .build();
         return client.send(request, HttpResponse.BodyHandlers.ofString());
