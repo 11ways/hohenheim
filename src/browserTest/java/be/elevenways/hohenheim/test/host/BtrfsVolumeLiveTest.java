@@ -64,7 +64,7 @@ class BtrfsVolumeLiveTest {
 
     @BeforeAll
     static void setUp() {
-        shell = BtrfsVolumeLiveTest::ssh;
+        shell = (script, timeoutSeconds) -> ssh(script);
 
         HostShell.Result reachable = shell.run("echo ok");
         LiveLane.require(LiveLane.Need.REMOTE_HOST, reachable.ok(),

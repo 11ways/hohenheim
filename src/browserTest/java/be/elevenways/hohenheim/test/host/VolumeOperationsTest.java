@@ -43,7 +43,7 @@ class VolumeOperationsTest {
         }
 
         @Override
-        public @NonNull Result run(@NonNull String script) {
+        public @NonNull Result run(@NonNull String script, long timeoutSeconds) {
             this.scripts.add(script);
             return this.answer.apply(script);
         }
