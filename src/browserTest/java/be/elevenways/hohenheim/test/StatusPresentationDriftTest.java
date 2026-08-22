@@ -1,11 +1,17 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.host.HostState;
+import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.instance.ConsoleKind;
+import be.elevenways.hohenheim.instance.ReadinessKind;
+import be.elevenways.hohenheim.instance.StopKind;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
@@ -153,6 +159,57 @@ class StatusPresentationDriftTest {
         assertThat(NotificationEvents.ALL).as("step 3: tokens are unique").doesNotHaveDuplicates();
         assertThat(NotificationEvents.isKnown("not_an_event"))
             .as("step 3: an undeclared token is refused").isFalse();
+    }
+
+    @Test
+    @DisplayName("the enum-backed columns are derived from their enum, and fail closed")
+    void enumBackedColumnsCannotDriftFromTheirDeclaringEnum() {
+
+        // 1. Each of these columns is BUILT from its enum, so the stored option set cannot
+        //    drift from the members -- a new member is one edit. The assertion binds the
+        //    two ACROSS sites (the column's value map vs the enum's own values), never an
+        //    enum against constants beside it.
+        record Bound(String name, EnumField field, List<String> tokens) {}
+        List<Bound> bound = List.of(
+            new Bound("volume backend", ServerModel.VOLUME_BACKEND,
+                Arrays.stream(VolumeBackend.values()).map(VolumeBackend::token).toList()),
+            new Bound("readiness kind", InstanceTemplateModel.READINESS_KIND,
+                Arrays.stream(ReadinessKind.values()).map(ReadinessKind::token).toList()),
+            new Bound("stop kind", InstanceTemplateModel.STOP_KIND,
+                Arrays.stream(StopKind.values()).map(StopKind::token).toList()),
+            new Bound("console kind", InstanceTemplateModel.CONSOLE_KIND,
+                Arrays.stream(ConsoleKind.values()).map(ConsoleKind::token).toList()));
+
+        for (Bound entry : bound) {
+            assertThat(entry.field().getValues().keySet())
+                .as("step 1: %s offers exactly its enum's tokens", entry.name())
+                .containsExactlyInAnyOrderElementsOf(entry.tokens());
+
+            // 2. Every member is localizable: a column an admin surface renders with an
+            //    English literal is the drift this whole class exists to catch.
+            for (EnumField.EnumValue value : entry.field().getValues().values()) {
+                assertThat(value.getMicrocopy())
+                    .as("step 2: %s / %s is localizable", entry.name(), value.getKey())
+                    .isNotNull();
+            }
+        }
+
+        // 3. The volume backend also carries the pill facets the host page renders, and
+        //    the refusing member is the one that shouts.
+        for (VolumeBackend backend : VolumeBackend.values()) {
+            assertThat(backend.icon()).as("step 3: %s declares an icon", backend).isNotBlank();
+            assertThat(backend.color()).as("step 3: %s declares a colour", backend).isNotBlank();
+        }
+        assertThat(VolumeBackend.NONE.color())
+            .as("step 3: a volume root that can enforce nothing shouts")
+            .isEqualTo("destructive");
+
+        // 4. Every lookup fails CLOSED: an unknown token is null, never a default member
+        //    that would promise a capability the filesystem does not have.
+        assertThat(VolumeBackend.forToken("ext4")).as("step 4: unknown backend").isNull();
+        assertThat(ReadinessKind.forToken("vibes")).as("step 4: unknown readiness").isNull();
+        assertThat(StopKind.forToken("plead")).as("step 4: unknown stop").isNull();
+        assertThat(ConsoleKind.forToken("janeway")).as("step 4: unknown console").isNull();
     }
 
     @Test

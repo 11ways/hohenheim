@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -52,7 +52,7 @@ class ProxyAuthGateTest {
         }
         initialized = true;
 
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
@@ -92,7 +92,7 @@ class ProxyAuthGateTest {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Gated Site");
         site.set(SiteModel.SLUG, "gated");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
         site.set(SiteModel.SETTINGS, Map.of("forward_host", "127.0.0.1",
             "forward_port", upstream.getAddress().getPort()));
         site.set(SiteModel.STATUS, "active");

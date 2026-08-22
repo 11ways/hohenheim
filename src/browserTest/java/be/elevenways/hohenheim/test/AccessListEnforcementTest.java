@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -45,7 +45,7 @@ class AccessListEnforcementTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
@@ -77,7 +77,7 @@ class AccessListEnforcementTest {
     @Test
     @Timeout(60)
     void accessRuleTreeEnforcesOnTheWire() throws Exception {
-        site = ProxyTestSupport.setupSite("hohenheim:proxy", "Guarded Site", "guarded-site",
+        site = ProxyTestSupport.setupSite("hohenheim:address", "Guarded Site", "guarded-site",
             Map.of("forward_host", "127.0.0.1",
                    "forward_port", upstream.getAddress().getPort()));
         ProxyTestSupport.addDomain(site, "guarded.acl.test", "exact", null, false);

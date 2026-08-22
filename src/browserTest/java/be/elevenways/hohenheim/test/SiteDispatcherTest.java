@@ -106,7 +106,7 @@ class SiteDispatcherTest {
         resetDatabase();
         AtomicReference<com.sun.net.httpserver.Headers> captured = new AtomicReference<>();
         int upstreamPort = startHeaderCapturingUpstream(captured);
-        setupSiteWithDomain("hohenheim:proxy", "alias.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "alias.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
         proxy = startProxy();
 
@@ -153,7 +153,7 @@ class SiteDispatcherTest {
         resetDatabase();
         AtomicReference<com.sun.net.httpserver.Headers> captured = new AtomicReference<>();
         int upstreamPort = startHeaderCapturingUpstream(captured);
-        setupSiteWithDomain("hohenheim:proxy", "hop.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "hop.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
         proxy = startProxy();
 
@@ -182,7 +182,7 @@ class SiteDispatcherTest {
     void websocketDisabledRefusesAnyUpgradeSpelling() throws Exception {
         resetDatabase();
         int markerPort = startMarkerUpstream("forwarded-anyway");
-        setupSiteWithDomain("hohenheim:proxy", "nows.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "nows.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", markerPort,
                 "websocket_upgrade", false));
         proxy = startProxy();
@@ -203,7 +203,7 @@ class SiteDispatcherTest {
         AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
         int upstreamPort = startCapturingUpstream(captured);
 
-        setupSiteWithDomain("hohenheim:proxy", "trusted.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "trusted.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
 
         proxy = startProxy();
@@ -228,7 +228,7 @@ class SiteDispatcherTest {
         AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
         int upstreamPort = startCapturingUpstream(captured);
 
-        setupSiteWithDomain("hohenheim:proxy", "spoof.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "spoof.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
 
         proxy = startProxy();
@@ -252,7 +252,7 @@ class SiteDispatcherTest {
             List.of("front-key-1"));
         AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
         int upstreamPort = startCapturingUpstream(captured);
-        setupSiteWithDomain("hohenheim:proxy", "invalid-ip.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "invalid-ip.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
         proxy = startProxy();
 
@@ -273,7 +273,7 @@ class SiteDispatcherTest {
         AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
         int upstreamPort = startCapturingUpstream(captured);
 
-        setupSiteWithDomain("hohenheim:proxy", "chain.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "chain.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
 
         proxy = startProxy();
@@ -296,7 +296,7 @@ class SiteDispatcherTest {
     @Test
     void websocketUpgradeDefaultsToEnabledWhenSettingIsAbsent() throws Exception {
         resetDatabase();
-        setupSiteWithDomain("hohenheim:proxy", "websocket-default.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "websocket-default.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", 1));
 
         proxy = startProxy();
@@ -341,7 +341,7 @@ class SiteDispatcherTest {
         // 1. A live site claims "shadow.test" as a metachar-free WILDCARD literal. Sites
         //    load in NAME order, so the "aaa" prefix makes this the first claimant the
         //    dispatcher sees.
-        Row wildcardSite = setupSite("hohenheim:proxy", "aaa-shadow-wildcard",
+        Row wildcardSite = setupSite("hohenheim:address", "aaa-shadow-wildcard",
             "aaa-shadow-wildcard",
             Map.of("forward_host", "127.0.0.1", "forward_port", wildcardUpstream));
         addDomain(wildcardSite, "shadow.test", "wildcard", null, false);
@@ -354,7 +354,7 @@ class SiteDispatcherTest {
         //    in the legacy shape the M045 backfill leaves behind: live but UNCLAIMED (the
         //    set-based update bypasses the write-time claim guard exactly like pre-claim
         //    data predates it). This is the shape the dispatcher backstop exists for.
-        Row exactSite = setupSite("hohenheim:proxy", "bbb-shadow-exact", "bbb-shadow-exact",
+        Row exactSite = setupSite("hohenheim:address", "bbb-shadow-exact", "bbb-shadow-exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", exactUpstream));
         addDomain(exactSite, "shadow-staging.test", "exact", null, false);
         Models.get(SiteDomainModel.class).find()
@@ -373,10 +373,10 @@ class SiteDispatcherTest {
 
         // 3. A genuine carve-out pair on ANOTHER domain family: an exact host plus a
         //    COVERING wildcard. Different canonical hostnames, so two legal routes.
-        Row carveExactSite = setupSite("hohenheim:proxy", "ccc-carve-exact", "ccc-carve-exact",
+        Row carveExactSite = setupSite("hohenheim:address", "ccc-carve-exact", "ccc-carve-exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", carveExactUpstream));
         addDomain(carveExactSite, "app.carve.test", "exact", null, false);
-        Row carveWildcardSite = setupSite("hohenheim:proxy", "ddd-carve-wildcard",
+        Row carveWildcardSite = setupSite("hohenheim:address", "ddd-carve-wildcard",
             "ddd-carve-wildcard",
             Map.of("forward_host", "127.0.0.1", "forward_port", carveWildcardUpstream));
         addDomain(carveWildcardSite, "*.carve.test", "wildcard", null, false);
@@ -411,7 +411,7 @@ class SiteDispatcherTest {
         AtomicReference<ProxyHeaders> captured = new AtomicReference<>();
         int upstreamPort = startCapturingUpstream(captured);
 
-        setupSiteWithDomain("hohenheim:proxy", "eu?.wild.test", "wildcard",
+        setupSiteWithDomain("hohenheim:address", "eu?.wild.test", "wildcard",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
 
         proxy = startProxy();

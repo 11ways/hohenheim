@@ -58,10 +58,10 @@ class SiteCrudTest extends HohenheimTestBase {
         assertThat(page.locator("pl-input").count()).isGreaterThan(0);
         assertThat(page.locator("pl-button").count()).isGreaterThan(0);
         // The type-discriminated settings sub-form renders a type selector.
-        assertThat(page.content()).contains("site_type");
+        assertThat(page.content()).contains("upstream_kind");
 
         HttpResponse<String> response = post("/admin/sites/new",
-            "name=Crud+Test+Site&site_type=hohenheim%3Adead&enabled=true&source=local");
+            "name=Crud+Test+Site&upstream_kind=hohenheim%3Astatic&enabled=true");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row site = crudSite();

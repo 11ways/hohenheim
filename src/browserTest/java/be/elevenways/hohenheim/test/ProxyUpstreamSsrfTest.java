@@ -80,7 +80,7 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
         Row row = model.createEmptyRow();
         row.set(SiteModel.NAME, name);
         row.set(SiteModel.SLUG, slug);
-        row.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        row.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
         Map<String, Object> settings = new HashMap<>();
         settings.put("forward_scheme", "http");
         settings.put("forward_host", forwardHost);

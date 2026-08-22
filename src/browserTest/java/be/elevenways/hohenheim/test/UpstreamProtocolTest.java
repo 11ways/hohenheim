@@ -130,7 +130,7 @@ class UpstreamProtocolTest {
         KeyPair keyPair = generateKeyPair();
         int port = startHttpsUpstream(keyPair, selfSignedCert(keyPair, "127.0.0.1", true));
 
-        setupSiteWithDomain("hohenheim:proxy", "untrusted-tls.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "untrusted-tls.test", "exact",
             httpsSettings(port, false));
 
         proxy = startProxy();
@@ -148,7 +148,7 @@ class UpstreamProtocolTest {
         int port = startHttpsUpstream(keyPair, cert);
 
         SiteDispatcher.overrideTrustedUpstreamSslContextForTests(UpstreamTrust.contextTrusting(cert));
-        setupSiteWithDomain("hohenheim:proxy", "trusted-tls.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "trusted-tls.test", "exact",
             httpsSettings(port, false));
 
         proxy = startProxy();
@@ -166,7 +166,7 @@ class UpstreamProtocolTest {
         int port = startHttpsUpstream(keyPair, cert);
 
         SiteDispatcher.overrideTrustedUpstreamSslContextForTests(UpstreamTrust.contextTrusting(cert));
-        setupSiteWithDomain("hohenheim:proxy", "wronghost-tls.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "wronghost-tls.test", "exact",
             httpsSettings(port, false));
 
         proxy = startProxy();
@@ -181,7 +181,7 @@ class UpstreamProtocolTest {
         KeyPair keyPair = generateKeyPair();
         int port = startHttpsUpstream(keyPair, selfSignedCert(keyPair, "unrelated.host", false));
 
-        setupSiteWithDomain("hohenheim:proxy", "ignored-tls.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "ignored-tls.test", "exact",
             httpsSettings(port, true));
 
         proxy = startProxy();
@@ -247,7 +247,7 @@ class UpstreamProtocolTest {
         AtomicReference<String> seenProtocol = new AtomicReference<>();
         int port = startH2cUpstream(seenProtocol);
 
-        setupSiteWithDomain("hohenheim:proxy", "h2c.test", "exact", h2Settings(port, 0));
+        setupSiteWithDomain("hohenheim:address", "h2c.test", "exact", h2Settings(port, 0));
 
         proxy = startProxy();
         String response = rawRequest(httpPort(proxy), "h2c.test", "/hello");
@@ -262,7 +262,7 @@ class UpstreamProtocolTest {
         AtomicReference<String> seenProtocol = new AtomicReference<>();
         int upstreamPort = startH2cUpstream(seenProtocol);
 
-        setupSiteWithDomain("hohenheim:proxy", "grpc.test", "exact", h2Settings(upstreamPort, 0));
+        setupSiteWithDomain("hohenheim:address", "grpc.test", "exact", h2Settings(upstreamPort, 0));
 
         proxy = startProxy();
         int proxyPort = httpPort(proxy);
@@ -348,7 +348,7 @@ class UpstreamProtocolTest {
         // carries the trailers, and the downstream chunked response must too.
         int port = startH2cUpstream(null);
 
-        setupSiteWithDomain("hohenheim:proxy", "h1trailers.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "h1trailers.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", port, "request_timeout", 0));
 
         proxy = startProxy();
@@ -378,7 +378,7 @@ class UpstreamProtocolTest {
         int upstreamPort = ((InetSocketAddress) undertowUpstream.getListenerInfo().get(0)
             .getAddress()).getPort();
 
-        setupSiteWithDomain("hohenheim:proxy", "reqtrailers.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "reqtrailers.test", "exact",
             h2Settings(upstreamPort, 0));
 
         proxy = startProxy();
@@ -487,11 +487,11 @@ class UpstreamProtocolTest {
         resetDatabase();
         int port = startSlowUpstream(1500);
 
-        Row limited = setupSite("hohenheim:proxy", "Limited Site", "limited-site", Map.of(
+        Row limited = setupSite("hohenheim:address", "Limited Site", "limited-site", Map.of(
             "forward_host", "127.0.0.1", "forward_port", port, "request_timeout", 1));
         addDomain(limited, "limited.test", "exact", null, false);
 
-        Row unlimited = setupSite("hohenheim:proxy", "Unlimited Site", "unlimited-site", Map.of(
+        Row unlimited = setupSite("hohenheim:address", "Unlimited Site", "unlimited-site", Map.of(
             "forward_host", "127.0.0.1", "forward_port", port, "request_timeout", 0));
         addDomain(unlimited, "unlimited.test", "exact", null, false);
 
@@ -613,7 +613,7 @@ class UpstreamProtocolTest {
         long bodyDelayMs = 4000;
         int upstreamPort = startHeadersThenDelayedBodyUpstream(bodyDelayMs);
 
-        setupSiteWithDomain("hohenheim:proxy", "stream.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "stream.test", "exact",
             h2Settings(upstreamPort, 0));
 
         proxy = startProxy();
@@ -729,7 +729,7 @@ class UpstreamProtocolTest {
         resetDatabase();
         int upstreamPort = startRecordingUpstream();
 
-        setupSiteWithDomain("hohenheim:proxy", "bidi.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "bidi.test", "exact",
             h2Settings(upstreamPort, 0));
 
         proxy = startProxy();
@@ -758,7 +758,7 @@ class UpstreamProtocolTest {
         resetDatabase();
         int upstreamPort = startRecordingUpstream();
 
-        setupSiteWithDomain("hohenheim:proxy", "bidi-h1.test", "exact", Map.of(
+        setupSiteWithDomain("hohenheim:address", "bidi-h1.test", "exact", Map.of(
             "forward_host", "127.0.0.1",
             "forward_port", upstreamPort,
             "request_timeout", 0));
@@ -791,7 +791,7 @@ class UpstreamProtocolTest {
         plainUpstream.start();
         int port = plainUpstream.getAddress().getPort();
 
-        setupSiteWithDomain("hohenheim:proxy", "encoding.test", "exact",
+        setupSiteWithDomain("hohenheim:address", "encoding.test", "exact",
             Map.of("forward_host", "127.0.0.1", "forward_port", port));
 
         proxy = startProxy();

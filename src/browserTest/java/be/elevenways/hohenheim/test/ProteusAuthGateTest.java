@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -53,7 +53,7 @@ class ProteusAuthGateTest {
         }
         initialized = true;
 
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
@@ -121,7 +121,7 @@ class ProteusAuthGateTest {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Site " + hostname);
         site.set(SiteModel.SLUG, hostname.replace(".", "-"));
-        site.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
         site.set(SiteModel.SETTINGS, Map.of("forward_host", "127.0.0.1",
             "forward_port", upstream.getAddress().getPort()));
         site.set(SiteModel.STATUS, "active");

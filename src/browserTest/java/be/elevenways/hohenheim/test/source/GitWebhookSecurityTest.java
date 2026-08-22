@@ -33,11 +33,15 @@ import java.util.function.BooleanSupplier;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The webhook security contract as observed traffic against a real proxy port: the
- * signature IS the authentication (constant refusal, no existence leak), a delivery id
- * deploys ONCE, a delivery cannot cross site/repository boundaries, and only the bound
- * branch deploys. Every counterfactual asserts ABSENCE of effect (no delivery row, no
- * deployment row), never just a status code.
+ * The webhook front door: a delivery that is unsigned, wrongly signed, aimed at another
+ * repository, or on another branch must be refused IDENTICALLY and must queue nothing.
+ *
+ * AIDEV-NOTE: this class lost its deploy-driven half on 2026-08-22. The site-keyed git
+ * checkout lane it awaited was deleted with {@code sites.source} (phase-0 design section 3),
+ * so replay-once, the GitLab/Gitea shared-token lanes, the no-ref lane and the
+ * webhook-driven preview lifecycle have NO pipeline to observe here any more. They are owed
+ * back by the brief that routes webhooks at the instance; what remains is the refusal half,
+ * which asserts ABSENCE and therefore needs no pipeline at all.
  */
 @org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation.class)
 class GitWebhookSecurityTest extends HohenheimTestBase {
@@ -78,10 +82,11 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         ServerMain.adoptProxyServer(proxy);
         proxyPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
 
-        // Both sites finish their INITIAL deploy before any webhook counting starts.
-        await("initial deploys of both sites recorded", () ->
-            !deploymentsOf(siteAId, "initial").isEmpty()
-                && !deploymentsOf(siteBId, "initial").isEmpty());
+        // AIDEV-NOTE: no initial deploy is awaited any more. The site-keyed git checkout
+        // lane was deleted with sites.source (phase-0 design section 3) -- a checkout lives
+        // in the workspace volume or the build context of the instance a site exposes -- so
+        // nothing here builds. What survives in this class is the half that asserts a
+        // delivery deploys NOTHING and leaks nothing, which needs no pipeline at all.
     }
 
     @AfterAll
@@ -135,37 +140,6 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     }
 
     @Test
-    @org.junit.jupiter.api.Order(2)
-    void aReplayedDeliveryDeploysExactlyOnce() throws Exception {
-        String deliveryId = UUID.randomUUID().toString();
-        String body = pushPayload("acme/repo-a", "refs/heads/main", "cafe2222");
-        String signature = "sha256=" + SecureTokens.hmacSha256Hex(SECRET_A, body);
-
-        // 1. The genuine delivery deploys.
-        String first = post("/api/webhooks/git/hook-a", body,
-            "X-GitHub-Event: push", "X-GitHub-Delivery: " + deliveryId,
-            "X-Hub-Signature-256: " + signature);
-        assertThat(first).as("step 1: the signed delivery is accepted")
-            .startsWith("HTTP/1.1 200").contains("queued");
-        await("step 1: the webhook deploy is recorded",
-            () -> deploymentsOf(siteAId, "webhook").size() == 1);
-
-        // 2. The provider retries the SAME delivery id (byte-identical): acknowledged
-        //    as a duplicate, and NO second deployment ever appears.
-        String replay = post("/api/webhooks/git/hook-a", body,
-            "X-GitHub-Event: push", "X-GitHub-Delivery: " + deliveryId,
-            "X-Hub-Signature-256: " + signature);
-        assertThat(replay).as("step 2: the replay is acknowledged, not re-run")
-            .startsWith("HTTP/1.1 200").contains("duplicate");
-        Thread.sleep(500);
-        assertThat(deploymentsOf(siteAId, "webhook"))
-            .as("step 2: one delivery id, one deployment -- replayed or not")
-            .hasSize(1);
-        assertThat(deliveryRowsOf(siteAId, "gh:" + deliveryId))
-            .as("step 2: the delivery id was claimed exactly once").hasSize(1);
-    }
-
-    @Test
     @org.junit.jupiter.api.Order(3)
     void aDeliveryForAnotherRepositoryIsRefusedEvenWithAValidSignature() throws Exception {
         // Site B's webhook, correctly signed with B's secret, but the payload names
@@ -215,345 +189,13 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             .startsWith("HTTP/1.1 200").contains("previews disabled");
     }
 
-    @Test
-    @org.junit.jupiter.api.Order(6)
-    void gitlabSharedTokenLaneDeploysAndItsWrongTokenRefusesIdentically() throws Exception {
-        int before = deploymentsOf(siteBId, "webhook").size();
-        String eventUuid = UUID.randomUUID().toString();
-        // GitLab push shape: project.path_with_namespace names the repository.
-        String body = "{\"ref\":\"refs/heads/main\",\"after\":\"cafe6666\","
-            + "\"project\":{\"path_with_namespace\":\"acme/repo-b\"}}";
-
-        // 1. Counterfactual FIRST: the right header with the WRONG token is the same
-        //    404 as an unsigned delivery, and nothing was claimed or deployed.
-        String wrongToken = post("/api/webhooks/git/hook-b", body,
-            "X-Gitlab-Event: Push Hook",
-            "X-Gitlab-Event-UUID: " + UUID.randomUUID(),
-            "X-Gitlab-Token: " + SECRET_A);
-        assertThat(wrongToken).as("step 1: a wrong X-Gitlab-Token is refused")
-            .startsWith("HTTP/1.1 404");
-        Thread.sleep(300);
-        assertThat(deploymentsOf(siteBId, "webhook"))
-            .as("step 1: the wrong token deployed nothing").hasSize(before);
-
-        // 2. Positive anchor: the same delivery with the RIGHT shared token deploys.
-        String accepted = post("/api/webhooks/git/hook-b", body,
-            "X-Gitlab-Event: Push Hook",
-            "X-Gitlab-Event-UUID: " + eventUuid,
-            "X-Gitlab-Token: " + SECRET_B);
-        assertThat(accepted).as("step 2: the GitLab shared-token delivery is accepted")
-            .startsWith("HTTP/1.1 200").contains("queued");
-        await("step 2: the GitLab-triggered deploy is recorded",
-            () -> deploymentsOf(siteBId, "webhook").size() == before + 1);
-        assertThat(deliveryRowsOf(siteBId, "gl:" + eventUuid))
-            .as("step 2: the delivery was claimed under its GitLab event uuid")
-            .hasSize(1);
-    }
-
-    /**
-     * GitLab's Merge Request Hook drives the SAME preview lifecycle GitHub's
-     * pull_request does. A GitLab repository used to get pushes and silently no
-     * previews at all, because only the literal event name "pull_request" was mapped.
-     *
-     * Observed through the STAMPED delivery action, which is the handler's own record of
-     * which lane a delivery reached; the preview machinery itself is proven elsewhere and
-     * refuses this static site by type, so nothing is built here.
-     */
-    @Test
-    @org.junit.jupiter.api.Order(7)
-    void gitlabMergeRequestEventsDriveTheSamePreviewLifecycleGithubPullRequestsDo()
-            throws Exception {
-        // 1. open: a GitLab MR reaches the preview lane at all -- this is the whole
-        //    defect. Its absence used to fall through to the PUSH handler.
-        assertThat(mergeRequestAction("open", null))
-            .as("step 1: an opened merge request queues a preview")
-            .isEqualTo("preview_queued");
-
-        // 2. reopen is the same intent under GitLab's spelling of "reopened".
-        assertThat(mergeRequestAction("reopen", null))
-            .as("step 2: a reopened merge request queues a preview")
-            .isEqualTo("preview_queued");
-
-        // 3. update is NOT GitHub's synchronize: GitLab fires it for retitles, labels and
-        //    assignees too, and only a source-branch head move carries oldrev. Without
-        //    that discrimination every cosmetic edit would rebuild the preview.
-        assertThat(mergeRequestAction("update", null))
-            .as("step 3: an update carrying no new head is ignored")
-            .isEqualTo("ignored_pr_action");
-        assertThat(mergeRequestAction("update", "beef0000"))
-            .as("step 3: an update that moved the head queues a preview")
-            .isEqualTo("preview_queued");
-
-        // 4. Both end states tear the preview down: GitHub only ever says "closed", while
-        //    GitLab distinguishes close from merge.
-        assertThat(mergeRequestAction("close", null))
-            .as("step 4: a closed merge request queues a teardown")
-            .isEqualTo("preview_teardown_queued");
-        assertThat(mergeRequestAction("merge", null))
-            .as("step 4: a merged one does too")
-            .isEqualTo("preview_teardown_queued");
-
-        // 5. An action outside the lifecycle is acknowledged and does nothing.
-        assertThat(mergeRequestAction("approved", null))
-            .as("step 5: an approval is not a deployment trigger")
-            .isEqualTo("ignored_pr_action");
-
-        // 6. A Merge Request Hook without object_attributes is malformed, not "ignored
-        //    action": the two stamps must stay distinguishable in the ledger.
-        String malformedUuid = UUID.randomUUID().toString();
-        String malformed = "{\"object_kind\":\"merge_request\","
-            + "\"project\":{\"path_with_namespace\":\"acme/repo-c\"}}";
-        post("/api/webhooks/git/hook-c", malformed,
-            "X-Gitlab-Event: Merge Request Hook",
-            "X-Gitlab-Event-UUID: " + malformedUuid,
-            "X-Gitlab-Token: " + SECRET_C);
-        assertThat(stampedAction("gl:" + malformedUuid))
-            .as("step 6: a shapeless merge request payload is malformed, not ignored")
-            .isEqualTo("ignored_malformed_pr");
-
-        // 7. CROSS-PROVIDER ANCHOR: the GitHub lane still reaches the same place on the
-        //    same site, so steps 1-6 are a mapping that was ADDED, not one that replaced.
-        String githubUuid = UUID.randomUUID().toString();
-        String githubBody = "{\"action\":\"opened\","
-            + "\"repository\":{\"full_name\":\"acme/repo-c\"},"
-            + "\"pull_request\":{\"number\":9,\"head\":{\"ref\":\"feature-gh\","
-            + "\"sha\":\"cafe9999\"}}}";
-        post("/api/webhooks/git/hook-c", githubBody,
-            "X-GitHub-Event: pull_request", "X-GitHub-Delivery: " + githubUuid,
-            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, githubBody));
-        assertThat(stampedAction("gh:" + githubUuid))
-            .as("step 7: GitHub pull requests still queue previews on the same site")
-            .isEqualTo("preview_queued");
-    }
-
-    /**
-     * An event this handler does not model must never fall through to a PRODUCTION
-     * deploy. Before the {@code ref} check, a correctly signed delivery of ANY unmapped
-     * event -- an issue comment, a release, a star -- carried no {@code ref}, skipped the
-     * branch comparison entirely and queued a deploy of the site's bound branch. Same
-     * shape as the GitLab merge-request defect, one layer further out: that fix mapped one
-     * event, it did not close the fall-through.
-     */
-    @Test
-    @org.junit.jupiter.api.Order(8)
-    void anEventCarryingNoRefIsNotAPushAndNeverQueuesAProductionDeploy() throws Exception {
-        assertThat(deploymentsOf(siteCId, "webhook"))
-            .as("baseline: site C has never been deployed by a webhook").isEmpty();
-
-        // 1. GitHub `issues`: signed, bound to the right repository, and carrying no ref.
-        //    The stamp must say it was not a push -- not "deploy_queued".
-        String issuesUuid = UUID.randomUUID().toString();
-        String issues = "{\"action\":\"opened\",\"issue\":{\"number\":3,\"title\":\"bug\"},"
-            + "\"repository\":{\"full_name\":\"acme/repo-c\"}}";
-        String issuesResponse = post("/api/webhooks/git/hook-c", issues,
-            "X-GitHub-Event: issues", "X-GitHub-Delivery: " + issuesUuid,
-            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, issues));
-        assertThat(issuesResponse).as("step 1: an issue event is acknowledged, not acted on")
-            .startsWith("HTTP/1.1 200").contains("not a push");
-        assertThat(stampedAction("gh:" + issuesUuid))
-            .as("step 1: an issue event is stamped as not-a-push")
-            .isEqualTo("ignored_not_a_push");
-
-        // 2. A Gitea `release` event: same shape through the other provider's headers, so
-        //    the gate is the PAYLOAD's missing ref and not one provider's header set.
-        String releaseUuid = UUID.randomUUID().toString();
-        String release = "{\"action\":\"published\",\"release\":{\"tag_name\":\"v1\"},"
-            + "\"repository\":{\"full_name\":\"acme/repo-c\"}}";
-        post("/api/webhooks/git/hook-c", release,
-            "X-Gitea-Event: release", "X-Gitea-Delivery: " + releaseUuid,
-            "X-Gitea-Signature: " + SecureTokens.hmacSha256Hex(SECRET_C, release));
-        assertThat(stampedAction("gt:" + releaseUuid))
-            .as("step 2: a Gitea release event is stamped as not-a-push")
-            .isEqualTo("ignored_not_a_push");
-
-        // 3. THE counterfactual that matters: neither delivery deployed anything. A
-        //    status-only assertion would have passed against the defect too, because the
-        //    old fall-through answered 200 with "queued" and then really did deploy.
-        Thread.sleep(500);
-        assertThat(deploymentsOf(siteCId, "webhook"))
-            .as("step 3: an unmodelled event deploys NOTHING")
-            .isEmpty();
-
-        // 4. Positive anchor: a genuine push on the bound branch still deploys, so step 3
-        //    is a discrimination and not a handler that stopped working.
-        String pushUuid = UUID.randomUUID().toString();
-        String push = pushPayload("acme/repo-c", "refs/heads/main", "cafeaaaa");
-        post("/api/webhooks/git/hook-c", push,
-            "X-GitHub-Event: push", "X-GitHub-Delivery: " + pushUuid,
-            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, push));
-        assertThat(stampedAction("gh:" + pushUuid))
-            .as("step 4: a real push on the bound branch still queues a deploy")
-            .isEqualTo("deploy_queued");
-        await("step 4: the anchor deploy is recorded",
-            () -> deploymentsOf(siteCId, "webhook").size() == 1);
-    }
-
-    /**
-     * Gitea is a first-class provider now, so its deliveries must reach the same lanes.
-     * Two things were missing: its vendor headers were unread (only the GitHub-compatible
-     * set it also sends kept it working at all), and its pull-request commit action is
-     * spelled {@code synchronized} -- so a new commit on a Gitea pull request answered 200
-     * and rebuilt nothing, leaving the preview pinned at the sha it opened with.
-     */
-    @Test
-    @org.junit.jupiter.api.Order(9)
-    void giteaDeliveriesReachTheSameLanesUnderItsOwnHeadersAndSpellings() throws Exception {
-        // 1. Counterfactual first: Gitea's raw-hex signature is verified, so a WRONG
-        //    secret under the Gitea header is the same silent 404 as everywhere else.
-        String rejected = "{\"action\":\"opened\","
-            + "\"repository\":{\"full_name\":\"acme/repo-c\"},"
-            + "\"pull_request\":{\"number\":11,\"head\":{\"ref\":\"feat-gt\",\"sha\":\"beef1111\"}}}";
-        String refusal = post("/api/webhooks/git/hook-c", rejected,
-            "X-Gitea-Event: pull_request", "X-Gitea-Delivery: " + UUID.randomUUID(),
-            "X-Gitea-Signature: " + SecureTokens.hmacSha256Hex("not-the-secret", rejected));
-        assertThat(refusal).as("step 1: a wrong Gitea signature is refused")
-            .startsWith("HTTP/1.1 404");
-
-        // 2. `opened` under Gitea's OWN headers only: the delivery is claimed under the
-        //    Gitea delivery id (not the body hash) and reaches the preview lane. Without
-        //    the vendor-header branches the event read as null and fell to the push lane.
-        String openedUuid = UUID.randomUUID().toString();
-        assertThat(giteaPullRequest(openedUuid, "opened", "beef2222"))
-            .as("step 2: an opened Gitea pull request queues a preview")
-            .isEqualTo("preview_queued");
-        assertThat(deliveryRowsOf(siteCId, "gt:" + openedUuid))
-            .as("step 2: claimed under the Gitea delivery id, never the body hash")
-            .hasSize(1);
-
-        // 3. THE defect: `synchronized` is Gitea's `synchronize`. A new commit on the
-        //    pull request must rebuild the preview, not be filed as an unknown action.
-        assertThat(giteaPullRequest(UUID.randomUUID().toString(), "synchronized", "beef3333"))
-            .as("step 3: a new commit on a Gitea pull request rebuilds the preview")
-            .isEqualTo("preview_queued");
-
-        // 4. Discrimination anchor: the spelling was ADDED, so Gitea's cosmetic actions
-        //    still do nothing -- `synchronized` did not become a catch-all.
-        assertThat(giteaPullRequest(UUID.randomUUID().toString(), "label_updated", "beef4444"))
-            .as("step 4: a label edit is not a deployment trigger")
-            .isEqualTo("ignored_pr_action");
-        assertThat(giteaPullRequest(UUID.randomUUID().toString(), "closed", "beef5555"))
-            .as("step 4: a closed Gitea pull request tears the preview down")
-            .isEqualTo("preview_teardown_queued");
-
-        // 5. Gitea's push lane under its own headers deploys, proving the header branches
-        //    serve BOTH lanes and not only the preview one.
-        int before = deploymentsOf(siteCId, "webhook").size();
-        String pushUuid = UUID.randomUUID().toString();
-        String push = pushPayload("acme/repo-c", "refs/heads/main", "beef6666");
-        String accepted = post("/api/webhooks/git/hook-c", push,
-            "X-Gitea-Event: push", "X-Gitea-Delivery: " + pushUuid,
-            "X-Gitea-Signature: " + SecureTokens.hmacSha256Hex(SECRET_C, push));
-        assertThat(accepted).as("step 5: the Gitea push is accepted")
-            .startsWith("HTTP/1.1 200").contains("queued");
-        await("step 5: the Gitea-triggered deploy is recorded",
-            () -> deploymentsOf(siteCId, "webhook").size() == before + 1);
-    }
-
-    /**
-     * The per-BRANCH preview lane: a push to a branch matching a declared
-     * {@code preview_branches} pattern creates/refreshes a preview instead of being
-     * filed as off-branch noise, a branch DELETE tears its preview down, and a delete
-     * of the PRODUCTION branch never queues a production deploy (before this lane the
-     * ref comparison matched a delete push of main and deployed a branch that no
-     * longer exists).
-     */
-    @Test
-    @org.junit.jupiter.api.Order(10)
-    void aPushToADeclaredPreviewBranchDrivesThePreviewLifecycleNotProduction()
-            throws Exception {
-        setPreviewBranches(siteCId, List.of("feature/*"));
-
-        // 1. A push to a MATCHING branch reaches the preview lane. Before the lane
-        //    existed this delivery stamped ignored_branch and no preview ever appeared.
-        String matchUuid = UUID.randomUUID().toString();
-        String match = pushPayload("acme/repo-c", "refs/heads/feature/login", "feed1111");
-        String matchResponse = post("/api/webhooks/git/hook-c", match,
-            "X-GitHub-Event: push", "X-GitHub-Delivery: " + matchUuid,
-            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, match));
-        assertThat(matchResponse).as("step 1: the matching push is acknowledged as a preview")
-            .startsWith("HTTP/1.1 200").contains("preview_queued");
-        assertThat(stampedAction("gh:" + matchUuid))
-            .as("step 1: a push to a declared preview branch queues a preview")
-            .isEqualTo("preview_queued");
-
-        // 2. Opt-in is per PATTERN: a branch outside the declared set stays ignored,
-        //    so the lane cannot mint a preview per pushed branch.
-        String missUuid = UUID.randomUUID().toString();
-        String miss = pushPayload("acme/repo-c", "refs/heads/chore-cleanup", "feed2222");
-        post("/api/webhooks/git/hook-c", miss,
-            "X-GitHub-Event: push", "X-GitHub-Delivery: " + missUuid,
-            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, miss));
-        assertThat(stampedAction("gh:" + missUuid))
-            .as("step 2: an undeclared branch is still ignored")
-            .isEqualTo("ignored_branch");
-
-        // 3. Deleting a branch that HOLDS a live preview tears it down: the source is
-        //    gone, so the environment must not outlive it until expiry.
-        Row preview = seedPreviewRow(siteCId, "feature/login");
-        int previewId = preview.get(be.elevenways.hohenheim.model.PreviewDeploymentModel.ID);
-        String deleteUuid = UUID.randomUUID().toString();
-        String delete = deletedPushPayload("acme/repo-c", "refs/heads/feature/login");
-        post("/api/webhooks/git/hook-c", delete,
-            "X-GitHub-Event: push", "X-GitHub-Delivery: " + deleteUuid,
-            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, delete));
-        assertThat(stampedAction("gh:" + deleteUuid))
-            .as("step 3: deleting a previewed branch queues its teardown")
-            .isEqualTo("preview_teardown_queued");
-        await("step 3: the branch preview is reclaimed", () -> {
-            Row row = Models.get(be.elevenways.hohenheim.model.PreviewDeploymentModel.class)
-                .findById(previewId);
-            return row != null && row.get(
-                be.elevenways.hohenheim.model.PreviewDeploymentModel.DELETED_AT) != null;
-        });
-
-        // 4. Deleting a branch with NO preview does nothing, loudly and distinguishably.
-        String emptyUuid = UUID.randomUUID().toString();
-        String empty = deletedPushPayload("acme/repo-c", "refs/heads/feature/gone");
-        post("/api/webhooks/git/hook-c", empty,
-            "X-GitHub-Event: push", "X-GitHub-Delivery: " + emptyUuid,
-            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, empty));
-        assertThat(stampedAction("gh:" + emptyUuid))
-            .as("step 4: a deleted branch without a preview is filed as such")
-            .isEqualTo("ignored_deleted_ref");
-
-        // 5. THE production counterfactual: a DELETE push of the bound branch matches
-        //    the ref comparison byte for byte, and used to queue a production deploy of
-        //    a branch that no longer exists. It must deploy NOTHING.
-        int before = deploymentsOf(siteCId, "webhook").size();
-        String prodDeleteUuid = UUID.randomUUID().toString();
-        String prodDelete = deletedPushPayload("acme/repo-c", "refs/heads/main");
-        post("/api/webhooks/git/hook-c", prodDelete,
-            "X-GitHub-Event: push", "X-GitHub-Delivery: " + prodDeleteUuid,
-            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, prodDelete));
-        assertThat(stampedAction("gh:" + prodDeleteUuid))
-            .as("step 5: a production branch delete is never a deploy")
-            .isEqualTo("ignored_deleted_ref");
-        Thread.sleep(500);
-        assertThat(deploymentsOf(siteCId, "webhook"))
-            .as("step 5: and it deployed nothing").hasSize(before);
-
-        // 6. Anchor: an ordinary push to the bound branch still deploys, so steps 1-5
-        //    narrowed the lane without closing it.
-        String anchorUuid = UUID.randomUUID().toString();
-        String anchor = pushPayload("acme/repo-c", "refs/heads/main", "feed3333");
-        post("/api/webhooks/git/hook-c", anchor,
-            "X-GitHub-Event: push", "X-GitHub-Delivery: " + anchorUuid,
-            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, anchor));
-        assertThat(stampedAction("gh:" + anchorUuid))
-            .as("step 6: the production lane still deploys")
-            .isEqualTo("deploy_queued");
-        await("step 6: the anchor deploy is recorded",
-            () -> deploymentsOf(siteCId, "webhook").size() == before + 1);
-    }
-
-    @SuppressWarnings("unchecked")
     private static void setPreviewBranches(Integer siteId, List<String> patterns) {
         var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.findById(siteId);
         Map<String, Object> settings = new LinkedHashMap<>(
-            (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS));
+            TestSources.sourceSettingsOf(site));
         settings.put("preview_branches", patterns);
-        site.set(SiteModel.SOURCE_SETTINGS, settings);
+        TestSources.updateSourceSettings(site, settings);
         siteModel.save(site);
     }
 
@@ -634,9 +276,9 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, name);
         site.set(SiteModel.SLUG, slug);
-        site.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.SETTINGS, Map.of("root_path", "."));
-        site.set(SiteModel.SOURCE, SiteModel.SOURCE_GIT);
+
         Map<String, Object> sourceSettings = new LinkedHashMap<>();
         sourceSettings.put("repository_url", upstreamRepo.toString());
         sourceSettings.put("repository", repository);
@@ -644,7 +286,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         sourceSettings.put("shallow_clone", false);
         sourceSettings.put("auto_deploy", true);
         sourceSettings.put("webhook_secret", secret);
-        site.set(SiteModel.SOURCE_SETTINGS, sourceSettings);
+        TestSources.attachGitSource(site, sourceSettings);
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
         siteModel.save(site);
@@ -663,9 +305,9 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.findById(siteId);
         Map<String, Object> settings = new LinkedHashMap<>(
-            (Map<String, Object>) site.get(SiteModel.SOURCE_SETTINGS));
+            TestSources.sourceSettingsOf(site));
         settings.put("previews_enabled", true);
-        site.set(SiteModel.SOURCE_SETTINGS, settings);
+        TestSources.updateSourceSettings(site, settings);
         siteModel.save(site);
     }
 

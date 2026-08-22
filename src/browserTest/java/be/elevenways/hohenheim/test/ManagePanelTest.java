@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantModel;
@@ -60,26 +61,27 @@ class ManagePanelTest extends HohenheimTestBase {
         Row siteA = siteModel.createEmptyRow();
         siteA.set(SiteModel.NAME, "Manage Site A");
         siteA.set(SiteModel.SLUG, "manage-site-a");
-        siteA.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        siteA.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         siteA.set(SiteModel.SETTINGS, Map.of(
             "root_path", "/srv/manage-a",
             "system_user_id", "hohenheim:site-a",
             "environment_variables", Map.of("DAEMON_SECRET", "must-not-render"),
             "command", "unsafe-host-command"));
-        siteA.set(SiteModel.SOURCE, SiteModel.SOURCE_GIT);
-        siteA.set(SiteModel.SOURCE_SETTINGS, Map.of(
+        siteA.set(SiteModel.STATUS, "active");
+        siteA.set(SiteModel.ENABLED, true);
+        // The source lives on the application instance the site exposes now (phase-0
+        // design section 3); the deployments tab reads it through there.
+        TestSources.attachGitSource(siteA, Map.of(
             "repository_url", "ssh://private/manage-a.git",
             "build_command", "private-build-command",
             "webhook_secret", "private-webhook-secret"));
-        siteA.set(SiteModel.STATUS, "active");
-        siteA.set(SiteModel.ENABLED, true);
         siteModel.save(siteA);
         siteAId = siteA.get(SiteModel.ID);
 
         Row siteB = siteModel.createEmptyRow();
         siteB.set(SiteModel.NAME, "Manage Site B");
         siteB.set(SiteModel.SLUG, "manage-site-b");
-        siteB.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        siteB.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         siteB.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         siteB.set(SiteModel.STATUS, "active");
         siteB.set(SiteModel.ENABLED, true);
@@ -191,7 +193,7 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(list.statusCode()).isEqualTo(200);
         assertThat(list.body()).contains("Manage Site A");
         assertThat(list.body()).doesNotContain("Manage Site B");
-        assertThat(list.body()).doesNotContain("data-column=\"site_type\"");
+        assertThat(list.body()).doesNotContain("data-column=\"upstream_kind\"");
         // Safe row actions only.
         assertThat(list.body()).contains("toggle_site");
         assertThat(list.body()).doesNotContain("clone_site");
@@ -233,7 +235,7 @@ class ManagePanelTest extends HohenheimTestBase {
         HttpResponse<String> form = operatorGet("/manage/sites/" + siteAId);
         assertThat(form.statusCode()).isEqualTo(200);
         assertThat(form.body())
-            .doesNotContain("name=\"site_type\"")
+            .doesNotContain("name=\"upstream_kind\"")
             .doesNotContain("name=\"source\"")
             .doesNotContain("name=\"settings.root_path\"")
             .doesNotContain("name=\"source_settings.build_command\"")
@@ -243,7 +245,7 @@ class ManagePanelTest extends HohenheimTestBase {
 
         HttpResponse<String> response = operatorPost("/manage/sites/" + siteAId,
             "name=Manage+Site+A+Edited&enabled=false&description=Delegated+description"
-                + "&site_type=hohenheim%3Acommand&source=local"
+                + "&upstream_kind=hohenheim%3Acommand"
                 + "&settings.root_path=%2Ftmp%2Fhijacked"
                 + "&settings.command=cat+%2Fetc%2Fshadow"
                 + "&settings.system_user_id=hohenheim%3Aroot"
@@ -256,17 +258,12 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(site.get(SiteModel.NAME)).isEqualTo("Manage Site A Edited");
         assertThat(site.get(SiteModel.ENABLED)).isFalse();
         assertThat(site.get(SiteModel.DESCRIPTION)).isEqualTo("Delegated description");
-        assertThat(site.get(SiteModel.SITE_TYPE)).isEqualTo("hohenheim:static");
+        assertThat(site.get(SiteModel.UPSTREAM_KIND)).isEqualTo("hohenheim:instance");
         assertThat(site.get(SiteModel.SETTINGS)).isEqualTo(Map.of(
             "root_path", "/srv/manage-a",
             "system_user_id", "hohenheim:site-a",
             "environment_variables", Map.of("DAEMON_SECRET", "must-not-render"),
             "command", "unsafe-host-command"));
-        assertThat(site.get(SiteModel.SOURCE)).isEqualTo(SiteModel.SOURCE_GIT);
-        assertThat(site.get(SiteModel.SOURCE_SETTINGS)).isEqualTo(Map.of(
-            "repository_url", "ssh://private/manage-a.git",
-            "build_command", "private-build-command",
-            "webhook_secret", "private-webhook-secret"));
 
         HttpResponse<String> delegated = operatorGet(
             "/manage/sites/" + siteAId + "/page/deployments");
@@ -600,7 +597,7 @@ class ManagePanelTest extends HohenheimTestBase {
         Row victim = siteModel.createEmptyRow();
         victim.set(SiteModel.NAME, "Takeover Victim");
         victim.set(SiteModel.SLUG, "takeover-victim");
-        victim.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        victim.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         victim.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         victim.set(SiteModel.STATUS, "active");
         victim.set(SiteModel.ENABLED, true);
@@ -616,7 +613,7 @@ class ManagePanelTest extends HohenheimTestBase {
         Row staged = siteModel.createEmptyRow();
         staged.set(SiteModel.NAME, "Staged Takeover");
         staged.set(SiteModel.SLUG, "staged-takeover");
-        staged.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        staged.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         staged.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         staged.set(SiteModel.STATUS, "active");
         staged.set(SiteModel.ENABLED, false);
@@ -632,7 +629,7 @@ class ManagePanelTest extends HohenheimTestBase {
         Row innocent = siteModel.createEmptyRow();
         innocent.set(SiteModel.NAME, "Staged Innocent");
         innocent.set(SiteModel.SLUG, "staged-innocent");
-        innocent.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        innocent.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         innocent.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         innocent.set(SiteModel.STATUS, "active");
         innocent.set(SiteModel.ENABLED, false);
@@ -679,8 +676,8 @@ class ManagePanelTest extends HohenheimTestBase {
 
             // 5. The admin form path refuses the same takeover (the invariant is shared,
             //    not per-panel).
-            String adminEnableBody = "name=Staged+Takeover&site_type=hohenheim%3Astatic"
-                + "&enabled=true&settings.root_path=%2Ftmp&source=local&description=";
+            String adminEnableBody = "name=Staged+Takeover&upstream_kind=hohenheim%3Astatic"
+                + "&enabled=true&settings.root_path=%2Ftmp&description=";
             assertThat(adminPost("/admin/sites/" + stagedId, adminEnableBody).statusCode())
                 .isIn(200, 302, 303, 422);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))

@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerSiteRequestHandler;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.SiteContainerKind;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.docker.SiteVolumes;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * The Docker-site tier against a real daemon, THROUGH the canonical runtime-resource
  * contract: the handler owns no container -- its running release is a site-owned
- * {@code site_container} instance deployed by InstanceService, and every assertion here
+ * {@code release} instance deployed by InstanceService, and every assertion here
  * pins that (owner labels name the INSTANCE, the ledger claim names the INSTANCE, the
  * attribution columns name the SITE). Skipped when the daemon socket or the test image
  * is absent.
@@ -104,7 +104,7 @@ class DockerSiteHandlerTest {
         String volumeName = SiteVolumes.volumeOf(siteId, "data");
         try {
             // 1. The site's running release IS an owned instance: the row exists, is
-            //    attributed to the site, and carries the site_container kind.
+            //    attributed to the site, and carries the release kind.
             assertThat(instanceId).as("step 1: the handler ensured an owned instance").isNotNull();
             Row instance = Models.get(InstanceModel.class).findById(instanceId);
             assertThat((String) instance.get(InstanceModel.GENERATED_BY))
@@ -114,7 +114,7 @@ class DockerSiteHandlerTest {
             assertThat((Integer) instance.get(InstanceModel.GENERATED_FOR_ID))
                 .as("step 1: attribution record").isEqualTo(siteId);
             assertThat((String) instance.get(InstanceModel.KIND))
-                .isEqualTo(SiteContainerKind.ID.toString());
+                .isEqualTo(ReleaseKind.ID.toString());
             assertThat((String) instance.get(InstanceModel.STATUS))
                 .as("step 1: the fenced outcome stamp landed")
                 .isEqualTo(InstanceModel.STATUS_RUNNING);

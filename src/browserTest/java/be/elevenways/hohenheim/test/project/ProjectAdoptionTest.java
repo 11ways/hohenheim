@@ -169,7 +169,7 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         Row row = Models.get(SiteModel.class).createEmptyRow();
         row.set(SiteModel.NAME, name);
         row.set(SiteModel.SLUG, name);
-        row.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        row.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         row.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         row.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         row.set(SiteModel.ENABLED, false);

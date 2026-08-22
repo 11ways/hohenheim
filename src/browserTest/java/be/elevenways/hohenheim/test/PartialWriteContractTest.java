@@ -74,14 +74,9 @@ class PartialWriteContractTest extends HohenheimTestBase {
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, PREFIX + "git site");
         site.set(SiteModel.SLUG, PREFIX + "git-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.SETTINGS, new LinkedHashMap<>(
             Map.of("root_path", "/tmp/" + PREFIX + "site")));
-        site.set(SiteModel.SOURCE, SiteModel.SOURCE_GIT);
-        site.set(SiteModel.SOURCE_SETTINGS, new LinkedHashMap<>(Map.of(
-            "repository", "https://git.example.test/team/site.git",
-            "branch", "main",
-            "webhook_secret", PREFIX + "secret")));
         site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         site.set(SiteModel.ENABLED, false);
         sites.save(site);
@@ -242,19 +237,21 @@ class PartialWriteContractTest extends HohenheimTestBase {
      */
     @Test
     @SuppressWarnings("unchecked")
-    void aGitProvisionedSiteKeepsItsSourceWhenOnlyItsNameIsWritten() {
+    void aSitesUpstreamSettingsSurviveWhenOnlyItsNameIsWritten() {
         Model sites = Models.get(SiteModel.class);
         Row before = sites.findById(gitSiteId);
 
-        // 1. The fixture really is git-provisioned, or the claim below is vacuous.
-        assertThat((String) before.get(SiteModel.SOURCE))
-            .as("step 1: the fixture site is git-provisioned").isEqualTo(SiteModel.SOURCE_GIT);
+        // 1. The fixture really carries upstream settings, or the claim below is vacuous.
+        //    AIDEV-NOTE: this used to assert on the git SOURCE columns, which moved off the
+        //    site with the upstream rename (phase-0 design section 3). The defect class is
+        //    unchanged -- a one-entry cell write must not blank a polymorphic map it never
+        //    mentioned -- so the subject moved to the settings map that is still here.
         Map<String, Object> settingsBefore =
-            (Map<String, Object>) before.get(SiteModel.SOURCE_SETTINGS);
-        assertThat(settingsBefore).as("step 1: with its repository stored")
-            .containsEntry("repository", "https://git.example.test/team/site.git");
+            (Map<String, Object>) before.get(SiteModel.SETTINGS);
+        assertThat(settingsBefore).as("step 1: with its upstream settings stored")
+            .containsEntry("root_path", "/tmp/" + PREFIX + "site");
 
-        // 2. A rename through the cell lane: one entry, immutable, no source in sight.
+        // 2. A rename through the cell lane: one entry, immutable, no settings in sight.
         new SiteResource().updateRow(before, Map.of(SiteModel.NAME.getName(), PREFIX + "still git"),
             admin());
 
@@ -262,11 +259,9 @@ class PartialWriteContractTest extends HohenheimTestBase {
         assertThat((String) after.get(SiteModel.NAME))
             .as("step 2: the rename landed").isEqualTo(PREFIX + "still git");
 
-        // 3. And the provisioning survived it, whole.
-        assertThat((String) after.get(SiteModel.SOURCE))
-            .as("step 3: the site is still git-provisioned").isEqualTo(SiteModel.SOURCE_GIT);
-        assertThat((Map<String, Object>) after.get(SiteModel.SOURCE_SETTINGS))
-            .as("step 3: with every git setting intact").isEqualTo(settingsBefore);
+        // 3. And the upstream settings survived it, whole.
+        assertThat((Map<String, Object>) after.get(SiteModel.SETTINGS))
+            .as("step 3: with every upstream setting intact").isEqualTo(settingsBefore);
     }
 
     /**

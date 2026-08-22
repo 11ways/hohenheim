@@ -31,7 +31,7 @@ class UnixSocketBridgeTest {
 
     /**
      * A bridge to a path with no listener must FAIL construction rather than bind a loopback
-     * listener + accept thread that {@code ProxySiteType.bridgeFor} then caches forever.
+     * listener + accept thread that {@code AddressUpstreamKind.bridgeFor} then caches forever.
      *
      * AIDEV-NOTE: this is the counterfactual for the leak the proxy wave named. Pre-fix the
      * constructor never dialed the AF_UNIX path, so this returned a live (dead) bridge that was
@@ -43,7 +43,7 @@ class UnixSocketBridgeTest {
         Path missing = Files.createTempDirectory("hh-bridge-missing").resolve("nope.sock");
         assertThat(Files.exists(missing)).as("the socket path does not exist").isFalse();
 
-        // verifyReachable=true is the mode ProxySiteType.bridgeFor uses before caching.
+        // verifyReachable=true is the mode AddressUpstreamKind.bridgeFor uses before caching.
         assertThatThrownBy(() -> new UnixSocketBridge(missing.toString(), true))
             .as("an unreachable upstream fails construction, so no dead bridge is ever cached")
             .isInstanceOf(IOException.class);

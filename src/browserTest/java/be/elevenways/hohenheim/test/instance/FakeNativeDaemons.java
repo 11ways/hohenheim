@@ -523,7 +523,9 @@ final class FakeNativeDaemons {
         }
 
         @Override
-        public String getDescription() { return "in-memory native test kind"; }
+        public @NonNull Microcopy getDescription() {
+        return Microcopy.of("fake_native").withFilter("scope", "instance_kind_description");
+    }
 
         @Override
         public Icon getIcon() { return Icon.of("flask"); }
@@ -535,7 +537,7 @@ final class FakeNativeDaemons {
         public Schema getSchema() { return SETTINGS_SCHEMA; }
 
         @Override
-        public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
+        public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
 
         @Override
         public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
@@ -591,7 +593,7 @@ final class FakeNativeDaemons {
         }
 
         @Override
-        public String getDescription() { return "in-memory volume-snapshot test kind"; }
+        public @NonNull Microcopy getDescription() { return Microcopy.of("fake_volume_snapshot").withFilter("scope", "instance_kind_description"); }
 
         @Override
         public Icon getIcon() { return Icon.of("flask"); }
@@ -603,7 +605,7 @@ final class FakeNativeDaemons {
         public Schema getSchema() { return FakeNativeKind.SETTINGS_SCHEMA; }
 
         @Override
-        public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
+        public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
 
         @Override
         public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
@@ -837,7 +839,7 @@ final class FakeNativeDaemons {
         }
 
         @Override
-        public String getDescription() { return "in-memory non-native test kind"; }
+        public @NonNull Microcopy getDescription() { return Microcopy.of("fake_volume_only").withFilter("scope", "instance_kind_description"); }
 
         @Override
         public Icon getIcon() { return Icon.of("flask"); }
@@ -849,7 +851,7 @@ final class FakeNativeDaemons {
         public Schema getSchema() { return FakeNativeKind.SETTINGS_SCHEMA; }
 
         @Override
-        public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
+        public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
 
         @Override
         public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {

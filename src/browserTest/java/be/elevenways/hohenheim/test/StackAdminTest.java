@@ -222,7 +222,7 @@ class StackAdminTest extends HohenheimTestBase {
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, "ledgersite");
         site.set(SiteModel.SLUG, "ledgersite");
-        site.set(SiteModel.SITE_TYPE, "docker");
+        site.set(SiteModel.UPSTREAM_KIND, "docker");
         site.set(SiteModel.ENABLED, false);
         sites.save(site);
         PortLedger.claim(ServerModel.localServerId(), "0.0.0.0", 8211, null,

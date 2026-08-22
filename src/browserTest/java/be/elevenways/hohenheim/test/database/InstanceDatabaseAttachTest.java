@@ -106,7 +106,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
 
         instanceAId = instance(PREFIX + "srv-a", "hohenheim:docker_container", hostId);
         instanceBId = instance(PREFIX + "srv-b", "hohenheim:docker_container", hostId);
-        incusInstanceId = instance(PREFIX + "srv-incus", "hohenheim:incus_container", incusHostId);
+        incusInstanceId = instance(PREFIX + "srv-incus", "hohenheim:system_container", incusHostId);
         remoteInstanceId = instance(PREFIX + "srv-remote", "hohenheim:docker_container", otherHostId);
         databaseAId = database(PREFIX + "db-a", hostId);
         databaseBId = database(PREFIX + "db-b", hostId);

@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.SiteContainerKind;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -46,7 +46,7 @@ import java.util.Set;
  * AIDEV-NOTE: this is the FakeIncusTransport doctrine applied to the docker lane, and it
  * generalizes FakeNativeDaemons rather than duplicating it: FakeNativeDaemons fakes a
  * whole KIND of its own (nothing production-shaped points at it), while a site release is
- * always a {@code hohenheim:site_container}, so the fake has to stand in for that kind's
+ * always a {@code hohenheim:release}, so the fake has to stand in for that kind's
  * runtime instead -- {@link #install()} re-registers the real kind's identifier with a
  * handler that differs in {@code runtimeFor} alone. An unhandled HTTP path throws loudly
  * rather than answering success: a gap here must fail the test, never hide in a default.
@@ -329,7 +329,7 @@ final class FakeDockerDaemon implements DockerTransport {
     // -- the kind face --------------------------------------------------------
 
     /**
-     * Point {@code hohenheim:site_container} and the local daemon at this fake, and
+     * Point {@code hohenheim:release} and the local daemon at this fake, and
      * return the restore hook. The kind registry maps identifier to handler, so a
      * re-register REPLACES -- and {@link #restore()} puts the production pair back.
      */
@@ -340,7 +340,7 @@ final class FakeDockerDaemon implements DockerTransport {
 
     /** Undo {@link #install()}; safe to call when it was never installed. */
     static void restore() {
-        InstanceKinds.register(new SiteContainerKind());
+        InstanceKinds.register(new ReleaseKind());
         DockerClient.overrideLocalTransportForTest(null);
     }
 
@@ -351,7 +351,7 @@ final class FakeDockerDaemon implements DockerTransport {
      */
     private static final class FakeSiteKind implements InstanceKindHandler {
 
-        private final SiteContainerKind real = new SiteContainerKind();
+        private final ReleaseKind real = new ReleaseKind();
         private final FakeDockerDaemon daemon;
 
         FakeSiteKind(@NonNull FakeDockerDaemon daemon) {
@@ -359,7 +359,7 @@ final class FakeDockerDaemon implements DockerTransport {
         }
 
         @Override
-        public @NonNull Identifier typeId() { return SiteContainerKind.ID; }
+        public @NonNull Identifier typeId() { return ReleaseKind.ID; }
 
         @Override
         public @NonNull String getDisplayName() { return this.real.getDisplayName(); }
@@ -368,7 +368,7 @@ final class FakeDockerDaemon implements DockerTransport {
         public @NonNull Microcopy getLabel() { return this.real.getLabel(); }
 
         @Override
-        public String getDescription() { return this.real.getDescription(); }
+        public @NonNull Microcopy getDescription() { return this.real.getDescription(); }
 
         @Override
         public Icon getIcon() { return this.real.getIcon(); }

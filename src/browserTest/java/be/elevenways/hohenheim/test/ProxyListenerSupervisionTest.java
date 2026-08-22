@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.task.SuperviseProxyListeners;
 import be.elevenways.zenit.common.task.DefaultTaskContext;
 import be.elevenways.zenit.comms.CommsChannel;
@@ -54,7 +54,7 @@ class ProxyListenerSupervisionTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();

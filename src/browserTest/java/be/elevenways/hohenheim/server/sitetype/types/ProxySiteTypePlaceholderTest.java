@@ -1,4 +1,4 @@
-package be.elevenways.hohenheim.server.sitetype.types;
+package be.elevenways.hohenheim.server.upstream.kinds;
 
 import org.junit.jupiter.api.Test;
 
@@ -16,28 +16,28 @@ class ProxySiteTypePlaceholderTest {
 
     @Test
     void substitutesASafeCaptureValue() {
-        assertThat(ProxySiteType.substitutePlaceholders("/run/{project}.sock",
+        assertThat(AddressUpstreamKind.substitutePlaceholders("/run/{project}.sock",
             Map.of("project", "alpha")))
             .isEqualTo("/run/alpha.sock");
     }
 
     @Test
     void rejectsAPathSeparatorInACaptureValue() {
-        assertThatThrownBy(() -> ProxySiteType.substitutePlaceholders("/run/{project}.sock",
+        assertThatThrownBy(() -> AddressUpstreamKind.substitutePlaceholders("/run/{project}.sock",
             Map.of("project", "../../etc/passwd")))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejectsADotDotCaptureValue() {
-        assertThatThrownBy(() -> ProxySiteType.substitutePlaceholders("/run/{project}.sock",
+        assertThatThrownBy(() -> AddressUpstreamKind.substitutePlaceholders("/run/{project}.sock",
             Map.of("project", "..")))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejectsABackslashInACaptureValue() {
-        assertThatThrownBy(() -> ProxySiteType.substitutePlaceholders("/run/{project}.sock",
+        assertThatThrownBy(() -> AddressUpstreamKind.substitutePlaceholders("/run/{project}.sock",
             Map.of("project", "a\\b")))
             .isInstanceOf(IllegalArgumentException.class);
     }

@@ -358,7 +358,7 @@ class IncusColdMigrationLiveTest {
     private static int vmRecord(String name, int hostId) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
-        row.set(InstanceModel.KIND, "hohenheim:incus_vm");
+        row.set(InstanceModel.KIND, "hohenheim:vm");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", VM_IMAGE, "memory_limit_mb", 512)));
         row.set(InstanceModel.SERVER_ID, hostId);
@@ -369,7 +369,7 @@ class IncusColdMigrationLiveTest {
     private static int peerRecord(String name, int hostId) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name);
-        row.set(InstanceModel.KIND, "hohenheim:incus_container");
+        row.set(InstanceModel.KIND, "hohenheim:system_container");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", PEER_IMAGE, "memory_limit_mb", 128)));
         row.set(InstanceModel.SERVER_ID, hostId);

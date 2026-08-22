@@ -141,7 +141,7 @@ class VmFramebufferHandlerTest extends HohenheimTestBase {
         Model instances = Models.get(InstanceModel.class);
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, name);
-        row.set(InstanceModel.KIND, "hohenheim:incus_vm");
+        row.set(InstanceModel.KIND, "hohenheim:vm");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine/3.22/cloud")));
         row.set(InstanceModel.STATUS, status);
         instances.save(row);

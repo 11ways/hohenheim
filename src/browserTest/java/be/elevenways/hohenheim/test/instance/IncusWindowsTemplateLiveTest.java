@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
-import be.elevenways.hohenheim.server.instance.IncusVmKind;
+import be.elevenways.hohenheim.server.instance.VmKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstallSupport;
@@ -250,7 +250,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             //    runtime the KIND ITSELF builds, with the spec the kind produces from
             //    these settings. Its own record, never deployed, so the
             //    refusal-before-create claim is measurable.
-            IncusVmKind kind = new IncusVmKind();
+            VmKind kind = new VmKind();
             InstanceSpec agentless = kind.specFor(agentlessId, windowsSettings(PREPARED_ALIAS, 512));
             InstallSupport installSupport = (InstallSupport) kind.runtimeFor(HOST);
             assertThat(agentless.guestAgent())
@@ -412,7 +412,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         Model instances = Models.get(InstanceModel.class);
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, name);
-        row.set(InstanceModel.KIND, IncusVmKind.ID.toString());
+        row.set(InstanceModel.KIND, VmKind.ID.toString());
         row.set(InstanceModel.SETTINGS, windowsSettings(alias, memoryMb));
         row.set(InstanceModel.SERVER_ID, hostId);
         instances.save(row);

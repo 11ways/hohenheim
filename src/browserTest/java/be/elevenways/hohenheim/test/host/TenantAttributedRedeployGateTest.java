@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.docker.SiteContainerKind;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -67,7 +67,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         assertThat(Models.get(InstanceModel.class).findById(instanceId)
                 .get(InstanceModel.KIND))
             .as("step 1: the workload's kind is the operator-authored one")
-            .isEqualTo(SiteContainerKind.ID.toString());
+            .isEqualTo(ReleaseKind.ID.toString());
         assertThat(OwnedInstances.isTenantAttributed(
                 Models.get(InstanceModel.class).findById(instanceId)))
             .as("step 1: but the WORKLOAD answers to a tenant, through the site above it")
@@ -78,7 +78,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         //    never have taken the workload. (Deploy itself is not called here -- past the
         //    gate it does real daemon work, which the default lane must never trigger.)
         assertThat(catchThrowable(() -> HostAdmission.requireInstancePlacement(hostId,
-                InstanceKinds.getHandler(SiteContainerKind.ID.toString()).isolation(),
+                InstanceKinds.getHandler(ReleaseKind.ID.toString()).isolation(),
                 Models.get(InstanceModel.class).findById(instanceId)
                     .get(InstanceModel.QUOTA_BUCKET))))
             .as("step 2: the acknowledged host passes the whole placement gate")
@@ -123,7 +123,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
                 Models.get(InstanceModel.class).findById(instanceId)))
             .as("step 5: with no manage grant above it the workload is operator-owned")
             .isFalse();
-        assertThat(InstanceKinds.getHandler(SiteContainerKind.ID.toString()).tenantAuthored())
+        assertThat(InstanceKinds.getHandler(ReleaseKind.ID.toString()).tenantAuthored())
             .as("step 5: and its kind never was tenant-authored, so the gate does not run")
             .isFalse();
     }
@@ -159,7 +159,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         Row row = sites.createEmptyRow();
         row.set(SiteModel.NAME, PREFIX + "site");
         row.set(SiteModel.SLUG, PREFIX + "site");
-        row.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        row.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         row.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         row.set(SiteModel.STATUS, "active");
         row.set(SiteModel.ENABLED, true);
@@ -173,7 +173,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         OwnedInstances.inScopeUnchecked("test", SiteModel.MODEL_ID, siteId, () -> {
             Row row = Models.get(InstanceModel.class).createEmptyRow();
             row.set(InstanceModel.NAME, PREFIX + "release");
-            row.set(InstanceModel.KIND, SiteContainerKind.ID.toString());
+            row.set(InstanceModel.KIND, ReleaseKind.ID.toString());
             row.set(InstanceModel.SETTINGS,
                 new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest")));
             row.set(InstanceModel.SERVER_ID, hostId);

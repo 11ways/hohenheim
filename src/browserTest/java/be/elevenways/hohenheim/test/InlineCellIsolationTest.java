@@ -448,7 +448,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, PREFIX + "site");
         site.set(SiteModel.SLUG, PREFIX + "site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp/" + PREFIX + "site"));
         site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         site.set(SiteModel.ENABLED, true);

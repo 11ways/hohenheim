@@ -8,8 +8,8 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
-import be.elevenways.hohenheim.server.instance.IncusContainerKind;
-import be.elevenways.hohenheim.server.instance.IncusVmKind;
+import be.elevenways.hohenheim.server.instance.SystemContainerKind;
+import be.elevenways.hohenheim.server.instance.VmKind;
 import be.elevenways.hohenheim.server.instance.NetworkBandwidth;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
@@ -54,9 +54,9 @@ class NetworkBandwidthTest extends HohenheimTestBase {
             throws Exception {
         // 1. Declaring the field IS the capability declaration -- the RootDisk doctrine.
         //    Only the Incus kinds can hand a rate to a real limiter, so only they ask.
-        assertThat(IncusContainerKind.SETTINGS_SCHEMA.getField(NetworkBandwidth.SETTING))
+        assertThat(SystemContainerKind.SETTINGS_SCHEMA.getField(NetworkBandwidth.SETTING))
             .as("step 1: the Incus container kind offers a network limit").isNotNull();
-        assertThat(IncusVmKind.SETTINGS_SCHEMA.getField(NetworkBandwidth.SETTING))
+        assertThat(VmKind.SETTINGS_SCHEMA.getField(NetworkBandwidth.SETTING))
             .as("step 1: and so does the Incus VM kind").isNotNull();
         assertThat(new DockerContainerKind().getSchema().getField(NetworkBandwidth.SETTING))
             .as("step 1: the Docker kind offers NO network limit -- there is no HostConfig"
@@ -65,12 +65,12 @@ class NetworkBandwidthTest extends HohenheimTestBase {
 
         // 2. The declaration survives the settings-to-spec derivation, and a blank one
         //    stays UNLIMITED rather than becoming a zero-rate cap.
-        assertThat(new IncusContainerKind().specFor(71, settings(100)).networkLimitMbit())
+        assertThat(new SystemContainerKind().specFor(71, settings(100)).networkLimitMbit())
             .as("step 2: a declared ceiling reaches the driver").isEqualTo(100);
-        assertThat(new IncusContainerKind().specFor(71, settings(null)).networkLimitMbit())
+        assertThat(new SystemContainerKind().specFor(71, settings(null)).networkLimitMbit())
             .as("step 2: a blank declaration leaves the wire unshaped, never capped at 0")
             .isNull();
-        assertThat(new IncusVmKind().specFor(72, settings(250)).networkLimitMbit())
+        assertThat(new VmKind().specFor(72, settings(250)).networkLimitMbit())
             .as("step 2: the VM kind carries it too").isEqualTo(250);
 
         // 3. THE WIRE: the create body's NIC carries the rate in BOTH directions, beside

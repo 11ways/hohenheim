@@ -179,7 +179,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         Row row = sites.createEmptyRow();
         row.set(SiteModel.NAME, name);
         row.set(SiteModel.SLUG, name);
-        row.set(SiteModel.SITE_TYPE, "hohenheim:command");
+        row.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         row.set(SiteModel.ENABLED, false);
         sites.save(row);
         return row.get(SiteModel.ID);

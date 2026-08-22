@@ -3,9 +3,9 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
-import be.elevenways.hohenheim.sitetype.SiteTypeInfo;
-import be.elevenways.hohenheim.sitetype.SiteTypeRegistry;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
+import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
+import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.guard.CommentMode;
@@ -99,19 +99,26 @@ class DisplayNameLocalizationTest {
         assertThat(InstanceKinds.getHandler("hohenheim:docker_container"))
             .as("the instance-kind registry is populated (an empty walk is vacuous)")
             .isNotNull();
-        assertThat(SiteTypes.getHandler("hohenheim:docker"))
-            .as("the site-type registry is populated (an empty walk is vacuous)")
+        assertThat(UpstreamKindHandlers.getHandler("hohenheim:static"))
+            .as("the upstream-kind registry is populated (an empty walk is vacuous)")
             .isNotNull();
 
+        // The DESCRIPTION is walked beside the label because it became a Microcopy too
+        // (the card presentations draw it): an English literal there rots exactly the same
+        // way, and nothing else would notice.
         for (InstanceKindInfo handler : InstanceKindRegistry.REGISTRY) {
             check(handler.getLabel(), "instance kind " + handler.typeId(), catalogs, broken);
+            check(handler.getDescription(), "instance kind description "
+                + handler.typeId(), catalogs, broken);
         }
-        for (SiteTypeInfo type : SiteTypeRegistry.REGISTRY) {
-            check(type.getLabel(), "site type " + type.typeId(), catalogs, broken);
+        for (UpstreamKindInfo type : UpstreamKinds.REGISTRY) {
+            check(type.getLabel(), "upstream kind " + type.typeId(), catalogs, broken);
+            check(type.getDescription(), "upstream kind description "
+                + type.typeId(), catalogs, broken);
         }
 
         assertThat(broken)
-            .as("every type label resolves to real copy in en AND nl")
+            .as("every type label and description resolves to real copy in en AND nl")
             .isEmpty();
     }
 
@@ -122,10 +129,10 @@ class DisplayNameLocalizationTest {
      * argument is not rendered there, getLabel() buys nothing over the English literal it
      * replaced -- it just swaps one wrong string for a debug toString.
      *
-     * AIDEV-NOTE: registry-driven on purpose. The two live call sites (OwnedInstances
-     * instance_kind_owner_managed, SiteDatabaseResource site_type_no_injection) are one
-     * instance each of the class; walking the registries means the next refusal that
-     * embeds a label is covered without anyone remembering to extend this.
+     * AIDEV-NOTE: registry-driven on purpose. The live call sites (OwnedInstances
+     * instance_kind_owner_managed, VolumeBackends host_no_volume_quota) are one instance
+     * each of the class; walking the registries means the next refusal that embeds a label
+     * is covered without anyone remembering to extend this.
      */
     @Test
     void everyTypeLabelSurvivesBeingReadBackOutOfARefusal() {
@@ -137,8 +144,8 @@ class DisplayNameLocalizationTest {
             checkRefusal(handler.getLabel(), "instance kind " + handler.typeId(),
                 catalogs, described, broken);
         }
-        for (SiteTypeInfo type : SiteTypeRegistry.REGISTRY) {
-            checkRefusal(type.getLabel(), "site type " + type.typeId(),
+        for (UpstreamKindInfo type : UpstreamKinds.REGISTRY) {
+            checkRefusal(type.getLabel(), "upstream kind " + type.typeId(),
                 catalogs, described, broken);
         }
 

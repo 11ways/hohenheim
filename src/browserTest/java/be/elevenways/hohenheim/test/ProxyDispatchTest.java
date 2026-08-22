@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.junit.jupiter.api.*;
@@ -43,7 +43,7 @@ class ProxyDispatchTest {
         if (initialized) return;
         initialized = true;
 
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         File db = TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
@@ -67,7 +67,7 @@ class ProxyDispatchTest {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Test Site " + hostname);
         site.set(SiteModel.SLUG, hostname.replace(".", "-"));
-        site.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
         site.set(SiteModel.SETTINGS, settings);
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
@@ -315,7 +315,7 @@ class ProxyDispatchTest {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Toggle Test");
         site.set(SiteModel.SLUG, "toggle-test");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
         site.set(SiteModel.SETTINGS, Map.of(
             "forward_host", "127.0.0.1",
             "forward_port", 8080,

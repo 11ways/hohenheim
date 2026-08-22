@@ -173,7 +173,7 @@ class TlsPassthroughTest {
         });
         httpBackend.start();
 
-        Row control = setupSite("hohenheim:proxy", "Control", "control",
+        Row control = setupSite("hohenheim:address", "Control", "control",
             Map.of("forward_host", "127.0.0.1", "forward_port", httpBackend.getAddress().getPort()));
         addDomain(control, "control.example.test", "exact", null, false);
         rawBackend = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
@@ -430,7 +430,7 @@ class TlsPassthroughTest {
             exchange.close();
         });
         httpBackend.start();
-        Row site = setupSite("hohenheim:proxy", "Identity", "identity", Map.of(
+        Row site = setupSite("hohenheim:address", "Identity", "identity", Map.of(
             "forward_host", "127.0.0.1", "forward_port", httpBackend.getAddress().getPort()));
         addDomain(site, "identity.example.test", "exact", null, false);
         startProxy();

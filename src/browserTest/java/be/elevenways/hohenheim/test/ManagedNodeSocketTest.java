@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -44,7 +44,7 @@ class ManagedNodeSocketTest {
         nodeAvailable = new File("/usr/local/bin/node").canExecute()
             || new File("/usr/bin/node").canExecute();
 
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
@@ -112,7 +112,7 @@ class ManagedNodeSocketTest {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Node Socket Site");
         site.set(SiteModel.SLUG, "node-socket-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:node");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.SETTINGS, Map.of(
             "script", scriptPath,
             "use_ports", false,

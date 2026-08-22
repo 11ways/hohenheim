@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.zenit.common.Zenit;
@@ -37,7 +37,7 @@ class TlsCertificateTest {
         if (initialized) return;
         initialized = true;
 
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
@@ -387,7 +387,7 @@ class TlsCertificateTest {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Force SSL Site");
         site.set(SiteModel.SLUG, "force-ssl");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:dead");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.ENABLED, true);
         site.set(SiteModel.STATUS, "active");
         siteModel.save(site);
@@ -541,7 +541,7 @@ class TlsCertificateTest {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Preferred TLS Site");
         site.set(SiteModel.SLUG, "preferred-tls-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:proxy");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
         site.set(SiteModel.SETTINGS, java.util.Map.of("forward_host", "127.0.0.1", "forward_port", 8080));
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);

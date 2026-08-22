@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.PasswordHasher;
@@ -151,21 +151,20 @@ class SecretFieldsTest extends HohenheimTestBase {
         assertThat(response.statusCode()).isIn(200, 302, 303);
         assertThat(storedPassword(ruleId)).isEqualTo(storedHash);
 
-        // Git webhook secret: a secret inside a site's source settings map.
-        SiteModel sites = Models.get(SiteModel.class);
-        Row site = sites.createEmptyRow();
-        site.set(SiteModel.NAME, "Secret git site");
-        site.set(SiteModel.SLUG, "secret-git-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:dead");
-        site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
-        site.set(SiteModel.ENABLED, false);
-        site.set(SiteModel.SOURCE, SiteModel.SOURCE_GIT);
-        site.set(SiteModel.SOURCE_SETTINGS, Map.of(
+        // Git webhook secret: a secret inside the settings map of the APPLICATION that
+        // carries the source. AIDEV-NOTE: it used to live on the site; the source moved to
+        // the instance with the upstream rename (phase-0 design section 3), and the
+        // masking contract this asserts is a property of the settings map, not of a table.
+        InstanceModel instances = Models.get(InstanceModel.class);
+        Row application = instances.createEmptyRow();
+        application.set(InstanceModel.NAME, "secret-git-app");
+        application.set(InstanceModel.KIND, "hohenheim:application");
+        application.set(InstanceModel.SETTINGS, Map.of(
             "repository_url", "https://git.example.com/site.git",
             "webhook_secret", SITE_SECRET));
-        sites.save(site);
+        instances.save(application);
 
-        navigateToApp("/admin/sites/" + site.get(SiteModel.ID));
+        navigateToApp("/admin/instances/" + application.get(InstanceModel.ID));
         waitForHydration();
         assertThat(page.content()).doesNotContain(SITE_SECRET);
     }

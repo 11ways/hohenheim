@@ -52,7 +52,7 @@ class DomainEditTest extends HohenheimTestBase {
     @Order(1)
     void createSiteAndDomain() throws Exception {
         var siteResponse = postForm("/admin/sites/new",
-            "name=Domain+Test+Site&site_type=hohenheim%3Aproxy&source=local"
+            "name=Domain+Test+Site&upstream_kind=hohenheim%3Aaddress"
             + "&settings.forward_host=127.0.0.1&settings.forward_port=9090");
         assertThat(siteResponse.statusCode()).isIn(200, 302, 303);
 
@@ -355,7 +355,7 @@ class DomainEditTest extends HohenheimTestBase {
     @Order(16)
     void sameRouteOnAnotherEnabledSiteIsRejected() throws Exception {
         var siteResponse = postForm("/admin/sites/new",
-            "name=Second+Route+Site&site_type=hohenheim%3Aproxy&source=local"
+            "name=Second+Route+Site&upstream_kind=hohenheim%3Aaddress"
             + "&settings.forward_host=127.0.0.1&settings.forward_port=9091");
         assertThat(siteResponse.statusCode()).isIn(200, 302, 303);
         Row second = Models.get(SiteModel.class).find()
@@ -375,7 +375,7 @@ class DomainEditTest extends HohenheimTestBase {
     @Order(17)
     void disabledSiteRowsAreExemptUntilEnabling() throws Exception {
         var siteResponse = postForm("/admin/sites/new",
-            "name=Draft+Route+Site&site_type=hohenheim%3Aproxy&source=local"
+            "name=Draft+Route+Site&upstream_kind=hohenheim%3Aaddress"
             + "&enabled=false&settings.forward_host=127.0.0.1&settings.forward_port=9092");
         assertThat(siteResponse.statusCode()).isIn(200, 302, 303);
         Row draft = Models.get(SiteModel.class).find()
@@ -398,7 +398,7 @@ class DomainEditTest extends HohenheimTestBase {
         waitForHydration();
         String snapshot = page.locator("input[name='cms__snapshot']").inputValue();
         var enableResponse = postForm("/admin/sites/" + draftId,
-            "name=Draft+Route+Site&site_type=hohenheim%3Aproxy&source=local"
+            "name=Draft+Route+Site&upstream_kind=hohenheim%3Aaddress"
             + "&enabled=false&enabled=true"
             + "&settings.forward_host=127.0.0.1&settings.forward_port=9092"
             + "&cms__snapshot=" + java.net.URLEncoder.encode(snapshot, java.nio.charset.StandardCharsets.UTF_8));

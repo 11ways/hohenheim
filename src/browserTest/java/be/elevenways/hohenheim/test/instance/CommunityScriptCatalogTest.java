@@ -105,7 +105,7 @@ class CommunityScriptCatalogTest {
                 .as("step 3: an import NEVER lands approved").isNull();
             assertThat((String) template.get(InstanceTemplateModel.KIND))
                 .as("step 3: catalog apps are incus system containers")
-                .isEqualTo("hohenheim:incus_container");
+                .isEqualTo("hohenheim:system_container");
             Map<?, ?> settings = (Map<?, ?>) template.get(InstanceTemplateModel.SETTINGS);
             assertThat(settings.get("image")).as("step 3: image alias").isEqualTo("debian/13");
             assertThat(settings.get("memory_limit_mb")).as("step 3: var_ram landed")

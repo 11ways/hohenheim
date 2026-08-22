@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Phase 0 / 0.1 stored-XSS gate, honest ingress: the payload is planted by an
  * ANONYMOUS request that traverses hohenheim's real tenant proxy listener (not
- * injected via child environment variables as ProclogRenderingTest does), lands
+ * injected via child environment variables as the deleted proclog viewer test did), lands
  * in the stored process log via the managed child's stdout, and must reach the
  * admin's browser as inert escaped text under the scoped admin CSP.
  *
@@ -87,7 +87,7 @@ class ProclogProxyIngressTest extends HohenheimTestBase {
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, "Proclog Proxy Site");
         site.set(SiteModel.SLUG, "proclog-proxy-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:command");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.SETTINGS, Map.of(
             "start_command", "node " + scriptPath,
             "port_argument", "--port",
@@ -220,7 +220,7 @@ class ProclogProxyIngressTest extends HohenheimTestBase {
 
             // Stop the proxy (and its live child) before the browser step: the live-process
             // ghostty terminal is incidental to the stored-log XSS gate. With no live
-            // handler the viewer shows only the stored log, exactly as ProclogRenderingTest
+            // handler the viewer shows only the stored log, exactly as the deleted proclog viewer test
             // does.
             proxy.stop();
             proxyStopped = true;

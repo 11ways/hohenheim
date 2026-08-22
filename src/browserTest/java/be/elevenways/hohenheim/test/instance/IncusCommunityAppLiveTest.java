@@ -277,7 +277,7 @@ class IncusCommunityAppLiveTest {
         Db.run(datasource, () -> {
             Row template = Models.get(InstanceTemplateModel.class).createEmptyRow();
             template.set(InstanceTemplateModel.NAME, "community-unknown-helper");
-            template.set(InstanceTemplateModel.KIND, "hohenheim:incus_container");
+            template.set(InstanceTemplateModel.KIND, "hohenheim:system_container");
             template.set(InstanceTemplateModel.SETTINGS,
                 Map.of("image", "debian/13", "memory_limit_mb", 256));
             template.set(InstanceTemplateModel.INSTALL_SCRIPT,

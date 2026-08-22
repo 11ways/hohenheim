@@ -220,7 +220,7 @@ class AdminPagesTest extends HohenheimTestBase {
     @Order(10)
     void activityLogDashboardFeedAndActivityDetailReflectACreation() throws Exception {
         var createResponse = post("/admin/sites/new",
-            "name=Audit+Test+Site&site_type=hohenheim%3Adead&source=local");
+            "name=Audit+Test+Site&upstream_kind=hohenheim%3Astatic");
         assertThat(createResponse.statusCode()).isIn(200, 302, 303);
 
         Row site = Models.get(SiteModel.class).find()
@@ -496,7 +496,7 @@ class AdminPagesTest extends HohenheimTestBase {
     // Site record pages
     // -----------------------------------------------------------------------
 
-    /** Site detail fields, the toggle action label, the conditional processes tab and the domains tab. */
+    /** Site detail fields, the toggle action label, the retired processes tab and the domains tab. */
     @Test
     @Order(23)
     void siteRecordPagesRenderFieldsActionsTabsAndDomains() throws Exception {
@@ -504,9 +504,8 @@ class AdminPagesTest extends HohenheimTestBase {
         Row suffixSite = siteModel.createEmptyRow();
         suffixSite.set(SiteModel.NAME, "Suffix Site");
         suffixSite.set(SiteModel.SLUG, "suffix-site");
-        suffixSite.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        suffixSite.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         suffixSite.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
-        suffixSite.set(SiteModel.SOURCE, "local");
         suffixSite.set(SiteModel.STATUS, "active");
         suffixSite.set(SiteModel.ENABLED, true);
         siteModel.save(suffixSite);
@@ -514,9 +513,8 @@ class AdminPagesTest extends HohenheimTestBase {
         Row toggleSite = siteModel.createEmptyRow();
         toggleSite.set(SiteModel.NAME, "Toggle Label Site");
         toggleSite.set(SiteModel.SLUG, "toggle-label-site");
-        toggleSite.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        toggleSite.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         toggleSite.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
-        toggleSite.set(SiteModel.SOURCE, "local");
         toggleSite.set(SiteModel.STATUS, "active");
         toggleSite.set(SiteModel.ENABLED, true);
         siteModel.save(toggleSite);
@@ -559,31 +557,11 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(site).isNotNull();
         Integer siteId = site.get(SiteModel.ID);
 
-        // The processes tab only exists for managed-process site types.
+        // The processes tab is GONE: it was deleted with the host-user process lane
+        // (phase-0 design section 3), so no site has one and the route 404s for every one.
         assertThat(get("/admin/sites/" + siteId).body())
             .doesNotContain("/admin/sites/" + siteId + "/page/processes");
         assertThat(get("/admin/sites/" + siteId + "/page/processes").statusCode()).isEqualTo(404);
-
-        Row managed = siteModel.createEmptyRow();
-        managed.set(SiteModel.NAME, "Managed Processes Site");
-        managed.set(SiteModel.SLUG, "managed-processes-site");
-        managed.set(SiteModel.SITE_TYPE, "hohenheim:command");
-        managed.set(SiteModel.SETTINGS, Map.of("start_command", "true"));
-        managed.set(SiteModel.SOURCE, "local");
-        managed.set(SiteModel.STATUS, "active");
-        managed.set(SiteModel.ENABLED, true);
-        siteModel.save(managed);
-
-        try {
-            Integer managedId = managed.get(SiteModel.ID);
-            assertThat(get("/admin/sites/" + managedId).body())
-                .contains("/admin/sites/" + managedId + "/page/processes");
-            HttpResponse<String> processes = get("/admin/sites/" + managedId + "/page/processes");
-            assertThat(processes.statusCode()).isEqualTo(200);
-            assertThat(processes.body()).contains("Stored process logs");
-        } finally {
-            siteModel.delete(managed);
-        }
 
         // The domains tab renders its empty state before any domain exists. Read over HTTP:
         // the empty state is server-rendered and RoutedLinkTargetsTest already reads this same

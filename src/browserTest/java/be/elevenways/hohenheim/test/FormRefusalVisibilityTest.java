@@ -27,7 +27,7 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
     void refusedSavesExplainThemselvesInWordsNotMachineTokens() throws Exception {
         // Step 1: a static site with settings, the positive anchor.
         var create = post("/admin/sites/new",
-            "name=Refusal+Probe&site_type=hohenheim%3Astatic&source=local"
+            "name=Refusal+Probe&upstream_kind=hohenheim%3Astatic"
                 + "&settings.root_path=%2Ftmp%2Frefusal-probe&settings.indexes=true");
         assertThat(create.statusCode()).as("the well-formed create succeeds").isEqualTo(302);
 
@@ -38,11 +38,11 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
         assertThat(before).as("settings persisted").isInstanceOf(Map.class);
         assertThat((Map<String, Object>) before).containsEntry("root_path", "/tmp/refusal-probe");
 
-        // Step 2: an update that submits settings WITHOUT their site_type
+        // Step 2: an update that submits settings WITHOUT their upstream_kind
         // discriminator is refused, leaves the record untouched, and the
         // rerendered error is a human sentence naming the missing sibling.
         var noSibling = post("/admin/sites/" + id,
-            "name=Refusal+Probe&source=local&settings.root_path=%2Ftmp%2Felsewhere");
+            "name=Refusal+Probe&settings.root_path=%2Ftmp%2Felsewhere");
         assertThat(noSibling.statusCode()).as("refusal rerenders the form").isEqualTo(200);
         site = Models.get(SiteModel.class).find().where(SiteModel.ID.eq(id)).first();
         Object afterNoSibling = site.get(SiteModel.SETTINGS);
@@ -51,13 +51,13 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
             .isEqualTo(before);
         assertThat(noSibling.body())
             .as("the field error is resolved copy, not a raw key")
-            .contains("could not be saved because no site_type")
+            .contains("could not be saved because no upstream_kind")
             .doesNotContain("data-unresolved>zenit.coercion");
 
         // Step 3: a nonsense scalar for a boolean setting is refused with the
         // boolean sentence, again with nothing written.
         var badBoolean = post("/admin/sites/" + id,
-            "name=Refusal+Probe&site_type=hohenheim%3Astatic&source=local"
+            "name=Refusal+Probe&upstream_kind=hohenheim%3Astatic"
                 + "&settings.root_path=%2Ftmp%2Frefusal-probe&settings.indexes=index.html");
         assertThat(badBoolean.statusCode()).isEqualTo(200);
         site = Models.get(SiteModel.class).find().where(SiteModel.ID.eq(id)).first();

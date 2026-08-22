@@ -446,7 +446,7 @@ class IncusKernelIsolationLiveTest {
         settings.put("memory_limit_mb", 128);
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, name + "-" + ownerRecordId);
-        row.set(InstanceModel.KIND, "hohenheim:incus_container");
+        row.set(InstanceModel.KIND, "hohenheim:system_container");
         row.set(InstanceModel.SETTINGS, settings);
         row.set(InstanceModel.SERVER_ID, host.get(ServerModel.ID));
         Models.get(InstanceModel.class).save(row);

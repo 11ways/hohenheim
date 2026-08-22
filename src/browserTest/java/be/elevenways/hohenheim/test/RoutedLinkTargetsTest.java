@@ -94,7 +94,7 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
     void domainsTabServesTheExactLinksItUsedToConcatenate() throws Exception {
         // 1. A site with one domain, so the tab has both header links and a row.
         var siteResponse = postForm("/admin/sites/new",
-            "name=Routed+Link+Site&site_type=hohenheim%3Aproxy&source=local"
+            "name=Routed+Link+Site&upstream_kind=hohenheim%3Aaddress"
             + "&settings.forward_host=127.0.0.1&settings.forward_port=9091");
         assertThat(siteResponse.statusCode()).as("step 1: the site is created").isIn(200, 302, 303);
         Row site = Models.get(SiteModel.class).find()

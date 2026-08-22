@@ -51,6 +51,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -764,7 +765,9 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             return Microcopy.of("fake_device_capable").withFilter("scope", "instance_kind");
         }
 
-        @Override public String getDescription() { return "in-memory device-capable test kind"; }
+        @Override public @NonNull Microcopy getDescription() {
+        return Microcopy.of("fake_device_capable").withFilter("scope", "instance_kind_description");
+    }
 
         @Override public Icon getIcon() { return Icon.of("flask"); }
 
@@ -772,7 +775,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
         @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 
-        @Override public @NonNull String requiredRuntime() { return ServerModel.RUNTIME_INCUS; }
+        @Override public @NonNull Set<String> supportedRuntimes() { return Set.of(ServerModel.RUNTIME_INCUS); }
 
         /** Its runtime really does implement DeviceAttachSupport, so it declares it. */
         @Override public boolean supportsDevices() { return true; }

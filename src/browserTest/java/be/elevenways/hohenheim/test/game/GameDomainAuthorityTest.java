@@ -78,7 +78,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         Row site = sites.createEmptyRow();
         site.set(SiteModel.NAME, "Game site");
         site.set(SiteModel.SLUG, "game-site");
-        site.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
@@ -475,7 +475,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         Row victimSite = sites.createEmptyRow();
         victimSite.set(SiteModel.NAME, "Arena site");
         victimSite.set(SiteModel.SLUG, "arena-site");
-        victimSite.set(SiteModel.SITE_TYPE, "hohenheim:static");
+        victimSite.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
         victimSite.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
         victimSite.set(SiteModel.STATUS, "active");
         victimSite.set(SiteModel.ENABLED, true);

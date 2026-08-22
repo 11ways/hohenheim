@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -44,7 +44,7 @@ class ForceSslAvailabilityTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        SiteTypes.boot();
+        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
@@ -81,10 +81,10 @@ class ForceSslAvailabilityTest {
 
         // Step 1: two sites, one with force_ssl OFF (the positive anchor) and one with
         // force_ssl ON (the model default the operator ticked).
-        Row plain = ProxyTestSupport.setupSite("hohenheim:proxy", "Plain Site", "plain-site",
+        Row plain = ProxyTestSupport.setupSite("hohenheim:address", "Plain Site", "plain-site",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
         ProxyTestSupport.addDomain(plain, "plain.fssl.test", "exact", null, false);
-        Row forced = ProxyTestSupport.setupSite("hohenheim:proxy", "Forced Site", "forced-site",
+        Row forced = ProxyTestSupport.setupSite("hohenheim:address", "Forced Site", "forced-site",
             Map.of("forward_host", "127.0.0.1", "forward_port", upstreamPort));
         addForceSslDomain(forced, "forced.fssl.test");
 

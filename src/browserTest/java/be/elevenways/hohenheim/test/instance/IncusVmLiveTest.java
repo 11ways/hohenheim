@@ -497,7 +497,7 @@ class IncusVmLiveTest {
             //    which the daemon refuses to go under -- a real constraint, not ours).
             Row row = Models.get(InstanceModel.class).createEmptyRow();
             row.set(InstanceModel.NAME, "vm-root-disk");
-            row.set(InstanceModel.KIND, "hohenheim:incus_vm");
+            row.set(InstanceModel.KIND, "hohenheim:vm");
             row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
                 "image", VM_IMAGE, "memory_limit_mb", 512, "root_disk_gb", 6)));
             row.set(InstanceModel.SERVER_ID, hostId);
@@ -616,7 +616,7 @@ class IncusVmLiveTest {
 
         Row template = Models.get(InstanceTemplateModel.class).createEmptyRow();
         template.set(InstanceTemplateModel.NAME, "vm-live-fixture");
-        template.set(InstanceTemplateModel.KIND, "hohenheim:incus_vm");
+        template.set(InstanceTemplateModel.KIND, "hohenheim:vm");
         template.set(InstanceTemplateModel.SETTINGS, settings);
         template.set(InstanceTemplateModel.REINSTALL_POLICY,
             InstanceTemplateModel.REINSTALL_PRESERVE);
@@ -645,7 +645,7 @@ class IncusVmLiveTest {
     private static int peerRecord(int hostId) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
         row.set(InstanceModel.NAME, "vm-isolation-peer");
-        row.set(InstanceModel.KIND, "hohenheim:incus_container");
+        row.set(InstanceModel.KIND, "hohenheim:system_container");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", PEER_IMAGE, "memory_limit_mb", 128)));
         row.set(InstanceModel.SERVER_ID, hostId);
