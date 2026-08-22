@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.stack;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -207,6 +208,22 @@ public final class StackServiceKind implements InstanceKindHandler {
                 notDeclarable.getMessage());
             return HARDENING;
         }
+    }
+
+    // Every field here is written from the stack's compose file, so this form is a
+    // READING surface far more often than an editing one: image, command, environment,
+    // volumes and ports answer "what is this service", and the probe, the ceilings and
+    // the two handles the stack owns fold away behind headers that say so.
+    static {
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.HEALTH,
+            List.of(HEALTH_CMD.getName(), HEALTH_INTERVAL_SECONDS.getName(),
+                HEALTH_TIMEOUT_SECONDS.getName(), HEALTH_RETRIES.getName(),
+                HEALTH_START_PERIOD_SECONDS.getName())));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME,
+            List.of(TMPFS_PATHS.getName(), CAPABILITIES.getName(),
+                MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.MANAGED,
+            List.of(STACK_NETWORK.getName(), SERVICE_NAME.getName())));
     }
 
     @Override

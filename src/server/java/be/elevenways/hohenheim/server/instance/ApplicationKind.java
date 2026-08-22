@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -19,6 +20,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.validation.validator.Range;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -121,6 +123,25 @@ public final class ApplicationKind implements InstanceKindHandler {
         DoubleField.builder().name("cpu_limit")
             .label(HohenheimFormCopy.label("cpu_limit"))
             .help(HohenheimFormCopy.help("cpu_limit")).build());
+
+    // The create decisions are where the code comes from, what image it ends up as and
+    // which port it serves; how it is built, when it is deployed, whether previews exist
+    // and what it may consume all have defaults, so they fold under headers that say what
+    // is inside. AIDEV-NOTE: declared after the fields -- Schema.addSection validates
+    // membership against the fields declared so far.
+    static {
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.BUILD,
+            HohenheimFormSections.join(
+                List.of(BUILDER.getName(), DOCKERFILE.getName(), BUILD_ARGUMENTS.getName()),
+                GitSourceSchema.BUILD_DETAIL)));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.DEPLOYMENT,
+            HohenheimFormSections.join(GitSourceSchema.DELIVERY,
+                List.of(HEALTH_PATH.getName(), KEEP_RELEASES.getName()),
+                GitSourceSchema.PREVIEWS)));
+        SETTINGS_SCHEMA.addSection(
+            HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME, List.of(
+                ENVIRONMENT_VARIABLES.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+    }
 
     /**
      * An application never runs: each deploy generates a {@code hohenheim:release} instance

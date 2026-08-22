@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.upstream.kinds;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -19,6 +20,7 @@ import io.undertow.util.Headers;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -88,6 +90,16 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("delay").suffix("ms").label(HohenheimFormCopy.label("delay"))
             .help(HohenheimFormCopy.help("delay")).build());
+
+    // The decision is WHERE to forward: scheme, host, port, or a unix socket instead.
+    // How the hop behaves once that is answered has six defaults that are right almost
+    // always, so they fold. AIDEV-NOTE: after the fields -- membership is validated eagerly.
+    static {
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.FORWARDING,
+            List.of(UPSTREAM_PROTOCOL.getName(), REQUEST_TIMEOUT.getName(),
+                WEBSOCKET_UPGRADE.getName(), IGNORE_CERTIFICATES.getName(),
+                REWRITE_LOCATION.getName(), DELAY.getName())));
+    }
 
     @Override
     public Identifier typeId() { return ID; }

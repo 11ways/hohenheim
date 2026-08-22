@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -124,6 +125,17 @@ public final class ReleaseKind implements InstanceKindHandler {
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
         DoubleField.builder().name("cpu_limit").label(HohenheimFormCopy.label("cpu_limit"))
             .help(HohenheimFormCopy.help("cpu_limit")).build());
+
+    // A release is GENERATED per deploy: what a reader wants is what it runs, and the four
+    // provenance handles the release engine stamped are evidence, not input. They stay in
+    // the form (folding is a display state, never a payload filter) under a header that
+    // says who owns them.
+    static {
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.LIMITS,
+            List.of(MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.MANAGED,
+            List.of(BUILT_IMAGE_ID.getName(), IMAGE_REF.getName(), SOURCE_FINGERPRINT.getName())));
+    }
 
     @Override
     public @NonNull Identifier typeId() { return ID; }
