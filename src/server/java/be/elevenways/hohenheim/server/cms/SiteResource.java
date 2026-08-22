@@ -1,17 +1,24 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimPickRules;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.proxy.RouteClaims.ClaimConflict;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
+import be.elevenways.hohenheim.site.SiteHostnamesCell;
+import be.elevenways.hohenheim.site.SiteTlsCell;
+import be.elevenways.hohenheim.site.SiteUpstreamCell;
+import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
@@ -31,10 +38,13 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
+import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -64,9 +74,36 @@ import java.util.UUID;
  */
 public class SiteResource extends RowResource {
 
+    /** Virtual column names (renderer cells). */
+    static final String HOSTNAMES_COLUMN = "hostnames";
+    static final String UPSTREAM_COLUMN = "upstream";
+    static final String TLS_COLUMN = "tls";
+
+    /**
+     * The site form: choice cards decide the upstream kind (each card names what it
+     * does in one sentence), the per-kind settings switch under it without a round
+     * trip, and the instance pick only wakes up for the {@code instance} kind --
+     * narrowed to instances the routing tier can actually serve.
+     */
     private final FormSpec formSpec = FormSpec.builder()
         .add(SiteModel.NAME)
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.UPSTREAM_KIND))
+        .add(Select.of(SiteModel.UPSTREAM_KIND)
+            .options(FieldFormEntryDefaults.enumOptionSource(SiteModel.UPSTREAM_KIND))
+            .presentation(Select.Presentation.CARDS)
+            .clearable(false)
+            .build())
+        // The pick resolves ONLY while the chosen upstream kind is the instance one
+        // (disabled otherwise), and offers only kinds whose serving container publishes
+        // a port. An instance is never created on a whim from inside a site form, so
+        // there is no "create new" here. The submit is re-narrowed server-side.
+        .add(RelationPick.of(SiteModel.INSTANCE_ID, InstanceModel.MODEL_ID)
+            .creatable(false).clearable(true)
+            .rulesFromSiblings(new HohenheimPickRules.UpstreamInstanceRules(
+                SiteModel.UPSTREAM_KIND.getName(),
+                InstanceUpstreamKind.ID.toString(),
+                InstanceKinds.kindsWhere(InstanceKindHandler::supportsSiteUpstream)),
+                "upstream_kind")
+            .build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SETTINGS))
         .add(SiteModel.ENABLED)
         .add(SiteModel.DESCRIPTION)
@@ -76,21 +113,63 @@ public class SiteResource extends RowResource {
             .creatable(false).build())
         .add(RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID)
             .creatable(false).build())
-        .add(RelationPick.of(SiteModel.INSTANCE_ID, InstanceModel.MODEL_ID)
-            .creatable(false).build())
         .build();
+
+    /**
+     * Prefill from the instance page's Expose action
+     * ({@code ?upstream_kind=hohenheim:instance&instance_id=N}); render-time only,
+     * the submit still runs full coercion and the upstream-instance narrowing.
+     */
+    @Override
+    public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
+        Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
+        String kind = conduit.getQueryParam("upstream_kind");
+        if (kind != null && !kind.isEmpty()
+                && UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind)) != null) {
+            values.put(SiteModel.UPSTREAM_KIND.getName(), kind);
+        }
+        String instanceId = conduit.getQueryParam("instance_id");
+        if (instanceId != null && !instanceId.isEmpty()) {
+            try {
+                values.put(SiteModel.INSTANCE_ID.getName(), Integer.parseInt(instanceId));
+            } catch (NumberFormatException ignored) {
+                // Malformed prefill: render the bare form.
+            }
+        }
+        return Map.copyOf(values);
+    }
 
     // AIDEV-NOTE: STATUS is deliberately absent. SiteModel.STATUS declares exactly ONE
     // member ("active") and every write sets it, so the column rendered the same pill on
     // every row forever -- a filter over it could only ever return the whole list.
+    // AIDEV-NOTE: the hostname/upstream/TLS cells each cost one small query per rendered
+    // row (page-capped); the upstream kind filter stays DECLARED without a visible enum
+    // column, so it renders labeled in the filter strip instead of duplicating the badge
+    // the upstream cell already draws.
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         // The slug names this site in every generated path, container name and log line,
         // so it reads under the name instead of costing a column of its own.
         .column(ColumnSpec.fromField(SiteModel.NAME).filterable().subtext("slug").build())
         .column(ColumnSpec.fromField(SiteModel.SLUG).hidden().build())
-        .column(ColumnSpec.fromField(SiteModel.UPSTREAM_KIND).filterable().build())
-        .column(ColumnSpec.fromField(SiteModel.ENABLED).filterable().build())
-        .column(ColumnSpec.fromField(SiteModel.CREATED_AT).filterable().build())
+        .column(ColumnSpec.virtual(HOSTNAMES_COLUMN,
+                Microcopy.of("hostnames").withFilter("scope", "site"))
+            .renderer("hohenheim:cms/cell/site-hostnames").build())
+        .column(ColumnSpec.virtual(UPSTREAM_COLUMN,
+                Microcopy.of("upstream").withFilter("scope", "site"))
+            .renderer("hohenheim:cms/cell/site-upstream").build())
+        .column(ColumnSpec.virtual(TLS_COLUMN, Microcopy.of("tls").withFilter("scope", "site"))
+            .renderer("hohenheim:cms/cell/site-tls").build())
+        // Enabled reads as ROW STATE (a disabled site renders muted, the strip keeps
+        // the tri-state filter) instead of costing a column; the picker still offers it.
+        .column(ColumnSpec.fromField(SiteModel.ENABLED).filterable().hidden().build())
+        // Off the default view: most sites gate nothing, so a column of blanks would
+        // push the actions column into horizontal scroll at laptop widths. The column
+        // picker (and the advanced filter) still offer it.
+        .column(ColumnSpec.fromField(SiteModel.ACCESS_LIST_ID)
+            .relation(RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
+            .hidden().build())
+        .column(ColumnSpec.fromField(SiteModel.UPSTREAM_KIND).filterable().hidden().build())
+        .column(ColumnSpec.fromField(SiteModel.CREATED_AT).filterable().hidden().build())
         .filter(FilterSpec.forField(SiteModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(SiteModel.NAME)).build())
         .filter(FilterSpec.forField(SiteModel.UPSTREAM_KIND, FilterSpec.Kind.SELECT)
@@ -100,7 +179,80 @@ public class SiteResource extends RowResource {
         .filter(FilterSpec.forField(SiteModel.CREATED_AT, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(SiteModel.CREATED_AT)).build())
         .defaultSort(SortSpec.desc(SiteModel.CREATED_AT.getName()))
+        .rowClasses(row -> Boolean.TRUE.equals(row.get(SiteModel.ENABLED))
+            ? "" : "hh-site-disabled")
         .build();
+
+    /** The three derived cells; everything else is plain fields. */
+    @Override
+    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        return switch (column.name()) {
+            case HOSTNAMES_COLUMN -> hostnamesCellOf(row);
+            case UPSTREAM_COLUMN -> upstreamCellOf(row);
+            case TLS_COLUMN -> tlsCellOf(row);
+            default -> super.cellValue(row, column);
+        };
+    }
+
+    private static @NonNull List<Row> domainsOf(@NonNull Row site) {
+        return Models.get(SiteDomainModel.class).findBySiteId(site.get(SiteModel.ID));
+    }
+
+    static @NonNull SiteHostnamesCell hostnamesCellOf(@NonNull Row site) {
+        List<Row> domains = domainsOf(site);
+        if (domains.isEmpty()) {
+            return new SiteHostnamesCell(null, 0);
+        }
+        return new SiteHostnamesCell(
+            String.valueOf((Object) domains.get(0).get(SiteDomainModel.HOSTNAME)),
+            domains.size() - 1);
+    }
+
+    static @NonNull SiteTlsCell tlsCellOf(@NonNull Row site) {
+        List<Row> domains = domainsOf(site);
+        if (domains.isEmpty()) {
+            return new SiteTlsCell(SiteTlsCell.NONE);
+        }
+        long forced = domains.stream()
+            .filter(domain -> Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)))
+            .count();
+        if (forced == domains.size()) {
+            return new SiteTlsCell(SiteTlsCell.FORCED);
+        }
+        return new SiteTlsCell(forced > 0 ? SiteTlsCell.PARTIAL : SiteTlsCell.OFF);
+    }
+
+    static @NonNull SiteUpstreamCell upstreamCellOf(@NonNull Row site) {
+        String kindKey = String.valueOf((Object) site.get(SiteModel.UPSTREAM_KIND));
+        UpstreamKindHandler handler = UpstreamKindHandlers.getHandler(kindKey);
+        Microcopy label = handler != null ? handler.getLabel()
+            : Microcopy.of("upstream").withFilter("scope", "site");
+        String icon = handler != null && handler.getIcon() != null
+            ? handler.getIcon().name() : null;
+        String color = handler != null ? handler.getColor() : null;
+
+        String instanceName = null;
+        String instanceUrl = null;
+        Integer instanceId = site.get(SiteModel.INSTANCE_ID);
+        if (instanceId != null) {
+            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            if (instance != null) {
+                instanceName = Models.get(InstanceModel.class).getDisplayTitle(instance);
+                instanceUrl = CmsRoutes.detail("admin", "instances", instanceId).toUrl();
+            }
+        }
+
+        String summary = null;
+        if (handler != null && instanceName == null) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> settings = site.get(SiteModel.SETTINGS) instanceof Map<?, ?> map
+                ? (Map<String, Object>) map : Map.of();
+            summary = handler.upstreamSummary(settings);
+        }
+
+        return new SiteUpstreamCell(kindKey, label, icon, color, summary,
+            instanceName, instanceUrl);
+    }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "site"); }
@@ -396,6 +548,7 @@ public class SiteResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "rollback_release"))
             .label(Microcopy.of("rollback").withFilter("scope", "site"))
             .icon(Icon.of("clock-rotate-left"))
+            .inlineInRow(false)
             .description(Microcopy.of("rollback_hint").withFilter("scope", "site"))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("rollback").withFilter("scope", "site"))
@@ -413,12 +566,18 @@ public class SiteResource extends RowResource {
     }
 
     /** The enable/disable operate action, shared with the delegated manage panel. */
+    /**
+     * Enable/disable rides the OVERFLOW: rows keep exactly Edit and Delete inline, the
+     * calm strip the admin-UI wave promises, and the Enabled column already answers
+     * the question the inline button used to.
+     */
     protected final @NonNull RowAction<Row> toggleAction() {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "toggle_site"))
             .label(Microcopy.of("toggle").withFilter("scope", "site"))
             .dynamicLabel(row -> Microcopy.of(Boolean.TRUE.equals(row.get(SiteModel.ENABLED))
                 ? "disable" : "enable").withFilter("scope", "site"))
             .icon(Icon.of("power-off"))
+            .inlineInRow(false)
             .handler((row, ctx) -> {
                 boolean current = Boolean.TRUE.equals(row.get(SiteModel.ENABLED));
                 // No pre-check: the write-pipeline enable invariant (installEnableInvariant)
@@ -438,6 +597,7 @@ public class SiteResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "clone_site"))
             .label(Microcopy.of("clone").withFilter("scope", "site"))
             .icon(Icon.of("copy"))
+            .inlineInRow(false)
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("clone").withFilter("scope", "site"))
                 .body(Microcopy.of("clone_confirm").withFilter("scope", "site"))
@@ -503,8 +663,11 @@ public class SiteResource extends RowResource {
     public @NonNull List<RecordScopedPage<Row>> subpages() {
         // The "access" tab is the GENERIC record-access page, contributed by
         // zenit-auth through RecordSubpageRegistry (part of frameworkSubpages).
+        // AIDEV-NOTE: no Deployments tab anymore -- the release history moved to the
+        // APPLICATION instance (InstanceDeploymentsPage) when the engine was re-keyed;
+        // a second copy here would be two UIs over one operation history.
         List<RecordScopedPage<Row>> pages = new ArrayList<>(
-            List.of(new SiteDomainsPage(), new SiteDeploymentsPage(), new SiteDevSessionsPage()));
+            List.of(new SiteDomainsPage(), new SiteDevSessionsPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
     }
@@ -527,11 +690,11 @@ public class SiteResource extends RowResource {
     @Override
     public @NonNull List<HeaderAction> headerActions() {
         List<HeaderAction> actions = new ArrayList<>(super.headerActions());
+        // Builds and releases moved to the INSTANCES header when the release engine was
+        // re-keyed to the application; a site owns hostnames, not artifacts.
         actions.addAll(List.of(
             CmsSupport.relatedList("auth_providers_link", "auth-providers", "auth_provider", Icon.of("key")),
-            CmsSupport.relatedList("previews_link", "previews", "preview_deployment", Icon.of("flask")),
-            CmsSupport.relatedList("builds_link", "builds", "build_operation", Icon.of("hammer")),
-            CmsSupport.relatedList("releases_link", "releases", "release_operation", Icon.of("rocket"))));
+            CmsSupport.relatedList("previews_link", "previews", "preview_deployment", Icon.of("flask"))));
         return actions;
     }
 

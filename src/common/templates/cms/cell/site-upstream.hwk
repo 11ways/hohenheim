@@ -1,0 +1,19 @@
+{#- Upstream cell: the kind badge plus where the traffic actually goes -- the served
+    instance (linked) for the instance kind, the kind's own one-line target otherwise. -#}
+{% declare value: SiteUpstreamCell %}
+{% if value != null %}
+<span class="hh-site-upstream" attr:data-upstream-kind={% value.kindKey %}>
+    {% if value.color != null %}
+    <pl-badge color-set={% value.color %}>{{ value.kindLabel }}</pl-badge>
+    {% else %}
+    <pl-badge variant="secondary">{{ value.kindLabel }}</pl-badge>
+    {% /if %}
+    {% if value.instanceUrl != null %}
+    <a href={% value.instanceUrl %}>{{ value.instanceName }}</a>
+    {% elseif value.instanceName != null %}
+    <span>{{ value.instanceName }}</span>
+    {% elseif value.summary != null %}
+    <span class="hh-upstream-summary">{{ value.summary }}</span>
+    {% /if %}
+</span>
+{% /if %}
