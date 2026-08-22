@@ -186,6 +186,66 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         assertThat((Object) saved.get(InstanceModel.SERVER_ID)).isEqualTo(incusHostId);
     }
 
+    /**
+     * The advanced section: a fold is a DISPLAY state, never a payload filter.
+     *
+     * Steps 1-4 are the contract (rendered collapsed, inputs present, an untouched
+     * create keeps the declared default, a folded field a person DID set persists);
+     * step 5 is the falsification -- a refusal about a folded field forces the section
+     * open, because a refusal nobody can see reads as a save that silently did nothing.
+     */
+    @Test
+    @Order(3)
+    void theAdvancedSectionFoldsWithoutFilteringTheSubmit() throws Exception {
+        String form = adminGet("/admin/instances/new").body();
+
+        // 1. The section renders, folded on first paint.
+        assertThat(form).as("step 1: the create form declares its advanced section")
+            .contains("data-section=\"advanced\"");
+        assertThat(form).as("step 1: and it starts folded")
+            .contains("data-collapsed=\"true\"");
+
+        // 2. Folded is not absent: both members are in the DOM with their names, which
+        //    is the whole difference between a disclosure and visibleIn.
+        assertThat(form).as("step 2: the folded crash policy is in the DOM")
+            .contains("name=\"crash_policy\"");
+        assertThat(form).as("step 2: so is the folded backup target")
+            .contains("name=\"backup_target_id\"");
+
+        // 3. A create touching only the visible fields lands on the declared default.
+        HttpResponse<String> plain = httpPostForm("/admin/instances/new",
+            "name=cf-visible-only&kind=hohenheim%3Adocker_container&server_id=" + dockerHostId,
+            sessionToken, csrfToken);
+        assertThat(plain.statusCode()).as("step 3: the create redirects").isIn(302, 303);
+        Row visibleOnly = findInstance("cf-visible-only");
+        assertThat(visibleOnly).as("step 3: the record exists").isNotNull();
+        assertThat((Object) visibleOnly.get(InstanceModel.CRASH_POLICY))
+            .as("step 3: an untouched folded field keeps its declared default")
+            .isEqualTo(InstanceModel.CRASH_NONE);
+
+        // 4. And a create that DID open the fold persists what was typed there.
+        HttpResponse<String> folded = httpPostForm("/admin/instances/new",
+            "name=cf-advanced-set&kind=hohenheim%3Adocker_container&server_id=" + dockerHostId
+                + "&crash_policy=" + InstanceModel.CRASH_RESTART,
+            sessionToken, csrfToken);
+        assertThat(folded.statusCode()).as("step 4: the create redirects").isIn(302, 303);
+        assertThat((Object) findInstance("cf-advanced-set").get(InstanceModel.CRASH_POLICY))
+            .as("step 4: a folded input still posts, and still coerces")
+            .isEqualTo(InstanceModel.CRASH_RESTART);
+
+        // 5. FALSIFICATION: a refusal about a folded field re-renders the section OPEN.
+        HttpResponse<String> refused = httpPostForm("/admin/instances/new",
+            "name=cf-bad-policy&kind=hohenheim%3Adocker_container&server_id=" + dockerHostId
+                + "&crash_policy=not-a-declared-policy",
+            sessionToken, csrfToken);
+        assertThat(refused.statusCode()).as("step 5: a refusal re-renders, never redirects")
+            .isNotIn(302, 303);
+        assertThat(findInstance("cf-bad-policy")).as("step 5: and nothing persisted").isNull();
+        assertThat(refused.body()).as("step 5: the section that holds the refusal is open")
+            .contains("data-section=\"advanced\"")
+            .contains("data-collapsed=\"false\"");
+    }
+
     private static Row findInstance(String name) {
         return Models.get(InstanceModel.class).find()
             .where(InstanceModel.NAME.eq(name))

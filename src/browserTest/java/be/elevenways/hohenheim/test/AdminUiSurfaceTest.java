@@ -13,6 +13,10 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -452,6 +456,189 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         assertThat(engine)
             .as("step 4: an owner-managed kind is never offered Deploy")
             .doesNotContain("deploy_instance");
+    }
+
+    /**
+     * The list toolbar's ONE quiet overflow carries the sibling catalogs, and the title
+     * bar carries none of them.
+     *
+     * Steps 1-3 are the contract, step 4 the falsification: the demoted peers used to be
+     * HeaderAction.Url buttons in the title bar, and the whole point of declaring them as
+     * related pages is that no such button can come back.
+     */
+    @Test
+    void siblingCatalogsRideTheRelatedPagesMenu() throws Exception {
+        // 1. The toolbar renders exactly one overflow. The marker is the ELEMENT, not the
+        //    token: the trigger inside it carries data-cms-header-overflow, so a bare
+        //    substring counts two.
+        String list = adminGet("/admin/instances").body();
+        assertThat(countOf(list, OVERFLOW_MENU))
+            .as("step 1: the list toolbar renders its one overflow, and only one")
+            .isEqualTo(1);
+
+        // 2. Opening it is the only way to read it: the menu's content is rendered
+        //    client-side into the portal, so the served HTML holds an empty element.
+        assertThat(relatedItems("/admin/instances"))
+            .as("step 2: every demoted catalog is offered as a related page")
+            .contains("/admin/backup-targets", "/admin/instance-quotas",
+                "/admin/game-domains", "/admin/builds", "/admin/releases");
+
+        // 3. And the sites list makes the same promise over its own two siblings.
+        assertThat(relatedItems("/admin/sites"))
+            .as("step 3: both of the site tier's catalogs are related pages")
+            .contains("/admin/auth-providers", "/admin/previews");
+
+        // 4. FALSIFICATION: the header-action ids the old hack minted are gone. If one
+        //    came back it would render as a button beside Create, which is the shape
+        //    RelatedPage exists to stop.
+        assertThat(list).as("step 4: no sibling link rides a header action any more")
+            .doesNotContain("backup_targets_link", "instance_quotas_link",
+                "game_domains_link", "builds_link", "releases_link");
+        assertThat(adminGet("/admin/sites").body())
+            .as("step 4: nor on the site tier")
+            .doesNotContain("auth_providers_link", "previews_link");
+    }
+
+    /**
+     * FALSIFICATION of the /manage half: a delegated resource inherits its operator
+     * parent's declarations, and an ADMIN peer slug is not registered in the tenant
+     * panel at all -- so the tenant list must declare none. ManagePanel's own
+     * registration walk would refuse a leftover at boot, which is why reaching this
+     * assertion at all is half the proof.
+     */
+    @Test
+    void theTenantPanelDeclaresNoRelatedPages() {
+        Panel admin = PanelRegistry.getBySlug("admin");
+        Panel manage = PanelRegistry.getBySlug("manage");
+        assertThat(admin).isNotNull();
+        assertThat(manage).isNotNull();
+
+        PanelPeer operatorList = admin.peerBySlug("instances");
+        PanelPeer tenantList = manage.peerBySlug("instances");
+        assertThat(operatorList).isInstanceOf(Resource.class);
+        assertThat(tenantList).isInstanceOf(Resource.class);
+
+        assertThat(((Resource<?>) operatorList).relatedPages())
+            .as("the operator list names its demoted catalogs").isNotEmpty();
+        assertThat(((Resource<?>) tenantList).relatedPages())
+            .as("the tenant list names none of them").isEmpty();
+        assertThat(((Resource<?>) manage.peerBySlug("sites")).relatedPages())
+            .as("nor does the tenant site list").isEmpty();
+    }
+
+    /**
+     * The record tab strip stops at the everyday destinations; housekeeping tabs live in
+     * the "More" menu. Step 3 is the falsification.
+     */
+    @Test
+    void theTabStripFoldsHousekeepingIntoMore() throws Exception {
+        String page = adminGet("/admin/instances/" + workspaceId + "/page/overview").body();
+
+        // AIDEV-NOTE: the split is positional because the menu's items are PORTALLED to
+        // the end of the document (he-bottom) while the strip's anchors stay in place.
+        // The load-bearing half is therefore what is NOT in the strip window.
+        int more = page.indexOf("cms-record-tabs-more");
+        assertThat(more).as("step 1: the strip renders its More disclosure").isGreaterThan(-1);
+        String strip = page.substring(page.indexOf("cms-record-tabs"), more);
+        String menu = page.substring(more);
+
+        // 2. What an operator opens daily stays on the strip.
+        assertThat(strip).as("step 2: the front door, the console, the files and the stats"
+                + " stay visible")
+            .contains("/page/overview", "/page/console", "/page/files", "/page/stats");
+
+        // 3. FALSIFICATION: the housekeeping tabs are NOT on the strip -- they are in the
+        //    menu. Before the declaration they filled the strip in declaration order and
+        //    pushed Files and Stats out of it.
+        for (String slug : List.of("volumes", "snapshots", "backups", "schedules")) {
+            assertThat(strip).as("step 3: " + slug + " is not an everyday tab")
+                .doesNotContain("/page/" + slug);
+            assertThat(menu).as("step 3: " + slug + " is reachable in the More menu")
+                .contains("/page/" + slug);
+        }
+    }
+
+    /**
+     * The record action band: the declared primary verb leads, at most three verbs sit
+     * inline, and a destructive one never does. Step 3 is the falsification.
+     */
+    @Test
+    void destructiveRecordActionsAreNeverInline() throws Exception {
+        String page = adminGet("/admin/instances/" + workspaceId + "/page/overview").body();
+
+        int band = page.indexOf("data-cms-record-actions");
+        assertThat(band).as("step 1: the record renders its action band").isGreaterThan(-1);
+        int menu = page.indexOf("cms-record-actions-overflow", band);
+        assertThat(menu).as("step 1: and its one overflow").isGreaterThan(band);
+
+        String inline = page.substring(band, menu);
+        String overflow = page.substring(menu);
+
+        // 2. Deploy is the DECLARED primary verb, so it leads the inline band, and the
+        //    band never grows past its cap however many actions the resource declares.
+        assertThat(inline).as("step 2: the primary verb is inline")
+            .contains("deploy_instance");
+        assertThat(countOf(inline, "data-action-id="))
+            .as("step 2: at most three verbs sit inline")
+            .isLessThanOrEqualTo(3);
+
+        // 3. FALSIFICATION: destroying an instance and its data is declared destructive,
+        //    so it can never buy an inline slot -- it is in the menu's destructive tail.
+        assertThat(inline).as("step 3: the irreversible verb is not inline")
+            .doesNotContain("destroy_instance_data");
+        assertThat(overflow).as("step 3: it is in the menu")
+            .contains("destroy_instance_data");
+
+        // 4. And the housekeeping verbs that opted out are there with it.
+        assertThat(inline).as("step 4: housekeeping opted out of the inline band")
+            .doesNotContain("snapshot_instance", "backup_instance", "expose_instance");
+        assertThat(overflow).as("step 4: and is reachable in the menu")
+            .contains("snapshot_instance", "backup_instance");
+    }
+
+    /** The list toolbar's one overflow MENU (the trigger's data attribute is not it). */
+    private static final String OVERFLOW_MENU = "<pl-dropdown-menu class=\"cms-header-overflow\"";
+
+    /**
+     * Where that menu's content actually lives once it opens: the shell's portal.
+     *
+     * AIDEV-NOTE: :visible is load-bearing. Every dropdown on the page portals its
+     * popup into he-bottom whether open or not (the user menu's is there too), so an
+     * unqualified selector waits on the first CLOSED one and times out.
+     */
+    private static final String OVERFLOW_POPUP =
+        "he-bottom .pl-dropdown-menu-content__popup:visible";
+
+    /**
+     * The hrefs the list toolbar's overflow offers under its "Related pages" label.
+     *
+     * AIDEV-NOTE: this drives the browser rather than reading the served HTML because
+     * the menu's content is rendered CLIENT-side into the he-bottom portal -- the
+     * pl-dropdown-menu-content the server sends is empty, so any substring assertion
+     * over the response would have matched the command palette's peer index instead and
+     * passed with the menu itself broken.
+     */
+    private List<String> relatedItems(String listPath) {
+        navigateToApp(listPath);
+        waitForHydration();
+        page.click("[data-cms-header-overflow]");
+        page.waitForSelector(OVERFLOW_POPUP + " a[href]");
+        List<String> hrefs = new ArrayList<>();
+        var links = page.locator(OVERFLOW_POPUP + " a[href]");
+        for (int index = 0; index < links.count(); index++) {
+            hrefs.add(links.nth(index).getAttribute("href"));
+        }
+        return hrefs;
+    }
+
+    private static int countOf(String haystack, String needle) {
+        int count = 0;
+        int at = haystack.indexOf(needle);
+        while (at > -1) {
+            count++;
+            at = haystack.indexOf(needle, at + needle.length());
+        }
+        return count;
     }
 
     /** The Expose action's target: the site create form arrives prefilled. */

@@ -231,6 +231,12 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
             "instance-deployments");
         capture("/admin/sites", "sites-list");
         capture("/admin/sites/new", "site-create-blank");
+        // The same form with its advanced section opened: the pair is the review
+        // evidence that a fold hides fields rather than dropping them.
+        capture("/admin/sites/new", "site-create-advanced-open", () -> {
+            page.click("[data-section='advanced'] pl-collapsible-trigger");
+            waitForReactiveIdle();
+        });
         capture("/admin/sites/new?upstream_kind=hohenheim%3Ainstance&instance_id="
             + applicationId, "site-create-expose-prefill");
         capture("/admin/runtime-images", "runtime-images-list");
