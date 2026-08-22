@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.SiteModel;
+
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.cms.InstanceConsolePage;
@@ -23,10 +23,9 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import be.elevenways.zenit.server.http.ReturnTarget;
 
-
 /**
- * Per-site operational control: the Deployments tab forms, the instance console and
- * the dev tunnel.
+ * Operational control handlers: the instance Deploys-tab forms, the instance console
+ * and the dev tunnel.
  */
 final class SiteControlHandlers {
 
@@ -34,48 +33,34 @@ final class SiteControlHandlers {
     }
 
     /**
-     * Deploy control (forms on the site's Deployments tab).
+     * Deploy control (forms on the instance's Deploys tab).
      *
-     * AIDEV-NOTE: both verbs act on the APPLICATION the site exposes, never on the site.
-     * The CANCEL verb is gone with the queue it cancelled: the release engine deploys
-     * synchronously behind a health gate, and what a failed candidate does is get destroyed
-     * while the prior release keeps serving -- there is no queued job to take back.
+     * AIDEV-NOTE: keyed by the APPLICATION instance since brief 9 moved the tab off the
+     * site -- the verbs act on the record that owns the releases. The CANCEL verb is
+     * gone with the queue it cancelled: the release engine deploys synchronously behind
+     * a health gate, and what a failed candidate does is get destroyed while the prior
+     * release keeps serving -- there is no queued job to take back.
      */
     static void initDeployControl() {
-        HohenheimEndpoints.SITES_DEPLOY.setHandler(conduit -> {
-            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
-            if (refusedSiteAccess(conduit, siteId)) {
+        HohenheimEndpoints.INSTANCES_DEPLOY.setHandler(conduit -> {
+            Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
+            if (refusedInstancePower(conduit, instanceId)) {
                 return null;
             }
-            Integer applicationId = applicationOf(siteId);
-            if (applicationId != null) {
-                Datasource datasource = Db.current();
-                JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
-                    ApplicationDeploys.deployQuietly(applicationId, null, "manual")));
-            }
-            return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, siteId));
+            Datasource datasource = Db.current();
+            JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
+                ApplicationDeploys.deployQuietly(instanceId, null, "manual")));
+            return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, instanceId));
         });
 
-        HohenheimEndpoints.SITES_ROLLBACK.setHandler(conduit -> {
-            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
-            if (refusedSiteAccess(conduit, siteId)) {
+        HohenheimEndpoints.INSTANCES_ROLLBACK.setHandler(conduit -> {
+            Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
+            if (refusedInstancePower(conduit, instanceId)) {
                 return null;
             }
-            Integer applicationId = applicationOf(siteId);
-            if (applicationId != null) {
-                ReleaseEngine.rollback(applicationId);
-            }
-            return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, siteId));
+            ReleaseEngine.rollback(instanceId);
+            return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, instanceId));
         });
-    }
-
-    /** The application a site exposes, or null. */
-    private static Integer applicationOf(Integer siteId) {
-        if (siteId == null) {
-            return null;
-        }
-        var site = Models.get(SiteModel.class).findById(siteId);
-        return site == null ? null : site.get(SiteModel.INSTANCE_ID);
     }
 
     static void initInstanceConsole() {
@@ -127,14 +112,17 @@ final class SiteControlHandlers {
      * rendered on), validated by {@link ReturnTarget}; forged values fall back
      * to the admin page.
      */
-    private static String deploymentsPageUrl(Conduit conduit, Integer siteId) {
+    private static String deploymentsPageUrl(Conduit conduit, Integer instanceId) {
         return ReturnTarget.or(ReturnTarget.read(conduit),
-            CmsRoutes.subpage(HandlerSupport.ADMIN, "sites", siteId, "deployments").toUrl());
+            CmsRoutes.subpage(HandlerSupport.ADMIN, "instances", instanceId,
+                "deployments").toUrl());
     }
 
-    /** Site-scoped gate: admin or a manage grant on THIS site; true = 403 already written. */
-    private static boolean refusedSiteAccess(Conduit conduit, Integer siteId) {
-        if (siteId != null && HohenheimAccess.canManageSite(conduit, siteId)) {
+    /** Instance-scoped gate: the POWER capability on THIS record; true = 403 written. */
+    private static boolean refusedInstancePower(Conduit conduit, Integer instanceId) {
+        if (instanceId != null && HohenheimAccess.hasInstanceCapability(
+                RecordSourceGate.accessContextOf(conduit), instanceId,
+                HohenheimAccess.POWER)) {
             return false;
         }
         conduit.forbidden();

@@ -1,8 +1,8 @@
-{#- Deployments tab on a git-sourced site: deploy history with captured build
-    logs, plus deploy-now / cancel / rollback controls. -#}
+{#- Deploys tab on a release-managed instance (an application): the release history
+    with captured build logs, plus deploy-now / rollback controls. -#}
 {% declare title: String %}
-{% declare siteId: Integer %}
-{% declare siteName: String %}
+{% declare instanceId: Integer %}
+{% declare instanceName: String %}
 {% declare isDeploying: Boolean = false %}
 {% declare canRollback: Boolean = false %}
 {% declare currentCommit: String = "" %}
@@ -27,7 +27,7 @@
 {% block "main" %}
 <section class="cms-resource-list-page">
     <header class="cms-resource-list-header">
-        <h1>{{ siteName }}</h1>
+        <h1>{{ instanceName }}</h1>
     </header>
 
     {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
@@ -35,9 +35,9 @@
 
     <pl-card>
         <pl-card-header>
-            <pl-card-title>{{ t("title", scope: "site_deployments") }}</pl-card-title>
+            <pl-card-title>{{ t("title", scope: "deployments") }}</pl-card-title>
             {% if currentCommit != "" %}
-            <pl-card-description>{{ t("current_commit", scope: "site_deployments", commit: currentCommit) }}</pl-card-description>
+            <pl-card-description>{{ t("current_commit", scope: "deployments", commit: currentCommit) }}</pl-card-description>
             {% /if %}
         </pl-card-header>
         <pl-card-content>
@@ -47,12 +47,12 @@
                     page (/admin or /manage); forged values fall back to /admin. -#}
                 <form use:Zenit.form={% deployTarget %}>
                     <input type="hidden" name={% returnParam %} value={% returnUrl %}>
-                    <pl-button variant={% "primary" %} type={% "submit" %} disabled={% isDeploying %}>{{ t("deploy_now", scope: "site_deployments") }}</pl-button>
+                    <pl-button variant={% "primary" %} type={% "submit" %} disabled={% isDeploying %}>{{ t("deploy_now", scope: "deployments") }}</pl-button>
                 </form>
                 {% if canRollback %}
-                <form use:Zenit.form={% rollbackTarget %} use:CmsConfirm.destructive={% t("rollback_confirm", scope: "site_deployments") %}>
+                <form use:Zenit.form={% rollbackTarget %} use:CmsConfirm.destructive={% t("rollback_confirm", scope: "deployments") %}>
                     <input type="hidden" name={% returnParam %} value={% returnUrl %}>
-                    <pl-button variant={% "destructive" %} type={% "submit" %}>{{ t("rollback", scope: "site_deployments") }}</pl-button>
+                    <pl-button variant={% "destructive" %} type={% "submit" %}>{{ t("rollback", scope: "deployments") }}</pl-button>
                 </form>
                 {% /if %}
             </div>
@@ -60,11 +60,11 @@
             {% if deployments %}
             <pl-table striped={% true %}>
                 <pl-table-header><pl-table-row>
-                    <pl-table-head>{{ t("started", scope: "site_deployments") }}</pl-table-head>
-                    <pl-table-head>{{ t("status", scope: "site_deployments") }}</pl-table-head>
-                    <pl-table-head>{{ t("trigger", scope: "site_deployments") }}</pl-table-head>
-                    <pl-table-head>{{ t("commit", scope: "site_deployments") }}</pl-table-head>
-                    <pl-table-head>{{ t("duration", scope: "site_deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("started", scope: "deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("status", scope: "deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("trigger", scope: "deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("commit", scope: "deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("duration", scope: "deployments") }}</pl-table-head>
                 </pl-table-row></pl-table-header>
                 <pl-table-body>
                     {% each deployments as index, deploy %}
@@ -93,7 +93,7 @@
                             {% if deploy.get("hasLog") == true %}
                             <pl-collapsible>
                                 <pl-collapsible-trigger>
-                                    <pl-button variant={% "ghost" %} size={% "sm" %}>{{ t("build_log", scope: "site_deployments") }}</pl-button>
+                                    <pl-button variant={% "ghost" %} size={% "sm" %}>{{ t("build_log", scope: "deployments") }}</pl-button>
                                 </pl-collapsible-trigger>
                                 <pl-collapsible-content>
                                     <pre class="hh-deploy-log">{{ deploy.get("log") }}</pre>
@@ -108,8 +108,8 @@
             </pl-table>
             {% else %}
             <pl-empty-state icon="rocket">
-                <pl-empty-state-title>{{ t("empty", scope: "site_deployments") }}</pl-empty-state-title>
-                <pl-empty-state-description>{{ t("empty_description", scope: "site_deployments") }}</pl-empty-state-description>
+                <pl-empty-state-title>{{ t("empty", scope: "deployments") }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ t("empty_description", scope: "deployments") }}</pl-empty-state-description>
             </pl-empty-state>
             {% /if %}
         </pl-card-content>
@@ -118,24 +118,24 @@
     {% if webhookSecret != "" %}
     <pl-card class="hh-webhook-card">
         <pl-card-header>
-            <pl-card-title>{{ t("webhook", scope: "site_deployments") }}</pl-card-title>
-            <pl-card-description>{{ t("webhook_description", scope: "site_deployments") }}</pl-card-description>
+            <pl-card-title>{{ t("webhook", scope: "deployments") }}</pl-card-title>
+            <pl-card-description>{{ t("webhook_description", scope: "deployments") }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
             <dl class="hh-webhook-fields">
-                <dt>{{ t("payload_url", scope: "site_deployments") }}</dt>
+                <dt>{{ t("payload_url", scope: "deployments") }}</dt>
                 <dd>
                     <code data-webhook-url>{{ webhookUrl }}</code>
-                    <pl-copy-button value={% webhookUrl %} ariaLabel={% t("copy_webhook_url", scope: "site_deployments") %}></pl-copy-button>
+                    <pl-copy-button value={% webhookUrl %} ariaLabel={% t("copy_webhook_url", scope: "deployments") %}></pl-copy-button>
                 </dd>
-                <dt>{{ t("secret", scope: "site_deployments") }}</dt>
+                <dt>{{ t("secret", scope: "deployments") }}</dt>
                 <dd>
                     <code data-webhook-secret>{{ webhookSecret }}</code>
-                    <pl-copy-button value={% webhookSecret %} ariaLabel={% t("copy_webhook_secret", scope: "site_deployments") %}></pl-copy-button>
+                    <pl-copy-button value={% webhookSecret %} ariaLabel={% t("copy_webhook_secret", scope: "deployments") %}></pl-copy-button>
                 </dd>
             </dl>
             {% if !webhookAutoDeploy %}
-            <pl-alert variant="warning">{{ t("auto_deploy_disabled", scope: "site_deployments") }}</pl-alert>
+            <pl-alert variant="warning">{{ t("auto_deploy_disabled", scope: "deployments") }}</pl-alert>
             {% /if %}
         </pl-card-content>
     </pl-card>

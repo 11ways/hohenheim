@@ -250,7 +250,7 @@ public class SiteDomainModel extends Model {
                 // without writing it back would leave a glob-under-exact row storable by an
                 // operator, and a whole set of consumers read this column RAW to decide
                 // real things -- CertificateRequestPage and ManagePanel gate certificate
-                // orders on `MATCH_EXACT.equals(column)`, SiteDeploymentsPage queries on it,
+                // orders on `MATCH_EXACT.equals(column)`, InstanceDeploymentsPage queries on it,
                 // TlsPassthroughRoutes builds SNI routes from it. Each of those would have
                 // to re-derive the tier, which is exactly the duplication that produced the
                 // takeover. One write here makes every raw reader correct by construction.
