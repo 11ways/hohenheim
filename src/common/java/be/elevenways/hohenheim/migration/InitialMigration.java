@@ -185,23 +185,6 @@ public class InitialMigration extends HohenheimMigration {
             table.addIndex("access_rules_parent_id_index", List.of("parent_id"));
         });
 
-        schema.createTable("proclogs", table -> {
-            table.id();
-            table.addColumn("site_id", ColumnType.INTEGER,
-                column -> column.nullable(false).references("sites", "id"));
-            table.addColumn("pid", ColumnType.INTEGER,
-                column -> column.nullable(true));
-            table.addColumn("log_html", ColumnType.TEXT,
-                column -> column.nullable(true));
-            table.addColumn("line_count", ColumnType.INTEGER,
-                column -> column.nullable(true).defaultValue(0));
-            table.timestamps();
-            table.addColumn("saved_at", ColumnType.DATETIME,
-                column -> column.nullable(true));
-            table.addIndex("proclogs_site_id_index", List.of("site_id"));
-            table.addIndex("proclogs_site_id_created_at_index", List.of("site_id", "created_at"));
-        });
-
         schema.createTable("system_users", table -> {
             table.id();
             table.addColumn("name", ColumnType.STRING,
@@ -226,23 +209,6 @@ public class InitialMigration extends HohenheimMigration {
             table.unique("system_users_name_unique", List.of("name"));
             table.addIndex("system_users_obsolete_index", List.of("obsolete"));
             table.unique("system_users_site_id_unique", List.of("site_id"));
-        });
-
-        schema.createTable("node_versions", table -> {
-            table.id();
-            table.addColumn("version", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(64));
-            table.addColumn("path", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(512));
-            table.addColumn("source", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(64));
-            table.addColumn("obsolete", ColumnType.BOOLEAN,
-                column -> column.nullable(true).defaultValue(false));
-            table.addColumn("last_seen_at", ColumnType.DATETIME,
-                column -> column.nullable(true));
-            table.timestamps();
-            table.unique("node_versions_path_unique", List.of("path"));
-            table.addIndex("node_versions_obsolete_index", List.of("obsolete"));
         });
 
         schema.createTable("servers", table -> {
@@ -1477,9 +1443,7 @@ public class InitialMigration extends HohenheimMigration {
         schema.dropTable("notification_channels");
         schema.dropTable("managed_databases");
         schema.dropTable("servers");
-        schema.dropTable("node_versions");
         schema.dropTable("system_users");
-        schema.dropTable("proclogs");
         schema.dropTable("access_rules");
         schema.dropTable("access_lists");
         schema.dropTable("certificates");

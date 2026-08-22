@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterAll;
@@ -52,7 +51,6 @@ class DnsSecTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();

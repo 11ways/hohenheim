@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.upstream;
 
-import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.registry.Identifier;
 
@@ -32,20 +31,6 @@ public class UpstreamKindHandlers {
         Identifier id = handler.typeId();
         UpstreamKinds.REGISTRY.add(id, handler);
         HANDLERS.put(id, handler);
-    }
-
-    /**
-     * One-time boot of the shared process-management infrastructure.
-     *
-     * AIDEV-NOTE: the model-funnel write hooks (SiteApiKeys, ReservedEnv, dyndns
-     * token hashing, the site enable invariant) deliberately do NOT install here
-     * anymore: they live in the discovered {@code HohenheimWriteHooks} ZenitModule,
-     * whose MODULES boot stage runs before STARTHTTP structurally. Installing them
-     * from an explicitly-ordered call site is what let the dyndns hook land AFTER
-     * the server had bound.
-     */
-    public static void boot() {
-        ProcessInfrastructure.init();
     }
 
     public static UpstreamKindHandler getHandler(String typeIdentifier) {

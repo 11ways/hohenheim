@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -44,7 +43,6 @@ class ManagedNodeSocketTest {
         nodeAvailable = new File("/usr/local/bin/node").canExecute()
             || new File("/usr/bin/node").canExecute();
 
-        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();

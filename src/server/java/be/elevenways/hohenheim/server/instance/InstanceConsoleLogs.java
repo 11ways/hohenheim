@@ -16,7 +16,7 @@ import java.time.Instant;
  * The DURABLE half of the console: one UPSERTED {@code instance_logs} row per workload
  * episode, so history outlives the in-memory ring and the controller process.
  *
- * AIDEV-NOTE: the ProclogModel discipline, not a new one -- upsert into the episode's own
+ * AIDEV-NOTE: the deleted proclog tier's discipline, not a new one -- upsert into the episode's own
  * row (never one row per flush), a periodic flush plus a final one at exit, and
  * {@code CleanOldInstanceLogs} sweeping by age. Retention is therefore bounded on BOTH
  * axes: each row is capped by the ring it mirrors, and the row set is capped by the sweeper.

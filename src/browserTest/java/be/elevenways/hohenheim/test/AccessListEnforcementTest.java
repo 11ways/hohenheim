@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -45,7 +44,6 @@ class AccessListEnforcementTest {
 
     @BeforeAll
     static void boot() throws Exception {
-        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();

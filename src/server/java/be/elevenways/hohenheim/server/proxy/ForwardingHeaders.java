@@ -21,7 +21,7 @@ final class ForwardingHeaders {
     static final HttpString X_REAL_IP = new HttpString("X-Real-IP");
 
     // Trusted-remote-proxy authentication, owned by ProxyScheme. Deliberately distinct from
-    // the managed-process control key on ManagedProcessSiteHandler: that one authorizes
+    // the deleted managed-process control key: that one authorized
     // process-control actions, this one authorizes client-IP and proto propagation.
     private static final HttpString X_HOHENHEIM_KEY = ProxyScheme.X_HOHENHEIM_KEY;
 
@@ -101,7 +101,7 @@ final class ForwardingHeaders {
         // Undertow's reuseXForwarded behavior then appends the connected peer to the sanitized
         // chain, preserving only a chain authenticated by X-Hohenheim-Key.
         // AIDEV-NOTE: this strip happens BEFORE dispatchToRoute, so the managed-process
-        // control API (ManagedProcessSiteHandler's X-Hohenheim-Key branch) is unreachable
+        // control API (the deleted X-Hohenheim-Key branch) is unreachable
         // through this listener today. Moving the strip later would make a privileged
         // endpoint publicly reachable -- a deliberate decision, never a side effect.
         requestHeaders.remove(X_HOHENHEIM_KEY);

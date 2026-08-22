@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.zenit.common.Zenit;
@@ -37,7 +36,6 @@ class TlsCertificateTest {
         if (initialized) return;
         initialized = true;
 
-        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();

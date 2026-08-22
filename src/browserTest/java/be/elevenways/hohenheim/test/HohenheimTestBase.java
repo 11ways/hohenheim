@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.GrantModel;
@@ -85,14 +84,12 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.DNS, true);
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.FIREWALL, true);
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.STACKS, true);
-        HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.PROCESSES, true);
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Roles.DATABASES, true);
 
         // Load the (empty) test settings file into the context so the panel's
         // framework SettingsPage can locate its editable DryFileSource.
         HohenheimSettingsFiles.load();
 
-        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         // Before the migrations, exactly as ServerMain does it: the declarations carry the
         // per-model liveness definition zenit-auth's orphan-purge migration consults.

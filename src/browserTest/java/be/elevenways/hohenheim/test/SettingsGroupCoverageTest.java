@@ -25,7 +25,7 @@ class SettingsGroupCoverageTest {
      * losing those keys.
      */
     private static final Set<String> DECLARED_GROUPS = Set.of(
-        "proxy", "roles", "ssl", "dns", "logging", "node", "storage", "stacks",
+        "proxy", "roles", "ssl", "dns", "logging", "storage", "stacks",
         "database", "security", "process", "auth_proteus", "proxy_auth", "quota",
         // The instance tier's own groups. The loader has forced them since they
         // were declared; this pin had simply drifted behind, which is the failure

@@ -26,7 +26,6 @@ import be.elevenways.hohenheim.server.incus.IncusEndpoint;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
-import be.elevenways.hohenheim.server.process.ProcessCapacity;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -367,7 +366,6 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
             budget != null ? clampInt(budget) : 0,
             clampInt(booked),
             budget != null ? clampInt(InstanceCapacity.bookableMbOn(serverId, budget)) : 0,
-            clampInt(ProcessCapacity.bookedMbOn(serverId)),
             measuredAt != null ? measuredAt.toString() : null,
             maxAge != null ? maxAge : 0);
     }
@@ -405,10 +403,6 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
         facts.add(WidgetFact.of(text("budget", locales, resolver), megabytes(capacity.budgetMb())));
         facts.add(WidgetFact.of(text("bookable", locales, resolver),
             megabytes(capacity.bookableMb())));
-        if (capacity.processBookedMb() > 0) {
-            facts.add(WidgetFact.of(text("process_booked", locales, resolver),
-                megabytes(capacity.processBookedMb())));
-        }
         return facts;
     }
 

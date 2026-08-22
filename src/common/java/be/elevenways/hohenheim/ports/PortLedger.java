@@ -39,8 +39,8 @@ import java.util.Set;
  * serializes write transactions (BEGIN IMMEDIATE), StackServiceModel/StackModel declare a
  * transaction around save + claim sync, so a friendly pre-write ledger READ cannot go
  * stale against a rival writer; the unique index stays as the storage-level backstop for
- * any writer that dodges the discipline. The OS probe (PortAllocator, C5) stays a
- * SEPARATE, later check: kernel-ephemeral consumers (IpcChannel, testcontainers) will
+ * any writer that dodges the discipline. The OS probe ({@code PortProbe}) stays a
+ * SEPARATE, later check: kernel-ephemeral consumers (testcontainers, orphans) will
  * never have ledger rows, so the ledger can never replace the probe.
  */
 public final class PortLedger {

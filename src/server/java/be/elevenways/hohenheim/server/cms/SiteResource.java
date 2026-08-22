@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.docker.SiteInstances;
 import be.elevenways.hohenheim.server.docker.SiteReleases;
-import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.hohenheim.server.proxy.RouteClaims.ClaimConflict;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
@@ -380,7 +379,6 @@ public class SiteResource extends RowResource {
         actions.add(this.toggleAction());
         actions.add(this.cloneAction());
         actions.add(this.rollbackAction());
-        actions.add(this.generateApiKeyAction());
         return actions;
     }
 
@@ -407,52 +405,6 @@ public class SiteResource extends RowResource {
                     Microcopy.of("rollback_done").withFilter("scope", "site"));
             })
             .build();
-    }
-
-    /**
-     * Mint a control-API key for a managed-process site. Only the digest is
-     * stored, so the toast is the ONE disclosure of the plaintext.
-     */
-    private @NonNull RowAction<Row> generateApiKeyAction() {
-        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "generate_api_key"))
-            .label(Microcopy.of("generate_api_key").withFilter("scope", "site"))
-            .icon(Icon.of("key"))
-            .description(Microcopy.of("generate_api_key_hint").withFilter("scope", "site"))
-            .visibleFor((row, ctx) -> supportsApiKeys(row))
-            .handler((row, ctx) -> generateApiKey(row))
-            .build();
-    }
-
-    /** @return true when this site's type declares an {@code api_keys} setting */
-    private static boolean supportsApiKeys(@NonNull Row site) {
-        UpstreamKindHandler handler = UpstreamKindHandlers.getHandler((String) site.get(SiteModel.UPSTREAM_KIND));
-        return handler != null && handler.getSchema().getField(SiteApiKeys.SETTING_NAME) != null;
-    }
-
-    private @NonNull CmsActionResult generateApiKey(@NonNull Row site) {
-        if (!supportsApiKeys(site)) {
-            return CmsActionResult.errorToast(
-                Microcopy.of("api_keys_unsupported").withFilter("scope", "site"));
-        }
-
-        String plaintext = SiteApiKeys.mint();
-        @SuppressWarnings("unchecked")
-        Map<String, Object> settings = site.get(SiteModel.SETTINGS) != null
-            ? new LinkedHashMap<>((Map<String, Object>) site.get(SiteModel.SETTINGS))
-            : new LinkedHashMap<>();
-        List<String> keys = new ArrayList<>(SiteApiKeys.normalize(settings.get(SiteApiKeys.SETTING_NAME)));
-        keys.add(SiteApiKeys.digest(plaintext));
-        settings.put(SiteApiKeys.SETTING_NAME, keys);
-        site.set(SiteModel.SETTINGS, settings);
-        ActivityLog.withAction("api_key_minted", null, () -> this.model().save(site));
-
-        // AIDEV-NOTE: withSecretArg, never withArg — the toast is the ONLY
-        // disclosure and flash toasts are session data; the flash carries a
-        // single-use SecretDisclosures handle so the plaintext never rests in
-        // auth_sessions.data. Re-mint stays the documented recovery.
-        return CmsActionResult.refreshWithToast(
-                Microcopy.of("api_key_minted").withFilter("scope", "site"))
-            .withSecretArg("key", plaintext);
     }
 
     /** The enable/disable operate action, shared with the delegated manage panel. */
@@ -506,11 +458,6 @@ public class SiteResource extends RowResource {
         Map<String, Object> clonedSettings = site.get(SiteModel.SETTINGS) != null
             ? new LinkedHashMap<>((Map<String, Object>) site.get(SiteModel.SETTINGS))
             : null;
-        if (clonedSettings != null) {
-            // AIDEV-NOTE: the source's keys authenticate the source's processes;
-            // handing them to a second site silently widens what each key unlocks.
-            clonedSettings.remove(SiteApiKeys.SETTING_NAME);
-        }
         clone.set(SiteModel.SETTINGS, clonedSettings);
         // AIDEV-NOTE: the clone deliberately does NOT copy instance_id. The source and
         // the workload now live on the instance (phase-0 design section 3), and two sites

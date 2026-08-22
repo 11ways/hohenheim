@@ -29,7 +29,7 @@ import java.util.Map;
 /**
  * Handles git webhook requests on the proxy port; intercepted by SiteDispatcher before
  * hostname-based routing, which never runs the zenit conduit chain -- so the signature
- * IS the authentication and core's RateLimiter is driven directly (the SiteApiKeys
+ * IS the authentication and core's RateLimiter is driven directly (the hashed-bearer
  * precedent).
  *
  * Security shape: every refusal on the way to signature verification -- unknown slug,

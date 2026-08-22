@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -33,7 +32,6 @@ class AcmeAccountEmailTest {
         if (initialized) return;
         initialized = true;
 
-        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();

@@ -414,7 +414,7 @@ public class GitDeployment {
     /**
      * Deny the build the tenant-network vocabulary its own runtime process is denied.
      *
-     * AIDEV-NOTE: this is the SAME uid chain ManagedProcessSiteHandler.isolate() applies
+     * AIDEV-NOTE: this is the SAME uid chain the deleted process lane's isolate() applied
      * (idempotent, so build and runtime share one chain). Without a run-as uid there is
      * nothing to key a deny on: the only identity the build would have is the DAEMON's
      * own, and a rule keyed on that cuts the control plane off from itself.

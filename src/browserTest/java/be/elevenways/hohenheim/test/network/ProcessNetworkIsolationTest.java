@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import org.junit.jupiter.api.BeforeAll;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.ProcessNetworkPolicy;
-import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import org.junit.jupiter.api.Test;
 
@@ -13,7 +12,6 @@ import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -166,93 +164,6 @@ class ProcessNetworkIsolationTest {
             assertThat(netns.probe(SITE_UID, METADATA, PORT))
                 .as("step 8: re-applying blocks the metadata service again")
                 .isEqualTo("BLOCKED");
-        }
-    }
-
-    /**
-     * The sweep's process pass against the same real kernel: divergence is READ out of the
-     * kernel, repaired through the verified applier, and the site is contained when the
-     * repair does not take.
-     */
-    @Test
-    void theSweepRepairsAProcessChainAndContainsTheSiteWhenItCannotBeRepaired()
-            throws IOException {
-        LiveLane.require(LiveLane.Need.NETNS, UidMappedNetns.available(),
-            "cannot build a uid-mapped netns");
-
-        try (UidMappedNetns netns = new UidMappedNetns()) {
-            LiveLane.require(LiveLane.Need.NETNS, netns.highestMappedUid() >= CONTROL_UID,
-                "the /etc/subuid range is too small to map the second uid");
-            wire(netns);
-            Path resolvConf = writeResolvConf("nameserver " + RESOLVER + "\n");
-            ProcessNetworkPolicy policy = netns.enforcingPolicy(resolvConf);
-
-            List<String> killed = new CopyOnWriteArrayList<>();
-            List<VerifyWorkloadIsolation.ProcessSubject> subjects = List.of(
-                new VerifyWorkloadIsolation.ProcessSubject(SITE_UID, "site-a", () -> {
-                    killed.add("site-a");
-                    return "killed the child processes of site 'site-a'";
-                }),
-                new VerifyWorkloadIsolation.ProcessSubject(CONTROL_UID, "site-b", () -> {
-                    killed.add("site-b");
-                    return "killed the child processes of site 'site-b'";
-                }));
-
-            // 1. One site policied, one not: the sweep reports exactly that split and
-            //    repairs the second, which only real packets can confirm.
-            policy.apply(SITE_UID, "site-a");
-            VerifyWorkloadIsolation.HostOutcome first =
-                VerifyWorkloadIsolation.sweepProcesses(subjects, policy);
-            assertThat(first).isNotNull();
-            assertThat(first.verifiable()).as("step 1: the kernel answered").isTrue();
-            assertThat(first.enforced()).as("step 1: the applied site is found enforced")
-                .containsExactly("site 'site-a' (uid " + SITE_UID + ")");
-            assertThat(first.repaired()).as("step 1: the unpolicied site is repaired")
-                .containsExactly("site 'site-b' (uid " + CONTROL_UID + ")");
-            assertThat(netns.probe(CONTROL_UID, METADATA, PORT))
-                .as("step 1: the repair holds against real packets")
-                .isEqualTo("BLOCKED");
-
-            // 2. The reboot/flush shape: the whole table gone under running children.
-            netns.setup("nft", "delete", "table", "inet", ProcessNetworkPolicy.table());
-            assertThat(netns.probe(SITE_UID, METADATA, PORT))
-                .as("step 2: with the table flushed the escape is back")
-                .isEqualTo("REACHABLE");
-            VerifyWorkloadIsolation.HostOutcome second =
-                VerifyWorkloadIsolation.sweepProcesses(subjects, policy);
-            assertThat(second).isNotNull();
-            assertThat(second.repaired()).as("step 2: one sweep repairs both identities")
-                .hasSize(2);
-            assertThat(netns.probe(SITE_UID, METADATA, PORT))
-                .as("step 2: and the deny is back in the kernel").isEqualTo("BLOCKED");
-            assertThat(killed).as("step 2: nothing was contained: the repair took").isEmpty();
-
-            // 3. Diverged AND unrepairable: the site is contained rather than left running
-            //    unisolated. The kernel stays readable, only writes are refused.
-            NftRunner readOnly = readOnlyRunner(netns);
-            ProcessNetworkPolicy refusing = new ProcessNetworkPolicy(readOnly, () -> true,
-                resolvConf);
-            netns.setup("nft", "delete", "table", "inet", ProcessNetworkPolicy.table());
-            VerifyWorkloadIsolation.HostOutcome third =
-                VerifyWorkloadIsolation.sweepProcesses(subjects, refusing);
-            assertThat(third).isNotNull();
-            assertThat(third.verifiable()).as("step 3: the kernel was readable").isTrue();
-            assertThat(third.contained()).as("step 3: both sites are contained")
-                .hasSize(2);
-            assertThat(killed).as("step 3: containment really killed both sites' children")
-                .containsExactly("site-a", "site-b");
-
-            // 4. Enforcement OFF is UNVERIFIABLE, never a reason to kill anything: the
-            //    pre-enforcement decision, identical to the container tiers'.
-            killed.clear();
-            VerifyWorkloadIsolation.HostOutcome fourth = VerifyWorkloadIsolation.sweepProcesses(
-                subjects, netns.disabledPolicy(resolvConf));
-            assertThat(fourth).isNotNull();
-            assertThat(fourth.verifiable()).as("step 4: reported unverifiable").isFalse();
-            assertThat(fourth.errors()).as("step 4: and it says why, on the record")
-                .anyMatch(error -> error.contains("security.nftables_enabled"));
-            assertThat(killed).as("step 4: a host that merely cannot enforce kills nothing")
-                .isEmpty();
         }
     }
 

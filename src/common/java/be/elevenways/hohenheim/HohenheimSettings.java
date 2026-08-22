@@ -226,13 +226,6 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
-        public static final SettingDefinition<Boolean> PROCESSES = GROUP.buildSetting("processes", Boolean.class)
-            .defaultValue(true)
-            .description("Run managed child processes (Node.js and friends): the process monitor, "
-                + "port and socket allocators")
-            .restartRequired()
-            .build();
-
         public static final SettingDefinition<Boolean> DATABASES = GROUP.buildSetting("databases", Boolean.class)
             .defaultValue(true)
             .description("Run managed databases: provisioning, backups and the site database links")
@@ -360,19 +353,6 @@ public class HohenheimSettings {
             .defaultValue("/var/log/hohenheim/access.log")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
             .description("Access log file path")
-            .build();
-    }
-
-    // --- Node.js discovery ---
-    public abstract class Node {
-        public static final SettingGroup GROUP = HOHENHEIM.createGroup("node")
-            .label("Node.js")
-            .describe("Node.js runtime discovery")
-            .icon("code");
-
-        public static final SettingDefinition<String> LOCATIONS = GROUP.buildSetting("locations", String.class)
-            .description("Additional N-style version directories, separated by commas or new lines")
-            .multiline()
             .build();
     }
 

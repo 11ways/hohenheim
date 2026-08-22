@@ -13,8 +13,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *                      (so the operator sees "evidence too old", not "never measured")
  * @param budgetMb      the bookable budget (MB); 0 when unmeasured
  * @param bookedMb      what the instance tier currently holds
- * @param bookableMb    budget minus the managed-process tier's own bookings
- * @param processBookedMb what the managed-process tier holds on this host
+ * @param bookableMb    what is still bookable on this host
  * @param measuredAtIso when the memory reading was produced, null when never
  * @param maxAgeHours   the declared freshness bound ({@code capacity.facts_max_age_hours})
  */
@@ -25,7 +24,6 @@ public record HostCapacityView(
     int budgetMb,
     int bookedMb,
     int bookableMb,
-    int processBookedMb,
     @Nullable String measuredAtIso,
     int maxAgeHours
 ) {

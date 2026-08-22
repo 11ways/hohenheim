@@ -3,12 +3,10 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.server.task.CleanOldActivity;
 import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
-import be.elevenways.hohenheim.server.task.CleanOldProclogs;
 import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
 import be.elevenways.hohenheim.server.task.MonitorStacks;
 import be.elevenways.hohenheim.server.task.ObserveInstanceDisk;
@@ -18,7 +16,6 @@ import be.elevenways.hohenheim.server.task.ReconcileDockerResources;
 import be.elevenways.hohenheim.server.task.ResignDnssecZones;
 import be.elevenways.hohenheim.server.task.SecuritySweep;
 import be.elevenways.hohenheim.server.task.SuperviseProxyListeners;
-import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
 import be.elevenways.hohenheim.server.task.VerifyIncusIsolation;
@@ -70,7 +67,6 @@ class HohenheimTaskBootstrapTest {
         BackupDatabases.class,
         CleanOldActivity.class,
         CleanOldInstanceLogs.class,
-        CleanOldProclogs.class,
         CleanOrphanCertificates.class,
         MonitorStacks.class,
         ObserveInstanceDisk.class,
@@ -80,7 +76,6 @@ class HohenheimTaskBootstrapTest {
         ResignDnssecZones.class,
         SecuritySweep.class,
         SuperviseProxyListeners.class,
-        UpdateNodeVersions.class,
         UpdateSystemIpAddresses.class,
         UpdateSystemUsers.class,
         VerifyIncusIsolation.class,
@@ -98,7 +93,6 @@ class HohenheimTaskBootstrapTest {
         System.setProperty("hohenheim.settings", settingsDry.getAbsolutePath());
         HohenheimSettingsFiles.load();
 
-        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         // auto-discovery creates system_task + the M0xx tables
         TestDatabases.freshDatabase();

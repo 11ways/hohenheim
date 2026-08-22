@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.host.HostPreflight;
-import be.elevenways.hohenheim.server.process.ProcessCapacity;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -116,19 +115,18 @@ public final class InstanceCapacity {
     }
 
     /**
-     * THE ceiling the instance tier is judged against on one host: its budget less what
-     * the managed-process tier already holds there.
+     * THE ceiling the instance tier is judged against on one host.
      *
-     * AIDEV-NOTE: one derivation, on purpose, and it is the fix for a chooser and a write
-     * that disagreed. {@link #reserve} judged against {@code budget - process bookings}
-     * while {@link InstancePlacement#chooseForBucket} compared against the bare budget, so
-     * on any host running managed children placement could CHOOSE a host whose write then
-     * refused {@code host_capacity_reached} -- the "chooser picks a host the deploy refuses
-     * by name" class the whole placement seam exists to kill. Both sides now call THIS;
-     * never re-spell the subtraction at a call site.
+     * AIDEV-NOTE: ONE derivation, on purpose, and it is the fix for a chooser and a write
+     * that disagreed -- {@link #reserve} and {@link InstancePlacement#chooseForBucket} once
+     * compared against different numbers, so placement could CHOOSE a host whose write then
+     * refused {@code host_capacity_reached}. Both sides call THIS; never re-spell it at a
+     * call site. The subtraction it used to carry was the managed-process tier's separate
+     * bucket, deleted with the host-user lane (phase-0 design section 7); the instance tier
+     * is now the only bucket on a host.
      */
     public static long bookableMbOn(int serverId, long budgetMb) {
-        return Math.max(0, budgetMb - ProcessCapacity.bookedMbOn(serverId));
+        return Math.max(0, budgetMb);
     }
 
     // -- the budget -----------------------------------------------------------
@@ -249,9 +247,6 @@ public final class InstanceCapacity {
         Row server = Models.get(ServerModel.class).findById(serverId);
         Long budget = server == null ? null : budgetMbOf(server);
         try {
-            // The host budget is shared with the managed-process tier, whose children book
-            // their own declared caps in a separate bucket -- see ProcessCapacity for why
-            // it is separate and what the cross-subtraction costs.
             Quotas.reserve(bucketOf(serverId), amountMb,
                 budget == null ? Long.MAX_VALUE : bookableMbOn(serverId, budget));
         } catch (QuotaExceeded full) {

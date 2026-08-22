@@ -31,7 +31,6 @@ public final class HohenheimRoles {
         DNS(HohenheimSettings.Roles.DNS),
         FIREWALL(HohenheimSettings.Roles.FIREWALL),
         STACKS(HohenheimSettings.Roles.STACKS),
-        PROCESSES(HohenheimSettings.Roles.PROCESSES),
         DATABASES(HohenheimSettings.Roles.DATABASES),
         INSTANCES(HohenheimSettings.Roles.INSTANCES);
 

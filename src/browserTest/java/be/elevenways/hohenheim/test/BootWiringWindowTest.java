@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -55,7 +54,6 @@ class BootWiringWindowTest {
         System.setProperty("hohenheim.settings", settingsDry.getAbsolutePath());
         HohenheimSettingsFiles.load();
 
-        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         HohenheimTestRuntime.declareAccessModelsOnce();
         TestDatabases.freshDatabase();

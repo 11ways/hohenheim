@@ -15,7 +15,6 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
-import be.elevenways.hohenheim.server.process.ProcessCapacity;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -379,11 +378,10 @@ class InstancePlacementTest {
      * most room left, never the one holding the fewest instance megabytes.
      *
      * AIDEV-NOTE: this is the journey the previous score could not survive, and it needs
-     * TWO hosts to say anything at all -- the managed-process journey below uses one, so
-     * it pins the CEILING and can discriminate no tie-break whatever. Both pairs below
-     * are built so the workload fits on BOTH candidates: the assertion is then purely
-     * about ranking, and a step that fails is a score regression rather than an
-     * eligibility one. Steps 2 and 4 are the ones that fail under `fewest booked`.
+     * TWO hosts to say anything at all. Both pairs below are built so the workload fits on
+     * BOTH candidates: the assertion is then purely about ranking, and a step that fails is
+     * a score regression rather than an eligibility one. Steps 2 and 4 are the ones that
+     * fail under `fewest booked`.
      */
     @Test
     void theScoreIsRemainingHeadroomNotTheInstanceBucketAlone() {
@@ -410,128 +408,35 @@ class InstancePlacementTest {
                     + " is the only one of the two carrying a workload at all")
                 .isEqualTo(large);
 
-            // 3. PAIR TWO, the OTHER tier. The managed-process bucket is not the instance
-            //    bucket, so a host can read as empty here and have almost nothing left.
-            //    Both of these are measured at 4096 MB, so budget cannot be what decides.
-            int childHeavy = host("score-children", ServerModel.ADMISSION_ADMITTED,
+            // 3. PAIR TWO, EQUAL BUDGETS. Both are measured at 4096 MB, so budget alone
+            //    cannot decide; only what each already carries can.
+            int lightlyLoaded = host("score-light", ServerModel.ADMISSION_ADMITTED,
                 ServerModel.POSTURE_SHARED_CONTAINER, 4096L);
             int instanceHeavy = host("score-instances", ServerModel.ADMISSION_ADMITTED,
                 ServerModel.POSTURE_SHARED_CONTAINER, 4096L);
-            ProcessCapacity.reserve(childHeavy, 3584);
-            try {
-                liveInstanceOn(instanceHeavy, BUCKET, 512);
-                assertThat(InstanceCapacity.bookedMbOn(childHeavy))
-                    .as("step 3: the child-heavy host's INSTANCE bucket is empty")
-                    .isZero();
-                assertThat(Map.of(
-                        "children", InstanceCapacity.bookableMbOn(childHeavy, 4096L)
-                            - InstanceCapacity.bookedMbOn(childHeavy),
-                        "instances", InstanceCapacity.bookableMbOn(instanceHeavy, 4096L)
-                            - InstanceCapacity.bookedMbOn(instanceHeavy)))
-                    .as("step 3: while it has 512 MB left and its sibling has 3584")
-                    .isEqualTo(Map.of("children", 512L, "instances", 3584L));
+            liveInstanceOn(instanceHeavy, BUCKET, 512);
+            assertThat(Map.of(
+                    "light", InstanceCapacity.bookableMbOn(lightlyLoaded, 4096L)
+                        - InstanceCapacity.bookedMbOn(lightlyLoaded),
+                    "heavy", InstanceCapacity.bookableMbOn(instanceHeavy, 4096L)
+                        - InstanceCapacity.bookedMbOn(instanceHeavy)))
+                .as("step 3: one has 4096 MB left, the other 3584")
+                .isEqualTo(Map.of("light", 4096L, "heavy", 3584L));
 
-                // 4. So the score must read the SAME subtraction the ceiling does. Both
-                //    hosts fit a 256 MB workload; the one with real room takes it.
-                //    Excluding the pair-one winner keeps this about pair two.
-                assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), large))
-                    .as("step 4: a host whose budget the managed-process tier has eaten"
-                        + " must not read as the emptiest machine in the fleet")
-                    .isEqualTo(instanceHeavy);
-            } finally {
-                ProcessCapacity.release(childHeavy, 3584);
-            }
+            // 4. So the score must read the SAME subtraction the ceiling does. Both
+            //    hosts fit a 256 MB workload; the one with real room takes it.
+            //    Excluding the pair-one winner keeps this about pair two.
+            assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), large))
+                .as("step 4: the host with real room wins, not the one that merely"
+                    + " happens to hold fewer instances")
+                .isEqualTo(lightlyLoaded);
 
-            // 5. TIE-BREAK, unchanged and still the lowest id: with the child bookings
-            //    released both 4096 MB hosts have equal headroom only after the instance
-            //    the sibling carries is accounted for, so the tie is made explicit by
-            //    giving the child-heavy host the same 512 MB of instances.
-            liveInstanceOn(childHeavy, BUCKET, 512);
+            // 5. TIE-BREAK, unchanged and still the lowest id: the tie is made explicit
+            //    by giving the lightly-loaded host the same 512 MB of instances.
+            liveInstanceOn(lightlyLoaded, BUCKET, 512);
             assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), large))
                 .as("step 5: equal headroom goes to the lowest id, deterministically")
-                .isEqualTo(Math.min(childHeavy, instanceHeavy));
-        });
-    }
-
-    /**
-     * The chooser and the write judge against ONE denominator, so a host running managed
-     * child processes cannot be chosen for a workload its own write then refuses.
-     *
-     * AIDEV-NOTE: these were two expressions that happened to agree while no host ran
-     * managed processes -- InstanceCapacity.reserve subtracted ProcessCapacity's bookings
-     * from the budget, chooseForBucket compared against the bare budget. Both now call
-     * InstanceCapacity.bookableMbOn; a step that fails here means someone re-spelled the
-     * subtraction at one of the two call sites.
-     *
-     * AIDEV-NOTE: ONE host, deliberately -- this is the CEILING, and a single candidate is
-     * the clearest way to ask "does the chooser offer what the write refuses". It can
-     * therefore discriminate no ranking at all; the score lives in
-     * {@link #theScoreIsRemainingHeadroomNotTheInstanceBucketAlone}.
-     */
-    @Test
-    void theChooserSubtractsManagedProcessBookingsExactlyLikeTheWriteDoes() {
-        Db.run(datasource, () -> {
-            // 1. One eligible host, 1024 MB measured, and 768 MB of it already held by
-            //    managed child processes -- a booking the instance tier does not own but
-            //    must respect (charge == cgroup cap on both tiers).
-            int only = host("proc", ServerModel.ADMISSION_ADMITTED,
-                ServerModel.POSTURE_SHARED_CONTAINER, 1024L);
-            ProcessCapacity.reserve(only, 768);
-            try {
-                assertThat(InstanceCapacity.bookableMbOn(only, 1024L))
-                    .as("step 1: only 256 MB of the host's budget is left to instances")
-                    .isEqualTo(256);
-
-                // 2. A 512 MB workload does NOT fit, and the chooser must say so rather
-                //    than pick this host and let the deploy refuse by name afterwards.
-                //
-                //    AIDEV-NOTE: the description rides the not-null assertion, because a
-                //    chooser that stops refusing hands keyOf a null and "expecting actual
-                //    not to be null" names neither the gate nor what it failed to stop.
-                Throwable refusedChoice = catchThrowable(() ->
-                    InstancePlacement.chooseForBucket(BUCKET, workload(512), null));
-                assertThat(refusedChoice)
-                    .as("step 2: the chooser CHOSE a host with 256 MB of headroom for a"
-                        + " 512 MB workload -- the write there refuses by name, so this is"
-                        + " the chooser sending the operator into a wall")
-                    .isNotNull();
-                assertThat(keyOf(refusedChoice))
-                    .as("step 2: and the refusal is the capacity one")
-                    .isEqualTo("no_placement_capacity");
-
-                // 3. And the write really would have refused it -- this is the exact
-                //    'chooser picks a host the deploy refuses by name' pairing.
-                Throwable refusedWrite = catchThrowable(() -> {
-                    Row row = Models.get(InstanceModel.class).createEmptyRow();
-                    row.set(InstanceModel.NAME, PREFIX + "proc-victim");
-                    row.set(InstanceModel.KIND, DOCKER_KIND);
-                    row.set(InstanceModel.SETTINGS,
-                        Map.of("image", "fake/image", "memory_limit_mb", 512));
-                    row.set(InstanceModel.SERVER_ID, only);
-                    Models.get(InstanceModel.class).save(row);
-                });
-                assertThat(refusedWrite)
-                    .as("step 3: the WRITE side must refuse the very workload step 2 was"
-                        + " asked about -- if it does not, the two sides disagree and this"
-                        + " test proves nothing")
-                    .isNotNull();
-                assertThat(keyOf(refusedWrite))
-                    .as("step 3: the two sides agree on the SAME denominator")
-                    .isEqualTo("host_capacity_reached");
-
-                // 4. POSITIVE ANCHOR: the host is not disqualified, only sized. Exactly
-                //    the 256 MB the processes left over still lands here.
-                assertThat(InstancePlacement.chooseForBucket(BUCKET, workload(256), null))
-                    .as("step 4: what fits in the remaining headroom is still placeable")
-                    .isEqualTo(only);
-                int landed = liveInstanceOn(only, BUCKET, 256);
-                assertThat(InstanceCapacity.bookedMbOn(only))
-                    .as("step 4: and the write took it, so both tiers total the budget")
-                    .isEqualTo(256);
-                assertThat(landed).isPositive();
-            } finally {
-                ProcessCapacity.release(only, 768);
-            }
+                .isEqualTo(Math.min(lightlyLoaded, instanceHeavy));
         });
     }
 

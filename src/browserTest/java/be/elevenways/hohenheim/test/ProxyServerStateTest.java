@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import org.junit.jupiter.api.*;
@@ -26,7 +25,6 @@ class ProxyServerStateTest {
         if (initialized) return;
         initialized = true;
 
-        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         // Declare the full-node role set: this class boots the runtime without the

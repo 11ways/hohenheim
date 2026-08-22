@@ -50,9 +50,7 @@ public final class HohenheimHandlers {
         DynamicDnsHandlers.init();
         DatabaseHandlers.init();
         ServerMediaHandlers.init();
-        SiteControlHandlers.initProcessControl();
         SiteControlHandlers.initDeployControl();
-        SiteControlHandlers.initTerminal();
         SiteControlHandlers.initInstanceConsole();
         SiteControlHandlers.initDevTunnel();
         initApi();

@@ -5,7 +5,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Shape checks for stored and adopted secret values, shared by every place that
- * hashes a bearer credential in place ({@code SiteApiKeys}, {@code DynamicDnsService}).
+ * hashes a bearer credential in place ({@code DynamicDnsService}).
  *
  * @author Jelle De Loecker
  */
