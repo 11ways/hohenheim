@@ -9006,10 +9006,6 @@
     "text": "Host '{$name}' kan geen volumequota afdwingen (backend: {$backend}) en kan dus geen {$kind} draaien. Koppel een btrfs- of zfs-bestandssysteem aan de volumemap of kies een andere host.",
     "scope": "violations"
   },
-  "workspace_runtime_not_wired": {
-    "text": "Werkplekken kunnen nog niet worden uitgerold: de werkplek-runtime volgt in een latere fase-0-stap",
-    "scope": "violations"
-  },
   "volume_backend_unimplemented": {
     "text": "Volume-backend {$backend} is nog niet geimplementeerd; alleen btrfs kan vandaag een volume aanmaken, begrenzen en snapshotten.",
     "scope": "violations"
@@ -9307,5 +9303,91 @@
   "template_runtime_image": {
     "text": "De runtime-image waarop dit sjabloon zijn hooks legt; leeg betekent dat de instellingen de image noemen.",
     "scope": "help"
+  },
+  "workspace_uid_base_invalid": {
+    "text": "De ingestelde workspace-uid-basis {$base} valt buiten het veilige bereik {$lowest}-{$highest}; een workspace zou dan een host-identiteit delen met een andere container.",
+    "scope": "violations"
+  },
+  "workspace_uid_out_of_range": {
+    "text": "Workspace-uid {$uid} valt in het bereik dat Incus aan onbevoorrechte containers geeft ({$highest}); verlaag de uid-basis of verplaats deze workspace.",
+    "scope": "violations"
+  },
+  "workspace_build_failed": {
+    "text": "Het build-commando van de workspace is mislukt: {$reason}",
+    "scope": "violations"
+  },
+  "workspace_exec_failed": {
+    "text": "Het commando kon niet in de workspace uitgevoerd worden: {$reason}",
+    "scope": "violations"
+  },
+  "workspace_kind_required": {
+    "text": "Dit deploy-commando geldt alleen voor een workspace",
+    "scope": "violations"
+  },
+  "runtime_image_required": {
+    "text": "Kies een runtime-image: die bepaalt waarin deze workload draait",
+    "scope": "violations"
+  },
+  "runtime_image_unknown": {
+    "text": "Runtime-image {$id} bestaat niet of staat uit",
+    "scope": "violations"
+  },
+  "runtime_image_no_variant": {
+    "text": "Runtime-image '{$name}' heeft geen {$runtime}-variant en kan dus niet op een {$runtime}-host draaien",
+    "scope": "violations"
+  },
+  "runtime_image_build_failed": {
+    "text": "Runtime-image '{$name}' kon niet op deze host gebouwd worden: {$reason}",
+    "scope": "violations"
+  },
+  "runtime_image_import_failed": {
+    "text": "Runtime-image '{$name}' kon niet in de Incus-imagestore geimporteerd worden: {$reason}",
+    "scope": "violations"
+  },
+  "runtime_image_context_missing": {
+    "text": "De build-context van runtime-image '{$name}' zit niet in deze server verpakt: {$reason}",
+    "scope": "violations"
+  },
+  "volume_own_failed": {
+    "text": "Volume '{$path}' kon niet aan de uid van de workload gegeven worden op de {$backend}-backend: {$reason}",
+    "scope": "violations"
+  },
+  "readiness_timed_out": {
+    "text": "'{$name}' werd nooit klaar ({$kind}): {$reason}",
+    "scope": "violations"
+  },
+  "readiness_needs_port": {
+    "text": "'{$name}' verwacht {$kind}-readiness maar publiceert geen poort om te testen",
+    "scope": "violations"
+  },
+  "delete_with_data": {
+    "text": "Verwijderen met data",
+    "scope": "instance"
+  },
+  "delete_with_data_confirm": {
+    "text": "Dit verwijdert de container van '{$name}' EN elk volume dat erbij hoort. De bestanden zijn definitief weg. Typ de naam om te bevestigen.",
+    "scope": "instance"
+  },
+  "deleted_with_data_toast": {
+    "text": "'{$name}' en de bijbehorende data zijn verwijderd",
+    "scope": "instance"
+  },
+  "home_quota": [
+    {
+      "text": "Limiet home (MB)",
+      "scope": "field"
+    },
+    {
+      "text": "Maximale grootte van het /home/site-volume van de workspace; leeg is geen limiet.",
+      "scope": "help"
+    }
+  ],
+  "workspace_host_no_subuid_range": {
+    "text": "Host '{$name}' delegeert geen subuid-bereik aan root, dus geen enkele onbevoorrechte container erop kan gemapt worden en een workspace kan zijn datamap niet bezitten.",
+    "scope": "violations"
+  },
+  "runtime_image_no_builder": {
+    "text": "Runtime-image '{$name}' kan niet voorbereid worden op host '{$host}': een Incus-host met workspaces heeft ook Docker nodig, want dat bouwt de rootfs waaruit de image geimporteerd wordt.",
+    "scope": "violations"
   }
 }

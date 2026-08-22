@@ -671,14 +671,32 @@ public class DockerClient {
      * @param env {@code "KEY=value"} entries set for the command (e.g. a dump password, which
      *            stays out of the captured stdout)
      */
-    @SuppressWarnings("unchecked")
     public ExecResult exec(String containerId, List<String> command, List<String> env) throws IOException {
+        return exec(containerId, command, env, null, null);
+    }
+
+    /**
+     * {@link #exec(String, List, List)} run as an explicit user and/or in a directory.
+     *
+     * @param user    the numeric uid (or user name) the command runs as, or null for the
+     *                container's own configured user
+     * @param workdir the working directory, or null for the image's
+     */
+    @SuppressWarnings("unchecked")
+    public ExecResult exec(String containerId, List<String> command, List<String> env,
+                           String user, String workdir) throws IOException {
         Map<String, Object> createSpec = new LinkedHashMap<>();
         createSpec.put("AttachStdout", true);
         createSpec.put("AttachStderr", true);
         createSpec.put("Cmd", command);
         if (!env.isEmpty()) {
             createSpec.put("Env", env);
+        }
+        if (user != null && !user.isBlank()) {
+            createSpec.put("User", user);
+        }
+        if (workdir != null && !workdir.isBlank()) {
+            createSpec.put("WorkingDir", workdir);
         }
         Map<String, Object> created = (Map<String, Object>) parseJson(request("POST",
             "/containers/" + containerId + "/exec", toJson(createSpec)).body());

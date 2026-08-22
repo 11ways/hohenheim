@@ -55,6 +55,7 @@ public final class IncusInstanceRuntime
     @Override
     public ExecSupport.@NonNull ExecOutcome runExec(@NonNull InstanceSpec spec,
                                                     @NonNull List<String> command,
+                                                    ExecSupport.@NonNull ExecOptions options,
                                                     long timeoutMs) throws IOException {
         if (!status(spec.handle()).running()) {
             throw new IOException("Instance '" + spec.handle() + "' is not running;"
@@ -65,7 +66,7 @@ public final class IncusInstanceRuntime
                 + " (guest_agent=false); its image cannot run an exec");
         }
         IncusClient.ExecResult result = this.incus.exec(spec.handle(), command,
-            java.util.Map.of(), timeoutMs);
+            options.env(), spec.runUser(), options.workdir(), timeoutMs);
         return new ExecSupport.ExecOutcome(result.exitCode(), result.output());
     }
 
@@ -443,6 +444,34 @@ public final class IncusInstanceRuntime
         if (PROFILE_PRIVILEGED.equals(spec.hardening().name())) {
             config.put("security.privileged", "true");
         }
+        applyRunUser(spec, config);
+    }
+
+    /** PID 1 of a workspace container; shipped by every runtime image (images/README.md). */
+    public static final String WORKSPACE_INIT = "/sbin/hohenheim-init";
+
+    /**
+     * A spec that declares a run user boots the image's own init, which drops to that uid.
+     *
+     * AIDEV-NOTE: {@code lxc.init.cmd} rather than arguments, and the command in the
+     * ENVIRONMENT rather than in that key: lxc.init.cmd is whitespace-split and does not
+     * honour quoting, so a start command with a space would silently become two. The
+     * image's {@code hohenheim-init} reads HOHENHEIM_START_COMMAND instead (images/README).
+     *
+     * AIDEV-NOTE: deliberately NO {@code raw.idmap}. An identity map would give host and
+     * namespace uid PARITY, and it was measured working on nightstrom 2026-08-22 -- but
+     * only after delegating the workspace uid window in /etc/subuid, and a second range
+     * there makes Incus union both into one default map with two entries for namespace id
+     * 0, after which EVERY container without its own raw.idmap fails to start. The uid
+     * here is therefore a NAMESPACE id, and {@code WorkspaceUids.incusHostUid} is what the
+     * controller chowns the volume to.
+     */
+    private static void applyRunUser(@NonNull InstanceSpec spec,
+                                     @NonNull Map<String, Object> config) {
+        if (spec.runUser() == null) {
+            return;
+        }
+        config.put("raw.lxc", "lxc.init.cmd = " + WORKSPACE_INIT);
     }
 
     /**
@@ -1084,7 +1113,15 @@ public final class IncusInstanceRuntime
             device.put("type", "disk");
             device.put("source", bind.getKey());
             device.put("path", bind.getValue());
-            device.put("shift", "true");
+            // AIDEV-NOTE: no {@code shift} for a workspace. Both live twins report an
+            // EMPTY kernel_features set, so the daemon never idmaps the mount and the
+            // option is silently inert -- a workspace's home then reads as the raw host
+            // uid from inside and refuses every write. The controller chowns the directory
+            // to the host uid the namespace id maps to instead
+            // (WorkspaceUids.incusHostUid), which needs no kernel feature at all.
+            if (spec.runUser() == null) {
+                device.put("shift", "true");
+            }
             devices.put("hohvol" + (++index), device);
         }
 

@@ -1,0 +1,32 @@
+#!/bin/sh
+# The lease handler busybox's udhcpc has no default for on Debian.
+#
+# Measured on nightstrom 2026-08-22: without a -s script udhcpc obtains the lease and
+# configures NOTHING -- the interface stays address-less and /etc/resolv.conf stays
+# empty, so the first outbound call fails with "Could not resolve host" while the DHCP
+# exchange in the log looks perfectly successful. Only the Incus lane runs this; Docker
+# configures the interface itself.
+set -u
+
+case "${1:-}" in
+    bound|renew)
+        ip addr flush dev "$interface"
+        ip addr add "$ip/$mask" dev "$interface"
+        if [ -n "${router:-}" ]; then
+            for gateway in $router; do
+                ip route add default via "$gateway" dev "$interface" 2>/dev/null
+                break
+            done
+        fi
+        : > /etc/resolv.conf
+        for server in ${dns:-}; do
+            echo "nameserver $server" >> /etc/resolv.conf
+        done
+        for suffix in ${domain:-}; do
+            echo "search $suffix" >> /etc/resolv.conf
+        done
+        ;;
+    deconfig)
+        ip addr flush dev "$interface" 2>/dev/null
+        ;;
+esac

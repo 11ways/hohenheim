@@ -233,7 +233,47 @@ public class InstanceResource extends RowResource {
         actions.add(this.backupAction());
         actions.add(this.captureTemplateAction());
         actions.add(this.migrateAction());
+        actions.add(this.destroyWithDataAction());
         return actions;
+    }
+
+    /**
+     * The one irreversible verb: destroy the workload AND the volumes it owns.
+     *
+     * AIDEV-NOTE: a SEPARATE action beside delete, not a checkbox on it. Delete keeps the
+     * data by design (the class note on {@code deleteRow}), so an operator who wants the
+     * bytes gone has to say so, and the dialog demands the instance's name typed back --
+     * the same guard the reinstall-that-clears and the host-retire actions use.
+     */
+    private @NonNull RowAction<Row> destroyWithDataAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "destroy_instance_data"))
+            .label(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
+            .icon(Icon.of("trash-can"))
+            .inlineInRow(false)
+            .visibleFor((row, ctx) -> HohenheimAccess.isAdmin(ctx))
+            // The record-less fallback the dynamic one refines; a dynamic confirmation
+            // without it is refused at registration (WriteAffordanceParityTest).
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
+                .body(Microcopy.of("delete_with_data_confirm").withFilter("scope", "instance"))
+                .confirmLabel(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
+            .dynamicConfirmation(row -> ConfirmationSpec.builder()
+                .title(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
+                .body(Microcopy.of("delete_with_data_confirm").withFilter("scope", "instance")
+                    .withArg("name", row.get(InstanceModel.NAME)))
+                .confirmLabel(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .requireTypedConfirmation(String.valueOf((Object) row.get(InstanceModel.NAME)))
+                .build())
+            .handler((row, ctx) -> {
+                this.instances.destroyWithData(row.get(InstanceModel.ID));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("deleted_with_data_toast").withFilter("scope", "instance")
+                        .withArg("name", row.get(InstanceModel.NAME)));
+            })
+            .build();
     }
 
     /**

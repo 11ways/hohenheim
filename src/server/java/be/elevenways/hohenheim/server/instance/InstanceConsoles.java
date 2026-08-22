@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -100,7 +101,12 @@ public final class InstanceConsoles {
     static @Nullable Watch prepare(InstanceService.@NonNull Resolved resolved, int instanceId,
                                    @NonNull HostLeases leases) {
         Row row = resolved.row();
-        String readiness = trimmedOrNull(templateValue(row, InstanceTemplateModel.READINESS_LINE));
+        // AIDEV-NOTE: the readiness LINE only decides when the template declares
+        // readiness_kind=console_line. The other two kinds are a probe after start
+        // (InstanceReadiness), and honouring a leftover line beside them would leave a
+        // workload stamped `starting` forever while its port probe had already passed.
+        String readiness = InstanceReadiness.declaredKind(row) == ReadinessKind.CONSOLE_LINE
+            ? trimmedOrNull(templateValue(row, InstanceTemplateModel.READINESS_LINE)) : null;
         String stopCommand = trimmedOrNull(templateValue(row, InstanceTemplateModel.STOP_COMMAND));
         boolean restartPolicy = InstanceModel.CRASH_RESTART
             .equals(row.get(InstanceModel.CRASH_POLICY));

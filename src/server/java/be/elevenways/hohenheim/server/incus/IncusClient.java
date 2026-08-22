@@ -307,9 +307,29 @@ public class IncusClient {
     public @NonNull ExecResult exec(@NonNull String name, @NonNull List<String> command,
                                     @NonNull Map<String, String> environment, long timeoutMs)
             throws IOException {
+        return exec(name, command, environment, null, null, timeoutMs);
+    }
+
+    /**
+     * {@link #exec(String, List, Map, long)} run as an explicit uid and/or in a directory.
+     *
+     * @param uid the numeric identity inside the instance, or null for root
+     * @param cwd the working directory, or null for the instance's default
+     */
+    public @NonNull ExecResult exec(@NonNull String name, @NonNull List<String> command,
+                                    @NonNull Map<String, String> environment,
+                                    @Nullable Integer uid, @Nullable String cwd,
+                                    long timeoutMs) throws IOException {
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("command", command);
         request.put("environment", environment);
+        if (uid != null) {
+            request.put("user", uid);
+            request.put("group", uid);
+        }
+        if (cwd != null && !cwd.isBlank()) {
+            request.put("cwd", cwd);
+        }
         request.put("record-output", true);
         request.put("interactive", false);
         request.put("wait-for-websocket", false);

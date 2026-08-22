@@ -369,6 +369,47 @@ public class HohenheimSettings {
             .description("Base directory for persistent data (git repos, etc.)")
             .restartRequired()
             .build();
+
+        /**
+         * The directory on the HOST that carries instance volumes; blank derives it from
+         * {@link #DATA_PATH}.
+         *
+         * AIDEV-NOTE: a SEPARATE setting because the two paths answer to different
+         * machines. {@code data_path} is the controller's own directory (it holds the
+         * per-host ssh identity store, the checkouts, the sqlite database); the volume root
+         * is a path on the machine the workload runs on, and for an ssh-managed host those
+         * are different filesystems entirely. Deriving one from the other made a
+         * remote-host volume root also the place the controller tried to write its ssh
+         * keys, which fails as "cannot create the host ssh store" -- a message about
+         * volumes nobody would read as one.
+         */
+        public static final SettingDefinition<String> VOLUME_ROOT = GROUP
+            .buildSetting("volume_root", String.class)
+            .description("Directory on the workload HOST that carries instance volumes; "
+                + "empty derives it from the data path. Set it when the controller and "
+                + "its hosts do not share a filesystem")
+            .restartRequired()
+            .build();
+
+        /**
+         * First host uid a workspace maps to; the workspace's uid is this plus the
+         * instance id.
+         *
+         * AIDEV-NOTE: the default 200000 sits BELOW Incus's own subuid range
+         * (/etc/subuid grants root 1000000+ on both live hosts), so a workspace uid can
+         * never collide with a uid an unprivileged Incus container already maps. Raising
+         * this into that range would silently give a workspace the same host identity as
+         * some other container's root, which is why WorkspaceUids refuses it by name.
+         */
+        public static final SettingDefinition<Integer> VOLUME_UID_BASE = GROUP
+            .buildSetting("volume_uid_base", Integer.class)
+            .defaultValue(200000)
+            .description("First host uid workspaces are mapped to; a workspace runs as "
+                + "this number plus its instance id. There is no unix account on the "
+                + "host, only a number, and it must stay below the subuid range Incus "
+                + "hands unprivileged containers (1000000)")
+            .restartRequired()
+            .build();
     }
 
     // --- Stacks ---

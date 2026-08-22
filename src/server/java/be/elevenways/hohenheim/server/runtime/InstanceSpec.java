@@ -71,6 +71,13 @@ import java.util.Map;
  *                      refuses BY NAME (the cloud-init shape): accepting a number it
  *                      would ignore is a paper limit, which is worse than the gap,
  *                      because it reports success while enforcing nothing.
+ * @param runUser       the host uid the workload's processes run as, or null to keep
+ *                      whatever the image declares. A DECLARED number, never an account:
+ *                      there is no unix user on the host behind it, which is what lets a
+ *                      workspace own its data directory without a host account existing
+ *                      ({@code WorkspaceUids}). A driver that cannot map a uid refuses BY
+ *                      NAME -- accepting one it would ignore leaves every file in the
+ *                      volume owned by root while the surface claims otherwise.
  * @param networkLimitMbit the DECLARED bandwidth ceiling of the workload's NICs in
  *                      Mbit/s, or null to leave the wire unshaped. Same contract as
  *                      {@code rootDiskGb} and for the same reason: a driver with no
@@ -95,7 +102,8 @@ public record InstanceSpec(@NonNull String handle,
                            @NonNull Map<String, Long> tmpfs,
                            @Nullable HealthCheck healthCheck,
                            @Nullable Integer rootDiskGb,
-                           @Nullable Integer networkLimitMbit) {
+                           @Nullable Integer networkLimitMbit,
+                           @Nullable Integer runUser) {
 
     /**
      * Every collection component is defensively copied, so a caller that keeps mutating the
@@ -171,6 +179,7 @@ public record InstanceSpec(@NonNull String handle,
         private @Nullable HealthCheck healthCheck;
         private @Nullable Integer rootDiskGb;
         private @Nullable Integer networkLimitMbit;
+        private @Nullable Integer runUser;
 
         private Builder(@NonNull String handle, @NonNull String image,
                         @NonNull ResourceLimits limits,
@@ -261,12 +270,18 @@ public record InstanceSpec(@NonNull String handle,
             return this;
         }
 
+        /** The host uid the workload runs as; null keeps the image's own user. */
+        public @NonNull Builder runUser(@Nullable Integer runUser) {
+            this.runUser = runUser;
+            return this;
+        }
+
         public @NonNull InstanceSpec build() {
             return new InstanceSpec(this.handle, this.image, this.command, this.env,
                 this.volumes, this.binds, this.publications, this.limits, this.hardening,
                 this.ownerLabels, this.cloudInitUserData, this.imageFingerprint,
                 this.imageOrigin, this.secureBoot, this.guestAgent, this.tmpfs,
-                this.healthCheck, this.rootDiskGb, this.networkLimitMbit);
+                this.healthCheck, this.rootDiskGb, this.networkLimitMbit, this.runUser);
         }
     }
 
@@ -296,7 +311,7 @@ public record InstanceSpec(@NonNull String handle,
             this.binds, List.copyOf(claimed), this.limits, this.hardening,
             this.ownerLabels, this.cloudInitUserData, this.imageFingerprint, this.imageOrigin,
             this.secureBoot, this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
-            this.networkLimitMbit);
+            this.networkLimitMbit, this.runUser);
     }
 
     /** A copy carrying the record's pinned resolved image identity. */
@@ -305,7 +320,7 @@ public record InstanceSpec(@NonNull String handle,
             this.binds, this.publications, this.limits, this.hardening, this.ownerLabels,
             this.cloudInitUserData, fingerprint, this.imageOrigin, this.secureBoot,
             this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
-            this.networkLimitMbit);
+            this.networkLimitMbit, this.runUser);
     }
 
     private static @NonNull List<PortPublication> listOf(@Nullable PortPublication one) {

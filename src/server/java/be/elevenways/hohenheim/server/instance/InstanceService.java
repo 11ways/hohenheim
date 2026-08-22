@@ -146,6 +146,12 @@ public final class InstanceService {
             // port in the ledger BEFORE the container exists (and before the image pull
             // that sits inside the create window); record-after specs pass unchanged.
             InstanceSpec spec = PortPublications.ensureClaimed(resolved, instanceId);
+            // The kind's own host preparation: volume directories materialized with their
+            // quota and ownership, the runtime image built if the host does not have it.
+            // Before create, because a bind whose source does not exist is silently
+            // created root-owned by the daemon.
+            resolved.handler().prepareForDeploy(instanceId,
+                ServerModel.nameOf(resolved.serverId()), resolved.settings());
             String handle = resolved.runtime().create(spec);
             // Pin honesty, recorded from DAEMON truth right after create: the resolved
             // image identity behind the mutable alias is what the record answers with,
@@ -170,6 +176,10 @@ public final class InstanceService {
             // the workload and refuses the deploy -- never a success report over a bind
             // nothing declared.
             PortPublications.verifyPublished(resolved, spec, status);
+            // The template's DECLARED readiness, for the two kinds that can only be
+            // answered once the workload is up and its host port is known. console_line
+            // is the console hub's and was already armed above.
+            InstanceReadiness.await(resolved.row(), status);
             this.beforeOutcomeWrite.run();
             // The fence gate comes BEFORE any ledger write: a stale controller that
             // reached the ledger first would delete the winner's fresh port claim.
@@ -547,7 +557,8 @@ public final class InstanceService {
     public record Resolved(@NonNull Row row, @NonNull InstanceKindHandler handler,
                            @NonNull InstanceRuntime runtime,
                            @NonNull InstanceSpec spec, int serverId,
-                           @NonNull Map<String, String> variables) {}
+                           @NonNull Map<String, String> variables,
+                           @NonNull Map<String, Object> settings) {}
 
     // -- interrupted capture/restore recovery ---------------------------------------
 
@@ -660,6 +671,42 @@ public final class InstanceService {
     }
 
     /**
+     * Destroy the workload AND the data its volumes hold.
+     *
+     * AIDEV-NOTE: a SEPARATE verb from {@link #destroy}, not a boolean on it, because the
+     * two have different consequences and different confirmations. An ordinary destroy is
+     * recoverable in the only sense that matters -- the bytes are still on the host, and a
+     * re-created instance mounts them again. This one is not, which is why its surface
+     * asks the operator to type the instance's name.
+     *
+     * @return the host paths that were removed
+     * @throws Violations naming whatever refused; the volumes are removed only AFTER the
+     *         container is verifiably gone, so a failed destroy never takes the data with it
+     */
+    public @NonNull List<String> destroyWithData(int instanceId) {
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.DESTROY);
+        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        if (row == null) {
+            throw Violations.ofForm(violationText("instance_not_found")
+                .withArg("id", instanceId));
+        }
+        String serverName = ServerModel.nameOf(
+            ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID)));
+        // AIDEV-NOTE: an ALREADY destroyed record still has its data, and that is the whole
+        // reason an ordinary destroy keeps it. "I deleted the workspace last week, now
+        // remove its files" has to work, so the container teardown is conditional and the
+        // volume removal is not -- an unconditional destroy() here refused with
+        // instance_not_found and left the bytes on the host forever.
+        if (row.get(InstanceModel.DELETED_AT) == null) {
+            destroy(instanceId);
+        }
+        List<String> removed = InstanceVolumes.destroyAll(instanceId, serverName);
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, "deleted_data",
+            String.join(", ", removed));
+        return removed;
+    }
+
+    /**
      * Stop and deploy again, in one verb.
      *
      * AIDEV-NOTE: THE restart composition, and there is exactly one. It used to live
@@ -734,7 +781,7 @@ public final class InstanceService {
             : ServerModel.RUNTIME_DOCKER;
         InstanceKinds.requireRuntimeMatch(serverName, hostRuntime, handler.supportedRuntimes());
         return new Resolved(row, handler, runtimeFor(handler, serverName), spec, serverId,
-            variables);
+            variables, settings);
     }
 
     /**

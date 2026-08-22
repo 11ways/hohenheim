@@ -195,6 +195,24 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     int defaultFootprintMb(@NonNull Map<String, Object> settings);
 
     /**
+     * Work this kind must do on the HOST before its container is created: materialize the
+     * volume directories the spec binds, make the runtime image present, apply ownership.
+     *
+     * AIDEV-NOTE: this is the seam between {@code resolve} (pure: it derives a spec and
+     * touches no host) and {@code create}. It exists because a bind mount whose source
+     * directory does not exist yet is not an error on any daemon -- Docker creates it,
+     * root-owned, and the workspace then cannot write its own home while every surface
+     * reports a successful deploy. Doing it inside {@code specFor} instead was measured
+     * and rejected: specFor runs on every status read, so a subvolume create and a quota
+     * call would ride every page render.
+     *
+     * @throws Violations naming what the host could not deliver
+     */
+    default void prepareForDeploy(int instanceId, @NonNull String serverName,
+                                  @NonNull Map<String, Object> settings) {
+    }
+
+    /**
      * Refuse a candidate host this kind's DEPLOY would refuse anyway, before placement
      * can choose it.
      *

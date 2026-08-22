@@ -112,6 +112,15 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
             "volume_destroy_failed", hostPath);
     }
 
+    @Override
+    public void own(@NonNull String hostPath, int uid) {
+        String quoted = HostShell.quote(hostPath);
+        // The directory itself, and its mode: 0700 so the number that owns it is the only
+        // identity that can read it. Nothing else on the host answers to that number.
+        run("chown " + uid + ":" + uid + " " + quoted + " && chmod 0700 " + quoted,
+            "volume_own_failed", hostPath);
+    }
+
     /**
      * Where a snapshot of this volume lands: a sibling {@code .snapshots} tree that mirrors
      * the volume's own {@code <instance>/<name>} layout, so a snapshot is never inside the

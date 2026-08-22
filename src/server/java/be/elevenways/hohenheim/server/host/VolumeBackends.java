@@ -42,8 +42,17 @@ public final class VolumeBackends {
     private VolumeBackends() {
     }
 
-    /** @return the volume root this deployment uses under the configured data path */
+    /**
+     * THE volume root: the explicit {@code storage.volume_root} when one is configured,
+     * otherwise {@code <data_path>/volumes}.
+     */
     public static @NonNull String volumeRoot() {
+        String declared = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Storage.VOLUME_ROOT);
+        if (declared != null && !declared.isBlank()) {
+            String root = declared.trim();
+            return root.endsWith("/") ? root.substring(0, root.length() - 1) : root;
+        }
         String dataPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
         String base = dataPath == null || dataPath.isBlank() ? "/opt/hohenheim/data" : dataPath.trim();
         return base.endsWith("/") ? base + "volumes" : base + "/volumes";
