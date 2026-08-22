@@ -14,4 +14,9 @@ public final class HohenheimFormCopy {
     public static Microcopy help(String key) {
         return Microcopy.of(key).withFilter("scope", "help");
     }
+
+    /** Label of a collapsible form section; the key is its {@code HohenheimFormSections} id. */
+    public static Microcopy section(String key) {
+        return Microcopy.of(key).withFilter("scope", "form_section");
+    }
 }

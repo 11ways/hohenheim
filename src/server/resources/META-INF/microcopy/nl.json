@@ -3733,6 +3733,10 @@
     {
       "text": "Runtime",
       "scope": "field"
+    },
+    {
+      "text": "Runtime",
+      "scope": "form_section"
     }
   ],
   "configured": {
@@ -4217,10 +4221,16 @@
     "text": "Mounts",
     "scope": "field"
   },
-  "ports": {
-    "text": "Gepubliceerde poorten",
-    "scope": "field"
-  },
+  "ports": [
+    {
+      "text": "Gepubliceerde poorten",
+      "scope": "field"
+    },
+    {
+      "text": "Poortpublicatie",
+      "scope": "form_section"
+    }
+  ],
   "depends_on": {
     "text": "Afhankelijk van",
     "scope": "field"
@@ -6498,10 +6508,16 @@
     "text": "Symlink",
     "scope": "instance_files"
   },
-  "managed": {
-    "text": "Beheerde configuratie",
-    "scope": "instance_files"
-  },
+  "managed": [
+    {
+      "text": "Beheerde configuratie",
+      "scope": "instance_files"
+    },
+    {
+      "text": "Beheerde waarden",
+      "scope": "form_section"
+    }
+  ],
   "read_only": {
     "text": "Je mag deze bestanden lezen maar niet wijzigen",
     "scope": "instance_files"
@@ -9597,5 +9613,29 @@
   "volume_backend_no_snapshot_body": {
     "text": "De dataroot dwingt groottelimieten af maar kan geen snapshots nemen, dus deploys van applicaties MET volumes worden hier geweigerd. Btrfs of ZFS op het datapad lost dit op.",
     "scope": "server_overview"
+  },
+  "build": {
+    "text": "Build",
+    "scope": "form_section"
+  },
+  "deployment": {
+    "text": "Uitrollen",
+    "scope": "form_section"
+  },
+  "limits": {
+    "text": "Resourcelimieten",
+    "scope": "form_section"
+  },
+  "guest": {
+    "text": "Gastconfiguratie",
+    "scope": "form_section"
+  },
+  "health": {
+    "text": "Healthchecks",
+    "scope": "form_section"
+  },
+  "forwarding": {
+    "text": "Doorstuuropties",
+    "scope": "form_section"
   }
 }
