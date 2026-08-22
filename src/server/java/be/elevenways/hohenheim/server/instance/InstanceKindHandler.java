@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.protoblast.common.annotation.BlastDiscoverable;
@@ -213,6 +214,39 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
+     * Whether records of this kind mount declared {@code instance_volumes} rows -- the
+     * ONE fact behind three surfaces: the Volumes tab renders on it, the dependent host
+     * picker narrows to quota-capable backends on it, and the default
+     * {@link #requirePlaceableOn} enforces that same backend requirement on it (the
+     * {@link #supportsDevices()} stance: a kind that forgets to declare hides an
+     * affordance rather than offering one its driver ignores).
+     */
+    default boolean supportsVolumes() {
+        return false;
+    }
+
+    /**
+     * Whether records of this kind run inside a runtime image ("yolk",
+     * {@code InstanceModel.RUNTIME_IMAGE_ID}); the runtime-image picker only resolves
+     * for kinds that declare it, because every other kind's deploy never reads the
+     * column and a choice it ignores is worse than no choice.
+     */
+    default boolean usesRuntimeImage() {
+        return false;
+    }
+
+    /**
+     * Whether a site's {@code instance} upstream can serve records of this kind (their
+     * serving container publishes a loopback port the routing tier can resolve). Drives
+     * the site form's dependent instance pick and the Expose action's visibility --
+     * the declared twin of {@code ApplicationUpstreams.resolve}, which still answers an
+     * honest 503 for a record that publishes nothing.
+     */
+    default boolean supportsSiteUpstream() {
+        return false;
+    }
+
+    /**
      * Refuse a candidate host this kind's DEPLOY would refuse anyway, before placement
      * can choose it.
      *
@@ -223,9 +257,16 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      * Implementations must stay CHEAP on the common path: the prepared-image check does
      * no daemon call at all for a catalog image.
      *
+     * The DEFAULT enforces the volume-backend consequence of {@link #supportsVolumes()}:
+     * a volume-mounting kind only places on a host whose data root can quota, so the
+     * declaration and its placement refusal cannot drift apart.
+     *
      * @throws Violations naming the reason this host cannot run these settings
      */
     default void requirePlaceableOn(@NonNull String serverName,
                                     @NonNull Map<String, Object> settings) {
+        if (this.supportsVolumes()) {
+            VolumeBackends.requireQuotaCapableHost(serverName, this.getLabel());
+        }
     }
 }

@@ -114,6 +114,21 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
+    /** The named address: the unix socket when one is set, else host:port. */
+    @Override
+    public String upstreamSummary(Map<String, Object> settings) {
+        Object socket = settings.get(SOCKET.getName());
+        if (socket != null && !String.valueOf(socket).isBlank()) {
+            return String.valueOf(socket);
+        }
+        Object host = settings.get(FORWARD_HOST.getName());
+        Object port = settings.get(FORWARD_PORT.getName());
+        if (host == null || String.valueOf(host).isBlank()) {
+            return null;
+        }
+        return port != null ? host + ":" + port : String.valueOf(host);
+    }
+
     @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         String socketSetting = (String) settings.get("socket");

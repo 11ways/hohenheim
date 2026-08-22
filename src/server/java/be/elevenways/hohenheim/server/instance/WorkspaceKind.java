@@ -148,11 +148,14 @@ public final class WorkspaceKind implements InstanceKindHandler {
         return 1024;
     }
 
-    @Override
-    public void requirePlaceableOn(@NonNull String serverName,
-                                   @NonNull Map<String, Object> settings) {
-        VolumeBackends.requireQuotaCapableHost(serverName, getLabel());
-    }
+    /** Mounts its declared volumes ({@code home} first); placement demands quota via the default. */
+    @Override public boolean supportsVolumes() { return true; }
+
+    /** Runs inside a runtime image; {@link RuntimeImages#requireFor} refuses without one. */
+    @Override public boolean usesRuntimeImage() { return true; }
+
+    /** Its container port is exposable through a site's {@code instance} upstream. */
+    @Override public boolean supportsSiteUpstream() { return true; }
 
     /**
      * Docker or Incus, decided by the HOST's declared runtime -- the one kind that reads it,

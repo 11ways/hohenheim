@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -444,6 +445,17 @@ public class InstanceModel extends Model {
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
+
+    /**
+     * The host relation, for relational filtering ("host name contains x" in the
+     * instance list); {@link #SERVER_ID} stays the written column.
+     */
+    public static final BelongsTo<ServerModel> SERVER =
+        SCHEMA.addRelation(BelongsTo.to(ServerModel.class)
+            .name("server")
+            .localKey(SERVER_ID)
+            .remoteKey(ServerModel.ID)
+            .build());
 
     static {
         SCHEMA.setDisplayFields(NAME);

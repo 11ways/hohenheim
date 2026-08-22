@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.protoblast.common.annotation.BlastDiscoverable;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
 
@@ -19,6 +20,17 @@ public interface UpstreamKindHandler extends UpstreamKindInfo {
 
     /** Create a request handler for a site with this upstream. */
     SiteRequestHandler createHandler(Row site, Map<String, Object> settings);
+
+    /**
+     * One short line saying where this site's traffic actually goes (the list cell
+     * under the kind badge: "10.0.0.4:8080", "/srv/www", a redirect target).
+     *
+     * @return the summary, or null when the kind has nothing terser than its label
+     */
+    default @Nullable String upstreamSummary(
+            Map<String, Object> settings) {
+        return null;
+    }
 
     /**
      * Called when a site's configuration changes.

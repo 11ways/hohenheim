@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 
 /**
  * Registration hook for the compile-time-discovered instance kinds plus the
@@ -56,6 +57,15 @@ public final class InstanceKinds {
     }
 
     /**
+     * @return whether records of this kind deploy through the release engine rather than
+     *         owning a container; an unknown kind is NOT release-managed (fail closed)
+     */
+    public static boolean isReleaseManaged(@Nullable String kind) {
+        InstanceKindHandler handler = kind == null ? null : getHandler(kind);
+        return handler != null && handler.releaseManaged();
+    }
+
+    /**
      * Refuse a kind only an owning tier may author, in the ONE place that decides it.
      *
      * AIDEV-NOTE: the offer ({@link #authorableOptions}) and this refusal answer to one
@@ -65,15 +75,6 @@ public final class InstanceKinds {
      *
      * @throws Violations when the kind's handler declares itself generated-only
      */
-    /**
-     * @return whether records of this kind deploy through the release engine rather than
-     *         owning a container; an unknown kind is NOT release-managed (fail closed)
-     */
-    public static boolean isReleaseManaged(@Nullable String kind) {
-        InstanceKindHandler handler = kind == null ? null : getHandler(kind);
-        return handler != null && handler.releaseManaged();
-    }
-
     public static void requireAuthorable(@Nullable String kind) {
 
         InstanceKindHandler handler = getHandler(kind);
@@ -154,11 +155,39 @@ public final class InstanceKinds {
             }
 
             Icon icon = entry.getIcon();
-            FieldOption<String> option = FieldOption.of(id.toString(), entry.getLabel());
+            FieldOption<String> option = FieldOption.of(id.toString(), entry.getLabel())
+                .withDescription(entry.getDescription());
 
             options.add(icon == null ? option : option.withIcon(icon.name()));
         }
 
         return options;
+    }
+
+    /**
+     * Every registered kind's supported runtimes, keyed by the stored kind value --
+     * the data the dependent host picker's resolver carries
+     * ({@code HohenheimPickRules.KindHostRules}).
+     */
+    public static @NonNull Map<String, List<String>> runtimesByKind() {
+        Map<String, List<String>> runtimes = new HashMap<>();
+        for (Map.Entry<Identifier, InstanceKindHandler> entry : HANDLERS.entrySet()) {
+            runtimes.put(entry.getKey().toString(),
+                List.copyOf(new TreeSet<>(entry.getValue().supportedRuntimes())));
+        }
+        return runtimes;
+    }
+
+    /** Stored kind values whose handler passes the predicate, registry order. */
+    public static @NonNull List<String> kindsWhere(@NonNull Predicate<InstanceKindHandler> predicate) {
+        List<String> kinds = new ArrayList<>();
+        for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
+            Identifier id = InstanceKindRegistry.REGISTRY.getId(entry);
+            InstanceKindHandler handler = id != null ? HANDLERS.get(id) : null;
+            if (handler != null && predicate.test(handler)) {
+                kinds.add(id.toString());
+            }
+        }
+        return kinds;
     }
 }

@@ -8,6 +8,8 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
@@ -144,6 +146,29 @@ public final class HohenheimSources implements ZenitModule {
             .project(BanModel.IP, BanModel.SOURCE, BanModel.ACTIVE,
                 BanModel.EXPIRES_AT, BanModel.CREATED_AT)
             .sortable(BanModel.CREATED_AT)
+            .permission(ADMIN_ACCESS)
+            .build());
+
+        // Hosts, for the instance form's DEPENDENT host pick: the projection is the
+        // rule vocabulary, so runtime and volume_backend MUST be projected -- the
+        // resolver (HohenheimPickRules.KindHostRules) narrows on exactly those two.
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(ServerModel.class)
+            .project(ServerModel.NAME, ServerModel.RUNTIME, ServerModel.VOLUME_BACKEND)
+            .search(ServerModel.NAME)
+            .permission(ADMIN_ACCESS)
+            .build());
+
+        // Runtime images ("yolks"), for the instance form's dependent image pick:
+        // enabled and incus_image are the resolver's rule vocabulary
+        // (HohenheimPickRules.RuntimeImageRules).
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(RuntimeImageModel.class)
+            .project(RuntimeImageModel.NAME, RuntimeImageModel.DESCRIPTION,
+                RuntimeImageModel.ENABLED, RuntimeImageModel.INCUS_IMAGE)
+            .search(RuntimeImageModel.NAME)
+            .subtitle(row -> {
+                Object description = row.get(RuntimeImageModel.DESCRIPTION);
+                return description != null ? String.valueOf(description) : "";
+            })
             .permission(ADMIN_ACCESS)
             .build());
 

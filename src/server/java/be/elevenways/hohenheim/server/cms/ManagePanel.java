@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -272,10 +273,26 @@ public final class ManagePanel extends Panel {
         // ManageInstanceResource exposes the model beside the admin InstanceResource --
         // which of the two derived defaults wins (admin-gated-unscoped versus
         // manage-gated-scoped) would otherwise be decided by panel walk ORDER at boot.
+        // AIDEV-NOTE: kind IS projected because the site form's dependent instance
+        // pick (HohenheimPickRules.UpstreamInstanceRules) narrows on it -- the
+        // projection is the rule vocabulary, so dropping it silently 400s the picker.
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceModel.class)
+            .project(InstanceModel.NAME, InstanceModel.KIND)
             .search(InstanceModel.NAME)
             .baseCriteria(() -> InstanceModel.DELETED_AT.isNull())
             .accessCriteria(ctx -> HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW))
+            .build());
+
+        // Templates: exposed by TWO RowResources (admin InstanceTemplateResource and
+        // ManageInstanceTemplateResource), so the derived default is boot-order-decided --
+        // the same shadowing hazard as instances above. The scope is THE catalog policy:
+        // operators browse everything, everyone else only APPROVED templates. The
+        // instance form's dependent template pick narrows on the projected kind.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceTemplateModel.class)
+            .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
+            .search(InstanceTemplateModel.NAME)
+            .accessCriteria(ctx -> HohenheimAccess.isAdmin(ctx)
+                ? null : InstanceTemplateModel.APPROVED_AT.isNotNull())
             .build());
 
         // Record schedules have no display fields and therefore no derived source. This

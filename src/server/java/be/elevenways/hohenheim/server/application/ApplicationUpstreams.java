@@ -77,14 +77,17 @@ public final class ApplicationUpstreams {
     public static @NonNull Resolution resolve(int applicationId, @NonNull String scheme) {
 
         long generation = generationOf(applicationId);
-        Row serving = ApplicationReleases.ownedServing(applicationId);
+        // consumerInstanceOf, not ownedServing: a release-managed record resolves its
+        // serving release, and any OTHER kind with a published port (a workspace, a
+        // docker container) resolves ITSELF -- which is what lets a site expose those
+        // kinds too (their handlers declare supportsSiteUpstream).
+        Integer servingId = ApplicationReleases.consumerInstanceOf(applicationId);
 
-        if (serving == null) {
+        if (servingId == null) {
             return new Resolution(null, generation);
         }
 
-        Integer releaseId = serving.get(InstanceModel.ID);
-        Integer port = publishedPortOf(releaseId);
+        Integer port = publishedPortOf(servingId);
 
         if (port == null) {
             return new Resolution(null, generation);
