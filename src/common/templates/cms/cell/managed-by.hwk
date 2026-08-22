@@ -1,0 +1,15 @@
+{#- "Managed by" cell: the owning product record of a generated instance, linked.
+    Blank for an authored row -- self-managed needs no badge. -#}
+{% declare value: ManagedByCell %}
+{% if value != null %}
+<span class="hh-managed-by">
+    {% if value.icon != null %}
+    <pl-icon name={% value.icon %} size="xs"></pl-icon>
+    {% /if %}
+    {% if value.ownerUrl != null %}
+    <a href={% value.ownerUrl %} title={% value.ownerKind %}>{{ value.ownerName }}</a>
+    {% else %}
+    <span title={% value.ownerKind %}>{{ value.ownerName }}</span>
+    {% /if %}
+</span>
+{% /if %}

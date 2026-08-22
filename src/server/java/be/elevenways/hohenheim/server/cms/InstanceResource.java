@@ -1,9 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimPickRules;
+import be.elevenways.hohenheim.instance.ManagedByCell;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
@@ -14,6 +18,9 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateCapture;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -25,10 +32,15 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -47,6 +59,10 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
+import be.elevenways.zenit.common.orm.query.rules.RelationRules;
+import be.elevenways.zenit.common.orm.query.rules.SchemaVocabulary;
+import be.elevenways.zenit.common.orm.query.rules.VariableDefinition;
+import be.elevenways.zenit.common.orm.query.rules.Vocabulary;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -70,35 +86,82 @@ import java.util.Map;
  */
 public class InstanceResource extends RowResource {
 
+    /** Virtual column naming the owning product record of a generated row. */
+    static final String MANAGED_BY_COLUMN = "managed_by";
+
+    /** The relational host filter's variable key ({@code filterVocabulary()}). */
+    static final String HOST_FILTER = "server.name";
+
     protected final InstanceService instances = new InstanceService();
 
-    private final FormSpec formSpec = FormSpec.builder()
-        .add(InstanceModel.NAME)
-        // AIDEV-NOTE: the derived entry offers EVERY registered kind, three of which the
-        // OwnedInstances write guard can only refuse -- the affordance-that-can-only-refuse
-        // shape the device surface documents. Supplied (never a resolved list): registry
-        // entries arrive via BlastAutoLoadInit after class-load and tests REPLACE entries at
-        // runtime, and a Supplied source still resolves on the context-free coercion path,
-        // which is what makes a hand-posted generated-only kind fail at the form layer too.
-        // This narrows SELECTION only; every label path reads EnumField.getValues() and
-        // still sees all six, so existing generated rows keep rendering their kind.
-        .add(Select.of(InstanceModel.KIND)
-            .options(OptionSource.supplied(InstanceKinds::authorableOptions))
-            .clearable(!Boolean.TRUE.equals(InstanceModel.KIND.getAttribute(FieldAttributes.REQUIRED)))
-            .build())
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
-        // A host is admitted, preflighted and trusted before it can carry anything, so it
-        // is never created from inside another record's form.
-        .add(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID)
-            .creatable(false).build())
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
-        .add(RelationPick.of(InstanceModel.BACKUP_TARGET_ID, BackupTargetModel.MODEL_ID)
-            .clearable(true).build())
-        // Grouping, never authority: ProjectGuards refuses an environment whose
-        // project does not OWN this instance, on every writer.
-        .add(RelationPick.of(InstanceModel.ENVIRONMENT_ID, EnvironmentModel.MODEL_ID)
-            .clearable(true).build())
-        .build();
+    /**
+     * The create/edit form: choice cards decide the kind, and every placement pick
+     * NARROWS from it live (host by supported runtime + volume backend, template and
+     * runtime image by kind) -- the dependent-pick mechanism, never a page of
+     * always-appropriate dropdowns.
+     *
+     * AIDEV-NOTE: built PER CALL, not cached in a field, because the resolvers carry
+     * SNAPSHOTS of the kind registry's declarations (runtimesByKind and friends) and
+     * tests replace registry entries at runtime -- the same staleness the Supplied
+     * option source below exists to avoid. Structural resolver equality makes the
+     * rebuild a reactive no-op for the browser.
+     */
+    private @NonNull FormSpec buildFormSpec() {
+        return FormSpec.builder()
+            // AIDEV-NOTE: the kind entry offers only what a human may author (the
+            // generated kinds are refused by OwnedInstances anyway -- an option that can
+            // only refuse is the affordance shape this panel bans). Supplied (never a
+            // resolved list): registry entries arrive via BlastAutoLoadInit after
+            // class-load and tests REPLACE entries at runtime, and a Supplied source
+            // still resolves on the context-free coercion path, which is what makes a
+            // hand-posted generated-only kind fail at the form layer too. This narrows
+            // SELECTION only; every label path reads EnumField.getValues() and still
+            // sees the whole registry, so existing generated rows keep their label.
+            .add(Select.of(InstanceModel.KIND)
+                .options(OptionSource.supplied(InstanceKinds::authorableOptions))
+                .presentation(Select.Presentation.CARDS)
+                .clearable(!Boolean.TRUE.equals(InstanceModel.KIND.getAttribute(FieldAttributes.REQUIRED)))
+                .build())
+            .add(InstanceModel.NAME)
+            // A host is admitted, preflighted and trusted before it can carry anything,
+            // so it is never created from inside another record's form -- and the offer
+            // follows the kind: only hosts whose runtime the kind supports, and (for
+            // volume-mounting kinds) whose data root can enforce quotas. The submit is
+            // re-narrowed server-side (relation_out_of_scope), the picker is never the gate.
+            .add(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID)
+                .creatable(false)
+                .rulesFromSiblings(new HohenheimPickRules.KindHostRules(
+                    InstanceModel.KIND.getName(),
+                    InstanceKinds.runtimesByKind(),
+                    InstanceKinds.kindsWhere(InstanceKindHandler::supportsVolumes)), "kind")
+                .build())
+            // The runtime image ("yolk") only resolves for kinds that run inside one;
+            // for every other kind the picker stays disabled -- its deploy never reads
+            // the column, and a choice the deploy ignores is worse than no choice.
+            .add(RelationPick.of(InstanceModel.RUNTIME_IMAGE_ID, RuntimeImageModel.MODEL_ID)
+                .creatable(false).clearable(true)
+                .rulesFromSiblings(new HohenheimPickRules.RuntimeImageRules(
+                    InstanceModel.KIND.getName(),
+                    InstanceKinds.kindsWhere(InstanceKindHandler::usesRuntimeImage),
+                    InstanceKinds.kindsWhere(handler ->
+                        !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER))), "kind")
+                .build())
+            // AIDEV-NOTE: deliberately NO template pick here. TEMPLATE_ID is only ever
+            // stamped by InstanceTemplates.createFromTemplate, which coerces the
+            // template's variables and arms the install lifecycle; a bare FK pick on
+            // this form would mint a template-linked record with none of that -- the
+            // half-templated silent-success shape. Creating from a template stays the
+            // template page's own flow (InstanceFromTemplatePage).
+            // Grouping, never authority: ProjectGuards refuses an environment whose
+            // project does not OWN this instance, on every writer.
+            .add(RelationPick.of(InstanceModel.ENVIRONMENT_ID, EnvironmentModel.MODEL_ID)
+                .clearable(true).build())
+            .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
+            .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
+            .add(RelationPick.of(InstanceModel.BACKUP_TARGET_ID, BackupTargetModel.MODEL_ID)
+                .clearable(true).build())
+            .build();
+    }
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         // The kind qualifies the name and the install state qualifies the status; both
@@ -109,43 +172,130 @@ public class InstanceResource extends RowResource {
             .relation(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
         .column(ColumnSpec.fromField(InstanceModel.STATUS).filterable().subtext("install_state").build())
         .column(ColumnSpec.fromField(InstanceModel.INSTALL_STATE).filterable().hidden().build())
-        .column(ColumnSpec.fromField(InstanceModel.CREATED_AT).filterable().build())
+        // Who runs this record: blank for an authored row, the owning product record
+        // (linked) for a generated one -- the honesty column that lets generated rows
+        // appear here at all without becoming a second UI over their owner.
+        .column(ColumnSpec.virtual(MANAGED_BY_COLUMN,
+                Microcopy.of("managed_by").withFilter("scope", "instance"))
+            .renderer("hohenheim:cms/cell/managed-by").build())
+        .column(ColumnSpec.fromField(InstanceModel.CREATED_AT).filterable().hidden().build())
         .filter(FilterSpec.forField(InstanceModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(InstanceModel.NAME)).build())
         .filter(FilterSpec.forField(InstanceModel.KIND, FilterSpec.Kind.SELECT)
             .label(FieldLabels.labelFor(InstanceModel.KIND)).build())
         .filter(FilterSpec.forField(InstanceModel.STATUS, FilterSpec.Kind.SELECT)
             .label(FieldLabels.labelFor(InstanceModel.STATUS)).build())
+        // Relational host filter: "the instances on daystrom" is a typed host name,
+        // riding the server.name variable filterVocabulary() declares below.
+        .filter(FilterSpec.global(HOST_FILTER, FieldLabels.labelFor(InstanceModel.SERVER_ID),
+            FilterSpec.Kind.TEXT).build())
         .build();
 
-    /** The server pick defaults to the local daemon (ensuring its row exists for the picker). */
-    @Override
-    public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
-        Map<String, Object> values = CmsSupport.mutable(formSpec().defaultValues());
-        values.put("server_id", ServerModel.localServerId());
-        return Map.copyOf(values);
-    }
+    // AIDEV-NOTE: no server_id prefill anymore, ON PURPOSE. The host pick narrows from
+    // the chosen kind, and a narrowing CHANGE clears the selection (the dependent-pick
+    // contract), so a prefilled local daemon was wiped by the first card click anyway --
+    // a default that survives only when you never choose anything is noise, not help.
 
     /**
-     * Soft-deleted instances are invisible everywhere, and so are GENERATED ones: an
-     * instance a product tier owns (a Docker site's running release) is managed through
-     * that record's own surface -- listing it here would be a second UI over the same
-     * records, and the GeneratedRows write guard would refuse every action anyway.
+     * Soft-deleted rows are invisible; everything else is LISTED, generated rows
+     * included -- with a "Managed by" column instead of a hole in the fleet. The one
+     * exception is {@code release} rows: one application deploys releases faster than
+     * an operator reads a list, they are deploy artifacts rather than things you
+     * manage, and their application's Deploys tab is their surface.
+     *
+     * AIDEV-NOTE: the release exclusion is structural (criteria), not a default filter
+     * value -- the list layer has no declared-default-filter mechanism, and an excluded
+     * row set with its own dedicated surface is the honest shape. Kind-filtering on
+     * "release" yields the framework's empty state, which states the truth.
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
         return ctx -> AccessDecision.allow(QueryPredicate.of(new CompositeCriteria(
             CompositeOperator.AND,
             InstanceModel.DELETED_AT.isNull(),
-            InstanceModel.GENERATED_BY.isNull())));
+            InstanceModel.KIND.ne(ReleaseKind.ID.toString()))));
     }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance"); }
     @Override public @NonNull String slug() { return "instances"; }
     @Override public @NonNull Model model() { return Models.get(InstanceModel.class); }
-    @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
+    @Override public @NonNull FormSpec formSpec() { return this.buildFormSpec(); }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
+
+    /** The schema's variables plus the relational host name the strip filter rides. */
+    @Override
+    public @NonNull Vocabulary filterVocabulary() {
+        Vocabulary.Builder vocabulary = Vocabulary.builder();
+        for (VariableDefinition definition : SchemaVocabulary.of(this.model()).definitions()) {
+            vocabulary.add(definition);
+        }
+        vocabulary.add(RelationRules.define(InstanceModel.SERVER, ServerModel.NAME)
+            .label(FieldLabels.labelFor(InstanceModel.SERVER_ID)));
+        return vocabulary.build();
+    }
+
+    /** {@link #MANAGED_BY_COLUMN} resolves the owning product record; the rest is fields. */
+    @Override
+    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        if (MANAGED_BY_COLUMN.equals(column.name())) {
+            return managedByCellOf(row);
+        }
+        return super.cellValue(row, column);
+    }
+
+    /**
+     * The owning record of a generated row as a linked cell; null (blank) for authored
+     * rows. The owning resource is FOUND on the admin panel by its model id, so the
+     * label, icon and slug can never drift from the resource that actually serves it
+     * (a row action has no conduit to ask, hence the literal "admin" -- the
+     * migrateAction precedent).
+     */
+    static @Nullable ManagedByCell managedByCellOf(@NonNull Row row) {
+        if (row.get(InstanceModel.GENERATED_BY) == null) {
+            return null;
+        }
+        String modelId = row.get(InstanceModel.GENERATED_FOR_MODEL);
+        Integer ownerId = row.get(InstanceModel.GENERATED_FOR_ID);
+        if (modelId == null || ownerId == null) {
+            return null;
+        }
+        Identifier ownerModelId = Identifier.tryParse(modelId);
+        Model ownerModel = ownerModelId != null ? Models.get(ownerModelId) : null;
+        Row owner = ownerModel != null ? ownerModel.findById(ownerId) : null;
+        if (ownerModel == null || owner == null) {
+            // The owner is gone (or unknown): state the raw attribution instead of a link.
+            return new ManagedByCell(null,
+                Microcopy.of("managed_by").withFilter("scope", "instance"),
+                modelId + " #" + ownerId, null);
+        }
+        Resource<?> ownerResource = adminResourceForModel(ownerModel.getModelId());
+
+        String url = ownerResource != null
+            ? CmsRoutes.detail("admin", ownerResource.slug(), ownerId).toUrl() : null;
+        String name = ownerModel.getDisplayTitle(owner);
+        return new ManagedByCell(
+            ownerResource != null ? ownerResource.icon().name() : null,
+            ownerResource != null ? ownerResource.label()
+                : Microcopy.of("managed_by").withFilter("scope", "instance"),
+            name != null ? name : modelId + " #" + ownerId,
+            url);
+    }
+
+    /** The admin panel's resource over a model, or null when none serves it. */
+    private static @Nullable Resource<?> adminResourceForModel(@NonNull Identifier modelId) {
+        Panel panel = PanelRegistry.getBySlug("admin");
+        if (panel == null) {
+            return null;
+        }
+        for (PanelPeer peer : panel.peers()) {
+            if (peer instanceof Resource<?> resource && resource.model() != null
+                    && resource.model().getModelId().equals(modelId)) {
+                return resource;
+            }
+        }
+        return null;
+    }
     /**
      * Same shape as sites: an instance fleet is the other list that outgrows a filter row,
      * so it keeps both the rule builder and per-operator saved views.
@@ -184,9 +334,25 @@ public class InstanceResource extends RowResource {
      */
     @Override
     public boolean updatableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return super.updatableBy(record, accessContext)
+        // A GENERATED row is read-only here whoever asks: OwnedInstances refuses every
+        // write outside the owning tier's system scope, so an editable form could only
+        // collect refusals. The owning record's own surface is where it is managed.
+        return record.get(InstanceModel.GENERATED_BY) == null
+            && super.updatableBy(record, accessContext)
             && HohenheimAccess.reachesRecord(accessContext, InstanceModel.MODEL_ID,
                 record.get(InstanceModel.ID), HohenheimAccess.CONFIG);
+    }
+
+    /** Generated rows are destroyed by their owning tier, never from this list. */
+    @Override
+    public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
+        return record.get(InstanceModel.GENERATED_BY) == null
+            && super.deletableBy(record, accessContext);
+    }
+
+    /** Whether this row's lifecycle belongs to a product tier rather than an operator. */
+    static boolean isGenerated(@NonNull Row row) {
+        return row.get(InstanceModel.GENERATED_BY) != null;
     }
 
     /**
@@ -220,12 +386,25 @@ public class InstanceResource extends RowResource {
         this.instances.destroy(existing.get(InstanceModel.ID));
     }
 
+    /**
+     * The generic delete dialog, with the one fact an operator must know before
+     * clicking: this removes the workload but KEEPS its data (the separate
+     * delete-with-data action is the one that does not).
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(
+            Microcopy.of("delete_confirm").withFilter("scope", "instance"));
+    }
+
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
         actions.add(this.deployAction());
         actions.add(this.stopAction());
         actions.add(this.restartAction());
+        actions.add(this.exposeAction());
+        actions.add(this.rollbackAction());
         actions.add(this.installAction());
         actions.add(this.reinstallAction());
         actions.add(this.appUpdateAction());
@@ -235,6 +414,66 @@ public class InstanceResource extends RowResource {
         actions.add(this.migrateAction());
         actions.add(this.destroyWithDataAction());
         return actions;
+    }
+
+    /**
+     * Open the site create form with THIS instance preselected as the upstream: the
+     * "give it a hostname" affordance, offered only where the routing tier could
+     * actually serve it (the kind declares {@code supportsSiteUpstream}).
+     */
+    private @NonNull RowAction<Row> exposeAction() {
+        return RowAction.Url.<Row>builder(Identifier.of("hohenheim", "expose_instance"))
+            .label(Microcopy.of("expose").withFilter("scope", "instance"))
+            .icon(Icon.of("globe"))
+            .inlineInRow(false)
+            .description(Microcopy.of("expose_hint").withFilter("scope", "instance"))
+            .visibleFor((row, ctx) -> !isGenerated(row) && supportsSiteUpstream(row)
+                && HohenheimAccess.isAdmin(ctx))
+            // The literal "admin" panel for the migrateAction reason (no conduit here),
+            // and this action is admin-only: a site create is an operator act.
+            .url(row -> new Uri(CmsEndpoints.CREATE_FORM
+                .with(CmsEndpoints.PANEL_PARAM, "admin")
+                .with(CmsEndpoints.RESOURCE_PARAM, "sites")
+                .with(HohenheimParams.UPSTREAM_KIND_PREFILL, InstanceUpstreamKind.ID.toString())
+                .with(HohenheimParams.INSTANCE_ID_PREFILL, row.get(InstanceModel.ID))
+                .toUrl()))
+            .build();
+    }
+
+    /**
+     * Roll a release-managed record back to its retained release -- the same engine
+     * verb the site row offers, now reachable from the application itself (an
+     * unexposed application can still be rolled back).
+     */
+    private @NonNull RowAction<Row> rollbackAction() {
+        return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "rollback_instance"))
+            .label(Microcopy.of("rollback").withFilter("scope", "instance"))
+            .icon(Icon.of("clock-rotate-left"))
+            .inlineInRow(false)
+            .description(Microcopy.of("rollback_hint").withFilter("scope", "instance"))
+            .visibleFor((row, ctx) -> !isGenerated(row)
+                && InstanceKinds.isReleaseManaged(row.get(InstanceModel.KIND))
+                && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
+                    row.get(InstanceModel.ID), HohenheimAccess.POWER))
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("rollback").withFilter("scope", "instance"))
+                .body(Microcopy.of("rollback_confirm").withFilter("scope", "instance"))
+                .confirmLabel(Microcopy.of("rollback").withFilter("scope", "instance"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
+            .handler((row, ctx) -> {
+                ReleaseEngine.rollback(row.get(InstanceModel.ID));
+                return CmsActionResult.refreshWithToast(
+                    Microcopy.of("rollback_done").withFilter("scope", "instance")
+                        .withArg("name", row.get(InstanceModel.NAME)));
+            })
+            .build();
+    }
+
+    /** Whether a site's instance upstream could serve this row's kind. */
+    static boolean supportsSiteUpstream(@NonNull Row row) {
+        InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
+        return handler != null && handler.supportsSiteUpstream();
     }
 
     /**
@@ -250,7 +489,7 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
             .icon(Icon.of("trash-can"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> HohenheimAccess.isAdmin(ctx))
+            .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.isAdmin(ctx))
             // The record-less fallback the dynamic one refines; a dynamic confirmation
             // without it is refused at registration (WriteAffordanceParityTest).
             .confirmation(ConfirmationSpec.builder()
@@ -292,7 +531,7 @@ public class InstanceResource extends RowResource {
             .icon(Icon.of("truck-fast"))
             .inlineInRow(false)
             .description(Microcopy.of("migrate_hint").withFilter("scope", "instance"))
-            .visibleFor((row, ctx) -> HohenheimAccess.isAdmin(ctx))
+            .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.isAdmin(ctx))
             // RowAction.Url is Uri-typed, so the typed target is rendered here. The panel
             // slug is the literal "admin" this action already produced (a row action has
             // no conduit to ask), so the URL does not move.
@@ -322,6 +561,7 @@ public class InstanceResource extends RowResource {
             new InstanceOverviewPage(this),
             new InstanceConsolePage(), new InstanceFramebufferPage(),
             new InstanceProvisioningPage(),
+            new InstanceDeploymentsPage(),
             new InstanceFilesPage(), new InstanceStatsPage(),
             // The exec tab hides AND 404s itself for anyone without the exec capability
             // on the record (InstanceExecPage.visibleFor); the admin panel gate is not
@@ -330,6 +570,7 @@ public class InstanceResource extends RowResource {
             new InstanceSnapshotsPage(new InstanceSnapshotResource()),
             new InstanceBackupsPage(new InstanceBackupResource()),
             new InstanceSchedulesPage(), new InstanceDevicesPage(),
+            new InstanceVolumesPage(),
             // Operator-only: the page hides AND 404s itself for a delegate, and the
             // /manage resource never lists it at all.
             new InstanceMigratePage()));
@@ -343,7 +584,8 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("install").withFilter("scope", "instance"))
             .icon(Icon.of("wand-magic-sparkles"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> row.get(InstanceModel.TEMPLATE_ID) != null
+            .visibleFor((row, ctx) -> !isGenerated(row)
+                && row.get(InstanceModel.TEMPLATE_ID) != null
                 && !InstanceModel.INSTALL_NONE.equals(row.get(InstanceModel.INSTALL_STATE))
                 && !InstanceModel.INSTALL_INSTALLED.equals(row.get(InstanceModel.INSTALL_STATE)))
             .handler((row, ctx) -> {
@@ -366,7 +608,8 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("reinstall").withFilter("scope", "instance"))
             .icon(Icon.of("rotate"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> row.get(InstanceModel.TEMPLATE_ID) != null
+            .visibleFor((row, ctx) -> !isGenerated(row)
+                && row.get(InstanceModel.TEMPLATE_ID) != null
                 && (InstanceModel.INSTALL_INSTALLED.equals(row.get(InstanceModel.INSTALL_STATE))
                     || InstanceModel.INSTALL_FAILED.equals(row.get(InstanceModel.INSTALL_STATE))))
             .confirmation(ConfirmationSpec.builder()
@@ -404,7 +647,7 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("app_update").withFilter("scope", "instance"))
             .icon(Icon.of("arrow-up-from-bracket"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> InstanceAppUpdates.hasUpdateScript(row)
+            .visibleFor((row, ctx) -> !isGenerated(row) && InstanceAppUpdates.hasUpdateScript(row)
                 && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
                     row.get(InstanceModel.ID), HohenheimAccess.CONFIG))
             .confirmation(ConfirmationSpec.builder()
@@ -437,7 +680,7 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("snapshot").withFilter("scope", "instance"))
             .icon(Icon.of("camera"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> HohenheimAccess.reachesRecord(ctx,
+            .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.reachesRecord(ctx,
                 InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.SNAPSHOTS))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("snapshot").withFilter("scope", "instance"))
@@ -459,7 +702,7 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("backup_now").withFilter("scope", "instance"))
             .icon(Icon.of("box-archive"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> HohenheimAccess.reachesRecord(ctx,
+            .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.reachesRecord(ctx,
                 InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.BACKUPS))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("backup_now").withFilter("scope", "instance"))
@@ -488,7 +731,7 @@ public class InstanceResource extends RowResource {
             .icon(Icon.of("box-archive"))
             .inlineInRow(false)
             .description(Microcopy.of("capture_template_hint").withFilter("scope", "instance"))
-            .visibleFor((row, ctx) -> HohenheimAccess.isAdmin(ctx)
+            .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.isAdmin(ctx)
                 && InstanceModel.STATUS_STOPPED.equals(row.get(InstanceModel.STATUS))
                 && supportsCapture(row))
             .confirmation(ConfirmationSpec.builder()
@@ -516,7 +759,7 @@ public class InstanceResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "deploy_instance"))
             .label(Microcopy.of("deploy").withFilter("scope", "instance"))
             .icon(Icon.of("play"))
-            .visibleFor((row, ctx) -> HohenheimAccess.reachesRecord(ctx,
+            .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.reachesRecord(ctx,
                 InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.POWER))
             .handler((row, ctx) -> {
                 this.instances.deploy(row.get(InstanceModel.ID));
@@ -536,7 +779,7 @@ public class InstanceResource extends RowResource {
             .label(Microcopy.of("restart").withFilter("scope", "instance"))
             .icon(Icon.of("rotate-right"))
             .inlineInRow(false)
-            .visibleFor((row, ctx) -> HohenheimAccess.reachesRecord(ctx,
+            .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.reachesRecord(ctx,
                 InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.POWER))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("restart").withFilter("scope", "instance"))
@@ -552,13 +795,19 @@ public class InstanceResource extends RowResource {
             .build();
     }
 
+    /**
+     * Stop rides the OVERFLOW menu: it is confirmed anyway (so the dialog was always a
+     * second click), and keeping it out of the strip leaves ONE inline verb and one
+     * red button per row -- the calm row the admin-UI wave promises.
+     */
     protected @NonNull RowAction<Row> stopAction() {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "stop_instance"))
             .label(Microcopy.of("stop").withFilter("scope", "instance"))
             .icon(Icon.of("stop"))
+            .inlineInRow(false)
             .style(ActionStyle.DESTRUCTIVE)
-            .visibleFor((row, ctx) ->
-                InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS))
+            .visibleFor((row, ctx) -> !isGenerated(row)
+                && InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS))
                     && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
                         row.get(InstanceModel.ID), HohenheimAccess.POWER))
             .confirmation(ConfirmationSpec.builder()
@@ -586,7 +835,10 @@ public class InstanceResource extends RowResource {
         actions.addAll(List.of(
             CmsSupport.relatedList("backup_targets_link", "backup-targets", "backup_target", Icon.of("box-archive")),
             CmsSupport.relatedList("instance_quotas_link", "instance-quotas", "instance_quota", Icon.of("gauge")),
-            CmsSupport.relatedList("game_domains_link", "game-domains", "game_domain", Icon.of("gamepad"))));
+            CmsSupport.relatedList("game_domains_link", "game-domains", "game_domain", Icon.of("gamepad")),
+            // Build and release history live with the tier that produces them now.
+            CmsSupport.relatedList("builds_link", "builds", "build_operation", Icon.of("hammer")),
+            CmsSupport.relatedList("releases_link", "releases", "release_operation", Icon.of("rocket"))));
         return actions;
     }
 
