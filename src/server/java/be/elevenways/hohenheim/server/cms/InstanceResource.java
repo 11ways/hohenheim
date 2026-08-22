@@ -30,7 +30,6 @@ import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -40,6 +39,7 @@ import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -49,6 +49,7 @@ import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -163,6 +164,21 @@ public class InstanceResource extends RowResource {
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
             .add(RelationPick.of(InstanceModel.BACKUP_TARGET_ID, BackupTargetModel.MODEL_ID)
                 .clearable(true).build())
+            // What a person DECIDES when creating an instance is the kind, its name, where
+            // it runs and what it runs inside; the failure policy and where its backups go
+            // are answers this installation already has. They fold, they still post, and a
+            // refusal on one forces the section back open.
+            //
+            // AIDEV-NOTE: this section can only name TOP-LEVEL entries. The long tail of
+            // this form is the per-kind SETTINGS sub-form, whose spec is DERIVED from the
+            // kind's Schema (FieldFormEntryRegistry.deriveSpec) and therefore has no
+            // declaration site a FormSection could be attached to. Folding those needs a
+            // framework seam (a schema-declared section, or a per-variant sub-spec hook on
+            // Nested.schemaFrom); do not work around it by hiding fields with visibleIn --
+            // that makes them unwritable, which is a different and worse thing.
+            .section(FormSection.advanced(
+                InstanceModel.CRASH_POLICY.getName(),
+                InstanceModel.BACKUP_TARGET_ID.getName()))
             .build();
     }
 
@@ -454,6 +470,7 @@ public class InstanceResource extends RowResource {
         return RowAction.Url.<Row>builder(Identifier.of("hohenheim", "expose_instance"))
             .label(Microcopy.of("expose").withFilter("scope", "instance"))
             .icon(Icon.of("globe"))
+            .inlineOnRecord(false)
             .inlineInRow(false)
             .description(Microcopy.of("expose_hint").withFilter("scope", "instance"))
             .visibleFor((row, ctx) -> !isGenerated(row) && supportsSiteUpstream(row)
@@ -558,6 +575,7 @@ public class InstanceResource extends RowResource {
         return RowAction.Url.<Row>builder(Identifier.of("hohenheim", "migrate_instance"))
             .label(Microcopy.of("migrate").withFilter("scope", "instance"))
             .icon(Icon.of("truck-fast"))
+            .inlineOnRecord(false)
             .inlineInRow(false)
             .description(Microcopy.of("migrate_hint").withFilter("scope", "instance"))
             .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.isAdmin(ctx))
@@ -636,6 +654,7 @@ public class InstanceResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "reinstall_instance"))
             .label(Microcopy.of("reinstall").withFilter("scope", "instance"))
             .icon(Icon.of("rotate"))
+            .inlineOnRecord(false)
             .inlineInRow(false)
             .visibleFor((row, ctx) -> !isGenerated(row)
                 && row.get(InstanceModel.TEMPLATE_ID) != null
@@ -675,6 +694,7 @@ public class InstanceResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "app_update_instance"))
             .label(Microcopy.of("app_update").withFilter("scope", "instance"))
             .icon(Icon.of("arrow-up-from-bracket"))
+            .inlineOnRecord(false)
             .inlineInRow(false)
             .visibleFor((row, ctx) -> !isGenerated(row) && InstanceAppUpdates.hasUpdateScript(row)
                 && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
@@ -708,6 +728,7 @@ public class InstanceResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "snapshot_instance"))
             .label(Microcopy.of("snapshot").withFilter("scope", "instance"))
             .icon(Icon.of("camera"))
+            .inlineOnRecord(false)
             .inlineInRow(false)
             .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.reachesRecord(ctx,
                 InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.SNAPSHOTS))
@@ -730,6 +751,7 @@ public class InstanceResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "backup_instance"))
             .label(Microcopy.of("backup_now").withFilter("scope", "instance"))
             .icon(Icon.of("box-archive"))
+            .inlineOnRecord(false)
             .inlineInRow(false)
             .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.reachesRecord(ctx,
                 InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.BACKUPS))
@@ -758,6 +780,7 @@ public class InstanceResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "capture_template"))
             .label(Microcopy.of("capture_template").withFilter("scope", "instance"))
             .icon(Icon.of("box-archive"))
+            .inlineOnRecord(false)
             .inlineInRow(false)
             .description(Microcopy.of("capture_template_hint").withFilter("scope", "instance"))
             .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.isAdmin(ctx)
@@ -800,6 +823,10 @@ public class InstanceResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "deploy_instance"))
             .label(Microcopy.of("deploy").withFilter("scope", "instance"))
             .icon(Icon.of("play"))
+            // PRIMARY is a declaration about the RECORD surface: RecordActionBands leads
+            // the inline band with it, so the one verb an instance page exists for keeps
+            // its slot however many housekeeping actions are declared after it.
+            .style(ActionStyle.PRIMARY)
             .visibleFor((row, ctx) -> !isGenerated(row)
                 && InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND))
                 && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
@@ -870,19 +897,23 @@ public class InstanceResource extends RowResource {
 
     /**
      * The instance tier's sibling catalogs, demoted out of the sidebar: where backups are
-     * written, who may run how many instances, and which public names route to which workload.
+     * written, who may run how many instances, which public names route to which workload,
+     * and the build/release history the tier produces.
+     *
+     * AIDEV-NOTE: these are peers, not verbs, so they are DECLARED as related pages and
+     * rendered in the list toolbar's one quiet overflow -- never pushed through
+     * HeaderAction.Url into the title bar, which is what this replaced. Each entry keeps
+     * the TARGET peer's own label, icon and description, so a demoted peer still has
+     * exactly one name.
      */
     @Override
-    public @NonNull List<HeaderAction> headerActions() {
-        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
-        actions.addAll(List.of(
-            CmsSupport.relatedList("backup_targets_link", "backup-targets", "backup_target", Icon.of("box-archive")),
-            CmsSupport.relatedList("instance_quotas_link", "instance-quotas", "instance_quota", Icon.of("gauge")),
-            CmsSupport.relatedList("game_domains_link", "game-domains", "game_domain", Icon.of("gamepad")),
-            // Build and release history live with the tier that produces them now.
-            CmsSupport.relatedList("builds_link", "builds", "build_operation", Icon.of("hammer")),
-            CmsSupport.relatedList("releases_link", "releases", "release_operation", Icon.of("rocket"))));
-        return actions;
+    public @NonNull List<RelatedPage> relatedPages() {
+        return List.of(
+            RelatedPage.toPeer("backup-targets"),
+            RelatedPage.toPeer("instance-quotas"),
+            RelatedPage.toPeer("game-domains"),
+            RelatedPage.toPeer("builds"),
+            RelatedPage.toPeer("releases"));
     }
 
 }

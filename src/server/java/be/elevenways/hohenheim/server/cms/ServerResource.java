@@ -24,11 +24,11 @@ import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -38,6 +38,7 @@ import be.elevenways.zenit.common.edit.Computed;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -120,6 +121,11 @@ public final class ServerResource extends RowResource {
                     ? "trust_notice_body_incus" : "trust_notice_body")))
             .dependsOn("runtime")
             .build())
+        // Enrolling a host is naming it, saying how it is reached and trusting it. The
+        // public addresses are a fact about the network the operator often fills in later.
+        .section(FormSection.advanced(
+            ServerModel.PUBLIC_IPV4.getName(),
+            ServerModel.PUBLIC_IPV6.getName()))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -964,11 +970,8 @@ public final class ServerResource extends RowResource {
      * What the reconciler found on these hosts, demoted out of the sidebar.
      */
     @Override
-    public @NonNull List<HeaderAction> headerActions() {
-        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
-        actions.addAll(List.of(
-            CmsSupport.relatedList("reconcile_findings_link", "reconcile-findings", "reconcile_finding", Icon.of("magnifying-glass"))));
-        return actions;
+    public @NonNull List<RelatedPage> relatedPages() {
+        return List.of(RelatedPage.toPeer("reconcile-findings"));
     }
 
 }

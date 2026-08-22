@@ -5,9 +5,9 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
-import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -84,9 +84,10 @@ public final class ManageProjectResource extends ProjectResource {
     }
 
     /**
-     * No inherited header actions: the operator resource links sibling ADMIN lists a
-     * tenant may not reach, and a 403 button is worse than no button.
+     * No inherited related pages: the operator resource names sibling peers of the ADMIN
+     * panel, which this panel does not register at all -- inheriting one would fail
+     * ManagePanel's own registration walk, and a 403 link is worse than no link.
      */
-    @Override public @NonNull List<HeaderAction> headerActions() { return List.of(); }
+    @Override public @NonNull List<RelatedPage> relatedPages() { return List.of(); }
 
 }

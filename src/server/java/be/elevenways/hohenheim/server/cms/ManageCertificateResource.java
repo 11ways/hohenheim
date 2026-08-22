@@ -6,10 +6,10 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
-import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
+import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
@@ -76,7 +76,7 @@ public final class ManageCertificateResource extends CertificateResource {
     @Override public @NonNull List<RowAction<Row>> rowActions() { return List.of(); }
 
     /** No upload link: an uploaded certificate is unverified authority over a name. */
-    @Override public @NonNull List<HeaderAction> headerActions() { return List.of(); }
+    @Override public @NonNull List<RelatedPage> relatedPages() { return List.of(); }
 
     /** Admins see every certificate; everyone else only the walk-reachable ones. */
     @Override

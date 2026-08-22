@@ -96,6 +96,12 @@ public final class InstanceQuotaResource extends RowResource {
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 16; }
 
+    /**
+     * Demoted out of the sidebar, so this sentence reaches a reader through the panel
+     * index and the related-pages menu of the list that names it.
+     */
+    @Override public @Nullable Microcopy description() { return CmsSupport.navHint("instance_quota"); }
+
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("gauge"); }
 }
