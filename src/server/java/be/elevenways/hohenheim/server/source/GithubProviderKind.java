@@ -46,7 +46,9 @@ public final class GithubProviderKind implements GitProviderKind {
     }
 
     @Override
-    public String getDescription() { return "github.com or a GitHub Enterprise installation"; }
+    public @NonNull Microcopy getDescription() {
+        return Microcopy.of("github").withFilter("scope", "git_provider_kind_description");
+    }
 
     @Override public Icon getIcon() { return Icon.of("github"); }
 

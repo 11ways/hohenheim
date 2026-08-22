@@ -15,10 +15,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Registration hook for the compile-time-discovered instance kinds plus the
- * server-side handler map (the SiteTypes shape). Concrete InstanceKindHandler
+ * server-side handler map (the UpstreamKindHandlers shape). Concrete InstanceKindHandler
  * implementations arrive via the generated BlastAutoLoadInit; nothing is
  * registered manually.
  */
@@ -92,21 +94,21 @@ public final class InstanceKinds {
      */
     public static @Nullable Microcopy runtimeMismatch(@NonNull String hostName,
                                                       @NonNull String hostRuntime,
-                                                      @NonNull String requiredRuntime) {
-        if (hostRuntime.equals(requiredRuntime)) {
+                                                      @NonNull Set<String> supportedRuntimes) {
+        if (supportedRuntimes.contains(hostRuntime)) {
             return null;
         }
         return Microcopy.of("host_runtime_mismatch")
             .withFilter("scope", "violations")
             .withArg("name", hostName)
             .withArg("runtime", hostRuntime)
-            .withArg("required", requiredRuntime);
+            .withArg("required", String.join(", ", new TreeSet<>(supportedRuntimes)));
     }
 
-    /** @throws Violations naming the host when its runtime is not the kind's required one */
+    /** @throws Violations naming the host when its runtime is not one the kind supports */
     public static void requireRuntimeMatch(@NonNull String hostName, @NonNull String hostRuntime,
-                                           @NonNull String requiredRuntime) {
-        Microcopy refusal = runtimeMismatch(hostName, hostRuntime, requiredRuntime);
+                                           @NonNull Set<String> supportedRuntimes) {
+        Microcopy refusal = runtimeMismatch(hostName, hostRuntime, supportedRuntimes);
         if (refusal != null) {
             throw Violations.ofForm(refusal);
         }

@@ -15,7 +15,7 @@ import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
-import be.elevenways.hohenheim.server.sitetype.types.ProxySiteType;
+import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -477,19 +477,19 @@ public final class TenantWrites {
         if (!row.has(SiteModel.SETTINGS.getName())) {
             return;
         }
-        if (!ProxySiteType.ID.toString().equals(String.valueOf(effectiveSiteType(row)))) {
+        if (!AddressUpstreamKind.ID.toString().equals(String.valueOf(effectiveSiteType(row)))) {
             return;
         }
         Object settingsValue = row.get(SiteModel.SETTINGS);
         if (!(settingsValue instanceof Map<?, ?> settings)) {
             return;
         }
-        Object hostValue = settings.get(ProxySiteType.FORWARD_HOST.getName());
+        Object hostValue = settings.get(AddressUpstreamKind.FORWARD_HOST.getName());
         if (hostValue == null || String.valueOf(hostValue).isBlank()) {
             return;
         }
         String host = String.valueOf(hostValue).trim();
-        Object schemeValue = settings.get(ProxySiteType.FORWARD_SCHEME.getName());
+        Object schemeValue = settings.get(AddressUpstreamKind.FORWARD_SCHEME.getName());
         String scheme = schemeValue != null && !String.valueOf(schemeValue).isBlank()
             ? String.valueOf(schemeValue) : "http";
         String url = scheme + "://" + host;
@@ -497,29 +497,29 @@ public final class TenantWrites {
         if (tenant) {
             if (PROXY_UPSTREAM_TENANT.problemOf(url) != null) {
                 throw Violations.ofField(
-                    SiteModel.SETTINGS.getName() + "." + ProxySiteType.FORWARD_HOST.getName(),
+                    SiteModel.SETTINGS.getName() + "." + AddressUpstreamKind.FORWARD_HOST.getName(),
                     host, CmsSupport.violationText("tenant_proxy_upstream_private"));
             }
             return;
         }
         if (PROXY_UPSTREAM_BASE.problemOf(url) != null) {
             throw Violations.ofField(
-                SiteModel.SETTINGS.getName() + "." + ProxySiteType.FORWARD_HOST.getName(),
+                SiteModel.SETTINGS.getName() + "." + AddressUpstreamKind.FORWARD_HOST.getName(),
                 host, CmsSupport.violationText("proxy_upstream_invalid"));
         }
     }
 
     /** The site type the write ends up with, reading the stored row on a partial update. */
     private static @Nullable Object effectiveSiteType(@NonNull Row row) {
-        if (row.has(SiteModel.SITE_TYPE.getName())) {
-            return row.get(SiteModel.SITE_TYPE);
+        if (row.has(SiteModel.UPSTREAM_KIND.getName())) {
+            return row.get(SiteModel.UPSTREAM_KIND);
         }
         Object id = row.has(SiteModel.ID.getName()) ? row.get(SiteModel.ID) : null;
         if (id == null) {
             return null;
         }
         Row stored = Models.get(SiteModel.class).findById(id);
-        return stored != null ? stored.get(SiteModel.SITE_TYPE) : null;
+        return stored != null ? stored.get(SiteModel.UPSTREAM_KIND) : null;
     }
 
     // --- Instances -------------------------------------------------------------------
@@ -550,7 +550,7 @@ public final class TenantWrites {
      * AIDEV-NOTE: what the column-level exemption used to mean, wrongly, was that the
      * OTHER settings members had no gate at all -- the image policy judges image, tag and
      * image_origin and nothing else, so a direct tenant POST could move
-     * {@code settings.privileged}, which IncusContainerKind lowers straight onto an Incus
+     * {@code settings.privileged}, which SystemContainerKind lowers straight onto an Incus
      * {@code security.privileged} container (threat-model boundary 1). The CMS form not
      * offering the field is a UX affordance, never a gate, which is this whole class's
      * premise. {@link #checkInstanceSettingsWrite} is therefore the per-KEY twin of the
@@ -621,7 +621,7 @@ public final class TenantWrites {
      * only the members {@code InstanceImagePolicy} judges, and every other member is as
      * frozen as a frozen column.
      *
-     * AIDEV-NOTE: the settings SCHEMA is per-KIND (IncusContainerKind declares
+     * AIDEV-NOTE: the settings SCHEMA is per-KIND (SystemContainerKind declares
      * {@code privileged}, the Docker kinds do not), so this walks the keys actually
      * present on either side rather than a model schema -- a kind-specific escape hatch
      * must not become writable just because InstanceModel's own schema cannot name it.

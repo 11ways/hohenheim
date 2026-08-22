@@ -4,8 +4,8 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -110,7 +110,7 @@ public final class WorkloadIdentity {
             if (siteId == null) {
                 continue;
             }
-            SiteTypeHandler type = SiteTypes.getHandler((String) site.get(SiteModel.SITE_TYPE));
+            UpstreamKindHandler type = UpstreamKindHandlers.getHandler((String) site.get(SiteModel.UPSTREAM_KIND));
             if (type == null || !type.managedProcessEnvironment()) {
                 continue;
             }

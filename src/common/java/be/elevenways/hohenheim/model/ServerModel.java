@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.net.IpLiterals;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -173,6 +174,35 @@ public class ServerModel extends Model {
     /** Whether the last preflight passed every REQUIRED check; the admit gate reads this. */
     public static final BooleanField PREFLIGHT_OK = SCHEMA.addField(
         BooleanField.builder("preflight_ok").defaultValue(false).build());
+
+    /**
+     * What the filesystem under this host's {@link #VOLUME_ROOT} can do, DETECTED by the
+     * preflight probe.
+     *
+     * AIDEV-NOTE: per DATA ROOT, not per host (phase-0 design section 1): both live twins
+     * run ext4 roots with a separate btrfs device, so "this host has btrfs somewhere" is
+     * not an answer to "can this volume have a quota". An unrecognised filesystem stores
+     * {@code none} and the placement gate then refuses workspaces and applications by
+     * name, which is the whole point of storing it rather than probing at deploy time.
+     */
+    public static final EnumField VOLUME_BACKEND = SCHEMA.addField(
+        VolumeBackend.fieldBuilder("volume_backend")
+            .label(HohenheimFormCopy.label("volume_backend"))
+            .help(HohenheimFormCopy.help("volume_backend"))
+            .build());
+
+    /** The directory that was probed ({@code <data_path>/volumes}), stored as evidence. */
+    public static final StringField VOLUME_ROOT = SCHEMA.addField(
+        StringField.builder().name("volume_root").nullable(true)
+            .label(HohenheimFormCopy.label("volume_root")).build());
+
+    /** What the probe actually read, so a {@code none} verdict names its own reason. */
+    public static final TextField VOLUME_BACKEND_DETAIL = SCHEMA.addField(
+        TextField.builder().name("volume_backend_detail").nullable(true).build());
+
+    /** When the volume-backend probe last ran; null = never probed, which is not the same as none. */
+    public static final DateTimeField VOLUME_PROBED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("volume_probed_at").build());
 
     /** Last time any probe (preflight, explicit probe action, reconcile sweep) reached the daemon. */
     public static final DateTimeField LAST_SEEN_AT = SCHEMA.addField(
@@ -534,6 +564,14 @@ public class ServerModel extends Model {
     public static @NonNull String runtimeOf(@NonNull Row server) {
         String runtime = server.get(RUNTIME);
         return runtime == null || runtime.isBlank() ? RUNTIME_DOCKER : runtime;
+    }
+
+    /**
+     * @return what this host's volume root can do; {@link VolumeBackend#NONE} when never
+     *         probed or unrecognised, which is the fail-closed answer placement needs
+     */
+    public static @NonNull VolumeBackend volumeBackendOf(@NonNull Row server) {
+        return VolumeBackend.resolve(server.get(VOLUME_BACKEND));
     }
 
     /** Whether this host declares the Incus runtime. */

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.source;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.TypeDefinition;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -28,5 +29,5 @@ public interface GitProviderKindInfo extends TypeDefinition {
     boolean requiresBaseUrl();
 
     /** Short description shown in the kind selector UI. */
-    String getDescription();
+    @NonNull Microcopy getDescription();
 }

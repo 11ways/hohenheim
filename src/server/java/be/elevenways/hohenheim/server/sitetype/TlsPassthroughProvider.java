@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.server.sitetype;
 
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.util.Map;
 
 /** Site type capability for raw TLS routes selected before HTTP decoding. */
-public interface TlsPassthroughProvider extends SiteTypeHandler {
+public interface TlsPassthroughProvider extends UpstreamKindHandler {
 
     TlsPassthroughTarget createTlsPassthroughTarget(Row site, Map<String, Object> settings);
 

@@ -27,7 +27,9 @@ public final class GiteaProviderKind implements GitProviderKind {
     }
 
     @Override
-    public String getDescription() { return "A self-hosted Gitea, Forgejo or Gogs installation"; }
+    public @NonNull Microcopy getDescription() {
+        return Microcopy.of("gitea").withFilter("scope", "git_provider_kind_description");
+    }
 
     /**
      * AIDEV-NOTE: the generic Git mark, not a Gitea mark -- FontAwesome ships none, and

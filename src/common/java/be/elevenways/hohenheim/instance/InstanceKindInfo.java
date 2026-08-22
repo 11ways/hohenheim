@@ -1,14 +1,15 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.TypeDefinition;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
- * Common instance-kind metadata (the SiteTypeInfo shape): lives in src/common so the
+ * Common instance-kind metadata (the UpstreamKindInfo shape): lives in src/common so the
  * admin UI can enumerate kinds without server dependencies. The kind is the ONE
  * discriminator of an instance -- runtime is implied by it ({@code docker_container}
- * now, {@code incus_container} and {@code vm} reserved), because
+ * now, {@code system_container} and {@code vm} reserved), because
  * {@code SchemaField.schemaFrom} takes exactly one sibling field.
  */
 public interface InstanceKindInfo extends TypeDefinition {
@@ -19,5 +20,5 @@ public interface InstanceKindInfo extends TypeDefinition {
     /**
      * Short description shown in the kind selector UI.
      */
-    String getDescription();
+    @NonNull Microcopy getDescription();
 }

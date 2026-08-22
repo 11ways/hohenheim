@@ -205,8 +205,8 @@ public final class CertificateAuthority {
             for (Row domain : covering) {
                 Row site = snapshot.siteOf(domain);
                 if (Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))
-                        || site != null && SiteModel.SITE_TYPE_TLS_PASSTHROUGH
-                            .equals(site.get(SiteModel.SITE_TYPE))) {
+                        || site != null && SiteModel.UPSTREAM_TLS_PASSTHROUGH
+                            .equals(site.get(SiteModel.UPSTREAM_KIND))) {
                     throw new Refused(Refusal.EXCLUDED, hostname);
                 }
             }

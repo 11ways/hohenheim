@@ -112,7 +112,9 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
     }
 
     @Override
-    public String getDescription() { return "A managed database's engine (managed by its database)"; }
+    public @NonNull Microcopy getDescription() {
+        return Microcopy.of("database_container").withFilter("scope", "instance_kind_description");
+    }
 
     @Override
     public Icon getIcon() { return Icon.of("database"); }

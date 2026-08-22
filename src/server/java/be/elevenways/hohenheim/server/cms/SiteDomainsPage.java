@@ -42,8 +42,8 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
                                            @NonNull AccessContext accessContext,
                                            @NonNull Row site) {
         Integer siteId = site.get(SiteModel.ID);
-        boolean tlsPassthrough = SiteModel.SITE_TYPE_TLS_PASSTHROUGH
-            .equals(site.get(SiteModel.SITE_TYPE));
+        boolean tlsPassthrough = SiteModel.UPSTREAM_TLS_PASSTHROUGH
+            .equals(site.get(SiteModel.UPSTREAM_KIND));
         String panel = CmsSupport.panelSlug(conduit);
         List<Map<String, Object>> domains = new ArrayList<>();
         for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {

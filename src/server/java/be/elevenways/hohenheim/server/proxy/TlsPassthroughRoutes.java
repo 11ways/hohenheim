@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
-import be.elevenways.hohenheim.server.sitetype.SiteTypes;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughTarget;
 import be.elevenways.protoblast.common.Blast;
@@ -62,7 +62,7 @@ public final class TlsPassthroughRoutes {
 
         for (Row site : sites) {
             String siteName = site.get(SiteModel.NAME);
-            SiteTypeHandler handler = SiteTypes.getHandler(site.get(SiteModel.SITE_TYPE));
+            UpstreamKindHandler handler = UpstreamKindHandlers.getHandler(site.get(SiteModel.UPSTREAM_KIND));
             if (handler == null) continue;
 
             @SuppressWarnings("unchecked")

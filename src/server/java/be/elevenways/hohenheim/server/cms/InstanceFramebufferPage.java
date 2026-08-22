@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.instance.IncusVmKind;
+import be.elevenways.hohenheim.server.instance.VmKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -44,7 +44,7 @@ public final class InstanceFramebufferPage implements RecordScopedPage<Row> {
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
-        return IncusVmKind.ID.toString().equals(record.get(InstanceModel.KIND))
+        return VmKind.ID.toString().equals(record.get(InstanceModel.KIND))
             && HohenheimAccess.hasInstanceCapability(accessContext,
                 record.get(InstanceModel.ID), HohenheimAccess.CONSOLE);
     }

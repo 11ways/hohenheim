@@ -5,7 +5,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 /**
  * THE owner of the per-node singletons every managed-process site type shares: the port
  * allocator, the socket allocator and the process monitor. Booted once by
- * {@code SiteTypes.boot()} when the {@code processes} role is on, and null on a node
+ * {@code UpstreamKindHandlers.boot()} when the {@code processes} role is on, and null on a node
  * where it is off.
  *
  * AIDEV-NOTE: these three used to be static fields on NodeSiteType that JavaSiteType and
@@ -27,7 +27,7 @@ public final class ProcessInfrastructure {
      * One-time boot of the shared process-management singletons; a second call is a no-op.
      *
      * AIDEV-NOTE: the guard is load-bearing for the shared-JVM test lane. Production calls
-     * SiteTypes.boot() once, but 33 browser-test classes call it, and without the guard each
+     * UpstreamKindHandlers.boot() once, but 33 browser-test classes call it, and without the guard each
      * one replaced all three singletons and started ANOTHER ProcessMonitor thread (10s
      * sampling, never stopped) while orphaning the previous port/socket bookkeeping. With
      * one JVM per class that leaked one thread and died; sharing a JVM across classes made

@@ -414,7 +414,7 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
             InstanceKindHandler handler = InstanceKinds.getHandler(
                 row.get(InstanceModel.KIND));
             if (handler == null
-                    || !ServerModel.RUNTIME_DOCKER.equals(handler.requiredRuntime())) {
+                    || !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
                 continue;   // unknown kinds fail their own lanes; Incus has its own sweep
             }
             int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));

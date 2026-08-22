@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
+import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -45,7 +46,7 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
 
     @Override
     public boolean visibleFor(@NonNull Row site) {
-        return SiteModel.SOURCE_GIT.equals(site.get(SiteModel.SOURCE));
+        return SiteSources.isGitSourced(site);
     }
 
     @Override
@@ -116,12 +117,11 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
      * domain is the copy-pastable choice.
      */
     private static void putAdminOnlyVars(Map<String, Object> vars, Row site) {
-        @SuppressWarnings("unchecked")
-        Map<String, Object> settings = site.get(SiteModel.SOURCE_SETTINGS) instanceof Map<?, ?> map
-            ? (Map<String, Object>) map : Map.of();
-        vars.put("webhookSecret", orEmpty(settings.get(GitSourceSchema.WEBHOOK_SECRET.getName())));
+        Map<String, Object> stored = SiteSources.settingsOf(site);
+        Map<String, Object> settings = stored == null ? Map.of() : stored;
+        vars.put("webhookSecret", orEmpty(settings.get(GitSourceSchema.WEBHOOK_SECRET)));
         vars.put("webhookAutoDeploy",
-            Boolean.TRUE.equals(settings.get(GitSourceSchema.AUTO_DEPLOY.getName())));
+            Boolean.TRUE.equals(settings.get(GitSourceSchema.AUTO_DEPLOY)));
 
         // AIDEV-NOTE: the git webhook is intercepted by SiteDispatcher BEFORE the zenit
         // conduit chain, so it is deliberately outside the Endpoint framework and has no

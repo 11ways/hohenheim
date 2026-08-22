@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
+import be.elevenways.hohenheim.instance.ReadinessKind;
+import be.elevenways.hohenheim.instance.StopKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -130,6 +133,58 @@ public class InstanceTemplateModel extends Model {
         StringField.builder().name("stop_command")
             .label(HohenheimFormCopy.label("stop_command"))
             .help(HohenheimFormCopy.help("stop_command"))
+            .build());
+
+    /**
+     * The runtime image ("yolk") this template layers its hooks over, or null when the
+     * template's own {@code settings} name the image.
+     *
+     * AIDEV-NOTE: this is what stops every Node 22 image appearing twice (once per
+     * template kind) -- the vocabulary-duplication objection in section 3 of the phase-0
+     * design. A template says "node-22 plus these hooks"; it does not re-declare node-22.
+     */
+    public static final IntegerField RUNTIME_IMAGE_ID = SCHEMA.addField(
+        IntegerField.builder().name("runtime_image_id")
+            .label(HohenheimFormCopy.label("runtime_image"))
+            .help(HohenheimFormCopy.help("template_runtime_image"))
+            .build());
+
+    /** Overrides the runtime image's default command; {@code \{$VAR\}} expanded at start. */
+    public static final StringField START_COMMAND = SCHEMA.addField(
+        StringField.builder().name("start_command")
+            .label(HohenheimFormCopy.label("start_command"))
+            .help(HohenheimFormCopy.help("start_command"))
+            .build());
+
+    public static final EnumField READINESS_KIND = SCHEMA.addField(
+        ReadinessKind.fieldBuilder("readiness_kind")
+            .label(HohenheimFormCopy.label("readiness_kind"))
+            .help(HohenheimFormCopy.help("readiness_kind"))
+            .build());
+
+    /** The http path or port name {@link #READINESS_KIND} probes; unused by console_line. */
+    public static final StringField READINESS_TARGET = SCHEMA.addField(
+        StringField.builder().name("readiness_target")
+            .label(HohenheimFormCopy.label("readiness_target"))
+            .help(HohenheimFormCopy.help("readiness_target"))
+            .build());
+
+    public static final EnumField STOP_KIND = SCHEMA.addField(
+        StopKind.fieldBuilder("stop_kind")
+            .label(HohenheimFormCopy.label("stop_kind"))
+            .help(HohenheimFormCopy.help("stop_kind"))
+            .build());
+
+    public static final IntegerField STOP_GRACE_SECONDS = SCHEMA.addField(
+        IntegerField.builder().name("stop_grace_seconds").defaultValue(10).suffix("s")
+            .label(HohenheimFormCopy.label("stop_grace_seconds"))
+            .help(HohenheimFormCopy.help("stop_grace_seconds"))
+            .build());
+
+    public static final EnumField CONSOLE_KIND = SCHEMA.addField(
+        ConsoleKind.fieldBuilder("console_kind")
+            .label(HohenheimFormCopy.label("console_kind"))
+            .help(HohenheimFormCopy.help("console_kind"))
             .build());
 
     /**

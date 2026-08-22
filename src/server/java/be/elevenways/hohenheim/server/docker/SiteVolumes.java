@@ -23,7 +23,7 @@ import java.util.Map;
  *
  * AIDEV-NOTE: DECIDED 2026-08-08, and it is the fix for silent data loss on a
  * zero-downtime release. The volume name used to be derived from the instance handle
- * ({@code SiteContainerKind.specFor}), and {@code SiteReleases.gatedSwap} mints a NEW
+ * ({@code ReleaseKind.specFor}), and {@code SiteReleases.gatedSwap} mints a NEW
  * instance row for every candidate -- so a health-gated release mounted a DIFFERENT,
  * EMPTY volume and orphaned the old one, while the in-place replacement path (which reuses
  * the serving row) kept it and hid the defect. The precedent this follows is

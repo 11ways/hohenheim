@@ -79,8 +79,7 @@ public final class HohenheimHandlers {
                 entry.put("id", siteId);
                 entry.put("name", site.get(SiteModel.NAME));
                 entry.put("slug", site.get(SiteModel.SLUG));
-                entry.put("type", String.valueOf(site.get(SiteModel.SITE_TYPE)));
-                entry.put("source", site.get(SiteModel.SOURCE));
+                entry.put("type", String.valueOf(site.get(SiteModel.UPSTREAM_KIND)));
                 entry.put("enabled", Boolean.TRUE.equals(site.get(SiteModel.ENABLED)));
                 SiteRequestHandler handler = proxy != null && siteId != null
                     ? proxy.getDispatcher().findHandlerBySiteId(siteId) : null;

@@ -17,7 +17,7 @@ import java.io.IOException;
  * {@code InstanceService.deploy}. That method used to call three tiers' static
  * {@code attachLinksBeforeStart} methods by name, and three separate waves had each
  * added exactly one line to it -- the same anti-pattern {@code generatedOnly()} removed
- * from the instance write hook, where {@code site_container} was hard-coded. A new
+ * from the instance write hook, where {@code release} was hard-coded. A new
  * owning tier now ships one class and is dispatched from the moment it registers.
  *
  * @author Jelle De Loecker

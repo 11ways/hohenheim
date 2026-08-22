@@ -181,7 +181,7 @@ public final class CertificateRequestPage extends PanelPage {
         if (site == null) {
             return List.of();
         }
-        if (SiteModel.SITE_TYPE_TLS_PASSTHROUGH.equals(site.get(SiteModel.SITE_TYPE))) {
+        if (SiteModel.UPSTREAM_TLS_PASSTHROUGH.equals(site.get(SiteModel.UPSTREAM_KIND))) {
             return List.of();
         }
         List<String> hostnames = new ArrayList<>();

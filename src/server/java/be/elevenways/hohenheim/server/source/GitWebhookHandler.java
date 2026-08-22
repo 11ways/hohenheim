@@ -123,9 +123,11 @@ public class GitWebhookHandler {
 
         // Everything up to and including signature verification refuses IDENTICALLY:
         // the response must not reveal whether the site exists or carries a secret.
-        Map<String, Object> sourceSettings = site != null
-            && SiteModel.SOURCE_GIT.equals(site.get(SiteModel.SOURCE))
-            ? castSettings(site.get(SiteModel.SOURCE_SETTINGS)) : null;
+        // AIDEV-NOTE: the webhook secret lives with the SOURCE, which moved off the site
+        // and onto the instance it exposes (phase-0 design section 3). The URL still
+        // carries the site slug; brief 8 routes webhooks at the instance directly and this
+        // hop through the site disappears with it.
+        Map<String, Object> sourceSettings = SiteSources.settingsOf(site);
         String webhookSecret = sourceSettings != null
             ? str(sourceSettings.get("webhook_secret")) : "";
 

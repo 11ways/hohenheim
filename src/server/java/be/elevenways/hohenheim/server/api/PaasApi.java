@@ -15,7 +15,7 @@ import be.elevenways.hohenheim.server.instance.InstanceApi;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.sitetype.SiteHandlers;
-import be.elevenways.hohenheim.server.sitetype.types.DockerSiteType;
+import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -179,7 +179,10 @@ public final class PaasApi {
             // sites ride the health-gated release engine over the retained digest-pinned
             // release (SiteResource's row action); git process/static sites re-point the
             // previous checkout slot (the Deployments tab). Neither is re-implemented.
-            if (DockerSiteType.ID.toString().equals(site.get(SiteModel.SITE_TYPE))) {
+            // AIDEV-NOTE: the successor of the deleted `docker` site type is the `instance`
+            // upstream; SiteReleases is still SITE-keyed until phase-0 brief 7 re-keys it
+            // onto the application instance, so the condition moved and the call did not.
+            if (InstanceUpstreamKind.ID.toString().equals(site.get(SiteModel.UPSTREAM_KIND))) {
                 try {
                     SiteReleases.rollback(siteId);
                 } catch (Violations refused) {
@@ -249,8 +252,7 @@ public final class PaasApi {
         entry.put("id", siteId);
         entry.put("name", site.get(SiteModel.NAME));
         entry.put("slug", site.get(SiteModel.SLUG));
-        entry.put("type", String.valueOf((Object) site.get(SiteModel.SITE_TYPE)));
-        entry.put("source", site.get(SiteModel.SOURCE));
+        entry.put("type", String.valueOf((Object) site.get(SiteModel.UPSTREAM_KIND)));
         entry.put("enabled", Boolean.TRUE.equals(site.get(SiteModel.ENABLED)));
         var proxy = ServerMain.getProxyServer();
         var handler = proxy != null && siteId != null

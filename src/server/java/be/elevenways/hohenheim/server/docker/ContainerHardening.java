@@ -395,7 +395,7 @@ public final class ContainerHardening {
      * the Docker create funnel; INCUS instances (containers and VMs) never pass through it
      * and get no LogConfig equivalent, because they do not have the exposure it closes: an
      * Incus guest's own logs are written inside the INSTANCE's filesystem, which the Incus
-     * tier bounds with its declarable root-disk cap ({@code IncusContainerKind.ROOT_DISK_GB}
+     * tier bounds with its declarable root-disk cap ({@code SystemContainerKind.ROOT_DISK_GB}
      * -> the root device's {@code size}, a real pool/qgroup limit), so a workload printing
      * in a loop fills its own quota rather than the shared host disk the way a Docker
      * json-file log does. What is NOT claimed here: a root-disk cap left blank inherits the

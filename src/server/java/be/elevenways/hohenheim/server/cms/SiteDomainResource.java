@@ -12,7 +12,7 @@ import be.elevenways.hohenheim.server.proxy.ReleasedClaims;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
-import be.elevenways.hohenheim.server.sitetype.types.TlsPassthroughSiteType;
+import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -161,8 +161,8 @@ public class SiteDomainResource extends RowResource {
                 int parsedSiteId = Integer.parseInt(siteId);
                 values.put("site_id", parsedSiteId);
                 Row site = Models.get(SiteModel.class).findById(parsedSiteId);
-                if (site != null && TlsPassthroughSiteType.ID.toString()
-                        .equals(site.get(SiteModel.SITE_TYPE))) {
+                if (site != null && TlsPassthroughUpstreamKind.ID.toString()
+                        .equals(site.get(SiteModel.UPSTREAM_KIND))) {
                     values.put("force_ssl", false);
                     values.put("exclude_from_letsencrypt", true);
                 }

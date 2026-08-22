@@ -775,7 +775,7 @@ public final class SiteReleases {
         return fresh;
     }
 
-    /** A fresh instance row of the site_container kind, in the given role. */
+    /** A fresh instance row of the release kind, in the given role. */
     private static @NonNull Row newInstanceRow(int siteId, @Nullable String siteName,
                                                int serverId,
                                                @NonNull Map<String, Object> desired,
@@ -783,7 +783,7 @@ public final class SiteReleases {
         Row instance = Models.get(InstanceModel.class).createEmptyRow();
         instance.set(InstanceModel.NAME,
             siteName != null && !siteName.isBlank() ? siteName : "site-" + siteId);
-        instance.set(InstanceModel.KIND, SiteContainerKind.ID.toString());
+        instance.set(InstanceModel.KIND, ReleaseKind.ID.toString());
         instance.set(InstanceModel.SETTINGS, desired);
         instance.set(InstanceModel.SERVER_ID, serverId);
         instance.set(InstanceModel.RUNTIME_ROLE, role);

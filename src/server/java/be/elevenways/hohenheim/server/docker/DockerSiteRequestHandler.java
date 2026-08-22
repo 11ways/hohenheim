@@ -18,7 +18,7 @@ import java.util.Map;
 /**
  * Serves a Docker site by reverse-proxying to its OWNED INSTANCE -- the canonical
  * runtime-resource contract. This handler owns no container: {@link SiteInstances}
- * converges the site's {@code site_container} instance through {@link
+ * converges the site's {@code release} instance through {@link
  * be.elevenways.hohenheim.server.instance.InstanceService} (fenced outcome writes,
  * verified destroy, ledger record-after, owner labels), and this class only reads the
  * published loopback port back as its upstream. There is deliberately NO fallback

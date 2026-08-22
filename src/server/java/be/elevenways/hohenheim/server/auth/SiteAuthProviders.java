@@ -9,7 +9,7 @@ import java.util.Map;
 
 /**
  * Registration hook for the compile-time-discovered per-site auth-provider
- * types plus the server-side handler map (parallel to SiteTypes). Concrete
+ * types plus the server-side handler map (parallel to UpstreamKindHandlers). Concrete
  * SiteAuthProviderTypeHandler implementations arrive via the generated
  * BlastAutoLoadInit; nothing is registered manually.
  *

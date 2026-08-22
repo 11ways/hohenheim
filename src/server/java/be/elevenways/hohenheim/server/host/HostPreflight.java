@@ -98,6 +98,10 @@ public final class HostPreflight {
         if (server == null) {
             throw new IllegalArgumentException("No server named '" + serverName + "'");
         }
+        // The volume backend is a property of the host's FILESYSTEM, not of its daemon, so
+        // it is probed for both runtimes before the daemon battery branches. Its own
+        // failures are stored as `none` (VolumeBackends.probe), never thrown.
+        VolumeBackends.store(server, VolumeBackends.probe(server));
         // The runtime declaration is DATA on the record: an Incus host gets the Incus
         // battery through the same store funnel, never a Docker probe aimed at it.
         if (ServerModel.isIncus(server)) {

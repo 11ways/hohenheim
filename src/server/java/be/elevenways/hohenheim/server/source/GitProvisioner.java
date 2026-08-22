@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
-import be.elevenways.hohenheim.server.sitetype.SiteTypeHandler;
+import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
@@ -13,7 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 /**
- * Entry point for git provisioning. Not a SiteTypeHandler -- wraps any type handler.
+ * Entry point for git provisioning. Not a UpstreamKindHandler -- wraps any type handler.
  */
 public class GitProvisioner {
 
@@ -28,7 +28,7 @@ public class GitProvisioner {
      * Create a git-provisioned handler for a site.
      * Returns immediately (non-blocking). The actual clone/build runs async.
      */
-    public static SiteRequestHandler createHandler(Row site, SiteTypeHandler typeHandler,
+    public static SiteRequestHandler createHandler(Row site, UpstreamKindHandler typeHandler,
                                                     Map<String, Object> typeSettings,
                                                     Map<String, Object> sourceSettings,
                                                     int siteId) {

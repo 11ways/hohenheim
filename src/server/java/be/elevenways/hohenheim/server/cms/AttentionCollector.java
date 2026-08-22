@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -633,11 +634,18 @@ public final class AttentionCollector {
     private static void failedDeployments(List<AttentionItem> items) {
         var siteModel = Models.get(SiteModel.class);
         var deployModel = Models.get(DeploymentModel.class);
+        // AIDEV-NOTE: the source moved off the site (phase-0 design section 3), so the
+        // git filter is no longer a column predicate: it asks the instance the site
+        // exposes. The query stays scoped to enabled, live sites and SiteSources answers
+        // per row; brief 7 re-keys this collector to the application instance outright.
         List<Row> gitSites = siteModel.find()
             .where(SiteModel.ENABLED.eq(true))
             .where(SiteModel.DELETED_AT.isNull())
-            .where(SiteModel.SOURCE.eq(SiteModel.SOURCE_GIT))
-            .all();
+            .where(SiteModel.INSTANCE_ID.isNotNull())
+            .all()
+            .stream()
+            .filter(SiteSources::isGitSourced)
+            .toList();
         for (Row site : gitSites) {
             Integer siteId = site.get(SiteModel.ID);
             if (siteId == null) {

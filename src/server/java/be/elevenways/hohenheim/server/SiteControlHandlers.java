@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.cms.InstanceConsolePage;
-import be.elevenways.hohenheim.server.cms.SiteProcessesPage;
 import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
@@ -231,9 +230,16 @@ final class SiteControlHandlers {
      * rendered on), validated by {@link ReturnTarget}; forged values fall back
      * to the admin page.
      */
+    /**
+     * AIDEV-NOTE: a literal since SiteProcessesPage was deleted with the site-upstream
+     * rename (phase-0 design section 3). It resolves to nothing now; these process-control
+     * handlers die with the host-user lane in brief 6 and this constant with them.
+     */
+    private static final String PROCESSES_SLUG = "processes";
+
     private static String processesPageUrl(Conduit conduit, Integer siteId) {
         return ReturnTarget.or(ReturnTarget.read(conduit),
-            CmsRoutes.subpage(HandlerSupport.ADMIN, "sites", siteId, SiteProcessesPage.SLUG).toUrl());
+            CmsRoutes.subpage(HandlerSupport.ADMIN, "sites", siteId, PROCESSES_SLUG).toUrl());
     }
 
     private static String deploymentsPageUrl(Conduit conduit, Integer siteId) {

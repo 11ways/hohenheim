@@ -111,16 +111,8 @@
     "text": "Een site is verplicht",
     "scope": "violations"
   },
-  "site_type_no_injection": {
-    "text": "Sites van type '{$type}' kunnen geen databankgegevens ontvangen: enkel sitetypes die een workload draaien (hostprocessen of een Docker-container) kunnen een beheerde databank bereiken",
-    "scope": "violations"
-  },
   "tls_passthrough_backend_certificate": {
     "text": "De backend presenteert het certificaat voor een TLS-passthroughdomein; wijs geen Hohenheim-certificaat toe",
-    "scope": "violations"
-  },
-  "tls_passthrough_local_only": {
-    "text": "TLS-passthroughsites routeren naar een bestaande upstream en kunnen geen Git-deploymentbron gebruiken",
     "scope": "violations"
   },
   "tls_passthrough_no_access_list": {
@@ -1377,6 +1369,10 @@
     {
       "text": "Geen",
       "scope": "crash_policy"
+    },
+    {
+      "text": "Geen",
+      "scope": "volume_backend"
     }
   ],
   "none_running": {
@@ -1411,6 +1407,10 @@
     {
       "text": "Poort",
       "scope": "database_tab"
+    },
+    {
+      "text": "Poort open",
+      "scope": "readiness_kind"
     }
   ],
   "primary": {
@@ -1943,14 +1943,6 @@
     "text": "Reguliere expressie",
     "scope": "domain_match"
   },
-  "local_files": {
-    "text": "Lokale bestanden",
-    "scope": "site_source"
-  },
-  "git_repository": {
-    "text": "Git-repository",
-    "scope": "site_source"
-  },
   "server_local": {
     "text": "{$name} (lokaal)",
     "scope": "server_option"
@@ -2259,10 +2251,6 @@
     "text": "Netwerk",
     "scope": "nav"
   },
-  "proxy": {
-    "text": "Proxy",
-    "scope": "site_type"
-  },
   "test": [
     {
       "text": "Test versturen",
@@ -2415,13 +2403,13 @@
       "scope": "server_overview"
     }
   ],
-  "site_type": [
+  "upstream_kind": [
     {
-      "text": "Sitetype",
+      "text": "Upstream",
       "scope": "field"
     },
     {
-      "text": "Hoe deze site wordt bediend: beheerd proces, statische bestanden, proxy, redirect, ...",
+      "text": "Waar deze hostnaam naartoe leidt: statische bestanden, een omleiding, een adres, een instantie die je beheert, ...",
       "scope": "help"
     }
   ],
@@ -4287,12 +4275,12 @@
       "scope": "help"
     },
     {
-      "text": "Commando",
-      "scope": "site_type"
-    },
-    {
       "text": "Commando-hook",
       "scope": "dns_publisher"
+    },
+    {
+      "text": "Consolecommando",
+      "scope": "stop_kind"
     }
   ],
   "registry_server": [
@@ -4325,10 +4313,16 @@
     "text": "Afhankelijk van",
     "scope": "field"
   },
-  "container_path": {
-    "text": "Pad in container",
-    "scope": "field"
-  },
+  "container_path": [
+    {
+      "text": "Pad in container",
+      "scope": "field"
+    },
+    {
+      "text": "Waar het volume in de container wordt gekoppeld.",
+      "scope": "help"
+    }
+  ],
   "mount_external_name": {
     "text": "Externe volumenaam",
     "scope": "field"
@@ -4871,10 +4865,16 @@
     "text": "Persistente benoemde volumes: logische naam naar containerpad; data overleeft herdeployments",
     "scope": "help"
   },
-  "docker_container": {
-    "text": "Docker-container",
-    "scope": "instance_kind"
-  },
+  "docker_container": [
+    {
+      "text": "Docker-container",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "Een container-image draaien als beheerde instantie",
+      "scope": "instance_kind_description"
+    }
+  ],
   "created": [
     {
       "text": "Aangemaakt",
@@ -5485,14 +5485,26 @@
       "scope": "git_provider"
     }
   ],
-  "filesystem": {
-    "text": "Map op schijf",
-    "scope": "backup_target_kind"
-  },
-  "ssh": {
-    "text": "SSH-host",
-    "scope": "backup_target_kind"
-  },
+  "filesystem": [
+    {
+      "text": "Map op schijf",
+      "scope": "backup_target_kind"
+    },
+    {
+      "text": "Een map op deze controller; alleen buiten de host als de map dat zelf is",
+      "scope": "backup_target_kind_description"
+    }
+  ],
+  "ssh": [
+    {
+      "text": "SSH-host",
+      "scope": "backup_target_kind"
+    },
+    {
+      "text": "Een map op een andere host via ssh; een ander storingsdomein als die host dat werkelijk is",
+      "scope": "backup_target_kind_description"
+    }
+  ],
   "snapshots": {
     "text": "Snapshots",
     "scope": "capability"
@@ -5505,10 +5517,20 @@
     "text": "Back-updoel",
     "scope": "field"
   },
-  "instance": {
-    "text": "Instantie",
-    "scope": "field"
-  },
+  "instance": [
+    {
+      "text": "Instantie",
+      "scope": "field"
+    },
+    {
+      "text": "Instantie",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Een instantie serveren die deze installatie beheert",
+      "scope": "upstream_kind_description"
+    }
+  ],
   "note": [
     {
       "text": "Notitie",
@@ -5900,10 +5922,16 @@
     "text": "Geinstalleerd",
     "scope": "install_state"
   },
-  "plain": {
-    "text": "Gewoon",
-    "scope": "variable_kind"
-  },
+  "plain": [
+    {
+      "text": "Gewoon",
+      "scope": "variable_kind"
+    },
+    {
+      "text": "Gewone console",
+      "scope": "console_kind"
+    }
+  ],
   "string": {
     "text": "Tekst",
     "scope": "variable_type"
@@ -6248,10 +6276,16 @@
       "scope": "capability"
     }
   ],
-  "console_line": {
-    "text": "Consolecommando",
-    "scope": "field"
-  },
+  "console_line": [
+    {
+      "text": "Consolecommando",
+      "scope": "field"
+    },
+    {
+      "text": "Consoleregel",
+      "scope": "readiness_kind"
+    }
+  ],
   "power_operation": {
     "text": "Actie",
     "scope": "field"
@@ -6408,38 +6442,46 @@
     "text": "Instanties aanmaken op basis van goedgekeurde sjablonen",
     "scope": "permission"
   },
-  "tls_passthrough": {
-    "text": "TLS-doorvoer",
-    "scope": "site_type"
-  },
-  "alchemy": {
-    "text": "Alchemy",
-    "scope": "site_type"
-  },
-  "dev_namespace": {
-    "text": "Dev-namespace",
-    "scope": "site_type"
-  },
-  "dead": {
-    "text": "Dood",
-    "scope": "site_type"
-  },
-  "static": {
-    "text": "Statisch",
-    "scope": "site_type"
-  },
-  "java": {
-    "text": "Java / Zenit",
-    "scope": "site_type"
-  },
-  "redirect": {
-    "text": "Doorverwijzing",
-    "scope": "site_type"
-  },
-  "node": {
-    "text": "Node.js",
-    "scope": "site_type"
-  },
+  "tls_passthrough": [
+    {
+      "text": "TLS-doorvoer",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Onaangeraakte TLS-verbindingen doorsturen op basis van SNI",
+      "scope": "upstream_kind_description"
+    }
+  ],
+  "dev_namespace": [
+    {
+      "text": "Dev-namespace",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Geregistreerde externe ontwikkelservers serveren op wildcard-subdomeinen",
+      "scope": "upstream_kind_description"
+    }
+  ],
+  "static": [
+    {
+      "text": "Statisch",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Bestanden uit een map serveren",
+      "scope": "upstream_kind_description"
+    }
+  ],
+  "redirect": [
+    {
+      "text": "Doorverwijzing",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Verzoeken doorsturen naar een andere URL",
+      "scope": "upstream_kind_description"
+    }
+  ],
   "hohenheim_databases_create": {
     "text": "Beheerde databanken aanmaken",
     "scope": "permission"
@@ -6616,22 +6658,40 @@
     "text": "De bestandsbewerking is mislukt: {$reason}",
     "scope": "violations"
   },
-  "site_container": {
-    "text": "Sitecontainer",
-    "scope": "instance_kind"
-  },
-  "stack_service": {
-    "text": "Stackservice",
-    "scope": "instance_kind"
-  },
+  "release": [
+    {
+      "text": "Release",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "Een uitrol van een applicatie (beheerd door die applicatie)",
+      "scope": "instance_kind_description"
+    }
+  ],
+  "stack_service": [
+    {
+      "text": "Stackservice",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "Een dienst van een beheerde stack (beheerd door die stack)",
+      "scope": "instance_kind_description"
+    }
+  ],
   "stack_port_bind_unsupported": {
     "text": "Service {$service} publiceert op {$address}, dat noch de hele host noch loopback is",
     "scope": "violations"
   },
-  "database_container": {
-    "text": "Databasecontainer",
-    "scope": "instance_kind"
-  },
+  "database_container": [
+    {
+      "text": "Databasecontainer",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "De engine van een beheerde database (beheerd door die database)",
+      "scope": "instance_kind_description"
+    }
+  ],
   "database_engine_unknown": {
     "text": "Onbekende database-engine {$engine}",
     "scope": "violations"
@@ -6924,18 +6984,36 @@
       "scope": "help"
     }
   ],
-  "github": {
-    "text": "GitHub",
-    "scope": "git_provider_kind"
-  },
-  "gitlab": {
-    "text": "GitLab",
-    "scope": "git_provider_kind"
-  },
-  "gitea": {
-    "text": "Gitea",
-    "scope": "git_provider_kind"
-  },
+  "github": [
+    {
+      "text": "GitHub",
+      "scope": "git_provider_kind"
+    },
+    {
+      "text": "github.com of een GitHub Enterprise-installatie",
+      "scope": "git_provider_kind_description"
+    }
+  ],
+  "gitlab": [
+    {
+      "text": "GitLab",
+      "scope": "git_provider_kind"
+    },
+    {
+      "text": "gitlab.com of een zelfgehoste GitLab-installatie",
+      "scope": "git_provider_kind_description"
+    }
+  ],
+  "gitea": [
+    {
+      "text": "Gitea",
+      "scope": "git_provider_kind"
+    },
+    {
+      "text": "Een zelfgehoste Gitea-, Forgejo- of Gogs-installatie",
+      "scope": "git_provider_kind_description"
+    }
+  ],
   "git_provider": [
     {
       "text": "Git-provider",
@@ -7004,16 +7082,10 @@
       "scope": "database_status"
     }
   ],
-  "docker": [
-    {
-      "text": "Docker",
-      "scope": "host_runtime"
-    },
-    {
-      "text": "Docker",
-      "scope": "site_type"
-    }
-  ],
+  "docker": {
+    "text": "Docker",
+    "scope": "host_runtime"
+  },
   "incus": {
     "text": "Incus",
     "scope": "host_runtime"
@@ -7058,10 +7130,16 @@
     "text": "Dit instantietype heeft een {$required}-host nodig, maar '{$name}' declareert de {$runtime}-runtime.",
     "scope": "violations"
   },
-  "incus_container": {
-    "text": "Systeemcontainer (LXC)",
-    "scope": "instance_kind"
-  },
+  "system_container": [
+    {
+      "text": "Systeemcontainer (LXC)",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "Een systeemcontainer draaien op een Incus-host",
+      "scope": "instance_kind_description"
+    }
+  ],
   "incus_image": [
     {
       "text": "Image-alias",
@@ -7146,10 +7224,16 @@
     "text": "Importeer {$app}",
     "scope": "template_import"
   },
-  "incus_vm": {
-    "text": "Virtuele machine",
-    "scope": "instance_kind"
-  },
+  "vm": [
+    {
+      "text": "Virtuele machine",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "Een KVM-machine draaien op een Incus-host",
+      "scope": "instance_kind_description"
+    }
+  ],
   "vm_image": [
     {
       "text": "Image-alias",
@@ -8356,10 +8440,20 @@
     "text": "Poorten die deze instantie in het grootboek houdt, samen met het hostadres waarop ze antwoorden.",
     "scope": "instance_overview"
   },
-  "address": {
-    "text": "Adres",
-    "scope": "instance_overview"
-  },
+  "address": [
+    {
+      "text": "Adres",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "Adres",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Verzoeken doorsturen naar een adres dat je zelf opgeeft (host, poort of unix-socket)",
+      "scope": "upstream_kind_description"
+    }
+  ],
   "protocol": {
     "text": "Protocol",
     "scope": "instance_overview"
@@ -9059,5 +9153,295 @@
   "dns_peer_transfer_host_required": {
     "text": "Een nameserver-peer heeft een transferhost nodig",
     "scope": "violations"
+  },
+  "workspace": [
+    {
+      "text": "Werkplek",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "Een blijvende ontwikkelbak: je bestanden blijven, de rest is wegwerpbaar",
+      "scope": "instance_kind_description"
+    }
+  ],
+  "application": [
+    {
+      "text": "Applicatie",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "Bouwen vanaf een repository en uitrollen met releases achter een gezondheidscontrole",
+      "scope": "instance_kind_description"
+    }
+  ],
+  "btrfs": {
+    "text": "Btrfs",
+    "scope": "volume_backend"
+  },
+  "zfs": {
+    "text": "ZFS",
+    "scope": "volume_backend"
+  },
+  "xfs_prjquota": {
+    "text": "XFS-projectquota",
+    "scope": "volume_backend"
+  },
+  "http": {
+    "text": "HTTP-pad",
+    "scope": "readiness_kind"
+  },
+  "signal": {
+    "text": "Signaal",
+    "scope": "stop_kind"
+  },
+  "mapped": {
+    "text": "Toegewezen uid",
+    "scope": "uid_mode"
+  },
+  "upstream_instance_required": {
+    "text": "Deze upstream serveert een instantie, dus die moet gekozen worden",
+    "scope": "violations"
+  },
+  "upstream_instance_unexpected": {
+    "text": "Alleen een instantie-upstream mag een instantie noemen; wis die of wijzig de upstream",
+    "scope": "violations"
+  },
+  "host_no_volume_quota": {
+    "text": "Host '{$name}' kan geen volumequota afdwingen (backend: {$backend}) en kan dus geen {$kind} draaien. Koppel een btrfs- of zfs-bestandssysteem aan de volumemap of kies een andere host.",
+    "scope": "violations"
+  },
+  "workspace_runtime_not_wired": {
+    "text": "Werkplekken kunnen nog niet worden uitgerold: de werkplek-runtime volgt in een latere fase-0-stap",
+    "scope": "violations"
+  },
+  "application_runtime_not_wired": {
+    "text": "Applicaties kunnen nog niet worden uitgerold: de release-engine wordt in een latere fase-0-stap omgezet",
+    "scope": "violations"
+  },
+  "build_context": [
+    {
+      "text": "Bouwmap",
+      "scope": "field"
+    },
+    {
+      "text": "Map in de repository met de Dockerfile van deze image; elke host bouwt de image daar lokaal uit.",
+      "scope": "help"
+    }
+  ],
+  "builtin": [
+    {
+      "text": "Ingebouwd",
+      "scope": "field"
+    },
+    {
+      "text": "Ingebouwde images horen bij de code: aanpassingen en verwijderingen worden bij de volgende start hersteld. Kopieer er een om te varieren.",
+      "scope": "help"
+    }
+  ],
+  "console_kind": [
+    {
+      "text": "Console",
+      "scope": "field"
+    },
+    {
+      "text": "Welke consoleweergave de workload van dit sjabloon krijgt.",
+      "scope": "help"
+    }
+  ],
+  "default_build_command": [
+    {
+      "text": "Standaard bouwcommando",
+      "scope": "field"
+    },
+    {
+      "text": "Wordt in de container uitgevoerd voor een herstart; leeg betekent dat deze image niets bouwt.",
+      "scope": "help"
+    }
+  ],
+  "default_command": [
+    {
+      "text": "Standaardcommando",
+      "scope": "field"
+    },
+    {
+      "text": "Wordt gestart als hoofdproces van de workload; een instantie kan dit overschrijven.",
+      "scope": "help"
+    }
+  ],
+  "default_port": [
+    {
+      "text": "Standaardpoort",
+      "scope": "field"
+    },
+    {
+      "text": "De poort waarop het standaardcommando van de image luistert.",
+      "scope": "help"
+    }
+  ],
+  "docker_image": [
+    {
+      "text": "Docker-image",
+      "scope": "field"
+    },
+    {
+      "text": "De lokale image-tag waarnaar deze runtime-image bouwt. Er is geen registry: hosts bouwen hem zelf.",
+      "scope": "help"
+    }
+  ],
+  "runtime_incus_image": [
+    {
+      "text": "Incus-image",
+      "scope": "field"
+    },
+    {
+      "text": "De Incus-alias of vingerafdruk van deze image; leeg betekent dat hij nog niet op een Incus-host kan draaien.",
+      "scope": "help"
+    }
+  ],
+  "exclusive_volume": [
+    {
+      "text": "Exclusief",
+      "scope": "field"
+    },
+    {
+      "text": "Twee releases mogen dit volume niet tegelijk gebruiken, dus een uitrol stopt de oude container voor de nieuwe start.",
+      "scope": "help"
+    }
+  ],
+  "host_path": {
+    "text": "Hostpad",
+    "scope": "field"
+  },
+  "icon": {
+    "text": "Pictogram",
+    "scope": "field"
+  },
+  "instance_port": [
+    {
+      "text": "Instantiepoort",
+      "scope": "field"
+    },
+    {
+      "text": "Welke opgegeven poort van de instantie geserveerd wordt; leeg gebruikt de enige gepubliceerde poort.",
+      "scope": "help"
+    }
+  ],
+  "keep_releases": [
+    {
+      "text": "Aantal releases bewaren",
+      "scope": "field"
+    },
+    {
+      "text": "Hoeveel release-containers bewaard blijven: de actieve plus de terugrolopties.",
+      "scope": "help"
+    }
+  ],
+  "quota_bytes": [
+    {
+      "text": "Groottelimiet",
+      "scope": "field"
+    },
+    {
+      "text": "Afgedwongen groottelimiet voor dit volume; alleen een host met een quota-backend kan die nakomen.",
+      "scope": "help"
+    }
+  ],
+  "readiness_kind": [
+    {
+      "text": "Klaar wanneer",
+      "scope": "field"
+    },
+    {
+      "text": "Hoe wordt bepaald dat de workload verkeer aankan.",
+      "scope": "help"
+    }
+  ],
+  "readiness_target": [
+    {
+      "text": "Doel van de gereedheidscontrole",
+      "scope": "field"
+    },
+    {
+      "text": "Het HTTP-pad of de poortnaam die de gereedheidscontrole test; een consoleregel gebruikt in plaats daarvan de gereedheidsregel.",
+      "scope": "help"
+    }
+  ],
+  "runtime_image": {
+    "text": "Runtime-image",
+    "scope": "field"
+  },
+  "shell": {
+    "text": "Shell",
+    "scope": "field"
+  },
+  "stop_grace_seconds": [
+    {
+      "text": "Respijt bij stoppen",
+      "scope": "field"
+    },
+    {
+      "text": "Hoelang een nette stop mag duren voordat de workload wordt afgebroken.",
+      "scope": "help"
+    }
+  ],
+  "stop_kind": [
+    {
+      "text": "Stoppen met",
+      "scope": "field"
+    },
+    {
+      "text": "Hoe de workload gevraagd wordt te stoppen voordat het respijt verstrijkt.",
+      "scope": "help"
+    }
+  ],
+  "uid_mode": [
+    {
+      "text": "Gebruikers-id-modus",
+      "scope": "field"
+    },
+    {
+      "text": "Hoe de procesidentiteit van de workload wordt afgeleid; vandaag bestaan alleen toegewezen host-uids.",
+      "scope": "help"
+    }
+  ],
+  "volume_backend": [
+    {
+      "text": "Volume-backend",
+      "scope": "field"
+    },
+    {
+      "text": "Gedetecteerd op de volumemap van deze host: bepaalt of een quota afgedwongen en een momentopname gemaakt kan worden.",
+      "scope": "help"
+    }
+  ],
+  "volume_name": [
+    {
+      "text": "Volumenaam",
+      "scope": "field"
+    },
+    {
+      "text": "Beheerdersnaam voor dit volume; hij benoemt de hostmap en wordt nooit vertaald.",
+      "scope": "help"
+    }
+  ],
+  "volume_root": {
+    "text": "Volumemap",
+    "scope": "field"
+  },
+  "workdir": {
+    "text": "Werkmap",
+    "scope": "field"
+  },
+  "instance_runtime_image": {
+    "text": "Waarin deze werkplek of applicatie draait.",
+    "scope": "help"
+  },
+  "site_instance": {
+    "text": "De instantie waarvan deze hostnaam de poort serveert.",
+    "scope": "help"
+  },
+  "template_runtime_image": {
+    "text": "De runtime-image waarop dit sjabloon zijn hooks legt; leeg betekent dat de instellingen de image noemen.",
+    "scope": "help"
   }
 }

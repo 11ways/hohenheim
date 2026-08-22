@@ -125,7 +125,7 @@ public class InstanceModel extends Model {
         .label(HohenheimFormCopy.label("name"))
         .build());
 
-    // ONE discriminator: the kind implies the runtime (docker_container now; incus_container
+    // ONE discriminator: the kind implies the runtime (docker_container now; system_container
     // and vm reserved). Values enumerate the registry live; stored value = "hohenheim:<kind>".
     public static final EnumField KIND = SCHEMA.addField(
         RegistryEnumField.builder("kind")
@@ -194,6 +194,21 @@ public class InstanceModel extends Model {
     public static final IntegerField TEMPLATE_ID = SCHEMA.addField(
         IntegerField.builder().name("template_id")
             .label(HohenheimFormCopy.label("template"))
+            .build());
+
+    /**
+     * The runtime image ("yolk") a workspace or application runs inside.
+     *
+     * AIDEV-NOTE: a COLUMN and not a settings key for the TEMPLATE_ID reason above -- the
+     * dynamic settings form entry rewrites the whole map on every admin save -- and
+     * because the runtime-image picker must narrow the HOST offer (an image with no
+     * incus_image cannot land on an Incus host), which a key inside the polymorphic map
+     * cannot be joined on.
+     */
+    public static final IntegerField RUNTIME_IMAGE_ID = SCHEMA.addField(
+        IntegerField.builder().name("runtime_image_id")
+            .label(HohenheimFormCopy.label("runtime_image"))
+            .help(HohenheimFormCopy.help("instance_runtime_image"))
             .build());
 
     /**

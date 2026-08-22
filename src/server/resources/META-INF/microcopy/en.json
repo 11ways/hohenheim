@@ -111,16 +111,8 @@
     "text": "A site is required",
     "scope": "violations"
   },
-  "site_type_no_injection": {
-    "text": "Sites of type '{$type}' cannot receive database credentials: only site types that run a workload (host processes or a Docker container) can reach a managed database",
-    "scope": "violations"
-  },
   "tls_passthrough_backend_certificate": {
     "text": "The backend presents the certificate for a TLS passthrough domain; do not assign a Hohenheim certificate",
-    "scope": "violations"
-  },
-  "tls_passthrough_local_only": {
-    "text": "TLS passthrough sites route to an existing upstream and cannot use a Git deployment source",
     "scope": "violations"
   },
   "tls_passthrough_no_access_list": {
@@ -1377,6 +1369,10 @@
     {
       "text": "None",
       "scope": "crash_policy"
+    },
+    {
+      "text": "None",
+      "scope": "volume_backend"
     }
   ],
   "none_running": {
@@ -1411,6 +1407,10 @@
     {
       "text": "Port",
       "scope": "database_tab"
+    },
+    {
+      "text": "Port open",
+      "scope": "readiness_kind"
     }
   ],
   "primary": {
@@ -1943,14 +1943,6 @@
     "text": "Regular expression",
     "scope": "domain_match"
   },
-  "local_files": {
-    "text": "Local files",
-    "scope": "site_source"
-  },
-  "git_repository": {
-    "text": "Git repository",
-    "scope": "site_source"
-  },
   "server_local": {
     "text": "{$name} (local)",
     "scope": "server_option"
@@ -2259,10 +2251,6 @@
     "text": "Networking",
     "scope": "nav"
   },
-  "proxy": {
-    "text": "Proxy",
-    "scope": "site_type"
-  },
   "test": [
     {
       "text": "Send test",
@@ -2415,13 +2403,13 @@
       "scope": "server_overview"
     }
   ],
-  "site_type": [
+  "upstream_kind": [
     {
-      "text": "Site type",
+      "text": "Upstream",
       "scope": "field"
     },
     {
-      "text": "How this site is served: managed process, static files, proxy, redirect, ...",
+      "text": "What this hostname resolves to: static files, a redirect, an address, an instance you manage, ...",
       "scope": "help"
     }
   ],
@@ -4287,12 +4275,12 @@
       "scope": "help"
     },
     {
-      "text": "Command",
-      "scope": "site_type"
-    },
-    {
       "text": "Command hook",
       "scope": "dns_publisher"
+    },
+    {
+      "text": "Console command",
+      "scope": "stop_kind"
     }
   ],
   "registry_server": [
@@ -4325,10 +4313,16 @@
     "text": "Depends on",
     "scope": "field"
   },
-  "container_path": {
-    "text": "Container path",
-    "scope": "field"
-  },
+  "container_path": [
+    {
+      "text": "Container path",
+      "scope": "field"
+    },
+    {
+      "text": "Where the volume is mounted inside the container.",
+      "scope": "help"
+    }
+  ],
   "mount_external_name": {
     "text": "External volume name",
     "scope": "field"
@@ -4871,10 +4865,16 @@
     "text": "Persistent named volumes: logical name to container path; data survives redeploys",
     "scope": "help"
   },
-  "docker_container": {
-    "text": "Docker container",
-    "scope": "instance_kind"
-  },
+  "docker_container": [
+    {
+      "text": "Docker container",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "Run a container image as a managed instance",
+      "scope": "instance_kind_description"
+    }
+  ],
   "created": [
     {
       "text": "Created",
@@ -5485,14 +5485,26 @@
       "scope": "git_provider"
     }
   ],
-  "filesystem": {
-    "text": "Filesystem directory",
-    "scope": "backup_target_kind"
-  },
-  "ssh": {
-    "text": "SSH host",
-    "scope": "backup_target_kind"
-  },
+  "filesystem": [
+    {
+      "text": "Filesystem directory",
+      "scope": "backup_target_kind"
+    },
+    {
+      "text": "A directory on this controller; only off-host if the directory itself is",
+      "scope": "backup_target_kind_description"
+    }
+  ],
+  "ssh": [
+    {
+      "text": "SSH host",
+      "scope": "backup_target_kind"
+    },
+    {
+      "text": "A directory on another host over ssh; a different failure domain when the host actually is one",
+      "scope": "backup_target_kind_description"
+    }
+  ],
   "snapshots": {
     "text": "Snapshots",
     "scope": "capability"
@@ -5505,10 +5517,20 @@
     "text": "Backup target",
     "scope": "field"
   },
-  "instance": {
-    "text": "Instance",
-    "scope": "field"
-  },
+  "instance": [
+    {
+      "text": "Instance",
+      "scope": "field"
+    },
+    {
+      "text": "Instance",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Serve an instance this deployment manages",
+      "scope": "upstream_kind_description"
+    }
+  ],
   "note": [
     {
       "text": "Note",
@@ -5900,10 +5922,16 @@
     "text": "Installed",
     "scope": "install_state"
   },
-  "plain": {
-    "text": "Plain",
-    "scope": "variable_kind"
-  },
+  "plain": [
+    {
+      "text": "Plain",
+      "scope": "variable_kind"
+    },
+    {
+      "text": "Plain console",
+      "scope": "console_kind"
+    }
+  ],
   "string": {
     "text": "Text",
     "scope": "variable_type"
@@ -6248,10 +6276,16 @@
       "scope": "capability"
     }
   ],
-  "console_line": {
-    "text": "Console command",
-    "scope": "field"
-  },
+  "console_line": [
+    {
+      "text": "Console command",
+      "scope": "field"
+    },
+    {
+      "text": "Console line",
+      "scope": "readiness_kind"
+    }
+  ],
   "power_operation": {
     "text": "Operation",
     "scope": "field"
@@ -6408,38 +6442,46 @@
     "text": "Create instances from approved templates",
     "scope": "permission"
   },
-  "tls_passthrough": {
-    "text": "TLS passthrough",
-    "scope": "site_type"
-  },
-  "alchemy": {
-    "text": "Alchemy",
-    "scope": "site_type"
-  },
-  "dev_namespace": {
-    "text": "Dev namespace",
-    "scope": "site_type"
-  },
-  "dead": {
-    "text": "Dead",
-    "scope": "site_type"
-  },
-  "static": {
-    "text": "Static",
-    "scope": "site_type"
-  },
-  "java": {
-    "text": "Java / Zenit",
-    "scope": "site_type"
-  },
-  "redirect": {
-    "text": "Redirect",
-    "scope": "site_type"
-  },
-  "node": {
-    "text": "Node.js",
-    "scope": "site_type"
-  },
+  "tls_passthrough": [
+    {
+      "text": "TLS passthrough",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Forward untouched TLS streams selected by SNI",
+      "scope": "upstream_kind_description"
+    }
+  ],
+  "dev_namespace": [
+    {
+      "text": "Dev namespace",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Serve registered remote dev servers on wildcard subdomains",
+      "scope": "upstream_kind_description"
+    }
+  ],
+  "static": [
+    {
+      "text": "Static",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Serve static files from a directory",
+      "scope": "upstream_kind_description"
+    }
+  ],
+  "redirect": [
+    {
+      "text": "Redirect",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Redirect requests to another URL",
+      "scope": "upstream_kind_description"
+    }
+  ],
   "hohenheim_databases_create": {
     "text": "Create managed databases",
     "scope": "permission"
@@ -6616,18 +6658,36 @@
     "text": "The file operation failed: {$reason}",
     "scope": "violations"
   },
-  "site_container": {
-    "text": "Site container",
-    "scope": "instance_kind"
-  },
-  "database_container": {
-    "text": "Database container",
-    "scope": "instance_kind"
-  },
-  "stack_service": {
-    "text": "Stack service",
-    "scope": "instance_kind"
-  },
+  "release": [
+    {
+      "text": "Release",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "One deploy of an application (managed by that application)",
+      "scope": "instance_kind_description"
+    }
+  ],
+  "database_container": [
+    {
+      "text": "Database container",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "A managed database's engine (managed by its database)",
+      "scope": "instance_kind_description"
+    }
+  ],
+  "stack_service": [
+    {
+      "text": "Stack service",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "One service of a managed stack (managed by its stack)",
+      "scope": "instance_kind_description"
+    }
+  ],
   "stack_port_bind_unsupported": {
     "text": "Service {$service} publishes on {$address}, which is neither the whole host nor loopback",
     "scope": "violations"
@@ -6924,18 +6984,36 @@
       "scope": "help"
     }
   ],
-  "github": {
-    "text": "GitHub",
-    "scope": "git_provider_kind"
-  },
-  "gitlab": {
-    "text": "GitLab",
-    "scope": "git_provider_kind"
-  },
-  "gitea": {
-    "text": "Gitea",
-    "scope": "git_provider_kind"
-  },
+  "github": [
+    {
+      "text": "GitHub",
+      "scope": "git_provider_kind"
+    },
+    {
+      "text": "github.com or a GitHub Enterprise installation",
+      "scope": "git_provider_kind_description"
+    }
+  ],
+  "gitlab": [
+    {
+      "text": "GitLab",
+      "scope": "git_provider_kind"
+    },
+    {
+      "text": "gitlab.com or a self-hosted GitLab installation",
+      "scope": "git_provider_kind_description"
+    }
+  ],
+  "gitea": [
+    {
+      "text": "Gitea",
+      "scope": "git_provider_kind"
+    },
+    {
+      "text": "A self-hosted Gitea, Forgejo or Gogs installation",
+      "scope": "git_provider_kind_description"
+    }
+  ],
   "git_provider": [
     {
       "text": "Git provider",
@@ -7004,16 +7082,10 @@
       "scope": "database_status"
     }
   ],
-  "docker": [
-    {
-      "text": "Docker",
-      "scope": "host_runtime"
-    },
-    {
-      "text": "Docker",
-      "scope": "site_type"
-    }
-  ],
+  "docker": {
+    "text": "Docker",
+    "scope": "host_runtime"
+  },
   "incus": {
     "text": "Incus",
     "scope": "host_runtime"
@@ -7058,10 +7130,16 @@
     "text": "Instance kind needs a {$required} host, but '{$name}' declares the {$runtime} runtime.",
     "scope": "violations"
   },
-  "incus_container": {
-    "text": "System container (LXC)",
-    "scope": "instance_kind"
-  },
+  "system_container": [
+    {
+      "text": "System container (LXC)",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "Run a system container on an Incus host",
+      "scope": "instance_kind_description"
+    }
+  ],
   "incus_image": [
     {
       "text": "Image alias",
@@ -7146,10 +7224,16 @@
     "text": "Import {$app}",
     "scope": "template_import"
   },
-  "incus_vm": {
-    "text": "Virtual machine",
-    "scope": "instance_kind"
-  },
+  "vm": [
+    {
+      "text": "Virtual machine",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "Run a KVM virtual machine on an Incus host",
+      "scope": "instance_kind_description"
+    }
+  ],
   "vm_image": [
     {
       "text": "Image alias",
@@ -8356,10 +8440,20 @@
     "text": "Ports this instance holds in the ledger, joined to the host address they answer at.",
     "scope": "instance_overview"
   },
-  "address": {
-    "text": "Address",
-    "scope": "instance_overview"
-  },
+  "address": [
+    {
+      "text": "Address",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "Address",
+      "scope": "upstream_kind"
+    },
+    {
+      "text": "Forward requests to an address you name (host, port or unix socket)",
+      "scope": "upstream_kind_description"
+    }
+  ],
   "protocol": {
     "text": "Protocol",
     "scope": "instance_overview"
@@ -9059,5 +9153,295 @@
   "dns_peer_transfer_host_required": {
     "text": "A nameserver peer needs a transfer host",
     "scope": "violations"
+  },
+  "workspace": [
+    {
+      "text": "Workspace",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "A persistent dev box: your files survive, the rest is disposable",
+      "scope": "instance_kind_description"
+    }
+  ],
+  "application": [
+    {
+      "text": "Application",
+      "scope": "instance_kind"
+    },
+    {
+      "text": "Build from a repository and deploy it with health-gated releases",
+      "scope": "instance_kind_description"
+    }
+  ],
+  "btrfs": {
+    "text": "Btrfs",
+    "scope": "volume_backend"
+  },
+  "zfs": {
+    "text": "ZFS",
+    "scope": "volume_backend"
+  },
+  "xfs_prjquota": {
+    "text": "XFS project quota",
+    "scope": "volume_backend"
+  },
+  "http": {
+    "text": "HTTP path",
+    "scope": "readiness_kind"
+  },
+  "signal": {
+    "text": "Signal",
+    "scope": "stop_kind"
+  },
+  "mapped": {
+    "text": "Mapped uid",
+    "scope": "uid_mode"
+  },
+  "upstream_instance_required": {
+    "text": "This upstream serves an instance, so it needs one chosen",
+    "scope": "violations"
+  },
+  "upstream_instance_unexpected": {
+    "text": "Only an instance upstream may name an instance; clear it or change the upstream",
+    "scope": "violations"
+  },
+  "host_no_volume_quota": {
+    "text": "Host '{$name}' cannot enforce a volume quota (backend: {$backend}), so it cannot run a {$kind}. Mount a btrfs or zfs filesystem at the volume root, or pick another host.",
+    "scope": "violations"
+  },
+  "workspace_runtime_not_wired": {
+    "text": "Workspaces cannot be deployed yet: the workspace runtime lands in a later phase-0 step",
+    "scope": "violations"
+  },
+  "application_runtime_not_wired": {
+    "text": "Applications cannot be deployed yet: the release engine is re-keyed in a later phase-0 step",
+    "scope": "violations"
+  },
+  "build_context": [
+    {
+      "text": "Build context",
+      "scope": "field"
+    },
+    {
+      "text": "Repository-relative directory holding this image's Dockerfile; every host builds the image from it locally.",
+      "scope": "help"
+    }
+  ],
+  "builtin": [
+    {
+      "text": "Built in",
+      "scope": "field"
+    },
+    {
+      "text": "Built-in images are code-owned: edits and deletions revert on the next boot. Copy one to make a variant.",
+      "scope": "help"
+    }
+  ],
+  "console_kind": [
+    {
+      "text": "Console",
+      "scope": "field"
+    },
+    {
+      "text": "Which console surface this template's workload gets.",
+      "scope": "help"
+    }
+  ],
+  "default_build_command": [
+    {
+      "text": "Default build command",
+      "scope": "field"
+    },
+    {
+      "text": "Run inside the container before a restart; empty means this image builds nothing.",
+      "scope": "help"
+    }
+  ],
+  "default_command": [
+    {
+      "text": "Default command",
+      "scope": "field"
+    },
+    {
+      "text": "Started as the workload's main process; an instance may override it.",
+      "scope": "help"
+    }
+  ],
+  "default_port": [
+    {
+      "text": "Default port",
+      "scope": "field"
+    },
+    {
+      "text": "The port the image's default command listens on.",
+      "scope": "help"
+    }
+  ],
+  "docker_image": [
+    {
+      "text": "Docker image",
+      "scope": "field"
+    },
+    {
+      "text": "The local image tag this runtime image builds to. There is no registry: hosts build it themselves.",
+      "scope": "help"
+    }
+  ],
+  "runtime_incus_image": [
+    {
+      "text": "Incus image",
+      "scope": "field"
+    },
+    {
+      "text": "The Incus alias or fingerprint of this image; empty means it cannot run on an Incus host yet.",
+      "scope": "help"
+    }
+  ],
+  "exclusive_volume": [
+    {
+      "text": "Exclusive",
+      "scope": "field"
+    },
+    {
+      "text": "No two releases may hold this volume at once, so a deploy stops the old container before starting the new one.",
+      "scope": "help"
+    }
+  ],
+  "host_path": {
+    "text": "Host path",
+    "scope": "field"
+  },
+  "icon": {
+    "text": "Icon",
+    "scope": "field"
+  },
+  "instance_port": [
+    {
+      "text": "Instance port",
+      "scope": "field"
+    },
+    {
+      "text": "Which declared port of the instance to serve; empty uses its single published port.",
+      "scope": "help"
+    }
+  ],
+  "keep_releases": [
+    {
+      "text": "Releases to keep",
+      "scope": "field"
+    },
+    {
+      "text": "How many release containers to keep: the serving one plus the rollback targets.",
+      "scope": "help"
+    }
+  ],
+  "quota_bytes": [
+    {
+      "text": "Size limit",
+      "scope": "field"
+    },
+    {
+      "text": "Enforced size cap for this volume; only a host with a quota-capable backend can honour it.",
+      "scope": "help"
+    }
+  ],
+  "readiness_kind": [
+    {
+      "text": "Ready when",
+      "scope": "field"
+    },
+    {
+      "text": "How the workload is judged ready to take traffic.",
+      "scope": "help"
+    }
+  ],
+  "readiness_target": [
+    {
+      "text": "Readiness target",
+      "scope": "field"
+    },
+    {
+      "text": "The HTTP path or port name the readiness check probes; a console line uses the readiness line instead.",
+      "scope": "help"
+    }
+  ],
+  "runtime_image": {
+    "text": "Runtime image",
+    "scope": "field"
+  },
+  "shell": {
+    "text": "Shell",
+    "scope": "field"
+  },
+  "stop_grace_seconds": [
+    {
+      "text": "Stop grace period",
+      "scope": "field"
+    },
+    {
+      "text": "How long a graceful stop may take before the workload is killed.",
+      "scope": "help"
+    }
+  ],
+  "stop_kind": [
+    {
+      "text": "Stop with",
+      "scope": "field"
+    },
+    {
+      "text": "How the workload is asked to stop before the grace period runs out.",
+      "scope": "help"
+    }
+  ],
+  "uid_mode": [
+    {
+      "text": "User id mode",
+      "scope": "field"
+    },
+    {
+      "text": "How the workload's process identity is derived; only mapped host uids exist today.",
+      "scope": "help"
+    }
+  ],
+  "volume_backend": [
+    {
+      "text": "Volume backend",
+      "scope": "field"
+    },
+    {
+      "text": "Detected from this host's volume root: it decides whether a quota can be enforced and a snapshot taken.",
+      "scope": "help"
+    }
+  ],
+  "volume_name": [
+    {
+      "text": "Volume name",
+      "scope": "field"
+    },
+    {
+      "text": "Operator identifier for this volume; it names the host directory and is never translated.",
+      "scope": "help"
+    }
+  ],
+  "volume_root": {
+    "text": "Volume root",
+    "scope": "field"
+  },
+  "workdir": {
+    "text": "Working directory",
+    "scope": "field"
+  },
+  "instance_runtime_image": {
+    "text": "What this workspace or application runs inside.",
+    "scope": "help"
+  },
+  "site_instance": {
+    "text": "The instance whose port this hostname serves.",
+    "scope": "help"
+  },
+  "template_runtime_image": {
+    "text": "The runtime image this template layers its hooks over; empty means the settings name the image.",
+    "scope": "help"
   }
 }

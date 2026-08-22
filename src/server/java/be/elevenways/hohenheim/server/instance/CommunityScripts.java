@@ -275,7 +275,7 @@ public final class CommunityScripts {
         Row template = templates.createEmptyRow();
         template.set(InstanceTemplateModel.NAME, manifest.app());
         template.set(InstanceTemplateModel.DESCRIPTION, manifest.description());
-        template.set(InstanceTemplateModel.KIND, IncusContainerKind.ID.toString());
+        template.set(InstanceTemplateModel.KIND, SystemContainerKind.ID.toString());
         template.set(InstanceTemplateModel.SETTINGS, settings);
         template.set(InstanceTemplateModel.INSTALL_SCRIPT, install);
         template.set(InstanceTemplateModel.UPDATE_SCRIPT, manifest.updateScript());

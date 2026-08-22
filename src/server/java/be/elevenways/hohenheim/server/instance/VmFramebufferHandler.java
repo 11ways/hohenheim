@@ -88,7 +88,7 @@ public final class VmFramebufferHandler implements WebSocketHandler {
             return;
         }
         Row instance = Models.get(InstanceModel.class).findById(this.instanceId);
-        if (instance == null || !IncusVmKind.ID.toString().equals(instance.get(InstanceModel.KIND))) {
+        if (instance == null || !VmKind.ID.toString().equals(instance.get(InstanceModel.KIND))) {
             this.session.sendText("not a VM instance");
             this.session.close(1008, "not a vm");
             return;

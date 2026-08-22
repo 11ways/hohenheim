@@ -92,7 +92,7 @@ public final class OwnedInstances {
             return;
         }
         InstanceKinds.requireRuntimeMatch(ServerModel.nameOf(serverId),
-            ServerModel.runtimeOf(server), handler.requiredRuntime());
+            ServerModel.runtimeOf(server), handler.supportedRuntimes());
     }
 
     /** A scope body that may fail the way the write it wraps fails. */

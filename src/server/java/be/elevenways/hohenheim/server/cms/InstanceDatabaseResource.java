@@ -217,7 +217,7 @@ public class InstanceDatabaseResource extends RowResource {
         }
         String kind = instance.get(InstanceModel.KIND);
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
-        if (handler == null || !ServerModel.RUNTIME_DOCKER.equals(handler.requiredRuntime())) {
+        if (handler == null || !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
             throw Violations.ofField("instance_id", instanceId,
                 CmsSupport.violationText("instance_kind_no_injection")
                     .withArg("kind", String.valueOf(kind)));

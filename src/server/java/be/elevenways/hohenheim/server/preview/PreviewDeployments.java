@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.source.DeployStatuses;
+import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.hohenheim.server.source.GitRepository;
@@ -75,8 +76,16 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class PreviewDeployments {
 
-    /** Site types previews support; others are refused with a named violation. */
-    private static final String DOCKER_SITE_TYPE = "hohenheim:docker";
+    /**
+     * Upstream kinds previews support; others are refused with a named violation.
+     *
+     * AIDEV-NOTE: the `docker` site type this named was deleted with the upstream rename
+     * (phase-0 design section 3) and its serving half became the `instance` upstream. The
+     * SOURCE now lives on the instance the site exposes, which is why the source read below
+     * goes through SiteSources; brief 7 makes previews releases OF an application and this
+     * whole site keying goes with it.
+     */
+    private static final String INSTANCE_UPSTREAM_KIND = "hohenheim:instance";
 
     /** Per-(site, ref) serialization so a webhook burst cannot race itself. */
     private static final Map<String, Object> LOCKS = new ConcurrentHashMap<>();
@@ -178,11 +187,8 @@ public final class PreviewDeployments {
         if (site == null || site.get(SiteModel.DELETED_AT) != null) {
             throw Violations.ofField("site_id", siteId, violation("preview_site_required"));
         }
-        if (!DOCKER_SITE_TYPE.equals(site.get(SiteModel.SITE_TYPE))) {
-            throw Violations.ofField("site_id", siteId,
-                violation("preview_unsupported_type"));
-        }
-        if (!SiteModel.SOURCE_GIT.equals(site.get(SiteModel.SOURCE))) {
+        if (!INSTANCE_UPSTREAM_KIND.equals(site.get(SiteModel.UPSTREAM_KIND))
+                || !SiteSources.isGitSourced(site)) {
             throw Violations.ofField("site_id", siteId,
                 violation("preview_unsupported_type"));
         }
@@ -225,7 +231,7 @@ public final class PreviewDeployments {
         Row preview = claimLocked(siteId, ref, prNumber);
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         Row site = Models.get(SiteModel.class).findById(siteId);
-        Map<String, Object> sourceSettings = castMap(site.get(SiteModel.SOURCE_SETTINGS));
+        Map<String, Object> sourceSettings = orEmpty(SiteSources.settingsOf(site));
         Map<String, Object> siteSettings = castMap(site.get(SiteModel.SETTINGS));
         String hostname = str(preview.get(PreviewDeploymentModel.HOSTNAME));
         int previewId = preview.get(PreviewDeploymentModel.ID);
@@ -288,6 +294,11 @@ public final class PreviewDeployments {
         }
     }
 
+    /** The git-source settings of the site's instance, or an empty map. */
+    private static @NonNull Map<String, Object> orEmpty(@Nullable Map<String, Object> settings) {
+        return settings == null ? Map.of() : settings;
+    }
+
     /** Best-effort commit-status FAILURE for a refusal that never minted a row. */
     private static void reportRefusal(int siteId, @NonNull String sha, @NonNull String reason) {
         try {
@@ -295,7 +306,7 @@ public final class PreviewDeployments {
             if (site == null) {
                 return;
             }
-            DeployStatuses.report(castMap(site.get(SiteModel.SOURCE_SETTINGS)), sha,
+            DeployStatuses.report(orEmpty(SiteSources.settingsOf(site)), sha,
                 GitProviderClient.StatusState.FAILURE, DeployStatuses.CONTEXT_PREVIEW,
                 "Preview refused: " + reason, null);
         } catch (RuntimeException unreported) {
@@ -538,7 +549,7 @@ public final class PreviewDeployments {
                 instance = Models.get(InstanceModel.class).createEmptyRow();
                 instance.set(InstanceModel.NAME, "preview-" + hostname);
                 instance.set(InstanceModel.KIND,
-                    be.elevenways.hohenheim.server.docker.SiteContainerKind.ID.toString());
+                    be.elevenways.hohenheim.server.docker.ReleaseKind.ID.toString());
                 instance.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
                 instance.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
             }
