@@ -399,19 +399,23 @@ public class HohenheimEndpoints {
         .rateLimit(DATABASE_IO_LIMIT)
         .build();
 
-    // --- Deploy control (forms on the site Deployments tab) ---
-    public static final Endpoint<Object> SITES_DEPLOY = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_deploy"))
+    // --- Deploy control (forms on the instance Deploys tab) ---
+    // AIDEV-NOTE: keyed by INSTANCE since the release engine was re-keyed to the
+    // application (phase-0 brief 7) and the Deployments tab moved with it (brief 9):
+    // the verbs act on the record that owns the releases, and an application no site
+    // exposes yet can still deploy.
+    public static final Endpoint<Object> INSTANCES_DEPLOY = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "instances_deploy"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
             .addDelimiter().addStatic("deploy").build())
         .rateLimit(DEPLOY_LIMIT)
         .build();
 
-    public static final Endpoint<Object> SITES_ROLLBACK = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_rollback"))
+    public static final Endpoint<Object> INSTANCES_ROLLBACK = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "instances_rollback"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
             .addDelimiter().addStatic("rollback").build())
         .rateLimit(DEPLOY_LIMIT)
         .build();

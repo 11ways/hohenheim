@@ -5,14 +5,15 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.source.GitSourceSchema;
-import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.source.GitWebhookHandler;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -20,7 +21,6 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
@@ -34,43 +34,42 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Deployments tab on a git-sourced site: deploy history with captured build
- * logs, plus deploy-now / cancel / rollback controls.
+ * Deploys tab on a release-managed instance (an application): the release history with
+ * captured build logs, deploy-now / rollback controls and the push webhook.
+ *
+ * AIDEV-NOTE: this REPLACED the site's Deployments tab when the release engine was
+ * re-keyed to the application (phase-0 brief 7): the deploy history belongs to the
+ * record that OWNS the releases, and an application that no site exposes yet still
+ * deploys. The site keeps only what a site is -- a hostname.
  */
-public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
+public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
 
-    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_deployments"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("deployments").withFilter("scope", "site"); }
-    @Override public @NonNull String slug() { return "deployments"; }
+    public static final String SLUG = "deployments";
+
+    @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_deployments"); }
+    @Override public @NonNull Microcopy label() { return Microcopy.of("title").withFilter("scope", "deployments"); }
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
 
+    /** Only release-managed kinds have a release history; the tab hides for the rest. */
     @Override
-    public boolean visibleFor(@NonNull Row site) {
-        return site.get(SiteModel.INSTANCE_ID) != null;
+    public boolean visibleFor(@NonNull Row record) {
+        return InstanceKinds.isReleaseManaged(record.get(InstanceModel.KIND));
     }
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit,
                                            @NonNull AccessContext accessContext,
-                                           @NonNull Row site) {
-        Integer siteId = site.get(SiteModel.ID);
+                                           @NonNull Row instance) {
+        Integer instanceId = instance.get(InstanceModel.ID);
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "site_deployments",
-            site.get(SiteModel.NAME)));
-        vars.put("siteId", siteId);
-        vars.put("siteName", site.get(SiteModel.NAME));
+        vars.put("title", CmsSupport.pageTitle(conduit, "instance_deployments",
+            instance.get(InstanceModel.NAME)));
+        vars.put("instanceId", instanceId);
+        vars.put("instanceName", instance.get(InstanceModel.NAME));
 
-        Integer applicationId = site.get(SiteModel.INSTANCE_ID);
-        Row application = applicationId == null ? null
-            : Models.get(InstanceModel.class).findById(applicationId);
-        vars.put("applicationId", applicationId);
-
-        // AIDEV-NOTE: one history, not two. The release operation IS the deploy record
-        // since phase-0 brief 7 deleted the `deployments` table of the host-slot lane, so
-        // this page reads release_operations of the APPLICATION the site exposes.
-        List<Row> operations = applicationId == null ? List.of()
-            : Models.get(ReleaseOperationModel.class)
-                .findForOwner(InstanceModel.MODEL_ID.toString(), applicationId, 50);
+        List<Row> operations = Models.get(ReleaseOperationModel.class)
+            .findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50);
 
         boolean inFlight = operations.stream().anyMatch(row ->
             ReleaseOperationModel.STATUS_PENDING.equals(row.get(ReleaseOperationModel.STATUS))
@@ -79,11 +78,9 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
                 || ReleaseOperationModel.STATUS_PROBING.equals(
                     row.get(ReleaseOperationModel.STATUS)));
         vars.put("isDeploying", inFlight);
-        vars.put("canRollback", applicationId != null && !inFlight
-            && ReleaseEngine.newestRetired(applicationId) != null);
+        vars.put("canRollback", !inFlight && ReleaseEngine.newestRetired(instanceId) != null);
 
-        Row serving = applicationId == null ? null
-            : ApplicationReleases.ownedServing(applicationId);
+        Row serving = ApplicationReleases.ownedServing(instanceId);
         vars.put("currentCommit", serving == null ? ""
             : shortSha(ApplicationReleases.storedSettings(serving).get("commit_sha")));
 
@@ -107,39 +104,36 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         vars.put("deployments", deployments);
 
         if (HohenheimAccess.isAdmin(accessContext)) {
-            putAdminOnlyVars(vars, site);
+            putAdminOnlyVars(vars, instance);
         }
 
-        // The deploy/cancel/rollback forms echo this as _return so their
-        // handlers redirect back to whichever panel rendered this page.
+        // The deploy/rollback forms echo this as _return so their handlers redirect
+        // back to whichever panel rendered this page.
         vars.put("returnUrl", ReturnTarget.capture(conduit));
         // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
         // ReturnTarget is server-only, so the common template cannot reach it.
         vars.put("returnParam", ReturnTarget.PARAM);
-        vars.put("deployTarget", HohenheimEndpoints.SITES_DEPLOY
-            .with(HohenheimEndpoints.SITE_ID, siteId));
-        vars.put("rollbackTarget", HohenheimEndpoints.SITES_ROLLBACK
-            .with(HohenheimEndpoints.SITE_ID, siteId));
+        vars.put("deployTarget", HohenheimEndpoints.INSTANCES_DEPLOY
+            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
+        vars.put("rollbackTarget", HohenheimEndpoints.INSTANCES_ROLLBACK
+            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
         vars.put("recordTabs", recordTabs(conduit));
         vars.put("timeWording", RelativeTimeWording.resolve(
             conduit.getLocales(), conduit.getMessageResolver()));
 
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-deployments"), vars);
+        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-deployments"), vars);
     }
 
     /**
-     * The ONLY place admin-only template vars may be populated (currently the
-     * webhook push URL + secret): every sensitive var must be added inside this
-     * method so the single isAdmin gate at the call site stays an allowlist.
-     * The webhook endpoint is intercepted before hostname routing, so any
-     * hostname pointing at the proxy works; the site's own first exact
-     * domain is the copy-pastable choice.
+     * The ONLY place admin-only template vars may be populated (the webhook push URL +
+     * secret): every sensitive var must be added inside this method so the single
+     * isAdmin gate at the call site stays an allowlist. The webhook endpoint is
+     * intercepted before hostname routing, so any hostname pointing at the proxy works;
+     * an exposing site's first exact hostname is the copy-pastable choice.
      */
-    private static void putAdminOnlyVars(Map<String, Object> vars, Row site) {
-        Row application = site.get(SiteModel.INSTANCE_ID) == null ? null
-            : Models.get(InstanceModel.class).findById(site.get(SiteModel.INSTANCE_ID));
-        Map<String, Object> settings = application == null ? Map.of()
-            : ApplicationReleases.storedSettings(application);
+    private static void putAdminOnlyVars(Map<String, Object> vars, Row instance) {
+        Integer instanceId = instance.get(InstanceModel.ID);
+        Map<String, Object> settings = ApplicationReleases.storedSettings(instance);
         vars.put("webhookSecret", orEmpty(settings.get(GitSourceSchema.WEBHOOK_SECRET)));
         vars.put("webhookAutoDeploy",
             Boolean.TRUE.equals(settings.get(GitSourceSchema.AUTO_DEPLOY)));
@@ -148,14 +142,19 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         // conduit chain, so it is deliberately outside the Endpoint framework and has no
         // RouteTarget. Referencing the handler's own PREFIX constant is what keeps this
         // display URL from drifting away from the route that actually answers.
-        String path = GitWebhookHandler.PREFIX + orEmpty(site.get(SiteModel.INSTANCE_ID));
+        String path = GitWebhookHandler.PREFIX + instanceId;
         String url = path;
-        Row domain = Models.get(SiteDomainModel.class).find()
+        Row site = Models.get(SiteModel.class).find()
+            .where(SiteModel.INSTANCE_ID.eq(instanceId))
+            .where(SiteModel.DELETED_AT.isNull())
+            .first();
+        Row domain = site == null ? null : Models.get(SiteDomainModel.class).find()
             .where(SiteDomainModel.SITE_ID.eq(site.get(SiteModel.ID)))
             .where(SiteDomainModel.MATCH_TYPE.eq(SiteDomainModel.MATCH_EXACT))
             .first();
         if (domain != null) {
-            String scheme = Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)) ? "https" : "http";
+            String scheme = Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL))
+                ? "https" : "http";
             url = scheme + "://" + domain.get(SiteDomainModel.HOSTNAME) + path;
         }
         vars.put("webhookUrl", url);
@@ -164,9 +163,9 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
     /**
      * The badge variant DECLARED on the release-operation status enum value itself.
      *
-     * AIDEV-NOTE: read off the model rather than switched on here, so a new status carries
-     * its colour everywhere at once. Unknown/blank degrades to secondary, the honest answer
-     * for a value the vocabulary does not contain.
+     * AIDEV-NOTE: read off the model rather than switched on here, so a new status
+     * carries its colour everywhere at once. Unknown/blank degrades to secondary, the
+     * honest answer for a value the vocabulary does not contain.
      */
     private static String statusVariant(@Nullable Object status) {
         EnumField.EnumValue value = status == null
