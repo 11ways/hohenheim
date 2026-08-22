@@ -12,10 +12,10 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
+import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -148,11 +148,8 @@ public class ProjectResource extends RowResource {
      * The environments of these projects, demoted out of the sidebar.
      */
     @Override
-    public @NonNull List<HeaderAction> headerActions() {
-        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
-        actions.addAll(List.of(
-            CmsSupport.relatedList("environments_link", "environments", "environment", Icon.of("layer-group"))));
-        return actions;
+    public @NonNull List<RelatedPage> relatedPages() {
+        return List.of(RelatedPage.toPeer("environments"));
     }
 
 }

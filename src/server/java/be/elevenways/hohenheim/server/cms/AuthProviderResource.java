@@ -71,6 +71,12 @@ public final class AuthProviderResource extends RowResource {
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
     @Override public int navOrder() { return 50; }
 
+    /**
+     * Demoted out of the sidebar, so this sentence reaches a reader through the panel
+     * index and the related-pages menu of the list that names it.
+     */
+    @Override public @Nullable Microcopy description() { return CmsSupport.navHint("auth_provider"); }
+
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("key"); }
 

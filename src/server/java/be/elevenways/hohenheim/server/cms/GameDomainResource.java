@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
 
@@ -63,6 +64,12 @@ public final class GameDomainResource extends RowResource {
     @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 21; }
+
+    /**
+     * Demoted out of the sidebar, so this sentence reaches a reader through the panel
+     * index and the related-pages menu of the list that names it.
+     */
+    @Override public @Nullable Microcopy description() { return CmsSupport.navHint("game_domain"); }
 
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("gamepad"); }

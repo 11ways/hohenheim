@@ -4,10 +4,10 @@ import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
+import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -74,6 +74,12 @@ public final class EnvironmentResource extends RowResource {
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 15; }
 
+    /**
+     * Demoted out of the sidebar, so this sentence reaches a reader through the panel
+     * index and the related-pages menu of the list that names it.
+     */
+    @Override public @Nullable Microcopy description() { return CmsSupport.navHint("environment"); }
+
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("layer-group"); }
 
@@ -130,11 +136,8 @@ public final class EnvironmentResource extends RowResource {
      * The variables owned by these environments, demoted out of the sidebar.
      */
     @Override
-    public @NonNull List<HeaderAction> headerActions() {
-        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
-        actions.addAll(List.of(
-            CmsSupport.relatedList("environment_variables_link", "environment-variables", "environment_variable", Icon.of("sliders"))));
-        return actions;
+    public @NonNull List<RelatedPage> relatedPages() {
+        return List.of(RelatedPage.toPeer("environment-variables"));
     }
 
 }

@@ -9,10 +9,10 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
-import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -81,7 +81,7 @@ public final class ManageInstanceTemplateResource extends InstanceTemplateResour
             : AccessDecision.allow(QueryPredicate.of(InstanceTemplateModel.APPROVED_AT.isNotNull()));
     }
 
-    @Override public @NonNull List<HeaderAction> headerActions() { return List.of(); }
+    @Override public @NonNull List<RelatedPage> relatedPages() { return List.of(); }
     @Override public @NonNull List<RecordScopedPage<Row>> subpages() { return List.of(); }
 
     /**

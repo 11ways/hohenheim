@@ -10,13 +10,13 @@ import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -27,6 +27,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
@@ -81,6 +82,19 @@ public final class DnsZoneResource extends RowResource {
         .add(DnsZoneModel.TRANSFER_STATUS)
         .add(DnsZoneModel.LAST_TRANSFER_AT)
         .add(DnsZoneModel.TRANSFER_MESSAGE)
+        // A zone is its origin, its role and who answers for it. The SOA timers have
+        // working defaults and the replication diagnostics are read-only output, so both
+        // fold -- and on a primary zone the diagnostics are hidden entirely, which simply
+        // leaves the section with fewer members.
+        .section(FormSection.advanced(
+            DnsZoneModel.DEFAULT_TTL.getName(),
+            DnsZoneModel.NEGATIVE_TTL.getName(),
+            DnsZoneModel.SOA_REFRESH.getName(),
+            DnsZoneModel.SOA_RETRY.getName(),
+            DnsZoneModel.SOA_EXPIRE.getName(),
+            DnsZoneModel.TRANSFER_STATUS.getName(),
+            DnsZoneModel.LAST_TRANSFER_AT.getName(),
+            DnsZoneModel.TRANSFER_MESSAGE.getName()))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -390,11 +404,8 @@ public final class DnsZoneResource extends RowResource {
      * The federation peers these zones transfer with, demoted out of the sidebar.
      */
     @Override
-    public @NonNull List<HeaderAction> headerActions() {
-        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
-        actions.addAll(List.of(
-            CmsSupport.relatedList("dns_peers_link", "dns-peers", "dns_peer", Icon.of("handshake"))));
-        return actions;
+    public @NonNull List<RelatedPage> relatedPages() {
+        return List.of(RelatedPage.toPeer("dns-peers"));
     }
 
 }

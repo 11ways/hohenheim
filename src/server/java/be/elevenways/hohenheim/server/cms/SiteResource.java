@@ -27,12 +27,12 @@ import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -42,6 +42,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
@@ -113,6 +114,13 @@ public class SiteResource extends RowResource {
             .creatable(false).build())
         .add(RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID)
             .creatable(false).build())
+        // Creating a site is deciding a name, what it serves and whether it is on. The
+        // prose and the two shared security declarations are edits a site receives later,
+        // so they fold -- still in the DOM, still posted, and forced open by a refusal.
+        .section(FormSection.advanced(
+            SiteModel.DESCRIPTION.getName(),
+            SiteModel.AUTH_PROVIDER_ID.getName(),
+            SiteModel.ACCESS_LIST_ID.getName()))
         .build();
 
     /**
@@ -597,6 +605,7 @@ public class SiteResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "clone_site"))
             .label(Microcopy.of("clone").withFilter("scope", "site"))
             .icon(Icon.of("copy"))
+            .inlineOnRecord(false)
             .inlineInRow(false)
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("clone").withFilter("scope", "site"))
@@ -685,17 +694,16 @@ public class SiteResource extends RowResource {
     }
 
     /**
-     * The proxy tier's sibling catalogs and histories, demoted out of the sidebar.
+     * The proxy tier's sibling catalogs, demoted out of the sidebar.
+     *
+     * Builds and releases moved to the INSTANCES list when the release engine was re-keyed
+     * to the application; a site owns hostnames, not artifacts.
      */
     @Override
-    public @NonNull List<HeaderAction> headerActions() {
-        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
-        // Builds and releases moved to the INSTANCES header when the release engine was
-        // re-keyed to the application; a site owns hostnames, not artifacts.
-        actions.addAll(List.of(
-            CmsSupport.relatedList("auth_providers_link", "auth-providers", "auth_provider", Icon.of("key")),
-            CmsSupport.relatedList("previews_link", "previews", "preview_deployment", Icon.of("flask"))));
-        return actions;
+    public @NonNull List<RelatedPage> relatedPages() {
+        return List.of(
+            RelatedPage.toPeer("auth-providers"),
+            RelatedPage.toPeer("previews"));
     }
 
 }

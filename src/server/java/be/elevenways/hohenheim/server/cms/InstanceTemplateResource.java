@@ -11,13 +11,13 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -148,15 +148,10 @@ public class InstanceTemplateResource extends RowResource {
         return pages;
     }
 
+    /** The import page is a sibling PEER, so it is declared as one rather than linked. */
     @Override
-    public @NonNull List<HeaderAction> headerActions() {
-        List<HeaderAction> actions = new ArrayList<>(super.headerActions());
-        actions.add(HeaderAction.Url.builder(Identifier.of("hohenheim", "import_template"))
-            .label(Microcopy.of("import").withFilter("scope", "instance_template"))
-            .icon(Icon.of("file-import"))
-            .url(new Uri(CmsRoutes.list("admin", "instance-templates-import").toUrl()))
-            .build());
-        return actions;
+    public @NonNull List<RelatedPage> relatedPages() {
+        return List.of(RelatedPage.toPeer("instance-templates-import"));
     }
 
     @Override
