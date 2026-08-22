@@ -10,6 +10,7 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -41,6 +42,14 @@ public class RuntimeImageResource extends RowResource {
         .add(RuntimeImageModel.WORKDIR)
         .add(RuntimeImageModel.SHELL)
         .add(RuntimeImageModel.ENABLED)
+        // A catalog entry is a name and the two image references it resolves to; the
+        // defaults it lends an instance are refinements of that.
+        .section(FormSection.advanced(
+            RuntimeImageModel.DEFAULT_COMMAND.getName(),
+            RuntimeImageModel.DEFAULT_PORT.getName(),
+            RuntimeImageModel.DEFAULT_BUILD_COMMAND.getName(),
+            RuntimeImageModel.WORKDIR.getName(),
+            RuntimeImageModel.SHELL.getName()))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()

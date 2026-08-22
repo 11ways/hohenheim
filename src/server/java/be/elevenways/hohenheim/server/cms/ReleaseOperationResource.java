@@ -10,6 +10,7 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
+import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -17,6 +18,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +42,14 @@ public final class ReleaseOperationResource extends RowResource {
         .add(ReleaseOperationModel.FAILURE_REASON)
         .add(ReleaseOperationModel.DURATION_MS)
         .add(ReleaseOperationModel.STEP_LOG)
+        // What went live and whether it worked reads first; which record it was for and
+        // which instances it swapped are the plumbing behind that answer.
+        .section(FormSection.advanced(
+            ReleaseOperationModel.FOR_MODEL.getName(),
+            ReleaseOperationModel.FOR_ID.getName(),
+            ReleaseOperationModel.CANDIDATE_INSTANCE_ID.getName(),
+            ReleaseOperationModel.RETIRED_INSTANCE_ID.getName(),
+            ReleaseOperationModel.DURATION_MS.getName()))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -69,6 +79,12 @@ public final class ReleaseOperationResource extends RowResource {
 
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }
     @Override public int navOrder() { return 18; }
+
+    /**
+     * Demoted out of the sidebar, so this sentence reaches a reader through the panel
+     * index and the related-pages menu of the list that names it.
+     */
+    @Override public @Nullable Microcopy description() { return CmsSupport.navHint("release_operation"); }
 
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }

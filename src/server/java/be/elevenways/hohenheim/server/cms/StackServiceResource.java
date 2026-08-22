@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.stack.StackServiceKind;
 import be.elevenways.zenit.common.edit.Array;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -75,6 +76,19 @@ public class StackServiceResource extends RowResource {
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(StackServiceModel.RESTART_POLICY))
         .add(StackServiceModel.MEMORY_LIMIT_MB)
         .add(StackServiceModel.CPU_LIMIT)
+        // A service is an image, a name and how it is wired; the capability allow-list,
+        // the healthcheck schedule, the restart policy and the resource ceilings are
+        // tuning a person reaches for once, so they fold.
+        .section(FormSection.advanced(
+            StackServiceModel.CAPABILITIES.getName(),
+            StackServiceModel.HEALTH_CMD.getName(),
+            StackServiceModel.HEALTH_INTERVAL_SECONDS.getName(),
+            StackServiceModel.HEALTH_TIMEOUT_SECONDS.getName(),
+            StackServiceModel.HEALTH_RETRIES.getName(),
+            StackServiceModel.HEALTH_START_PERIOD_SECONDS.getName(),
+            StackServiceModel.RESTART_POLICY.getName(),
+            StackServiceModel.MEMORY_LIMIT_MB.getName(),
+            StackServiceModel.CPU_LIMIT.getName()))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
