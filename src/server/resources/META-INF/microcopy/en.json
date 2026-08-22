@@ -3733,6 +3733,10 @@
     {
       "text": "Runtime",
       "scope": "field"
+    },
+    {
+      "text": "Runtime",
+      "scope": "form_section"
     }
   ],
   "configured": {
@@ -4217,10 +4221,16 @@
     "text": "Mounts",
     "scope": "field"
   },
-  "ports": {
-    "text": "Published ports",
-    "scope": "field"
-  },
+  "ports": [
+    {
+      "text": "Published ports",
+      "scope": "field"
+    },
+    {
+      "text": "Port publishing",
+      "scope": "form_section"
+    }
+  ],
   "depends_on": {
     "text": "Depends on",
     "scope": "field"
@@ -6498,10 +6508,16 @@
     "text": "Symlink",
     "scope": "instance_files"
   },
-  "managed": {
-    "text": "Managed config",
-    "scope": "instance_files"
-  },
+  "managed": [
+    {
+      "text": "Managed config",
+      "scope": "instance_files"
+    },
+    {
+      "text": "Managed values",
+      "scope": "form_section"
+    }
+  ],
   "read_only": {
     "text": "You may read these files but not change them",
     "scope": "instance_files"
@@ -9597,5 +9613,29 @@
   "volume_backend_no_snapshot_body": {
     "text": "The data root enforces size limits but cannot take snapshots, so deploys of applications WITH volumes are refused here. Btrfs or ZFS at the data path lifts this.",
     "scope": "server_overview"
+  },
+  "build": {
+    "text": "Build",
+    "scope": "form_section"
+  },
+  "deployment": {
+    "text": "Deployment",
+    "scope": "form_section"
+  },
+  "limits": {
+    "text": "Resource limits",
+    "scope": "form_section"
+  },
+  "guest": {
+    "text": "Guest configuration",
+    "scope": "form_section"
+  },
+  "health": {
+    "text": "Health checks",
+    "scope": "form_section"
+  },
+  "forwarding": {
+    "text": "Forwarding options",
+    "scope": "form_section"
   }
 }

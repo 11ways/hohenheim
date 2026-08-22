@@ -5,6 +5,8 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.List;
+
 /**
  * THE git-source vocabulary, contributed INTO a host schema rather than owning one.
  *
@@ -33,6 +35,20 @@ public final class GitSourceSchema {
     public static final String PREVIEWS_ENABLED = "previews_enabled";
     public static final String PREVIEW_BRANCHES = "preview_branches";
     public static final String PREVIEW_ENVIRONMENT_VARIABLES = "preview_environment_variables";
+
+    /**
+     * The checkout-and-build detail a host schema folds away: everything between
+     * "which repository" and "what command builds it" that has a working default.
+     */
+    public static final List<String> BUILD_DETAIL = List.of(
+        BUILD_DIRECTORY, BUILD_TIMEOUT, BUILD_ENVIRONMENT_VARIABLES, SHALLOW_CLONE, SUBMODULES);
+
+    /** When a new revision is picked up, and what proves the webhook that says so. */
+    public static final List<String> DELIVERY = List.of(AUTO_DEPLOY, POLL_INTERVAL, WEBHOOK_SECRET);
+
+    /** The preview lane: off by default, and three fields nobody sets while creating. */
+    public static final List<String> PREVIEWS = List.of(
+        PREVIEWS_ENABLED, PREVIEW_BRANCHES, PREVIEW_ENVIRONMENT_VARIABLES);
 
     private GitSourceSchema() {}
 
