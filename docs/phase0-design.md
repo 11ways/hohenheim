@@ -188,10 +188,18 @@ choice; the kind declares both), started from a RUNTIME IMAGE (4.5), with:
 
 - Data directory `<volume root>/<instance id>/home` mounted at `/home/site`
   (section 5). Everything outside it is disposable and the shell banner says so.
-- Process identity: host uid `volume_uid_base + instance id` (setting,
-  default 200000, the range must not overlap Incus's subuid range 1000000+).
-  Docker: container config `User`; Incus: `raw.idmap` + `exec --user`. There is
-  no unix ACCOUNT on the host, only a number.
+- Process identity: uid `volume_uid_base + instance id` (setting, default 200000,
+  below Incus's subuid range 1000000+). Docker: container config `User`, where it is
+  a HOST uid. Incus: a NAMESPACE id the image's init drops to, with the volume
+  directory chowned to `subuid base + that id`. There is no unix ACCOUNT on the host,
+  only a number.
+  IMPLEMENTATION NOTE (brief 8, measured on nightstrom 2026-08-22): `raw.idmap` gives
+  host/namespace parity and works, but only if the host delegates the workspace uid
+  window in `/etc/subuid`; a second range there makes Incus union both into one default
+  map with two entries for namespace id 0, after which every container WITHOUT its own
+  raw.idmap fails to start. `shift=true` is inert on both twins (the daemon reports an
+  empty `kernel_features`). The mapped-owner form needs no host configuration and no
+  kernel feature, so it is what shipped.
 - Start command from the runtime image (overridable per instance), supervised
   as the container's main process (Docker PID 1 via the image's `tini`-style
   entry; Incus: the image ships a minimal init that runs the command as the
