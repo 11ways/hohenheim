@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.AuthKeys;
@@ -42,6 +43,8 @@ class SiteAccessControlTest extends HohenheimTestBase {
 
     private static Integer siteAId;
     private static Integer siteBId;
+    private static Integer instanceAId;
+    private static Integer instanceBId;
     private static Integer limitedUserId;
     private static String limitedSession;
     private static String limitedCsrf;
@@ -69,6 +72,20 @@ class SiteAccessControlTest extends HohenheimTestBase {
         siteB.set(SiteModel.ENABLED, true);
         siteModel.save(siteB);
         siteBId = siteB.get(SiteModel.ID);
+
+        // Two instances for the instance-keyed deploy/rollback endpoints (the verbs
+        // moved off the site when the release engine was re-keyed to the application).
+        var instanceModel = Models.get(InstanceModel.class);
+        Row instanceA = instanceModel.createEmptyRow();
+        instanceA.set(InstanceModel.NAME, "access-app-a");
+        instanceA.set(InstanceModel.KIND, "hohenheim:application");
+        instanceModel.save(instanceA);
+        instanceAId = instanceA.get(InstanceModel.ID);
+        Row instanceB = instanceModel.createEmptyRow();
+        instanceB.set(InstanceModel.NAME, "access-app-b");
+        instanceB.set(InstanceModel.KIND, "hohenheim:application");
+        instanceModel.save(instanceB);
+        instanceBId = instanceB.get(InstanceModel.ID);
 
         // A dedicated NON-admin user with its own session; the shared admin
         // session stays untouched.
@@ -147,11 +164,11 @@ class SiteAccessControlTest extends HohenheimTestBase {
      */
     @Test
     void manageGrantJourney() throws Exception {
-        // 1. Per-site endpoints refuse a principal holding no grant on the site.
-        assertAuthorizationRefusal(limitedPost("/sites/" + siteAId + "/deploy"),
-            "step 1: deploy on an ungranted site");
-        assertAuthorizationRefusal(limitedPost("/sites/" + siteAId + "/rollback"),
-            "step 1: rollback on an ungranted site");
+        // 1. Per-instance endpoints refuse a principal holding no capability on the record.
+        assertAuthorizationRefusal(limitedPost("/instances/" + instanceAId + "/deploy"),
+            "step 1: deploy on an ungranted instance");
+        assertAuthorizationRefusal(limitedPost("/instances/" + instanceAId + "/rollback"),
+            "step 1: rollback on an ungranted instance");
 
         // 2. Installation-scoped sensitive endpoints are admin-only.
         assertAuthorizationRefusal(limitedGet("/certificates/1/download"),
@@ -175,20 +192,24 @@ class SiteAccessControlTest extends HohenheimTestBase {
             .as("step 3: and the refusal never echoes the requested name back")
             .doesNotContain("somedb");
 
-        // 4. The grant that changes everything below.
+        // 4. The grants that change everything below: the site grant drives the manage
+        //    panel views proven in step 7+, and the INSTANCE grant is what the deploy
+        //    verb answers to now (MANAGE implies POWER on the record).
         RecordGrants.grant(GrantSubjectType.USER, limitedUserId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, limitedUserId, InstanceModel.MODEL_ID,
+            instanceAId, HohenheimAccess.MANAGE, true);
 
-        // 5. Site A passes authorization: no git source configured, so the handler falls
-        //    through to its redirect -- the point is it no longer 403s. These two are also
+        // 5. Instance A passes authorization: no git source configured, so the handler
+        //    falls through to its redirect -- the point is it no longer 403s. This is also
         //    the control for step 1: the SAME client, the SAME CSRF token, now accepted.
-        assertThat(limitedPost("/sites/" + siteAId + "/deploy").statusCode())
+        assertThat(limitedPost("/instances/" + instanceAId + "/deploy").statusCode())
             .describedAs("step 5: deploy passes once the grant exists")
             .isIn(302, 303);
 
-        // 6. The grant is per RECORD: site B stays refused.
-        assertAuthorizationRefusal(limitedPost("/sites/" + siteBId + "/deploy"),
-            "step 6: a grant on site A unlocks nothing on site B");
+        // 6. The grant is per RECORD: instance B stays refused.
+        assertAuthorizationRefusal(limitedPost("/instances/" + instanceBId + "/deploy"),
+            "step 6: a grant on instance A unlocks nothing on instance B");
 
         // 7. The policy's principal-facing views agree with the wire.
         UserPrincipal principal = new UserPrincipal(limitedUserId, "Limited User");

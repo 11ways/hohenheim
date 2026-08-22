@@ -50,8 +50,8 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
     private static final List<Map.Entry<String, List<String>>> EXPECTED_SIDEBAR = List.of(
         // The ungrouped top block: what you look at, and what everything runs on.
         Map.entry("default", List.of("dashboard", "servers")),
-        Map.entry("deploy", List.of("projects", "sites", "instances", "stacks",
-            "databases", "instance-templates", "git-providers")),
+        Map.entry("deploy", List.of("projects", "sites", "instances", "runtime-images",
+            "stacks", "databases", "instance-templates", "git-providers")),
         Map.entry("networking", List.of("dns-zones", "certificates", "access-lists",
             "released-claims")),
         Map.entry("security", List.of("users", "roles", "spamservice", "bans")),
@@ -104,7 +104,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         int visible = sections.stream().mapToInt(section -> section.peers().size()).sum();
         assertThat(visible)
             .as("step 1: the whole sidebar stays scannable (it was 39)")
-            .isEqualTo(20);
+            .isEqualTo(21);
 
         // 2. Every visible entry explains itself, and no two entries of one group share a
         //    navOrder -- a tie makes the rendered order depend on declaration order, which is
@@ -202,17 +202,21 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         // 6. The sibling catalogs demoted onto a parent list are linked from that list's
         //    header, so an operator standing on Instances/Sites/Projects/DNS zones can still
         //    walk to them.
+        // Build and release history moved WITH the release engine's re-keying: they
+        // are the instance tier's siblings now, and a site heads only to what a
+        // hostname owns (auth providers, previews).
         assertThat(adminGet("/admin/instances").body())
-            .as("step 6: the Instances list heads to its sibling catalogs")
+            .as("step 6: the Instances list heads to its sibling catalogs and histories")
             .contains("/admin/backup-targets")
             .contains("/admin/instance-quotas")
-            .contains("/admin/game-domains");
-        assertThat(adminGet("/admin/sites").body())
-            .as("step 6: the Sites list heads to its sibling catalogs and histories")
-            .contains("/admin/auth-providers")
-            .contains("/admin/previews")
+            .contains("/admin/game-domains")
             .contains("/admin/builds")
             .contains("/admin/releases");
+        assertThat(adminGet("/admin/sites").body())
+            .as("step 6: the Sites list heads to its sibling catalogs")
+            .contains("/admin/auth-providers")
+            .contains("/admin/previews")
+            .doesNotContain("/admin/builds");
         assertThat(adminGet("/admin/projects").body())
             .as("step 6: the Projects list heads to environments")
             .contains("/admin/environments");
