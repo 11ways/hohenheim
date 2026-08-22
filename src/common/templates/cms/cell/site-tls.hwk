@@ -1,0 +1,5 @@
+{#- TLS cell: whether the hostnames force HTTPS, as one badge. -#}
+{% declare value: SiteTlsCell %}
+{% if value != null %}
+<pl-badge variant={% value.variant %} attr:data-tls={% value.token %}>{{ value.label }}</pl-badge>
+{% /if %}

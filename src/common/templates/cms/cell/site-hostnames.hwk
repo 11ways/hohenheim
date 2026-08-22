@@ -1,0 +1,15 @@
+{#- Hostname cell: the first hostname plus a "+N" tail; an honest empty wording
+    when the site answers for nothing yet. -#}
+{% declare value: SiteHostnamesCell %}
+{% if value != null %}
+<span class="hh-site-hostnames">
+    {% if value.primary != null %}
+    <span>{{ value.primary }}</span>
+    {% if value.moreCount > 0 %}
+    <pl-badge variant="outline">+{{ value.moreCount }}</pl-badge>
+    {% /if %}
+    {% else %}
+    <span class="hh-muted">{{ t("no_hostnames", scope: "site") }}</span>
+    {% /if %}
+</span>
+{% /if %}
