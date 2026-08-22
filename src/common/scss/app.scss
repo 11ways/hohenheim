@@ -390,6 +390,30 @@
         }
     }
 
+    pl-table-row.hh-site-disabled {
+        opacity: 0.55;
+    }
+
+    .hh-managed-by,
+    .hh-site-upstream,
+    .hh-site-hostnames {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--pl-space-xs);
+    }
+
+    .hh-tab-hint {
+        margin: 0 0 var(--pl-space-md);
+        color: var(--pl-color-text-muted);
+        font-size: var(--pl-font-size-sm);
+    }
+
+    .hh-upstream-summary,
+    .hh-muted {
+        color: var(--pl-color-text-muted);
+        font-size: var(--pl-font-size-xs);
+    }
+
     .hh-state-badges {
         display: flex;
         flex-wrap: wrap;

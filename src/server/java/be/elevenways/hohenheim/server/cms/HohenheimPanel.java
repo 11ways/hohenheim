@@ -157,14 +157,17 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new InstanceScheduleResource(), Role.INSTANCES);
         addIf(peers, new InstanceScheduleStepResource(), Role.INSTANCES);
         addIf(peers, new InstanceDeviceResource(), Role.INSTANCES);
+        addIf(peers, new InstanceVolumeResource(), Role.INSTANCES);
+        addIf(peers, new RuntimeImageResource(), Role.INSTANCES);
         addIf(peers, new InstanceScheduleRunResource(), Role.INSTANCES);
         addIf(peers, new GameDomainResource(), Role.INSTANCES);
         addIf(peers, new BackupTargetResource(), Role.INSTANCES);
         // Build history serves the two tiers that produce images today (Docker sites
         // through the proxy role, container instances through the instances role).
         addIf(peers, new BuildOperationResource(), Role.PROXY, Role.INSTANCES);
-        // Release history: today only Docker sites release through the health gate.
-        addIf(peers, new ReleaseOperationResource(), Role.PROXY);
+        // Release history: applications (the instance tier) release through the
+        // health gate since the phase-0 re-keying; the proxy role merely exposes them.
+        addIf(peers, new ReleaseOperationResource(), Role.PROXY, Role.INSTANCES);
         addIf(peers, new GitProviderResource(), Role.PROXY);
         addIf(peers, new PreviewDeploymentResource(), Role.PROXY);
         addIf(peers, new StackResource(), Role.STACKS);
