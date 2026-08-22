@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * The replay claim over webhook deliveries: INSERT-FIRST against the unique
- * (site_id, delivery_key) index, so of two racing identical deliveries exactly one
+ * (instance_id, delivery_key) index, so of two racing identical deliveries exactly one
  * wins -- the loser's insert fails on the index, never on a stale read.
  */
 final class WebhookDeliveries {
@@ -43,10 +43,10 @@ final class WebhookDeliveries {
      *
      * @return the claimed row, or null when this delivery was already processed
      */
-    static @Nullable Row claim(int siteId, @NonNull String deliveryKey, @Nullable String event) {
+    static @Nullable Row claim(int instanceId, @NonNull String deliveryKey, @Nullable String event) {
         WebhookDeliveryModel model = Models.get(WebhookDeliveryModel.class);
         Row row = model.createEmptyRow();
-        row.set(WebhookDeliveryModel.SITE_ID, siteId);
+        row.set(WebhookDeliveryModel.INSTANCE_ID, instanceId);
         row.set(WebhookDeliveryModel.DELIVERY_KEY, deliveryKey);
         row.set(WebhookDeliveryModel.EVENT, event);
         row.set(WebhookDeliveryModel.RECEIVED_AT, Instant.now());
@@ -57,14 +57,14 @@ final class WebhookDeliveries {
             // a replay. A genuinely broken datasource fails the fresh-key insert too,
             // which surfaces as a 500 at the handler -- never as a silent dedupe.
             if (model.find()
-                    .where(WebhookDeliveryModel.SITE_ID.eq(siteId))
+                    .where(WebhookDeliveryModel.INSTANCE_ID.eq(instanceId))
                     .where(WebhookDeliveryModel.DELIVERY_KEY.eq(deliveryKey))
                     .first() != null) {
                 return null;
             }
             throw duplicate;
         }
-        prune(model, siteId);
+        prune(model, instanceId);
         return row;
     }
 
@@ -81,10 +81,10 @@ final class WebhookDeliveries {
         }
     }
 
-    private static void prune(@NonNull WebhookDeliveryModel model, int siteId) {
+    private static void prune(@NonNull WebhookDeliveryModel model, int instanceId) {
         try {
             List<Row> stale = model.find()
-                .where(WebhookDeliveryModel.SITE_ID.eq(siteId))
+                .where(WebhookDeliveryModel.INSTANCE_ID.eq(instanceId))
                 .where(WebhookDeliveryModel.RECEIVED_AT.lt(Instant.now().minus(RETAIN)))
                 .orderBy(WebhookDeliveryModel.ID, SortOrder.ASC)
                 .limit(PRUNE_BATCH)
@@ -93,7 +93,7 @@ final class WebhookDeliveries {
                 model.delete(old.get(WebhookDeliveryModel.ID));
             }
         } catch (RuntimeException e) {
-            Blast.log("GIT WEBHOOK: delivery prune failed for site", siteId, "-", e.getMessage());
+            Blast.log("GIT WEBHOOK: delivery prune failed for site", instanceId, "-", e.getMessage());
         }
     }
 }

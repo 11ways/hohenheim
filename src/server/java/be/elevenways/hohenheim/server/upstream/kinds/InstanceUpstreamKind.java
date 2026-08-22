@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.upstream.kinds;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.application.InstanceUpstreamHandler;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
@@ -94,7 +95,18 @@ public final class InstanceUpstreamKind implements UpstreamKindHandler {
 
     @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
-        return new FaultedSiteHandler(site.get(SiteModel.ID),
-            "instance upstreams are not routed yet (phase 0 brief 7 re-keys the release engine)");
+
+        Integer instanceId = site.get(SiteModel.INSTANCE_ID);
+
+        if (instanceId == null) {
+            return new FaultedSiteHandler(site.get(SiteModel.ID),
+                "this site names no instance to serve from");
+        }
+
+        Object scheme = settings.get(SCHEME.getName());
+
+        return new InstanceUpstreamHandler(site.get(SiteModel.ID), instanceId,
+            !Boolean.FALSE.equals(settings.get(WEBSOCKET_UPGRADE.getName())),
+            scheme == null || scheme.toString().isBlank() ? "http" : scheme.toString());
     }
 }

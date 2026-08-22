@@ -13,7 +13,6 @@
     Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
 {% declare returnParam: String %}
 {% declare deployTarget: RouteTarget %}
-{% declare cancelDeployTarget: RouteTarget %}
 {% declare rollbackTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare timeWording: RelativeTimeWording %}
@@ -50,12 +49,6 @@
                     <input type="hidden" name={% returnParam %} value={% returnUrl %}>
                     <pl-button variant={% "primary" %} type={% "submit" %} disabled={% isDeploying %}>{{ t("deploy_now", scope: "site_deployments") }}</pl-button>
                 </form>
-                {% if isDeploying %}
-                <form use:Zenit.form={% cancelDeployTarget %}>
-                    <input type="hidden" name={% returnParam %} value={% returnUrl %}>
-                    <pl-button variant={% "outline" %} type={% "submit" %}>{{ t("cancel", scope: "site_deployments") }}</pl-button>
-                </form>
-                {% /if %}
                 {% if canRollback %}
                 <form use:Zenit.form={% rollbackTarget %} use:CmsConfirm.destructive={% t("rollback_confirm", scope: "site_deployments") %}>
                     <input type="hidden" name={% returnParam %} value={% returnUrl %}>

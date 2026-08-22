@@ -1094,8 +1094,8 @@ public class HohenheimSettings {
                 + "finish against a live upstream before the workload stops")
             .build();
 
-        public static final SettingDefinition<Integer> HISTORY_PER_SITE = GROUP
-            .buildSetting("history_per_site", Integer.class)
+        public static final SettingDefinition<Integer> HISTORY_PER_RECORD = GROUP
+            .buildSetting("history_per_record", Integer.class)
             .defaultValue(50)
             .description("Release operations kept per owning record; older rows are "
                 + "pruned when an operation completes")

@@ -19,7 +19,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
-import be.elevenways.hohenheim.server.docker.SiteReleases;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
@@ -163,7 +163,7 @@ public class ServerMain {
             // never replaced), a half-flipped switch is completed and a lost drain is
             // finished. Virtual thread for the same reason as the stack sweep: it
             // does live daemon work and must never hold the listeners off the wire.
-            JobRunner.startVirtualThread(SiteReleases::recoverInterrupted);
+            JobRunner.startVirtualThread(ReleaseEngine::recoverInterrupted);
             // Preview lifetimes are one-shot record schedules: a deadline missed
             // while down fires at the framework sweeper's next pass, no boot sweep.
         } else {

@@ -833,6 +833,19 @@ public final class DockerInstanceRuntime
                 "Target", containerPath,
                 "VolumeOptions", Map.of("Labels", spec.ownerLabels())));
         });
+        // Hohenheim-OWNED host directories (InstanceVolumes): a bind of a path under the
+        // volume root, which ContainerHardening.requireVolumeRootSource is what confines.
+        // No VolumeOptions -- there is no daemon-side object to label, the directory is
+        // the controller's and outlives every container that mounts it.
+        spec.binds().forEach((hostPath, containerPath) -> {
+            if (containerPath == null || containerPath.isBlank()) {
+                return;
+            }
+            mounts.add(Map.of(
+                "Type", "bind",
+                "Source", hostPath,
+                "Target", containerPath));
+        });
         if (!mounts.isEmpty()) {
             hostConfig.put("Mounts", mounts);
         }
@@ -1017,6 +1030,19 @@ public final class DockerInstanceRuntime
                 "Source", volumeName,
                 "Target", containerPath,
                 "VolumeOptions", Map.of("Labels", spec.ownerLabels())));
+        });
+        // Hohenheim-OWNED host directories (InstanceVolumes): a bind of a path under the
+        // volume root, which ContainerHardening.requireVolumeRootSource is what confines.
+        // No VolumeOptions -- there is no daemon-side object to label, the directory is
+        // the controller's and outlives every container that mounts it.
+        spec.binds().forEach((hostPath, containerPath) -> {
+            if (containerPath == null || containerPath.isBlank()) {
+                return;
+            }
+            mounts.add(Map.of(
+                "Type", "bind",
+                "Source", hostPath,
+                "Target", containerPath));
         });
         // DECLARED discardable storage: RAM-backed, size-capped, gone with the container.
         // There is no daemon-side object to attribute and none is needed, which is

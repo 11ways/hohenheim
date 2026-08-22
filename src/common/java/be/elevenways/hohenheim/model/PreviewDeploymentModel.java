@@ -36,9 +36,9 @@ public class PreviewDeploymentModel extends Model {
     public static final String STATUS_DESTROYED = "destroyed";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id")
+    public static final IntegerField APPLICATION_ID = SCHEMA.addField(IntegerField.builder().name("application_id")
         .required()
-        .label(HohenheimFormCopy.label("site"))
+        .label(HohenheimFormCopy.label("application"))
         .build());
 
     /** The git ref (branch) this preview builds; user data, never localized. */
@@ -88,11 +88,12 @@ public class PreviewDeploymentModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
 
-    public static final BelongsTo<SiteModel> SITE = SCHEMA.addRelation(
-        BelongsTo.to(SiteModel.class)
-            .name("site")
-            .localKey(SITE_ID)
-            .remoteKey(SiteModel.ID)
+    /** The application this is a preview OF; its releases and this one share a source. */
+    public static final BelongsTo<InstanceModel> APPLICATION = SCHEMA.addRelation(
+        BelongsTo.to(InstanceModel.class)
+            .name("application")
+            .localKey(APPLICATION_ID)
+            .remoteKey(InstanceModel.ID)
             .build());
 
     static {
@@ -101,9 +102,9 @@ public class PreviewDeploymentModel extends Model {
     }
 
     /** Live (not torn down) previews of one site, newest first. */
-    public List<Row> findLiveBySiteId(int siteId) {
+    public List<Row> findLiveByApplicationId(int applicationId) {
         return find()
-            .where(SITE_ID.eq(siteId))
+            .where(APPLICATION_ID.eq(applicationId))
             .where(DELETED_AT.isNull())
             .orderBy(ID, SortOrder.DESC)
             .all();

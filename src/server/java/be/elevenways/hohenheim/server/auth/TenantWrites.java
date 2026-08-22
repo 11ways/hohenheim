@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
@@ -249,32 +248,6 @@ public final class TenantWrites {
                 }
                 HohenheimAccess.requireDatabaseCapability(
                     (Integer) id, HohenheimAccess.DESTROY);
-            }
-        });
-        SiteDatabaseModel.SCHEMA.addBeforeValidateHook(context -> {
-            Row row = context.getRow();
-            if (row == null || !isTenantOriginated()) {
-                return;
-            }
-            Row stored = row.has(SiteDatabaseModel.ID.getName())
-                ? Models.get(SiteDatabaseModel.class).findById(row.get(SiteDatabaseModel.ID))
-                : null;
-            requireLinkAuthority(effective(row, stored, SiteDatabaseModel.SITE_ID),
-                effective(row, stored, SiteDatabaseModel.DATABASE_ID));
-            if (stored != null) {
-                // Moving a link off a side needs authority over the side being LEFT too,
-                // or "re-point my link at your database" launders into a detach.
-                requireLinkAuthority(stored.get(SiteDatabaseModel.SITE_ID),
-                    stored.get(SiteDatabaseModel.DATABASE_ID));
-            }
-        });
-        SiteDatabaseModel.SCHEMA.addBeforeRemoveHook(context -> {
-            if (!isTenantOriginated()) {
-                return;
-            }
-            for (Row doomed : doomedRows(context)) {
-                requireLinkAuthority(doomed.get(SiteDatabaseModel.SITE_ID),
-                    doomed.get(SiteDatabaseModel.DATABASE_ID));
             }
         });
         InstanceDatabaseModel.SCHEMA.addBeforeValidateHook(context -> {
@@ -750,38 +723,9 @@ public final class TenantWrites {
     }
 
     /**
-     * Attaching a database to a site injects that database's CREDENTIALS into that site's
-     * runtime, so it needs authority over BOTH records -- the two-sided
-     * {@code GameDomains.requireAuthority} shape, and for the same reason: a one-sided
-     * check turns a link row into a way to read a credential you were never granted (point
-     * your own site at my database) or to hand your database to a runtime you do not
-     * control (point my site at your database).
-     *
-     * Deliberately NOT a capability of its own: there is no join record to hold one on
-     * before it exists, and a third authority over a pair is a third authority that can
-     * disagree with the two it sits between.
-     *
-     * @throws Violations {@code tenant_site_not_managed} or the uniform database refusal
-     */
-    private static void requireLinkAuthority(@Nullable Object siteIdValue,
-                                             @Nullable Object databaseIdValue) {
-        AccessContext ctx = acting();
-        if (!(siteIdValue instanceof Integer siteId) || ctx == null || ctx.isAnonymous()
-                || !HohenheimAccess.canManageSite(ctx, siteId)) {
-            throw Violations.ofField(SiteDatabaseModel.SITE_ID.getName(), siteIdValue,
-                CmsSupport.violationText("tenant_site_not_managed"));
-        }
-        if (!(databaseIdValue instanceof Integer databaseId)
-                || !HohenheimAccess.hasDatabaseCapability(ctx, databaseId,
-                    HohenheimAccess.MANAGE)) {
-            throw HohenheimAccess.databaseRefusal();
-        }
-    }
-
-    /**
      * Attaching a database to an INSTANCE injects that database's CREDENTIALS into that
      * workload's environment, so it needs authority over BOTH records -- the same
-     * two-sided rule {@link #requireLinkAuthority} applies to sites, and for the same
+     * two-sided rule {@code GameDomains.requireAuthority} applies, and for the same
      * reason: a one-sided check turns a link row into a way to read a credential you were
      * never granted (point your own instance at my database) or to hand your database to a
      * runtime you do not control (point my instance at your database).

@@ -20,6 +20,14 @@ import java.util.Map;
  * @param command       command override, or null to keep the image's default
  * @param env           environment variables (name to value, ordered)
  * @param volumes       persistent named volumes: volume name to container path
+ * @param binds         Hohenheim-OWNED host directories: host path to container path.
+ *                      Unlike a named volume, the controller creates, quotas, snapshots
+ *                      and removes these itself ({@code InstanceVolumes}), and their
+ *                      identity is the OWNER record's, which is what lets a release
+ *                      container mount its application's data. Every host path must sit
+ *                      under the configured volume root -- {@code ContainerHardening}
+ *                      refuses any other bind source, because a bind of an arbitrary host
+ *                      path is not an isolation boundary
  * @param publications  the declared port publications, empty for none. Loopback/tcp
  *                      publishes an ephemeral host port recorded AFTER start
  *                      (record-after); UDP, public exposure and fixed host ports ride
@@ -74,6 +82,7 @@ public record InstanceSpec(@NonNull String handle,
                            @Nullable List<String> command,
                            @NonNull Map<String, String> env,
                            @NonNull Map<String, String> volumes,
+                           @NonNull Map<String, String> binds,
                            @NonNull List<PortPublication> publications,
                            @NonNull ResourceLimits limits,
                            ContainerHardening.@NonNull Profile hardening,
@@ -101,6 +110,7 @@ public record InstanceSpec(@NonNull String handle,
         command = command == null ? null : List.copyOf(command);
         env = copyOrdered(env);
         volumes = copyOrdered(volumes);
+        binds = copyOrdered(binds);
         publications = List.copyOf(publications);
         ownerLabels = copyOrdered(ownerLabels);
         tmpfs = copyOrdered(tmpfs);
@@ -150,6 +160,7 @@ public record InstanceSpec(@NonNull String handle,
         private @Nullable List<String> command;
         private @NonNull Map<String, String> env = Map.of();
         private @NonNull Map<String, String> volumes = Map.of();
+        private @NonNull Map<String, String> binds = Map.of();
         private @NonNull List<PortPublication> publications = List.of();
         private @Nullable String cloudInitUserData;
         private @Nullable String imageFingerprint;
@@ -185,6 +196,12 @@ public record InstanceSpec(@NonNull String handle,
 
         public @NonNull Builder volumes(@NonNull Map<String, String> volumes) {
             this.volumes = volumes;
+            return this;
+        }
+
+        /** Owner-keyed host directories under the volume root; see {@code InstanceVolumes}. */
+        public @NonNull Builder binds(@NonNull Map<String, String> binds) {
+            this.binds = binds;
             return this;
         }
 
@@ -246,7 +263,7 @@ public record InstanceSpec(@NonNull String handle,
 
         public @NonNull InstanceSpec build() {
             return new InstanceSpec(this.handle, this.image, this.command, this.env,
-                this.volumes, this.publications, this.limits, this.hardening,
+                this.volumes, this.binds, this.publications, this.limits, this.hardening,
                 this.ownerLabels, this.cloudInitUserData, this.imageFingerprint,
                 this.imageOrigin, this.secureBoot, this.guestAgent, this.tmpfs,
                 this.healthCheck, this.rootDiskGb, this.networkLimitMbit);
@@ -276,7 +293,7 @@ public record InstanceSpec(@NonNull String handle,
                 + " were claimed");
         }
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
-            List.copyOf(claimed), this.limits, this.hardening,
+            this.binds, List.copyOf(claimed), this.limits, this.hardening,
             this.ownerLabels, this.cloudInitUserData, this.imageFingerprint, this.imageOrigin,
             this.secureBoot, this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
             this.networkLimitMbit);
@@ -285,7 +302,7 @@ public record InstanceSpec(@NonNull String handle,
     /** A copy carrying the record's pinned resolved image identity. */
     public @NonNull InstanceSpec withImageFingerprint(@Nullable String fingerprint) {
         return new InstanceSpec(this.handle, this.image, this.command, this.env, this.volumes,
-            this.publications, this.limits, this.hardening, this.ownerLabels,
+            this.binds, this.publications, this.limits, this.hardening, this.ownerLabels,
             this.cloudInitUserData, fingerprint, this.imageOrigin, this.secureBoot,
             this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
             this.networkLimitMbit);

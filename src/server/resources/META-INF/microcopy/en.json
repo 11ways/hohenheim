@@ -12,7 +12,7 @@
     "scope": "violations"
   },
   "database_already_attached": {
-    "text": "That database is already attached to this site",
+    "text": "That database is already attached to this instance",
     "scope": "violations"
   },
   "database_immutable": {
@@ -5391,6 +5391,10 @@
     {
       "text": "Serve an instance this deployment manages",
       "scope": "upstream_kind_description"
+    },
+    {
+      "text": "Instance {$name}",
+      "scope": "attention_title"
     }
   ],
   "note": [
@@ -5436,11 +5440,11 @@
     "scope": "violations"
   },
   "deploy_not_available": {
-    "text": "This site has no on-demand deploy; only git-sourced sites can be deployed",
+    "text": "This site exposes no application, so there is nothing to deploy",
     "scope": "violations"
   },
   "rollback_not_available": {
-    "text": "No rollback target is available for this site",
+    "text": "This site exposes no application, so there is no release to roll back",
     "scope": "violations"
   },
   "variable_key_required": {
@@ -6574,14 +6578,6 @@
     "text": "Instance ownership attribution is set by the system, never submitted",
     "scope": "violations"
   },
-  "site_volumes_unavailable": {
-    "text": "The site's persistent volumes could not be prepared: {$reason}",
-    "scope": "violations"
-  },
-  "site_image_build_failed": {
-    "text": "Building the site image failed: {$reason}",
-    "scope": "violations"
-  },
   "serving": {
     "text": "Serving",
     "scope": "runtime_role"
@@ -6617,15 +6613,11 @@
     "scope": "violations"
   },
   "release_no_rollback_target": {
-    "text": "This site has no retained release to roll back to",
+    "text": "This application has no retained release to roll back to",
     "scope": "violations"
   },
   "release_no_serving_release": {
-    "text": "This site has no running release to switch traffic away from",
-    "scope": "violations"
-  },
-  "site_image_unresolvable": {
-    "text": "The site image could not be resolved to a digest: {$reason}",
+    "text": "This application has no running release to switch traffic away from",
     "scope": "violations"
   },
   "members": {
@@ -6718,10 +6710,6 @@
     "text": "A Gitea provider needs its own base URL; there is no public default host",
     "scope": "violations"
   },
-  "preview_site_required": {
-    "text": "A preview needs an existing site",
-    "scope": "violations"
-  },
   "preview_owner_unreadable": {
     "text": "The site's owner could not be derived; refusing the preview",
     "scope": "violations"
@@ -6736,14 +6724,6 @@
   },
   "preview_no_base_domain": {
     "text": "No preview base domain is configured (previews.base_domain)",
-    "scope": "violations"
-  },
-  "preview_no_repository": {
-    "text": "The site has no repository to build a preview from",
-    "scope": "violations"
-  },
-  "preview_checkout_failed": {
-    "text": "Preview checkout failed: {$reason}",
     "scope": "violations"
   },
   "preview_build_failed": {
@@ -9030,8 +9010,76 @@
     "text": "Workspaces cannot be deployed yet: the workspace runtime lands in a later phase-0 step",
     "scope": "violations"
   },
-  "application_runtime_not_wired": {
-    "text": "Applications cannot be deployed yet: the release engine is re-keyed in a later phase-0 step",
+  "volume_backend_unimplemented": {
+    "text": "Volume backend {$backend} is not implemented yet; only btrfs can create, quota and snapshot a volume today.",
+    "scope": "violations"
+  },
+  "volume_create_failed": {
+    "text": "The volume directory '{$path}' could not be created on the {$backend} backend: {$reason}",
+    "scope": "violations"
+  },
+  "volume_quota_failed": {
+    "text": "The size limit of volume '{$path}' could not be applied on the {$backend} backend: {$reason}",
+    "scope": "violations"
+  },
+  "volume_snapshot_failed": {
+    "text": "Volume '{$path}' could not be snapshotted on the {$backend} backend: {$reason}",
+    "scope": "violations"
+  },
+  "volume_destroy_failed": {
+    "text": "Volume '{$path}' could not be removed on the {$backend} backend: {$reason}",
+    "scope": "violations"
+  },
+  "volume_no_snapshot_support": {
+    "text": "Host '{$name}' cannot snapshot a volume (backend: {$backend}), so a deploy that would write to declared volumes is refused. Mount a btrfs or zfs filesystem at the volume root, or remove the volumes.",
+    "scope": "violations"
+  },
+  "volume_host_unknown": {
+    "text": "No host named '{$name}' is inventoried, so its volumes cannot be prepared",
+    "scope": "violations"
+  },
+  "volume_name_invalid": {
+    "text": "Volume name '{$name}' is not a plain directory name",
+    "scope": "violations"
+  },
+  "application_not_found": {
+    "text": "No application with id {$id} exists",
+    "scope": "violations"
+  },
+  "application_owns_no_container": {
+    "text": "An application never runs a container itself; each deploy generates a release that does",
+    "scope": "violations"
+  },
+  "application_never_built": {
+    "text": "Application '{$name}' has never been deployed, so there is nothing to serve yet",
+    "scope": "violations"
+  },
+  "application_image_build_failed": {
+    "text": "The application image could not be built: {$reason}",
+    "scope": "violations"
+  },
+  "application_image_unresolvable": {
+    "text": "The application image could not be resolved to a digest: {$reason}",
+    "scope": "violations"
+  },
+  "source_no_repository": {
+    "text": "This source names no repository to check out",
+    "scope": "violations"
+  },
+  "source_checkout_failed": {
+    "text": "The source could not be checked out: {$reason}",
+    "scope": "violations"
+  },
+  "preview_no_exposing_site": {
+    "text": "No site exposes this application, so a preview would have no hostname to answer on",
+    "scope": "violations"
+  },
+  "preview_application_required": {
+    "text": "A preview needs an existing application",
+    "scope": "violations"
+  },
+  "site_exposes_no_instance": {
+    "text": "This site exposes no instance, so there is no release to roll back",
     "scope": "violations"
   },
   "build_context": [

@@ -12,7 +12,7 @@
     "scope": "violations"
   },
   "database_already_attached": {
-    "text": "Die databank is al aan deze site gekoppeld",
+    "text": "Die databank is al aan deze instance gekoppeld",
     "scope": "violations"
   },
   "database_immutable": {
@@ -5391,6 +5391,10 @@
     {
       "text": "Een instantie serveren die deze installatie beheert",
       "scope": "upstream_kind_description"
+    },
+    {
+      "text": "Instance {$name}",
+      "scope": "attention_title"
     }
   ],
   "note": [
@@ -5436,11 +5440,11 @@
     "scope": "violations"
   },
   "deploy_not_available": {
-    "text": "Deze site heeft geen on-demand deploy; enkel git-sites kunnen gedeployed worden",
+    "text": "Deze site stelt geen applicatie beschikbaar, dus er valt niets uit te rollen",
     "scope": "violations"
   },
   "rollback_not_available": {
-    "text": "Er is geen rollbackdoel beschikbaar voor deze site",
+    "text": "Deze site stelt geen applicatie beschikbaar, dus er is geen release om naar terug te rollen",
     "scope": "violations"
   },
   "variable_key_required": {
@@ -6574,14 +6578,6 @@
     "text": "De eigendomsattributie van een instance wordt door het systeem gezet, nooit ingediend",
     "scope": "violations"
   },
-  "site_volumes_unavailable": {
-    "text": "De permanente volumes van deze site konden niet worden voorbereid: {$reason}",
-    "scope": "violations"
-  },
-  "site_image_build_failed": {
-    "text": "Het bouwen van de site-image is mislukt: {$reason}",
-    "scope": "violations"
-  },
   "serving": {
     "text": "Actief",
     "scope": "runtime_role"
@@ -6617,15 +6613,11 @@
     "scope": "violations"
   },
   "release_no_rollback_target": {
-    "text": "Deze site heeft geen bewaarde release om naar terug te draaien",
+    "text": "Deze applicatie heeft geen bewaarde release om naar terug te draaien",
     "scope": "violations"
   },
   "release_no_serving_release": {
-    "text": "Deze site heeft geen draaiende release om verkeer van weg te schakelen",
-    "scope": "violations"
-  },
-  "site_image_unresolvable": {
-    "text": "De site-image kon niet naar een digest worden vertaald: {$reason}",
+    "text": "Deze applicatie heeft geen draaiende release om verkeer van weg te schakelen",
     "scope": "violations"
   },
   "members": {
@@ -6718,10 +6710,6 @@
     "text": "Een Gitea-provider heeft zijn eigen basis-URL nodig; er is geen publieke standaardhost",
     "scope": "violations"
   },
-  "preview_site_required": {
-    "text": "Een preview vereist een bestaande site",
-    "scope": "violations"
-  },
   "preview_owner_unreadable": {
     "text": "De eigenaar van de site kon niet worden afgeleid; preview geweigerd",
     "scope": "violations"
@@ -6736,14 +6724,6 @@
   },
   "preview_no_base_domain": {
     "text": "Geen preview-basisdomein ingesteld (previews.base_domain)",
-    "scope": "violations"
-  },
-  "preview_no_repository": {
-    "text": "De site heeft geen repository om een preview van te bouwen",
-    "scope": "violations"
-  },
-  "preview_checkout_failed": {
-    "text": "Preview-checkout mislukt: {$reason}",
     "scope": "violations"
   },
   "preview_build_failed": {
@@ -9030,8 +9010,76 @@
     "text": "Werkplekken kunnen nog niet worden uitgerold: de werkplek-runtime volgt in een latere fase-0-stap",
     "scope": "violations"
   },
-  "application_runtime_not_wired": {
-    "text": "Applicaties kunnen nog niet worden uitgerold: de release-engine wordt in een latere fase-0-stap omgezet",
+  "volume_backend_unimplemented": {
+    "text": "Volume-backend {$backend} is nog niet geimplementeerd; alleen btrfs kan vandaag een volume aanmaken, begrenzen en snapshotten.",
+    "scope": "violations"
+  },
+  "volume_create_failed": {
+    "text": "De volumemap '{$path}' kon niet aangemaakt worden op de {$backend}-backend: {$reason}",
+    "scope": "violations"
+  },
+  "volume_quota_failed": {
+    "text": "De groottelimiet van volume '{$path}' kon niet toegepast worden op de {$backend}-backend: {$reason}",
+    "scope": "violations"
+  },
+  "volume_snapshot_failed": {
+    "text": "Van volume '{$path}' kon geen snapshot gemaakt worden op de {$backend}-backend: {$reason}",
+    "scope": "violations"
+  },
+  "volume_destroy_failed": {
+    "text": "Volume '{$path}' kon niet verwijderd worden op de {$backend}-backend: {$reason}",
+    "scope": "violations"
+  },
+  "volume_no_snapshot_support": {
+    "text": "Host '{$name}' kan geen snapshot van een volume maken (backend: {$backend}), dus een deploy die naar gedeclareerde volumes zou schrijven wordt geweigerd. Koppel een btrfs- of zfs-bestandssysteem aan de volumemap, of verwijder de volumes.",
+    "scope": "violations"
+  },
+  "volume_host_unknown": {
+    "text": "Er is geen host met de naam '{$name}' geinventariseerd, dus zijn volumes kunnen niet voorbereid worden",
+    "scope": "violations"
+  },
+  "volume_name_invalid": {
+    "text": "Volumenaam '{$name}' is geen gewone mapnaam",
+    "scope": "violations"
+  },
+  "application_not_found": {
+    "text": "Er bestaat geen applicatie met id {$id}",
+    "scope": "violations"
+  },
+  "application_owns_no_container": {
+    "text": "Een applicatie draait zelf nooit een container; elke deploy maakt een release die dat wel doet",
+    "scope": "violations"
+  },
+  "application_never_built": {
+    "text": "Applicatie '{$name}' is nog nooit uitgerold, dus er is nog niets om te serveren",
+    "scope": "violations"
+  },
+  "application_image_build_failed": {
+    "text": "De applicatie-image kon niet gebouwd worden: {$reason}",
+    "scope": "violations"
+  },
+  "application_image_unresolvable": {
+    "text": "De applicatie-image kon niet naar een digest herleid worden: {$reason}",
+    "scope": "violations"
+  },
+  "source_no_repository": {
+    "text": "Deze bron noemt geen repository om uit te checken",
+    "scope": "violations"
+  },
+  "source_checkout_failed": {
+    "text": "De bron kon niet uitgecheckt worden: {$reason}",
+    "scope": "violations"
+  },
+  "preview_no_exposing_site": {
+    "text": "Geen enkele site stelt deze applicatie beschikbaar, dus een preview zou geen hostnaam hebben om op te antwoorden",
+    "scope": "violations"
+  },
+  "preview_application_required": {
+    "text": "Een preview heeft een bestaande applicatie nodig",
+    "scope": "violations"
+  },
+  "site_exposes_no_instance": {
+    "text": "Deze site stelt geen instance beschikbaar, dus er is geen release om naar terug te rollen",
     "scope": "violations"
   },
   "build_context": [

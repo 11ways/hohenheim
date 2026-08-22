@@ -2,21 +2,25 @@ package be.elevenways.hohenheim.server.api;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.Db;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.docker.SiteReleases;
+import be.elevenways.hohenheim.server.application.ApplicationDeploys;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceApi;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
-import be.elevenways.hohenheim.server.sitetype.SiteHandlers;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
-import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -152,16 +156,16 @@ public final class PaasApi {
                 return null;
             }
             Integer siteId = site.get(SiteModel.ID);
-            GitSiteRequestHandler git = SiteHandlers.git(siteId);
-            if (git == null) {
-                // The same shape the HTML lane has: only a git-provisioned site offers a
-                // "deploy now"; image-sourced sites converge on settings changes.
+            Integer applicationId = applicationIdOf(site);
+            if (applicationId == null) {
+                // Only a site that exposes an application has anything to deploy.
                 return ApiConduits.refusal(conduit, Violations.ofForm(
                     ApiConduits.violationText("deploy_not_available")));
             }
-            git.enqueueDeploy(ApiConduits.ORIGIN);
-            ActivityLog.record(Models.get(SiteModel.class), siteId, "deploy_triggered",
-                ApiConduits.ORIGIN);
+            // The build takes minutes; an API caller expects an answer in seconds.
+            Datasource datasource = Db.current();
+            JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
+                ApplicationDeploys.deployQuietly(applicationId, null, ApiConduits.ORIGIN)));
             return ApiConduits.json(Map.of("id", siteId, "status", "queued"));
         });
 
@@ -175,33 +179,23 @@ public final class PaasApi {
                 return null;
             }
             Integer siteId = site.get(SiteModel.ID);
-            // The same two rollback lanes the admin UI offers, same dispatch: docker
-            // sites ride the health-gated release engine over the retained digest-pinned
-            // release (SiteResource's row action); git process/static sites re-point the
-            // previous checkout slot (the Deployments tab). Neither is re-implemented.
-            // AIDEV-NOTE: the successor of the deleted `docker` site type is the `instance`
-            // upstream; SiteReleases is still SITE-keyed until phase-0 brief 7 re-keys it
-            // onto the application instance, so the condition moved and the call did not.
-            if (InstanceUpstreamKind.ID.toString().equals(site.get(SiteModel.UPSTREAM_KIND))) {
-                try {
-                    SiteReleases.rollback(siteId);
-                } catch (Violations refused) {
-                    return ApiConduits.refusal(conduit, refused);
-                }
-                // SiteReleases.rollback records the settled rollback itself (the panel
-                // row action gets the same row); the activity origin column already
-                // says "api". A second record here would double-count this lane only.
-                return ApiConduits.json(Map.of("id", siteId, "status", "rolled_back"));
-            }
-            GitSiteRequestHandler git = SiteHandlers.git(siteId);
-            if (git == null || !git.hasPreviousSlot()) {
+            // ONE rollback lane now: the health-gated release engine over the retained
+            // digest-pinned release, the same call the panel row action makes. The second
+            // lane this used to offer (re-point the previous checkout slot) died with the
+            // host-slot deploy lane it belonged to.
+            Integer applicationId = applicationIdOf(site);
+            if (applicationId == null) {
                 return ApiConduits.refusal(conduit, Violations.ofForm(
                     ApiConduits.violationText("rollback_not_available")));
             }
-            git.enqueueRollback();
-            ActivityLog.record(Models.get(SiteModel.class), siteId, "rollback_triggered",
-                ApiConduits.ORIGIN);
-            return ApiConduits.json(Map.of("id", siteId, "status", "queued"));
+            try {
+                ReleaseEngine.rollback(applicationId);
+            } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            }
+            // ReleaseEngine.rollback records the settled rollback itself; the activity
+            // origin column already says "api", so a second record would double-count.
+            return ApiConduits.json(Map.of("id", siteId, "status", "rolled_back"));
         });
     }
 
@@ -259,25 +253,29 @@ public final class PaasApi {
             ? proxy.getDispatcher().findHandlerBySiteId(siteId) : null;
         entry.put("health", handler != null
             ? BlastString.lower(handler.getHealth().name()) : "unknown");
-        GitSiteRequestHandler git = SiteHandlers.git(siteId);
-        if (git != null) {
-            entry.put("current_commit", git.getCurrentCommit());
-            entry.put("deploying", git.isDeploying());
+        Integer applicationId = applicationIdOf(site);
+        if (applicationId != null) {
+            entry.put("application_id", applicationId);
+            Row serving = ApplicationReleases.ownedServing(applicationId);
+            if (serving != null) {
+                entry.put("current_commit", stringOrEmpty(
+                    ApplicationReleases.storedSettings(serving).get("commit_sha")));
+            }
         }
         Row project = siteId == null ? null : Projects.projectOf(SiteModel.MODEL_ID, siteId);
         if (project != null) {
             entry.put("project", Map.of("id", project.get(ProjectModel.ID),
                 "name", project.get(ProjectModel.NAME)));
         }
-        if (detail && siteId != null) {
+        if (detail && applicationId != null) {
             Row latest = Models.get(ReleaseOperationModel.class)
-                .findForOwner(SiteModel.MODEL_ID.toString(), siteId, 1)
+                .findForOwner(InstanceModel.MODEL_ID.toString(), applicationId, 1)
                 .stream().findFirst().orElse(null);
             if (latest != null) {
                 entry.put("release", releaseProjection(latest, false));
             }
-            entry.put("rollback_available", SiteReleases.newestRetired(siteId) != null
-                || (git != null && git.hasPreviousSlot()));
+            entry.put("rollback_available",
+                ReleaseEngine.newestRetired(applicationId) != null);
         }
         return entry;
     }
@@ -290,10 +288,17 @@ public final class PaasApi {
             if (site == null) {
                 return null;
             }
+            // AIDEV-NOTE: deployments and releases are the SAME record now (the deleted
+            // `deployments` table was the host-slot lane's private history). The endpoint
+            // stays for its consumers and answers from release_operations.
             int siteId = site.get(SiteModel.ID);
+            Integer applicationId = applicationIdOf(site);
             List<Map<String, Object>> deployments = new ArrayList<>();
-            for (Row row : Models.get(DeploymentModel.class).findBySiteId(siteId, 50)) {
-                deployments.add(deploymentProjection(row));
+            if (applicationId != null) {
+                for (Row row : Models.get(ReleaseOperationModel.class)
+                        .findForOwner(InstanceModel.MODEL_ID.toString(), applicationId, 50)) {
+                    deployments.add(releaseProjection(row, false));
+                }
             }
             return ApiConduits.json(Map.of("id", siteId, "deployments", deployments));
         });
@@ -303,16 +308,20 @@ public final class PaasApi {
             if (site == null) {
                 return null;
             }
-            Row deployment = childRow(conduit, HohenheimEndpoints.DEPLOYMENT_ID,
-                id -> Models.get(DeploymentModel.class).find()
-                    .where(DeploymentModel.SITE_ID.eq(site.get(SiteModel.ID)))
-                    .where(DeploymentModel.ID.eq(id))
-                    .first());
+            Integer applicationId = applicationIdOf(site);
+            Row deployment = applicationId == null ? null
+                : childRow(conduit, HohenheimEndpoints.DEPLOYMENT_ID,
+                    id -> Models.get(ReleaseOperationModel.class).find()
+                        .where(ReleaseOperationModel.FOR_MODEL.eq(
+                            InstanceModel.MODEL_ID.toString()))
+                        .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
+                        .where(ReleaseOperationModel.ID.eq(id))
+                        .first());
             if (deployment == null) {
                 return null;
             }
-            return ApiConduits.json(Map.of("id", deployment.get(DeploymentModel.ID),
-                "log", stringOrEmpty(deployment.get(DeploymentModel.LOG))));
+            return ApiConduits.json(Map.of("id", deployment.get(ReleaseOperationModel.ID),
+                "log", stringOrEmpty(deployment.get(ReleaseOperationModel.STEP_LOG))));
         });
 
         HohenheimEndpoints.API_V1_SITE_RELEASES.setHandler(conduit -> {
@@ -321,10 +330,13 @@ public final class PaasApi {
                 return null;
             }
             int siteId = site.get(SiteModel.ID);
+            Integer applicationId = applicationIdOf(site);
             List<Map<String, Object>> releases = new ArrayList<>();
-            for (Row row : Models.get(ReleaseOperationModel.class)
-                    .findForOwner(SiteModel.MODEL_ID.toString(), siteId, 50)) {
-                releases.add(releaseProjection(row, false));
+            if (applicationId != null) {
+                for (Row row : Models.get(ReleaseOperationModel.class)
+                        .findForOwner(InstanceModel.MODEL_ID.toString(), applicationId, 50)) {
+                    releases.add(releaseProjection(row, false));
+                }
             }
             return ApiConduits.json(Map.of("id", siteId, "releases", releases));
         });
@@ -334,10 +346,12 @@ public final class PaasApi {
             if (site == null) {
                 return null;
             }
-            Row release = childRow(conduit, HohenheimEndpoints.RELEASE_ID,
+            Integer applicationId = applicationIdOf(site);
+            Row release = applicationId == null ? null
+                : childRow(conduit, HohenheimEndpoints.RELEASE_ID,
                 id -> Models.get(ReleaseOperationModel.class).find()
-                    .where(ReleaseOperationModel.FOR_MODEL.eq(SiteModel.MODEL_ID.toString()))
-                    .where(ReleaseOperationModel.FOR_ID.eq(site.get(SiteModel.ID)))
+                    .where(ReleaseOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+                    .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
                     .where(ReleaseOperationModel.ID.eq(id))
                     .first());
             if (release == null) {
@@ -406,17 +420,25 @@ public final class PaasApi {
         return row;
     }
 
-    private static @NonNull Map<String, Object> deploymentProjection(@NonNull Row row) {
-        Map<String, Object> entry = new LinkedHashMap<>();
-        entry.put("id", row.get(DeploymentModel.ID));
-        entry.put("status", String.valueOf((Object) row.get(DeploymentModel.STATUS)));
-        entry.put("reason", stringOrEmpty(row.get(DeploymentModel.REASON)));
-        entry.put("commit_sha", stringOrEmpty(row.get(DeploymentModel.COMMIT_SHA)));
-        entry.put("error", stringOrEmpty(row.get(DeploymentModel.ERROR)));
-        entry.put("started_at", String.valueOf((Object) row.get(DeploymentModel.STARTED_AT)));
-        entry.put("finished_at", String.valueOf((Object) row.get(DeploymentModel.FINISHED_AT)));
-        entry.put("duration_ms", row.get(DeploymentModel.DURATION_MS));
-        return entry;
+    /**
+     * The application a site exposes, or null when it exposes none.
+     *
+     * AIDEV-NOTE: the API's site endpoints stayed site-addressed on purpose -- an API
+     * consumer names the thing it knows, its site -- but every DEPLOY verb now acts on the
+     * application behind it. A site with no application refuses by name instead of quietly
+     * doing nothing, which is what the dead git-handler lookup did.
+     */
+    private static @Nullable Integer applicationIdOf(@NonNull Row site) {
+        Integer instanceId = site.get(SiteModel.INSTANCE_ID);
+        if (instanceId == null) {
+            return null;
+        }
+        Row instance = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .first();
+        return instance != null && InstanceKinds.isReleaseManaged(
+            instance.get(InstanceModel.KIND)) ? instanceId : null;
     }
 
     private static @NonNull Map<String, Object> releaseProjection(@NonNull Row row,

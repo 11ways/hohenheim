@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -363,9 +362,9 @@ public final class DockerReconciler {
             // Site-database link networks are owned by their ATTACHMENT row: the row's
             // deletion is what orphans the network, so a stale join a sweep missed is
             // surfaced instead of sitting OWNED forever.
-            if (SiteDatabaseModel.MODEL_ID.equals(model)) {
-                return Models.get(SiteDatabaseModel.class).find()
-                    .where(SiteDatabaseModel.ID.eq(key)).first() != null;
+            if (InstanceDatabaseModel.MODEL_ID.equals(model)) {
+                return Models.get(InstanceDatabaseModel.class).find()
+                    .where(InstanceDatabaseModel.ID.eq(key)).first() != null;
             }
             // AIDEV-NOTE: the INSTANCE-database link answers exactly as the site link
             // above does, and the answer is deliberate: liveness is the ATTACHMENT ROW's

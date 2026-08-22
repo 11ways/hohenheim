@@ -26,7 +26,7 @@ import java.util.List;
  * rollback deploys; copying it here would duplicate that authority AND leak the secret
  * environment map onto a derived surface (the phase 0.6 discipline).
  *
- * AIDEV-NOTE: {@link #SITE_FINGERPRINT} vs {@link #SPEC_FINGERPRINT} is what makes a
+ * AIDEV-NOTE: {@link #OWNER_FINGERPRINT} vs {@link #SPEC_FINGERPRINT} is what makes a
  * rollback SURVIVE convergence: a succeeded rollback whose site_fingerprint still equals
  * the current source identity PINS the site to the rolled-back release, because the
  * source did not change since the operator rejected it; any source change dissolves the
@@ -103,8 +103,8 @@ public class ReleaseOperationModel extends Model {
         IntegerField.builder().name("retired_instance_id").build());
 
     /** Source identity of the SITE's settings at operation time (the pin key). */
-    public static final StringField SITE_FINGERPRINT = SCHEMA.addField(
-        StringField.builder().name("site_fingerprint").filterable(false).build());
+    public static final StringField OWNER_FINGERPRINT = SCHEMA.addField(
+        StringField.builder().name("owner_fingerprint").filterable(false).build());
 
     /** Source identity of the spec the candidate DEPLOYED (differs on rollback). */
     public static final StringField SPEC_FINGERPRINT = SCHEMA.addField(

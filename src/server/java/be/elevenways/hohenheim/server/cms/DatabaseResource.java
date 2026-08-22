@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -214,16 +213,7 @@ public class DatabaseResource extends RowResource {
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         String name = existing.get(DatabaseModel.NAME);
         Integer id = existing.get(DatabaseModel.ID);
-        SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
-        SiteModel sites = Models.get(SiteModel.class);
-        List<String> attachedTo = new ArrayList<>();
-        for (Row link : links.findByDatabaseId(id)) {
-            Row site = sites.find().where(SiteModel.ID.eq(link.get(SiteDatabaseModel.SITE_ID))).first();
-            if (site != null && site.get(SiteModel.DELETED_AT) == null) {
-                attachedTo.add(String.valueOf(site.get(SiteModel.NAME)));
-            }
-        }
-        attachedTo.addAll(InstanceDatabaseLinks.liveInstanceNames(id));
+        List<String> attachedTo = new ArrayList<>(InstanceDatabaseLinks.liveInstanceNames(id));
         if (!attachedTo.isEmpty()) {
             throw Violations.ofForm(CmsSupport.violationText("database_in_use")
                 .withArg("name", name)
@@ -239,7 +229,6 @@ public class DatabaseResource extends RowResource {
                 .withArg("reason", e.getMessage()));
         }
         // Links to soft-deleted owners are debris once the database is gone.
-        links.find().where(SiteDatabaseModel.DATABASE_ID.eq(id)).delete();
         InstanceDatabaseLinks.deleteForDatabase(id);
     }
 
@@ -291,8 +280,6 @@ public class DatabaseResource extends RowResource {
                 Integer id = row.get(DatabaseModel.ID);
                 ActivityLog.withAction(ActivityLog.ACTION_DELETE, "force-destroy", () -> {
                     this.databaseService.forceDestroyRecord(name);
-                    Models.get(SiteDatabaseModel.class).find()
-                        .where(SiteDatabaseModel.DATABASE_ID.eq(id)).delete();
                     InstanceDatabaseLinks.deleteForDatabase(id);
                 });
                 return CmsActionResult.refreshWithToast(

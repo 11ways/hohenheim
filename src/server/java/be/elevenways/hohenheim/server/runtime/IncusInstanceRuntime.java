@@ -254,6 +254,7 @@ public final class IncusInstanceRuntime
         if (spec.rootDiskGb() != null) {
             devices.put(ROOT_DEVICE, rootDevice(spec.rootDiskGb()));
         }
+        devices.putAll(bindDevices(spec));
         definition.put("devices", devices);
         definition.put("profiles", List.of("default"));
         this.incus.createInstance(definition);
@@ -1055,6 +1056,40 @@ public final class IncusInstanceRuntime
     }
 
     // -- DeviceAttachSupport --------------------------------------------------
+
+    /**
+     * The Hohenheim-owned host directories of a spec as {@code disk} devices.
+     *
+     * AIDEV-NOTE: {@code shift=true} is what makes the files usable from inside an
+     * unprivileged container -- the daemon idmaps the host directory onto the container's
+     * uid range instead of the workload seeing everything as {@code nobody}. Without it a
+     * workspace's home directory would mount and then refuse every write, which reads as a
+     * broken image rather than as a missing mount option.
+     *
+     * AIDEV-NOTE: these ARE {@code spec.volumes()}'s counterpart on this driver, and until
+     * now a spec carrying volumes deployed on Incus lost them without a word -- the one
+     * silent drop in a driver whose every other gap refuses by name. Named volumes still
+     * have no Incus meaning; owned host directories do.
+     */
+    private static @NonNull Map<String, Object> bindDevices(@NonNull InstanceSpec spec) {
+
+        Map<String, Object> devices = new LinkedHashMap<>();
+        int index = 0;
+
+        for (Map.Entry<String, String> bind : spec.binds().entrySet()) {
+            if (bind.getValue() == null || bind.getValue().isBlank()) {
+                continue;
+            }
+            Map<String, Object> device = new LinkedHashMap<>();
+            device.put("type", "disk");
+            device.put("source", bind.getKey());
+            device.put("path", bind.getValue());
+            device.put("shift", "true");
+            devices.put("hohvol" + (++index), device);
+        }
+
+        return devices;
+    }
 
     /** The daemon-side custom-volume name of one device (handle-scoped, collision-free). */
     public static @NonNull String volumeNameOf(@NonNull InstanceSpec spec,

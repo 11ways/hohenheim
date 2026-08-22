@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
-import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.protoblast.common.Blast;
@@ -146,12 +145,11 @@ public class DatabaseService extends DatasourceScoped {
         Row row = require(name);
         Integer recordId = row.get(DatabaseModel.ID);
         int port = scoped(() -> DatabaseInstances.deploy(row, limits));
-        // Both consumer tiers rejoin: a site's release container and any instance the
-        // record is attached to. Either rejoin can move the published port, so the
-        // re-observation below runs if EITHER touched something.
+        // Every attached consumer rejoins -- an application's serving release included,
+        // which InstanceDatabaseNetworks resolves off the owning record. A rejoin can move
+        // the published port, so the re-observation below runs when one touched something.
         boolean rejoined = recordId != null
-            && (query(() -> SiteDatabaseNetworks.reattachForDatabase(recordId))
-                | query(() -> InstanceDatabaseNetworks.reattachForDatabase(recordId)));
+            && query(() -> InstanceDatabaseNetworks.reattachForDatabase(recordId));
         if (rejoined) {
             ManagedDatabase.LiveStatus fresh = query(() -> DatabaseInstances.liveStatus(recordId));
             if (fresh.running() && fresh.port() != null) {

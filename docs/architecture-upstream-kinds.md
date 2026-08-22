@@ -122,10 +122,14 @@ unparseable), `preserve_path` (default false), `delay` (ms). A target that is no
 
 **Instance**: `port` (which declared port of the instance to serve; blank = its single
 publication), `scheme` (http/https), `websocket_upgrade` (default true), `request_timeout`
-(s). It absorbs the serving half of the deleted `docker` site type. Its DISPATCH is not
-wired yet: `DockerSiteRequestHandler` is still keyed to the SITE, and re-keying it onto the
-application instance is a later phase-0 step, so `createHandler` answers an honest 503
-rather than half-resolving a port.
+(s). It absorbs the serving half of the deleted `docker` site type. `InstanceUpstreamHandler`
+RESOLVES the serving release's published loopback port off the port ledger and forwards
+there; it converges nothing, so a routing reload can no longer block on a build. The
+resolution is generation-keyed (`ApplicationUpstreams`): a release flip bumps the
+application's generation and the handler re-resolves on its next request, which is what
+makes a swap visible without rebuilding the route table. A site whose `instance_id` is null
+is a `FaultedSiteHandler`; an application with nothing serving answers 503 and reports DOWN.
+`request_timeout` rides the generic `RouteEntry` reading of the site settings.
 
 **Dev namespace**: `registration_token` (secret). The matched wildcard's first label picks a
 live `DevLease`; a name with no lease renders the dev-offline page. `SiteResource` mints a

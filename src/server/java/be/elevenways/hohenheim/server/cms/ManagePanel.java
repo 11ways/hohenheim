@@ -513,12 +513,13 @@ public final class ManagePanel extends Panel {
     }
 
     /**
-     * @return null for admins, else the previews of the principal's managed sites
+     * @return null for admins, else the previews of the principal's managed APPLICATIONS
      */
     static @Nullable Criteria previewScope(@NonNull AccessContext ctx) {
-        return HohenheimAccess.managedSiteScope(ctx,
+        return HohenheimAccess.grantScope(ctx,
             Models.get(PreviewDeploymentModel.class),
-            PreviewDeploymentModel.SITE_ID::in);
+            InstanceModel.MODEL_ID, HohenheimAccess.MANAGE,
+            PreviewDeploymentModel.APPLICATION_ID::in);
     }
 
     /** Matches nothing; NEVER ID.in(empty), which some backends reject or widen. */

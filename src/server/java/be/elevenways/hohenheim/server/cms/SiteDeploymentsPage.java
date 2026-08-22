@@ -1,15 +1,15 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.model.DeploymentModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.source.GitSourceSchema;
-import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
-import be.elevenways.hohenheim.server.source.SiteSources;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -46,7 +46,7 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
 
     @Override
     public boolean visibleFor(@NonNull Row site) {
-        return SiteSources.isGitSourced(site);
+        return site.get(SiteModel.INSTANCE_ID) != null;
     }
 
     @Override
@@ -60,25 +60,46 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         vars.put("siteId", siteId);
         vars.put("siteName", site.get(SiteModel.NAME));
 
-        GitSiteRequestHandler git = findGitHandler(siteId);
-        vars.put("isDeploying", git != null && git.isDeploying());
-        vars.put("canRollback", git != null && git.hasPreviousSlot() && !git.isDeploying());
-        vars.put("currentCommit", git != null && git.getCurrentCommit() != null
-            ? shortSha(git.getCurrentCommit()) : "");
+        Integer applicationId = site.get(SiteModel.INSTANCE_ID);
+        Row application = applicationId == null ? null
+            : Models.get(InstanceModel.class).findById(applicationId);
+        vars.put("applicationId", applicationId);
+
+        // AIDEV-NOTE: one history, not two. The release operation IS the deploy record
+        // since phase-0 brief 7 deleted the `deployments` table of the host-slot lane, so
+        // this page reads release_operations of the APPLICATION the site exposes.
+        List<Row> operations = applicationId == null ? List.of()
+            : Models.get(ReleaseOperationModel.class)
+                .findForOwner(InstanceModel.MODEL_ID.toString(), applicationId, 50);
+
+        boolean inFlight = operations.stream().anyMatch(row ->
+            ReleaseOperationModel.STATUS_PENDING.equals(row.get(ReleaseOperationModel.STATUS))
+                || ReleaseOperationModel.STATUS_DEPLOYING.equals(
+                    row.get(ReleaseOperationModel.STATUS))
+                || ReleaseOperationModel.STATUS_PROBING.equals(
+                    row.get(ReleaseOperationModel.STATUS)));
+        vars.put("isDeploying", inFlight);
+        vars.put("canRollback", applicationId != null && !inFlight
+            && ReleaseEngine.newestRetired(applicationId) != null);
+
+        Row serving = applicationId == null ? null
+            : ApplicationReleases.ownedServing(applicationId);
+        vars.put("currentCommit", serving == null ? ""
+            : shortSha(ApplicationReleases.storedSettings(serving).get("commit_sha")));
 
         List<Map<String, Object>> deployments = new ArrayList<>();
-        for (Row row : Models.get(DeploymentModel.class).findBySiteId(siteId, 50)) {
+        for (Row row : operations) {
             Map<String, Object> entry = new HashMap<>();
-            entry.put("id", row.get(DeploymentModel.ID));
-            entry.put("status", orEmpty(row.get(DeploymentModel.STATUS)));
-            entry.put("statusVariant", statusVariant(row.get(DeploymentModel.STATUS)));
-            entry.put("reason", orEmpty(row.get(DeploymentModel.REASON)));
-            entry.put("commit", shortSha(row.get(DeploymentModel.COMMIT_SHA)));
-            entry.put("duration", durationLabel(row.get(DeploymentModel.DURATION_MS)));
-            entry.put("error", orEmpty(row.get(DeploymentModel.ERROR)));
-            Instant startedAt = row.get(DeploymentModel.STARTED_AT);
+            entry.put("id", row.get(ReleaseOperationModel.ID));
+            entry.put("status", orEmpty(row.get(ReleaseOperationModel.STATUS)));
+            entry.put("statusVariant", statusVariant(row.get(ReleaseOperationModel.STATUS)));
+            entry.put("reason", orEmpty(row.get(ReleaseOperationModel.KIND)));
+            entry.put("commit", shortSha(row.get(ReleaseOperationModel.IMAGE_ID)));
+            entry.put("duration", durationLabel(row.get(ReleaseOperationModel.DURATION_MS)));
+            entry.put("error", orEmpty(row.get(ReleaseOperationModel.FAILURE_REASON)));
+            Instant startedAt = row.get(ReleaseOperationModel.STARTED_AT);
             entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
-            String log = row.get(DeploymentModel.LOG);
+            String log = row.get(ReleaseOperationModel.STEP_LOG);
             entry.put("log", log != null ? log : "");
             entry.put("hasLog", log != null && !log.isBlank());
             deployments.add(entry);
@@ -96,8 +117,6 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         // ReturnTarget is server-only, so the common template cannot reach it.
         vars.put("returnParam", ReturnTarget.PARAM);
         vars.put("deployTarget", HohenheimEndpoints.SITES_DEPLOY
-            .with(HohenheimEndpoints.SITE_ID, siteId));
-        vars.put("cancelDeployTarget", HohenheimEndpoints.SITES_DEPLOY_CANCEL
             .with(HohenheimEndpoints.SITE_ID, siteId));
         vars.put("rollbackTarget", HohenheimEndpoints.SITES_ROLLBACK
             .with(HohenheimEndpoints.SITE_ID, siteId));
@@ -117,8 +136,10 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
      * domain is the copy-pastable choice.
      */
     private static void putAdminOnlyVars(Map<String, Object> vars, Row site) {
-        Map<String, Object> stored = SiteSources.settingsOf(site);
-        Map<String, Object> settings = stored == null ? Map.of() : stored;
+        Row application = site.get(SiteModel.INSTANCE_ID) == null ? null
+            : Models.get(InstanceModel.class).findById(site.get(SiteModel.INSTANCE_ID));
+        Map<String, Object> settings = application == null ? Map.of()
+            : ApplicationReleases.storedSettings(application);
         vars.put("webhookSecret", orEmpty(settings.get(GitSourceSchema.WEBHOOK_SECRET)));
         vars.put("webhookAutoDeploy",
             Boolean.TRUE.equals(settings.get(GitSourceSchema.AUTO_DEPLOY)));
@@ -127,7 +148,7 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         // conduit chain, so it is deliberately outside the Endpoint framework and has no
         // RouteTarget. Referencing the handler's own PREFIX constant is what keeps this
         // display URL from drifting away from the route that actually answers.
-        String path = GitWebhookHandler.PREFIX + orEmpty(site.get(SiteModel.SLUG));
+        String path = GitWebhookHandler.PREFIX + orEmpty(site.get(SiteModel.INSTANCE_ID));
         String url = path;
         Row domain = Models.get(SiteDomainModel.class).find()
             .where(SiteDomainModel.SITE_ID.eq(site.get(SiteModel.ID)))
@@ -140,27 +161,16 @@ public final class SiteDeploymentsPage implements RecordScopedPage<Row> {
         vars.put("webhookUrl", url);
     }
 
-    private static @Nullable GitSiteRequestHandler findGitHandler(Integer siteId) {
-        var proxy = ServerMain.getProxyServer();
-        if (proxy != null && siteId != null
-            && proxy.getDispatcher().findHandlerBySiteId(siteId) instanceof GitSiteRequestHandler git) {
-            return git;
-        }
-        return null;
-    }
-
     /**
-     * The badge variant DECLARED on the deployment status enum value itself.
+     * The badge variant DECLARED on the release-operation status enum value itself.
      *
-     * AIDEV-NOTE: this was a switch re-spelling the four statuses with colours the model
-     * does not declare (success rendered "default", failed lived in the DEFAULT arm), so a
-     * fifth status would have rendered "destructive" here while carrying its own colour
-     * everywhere else. Same shape as StackDeploymentsPage; unknown/blank degrades to
-     * secondary, the honest answer for a value the vocabulary does not contain.
+     * AIDEV-NOTE: read off the model rather than switched on here, so a new status carries
+     * its colour everywhere at once. Unknown/blank degrades to secondary, the honest answer
+     * for a value the vocabulary does not contain.
      */
     private static String statusVariant(@Nullable Object status) {
         EnumField.EnumValue value = status == null
-            ? null : DeploymentModel.STATUS.getValues().get(String.valueOf(status));
+            ? null : ReleaseOperationModel.STATUS.getValues().get(String.valueOf(status));
         String color = value != null ? value.getColor() : null;
         return color != null ? color : "secondary";
     }
