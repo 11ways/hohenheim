@@ -32,6 +32,11 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedules"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_schedule"); }
+    /**
+     * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
+     * menu so the visible strip stays the handful of tabs an operator opens daily.
+     */
+    @Override public boolean secondaryTab() { return true; }
     @Override public @NonNull String slug() { return "schedules"; }
     @Override public @NonNull Icon icon() { return Icon.of("clock"); }
 
