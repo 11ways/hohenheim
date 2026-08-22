@@ -61,6 +61,10 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
+        // AIDEV-NOTE: deliberately NO kind gate here (unlike the Volumes tab): the file
+        // lane browses the RUNTIME's volumes -- Docker named volumes included -- not only
+        // declared instance_volumes rows, so a docker_container legitimately has files to
+        // browse. The page itself renders the named no-lane/no-volumes states.
         return HohenheimAccess.hasInstanceCapability(
             accessContext, record.get(InstanceModel.ID), HohenheimAccess.FILES_READ);
     }

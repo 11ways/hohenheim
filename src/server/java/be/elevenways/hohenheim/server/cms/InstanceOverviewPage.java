@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.instance.InstanceEndpointView;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -167,6 +168,31 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
         bands.add(band(new WidgetTree(List.of(
             new WidgetInstance(InstanceEndpointsWidget.ID, Map.of())
                 .withData(endpointsOf(instanceId))))));
+
+        // Exposed by: the sites whose hostname serves THIS instance (the sites.instance_id
+        // reverse lookup the column exists for). The tenant sees the hostnames -- they are
+        // the addresses their workload answers on -- but only the operator gets the links,
+        // the host-fact precedent above.
+        List<WidgetInstance> exposedBy = new ArrayList<>();
+        for (Row site : Models.get(SiteModel.class).find()
+                .where(SiteModel.INSTANCE_ID.eq(instanceId))
+                .where(SiteModel.DELETED_AT.isNull())
+                .all()) {
+            String siteName = site.get(SiteModel.NAME);
+            Microcopy label = Microcopy.of("exposed_by").withFilter("scope", "instance_overview");
+            if (delegated) {
+                exposedBy.add(new WidgetInstance(FactWidget.ID, Map.of())
+                    .withData(WidgetFact.of(label.resolve(locales, resolver), siteName)));
+            } else {
+                exposedBy.add(new WidgetInstance(FactWidget.ID, Map.of())
+                    .withData(WidgetFact.link(label.resolve(locales, resolver), siteName,
+                        CmsRoutes.detail(panelSlug, "sites",
+                            site.get(SiteModel.ID)).toUrl())));
+            }
+        }
+        if (!exposedBy.isEmpty()) {
+            bands.add(band(new WidgetTree(exposedBy)));
+        }
 
         // AIDEV-NOTE: the per-record RECENT ACTIVITY band. It was blocked until zenit-cms's
         // `zenit.activity` source started PROJECTING record_id: a source's rule vocabulary is

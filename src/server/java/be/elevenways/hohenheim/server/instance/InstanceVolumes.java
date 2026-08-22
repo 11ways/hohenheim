@@ -274,10 +274,38 @@ public final class InstanceVolumes {
      * An application delete is a SOFT delete (deleted_at), so its data must survive it --
      * the same rule the site tier already applied to its volumes, and for the same reason:
      * a volume is unrecoverable, so removing one is a human act with the data still there.
-     * A volume of a soft-deleted owner surfaces through the reconciler as an orphan. When a
-     * typed-confirm volume delete ships (phase-0 brief 9), it brings the destroy WITH its
-     * consumer rather than finding one waiting here.
+     * A volume of a soft-deleted owner surfaces through the reconciler as an orphan.
+     * {@link #destroyOne} is that human act's mechanism (the Volumes tab's typed-confirm
+     * delete, phase-0 brief 9).
      */
+
+    /**
+     * Destroy ONE declared volume: directory removed at the daemon, then the row --
+     * daemon first, so a failed removal keeps the declaration as evidence.
+     *
+     * @return the removed host path
+     * @throws Violations naming the backend when the host cannot remove it
+     */
+    public static @NonNull String destroyOne(int ownerInstanceId, @NonNull String name,
+                                             @NonNull String serverName) {
+        InstanceVolumeModel model = Models.get(InstanceVolumeModel.class);
+        Row volume = model.find()
+            .where(InstanceVolumeModel.INSTANCE_ID.eq(ownerInstanceId))
+            .where(InstanceVolumeModel.NAME.eq(name))
+            .first();
+        if (volume == null) {
+            throw Violations.ofForm(Microcopy.of("volume_unknown")
+                .withFilter("scope", "violations").withArg("name", name));
+        }
+        Row server = requireServer(serverName);
+        String hostPath = hostPathFor(ownerInstanceId, name);
+        operationsFor(server).destroy(hostPath);
+        model.find()
+            .where(InstanceVolumeModel.INSTANCE_ID.eq(ownerInstanceId))
+            .where(InstanceVolumeModel.NAME.eq(name))
+            .delete();
+        return hostPath;
+    }
 
     // -- internals -------------------------------------------------------------
 

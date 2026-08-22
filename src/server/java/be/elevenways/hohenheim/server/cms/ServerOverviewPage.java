@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.host.KernelIsolationView;
 import be.elevenways.hohenheim.host.PostureAcknowledgementView;
 import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.host.TrustLaneView;
+import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.host.WorkloadView;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
@@ -128,6 +129,25 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
         if (!lastError.isBlank()) {
             state.add(alert(AlertVariant.DESTRUCTIVE,
                 NoticeData.of(text("last_error", locales, resolver), lastError)));
+        }
+
+        // The volume-backend FINDING and its consequence, beside admission and posture:
+        // what the preflight probe measured on the data root, and -- when it measured
+        // nothing usable -- what that refuses and how to fix it, in the operator's words.
+        VolumeBackend volumeBackend = ServerModel.volumeBackendOf(server);
+        state.add(new WidgetInstance(FactListWidget.ID, Map.of())
+            .withData(List.of(WidgetFact.badge(
+                text("volume_backend", locales, resolver),
+                WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
+                    volumeBackend.color(), volumeBackend.icon())))));
+        if (!volumeBackend.supportsQuota()) {
+            state.add(alert(AlertVariant.WARNING, NoticeData.of(
+                text("volume_backend_none_title", locales, resolver),
+                text("volume_backend_none_body", locales, resolver))));
+        } else if (!volumeBackend.supportsSnapshot()) {
+            state.add(alert(AlertVariant.WARNING, NoticeData.of(
+                text("volume_backend_no_snapshot_title", locales, resolver),
+                text("volume_backend_no_snapshot_body", locales, resolver))));
         }
 
         PostureAcknowledgementView acknowledgement = acknowledgementViewOf(server);
