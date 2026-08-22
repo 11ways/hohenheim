@@ -70,6 +70,13 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
+    /** The redirect target. */
+    @Override
+    public String upstreamSummary(Map<String, Object> settings) {
+        Object target = settings.get(TARGET_URL.getName());
+        return target != null && !String.valueOf(target).isBlank() ? String.valueOf(target) : null;
+    }
+
     @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         String targetUrl = (String) settings.get("target_url");

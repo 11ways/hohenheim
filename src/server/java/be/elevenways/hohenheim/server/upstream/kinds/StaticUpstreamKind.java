@@ -77,6 +77,13 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
+    /** The served directory. */
+    @Override
+    public String upstreamSummary(Map<String, Object> settings) {
+        Object root = settings.get(ROOT_PATH.getName());
+        return root != null && !String.valueOf(root).isBlank() ? String.valueOf(root) : null;
+    }
+
     @Override
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         String rootPathStr = (String) settings.get("root_path");

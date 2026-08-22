@@ -26,11 +26,11 @@ import java.util.Map;
  * container's published loopback port.
  *
  * AIDEV-NOTE: this kind absorbs the serving half of the deleted {@code docker} site type.
- * Its dispatch is NOT wired yet -- {@code DockerSiteRequestHandler} is still keyed to the
- * SITE and its re-keying onto the application instance is brief 7 of the phase-0 design.
- * Until then {@link #createHandler} answers the honest 503 rather than half-resolving a
- * port: a handler that quietly forwarded nowhere is exactly the silent-success shape this
- * codebase refuses.
+ * Its dispatch is WIRED since phase-0 brief 7: {@link #createHandler} builds an
+ * {@link InstanceUpstreamHandler}, which re-resolves through {@code ApplicationUpstreams}
+ * whenever the record's generation moves -- a release-managed record resolves its serving
+ * release, any other exposable kind resolves its own published port. A record with
+ * nothing serving still answers the honest 503.
  */
 public final class InstanceUpstreamKind implements UpstreamKindHandler {
 

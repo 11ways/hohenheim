@@ -61,6 +61,17 @@ public final class TlsPassthroughUpstreamKind implements TlsPassthroughProvider 
     @Override public String getColor() { return "cyan"; }
     @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 
+    /** The forwarded TLS endpoint. */
+    @Override
+    public String upstreamSummary(Map<String, Object> settings) {
+        Object host = settings.get(FORWARD_HOST.getName());
+        Object port = settings.get(FORWARD_PORT.getName());
+        if (host == null || String.valueOf(host).isBlank()) {
+            return null;
+        }
+        return port != null ? host + ":" + port : String.valueOf(host);
+    }
+
     @Override
     public TlsPassthroughTarget createTlsPassthroughTarget(Row site, Map<String, Object> settings) {
         String host = settings.get("forward_host") instanceof String value ? value : null;

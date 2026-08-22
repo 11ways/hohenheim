@@ -168,6 +168,9 @@ public final class DockerContainerKind implements InstanceKindHandler {
     @Override
     public Schema getSchema() { return SETTINGS_SCHEMA; }
 
+    /** A published container port is exposable through a site's {@code instance} upstream. */
+    @Override public boolean supportsSiteUpstream() { return true; }
+
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
         return new DockerInstanceRuntime(new ServerService().clientFor(serverName),

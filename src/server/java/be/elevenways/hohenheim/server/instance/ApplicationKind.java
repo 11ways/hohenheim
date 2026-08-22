@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.source.GitSourceSchema;
@@ -33,9 +32,10 @@ import java.util.Map;
  * would make "edit the app" and "the release that is running" the same row, and there is
  * no shape in which that is true during a gated swap.
  *
- * AIDEV-NOTE: model-level only in phase 0 brief 5. {@link #runtimeFor}/{@link #specFor}
- * refuse by name; brief 7 re-keys {@code SiteReleases}/{@code SiteInstances} from the site
- * to this record and wires them.
+ * AIDEV-NOTE: {@link #runtimeFor}/{@link #specFor} refuse by name PERMANENTLY -- the
+ * release engine ({@code ApplicationReleases}/{@code ReleaseEngine}, re-keyed here in
+ * phase 0 brief 7) builds specs for the generated release instances; this record never
+ * has a driver of its own.
  */
 public final class ApplicationKind implements InstanceKindHandler {
 
@@ -154,11 +154,14 @@ public final class ApplicationKind implements InstanceKindHandler {
         return 1024;
     }
 
-    @Override
-    public void requirePlaceableOn(@NonNull String serverName,
-                                   @NonNull Map<String, Object> settings) {
-        VolumeBackends.requireQuotaCapableHost(serverName, getLabel());
-    }
+    /** Its declared volumes mount into every release; placement demands quota via the default. */
+    @Override public boolean supportsVolumes() { return true; }
+
+    /** May name a runtime image as its build base; optional, unlike the workspace. */
+    @Override public boolean usesRuntimeImage() { return true; }
+
+    /** The serving release's published port is what a site's {@code instance} upstream serves. */
+    @Override public boolean supportsSiteUpstream() { return true; }
 
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {

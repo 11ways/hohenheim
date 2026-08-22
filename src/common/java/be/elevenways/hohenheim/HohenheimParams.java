@@ -34,6 +34,11 @@ public final class HohenheimParams {
         ParameterDefinition.builder(Integer.class).name("template_id")
             .stringResolver(Integer::parseInt).build();
 
+    /** Prefill for the site create form's upstream kind (the Expose action). */
+    public static final ParameterDefinition<String> UPSTREAM_KIND_PREFILL =
+        ParameterDefinition.builder(String.class).name("upstream_kind")
+            .stringResolver(value -> value).build();
+
     /** Prefill for a create form whose record belongs to a DNS zone. */
     public static final ParameterDefinition<Integer> ZONE_ID_PREFILL =
         ParameterDefinition.builder(Integer.class).name("zone_id")
