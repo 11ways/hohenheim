@@ -247,8 +247,14 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
         badges.add(WidgetBadge.of(InstanceModel.STATUS, instance.get(InstanceModel.STATUS),
             locales, resolver));
         addBadge(badges, InstanceModel.KIND, instance.get(InstanceModel.KIND), locales, resolver);
-        addBadge(badges, InstanceModel.INSTALL_STATE, instance.get(InstanceModel.INSTALL_STATE),
-            locales, resolver);
+
+        // The install badge is a state band entry only while there IS an install lifecycle
+        // (InstanceModel.isNotableInstallState); "no install step" on every record is the
+        // clutter this band exists to avoid.
+        Object installState = instance.get(InstanceModel.INSTALL_STATE);
+        if (InstanceModel.isNotableInstallState(installState)) {
+            addBadge(badges, InstanceModel.INSTALL_STATE, installState, locales, resolver);
+        }
         return badges;
     }
 
