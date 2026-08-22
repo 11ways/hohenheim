@@ -222,6 +222,17 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
             waitForReactiveIdle();
             waitForReactiveIdle();
         });
+        // The same form with one kind-settings fold opened: the pair is the review
+        // evidence that a schema-declared section hides fields rather than dropping them.
+        capture("/admin/instances/new", "instance-create-workspace-build-open", () -> {
+            page.click("pl-choice-group[name='kind']"
+                + " pl-choice-card[data-value='hohenheim:workspace'] button");
+            waitForReactiveIdle();
+            waitForReactiveIdle();
+            page.click("pl-fieldset[data-path='settings']"
+                + " pl-card[data-section='build'] pl-collapsible-trigger");
+            waitForReactiveIdle();
+        });
         capture("/admin/instances/" + workspaceId + "/page/overview", "instance-overview");
         capture("/admin/instances/" + workspaceId + "/page/volumes", "instance-volumes");
         capture("/admin/instances/" + workspaceId, "instance-settings-form");
