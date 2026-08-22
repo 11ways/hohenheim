@@ -11,7 +11,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 /**
  * The webhook replay ledger: one row per ACCEPTED (signature-verified) delivery, keyed
  * by the provider's delivery id per site. Insert-first is the idempotency claim -- the
- * UNIQUE (site_id, delivery_key) index makes a replayed delivery fail its insert, so a
+ * UNIQUE (instance_id, delivery_key) index makes a replayed delivery fail its insert, so a
  * provider retry can never enqueue a second deploy.
  */
 public class WebhookDeliveryModel extends Model {
@@ -20,7 +20,7 @@ public class WebhookDeliveryModel extends Model {
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
+    public static final IntegerField INSTANCE_ID = SCHEMA.addField(IntegerField.builder().name("instance_id").build());
 
     /** Provider delivery id header when present, else sha256 of the raw body. */
     public static final StringField DELIVERY_KEY = SCHEMA.addField(

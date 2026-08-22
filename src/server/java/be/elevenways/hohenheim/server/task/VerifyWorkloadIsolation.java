@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ServerService;
-import be.elevenways.hohenheim.server.docker.SiteDatabaseNetworks;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -336,7 +335,6 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
      */
     private static void collectLinks(@NonNull Map<Integer, List<Expected>> inventory) {
         if (HohenheimRoles.enabled(HohenheimRoles.Role.PROXY)) {
-            addLinks(inventory, SiteDatabaseNetworks.liveLinkHandles(), Egress.NONE);
         }
         if (HohenheimRoles.enabled(HohenheimRoles.Role.INSTANCES)) {
             addLinks(inventory, GameDomains.liveLinkHandles(), Egress.OPEN);

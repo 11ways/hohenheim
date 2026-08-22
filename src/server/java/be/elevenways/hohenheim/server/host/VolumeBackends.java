@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.host;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -11,13 +10,10 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 
 /**
  * THE volume-backend probe: what the filesystem under a host's volume root can actually do,
@@ -34,9 +30,6 @@ import java.util.concurrent.TimeUnit;
  * be right about the machine and wrong about every volume on it.
  */
 public final class VolumeBackends {
-
-    /** How long a probe may take before the host counts as unanswerable. */
-    static final long PROBE_TIMEOUT_SECONDS = 20;
 
     /** The mount options that make an XFS project quota actually enforce. */
     private static final List<String> PRJQUOTA_OPTIONS = List.of("prjquota", "pquota");
@@ -97,11 +90,11 @@ public final class VolumeBackends {
 
         // stat -f answers even for a path that does not exist yet only if a parent does,
         // so probe the deepest existing ancestor: the volume root is created on first use.
-        String script = "p=" + shellQuote(root) + "; "
+        String script = "p=" + HostShell.quote(root) + "; "
             + "while [ ! -e \"$p\" ] && [ \"$p\" != \"/\" ]; do p=$(dirname \"$p\"); done; "
             + "echo \"$p\"; stat -f -c %T \"$p\"; findmnt -no OPTIONS --target \"$p\" || true";
 
-        Result result = run(server, script);
+        HostShell.Result result = HostShell.forServer(server).run(script);
 
         if (result.exitCode() != 0) {
             return new Detection(VolumeBackend.NONE, root,
@@ -175,61 +168,4 @@ public final class VolumeBackends {
             .withArg("backend", backend.label()));
     }
 
-    // -- the host exec seam ---------------------------------------------------
-
-    /** One command's outcome; the text is stdout plus stderr, whichever spoke. */
-    record Result(int exitCode, @NonNull String text) {
-    }
-
-    /**
-     * Run a shell snippet on the host: locally for a local host, over the pinned ssh lane
-     * for an SSH one ({@code RestoreCapacity.remoteAvailable} is the precedent).
-     */
-    private static @NonNull Result run(@NonNull Row server, @NonNull String script) {
-
-        List<String> argv = ServerModel.hasSshLane(server)
-            ? sshArgv(server, script)
-            : List.of("sh", "-c", script);
-
-        if (argv.isEmpty()) {
-            return new Result(1, "no ssh lane could be built for this host");
-        }
-
-        try {
-            Process process = new ProcessBuilder(argv).redirectErrorStream(true).start();
-            try {
-                byte[] output = process.getInputStream().readAllBytes();
-                if (!process.waitFor(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    return new Result(1, "the volume probe timed out");
-                }
-                return new Result(process.exitValue(),
-                    new String(output, StandardCharsets.UTF_8).trim());
-            } finally {
-                process.destroyForcibly();
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            return new Result(1, "the volume probe was interrupted");
-        } catch (IOException failed) {
-            return new Result(1, String.valueOf(failed.getMessage()));
-        }
-    }
-
-    private static @NonNull List<String> sshArgv(@NonNull Row server, @NonNull String script) {
-        try {
-            return HostKeys.sshArgv(server, List.of("sh", "-c", shellQuote(script)));
-        } catch (RuntimeException refusal) {
-            // An unpinned host cannot be probed at all; that refusal is itself the verdict.
-            Blast.log("VolumeBackends: cannot reach host", server.get(ServerModel.NAME),
-                "-", refusal.getMessage());
-            return List.of();
-        }
-    }
-
-    /** POSIX single-quoting: the only quoting that survives an arbitrary path. */
-    private static @NonNull String shellQuote(@Nullable String value) {
-        String text = value == null ? "" : value;
-        return "'" + text.replace("'", "'\\''") + "'";
-    }
 }

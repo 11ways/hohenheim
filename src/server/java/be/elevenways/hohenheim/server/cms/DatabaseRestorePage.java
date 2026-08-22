@@ -2,7 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.SiteDatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -54,21 +55,22 @@ public final class DatabaseRestorePage implements RecordScopedPage<Row> {
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/database-restore"), vars);
     }
 
-    /** Live sites this database is attached to (env injection), for the "Used by" card line. */
+    /** Live INSTANCES this database is attached to (env injection), for the "Used by" line. */
     private static @NonNull List<Map<String, Object>> usedBy(Integer databaseId) {
-        List<Map<String, Object>> sites = new ArrayList<>();
-        SiteModel siteModel = Models.get(SiteModel.class);
-        for (Row link : Models.get(SiteDatabaseModel.class).findByDatabaseId(databaseId)) {
-            Row site = siteModel.find()
-                .where(SiteModel.ID.eq(link.get(SiteDatabaseModel.SITE_ID)))
+        List<Map<String, Object>> instances = new ArrayList<>();
+        InstanceModel instanceModel = Models.get(InstanceModel.class);
+        for (Row link : Models.get(InstanceDatabaseModel.class).findByDatabaseId(databaseId)) {
+            Row instance = instanceModel.find()
+                .where(InstanceModel.ID.eq(link.get(InstanceDatabaseModel.INSTANCE_ID)))
+                .where(InstanceModel.DELETED_AT.isNull())
                 .first();
-            if (site != null && site.get(SiteModel.DELETED_AT) == null) {
-                sites.add(Map.of(
-                    "name", String.valueOf(site.get(SiteModel.NAME)),
-                    "target", CmsRoutes.subpage("admin", "sites", site.get(SiteModel.ID),
-                        "databases")));
+            if (instance != null) {
+                instances.add(Map.of(
+                    "name", String.valueOf(instance.get(InstanceModel.NAME)),
+                    "target", CmsRoutes.subpage("admin", "instances",
+                        instance.get(InstanceModel.ID), "databases")));
             }
         }
-        return sites;
+        return instances;
     }
 }

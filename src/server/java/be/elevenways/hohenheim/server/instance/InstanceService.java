@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
+import be.elevenways.hohenheim.server.application.ApplicationDeploys;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
@@ -114,6 +116,13 @@ public final class InstanceService {
         // hold power; operator and system work (crash restarts, schedule chains, installs)
         // runs outside a request and passes untouched.
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
+        // A release-managed record owns no container: deploying it means checking the
+        // source out and converging a RELEASE. The branch is here, after the gate and
+        // before any driver work, so every existing power surface deploys an application
+        // with nothing wired at the call site.
+        if (releaseManaged(instanceId)) {
+            return ApplicationDeploys.deploy(instanceId, null, "deploy").status();
+        }
         Resolved resolved = resolve(instanceId);
         // Settle-then-refuse: a start under a live capture/restore corrupts the very
         // data those operations exist to protect; a start before the template's install
@@ -219,6 +228,10 @@ public final class InstanceService {
      */
     public void stop(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
+        if (releaseManaged(instanceId)) {
+            ApplicationReleases.stopFor(instanceId);
+            return;
+        }
         Resolved resolved = resolve(instanceId);
         // An operator stop mid-capture/mid-restore would stamp STOPPED over the
         // protected status and un-protect the operation; destroy stays ungated.
@@ -266,6 +279,11 @@ public final class InstanceService {
     public void destroy(int instanceId) {
         // Destroy is its OWN verb, not a power action: stopping is reversible, this is not.
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.DESTROY);
+        if (releaseManaged(instanceId)) {
+            ApplicationReleases.destroyFor(instanceId);
+            trash(instanceId);
+            return;
+        }
         Resolved resolved = resolve(instanceId);
         long fence = this.leases.requireFence(resolved.serverId());
         try {
@@ -393,8 +411,40 @@ public final class InstanceService {
 
     /** Typed live status straight off the daemon; never throws. */
     public @NonNull InstanceStatus liveStatus(int instanceId) {
+        if (releaseManaged(instanceId)) {
+            // An application's live state IS its serving release's; with nothing serving
+            // the honest answer is ABSENT, not an exception from a driver it has none of.
+            InstanceStatus serving = ApplicationReleases.liveStatus(instanceId);
+            return serving != null ? serving : new InstanceStatus(ContainerState.ABSENT, null);
+        }
         Resolved resolved = resolve(instanceId);
         return resolved.runtime().status(resolved.spec().handle());
+    }
+
+    /** Whether this record's kind deploys through the release engine instead of a driver. */
+    private static boolean releaseManaged(int instanceId) {
+        Row row = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .first();
+        return row != null && InstanceKinds.isReleaseManaged(row.get(InstanceModel.KIND));
+    }
+
+    /**
+     * Soft-delete a record whose runtime consequences are already settled.
+     *
+     * AIDEV-NOTE: an application has no container, so the destroy verb's fenced
+     * stamp-then-trash sequence has nothing to fence against; what makes ITS delete safe is
+     * that {@code ApplicationReleases.destroyFor} refused unless every release was verified
+     * gone first.
+     */
+    private void trash(int instanceId) {
+        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        if (row == null || row.get(InstanceModel.DELETED_AT) != null) {
+            return;
+        }
+        row.set(InstanceModel.DELETED_AT, Instant.now());
+        Models.get(InstanceModel.class).save(row);
     }
 
     // -- the fence discipline -------------------------------------------------

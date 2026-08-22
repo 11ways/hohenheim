@@ -5,8 +5,7 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.docker.SiteInstances;
-import be.elevenways.hohenheim.server.docker.SiteReleases;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.proxy.RouteClaims.ClaimConflict;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
@@ -345,21 +344,14 @@ public class SiteResource extends RowResource {
     }
 
     /**
-     * Soft delete: verified runtime teardown first, then stamp deleted_at, remove a git
-     * checkout, keep the row.
+     * Soft delete: reclaim the previews this site routed, then stamp deleted_at.
      *
-     * AIDEV-NOTE: deliberately does NOT touch the site's docker volumes. A soft-deleted
-     * site is restorable, so its data must survive; the volumes are accounted for by the
-     * reconciler, which classifies them ORPHANED (soft-deleted = not live) and surfaces
-     * them on the dashboard for an explicit operator decision -- report-only is C2's
-     * contract, and removal stays a human act because a volume is unrecoverable. There
-     * is NO hard delete path for sites, so the record can never die while its volumes
-     * survive unaccounted for. The runtime half is SiteInstances.destroyFor: the site's
-     * owned instance dies WITH the site (InstanceService.destroy soft-deletes, so no
-     * remove hook would ever do this -- the GameDomains.deleteForInstance precedent),
-     * with the C6 discipline inherited from the instance tier: an unconfirmable
-     * teardown REFUSES this delete rather than leaving a running container behind a
-     * dead record (the ManagedDatabase.destroy lesson).
+     * AIDEV-NOTE: a site delete drops a HOSTNAME and nothing else. Since phase-0 brief 7
+     * the site owns no runtime at all -- the application it exposed keeps running, keeps
+     * its releases and keeps its volumes, and can be pointed at by another site tomorrow.
+     * Previews are the one cascade left, and only the ones whose generated hostname lived
+     * on THIS site (see PreviewDeployments.destroyForSite): the soft delete fires no remove
+     * hook that could ever reclaim them.
      */
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
@@ -367,10 +359,23 @@ public class SiteResource extends RowResource {
         // Previews die WITH the site (explicit for the same reason destroyFor is:
         // the soft delete fires no remove hook that could ever do this).
         be.elevenways.hohenheim.server.preview.PreviewDeployments.destroyForSite(siteId);
-        SiteInstances.destroyFor(siteId);
         existing.set(SiteModel.DELETED_AT, Instant.now());
         ActivityLog.withAction(ActivityLog.ACTION_DELETE, "soft-delete",
             () -> this.model().save(existing));
+    }
+
+    /**
+     * The application a site exposes.
+     *
+     * @throws Violations when it exposes none -- the row action is hidden in that case, so
+     *         reaching this is a stale form, not a normal path
+     */
+    private static int requireApplicationOf(@NonNull Row site) {
+        Integer instanceId = site.get(SiteModel.INSTANCE_ID);
+        if (instanceId == null) {
+            throw Violations.ofForm(CmsSupport.violationText("site_exposes_no_instance"));
+        }
+        return instanceId;
     }
 
     @Override
@@ -400,7 +405,7 @@ public class SiteResource extends RowResource {
             .visibleFor((row, ctx) -> InstanceUpstreamKind.ID.toString()
                 .equals(row.get(SiteModel.UPSTREAM_KIND)))
             .handler((row, ctx) -> {
-                SiteReleases.rollback(row.get(SiteModel.ID));
+                ReleaseEngine.rollback(requireApplicationOf(row));
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("rollback_done").withFilter("scope", "site"));
             })

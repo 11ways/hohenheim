@@ -65,6 +65,15 @@ public final class InstanceKinds {
      *
      * @throws Violations when the kind's handler declares itself generated-only
      */
+    /**
+     * @return whether records of this kind deploy through the release engine rather than
+     *         owning a container; an unknown kind is NOT release-managed (fail closed)
+     */
+    public static boolean isReleaseManaged(@Nullable String kind) {
+        InstanceKindHandler handler = kind == null ? null : getHandler(kind);
+        return handler != null && handler.releaseManaged();
+    }
+
     public static void requireAuthorable(@Nullable String kind) {
 
         InstanceKindHandler handler = getHandler(kind);

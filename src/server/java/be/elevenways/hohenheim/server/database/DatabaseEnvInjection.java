@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
-import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -18,10 +17,14 @@ import java.util.Map;
 
 /**
  * Derives the environment variables a WORKLOAD receives for each attached managed
- * database -- a site's processes ({@link #envForSite}) or an instance's container
- * ({@link #envForInstance}) -- resolved at spawn time so the published port and the
- * credentials are always current (nothing is ever baked into stored settings). A database
- * that is not active-and-running
+ * database ({@link #envForInstance}), resolved at deploy time so the published port and the
+ * credentials are always current (nothing is ever baked into stored settings).
+ *
+ * AIDEV-NOTE: there used to be a second owner here, the SITE, over a second link table.
+ * Phase-0 brief 7 deleted both: a site no longer runs anything, and the record that does --
+ * the application instance -- already had {@code instance_databases}. One owner means the
+ * two lanes can no longer disagree about what a prefix normalizes to or when a database
+ * counts as unresolved. A database that is not active-and-running
  * contributes NO variables: the skip is logged as {@code hohenheim.db_injection.unresolved}
  * and the dashboard attention panel surfaces it.
  *
@@ -36,11 +39,11 @@ public final class DatabaseEnvInjection {
     }
 
     /**
-     * The address shape the consuming runtime can actually reach: host processes dial the
-     * database's published loopback port; a Docker site container sits on its own private
+     * The address shape the consuming runtime can actually reach: a caller on the host
+     * dials the database's published loopback port; a container sits on its own private
      * network where 127.0.0.1 is ITSELF, so it gets the database's container hostname on
-     * the shared link network and the engine's native port instead (SiteDatabaseNetworks
-     * joins the pair before the container starts).
+     * the shared link network and the engine's native port instead
+     * ({@code InstanceDatabaseNetworks} joins the pair before the container starts).
      */
     public enum Style {
         PUBLISHED_LOOPBACK,
@@ -55,7 +58,6 @@ public final class DatabaseEnvInjection {
      * word differ, so the derivation below stays one code path.
      */
     private enum Owner {
-        SITE("site_id"),
         INSTANCE("instance_id");
 
         private final @NonNull String logKey;
@@ -65,41 +67,19 @@ public final class DatabaseEnvInjection {
         }
     }
 
-    /** Injected environment for a site using live Docker state; empty when nothing is attached. */
-    public static @NonNull Map<String, String> envForSite(int siteId) {
-        return envForSite(siteId, null, Style.PUBLISHED_LOOPBACK);
-    }
-
     /**
-     * Injected environment for an INSTANCE: the same families a site gets, resolved the
-     * same way at the same moment (never stored), for the workloads the instance tier owns
-     * directly. Always the CONTAINER_NETWORK style -- an instance workload's 127.0.0.1 is
-     * itself, and {@code InstanceDatabaseNetworks} joins it to each attached database's
+     * Injected environment for an INSTANCE: resolved at the same moment it is used and
+     * never stored. Always the CONTAINER_NETWORK style -- an instance workload's 127.0.0.1
+     * is itself, and {@code InstanceDatabaseNetworks} joins it to each attached database's
      * link network between container create and start.
-     *
-     * @see #envForSite(int, LiveResolver, Style)
      */
     public static @NonNull Map<String, String> envForInstance(int instanceId,
                                                               @Nullable LiveResolver resolver) {
         return envFor(Owner.INSTANCE, instanceId, resolver, Style.CONTAINER_NETWORK);
     }
 
-    /** {@link #envForSite(int, LiveResolver, Style)} in the host-process (loopback) style. */
-    public static @NonNull Map<String, String> envForSite(int siteId, @Nullable LiveResolver resolver) {
-        return envForSite(siteId, resolver, Style.PUBLISHED_LOOPBACK);
-    }
-
     /**
-     * Injected environment for a site. Fail-soft by design: a spawn must never die on
-     * injection plumbing, so any resolution error degrades to "no variables" with a log.
-     */
-    public static @NonNull Map<String, String> envForSite(int siteId, @Nullable LiveResolver resolver,
-                                                          @NonNull Style style) {
-        return envFor(Owner.SITE, siteId, resolver, style);
-    }
-
-    /**
-     * The one derivation both tiers use: read the owner's links oldest-first, resolve each
+     * The derivation: read the owner's links oldest-first, resolve each
      * database live, and emit its variable family. Fail-soft by design -- a spawn must
      * never die on injection plumbing, so any resolution error degrades to "no variables"
      * with a log.
@@ -138,24 +118,16 @@ public final class DatabaseEnvInjection {
     }
 
     private static @NonNull List<Row> linksOf(@NonNull Owner owner, int ownerId) {
-        if (owner == Owner.SITE) {
-            SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
-            return links == null ? List.of() : links.findBySiteId(ownerId);
-        }
         InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
         return links == null ? List.of() : links.findByInstanceId(ownerId);
     }
 
     private static @Nullable Integer databaseIdOf(@NonNull Owner owner, @NonNull Row link) {
-        return owner == Owner.SITE
-            ? link.get(SiteDatabaseModel.DATABASE_ID)
-            : link.get(InstanceDatabaseModel.DATABASE_ID);
+        return link.get(InstanceDatabaseModel.DATABASE_ID);
     }
 
     private static @Nullable String prefixOf(@NonNull Owner owner, @NonNull Row link) {
-        return owner == Owner.SITE
-            ? link.get(SiteDatabaseModel.ENV_PREFIX)
-            : link.get(InstanceDatabaseModel.ENV_PREFIX);
+        return link.get(InstanceDatabaseModel.ENV_PREFIX);
     }
 
     private static void appendLink(Map<String, String> env, Owner owner, int ownerId,
@@ -215,17 +187,17 @@ public final class DatabaseEnvInjection {
             "reason", reason));
     }
 
-    /** Uppercased prefix, {@link SiteDatabaseModel#DEFAULT_PREFIX} when blank. */
+    /** Uppercased prefix, {@link InstanceDatabaseModel#DEFAULT_PREFIX} when blank. */
     public static @NonNull String normalizedPrefix(@Nullable String prefix) {
         if (prefix == null || prefix.isBlank()) {
-            return SiteDatabaseModel.DEFAULT_PREFIX;
+            return InstanceDatabaseModel.DEFAULT_PREFIX;
         }
         return prefix.trim().toUpperCase(Locale.ROOT);
     }
 
     /**
      * The variable family for one resolved link: {@code {PREFIX}_HOST/PORT/USER/PASSWORD/NAME/URL},
-     * plus the bare {@code DATABASE_URL} when this is the site's primary link.
+     * plus the bare {@code DATABASE_URL} when this is the owner's primary link.
      */
     public static @NonNull Map<String, String> vars(ManagedDatabase.@NonNull Engine engine,
                                                     @NonNull String host, int port,

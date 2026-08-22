@@ -42,6 +42,22 @@ public final class ApplicationKind implements InstanceKindHandler {
     public static final Identifier ID = Identifier.of("hohenheim", "application");
     public static final Schema SETTINGS_SCHEMA = GitSourceSchema.addTo(new Schema());
 
+    /**
+     * A prebuilt image to release instead of building one.
+     *
+     * AIDEV-NOTE: an application does not have to be git-sourced. Naming an image here gets
+     * the SAME health-gated swap, digest pin and rollback as a built one -- the difference is
+     * only where the artifact comes from. {@code docker_container} stays the kind for a
+     * one-off container that wants none of that; this is for a released one.
+     */
+    public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("image").label(HohenheimFormCopy.label("image"))
+            .help(HohenheimFormCopy.help("image")).build());
+
+    public static final StringField TAG = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("tag").label(HohenheimFormCopy.label("image_tag"))
+            .help(HohenheimFormCopy.help("image_tag")).build());
+
     /** Which builder a checkout is built with; Nixpacks emits a Dockerfile, then one lane. */
     public static final EnumField BUILDER = SETTINGS_SCHEMA.addField(
         EnumField.builder("builder")
@@ -106,6 +122,12 @@ public final class ApplicationKind implements InstanceKindHandler {
             .label(HohenheimFormCopy.label("cpu_limit"))
             .help(HohenheimFormCopy.help("cpu_limit")).build());
 
+    /**
+     * An application never runs: each deploy generates a {@code hohenheim:release} instance
+     * and this record's status reflects the one that serves.
+     */
+    @Override public boolean releaseManaged() { return true; }
+
     @Override public @NonNull Identifier typeId() { return ID; }
 
     @Override public @NonNull String getDisplayName() { return "Application"; }
@@ -149,7 +171,7 @@ public final class ApplicationKind implements InstanceKindHandler {
     }
 
     private static Violations notWired() {
-        return Violations.ofForm(Microcopy.of("application_runtime_not_wired")
+        return Violations.ofForm(Microcopy.of("application_owns_no_container")
             .withFilter("scope", "violations"));
     }
 }

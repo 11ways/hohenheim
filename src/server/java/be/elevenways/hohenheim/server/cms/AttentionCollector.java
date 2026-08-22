@@ -1,16 +1,15 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DeploymentModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
+import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDatabaseModel;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -23,6 +22,7 @@ import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -546,7 +546,7 @@ public final class AttentionCollector {
      * already surface above; this frames the SITE impact of a stopped container.
      */
     private static void unavailableAttachedDatabases(List<AttentionItem> items) {
-        var linkModel = Models.get(SiteDatabaseModel.class);
+        var linkModel = Models.get(InstanceDatabaseModel.class);
         if (linkModel == null) {
             return;
         }
@@ -554,19 +554,19 @@ public final class AttentionCollector {
         if (links.isEmpty()) {
             return;
         }
-        var siteModel = Models.get(SiteModel.class);
+        var instanceModel = Models.get(InstanceModel.class);
         var databaseModel = Models.get(DatabaseModel.class);
         DatabaseService databases = new DatabaseService();
         for (Row link : links) {
-            Row site = siteModel.find()
-                .where(SiteModel.ID.eq(link.get(SiteDatabaseModel.SITE_ID)))
+            Row instance = instanceModel.find()
+                .where(InstanceModel.ID.eq(link.get(InstanceDatabaseModel.INSTANCE_ID)))
+                .where(InstanceModel.DELETED_AT.isNull())
                 .first();
-            if (site == null || site.get(SiteModel.DELETED_AT) != null
-                || !Boolean.TRUE.equals(site.get(SiteModel.ENABLED))) {
+            if (instance == null) {
                 continue;
             }
             Row database = databaseModel.find()
-                .where(DatabaseModel.ID.eq(link.get(SiteDatabaseModel.DATABASE_ID)))
+                .where(DatabaseModel.ID.eq(link.get(InstanceDatabaseModel.DATABASE_ID)))
                 .first();
             if (database == null) {
                 continue;   // dangling link; the tab shows it as (deleted)
@@ -595,9 +595,11 @@ public final class AttentionCollector {
             }
             if (unavailable) {
                 items.add(item("warning", "database",
-                    copy("site", "attention_title", "name", site.get(SiteModel.NAME)),
+                    copy("instance", "attention_title",
+                        "name", instance.get(InstanceModel.NAME)),
                     detail,
-                    CmsRoutes.subpage(ADMIN, "sites", site.get(SiteModel.ID), "databases")));
+                    CmsRoutes.subpage(ADMIN, "instances", instance.get(InstanceModel.ID),
+                        "databases")));
             }
         }
     }
@@ -610,36 +612,41 @@ public final class AttentionCollector {
         }
     }
 
+    /**
+     * The newest release operation of every application, when it FAILED.
+     *
+     * AIDEV-NOTE: this used to read the {@code deployments} table of the deleted host-slot
+     * lane. The release engine's own {@code release_operations} row IS the deploy history
+     * now -- one record of what was attempted, with its step log -- so there is no second
+     * table to keep in step with it.
+     */
     private static void failedDeployments(List<AttentionItem> items) {
-        var siteModel = Models.get(SiteModel.class);
-        var deployModel = Models.get(DeploymentModel.class);
-        // AIDEV-NOTE: the source moved off the site (phase-0 design section 3), so the
-        // git filter is no longer a column predicate: it asks the instance the site
-        // exposes. The query stays scoped to enabled, live sites and SiteSources answers
-        // per row; brief 7 re-keys this collector to the application instance outright.
-        List<Row> gitSites = siteModel.find()
-            .where(SiteModel.ENABLED.eq(true))
-            .where(SiteModel.DELETED_AT.isNull())
-            .where(SiteModel.INSTANCE_ID.isNotNull())
-            .all()
-            .stream()
-            .filter(SiteSources::isGitSourced)
-            .toList();
-        for (Row site : gitSites) {
-            Integer siteId = site.get(SiteModel.ID);
-            if (siteId == null) {
+        var instanceModel = Models.get(InstanceModel.class);
+        var operations = Models.get(ReleaseOperationModel.class);
+        if (instanceModel == null || operations == null) {
+            return;
+        }
+        for (Row application : instanceModel.find()
+                .where(InstanceModel.KIND.eq(ApplicationKind.ID.toString()))
+                .where(InstanceModel.DELETED_AT.isNull())
+                .all()) {
+            Integer applicationId = application.get(InstanceModel.ID);
+            if (applicationId == null) {
                 continue;
             }
-            List<Row> latest = deployModel.findBySiteId(siteId, 1);
+            List<Row> latest = operations.findForOwner(InstanceModel.MODEL_ID.toString(),
+                applicationId, 1);
             if (latest.isEmpty()) {
                 continue;
             }
-            Row deploy = latest.get(0);
-            if (DeploymentModel.STATUS_FAILED.equals(deploy.get(DeploymentModel.STATUS))) {
+            Row operation = latest.get(0);
+            if (ReleaseOperationModel.STATUS_FAILED.equals(
+                    operation.get(ReleaseOperationModel.STATUS))) {
                 items.add(item("error", "rocket",
-                    copy("deploy", "attention_title", "name", site.get(SiteModel.NAME)),
-                    literal(deploy.get(DeploymentModel.ERROR)),
-                    CmsRoutes.subpage(ADMIN, "sites", siteId, "deployments")));
+                    copy("deploy", "attention_title",
+                        "name", application.get(InstanceModel.NAME)),
+                    literal(operation.get(ReleaseOperationModel.FAILURE_REASON)),
+                    CmsRoutes.subpage(ADMIN, "instances", applicationId, "deployments")));
             }
         }
     }

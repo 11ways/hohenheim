@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.preview.PreviewBranches;
+import be.elevenways.hohenheim.server.application.ApplicationDeploys;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
-import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -32,9 +33,9 @@ import java.util.Map;
  * IS the authentication and core's RateLimiter is driven directly (the hashed-bearer
  * precedent).
  *
- * Security shape: every refusal on the way to signature verification -- unknown slug,
- * unknown site, non-git site, missing secret, wrong signature -- is the SAME 404, so a
- * probe learns nothing about which sites exist or which carry secrets. A delivery id is
+ * Security shape: every refusal on the way to signature verification -- unknown segment,
+ * unknown application, missing secret, wrong signature -- is the SAME 404, so a
+ * probe learns nothing about which applications exist or which carry secrets. A delivery id is
  * claimed BEFORE any action (the replay ledger), a payload that names a repository must
  * name the bound one, and only a branch-matching push deploys -- an event carrying no
  * {@code ref} is not a push and is ignored rather than deployed.
@@ -115,19 +116,16 @@ public class GitWebhookHandler {
             return;
         }
 
-        var siteModel = Models.get(SiteModel.class);
-        Row site = siteModel.find()
-            .where(SiteModel.SLUG.eq(slug))
-            .where(SiteModel.DELETED_AT.isNull())
-            .first();
+        // AIDEV-NOTE: the URL names the APPLICATION, because the application is what has a
+        // source, a secret and a deploy. It used to name a site slug and hop to the site's
+        // instance to find the secret -- a hop that could not answer at all for an
+        // application no site exposed, which is a perfectly ordinary application.
+        Row application = applicationOf(slug);
 
-        // Everything up to and including signature verification refuses IDENTICALLY:
-        // the response must not reveal whether the site exists or carries a secret.
-        // AIDEV-NOTE: the webhook secret lives with the SOURCE, which moved off the site
-        // and onto the instance it exposes (phase-0 design section 3). The URL still
-        // carries the site slug; brief 8 routes webhooks at the instance directly and this
-        // hop through the site disappears with it.
-        Map<String, Object> sourceSettings = SiteSources.settingsOf(site);
+        // Everything up to and including signature verification refuses IDENTICALLY: the
+        // response must not reveal whether the application exists or carries a secret.
+        Map<String, Object> sourceSettings = application == null ? null
+            : ApplicationReleases.storedSettings(application);
         String webhookSecret = sourceSettings != null
             ? str(sourceSettings.get("webhook_secret")) : "";
 
@@ -136,20 +134,20 @@ public class GitWebhookHandler {
             return;
         }
 
-        int siteId = site.get(SiteModel.ID);
+        int applicationId = application.get(InstanceModel.ID);
 
         // Replay claim FIRST: a provider retry (same delivery id) must never act twice.
         String deliveryKey = deliveryKeyOf(exchange, body);
         String event = eventOf(exchange);
-        Row claimed = WebhookDeliveries.claim(siteId, deliveryKey, event);
+        Row claimed = WebhookDeliveries.claim(applicationId, deliveryKey, event);
         if (claimed == null) {
             sendJson(exchange, 200, "{\"status\":\"duplicate\"}");
             return;
         }
 
         // Repository binding: a payload that names a repository must name the one this
-        // site is bound to -- a valid signature for the right site is not a licence to
-        // act on another repository's events (secret reuse, provider misconfiguration).
+        // application is bound to -- a valid signature for the right application is not a
+        // licence to act on another repository's events (secret reuse, misconfiguration).
         Object payload = parsePayload(body);
         String payloadRepo = payloadRepository(payload);
         String boundRepo = boundRepositoryOf(sourceSettings);
@@ -160,21 +158,21 @@ public class GitWebhookHandler {
         }
 
         if (isPullRequestEvent(event)) {
-            handlePullRequest(exchange, claimed, site, sourceSettings, payload, event);
+            handlePullRequest(exchange, claimed, application, sourceSettings, payload, event);
             return;
         }
 
-        handlePush(exchange, claimed, site, sourceSettings, payload, event);
+        handlePush(exchange, claimed, application, sourceSettings, payload, event);
     }
 
     // -- push -> deploy --------------------------------------------------------
 
-    private static void handlePush(HttpServerExchange exchange, Row claimed, Row site,
+    private static void handlePush(HttpServerExchange exchange, Row claimed, Row application,
                                    Map<String, Object> sourceSettings, Object payload,
                                    @Nullable String event) {
-        int siteId = site.get(SiteModel.ID);
+        int applicationId = application.get(InstanceModel.ID);
 
-        // Branch selection: a push to another branch is not this site's source.
+        // Branch selection: a push to another branch is not this application's source.
         String configuredBranch = str(sourceSettings.getOrDefault("branch", "main"));
         if (configuredBranch.isEmpty()) {
             configuredBranch = "main";
@@ -206,8 +204,8 @@ public class GitWebhookHandler {
             ? pushedRef.substring("refs/heads/".length()) : "";
         boolean production = pushedRef.equals("refs/heads/" + configuredBranch);
         if (deleted) {
-            if (!production && !branch.isEmpty() && hasLivePreview(siteId, branch)) {
-                queuePreviewTeardown(siteId, branch, "branch_deleted");
+            if (!production && !branch.isEmpty() && hasLivePreview(applicationId, branch)) {
+                queuePreviewTeardown(applicationId, branch, "branch_deleted");
                 WebhookDeliveries.stampAction(claimed, "preview_teardown_queued");
                 sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
                 return;
@@ -229,9 +227,9 @@ public class GitWebhookHandler {
             Datasource datasource = Db.current();
             JobRunner.startVirtualThread(() -> withScope(datasource, () ->
                 PreviewDeployments
-                    .deployQuietly(siteId, branch,
+                    .deployQuietly(applicationId, branch,
                         pushedSha.isEmpty() ? null : pushedSha, null)));
-            ActivityLog.record(Models.get(SiteModel.class), siteId,
+            ActivityLog.record(Models.get(InstanceModel.class), applicationId,
                 "preview_triggered", "webhook:" + branch);
             WebhookDeliveries.stampAction(claimed, "preview_queued");
             sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
@@ -250,31 +248,42 @@ public class GitWebhookHandler {
             return;
         }
 
-        var proxy = ServerMain.getProxyServer();
-        if (proxy == null) {
-            sendJson(exchange, 503, "{\"error\":\"proxy not running\"}");
-            return;
-        }
+        // The pushed head gets a PENDING status right away; the deploy's own completion
+        // reports the outcome onto the sha it actually checked out.
+        String pushedSha = payload instanceof Map<?, ?> map ? str(map.get("after")) : "";
+        DeployStatuses.report(sourceSettings, pushedSha.isEmpty() ? null : pushedSha,
+            GitProviderClient.StatusState.PENDING, DeployStatuses.CONTEXT_DEPLOY,
+            "Deploy queued", null);
+        // The build takes minutes; the provider expects an answer in seconds.
+        Datasource deployDatasource = Db.current();
+        String deployBranch = configuredBranch;
+        JobRunner.startVirtualThread(() -> withScope(deployDatasource, () ->
+            ApplicationDeploys.deployQuietly(applicationId, deployBranch, "webhook")));
+        WebhookDeliveries.stampAction(claimed, "deploy_queued");
+        Blast.log("GIT WEBHOOK: deploy queued for application",
+            application.get(InstanceModel.NAME), "(id:", applicationId + ")");
+        sendJson(exchange, 200, "{\"status\":\"queued\"}");
+    }
 
-        SiteRequestHandler handler = proxy.getDispatcher().findHandlerBySiteId(siteId);
-        if (handler instanceof GitSiteRequestHandler gitHandler) {
-            // The pushed head gets a PENDING status right away; the deploy's own
-            // completion reports the outcome onto the sha it actually checked out.
-            String pushedSha = payload instanceof Map<?, ?> map ? str(map.get("after")) : "";
-            DeployStatuses.report(sourceSettings, pushedSha.isEmpty() ? null : pushedSha,
-                GitProviderClient.StatusState.PENDING, DeployStatuses.CONTEXT_DEPLOY,
-                "Deploy queued", null);
-            gitHandler.enqueueDeploy("webhook");
-            // An externally-triggered production deploy needs the same trail as
-            // the manual admin action (which records deploy_triggered).
-            ActivityLog.record(Models.get(SiteModel.class), siteId, "deploy_triggered", "webhook");
-            WebhookDeliveries.stampAction(claimed, "deploy_queued");
-            Blast.log("GIT WEBHOOK: deploy queued for site", site.get(SiteModel.SLUG),
-                "(id:", siteId + ")");
-            sendJson(exchange, 200, "{\"status\":\"queued\"}");
-        } else {
-            sendJson(exchange, 404, "{\"error\":\"handler not found\"}");
+    /**
+     * The application a webhook URL names.
+     *
+     * @param slug the last path segment: the application instance id
+     * @return the application, or null when the segment names no live application
+     */
+    private static @Nullable Row applicationOf(@NonNull String slug) {
+        int applicationId;
+        try {
+            applicationId = Integer.parseInt(slug.trim());
+        } catch (NumberFormatException notAnId) {
+            return null;
         }
+        Row application = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(applicationId))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .first();
+        return application != null && InstanceKinds.isReleaseManaged(
+            application.get(InstanceModel.KIND)) ? application : null;
     }
 
     /** All three providers zero out {@code after} on a ref delete; GitHub/Gitea also flag it. */
@@ -289,25 +298,26 @@ public class GitWebhookHandler {
         return !after.isEmpty() && after.chars().allMatch(c -> c == '0');
     }
 
-    private static boolean hasLivePreview(int siteId, @NonNull String ref) {
+    private static boolean hasLivePreview(int applicationId, @NonNull String ref) {
         return Models.get(PreviewDeploymentModel.class).find()
-            .where(PreviewDeploymentModel.SITE_ID.eq(siteId))
+            .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
             .where(PreviewDeploymentModel.REF.eq(ref))
             .where(PreviewDeploymentModel.DELETED_AT.isNull())
             .first() != null;
     }
 
-    private static void queuePreviewTeardown(int siteId, @NonNull String ref,
+    private static void queuePreviewTeardown(int applicationId, @NonNull String ref,
                                              @NonNull String reason) {
         Datasource datasource = Db.current();
         JobRunner.startVirtualThread(() -> withScope(datasource, () ->
             PreviewDeployments
-                .destroyForRefQuietly(siteId, ref, reason)));
+                .destroyForRefQuietly(applicationId, ref, reason)));
     }
 
     // -- pull request -> preview ----------------------------------------------
 
-    private static void handlePullRequest(HttpServerExchange exchange, Row claimed, Row site,
+    private static void handlePullRequest(HttpServerExchange exchange, Row claimed,
+                                          Row application,
                                           Map<String, Object> sourceSettings, Object payload,
                                           @Nullable String event) {
         if (!Boolean.TRUE.equals(sourceSettings.get("previews_enabled"))) {
@@ -322,7 +332,7 @@ public class GitWebhookHandler {
             return;
         }
 
-        int siteId = site.get(SiteModel.ID);
+        int applicationId = application.get(InstanceModel.ID);
         String ref = previewEvent.ref();
         Datasource datasource = Db.current();
         switch (previewEvent.intent()) {
@@ -330,16 +340,16 @@ public class GitWebhookHandler {
                 // The build takes minutes; the provider expects an answer in seconds.
                 JobRunner.startVirtualThread(() -> withScope(datasource, () ->
                     PreviewDeployments
-                        .deployQuietly(siteId, ref, previewEvent.sha(), previewEvent.number())));
+                        .deployQuietly(applicationId, ref, previewEvent.sha(), previewEvent.number())));
                 WebhookDeliveries.stampAction(claimed, "preview_queued");
-                ActivityLog.record(Models.get(SiteModel.class), siteId,
+                ActivityLog.record(Models.get(InstanceModel.class), applicationId,
                     "preview_triggered", "webhook:" + ref);
                 sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
             }
             case TEARDOWN -> {
                 JobRunner.startVirtualThread(() -> withScope(datasource, () ->
                     PreviewDeployments
-                        .destroyForRefQuietly(siteId, ref, "pr_closed")));
+                        .destroyForRefQuietly(applicationId, ref, "pr_closed")));
                 WebhookDeliveries.stampAction(claimed, "preview_teardown_queued");
                 sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
             }
@@ -537,7 +547,7 @@ public class GitWebhookHandler {
         return null;
     }
 
-    /** The repository the site is bound to: the provider binding, else the URL's path. */
+    /** The repository the application is bound to: the provider binding, else the URL's path. */
     static @Nullable String boundRepositoryOf(@NonNull Map<String, Object> sourceSettings) {
         String repository = str(sourceSettings.get("repository"));
         if (!repository.isEmpty()) {

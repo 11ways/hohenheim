@@ -37,7 +37,7 @@ public final class ManagePreviewDeploymentResource extends PreviewDeploymentReso
     // Deploy section unique (AdminNavigationJourneyTest step 7).
     @Override public int navOrder() { return 25; }
 
-    /** Admins see everything; everyone else only previews of their granted sites. */
+    /** Admins see everything; everyone else only previews of their granted applications. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
         return ctx -> {
@@ -50,18 +50,19 @@ public final class ManagePreviewDeploymentResource extends PreviewDeploymentReso
 
     /**
      * The FIRST statement of the create path (verifiesScopeBeforeMutating contract):
-     * a tenant may only aim a preview at a site the capability walk confirms they
-     * manage. Same uniform refusal as an unknown site -- naming the difference would
-     * be a site-existence oracle.
+     * a tenant may only aim a preview at an APPLICATION the capability walk confirms they
+     * manage. Same uniform refusal as an unknown application -- naming the difference
+     * would be an existence oracle.
      */
     @Override
     protected void requireCreateAuthority(@NonNull Map<String, Object> coerced,
                                           @NonNull AccessContext accessContext) {
-        Object siteId = coerced.get(PreviewDeploymentModel.SITE_ID.getName());
-        if (!(siteId instanceof Number number)
-                || !HohenheimAccess.canManageSite(accessContext, number.intValue())) {
-            throw Violations.ofField(PreviewDeploymentModel.SITE_ID.getName(), siteId,
-                CmsSupport.violationText("preview_site_required"));
+        Object applicationId = coerced.get(PreviewDeploymentModel.APPLICATION_ID.getName());
+        if (!(applicationId instanceof Number number)
+                || !HohenheimAccess.canManageInstance(accessContext, number.intValue())) {
+            throw Violations.ofField(PreviewDeploymentModel.APPLICATION_ID.getName(),
+                applicationId,
+                CmsSupport.violationText("preview_application_required"));
         }
     }
 

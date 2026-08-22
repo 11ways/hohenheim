@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
-import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -44,7 +44,7 @@ import java.util.Map;
 public class PreviewDeploymentResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
-        .add(RelationPick.of(PreviewDeploymentModel.SITE_ID, SiteModel.MODEL_ID).build())
+        .add(RelationPick.of(PreviewDeploymentModel.APPLICATION_ID, InstanceModel.MODEL_ID).build())
         .add(PreviewDeploymentModel.REF)
         .add(PreviewDeploymentModel.PR_NUMBER)
         .add(PreviewDeploymentModel.HEAD_SHA)
@@ -117,7 +117,7 @@ public class PreviewDeploymentResource extends RowResource {
     public @NonNull List<ResourceFieldBinding> fieldBindings() {
         List<ResourceFieldBinding> bindings = new ArrayList<>();
         for (var entry : this.formSpec.entries()) {
-            boolean creationInput = PreviewDeploymentModel.SITE_ID.getName().equals(entry.name())
+            boolean creationInput = PreviewDeploymentModel.APPLICATION_ID.getName().equals(entry.name())
                 || PreviewDeploymentModel.REF.getName().equals(entry.name());
             // Site and ref are the CREATE inputs; once the row exists the lifecycle
             // engine owns every column. The enforcement point passes record == null
@@ -142,10 +142,11 @@ public class PreviewDeploymentResource extends RowResource {
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         this.requireCreateAuthority(coerced, accessContext);
-        Object siteId = coerced.get(PreviewDeploymentModel.SITE_ID.getName());
-        if (!(siteId instanceof Number siteNumber)) {
-            throw Violations.ofField(PreviewDeploymentModel.SITE_ID.getName(), siteId,
-                CmsSupport.violationText("preview_site_required"));
+        Object applicationId = coerced.get(PreviewDeploymentModel.APPLICATION_ID.getName());
+        if (!(applicationId instanceof Number applicationNumber)) {
+            throw Violations.ofField(PreviewDeploymentModel.APPLICATION_ID.getName(),
+                applicationId,
+                CmsSupport.violationText("preview_application_required"));
         }
         String ref = coerced.get(PreviewDeploymentModel.REF.getName()) instanceof String value
             ? value.trim() : "";
@@ -154,8 +155,8 @@ public class PreviewDeploymentResource extends RowResource {
                 CmsSupport.violationText("preview_ref_required"));
         }
         try {
-            Row preview = PreviewDeployments.queue(siteNumber.intValue(), ref, null, null);
-            ActivityLog.record(Models.get(SiteModel.class), siteNumber.intValue(),
+            Row preview = PreviewDeployments.queue(applicationNumber.intValue(), ref, null, null);
+            ActivityLog.record(Models.get(InstanceModel.class), applicationNumber.intValue(),
                 "preview_triggered", "manual:" + ref);
             return preview.get(PreviewDeploymentModel.ID);
         } catch (Violations refused) {
@@ -169,7 +170,7 @@ public class PreviewDeploymentResource extends RowResource {
 
     /**
      * Admin surface: the panel gate is the authority. The /manage subclass narrows
-     * this to a walk-confirmed manage grant on the chosen site.
+     * this to a walk-confirmed manage grant on the chosen application.
      */
     protected void requireCreateAuthority(@NonNull Map<String, Object> coerced,
                                           @NonNull AccessContext accessContext) {

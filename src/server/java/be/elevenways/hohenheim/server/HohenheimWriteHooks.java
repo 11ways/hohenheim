@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.server.cms.SiteTerminalCsp;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
-import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.dns.DnsClaimReleases;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
@@ -106,7 +106,7 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // database's lowered engine) carries derived attribution, is read-only outside
         // its owning tier's system scope, and a generatedOnly() kind cannot be authored
         // standalone at all. One funnel, declared per kind -- see OwnedInstances.
-        SiteInstances.install();
+        ApplicationReleases.install();
         DatabaseInstances.install();
         be.elevenways.hohenheim.server.stack.StackInstances.install();
         // A generated preview hostname row carries derived attribution: read-only outside

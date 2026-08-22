@@ -1,20 +1,22 @@
-package be.elevenways.hohenheim.server.docker;
+package be.elevenways.hohenheim.server.application;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDatabaseModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
-import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.host.HostLeases;
+import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
-import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -46,7 +48,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * The health-gated zero-downtime release engine of the site tier: create candidate,
+ * The health-gated zero-downtime release engine of the application tier: create candidate,
  * probe, switch, drain, retain, reclaim -- every attempt a durable
  * {@link ReleaseOperationModel} row, every step visible in its log. A failed candidate
  * NEVER replaces the serving release: it is destroyed and the operation records failed
@@ -62,34 +64,34 @@ import java.util.TreeMap;
  * request can observe a half-configured state; there is no in-place mutation to race.
  *
  * AIDEV-NOTE: retention/reclaim policy -- exactly ONE superseded release is retained per
- * site (role {@code retired}: the instance row with the digest-pinned spec plus its
+ * application (role {@code retired}: the instance row with the digest-pinned spec plus its
  * stopped container, whose existence also pins the image against the per-build prune).
  * Reclaim happens at the END of the next successful operation's drain phase: every
- * retired release except the newest is verified-destroyed and the site's build artifacts
- * are pruned down to the serving digest. Site delete destroys all of it (destroyFor).
+ * retired release except the newest is verified-destroyed and the application's build artifacts
+ * are pruned down to the serving digest. Application delete destroys all of it (destroyFor).
  */
-public final class SiteReleases {
+public final class ReleaseEngine {
 
-    /** The activity action a SETTLED docker-site rollback is recorded under. */
+    /** The activity action a SETTLED application rollback is recorded under. */
     public static final String ACTIVITY_ROLLBACK_ACTION = "rolled_back";
 
     /** Keys of {@code adjustPaths}-injected checkout paths: per-slot, never source identity. */
     private static final List<String> VOLATILE_SETTINGS =
         List.of("build_context", "working_directory", "script", "root_path");
 
-    private SiteReleases() {
+    private ReleaseEngine() {
     }
 
     // -- source identity ------------------------------------------------------
 
     /**
-     * Identity of the SOURCE a release would be produced from: the resolved site
+     * Identity of the SOURCE a release would be produced from: the resolved application
      * settings with slot-dependent absolute paths dropped (commit_sha carries the
      * source identity for git checkouts). Matching fingerprints mean a release would
      * change nothing -- which is what lets an unchanged routing reload skip the
      * sandbox build entirely.
      */
-    public static @NonNull String sourceFingerprint(int siteId,
+    public static @NonNull String sourceFingerprint(int applicationId,
                                                     @NonNull Map<String, Object> settings) {
         TreeMap<String, Object> canonical = new TreeMap<>();
         settings.forEach((key, value) -> {
@@ -97,34 +99,34 @@ public final class SiteReleases {
                 canonical.put(key, value);
             }
         });
-        StringBuilder text = new StringBuilder("site:").append(siteId);
+        StringBuilder text = new StringBuilder("application:").append(applicationId);
         appendCanonical(text, canonical);
-        appendDatabaseLinks(text, siteId);
+        appendDatabaseLinks(text, applicationId);
         return sha256(text.toString());
     }
 
     /**
-     * Fold the site's database attachments into the source identity: an attach, a
+     * Fold the application's database attachments into the source identity: an attach, a
      * detach, a prefix change, a credential re-provision or a status flip must all read
      * as "the release would change" -- the injected environment and the link-network
      * joins only converge through a release, and the fast reuse lane would otherwise
      * skip them forever on an unchanged image.
      */
-    private static void appendDatabaseLinks(StringBuilder text, int siteId) {
-        List<Row> links = Models.get(SiteDatabaseModel.class).findBySiteId(siteId);
+    private static void appendDatabaseLinks(StringBuilder text, int applicationId) {
+        List<Row> links = Models.get(InstanceDatabaseModel.class).findByInstanceId(applicationId);
         if (links.isEmpty()) {
             return;
         }
         DatabaseModel databases = Models.get(DatabaseModel.class);
         text.append("|dblinks:");
         for (Row link : links) {
-            text.append(link.get(SiteDatabaseModel.ID)).append(':')
-                .append(link.get(SiteDatabaseModel.DATABASE_ID)).append(':')
+            text.append(link.get(InstanceDatabaseModel.ID)).append(':')
+                .append(link.get(InstanceDatabaseModel.DATABASE_ID)).append(':')
                 .append(DatabaseEnvInjection.normalizedPrefix(
-                    link.get(SiteDatabaseModel.ENV_PREFIX)))
+                    link.get(InstanceDatabaseModel.ENV_PREFIX)))
                 .append(':');
             Row database = databases.find()
-                .where(DatabaseModel.ID.eq(link.get(SiteDatabaseModel.DATABASE_ID)))
+                .where(DatabaseModel.ID.eq(link.get(InstanceDatabaseModel.DATABASE_ID)))
                 .first();
             if (database != null) {
                 text.append(database.get(DatabaseModel.STATUS)).append(':')
@@ -176,57 +178,57 @@ public final class SiteReleases {
     }
 
     /**
-     * Whether the site is PINNED to its rolled-back release: the newest succeeded
+     * Whether the application is PINNED to its rolled-back release: the newest succeeded
      * operation is a rollback and the source has not changed since -- the operator
      * rejected exactly this source, so converging back onto it would silently undo the
      * rollback on the next routing reload. Any source change dissolves the pin.
      */
-    public static boolean pinnedByRollback(int siteId, @NonNull String siteFingerprint) {
+    public static boolean pinnedByRollback(int applicationId, @NonNull String ownerFingerprint) {
         // Post-switch phases count: a rollback that has taken traffic but is still
         // draining MUST already pin, or the routing reload the rollback itself
         // triggers would converge straight back onto the rejected spec and undo it.
         Row latest = Models.get(ReleaseOperationModel.class).find()
-            .where(ReleaseOperationModel.FOR_MODEL.eq(SiteModel.MODEL_ID.toString()))
-            .where(ReleaseOperationModel.FOR_ID.eq(siteId))
+            .where(ReleaseOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+            .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
             .where(ReleaseOperationModel.STATUS.in(ReleaseOperationModel.STATUS_SWITCHING,
                 ReleaseOperationModel.STATUS_DRAINING, ReleaseOperationModel.STATUS_SUCCEEDED))
             .orderBy(ReleaseOperationModel.ID, SortOrder.DESC)
             .first();
         return latest != null
             && ReleaseOperationModel.KIND_ROLLBACK.equals(latest.get(ReleaseOperationModel.KIND))
-            && siteFingerprint.equals(latest.get(ReleaseOperationModel.SITE_FINGERPRINT));
+            && ownerFingerprint.equals(latest.get(ReleaseOperationModel.OWNER_FINGERPRINT));
     }
 
     // -- the operations -------------------------------------------------------
 
     /**
-     * First release of a site that never had one: deploy directly, recorded as a
+     * First release of an application that never had one: deploy directly, recorded as a
      * release operation. There is deliberately no probe GATE here -- with nothing
      * serving there is nothing a failed candidate could replace, and refusing would
      * only hide the workload's real state; the step log states this.
      *
-     * @throws Violations when the deploy refuses (the site is down either way)
+     * @throws Violations when the deploy refuses (the application is down either way)
      */
-    static SiteInstances.@NonNull SiteRuntime initialRelease(int siteId,
-                                                             @Nullable String siteName,
+    static ApplicationReleases.@NonNull Release initialRelease(int applicationId,
+                                                             @Nullable String applicationName,
                                                              int serverId,
                                                              @NonNull Map<String, Object> desired,
-                                                             @NonNull String siteFingerprint) {
-        Row op = newOperation(ReleaseOperationModel.KIND_RELEASE, siteId,
-            siteFingerprint, siteFingerprint);
+                                                             @NonNull String ownerFingerprint) {
+        Row op = newOperation(ReleaseOperationModel.KIND_RELEASE, applicationId,
+            ownerFingerprint, ownerFingerprint);
         step(op, "initial release: no prior release to protect, deploying directly");
         try {
-            Row instance = newInstanceRow(siteId, siteName, serverId, desired,
+            Row instance = newInstanceRow(applicationId, applicationName, serverId, desired,
                 InstanceModel.ROLE_SERVING);
             int instanceId = instance.get(InstanceModel.ID);
             transition(stamp(op).set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, instanceId),
                 ReleaseOperationModel.STATUS_DEPLOYING,
                 "instance " + instanceId + " created");
             InstanceStatus status = new InstanceService().deploy(instanceId);
+            ApplicationUpstreams.invalidate(applicationId);
             finish(stamp(op).set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image"))),
                 ReleaseOperationModel.STATUS_SUCCEEDED, null, "deployed");
-            SiteVolumes.heal(siteId, desired);
-            return new SiteInstances.SiteRuntime(instanceId, status);
+            return new ApplicationReleases.Release(instanceId, status);
         } catch (RuntimeException e) {
             finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(e), "deploy failed");
             throw e;
@@ -238,14 +240,14 @@ public final class SiteReleases {
      * (running with a published port), the candidate is deployed BESIDE it, probed, and
      * only a healthy candidate takes the traffic over; any failure destroys the
      * candidate, records it, and RETURNS the prior release still serving -- a source
-     * change can degrade a site to "stale but up", never to "down". When nothing is
+     * change can degrade an application to "stale but up", never to "down". When nothing is
      * serving, the spec is replaced in place (there is nothing to protect).
      */
-    static SiteInstances.@NonNull SiteRuntime release(@NonNull DockerClient docker, int siteId,
-                                                      @Nullable String siteName, int serverId,
+    static ApplicationReleases.@NonNull Release release(@NonNull DockerClient docker, int applicationId,
+                                                      @Nullable String applicationName, int serverId,
                                                       @NonNull Row serving,
                                                       @NonNull Map<String, Object> sourceSettings,
-                                                      @NonNull String siteFingerprint) {
+                                                      @NonNull String ownerFingerprint) {
         int servingId = serving.get(InstanceModel.ID);
         InstanceStatus oldLive = new InstanceService().liveStatus(servingId);
         // AIDEV-NOTE: workloadDead() is part of this test, not decoration. A container the
@@ -253,32 +255,34 @@ public final class SiteReleases {
         // with it counted as "protecting", an unchanged converge took the fingerprint-adopt
         // branch below, returned the same dead release and recorded the operation SUCCEEDED
         // ("spec unchanged; ... without a deploy"), so the reuse lane's own OOMKilled
-        // refusal (SiteInstances.reusableStatus) achieved nothing and the site kept
+        // refusal (ApplicationReleases.reusableStatus) achieved nothing and the application kept
         // pointing at a dead workload forever. Not protecting means the honest thing
         // happens instead: redeploy in place, no probe gate, because there is no live
         // traffic to gate against.
         boolean protecting = oldLive.running() && oldLive.publishedPort() != null
             && !oldLive.workloadDead();
 
-        Row op = newOperation(ReleaseOperationModel.KIND_RELEASE, siteId,
-            siteFingerprint, siteFingerprint);
+
+        Row op = newOperation(ReleaseOperationModel.KIND_RELEASE, applicationId,
+            ownerFingerprint, ownerFingerprint);
         Map<String, Object> desired;
         try {
             step(op, "resolving the desired spec (build/pull + digest pin)");
-            desired = SiteInstances.desiredSettings(docker, siteId, sourceSettings);
-            desired.put("source_fingerprint", siteFingerprint);
+            desired = ApplicationReleases.desiredSettings(docker,
+                ApplicationReleases.requireApplication(applicationId), sourceSettings);
+            desired.put("source_fingerprint", ownerFingerprint);
         } catch (RuntimeException e) {
             finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(e),
                 "spec resolution failed");
             if (protecting) {
-                Blast.log("RELEASE: site", siteId, "release failed before a candidate"
+                Blast.log("RELEASE: application", applicationId, "release failed before a candidate"
                     + " existed; the prior release keeps serving -", reasonOf(e));
-                return new SiteInstances.SiteRuntime(servingId, oldLive);
+                return new ApplicationReleases.Release(servingId, oldLive);
             }
             throw e;
         }
 
-        if (specEquals(desired, SiteInstances.storedSettings(serving))
+        if (specEquals(desired, ApplicationReleases.storedSettings(serving))
                 && serverId == ServerModel.canonicalServerId(
                     serving.get(InstanceModel.SERVER_ID))) {
             // The source fingerprint drifted (legacy row, new derivation input) but the
@@ -286,15 +290,28 @@ public final class SiteReleases {
             Row adopting = reload(servingId);
             adopting.set(InstanceModel.SETTINGS, desired);
             Models.get(InstanceModel.class).save(adopting);
-            SiteVolumes.heal(siteId, desired);
             finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null,
                 "spec unchanged; fingerprint adopted without a deploy");
             if (protecting) {
-                return new SiteInstances.SiteRuntime(servingId, oldLive);
+                return new ApplicationReleases.Release(servingId, oldLive);
             }
-            return new SiteInstances.SiteRuntime(servingId,
+            return new ApplicationReleases.Release(servingId,
                 new InstanceService().deploy(servingId));
         }
+
+        // A volume no two workloads may hold at once cannot be gated: the candidate would
+        // mount the serving release's data WHILE it is still writing to it. Declaring one
+        // buys stop-then-start (a real, visible outage) instead of a silent double mount.
+        if (protecting && InstanceVolumes.hasExclusive(applicationId)) {
+            step(op, "an exclusive volume is declared; stopping the serving release before"
+                + " the new one starts instead of gating a candidate beside it");
+            protecting = false;
+        }
+
+        // The pre-deploy snapshot: a point-in-time copy of the data the new release is
+        // about to write to, taken BEFORE anything starts. A host whose backend cannot
+        // snapshot refuses the deploy by name rather than pretending it protected anything.
+        snapshotVolumes(op, applicationId, serverId);
 
         if (!protecting || !(desired.get("container_port") instanceof Number)) {
             // Nothing serving traffic (or a portless workload the proxy cannot probe):
@@ -304,13 +321,13 @@ public final class SiteReleases {
             replacing.set(InstanceModel.SETTINGS, desired);
             replacing.set(InstanceModel.SERVER_ID, serverId);
             Models.get(InstanceModel.class).save(replacing);
-            SiteVolumes.heal(siteId, desired);
             transition(op, ReleaseOperationModel.STATUS_DEPLOYING, "deploying in place");
             try {
                 InstanceStatus status = new InstanceService().deploy(servingId);
+                ApplicationUpstreams.invalidate(applicationId);
                 finish(stamp(op).set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image"))),
                     ReleaseOperationModel.STATUS_SUCCEEDED, null, "deployed");
-                return new SiteInstances.SiteRuntime(servingId, status);
+                return new ApplicationReleases.Release(servingId, status);
             } catch (RuntimeException e) {
                 finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(e), "deploy failed");
                 throw e;
@@ -318,18 +335,18 @@ public final class SiteReleases {
         }
 
         try {
-            return gatedSwap(docker, op, siteId, siteName, serverId, serving, desired);
+            return gatedSwap(docker, op, applicationId, applicationName, serverId, serving, desired);
         } catch (RuntimeException e) {
             // The health gate held: the candidate never took traffic and is gone; the
             // prior release keeps serving. Loud in the log AND durable on the record.
-            Blast.log("RELEASE: site", siteId, "candidate refused -", reasonOf(e),
+            Blast.log("RELEASE: application", applicationId, "candidate refused -", reasonOf(e),
                 "- the prior release keeps serving");
-            return new SiteInstances.SiteRuntime(servingId, oldLive);
+            return new ApplicationReleases.Release(servingId, oldLive);
         }
     }
 
     /**
-     * Roll the site back to its RETAINED release: one durable operation over the
+     * Roll the application back to its RETAINED release: one durable operation over the
      * retired instance's digest-pinned settings. Nothing is rebuilt, cloned or pulled
      * from a tag -- the artifact is addressed by content, so a deleted checkout or a
      * moved tag cannot change what this deploys.
@@ -337,10 +354,10 @@ public final class SiteReleases {
      * @throws Violations when no rollback target exists or the candidate fails its
      *         probe (the current release keeps serving either way)
      */
-    public static void rollback(int siteId) {
-        SiteInstances.inScopeUnchecked(siteId, () -> {
-            Row serving = SiteInstances.ownedServing(siteId);
-            Row target = newestRetired(siteId);
+    public static void rollback(int applicationId) {
+        ApplicationReleases.inScopeUnchecked(applicationId, () -> {
+            Row serving = ApplicationReleases.ownedServing(applicationId);
+            Row target = newestRetired(applicationId);
             if (target == null) {
                 throw Violations.ofForm(Microcopy.of("release_no_rollback_target")
                     .withFilter("scope", "violations"));
@@ -349,11 +366,11 @@ public final class SiteReleases {
                 throw Violations.ofForm(Microcopy.of("release_no_serving_release")
                     .withFilter("scope", "violations"));
             }
-            Map<String, Object> desired = SiteInstances.storedSettings(target);
+            Map<String, Object> desired = ApplicationReleases.storedSettings(target);
             int serverId = ServerModel.canonicalServerId(target.get(InstanceModel.SERVER_ID));
             String specFingerprint = str(desired.get("source_fingerprint"));
-            String siteFingerprint =
-                str(SiteInstances.storedSettings(serving).get("source_fingerprint"));
+            String ownerFingerprint =
+                str(ApplicationReleases.storedSettings(serving).get("source_fingerprint"));
 
             InstanceStatus oldLive =
                 new InstanceService().liveStatus(serving.get(InstanceModel.ID));
@@ -361,28 +378,27 @@ public final class SiteReleases {
                 throw Violations.ofForm(Microcopy.of("release_no_serving_release")
                     .withFilter("scope", "violations"));
             }
-            Row op = newOperation(ReleaseOperationModel.KIND_ROLLBACK, siteId,
-                siteFingerprint, specFingerprint);
+            Row op = newOperation(ReleaseOperationModel.KIND_ROLLBACK, applicationId,
+                ownerFingerprint, specFingerprint);
             step(op, "rolling back to retired instance " + target.get(InstanceModel.ID)
                 + " (image " + str(desired.get("image")) + ")");
             DockerClient docker = serverId == ServerModel.localServerId()
                 ? new DockerClient()
                 : new ServerService().clientFor(ServerModel.nameOf(serverId));
-            gatedSwap(docker, op, siteId, serving.get(InstanceModel.NAME), serverId,
+            gatedSwap(docker, op, applicationId, serving.get(InstanceModel.NAME), serverId,
                 serving, desired);
         });
-        // The routing tier still proxies the OLD release's port until it rebuilds the
-        // site's handler; the drain window keeps that upstream alive through the reload.
-        ProxyServer proxy = ServerMain.getProxyServer();
-        if (proxy != null) {
-            proxy.reload();
-        }
+        // AIDEV-NOTE: no proxy reload any more, and that is the point of the re-keying. A
+        // flip no longer changes the ROUTE TABLE at all -- the site's route names an
+        // application, and the instance upstream handler re-resolves the serving release's
+        // address off the generation gatedSwap just bumped. Rebuilding every site's handler
+        // to move one upstream was the site-keyed shape.
         // AIDEV-NOTE: recorded HERE, in the engine, not on the surfaces. The admin row
         // action (SiteResource#rollbackAction) recorded nothing while the automation API
         // recorded "rollback_triggered" -- the same one-surface-audited asymmetry the
         // instance power path had. The engine writes its state through role saves and
         // ReleaseOperation rows, neither of which is an activity row about the SITE.
-        ActivityLog.record(Models.get(SiteModel.class), siteId, ACTIVITY_ROLLBACK_ACTION,
+        ActivityLog.record(Models.get(InstanceModel.class), applicationId, ACTIVITY_ROLLBACK_ACTION,
             null);
     }
 
@@ -392,9 +408,9 @@ public final class SiteReleases {
      * destroying the candidate -- a failed candidate never exists as a serving role,
      * never keeps a container, and its port claim dies with it.
      */
-    private static SiteInstances.@NonNull SiteRuntime gatedSwap(@NonNull DockerClient docker,
-                                                                @NonNull Row op, int siteId,
-                                                                @Nullable String siteName,
+    private static ApplicationReleases.@NonNull Release gatedSwap(@NonNull DockerClient docker,
+                                                                @NonNull Row op, int applicationId,
+                                                                @Nullable String applicationName,
                                                                 int serverId,
                                                                 @NonNull Row serving,
                                                                 @NonNull Map<String, Object> desired) {
@@ -402,7 +418,7 @@ public final class SiteReleases {
         Integer candidateId = null;
         InstanceService instances = new InstanceService();
         try {
-            Row candidate = newInstanceRow(siteId, siteName, serverId, desired,
+            Row candidate = newInstanceRow(applicationId, applicationName, serverId, desired,
                 InstanceModel.ROLE_CANDIDATE);
             candidateId = candidate.get(InstanceModel.ID);
             transition(stamp(op).set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId),
@@ -440,13 +456,17 @@ public final class SiteReleases {
             candidate.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
             instances.assignRuntimeRole(servingId, InstanceModel.ROLE_RETIRED);
             serving.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_RETIRED);
-            SiteVolumes.heal(siteId, desired);
+            // The proxy resolves the serving release's address lazily and re-resolves when
+            // this generation moves; without this bump it would keep forwarding to the
+            // retired container until the drain stopped it, which IS the dropped request
+            // the gated swap exists to prevent.
+            ApplicationUpstreams.invalidate(applicationId);
             transition(op, ReleaseOperationModel.STATUS_DRAINING,
                 "instance " + candidateId + " now serving; instance " + servingId
                     + " retained as the rollback target, draining");
-            scheduleDrain(siteId, op.get(ReleaseOperationModel.ID), servingId,
+            scheduleDrain(applicationId, op.get(ReleaseOperationModel.ID), servingId,
                 str(desired.get("image")), Db.current());
-            return new SiteInstances.SiteRuntime(candidateId, candidateStatus);
+            return new ApplicationReleases.Release(candidateId, candidateStatus);
         } catch (RuntimeException gateHeld) {
             finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(gateHeld),
                 "candidate refused: " + reasonOf(gateHeld));
@@ -454,6 +474,23 @@ public final class SiteReleases {
                 destroyCandidateQuietly(candidateId);
             }
             throw gateHeld;
+        }
+    }
+
+    /**
+     * Snapshot every volume the application declares, before a deploy touches them.
+     *
+     * AIDEV-NOTE: the refusal is deliberately LOUD and not swallowed. An application with
+     * no volumes snapshots nothing and deploys as before; an application WITH volumes on a
+     * host that cannot snapshot is refused by name, because "we took a backup" is the one
+     * claim that must never be a guess (phase-0 design section 5: no tar fallback).
+     */
+    private static void snapshotVolumes(@NonNull Row op, int applicationId, int serverId) {
+        List<String> snapshots = InstanceVolumes.snapshotAll(applicationId,
+            ServerModel.nameOf(serverId), "predeploy");
+        if (!snapshots.isEmpty()) {
+            step(op, "pre-deploy snapshot of " + snapshots.size() + " volume(s): "
+                + String.join(", ", snapshots));
         }
     }
 
@@ -466,7 +503,7 @@ public final class SiteReleases {
      * datasource and attribution scopes captured at switch time; a controller crash
      * before it runs is finished by {@link #recoverInterrupted()}.
      */
-    private static void scheduleDrain(int siteId, int opId, int retiredId,
+    private static void scheduleDrain(int applicationId, int opId, int retiredId,
                                       @NonNull String servingImage,
                                       @Nullable Datasource datasource) {
         Integer seconds = HohenheimSettings.VALUES.getValue(
@@ -479,19 +516,19 @@ public final class SiteReleases {
                 Thread.currentThread().interrupt();
                 return;
             }
-            withScope(datasource, () -> SiteInstances.inScopeUnchecked(siteId, () -> {
+            withScope(datasource, () -> ApplicationReleases.inScopeUnchecked(applicationId, () -> {
                 Row op = Models.get(ReleaseOperationModel.class).findById(opId);
                 if (op == null || !ReleaseOperationModel.STATUS_DRAINING.equals(
                         op.get(ReleaseOperationModel.STATUS))) {
                     return;
                 }
-                completeDrain(siteId, op, retiredId, servingImage, "drain window elapsed");
+                completeDrain(applicationId, op, retiredId, servingImage, "drain window elapsed");
             }));
         });
     }
 
     /** The shared drain completion: stop retained, reclaim older, prune, succeed. */
-    private static void completeDrain(int siteId, @NonNull Row op, int retiredId,
+    private static void completeDrain(int applicationId, @NonNull Row op, int retiredId,
                                       @NonNull String servingImage, @NonNull String how) {
         try {
             Row retired = Models.get(InstanceModel.class).findById(retiredId);
@@ -508,25 +545,25 @@ public final class SiteReleases {
             // recorded verbatim and the instance tier's parked claims/reconciler
             // surface the leftover -- never a silent shrug, never a false "failed".
             step(op, "WARNING: superseded release stop failed: " + reasonOf(stopFailed));
-            Blast.log("RELEASE: site", siteId, "superseded release stop failed -",
+            Blast.log("RELEASE: application", applicationId, "superseded release stop failed -",
                 reasonOf(stopFailed));
         }
-        reclaimOlderRetired(siteId, retiredId, op);
-        pruneArtifactsQuietly(siteId, servingImage, op);
+        reclaimOlderRetired(applicationId, retiredId, op);
+        pruneArtifactsQuietly(applicationId, servingImage, op);
         // Detached databases lose their link network HERE, after the switch and once the
         // superseded release stopped: disconnecting a still-serving container would
         // re-allocate its published port under the proxy.
         try {
-            SiteDatabaseNetworks.sweepFor(siteId, false);
+            InstanceDatabaseNetworks.sweepFor(applicationId, false);
         } catch (RuntimeException e) {
             step(op, "WARNING: database link-network sweep failed: " + reasonOf(e));
         }
         finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null, "release complete");
     }
 
-    /** Destroy every retired release of the site EXCEPT the newest (the one retained). */
-    private static void reclaimOlderRetired(int siteId, int keepInstanceId, @NonNull Row op) {
-        for (Row stale : ownedWithRole(siteId, InstanceModel.ROLE_RETIRED)) {
+    /** Destroy every retired release of the application EXCEPT the newest (the one retained). */
+    private static void reclaimOlderRetired(int applicationId, int keepInstanceId, @NonNull Row op) {
+        for (Row stale : ownedWithRole(applicationId, InstanceModel.ROLE_RETIRED)) {
             int staleId = stale.get(InstanceModel.ID);
             if (staleId == keepInstanceId) {
                 continue;
@@ -536,17 +573,17 @@ public final class SiteReleases {
                 step(op, "reclaimed superseded release instance " + staleId);
             } catch (RuntimeException e) {
                 step(op, "WARNING: could not reclaim instance " + staleId + ": " + reasonOf(e));
-                Blast.log("RELEASE: site", siteId, "could not reclaim instance", staleId,
+                Blast.log("RELEASE: application", applicationId, "could not reclaim instance", staleId,
                     "-", reasonOf(e));
             }
         }
     }
 
-    private static void pruneArtifactsQuietly(int siteId, @NonNull String servingImage,
+    private static void pruneArtifactsQuietly(int applicationId, @NonNull String servingImage,
                                               @NonNull Row op) {
         try {
-            BuildArtifacts.pruneSuperseded(new DockerClient(), SiteModel.MODEL_ID.toString(),
-                siteId, servingImage);
+            BuildArtifacts.pruneSuperseded(new DockerClient(), InstanceModel.MODEL_ID.toString(),
+                applicationId, servingImage);
         } catch (RuntimeException e) {
             step(op, "WARNING: artifact prune failed: " + reasonOf(e));
         }
@@ -570,9 +607,9 @@ public final class SiteReleases {
             .all();
         List<Integer> answered = new ArrayList<>();
         for (Row op : inFlight) {
-            Integer siteId = op.get(ReleaseOperationModel.FOR_ID);
-            if (siteId == null
-                    || !SiteModel.MODEL_ID.toString().equals(
+            Integer applicationId = op.get(ReleaseOperationModel.FOR_ID);
+            if (applicationId == null
+                    || !InstanceModel.MODEL_ID.toString().equals(
                         op.get(ReleaseOperationModel.FOR_MODEL))) {
                 finish(op, ReleaseOperationModel.STATUS_INTERRUPTED,
                     "interrupted by a controller restart", "boot recovery: unknown owner");
@@ -591,7 +628,7 @@ public final class SiteReleases {
                 // another controller holds is skipped: the release is that controller's.
                 Integer serverId = releaseHostOf(op);
                 Runnable recover = () ->
-                    SiteInstances.inScopeUnchecked(siteId, () -> recoverOne(siteId, op));
+                    ApplicationReleases.inScopeUnchecked(applicationId, () -> recoverOne(applicationId, op));
                 if (serverId == null) {
                     recover.run();
                 } else {
@@ -627,14 +664,14 @@ public final class SiteReleases {
         return null;
     }
 
-    private static void recoverOne(int siteId, @NonNull Row op) {
+    private static void recoverOne(int applicationId, @NonNull Row op) {
         String status = op.get(ReleaseOperationModel.STATUS);
         Integer candidateId = op.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID);
         Integer retiredId = op.get(ReleaseOperationModel.RETIRED_INSTANCE_ID);
 
         if (ReleaseOperationModel.STATUS_DRAINING.equals(status)) {
-            completeDrain(siteId, op, retiredId != null ? retiredId : -1,
-                servingImageOf(siteId), "boot recovery finished the lost drain");
+            completeDrain(applicationId, op, retiredId != null ? retiredId : -1,
+                servingImageOf(applicationId), "boot recovery finished the lost drain");
             return;
         }
         if (ReleaseOperationModel.STATUS_SWITCHING.equals(status) && candidateId != null) {
@@ -651,7 +688,7 @@ public final class SiteReleases {
                 }
                 transition(op, ReleaseOperationModel.STATUS_DRAINING,
                     "boot recovery: switch had completed, draining");
-                completeDrain(siteId, op, retiredId, servingImageOf(siteId),
+                completeDrain(applicationId, op, retiredId, servingImageOf(applicationId),
                     "boot recovery finished the lost drain");
                 return;
             }
@@ -665,11 +702,11 @@ public final class SiteReleases {
             "boot recovery: candidate destroyed, prior release untouched");
     }
 
-    /** Destroy candidate-role site instances no in-flight operation answers for. */
+    /** Destroy candidate-role release instances no in-flight operation answers for. */
     private static void sweepOrphanCandidates(@NonNull List<Integer> answered) {
         List<Row> candidates = Models.get(InstanceModel.class).find()
             .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_CANDIDATE))
-            .where(InstanceModel.GENERATED_FOR_MODEL.eq(SiteModel.MODEL_ID.toString()))
+            .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
             .where(InstanceModel.DELETED_AT.isNull())
             .all();
         for (Row candidate : candidates) {
@@ -677,18 +714,18 @@ public final class SiteReleases {
             if (answered.contains(candidateId)) {
                 continue;
             }
-            Integer siteId = candidate.get(InstanceModel.GENERATED_FOR_ID);
+            Integer applicationId = candidate.get(InstanceModel.GENERATED_FOR_ID);
             Blast.log("RELEASE: destroying orphaned candidate instance", candidateId,
-                "of site", siteId);
-            SiteInstances.inScopeUnchecked(siteId != null ? siteId : -1,
+                "of application", applicationId);
+            ApplicationReleases.inScopeUnchecked(applicationId != null ? applicationId : -1,
                 () -> destroyCandidateQuietly(candidateId));
         }
     }
 
-    private static @NonNull String servingImageOf(int siteId) {
-        Row serving = SiteInstances.ownedServing(siteId);
+    private static @NonNull String servingImageOf(int applicationId) {
+        Row serving = ApplicationReleases.ownedServing(applicationId);
         return serving != null
-            ? str(SiteInstances.storedSettings(serving).get("image")) : "";
+            ? str(ApplicationReleases.storedSettings(serving).get("image")) : "";
     }
 
     // -- the health probe -----------------------------------------------------
@@ -776,13 +813,13 @@ public final class SiteReleases {
     }
 
     /** A fresh instance row of the release kind, in the given role. */
-    private static @NonNull Row newInstanceRow(int siteId, @Nullable String siteName,
+    private static @NonNull Row newInstanceRow(int applicationId, @Nullable String applicationName,
                                                int serverId,
                                                @NonNull Map<String, Object> desired,
                                                @NonNull String role) {
         Row instance = Models.get(InstanceModel.class).createEmptyRow();
         instance.set(InstanceModel.NAME,
-            siteName != null && !siteName.isBlank() ? siteName : "site-" + siteId);
+            applicationName != null && !applicationName.isBlank() ? applicationName : "application-" + applicationId);
         instance.set(InstanceModel.KIND, ReleaseKind.ID.toString());
         instance.set(InstanceModel.SETTINGS, desired);
         instance.set(InstanceModel.SERVER_ID, serverId);
@@ -811,34 +848,34 @@ public final class SiteReleases {
         }
     }
 
-    static @NonNull List<Row> ownedWithRole(int siteId, @NonNull String role) {
+    static @NonNull List<Row> ownedWithRole(int applicationId, @NonNull String role) {
         return Models.get(InstanceModel.class).find()
-            .where(InstanceModel.GENERATED_FOR_MODEL.eq(SiteModel.MODEL_ID.toString()))
-            .where(InstanceModel.GENERATED_FOR_ID.eq(siteId))
+            .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+            .where(InstanceModel.GENERATED_FOR_ID.eq(applicationId))
             .where(InstanceModel.RUNTIME_ROLE.eq(role))
             .where(InstanceModel.DELETED_AT.isNull())
             .orderBy(InstanceModel.ID, SortOrder.DESC)
             .all();
     }
 
-    /** The site's newest retained release (the rollback target), or null. */
-    public static @Nullable Row newestRetired(int siteId) {
-        List<Row> retired = ownedWithRole(siteId, InstanceModel.ROLE_RETIRED);
+    /** The application's newest retained release (the rollback target), or null. */
+    public static @Nullable Row newestRetired(int applicationId) {
+        List<Row> retired = ownedWithRole(applicationId, InstanceModel.ROLE_RETIRED);
         return retired.isEmpty() ? null : retired.get(0);
     }
 
     // -- operation record plumbing -------------------------------------------
 
-    private static @NonNull Row newOperation(@NonNull String kind, int siteId,
-                                             @NonNull String siteFingerprint,
+    private static @NonNull Row newOperation(@NonNull String kind, int applicationId,
+                                             @NonNull String ownerFingerprint,
                                              @NonNull String specFingerprint) {
         ReleaseOperationModel model = Models.get(ReleaseOperationModel.class);
         Row op = model.createEmptyRow();
         op.set(ReleaseOperationModel.KIND, kind);
-        op.set(ReleaseOperationModel.FOR_MODEL, SiteModel.MODEL_ID.toString());
-        op.set(ReleaseOperationModel.FOR_ID, siteId);
+        op.set(ReleaseOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
+        op.set(ReleaseOperationModel.FOR_ID, applicationId);
         op.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_PENDING);
-        op.set(ReleaseOperationModel.SITE_FINGERPRINT, siteFingerprint);
+        op.set(ReleaseOperationModel.OWNER_FINGERPRINT, ownerFingerprint);
         op.set(ReleaseOperationModel.SPEC_FINGERPRINT, specFingerprint);
         op.set(ReleaseOperationModel.STARTED_AT, Instant.now());
         op.set(ReleaseOperationModel.STEP_LOG, "");
@@ -908,7 +945,7 @@ public final class SiteReleases {
     /** Keep the newest N operations per owning record; older rows go. */
     private static void prune(@NonNull Row op) {
         Integer keep = HohenheimSettings.VALUES.getValue(
-            HohenheimSettings.Releases.HISTORY_PER_SITE);
+            HohenheimSettings.Releases.HISTORY_PER_RECORD);
         int limit = keep != null && keep > 0 ? keep : 50;
         ReleaseOperationModel model = Models.get(ReleaseOperationModel.class);
         List<Row> stale = model.find()
@@ -930,7 +967,7 @@ public final class SiteReleases {
         Map<String, Object> b = new LinkedHashMap<>(right);
         a.remove("source_fingerprint");
         b.remove("source_fingerprint");
-        return SiteInstances.settingsEqual(a, b);
+        return ApplicationReleases.settingsEqual(a, b);
     }
 
     private static void withScope(@Nullable Datasource datasource, @NonNull Runnable body) {

@@ -63,6 +63,21 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
+     * Whether a record of this kind owns NO container of its own: its lifecycle verbs
+     * converge a generated RELEASE instead.
+     *
+     * AIDEV-NOTE: this is the seam that lets every existing power surface -- the CMS row
+     * action, the automation API, a schedule chain -- deploy an application without knowing
+     * an application exists. {@code InstanceService} asks the KIND rather than switching on
+     * a name, so a second release-managed kind is one method override and no edits here.
+     *
+     * @return false for every kind whose record IS a workload
+     */
+    default boolean releaseManaged() {
+        return false;
+    }
+
+    /**
      * Whether records of this kind may ONLY be written by the owning product tier, inside
      * its {@code GeneratedRows} system scope. A generated-only kind cannot be created,
      * edited or re-kinded from the standalone instance form or API at all, which is what

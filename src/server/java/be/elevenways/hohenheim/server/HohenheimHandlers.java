@@ -2,6 +2,10 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimPaths;
+import be.elevenways.hohenheim.server.application.ApplicationDeploys;
+import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.api.PaasApi;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
@@ -10,7 +14,6 @@ import be.elevenways.hohenheim.server.instance.InstanceApi;
 import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
-import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
@@ -83,10 +86,6 @@ public final class HohenheimHandlers {
                     ? proxy.getDispatcher().findHandlerBySiteId(siteId) : null;
                 entry.put("health", handler != null
                     ? BlastString.lower(handler.getHealth().name()) : "unknown");
-                if (handler instanceof GitSiteRequestHandler git) {
-                    entry.put("current_commit", git.getCurrentCommit());
-                    entry.put("deploying", git.isDeploying());
-                }
                 sites.add(entry);
             }
             return HandlerSupport.jsonUntyped(Map.of("sites", sites));
@@ -98,13 +97,15 @@ public final class HohenheimHandlers {
                 return null;
             }
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
-            var git = SiteControlHandlers.gitHandler(siteId);
-            if (git.isEmpty()) {
+            Row site = siteId == null ? null : Models.get(SiteModel.class).findById(siteId);
+            Integer applicationId = site == null ? null : site.get(SiteModel.INSTANCE_ID);
+            if (applicationId == null) {
                 conduit.notFound();
                 return null;
             }
-            git.get().enqueueDeploy("api");
-            ActivityLog.record(Models.get(SiteModel.class), siteId, "deploy_triggered", "api");
+            Datasource datasource = Db.current();
+            JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
+                ApplicationDeploys.deployQuietly(applicationId, null, "api")));
             return HandlerSupport.jsonUntyped(Map.of("status", "queued", "site", siteId));
         });
     }

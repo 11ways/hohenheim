@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.preview;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.quota.OwnerQuota;
 import be.elevenways.protoblast.common.Blast;
@@ -26,7 +26,7 @@ import java.util.Set;
 
 /**
  * Concurrent-preview quota per owner: the InstanceQuota shape over its own bucket
- * prefix. A preview's owner IS its site's grant-derived owner (a project is one
+ * prefix. A preview's owner IS its application's grant-derived owner (a project is one
  * owner), so two racing webhook-triggered previews of one project contest one atomic
  * ledger row and the cap holds under concurrency. Unreadable grants fail CLOSED --
  * a preview whose owner cannot be derived is refused, never charged to nobody.
@@ -90,16 +90,24 @@ public final class PreviewQuota {
         PreviewDeploymentModel.SCHEMA.addAfterRemoveHook(PreviewQuota::releaseDoomedBuckets);
     }
 
-    /** The owner pack of the preview's SITE; fails closed on unreadable grants. */
+    /**
+     * The owner pack of the preview's APPLICATION; fails closed on unreadable grants.
+     *
+     * AIDEV-NOTE: the charge followed the source when the source moved (phase-0 brief 7).
+     * It is the same rule as before -- the owner of the thing being deployed pays -- and it
+     * has to be re-derivable from the stored row on release, which is why it reads the
+     * application id off the row rather than an actor identity.
+     */
     private static @NonNull String ownerPackOf(@NonNull Row previewRow) {
-        Object siteId = previewRow.has(PreviewDeploymentModel.SITE_ID.getName())
-            ? previewRow.get(PreviewDeploymentModel.SITE_ID.getName()) : null;
-        if (!(siteId instanceof Number number)) {
-            throw Violations.ofField(PreviewDeploymentModel.SITE_ID.getName(), siteId,
-                Microcopy.of("preview_site_required").withFilter("scope", "violations"));
+        Object applicationId = previewRow.has(PreviewDeploymentModel.APPLICATION_ID.getName())
+            ? previewRow.get(PreviewDeploymentModel.APPLICATION_ID.getName()) : null;
+        if (!(applicationId instanceof Number number)) {
+            throw Violations.ofField(PreviewDeploymentModel.APPLICATION_ID.getName(),
+                applicationId,
+                Microcopy.of("preview_application_required").withFilter("scope", "violations"));
         }
         Set<String> subjects = HohenheimAccess.manageSubjectsOf(
-            SiteModel.MODEL_ID, number.intValue());
+            InstanceModel.MODEL_ID, number.intValue());
         if (subjects == null) {
             throw Violations.ofForm(Microcopy.of("preview_owner_unreadable")
                 .withFilter("scope", "violations"));

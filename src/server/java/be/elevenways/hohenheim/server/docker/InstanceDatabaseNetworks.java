@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The network half of INSTANCE-database attachments: one policied LINK network per
@@ -28,28 +30,26 @@ import java.util.Map;
  * {@code instance_databases} row keeps no network, and a link network never carries a
  * third member, so two instances sharing one database still cannot reach each other.
  *
- * The site lane's twin is {@link SiteDatabaseNetworks}; the daemon mechanics they share
- * live in {@link DatabaseLinkNetworks}. What differs is not cosmetic: a site's consumer is
- * whichever release instance is currently SERVING (so the lane resolves it), while an
- * instance IS its own consumer.
+ * AIDEV-NOTE: OWNER and CONSUMER are not always the same record, and phase-0 brief 7 folded
+ * the deleted site lane's asymmetry in here rather than keeping a second copy of this class.
+ * An ordinary instance owns its links and consumes them itself; an APPLICATION owns them
+ * while whichever release is currently serving consumes them. The link network is therefore
+ * named after the OWNER (it must outlive every release) and joined by the CONSUMER's
+ * container -- naming it after the consumer would mint a fresh, empty network on every
+ * deploy, exactly the defect owner-keyed volumes exist to avoid.
  *
- * AIDEV-NOTE: link networks carry {@link Egress#NONE}, for the reason the site lane spells
- * out -- the database's own network was DECLARED egress-NONE and a second interface must
+ * AIDEV-NOTE: link networks carry {@link Egress#NONE} -- the database's own network was DECLARED egress-NONE and a second interface must
  * not silently widen that. The instance's own egress rides its primary per-workload
  * network, untouched; members still reach each other because the own-subnet accept
  * precedes the egress drop.
  *
- * AIDEV-NOTE: the handle kind is {@code idblink}, NOT the site lane's {@code dblink}. One
- * numeric-pair namespace cannot serve two owner kinds: instance 5 + database 3 and site 5
- * + database 3 would mint the same network name and each lane's sweep would remove the
- * other's.
  */
 public final class InstanceDatabaseNetworks {
 
     private InstanceDatabaseNetworks() {
     }
 
-    /** Link-network handle of one instance/database pair. */
+    /** Link-network handle of one (link owner, database) pair. */
     static @NonNull String linkHandle(int instanceId, int databaseId) {
         return ControllerScope.handle(ControllerScope.KIND_INSTANCE_DBLINK,
             instanceId + "-" + databaseId);
@@ -102,7 +102,9 @@ public final class InstanceDatabaseNetworks {
      */
     public static void attachLinksBeforeStart(InstanceService.@NonNull Resolved resolved,
                                               int instanceId) throws IOException {
-        List<Row> links = Models.get(InstanceDatabaseModel.class).findByInstanceId(instanceId);
+        // A release's links live on its APPLICATION; every other instance owns its own.
+        int ownerId = ApplicationReleases.linkOwnerOf(resolved.row());
+        List<Row> links = Models.get(InstanceDatabaseModel.class).findByInstanceId(ownerId);
         if (links.isEmpty()) {
             return;
         }
@@ -132,7 +134,7 @@ public final class InstanceDatabaseNetworks {
                     + " instance or the database so both run on the same server.");
             }
             String databaseHandle = DatabaseInstances.handleOf(databaseId);
-            String handle = linkHandle(instanceId, databaseId);
+            String handle = linkHandle(ownerId, databaseId);
             support.ensureLinkNetwork(handle,
                 OwnerLabels.of(InstanceDatabaseModel.MODEL_ID, link.get(InstanceDatabaseModel.ID)),
                 Egress.NONE);
@@ -170,7 +172,13 @@ public final class InstanceDatabaseNetworks {
     public static boolean reattachForDatabase(int databaseId) {
         boolean touched = false;
         for (Row link : Models.get(InstanceDatabaseModel.class).findByDatabaseId(databaseId)) {
-            Integer instanceId = link.get(InstanceDatabaseModel.INSTANCE_ID);
+            Integer ownerId = link.get(InstanceDatabaseModel.INSTANCE_ID);
+            if (ownerId == null) {
+                continue;
+            }
+            // The container to rejoin is the owner's CONSUMER: an application has none
+            // until a release serves, and there is nothing to rejoin until then.
+            Integer instanceId = ApplicationReleases.consumerInstanceOf(ownerId);
             if (instanceId == null) {
                 continue;
             }
@@ -189,7 +197,7 @@ public final class InstanceDatabaseNetworks {
                     skipped(instanceId, databaseId, "cross_host");
                     continue;
                 }
-                String handle = linkHandle(instanceId, databaseId);
+                String handle = linkHandle(ownerId, databaseId);
                 support.ensureLinkNetwork(handle,
                     OwnerLabels.of(InstanceDatabaseModel.MODEL_ID,
                         link.get(InstanceDatabaseModel.ID)), Egress.NONE);
@@ -222,30 +230,47 @@ public final class InstanceDatabaseNetworks {
      * @param everything when true, remove ALL of the instance's link networks regardless
      *        of surviving rows (the instance-destroy shape)
      */
-    public static void sweepFor(int instanceId, boolean everything) {
-        Row instance = Models.get(InstanceModel.class).findById(instanceId);
-        int serverId = instance != null
-            ? ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID))
+    public static void sweepFor(int ownerId, boolean everything) {
+        Row owner = Models.get(InstanceModel.class).findById(ownerId);
+        int serverId = owner != null
+            ? ServerModel.canonicalServerId(owner.get(InstanceModel.SERVER_ID))
             : ServerModel.localServerId();
+        sweepFor(ownerId, everything, Set.of(serverId));
+    }
+
+    /**
+     * The multi-host form: an application's releases may have been placed on more than one
+     * host over their lifetime, so a destroy sweeps every host any of them ran on.
+     *
+     * @param servers the hosts to sweep, captured BEFORE the rows that name them are trashed
+     */
+    public static void sweepFor(int ownerId, boolean everything, @NonNull Set<Integer> servers) {
         InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
         String prefix = ControllerScope.kindPrefix(ControllerScope.KIND_INSTANCE_DBLINK)
-            + instanceId + "-";
-        try {
-            DatabaseLinkNetworks.sweepOnServer(prefix, ServerModel.nameOf(serverId), serverId,
-                everything, databaseId -> {
-                    for (Row link : links.findByInstanceId(instanceId)) {
-                        if (Integer.valueOf(databaseId)
-                                .equals(link.get(InstanceDatabaseModel.DATABASE_ID))) {
-                            return true;
+            + ownerId + "-";
+        Integer consumerId = ApplicationReleases.consumerInstanceOf(ownerId);
+        DatabaseLinkNetworks.Consumer consumer = consumerId == null ? null
+            : new DatabaseLinkNetworks.Consumer(consumerId,
+                ControllerScope.handle(ControllerScope.KIND_INSTANCE, consumerId));
+        for (Integer serverId : servers) {
+            if (serverId == null) {
+                continue;
+            }
+            try {
+                DatabaseLinkNetworks.sweepOnServer(prefix, ServerModel.nameOf(serverId), serverId,
+                    everything, databaseId -> {
+                        for (Row link : links.findByInstanceId(ownerId)) {
+                            if (Integer.valueOf(databaseId)
+                                    .equals(link.get(InstanceDatabaseModel.DATABASE_ID))) {
+                                return true;
+                            }
                         }
-                    }
-                    return false;
-                },
-                new DatabaseLinkNetworks.Consumer(instanceId,
-                    ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId)));
-        } catch (Exception e) {
-            Blast.log("DB-LINK: link-network sweep failed for instance", instanceId,
-                "on server", serverId, "-", e.getMessage());
+                        return false;
+                    }, consumer);
+            } catch (Exception e) {
+                Blast.log("DB-LINK: link-network sweep failed for instance", ownerId,
+                    "on server", serverId, "-", e.getMessage());
+            }
         }
     }
 

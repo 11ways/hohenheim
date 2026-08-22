@@ -17,7 +17,8 @@ import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.SiteReleases;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
@@ -26,6 +27,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.source.DeployStatuses;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
+import be.elevenways.hohenheim.server.source.GitCheckout;
 import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.util.EnvVars;
@@ -37,6 +39,7 @@ import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
@@ -45,9 +48,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
 import java.net.URI;
-import java.nio.file.Files;
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -57,10 +58,15 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The preview-deployment lifecycle: create/refresh from one git ref, serve on a
- * generated hostname, and RECLAIM -- instance, port claims, generated domain row and
+ * The preview-deployment lifecycle: create/refresh one git ref OF AN APPLICATION, serve it
+ * on a generated hostname, and RECLAIM -- instance, port claims, generated domain row and
  * DNS rows -- when the bounded lifetime ends, the PR closes, an operator acts, or the
- * owning site dies.
+ * owning application dies.
+ *
+ * AIDEV-NOTE: previews are keyed to the APPLICATION (phase-0 brief 7), not to a site. The
+ * application is what has a source to build and a spec to run; a site only lends the
+ * preview a hostname, because a hostname routes only from some site's domain table. An
+ * application no site exposes is refused BY NAME rather than built and left unreachable.
  *
  * A preview deliberately uses the DIRECT deploy lane, not the candidate/probe/switch
  * gate: nothing production-facing is being replaced, so a refused preview is simply a
@@ -76,18 +82,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class PreviewDeployments {
 
-    /**
-     * Upstream kinds previews support; others are refused with a named violation.
-     *
-     * AIDEV-NOTE: the `docker` site type this named was deleted with the upstream rename
-     * (phase-0 design section 3) and its serving half became the `instance` upstream. The
-     * SOURCE now lives on the instance the site exposes, which is why the source read below
-     * goes through SiteSources; brief 7 makes previews releases OF an application and this
-     * whole site keying goes with it.
-     */
-    private static final String INSTANCE_UPSTREAM_KIND = "hohenheim:instance";
-
-    /** Per-(site, ref) serialization so a webhook burst cannot race itself. */
+    /** Per-(application, ref) serialization so a webhook burst cannot race itself. */
     private static final Map<String, Object> LOCKS = new ConcurrentHashMap<>();
 
     private PreviewDeployments() {
@@ -101,15 +96,15 @@ public final class PreviewDeployments {
      * domain) is additionally reported onto the commit status when a sha is known --
      * without it a capped preview was invisible everywhere but the controller log.
      */
-    public static void deployQuietly(int siteId, @NonNull String ref, @Nullable String sha,
+    public static void deployQuietly(int applicationId, @NonNull String ref, @Nullable String sha,
                                      @Nullable Integer prNumber) {
         try {
-            deploy(siteId, ref, sha, prNumber);
+            deploy(applicationId, ref, sha, prNumber);
         } catch (Exception e) {
-            Blast.log("PREVIEW: deploy of site", siteId, "ref", ref, "failed -",
+            Blast.log("PREVIEW: deploy of application", applicationId, "ref", ref, "failed -",
                 e.getMessage());
             if (e instanceof Violations && sha != null && !sha.isBlank()) {
-                reportRefusal(siteId, sha, reasonOf(e));
+                reportRefusal(applicationId, sha, reasonOf(e));
             }
         }
     }
@@ -120,11 +115,11 @@ public final class PreviewDeployments {
      * form synchronously), then build in the background exactly like a webhook deploy.
      *
      * AIDEV-NOTE: QUOTA DECISION (2026-08-10, applies to ALL creation lanes). The
-     * charge is the SITE's manage-grant owner pack, always -- the PreviewQuota
+     * charge is the APPLICATION's manage-grant owner pack, always -- the PreviewQuota
      * before-write hook fires on this row save no matter which surface asked, so
      * charge == cap holds structurally and a manual or branch preview can never ride
      * an uncharged side door. Charging the ACTING operator instead was rejected: the
-     * environment lives in the site owner's fleet, and an actor-derived charge would
+     * environment lives in the application owner's fleet, and an actor-derived charge would
      * book a bucket the row's release path could not re-derive. At the cap every lane
      * REFUSES BY NAME (preview_quota_reached); eviction of the oldest preview was
      * rejected because it destroys a running environment (possibly a PR under active
@@ -133,21 +128,21 @@ public final class PreviewDeployments {
      * @return the claimed preview row, status deploying
      * @throws Violations naming the refusal
      */
-    public static @NonNull Row queue(int siteId, @NonNull String ref, @Nullable String sha,
+    public static @NonNull Row queue(int applicationId, @NonNull String ref, @Nullable String sha,
                                      @Nullable Integer prNumber) throws Exception {
         Row preview;
-        synchronized (lockFor(siteId, ref)) {
-            preview = claimLocked(siteId, ref, prNumber);
+        synchronized (lockFor(applicationId, ref)) {
+            preview = claimLocked(applicationId, ref, prNumber);
         }
         Datasource datasource = Db.current();
         String pinnedSha = sha;
         JobRunner.startVirtualThread(() -> {
             Runnable build = () -> {
                 try {
-                    deploy(siteId, ref, pinnedSha, prNumber);
+                    deploy(applicationId, ref, pinnedSha, prNumber);
                 } catch (Exception e) {
                     // The row already records status failed + last_error.
-                    Blast.log("PREVIEW: queued deploy of site", siteId, "ref", ref,
+                    Blast.log("PREVIEW: queued deploy of application", applicationId, "ref", ref,
                         "failed -", e.getMessage());
                 }
             };
@@ -169,27 +164,23 @@ public final class PreviewDeployments {
      * @throws Violations naming the refusal (unsupported type, no base domain, quota,
      *         build failure, probe failure)
      */
-    public static @NonNull Row deploy(int siteId, @NonNull String ref, @Nullable String sha,
+    public static @NonNull Row deploy(int applicationId, @NonNull String ref, @Nullable String sha,
                                       @Nullable Integer prNumber) throws Exception {
-        synchronized (lockFor(siteId, ref)) {
-            return deployLocked(siteId, ref, sha, prNumber);
+        synchronized (lockFor(applicationId, ref)) {
+            return deployLocked(applicationId, ref, sha, prNumber);
         }
     }
 
     /**
-     * The synchronous half of a deploy: validate the site, mint/refresh the
+     * The synchronous half of a deploy: validate the application, mint/refresh the
      * quota-charged row (status deploying) and arm the expiry. Callers hold the
-     * per-(site, ref) lock.
+     * per-(application, ref) lock.
      */
-    private static @NonNull Row claimLocked(int siteId, @NonNull String ref,
+    private static @NonNull Row claimLocked(int applicationId, @NonNull String ref,
                                             @Nullable Integer prNumber) {
-        Row site = Models.get(SiteModel.class).findById(siteId);
-        if (site == null || site.get(SiteModel.DELETED_AT) != null) {
-            throw Violations.ofField("site_id", siteId, violation("preview_site_required"));
-        }
-        if (!INSTANCE_UPSTREAM_KIND.equals(site.get(SiteModel.UPSTREAM_KIND))
-                || !SiteSources.isGitSourced(site)) {
-            throw Violations.ofField("site_id", siteId,
+        Row application = ApplicationReleases.requireApplication(applicationId);
+        if (!SiteSources.hasRepository(ApplicationReleases.storedSettings(application))) {
+            throw Violations.ofField("application_id", applicationId,
                 violation("preview_unsupported_type"));
         }
         String baseDomain = str(HohenheimSettings.VALUES.getValue(
@@ -197,19 +188,27 @@ public final class PreviewDeployments {
         if (baseDomain.isEmpty()) {
             throw Violations.ofForm(violation("preview_no_base_domain"));
         }
+        // A preview is built from the APPLICATION but must be REACHABLE, and a hostname
+        // only routes when it sits in some site's domain table. Refusing here beats
+        // building an environment nobody can open.
+        Row site = exposingSite(applicationId);
+        if (site == null) {
+            throw Violations.ofField("application_id", applicationId,
+                violation("preview_no_exposing_site"));
+        }
         String hostname = hostnameFor(str(site.get(SiteModel.SLUG)), ref, baseDomain);
 
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         Row preview = model.find()
-            .where(PreviewDeploymentModel.SITE_ID.eq(siteId))
+            .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
             .where(PreviewDeploymentModel.REF.eq(ref))
             .where(PreviewDeploymentModel.DELETED_AT.isNull())
             .first();
         if (preview == null) {
-            // The quota hook charges the site's owner bucket on this save and refuses
+            // The quota hook charges the application's owner bucket on this save and refuses
             // over-cap creates atomically -- no separate count-then-create window.
             preview = model.createEmptyRow();
-            preview.set(PreviewDeploymentModel.SITE_ID, siteId);
+            preview.set(PreviewDeploymentModel.APPLICATION_ID, applicationId);
             preview.set(PreviewDeploymentModel.REF, ref);
         }
         Instant expiresAt = expiry();
@@ -225,14 +224,16 @@ public final class PreviewDeployments {
         return preview;
     }
 
-    private static @NonNull Row deployLocked(int siteId, @NonNull String ref,
+    private static @NonNull Row deployLocked(int applicationId, @NonNull String ref,
                                              @Nullable String sha,
                                              @Nullable Integer prNumber) throws Exception {
-        Row preview = claimLocked(siteId, ref, prNumber);
+        Row preview = claimLocked(applicationId, ref, prNumber);
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
-        Row site = Models.get(SiteModel.class).findById(siteId);
-        Map<String, Object> sourceSettings = orEmpty(SiteSources.settingsOf(site));
-        Map<String, Object> siteSettings = castMap(site.get(SiteModel.SETTINGS));
+        Row application = ApplicationReleases.requireApplication(applicationId);
+        Row site = exposingSite(applicationId);
+        // One settings map now: the application carries BOTH the source and the spec.
+        Map<String, Object> siteSettings = ApplicationReleases.storedSettings(application);
+        Map<String, Object> sourceSettings = siteSettings;
         String hostname = str(preview.get(PreviewDeploymentModel.HOSTNAME));
         int previewId = preview.get(PreviewDeploymentModel.ID);
 
@@ -241,8 +242,9 @@ public final class PreviewDeployments {
                 DeployStatuses.CONTEXT_PREVIEW, "Preview deploying", null);
 
             // 1. Checkout the ref (control-plane clone; the build runs sandboxed).
-            File checkout = checkoutDir(previewId);
-            String commitSha = checkoutRef(siteId, ref, sourceSettings, checkout);
+            File checkout = GitCheckout.directoryFor(PreviewDeploymentModel.MODEL_ID, previewId);
+            String commitSha = GitCheckout.materialize(PreviewDeploymentModel.MODEL_ID,
+                previewId, ref, sourceSettings, checkout);
             if (sha == null || sha.isBlank()) {
                 sha = commitSha;
             }
@@ -273,7 +275,7 @@ public final class PreviewDeployments {
             if (port == null) {
                 throw Violations.ofForm(violation("preview_no_published_port"));
             }
-            SiteReleases.probe(port, healthPath(siteSettings));
+            ReleaseEngine.probe(port, healthPath(siteSettings));
 
             // 4. Stamp running; route it.
             preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_RUNNING);
@@ -282,7 +284,7 @@ public final class PreviewDeployments {
             reloadProxy();
             DeployStatuses.report(sourceSettings, sha, GitProviderClient.StatusState.SUCCESS,
                 DeployStatuses.CONTEXT_PREVIEW, "Preview ready", "https://" + hostname + "/");
-            Blast.log("PREVIEW:", hostname, "ready (site", siteId + ", ref", ref + ")");
+            Blast.log("PREVIEW:", hostname, "ready (application", applicationId + ", ref", ref + ")");
             return preview;
         } catch (Exception failed) {
             preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_FAILED);
@@ -294,35 +296,30 @@ public final class PreviewDeployments {
         }
     }
 
-    /** The git-source settings of the site's instance, or an empty map. */
-    private static @NonNull Map<String, Object> orEmpty(@Nullable Map<String, Object> settings) {
-        return settings == null ? Map.of() : settings;
-    }
-
     /** Best-effort commit-status FAILURE for a refusal that never minted a row. */
-    private static void reportRefusal(int siteId, @NonNull String sha, @NonNull String reason) {
+    private static void reportRefusal(int applicationId, @NonNull String sha, @NonNull String reason) {
         try {
-            Row site = Models.get(SiteModel.class).findById(siteId);
-            if (site == null) {
+            Row application = Models.get(InstanceModel.class).findById(applicationId);
+            if (application == null) {
                 return;
             }
-            DeployStatuses.report(orEmpty(SiteSources.settingsOf(site)), sha,
+            DeployStatuses.report(ApplicationReleases.storedSettings(application), sha,
                 GitProviderClient.StatusState.FAILURE, DeployStatuses.CONTEXT_PREVIEW,
                 "Preview refused: " + reason, null);
         } catch (RuntimeException unreported) {
-            Blast.log("PREVIEW: could not report refusal for site", siteId, "-",
+            Blast.log("PREVIEW: could not report refusal for application", applicationId, "-",
                 unreported.getMessage());
         }
     }
 
     // -- teardown --------------------------------------------------------------
 
-    /** {@link #destroy} by (site, ref) for fire-and-forget callers. */
-    public static void destroyForRefQuietly(int siteId, @NonNull String ref,
+    /** {@link #destroy} by (application, ref) for fire-and-forget callers. */
+    public static void destroyForRefQuietly(int applicationId, @NonNull String ref,
                                             @NonNull String reason) {
         try {
             Row preview = Models.get(PreviewDeploymentModel.class).find()
-                .where(PreviewDeploymentModel.SITE_ID.eq(siteId))
+                .where(PreviewDeploymentModel.APPLICATION_ID.eq(applicationId))
                 .where(PreviewDeploymentModel.REF.eq(ref))
                 .where(PreviewDeploymentModel.DELETED_AT.isNull())
                 .first();
@@ -330,7 +327,7 @@ public final class PreviewDeployments {
                 destroy(preview.get(PreviewDeploymentModel.ID), reason);
             }
         } catch (Exception e) {
-            Blast.log("PREVIEW: teardown of site", siteId, "ref", ref, "failed -",
+            Blast.log("PREVIEW: teardown of application", applicationId, "ref", ref, "failed -",
                 e.getMessage());
         }
     }
@@ -340,7 +337,7 @@ public final class PreviewDeployments {
      * removed or observed absent, claims released), the generated domain row and DNS
      * rows die BY EXACT ATTRIBUTION, the checkout directory is deleted, and the row
      * soft-deletes (which releases the quota charge and records the hostname's released
-     * route claim under the site's owner -- so the same owner's next preview may retake
+     * route claim under the application's owner -- so the same owner's next preview may retake
      * it while a stranger is quarantined).
      *
      * @throws Violations when the daemon cannot confirm the teardown -- the preview then
@@ -352,8 +349,8 @@ public final class PreviewDeployments {
         if (preview == null || preview.get(PreviewDeploymentModel.DELETED_AT) != null) {
             return;
         }
-        int siteId = intOf(preview.get(PreviewDeploymentModel.SITE_ID));
-        synchronized (lockFor(siteId, str(preview.get(PreviewDeploymentModel.REF)))) {
+        int applicationId = intOf(preview.get(PreviewDeploymentModel.APPLICATION_ID));
+        synchronized (lockFor(applicationId, str(preview.get(PreviewDeploymentModel.REF)))) {
             try {
                 inScope(previewId, () -> {
                     Integer instanceId = preview.get(PreviewDeploymentModel.INSTANCE_ID);
@@ -389,7 +386,8 @@ public final class PreviewDeployments {
                 Blast.log("PREVIEW: artifact prune of preview", previewId, "failed -",
                     pruneFailed.getMessage());
             }
-            deleteTree(checkoutDir(previewId));
+            GitCheckout.deleteTree(
+                GitCheckout.directoryFor(PreviewDeploymentModel.MODEL_ID, previewId));
             preview.set(PreviewDeploymentModel.STATUS,
                 "expired".equals(reason) ? PreviewDeploymentModel.STATUS_EXPIRED
                                          : PreviewDeploymentModel.STATUS_DESTROYED);
@@ -408,11 +406,45 @@ public final class PreviewDeployments {
         }
     }
 
-    /** Destroy every live preview of one site; the site-delete cascade. */
+    /**
+     * Destroy every live preview whose generated hostname lives on this site.
+     *
+     * AIDEV-NOTE: a preview belongs to an APPLICATION, which outlives any one site, so this
+     * cascade is keyed on the thing the site actually owns -- the generated domain row.
+     * Deleting one exposing site of a multi-site application takes only the previews that
+     * were reachable through it.
+     */
     public static void destroyForSite(int siteId) {
-        for (Row preview : Models.get(PreviewDeploymentModel.class).findLiveBySiteId(siteId)) {
-            destroy(preview.get(PreviewDeploymentModel.ID), "site_deleted");
+        for (Row preview : Models.get(PreviewDeploymentModel.class).find()
+                .where(PreviewDeploymentModel.DELETED_AT.isNull()).all()) {
+            int previewId = preview.get(PreviewDeploymentModel.ID);
+            for (Row domain : generatedDomainsOf(previewId)) {
+                if (Integer.valueOf(siteId).equals(domain.get(SiteDomainModel.SITE_ID))) {
+                    destroy(previewId, "site_deleted");
+                    break;
+                }
+            }
         }
+    }
+
+    /** Every live preview of one application; the application-delete cascade. */
+    public static void destroyForApplication(int applicationId) {
+        for (Row preview : Models.get(PreviewDeploymentModel.class)
+                .findLiveByApplicationId(applicationId)) {
+            destroy(preview.get(PreviewDeploymentModel.ID), "application_deleted");
+        }
+    }
+
+    /**
+     * A site that exposes this application, lowest id first so the hostname a preview gets
+     * is stable across reloads.
+     */
+    public static @Nullable Row exposingSite(int applicationId) {
+        return Models.get(SiteModel.class).find()
+            .where(SiteModel.INSTANCE_ID.eq(applicationId))
+            .where(SiteModel.DELETED_AT.isNull())
+            .orderBy(SiteModel.ID, SortOrder.ASC)
+            .first();
     }
 
     /**
@@ -456,47 +488,6 @@ public final class PreviewDeployments {
 
     // -- internals -------------------------------------------------------------
 
-    private static @NonNull String checkoutRef(int siteId, @NonNull String ref,
-                                               @NonNull Map<String, Object> sourceSettings,
-                                               @NonNull File checkout) throws Exception {
-        String boundUrl = GitProviders.boundCloneUrl(sourceSettings);
-        String repoUrl = boundUrl != null ? boundUrl : str(sourceSettings.get("repository_url"));
-        if (repoUrl.isEmpty()) {
-            throw Violations.ofForm(violation("preview_no_repository"));
-        }
-        GitRepository repo = new GitRepository(repoUrl, ref, true,
-            Boolean.TRUE.equals(sourceSettings.get("submodules")), null);
-        if (boundUrl != null) {
-            repo.setCredentialEnv(() -> {
-                try {
-                    return GitProviders.credentialEnv(sourceSettings);
-                } catch (Exception e) {
-                    Blast.log("PREVIEW: site", siteId, "provider credential unavailable -",
-                        e.getMessage());
-                    return null;
-                }
-            });
-        }
-        GitRepository.GitResult result;
-        if (checkout.isDirectory() && repo.isMatchingRepo(checkout)) {
-            result = repo.fetchAndReset(checkout);
-        } else {
-            deleteTree(checkout);
-            checkout.getParentFile().mkdirs();
-            result = repo.clone(checkout);
-        }
-        if (!result.success()) {
-            throw Violations.ofForm(violation("preview_checkout_failed")
-                .withArg("reason", result.output()));
-        }
-        String commit = repo.getCurrentCommit(checkout);
-        if (commit == null || commit.isBlank()) {
-            throw Violations.ofForm(violation("preview_checkout_failed")
-                .withArg("reason", "no commit identity"));
-        }
-        return commit;
-    }
-
     /**
      * The preview's container spec. Only preview-declared variables enter it; resource
      * limits are inherited (they cap, never leak), volumes and injected database
@@ -539,7 +530,7 @@ public final class PreviewDeployments {
                                                     @NonNull Map<String, Object> desired,
                                                     @NonNull String hostname) throws Exception {
         int previewId = preview.get(PreviewDeploymentModel.ID);
-        int siteId = site.get(SiteModel.ID);
+        int hostSiteId = site.get(SiteModel.ID);
         InstanceStatus[] status = new InstanceStatus[1];
         inScope(previewId, () -> {
             Integer instanceId = preview.get(PreviewDeploymentModel.INSTANCE_ID);
@@ -561,7 +552,7 @@ public final class PreviewDeployments {
 
             status[0] = new InstanceService().deploy(freshInstanceId);
 
-            ensureGeneratedDomain(previewId, siteId, hostname);
+            ensureGeneratedDomain(previewId, hostSiteId, hostname);
             reconcileGeneratedDns(previewId, hostname);
         });
         return status[0];
@@ -573,7 +564,7 @@ public final class PreviewDeployments {
      * judge it exactly like a hand-authored domain -- the attribution is the only
      * difference, and it is what scopes cleanup.
      */
-    private static void ensureGeneratedDomain(int previewId, int siteId,
+    private static void ensureGeneratedDomain(int previewId, int hostSiteId,
                                               @NonNull String hostname) {
         var domains = Models.get(SiteDomainModel.class);
         List<Row> owned = generatedDomainsOf(previewId);
@@ -590,7 +581,7 @@ public final class PreviewDeployments {
             return;
         }
         Row domain = domains.createEmptyRow();
-        domain.set(SiteDomainModel.SITE_ID, siteId);
+        domain.set(SiteDomainModel.SITE_ID, hostSiteId);
         domain.set(SiteDomainModel.HOSTNAME, hostname);
         domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
         // Plain HTTP + wildcard-cert SNI: a preview never triggers ACME issuance.
@@ -728,23 +719,6 @@ public final class PreviewDeployments {
         return path.isEmpty() ? "/" : path;
     }
 
-    private static @NonNull File checkoutDir(int previewId) {
-        String dataPath = HohenheimSettings.VALUES.getValue(
-            HohenheimSettings.Storage.DATA_PATH);
-        return new File(dataPath, "previews/" + previewId);
-    }
-
-    private static void deleteTree(@NonNull File dir) {
-        if (!dir.exists()) {
-            return;
-        }
-        try (var walk = Files.walk(dir.toPath())) {
-            walk.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-        } catch (Exception e) {
-            Blast.log("PREVIEW: could not delete checkout", dir.getAbsolutePath(),
-                "-", e.getMessage());
-        }
-    }
 
     private static void reloadProxy() {
         ProxyServer proxy = ServerMain.getProxyServer();
@@ -762,8 +736,8 @@ public final class PreviewDeployments {
             PreviewDeploymentModel.MODEL_ID.toString(), previewId), work::run);
     }
 
-    private static @NonNull Object lockFor(int siteId, @NonNull String ref) {
-        return LOCKS.computeIfAbsent(siteId + "\n" + ref, ignored -> new Object());
+    private static @NonNull Object lockFor(int applicationId, @NonNull String ref) {
+        return LOCKS.computeIfAbsent(applicationId + "\n" + ref, ignored -> new Object());
     }
 
     private static @NonNull Microcopy violation(@NonNull String key) {

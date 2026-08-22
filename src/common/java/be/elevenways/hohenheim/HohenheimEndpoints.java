@@ -408,14 +408,6 @@ public class HohenheimEndpoints {
         .rateLimit(DEPLOY_LIMIT)
         .build();
 
-    public static final Endpoint<Object> SITES_DEPLOY_CANCEL = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_deploy_cancel"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("deploy").addDelimiter().addStatic("cancel").build())
-        .rateLimit(DEPLOY_LIMIT)
-        .build();
-
     public static final Endpoint<Object> SITES_ROLLBACK = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "sites_rollback"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)

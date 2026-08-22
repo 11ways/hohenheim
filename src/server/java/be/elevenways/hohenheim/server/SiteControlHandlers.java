@@ -10,8 +10,11 @@ import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
-import be.elevenways.hohenheim.server.sitetype.SiteHandlers;
-import be.elevenways.hohenheim.server.source.GitSiteRequestHandler;
+import be.elevenways.hohenheim.server.application.ApplicationDeploys;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -20,7 +23,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import be.elevenways.zenit.server.http.ReturnTarget;
 
-import java.util.Optional;
 
 /**
  * Per-site operational control: the Deployments tab forms, the instance console and
@@ -31,30 +33,26 @@ final class SiteControlHandlers {
     private SiteControlHandlers() {
     }
 
-    /** Deploy control (forms on the site's Deployments tab). */
+    /**
+     * Deploy control (forms on the site's Deployments tab).
+     *
+     * AIDEV-NOTE: both verbs act on the APPLICATION the site exposes, never on the site.
+     * The CANCEL verb is gone with the queue it cancelled: the release engine deploys
+     * synchronously behind a health gate, and what a failed candidate does is get destroyed
+     * while the prior release keeps serving -- there is no queued job to take back.
+     */
     static void initDeployControl() {
         HohenheimEndpoints.SITES_DEPLOY.setHandler(conduit -> {
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
             if (refusedSiteAccess(conduit, siteId)) {
                 return null;
             }
-            gitHandler(siteId).ifPresent(git -> {
-                git.enqueueDeploy("manual");
-                ActivityLog.record(Models.get(SiteModel.class), siteId, "deploy_triggered", null);
-            });
-            return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, siteId));
-        });
-
-        HohenheimEndpoints.SITES_DEPLOY_CANCEL.setHandler(conduit -> {
-            Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
-            if (refusedSiteAccess(conduit, siteId)) {
-                return null;
+            Integer applicationId = applicationOf(siteId);
+            if (applicationId != null) {
+                Datasource datasource = Db.current();
+                JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
+                    ApplicationDeploys.deployQuietly(applicationId, null, "manual")));
             }
-            gitHandler(siteId).ifPresent(git -> {
-                if (git.cancelCurrentDeploy()) {
-                    ActivityLog.record(Models.get(SiteModel.class), siteId, "deploy_cancelled", null);
-                }
-            });
             return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, siteId));
         });
 
@@ -63,12 +61,21 @@ final class SiteControlHandlers {
             if (refusedSiteAccess(conduit, siteId)) {
                 return null;
             }
-            gitHandler(siteId).ifPresent(git -> {
-                git.enqueueRollback();
-                ActivityLog.record(Models.get(SiteModel.class), siteId, "rollback_triggered", null);
-            });
+            Integer applicationId = applicationOf(siteId);
+            if (applicationId != null) {
+                ReleaseEngine.rollback(applicationId);
+            }
             return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, siteId));
         });
+    }
+
+    /** The application a site exposes, or null. */
+    private static Integer applicationOf(Integer siteId) {
+        if (siteId == null) {
+            return null;
+        }
+        var site = Models.get(SiteModel.class).findById(siteId);
+        return site == null ? null : site.get(SiteModel.INSTANCE_ID);
     }
 
     static void initInstanceConsole() {
@@ -134,7 +141,4 @@ final class SiteControlHandlers {
         return true;
     }
 
-    static Optional<GitSiteRequestHandler> gitHandler(Integer siteId) {
-        return Optional.ofNullable(SiteHandlers.git(siteId));
-    }
 }

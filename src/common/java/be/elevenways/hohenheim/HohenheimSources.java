@@ -4,10 +4,10 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
+import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
@@ -156,10 +156,10 @@ public final class HohenheimSources implements ZenitModule {
         ActivityLog.setPolicy(SiteModel.MODEL_ID, ActivityPolicy.ALL);
 
         // Bookkeeping tables whose writes are machine-generated churn, not user
-        // actions: instance logs upsert per console episode and deployments carry
-        // their own history UI. Tracking them would flood zenit_activity.
+        // actions: instance logs upsert per console episode, and a release operation is
+        // itself the history UI. Tracking them would flood zenit_activity.
         ActivityLog.setPolicy(InstanceLogModel.MODEL_ID, ActivityPolicy.NONE);
-        ActivityLog.setPolicy(DeploymentModel.MODEL_ID, ActivityPolicy.NONE);
+        ActivityLog.setPolicy(ReleaseOperationModel.MODEL_ID, ActivityPolicy.NONE);
 
         // Reconcile findings are a DERIVED CACHE, not a record of anything: every sweep
         // deletes a host's whole finding set and re-inserts it. Logging that churn buried

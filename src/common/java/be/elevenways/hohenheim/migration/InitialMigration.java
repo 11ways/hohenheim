@@ -375,45 +375,6 @@ public class InitialMigration extends HohenheimMigration {
             table.addIndex("site_sessions_expires_at_index", List.of("expires_at"));
         });
 
-        schema.createTable("deployments", table -> {
-            table.id();
-            table.addColumn("site_id", ColumnType.INTEGER,
-                column -> column.nullable(true));
-            table.addColumn("status", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(20));
-            table.addColumn("reason", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(50));
-            table.addColumn("commit_sha", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(64));
-            table.addColumn("slot", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(10));
-            table.addColumn("error", ColumnType.TEXT,
-                column -> column.nullable(true));
-            table.addColumn("log", ColumnType.TEXT,
-                column -> column.nullable(true));
-            table.addColumn("started_at", ColumnType.DATETIME,
-                column -> column.nullable(true));
-            table.addColumn("finished_at", ColumnType.DATETIME,
-                column -> column.nullable(true));
-            table.addColumn("duration_ms", ColumnType.INTEGER,
-                column -> column.nullable(true));
-            table.timestamps();
-            table.addIndex("deployments_site_id_index", List.of("site_id"));
-        });
-
-        schema.createTable("site_databases", table -> {
-            table.id();
-            table.addColumn("site_id", ColumnType.INTEGER,
-                column -> column.nullable(true));
-            table.addColumn("database_id", ColumnType.INTEGER,
-                column -> column.nullable(true));
-            table.addColumn("env_prefix", ColumnType.STRING,
-                column -> column.nullable(true).maxLength(40));
-            table.timestamps();
-            table.addIndex("site_databases_site_id_index", List.of("site_id"));
-            table.addIndex("site_databases_database_id_index", List.of("database_id"));
-        });
-
         schema.createTable("dns_zones", table -> {
             table.id();
             table.addColumn("origin", ColumnType.STRING,
@@ -1211,7 +1172,7 @@ public class InitialMigration extends HohenheimMigration {
                 column -> column.nullable(true));
             table.addColumn("retired_instance_id", ColumnType.INTEGER,
                 column -> column.nullable(true));
-            table.addColumn("site_fingerprint", ColumnType.STRING,
+            table.addColumn("owner_fingerprint", ColumnType.STRING,
                 column -> column.nullable(true));
             table.addColumn("spec_fingerprint", ColumnType.STRING,
                 column -> column.nullable(true));
@@ -1275,8 +1236,10 @@ public class InitialMigration extends HohenheimMigration {
 
         schema.createTable("webhook_deliveries", table -> {
             table.id();
-            table.addColumn("site_id", ColumnType.INTEGER,
-                column -> column.nullable(false).references("sites", "id"));
+            // The APPLICATION the webhook deploys, not the site it used to hang off: a
+            // replay claim must be unique per thing-that-deploys (phase-0 design 4.2).
+            table.addColumn("instance_id", ColumnType.INTEGER,
+                column -> column.nullable(false).references("instances", "id"));
             table.addColumn("delivery_key", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(191));
             table.addColumn("event", ColumnType.STRING,
@@ -1286,13 +1249,17 @@ public class InitialMigration extends HohenheimMigration {
             table.addColumn("received_at", ColumnType.DATETIME,
                 column -> column.nullable(true));
             table.timestamps();
-            table.unique("webhook_deliveries_site_key_unique", List.of("site_id", "delivery_key"));
+            table.unique("webhook_deliveries_instance_key_unique",
+                List.of("instance_id", "delivery_key"));
         });
 
         schema.createTable("preview_deployments", table -> {
             table.id();
-            table.addColumn("site_id", ColumnType.INTEGER,
-                column -> column.nullable(false).references("sites", "id"));
+            // A preview is a preview OF an application: it builds the application's source
+            // and runs the application's spec. The site that exposes the application only
+            // lends it a hostname (see PreviewDeployments.exposingSite).
+            table.addColumn("application_id", ColumnType.INTEGER,
+                column -> column.nullable(false).references("instances", "id"));
             table.addColumn("ref", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(191));
             table.addColumn("pr_number", ColumnType.INTEGER,
@@ -1314,7 +1281,8 @@ public class InitialMigration extends HohenheimMigration {
             table.addColumn("deleted_at", ColumnType.DATETIME,
                 column -> column.nullable(true));
             table.timestamps();
-            table.addIndex("preview_deployments_site_id_index", List.of("site_id"));
+            table.addIndex("preview_deployments_application_id_index",
+                List.of("application_id"));
             table.addIndex("preview_deployments_expires_at_index", List.of("expires_at"));
         });
 
@@ -1436,8 +1404,6 @@ public class InitialMigration extends HohenheimMigration {
         schema.dropTable("dns_peers");
         schema.dropTable("dns_records");
         schema.dropTable("dns_zones");
-        schema.dropTable("site_databases");
-        schema.dropTable("deployments");
         schema.dropTable("site_sessions");
         schema.dropTable("site_auth_providers");
         schema.dropTable("notification_channels");

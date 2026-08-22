@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -212,17 +213,20 @@ public final class ContainerHardening {
      * images chown their data directory, write pid files and unpack assets into the
      * rootfs, so a read-only root would refuse to start the ordinary workload instead of
      * confining a hostile one (docs/instance-tier-plan.md carries the clause's own copy of
-     * the verdict). {@code Binds} needs no entry of its own any more, but the reason it
-     * was refused still holds and now covers bind-type {@link #refuseEscapes} entries in
-     * the permitted {@code Mounts}: a bind of /var/run/docker.sock is root on the host, no
-     * tier binds host paths today, and none should start without revisiting this class.
+     * the verdict). {@code Binds} needs no entry of its own any more: a host path
+     * reaches a workload as a bind-type entry in the permitted {@code Mounts}, and
+     * {@link #requireVolumeRootSource} confines its source to the volume root this
+     * deployment owns -- a bind of /var/run/docker.sock is still root on the host, and
+     * still refused.
      */
     public static final Map<String, String> PERMITTED_KEYS = orderedMap(
         "NetworkMode", "the per-workload private network the caller just created;"
             + " the host and container: spellings are refused below, so what this can name"
             + " is a network, never a namespace share.",
-        "Mounts", "named volumes and tmpfs for a workload's declared storage; a bind-type"
-            + " entry is refused below because a host path is not an isolation boundary.",
+        "Mounts", "named volumes, tmpfs and the workload's own volume directories for its"
+            + " declared storage; a bind-type entry whose source is NOT under the volume"
+            + " root is refused below, because an arbitrary host path is not an isolation"
+            + " boundary.",
         "PortBindings", "host port publication, materializing a port the allocator ledger"
             + " already claimed.",
         "Memory", "the operator-configured cgroup memory cap (ResourceLimits): a cap the"
@@ -481,12 +485,49 @@ public final class ContainerHardening {
                 Map<String, Object> foldedMount = caseFolded(entry);
                 Object type = foldedMount.get(fold("Type"));
                 if (type instanceof String text && text.equalsIgnoreCase("bind")) {
-                    throw new IllegalArgumentException("REFUSED to create container: a bind mount"
-                        + " of host path '" + foldedMount.get(fold("Source")) + "' is not an"
-                        + " isolation boundary (a bind of the Docker socket is root on the host)."
-                        + " Use a named volume or a tmpfs.");
+                    requireVolumeRootSource(foldedMount.get(fold("Source")));
                 }
             }
+        }
+    }
+
+    /**
+     * The ONE host path a bind mount may name: a directory inside this deployment's volume
+     * root, which is a tree the controller owns end to end ({@code InstanceVolumes}).
+     *
+     * AIDEV-NOTE: bind mounts used to be refused outright, and the reason ("a bind of
+     * /var/run/docker.sock is root on the host") is still exactly right for an ARBITRARY
+     * source. What changed is that Hohenheim now owns a directory tree of its own and mounts
+     * volumes out of it, so the rule became a containment test instead of a ban. It is
+     * TEXTUAL and deliberately strict: the source must be an absolute path, must start with
+     * the volume root plus a separator, and may not contain a {@code ..} segment. A textual
+     * test cannot see through a symlink, which is why nothing outside {@link
+     * be.elevenways.hohenheim.server.instance.InstanceVolumes} may mint a bind source -- the
+     * derivation there is what guarantees the path is one the controller created.
+     *
+     * @throws IllegalArgumentException naming the refused source
+     */
+    static void requireVolumeRootSource(@Nullable Object rawSource) {
+
+        String source = rawSource == null ? "" : String.valueOf(rawSource).trim();
+        String root = VolumeBackends.volumeRoot();
+
+        boolean contained = source.startsWith(root + "/")
+            && source.length() > root.length() + 1;
+
+        for (String segment : source.split("/")) {
+            if (segment.equals("..")) {
+                contained = false;
+                break;
+            }
+        }
+
+        if (!contained) {
+            throw new IllegalArgumentException("REFUSED to create container: a bind mount"
+                + " of host path '" + source + "' is not an isolation boundary (a bind of"
+                + " the Docker socket is root on the host). The only permitted bind source"
+                + " is a volume directory under '" + root + "/', created by InstanceVolumes;"
+                + " everything else stays a named volume or a tmpfs.");
         }
     }
 
