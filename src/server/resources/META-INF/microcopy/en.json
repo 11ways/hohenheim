@@ -936,17 +936,17 @@
     }
   ],
   "auto_deploy_disabled": {
-    "text": "Auto-deploy is disabled for this site: pushes are acknowledged but not deployed. Enable it in the site's source settings.",
-    "scope": "site_deployments"
+    "text": "Auto-deploy is disabled: pushes are acknowledged but not deployed. Enable it in the application's source settings.",
+    "scope": "deployments"
   },
   "build_log": {
     "text": "Build log",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "cancel": [
     {
       "text": "Cancel deploy",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Cancel",
@@ -985,7 +985,7 @@
   },
   "commit": {
     "text": "Commit",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "connection": {
     "text": "Connection",
@@ -997,11 +997,11 @@
   },
   "copy_webhook_secret": {
     "text": "Copy webhook secret",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "copy_webhook_url": {
     "text": "Copy webhook URL",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "cpu": {
     "text": "CPU",
@@ -1009,7 +1009,7 @@
   },
   "current_commit": {
     "text": "Currently serving commit {$commit}.",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "database": [
     {
@@ -1071,7 +1071,7 @@
   ],
   "deploy_now": {
     "text": "Deploy now",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "down": {
     "text": "Down",
@@ -1084,7 +1084,7 @@
   "duration": [
     {
       "text": "Duration",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Duration",
@@ -1102,7 +1102,7 @@
     },
     {
       "text": "No deployments yet",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "No dev servers connected",
@@ -1147,6 +1147,10 @@
     {
       "text": "No rules yet",
       "scope": "access_rule"
+    },
+    {
+      "text": "No volumes",
+      "scope": "instance_volume"
     }
   ],
   "empty_description": [
@@ -1160,7 +1164,7 @@
     },
     {
       "text": "Webhook, poll or manual deploys of this site will show up here.",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "A stack is composed of services, one container image each. Add the first one to describe what this stack runs.",
@@ -1185,6 +1189,10 @@
     {
       "text": "Fetch an ISO below to make it attachable as install media on this host's virtual machines.",
       "scope": "server_media"
+    },
+    {
+      "text": "This instance declares no data directories yet.",
+      "scope": "instance_volume"
     }
   ],
   "engine": [
@@ -1253,10 +1261,16 @@
       "scope": "dns_transfer"
     }
   ],
-  "forced": {
-    "text": "Forced",
-    "scope": "site_domains"
-  },
+  "forced": [
+    {
+      "text": "Forced",
+      "scope": "site_domains"
+    },
+    {
+      "text": "HTTPS",
+      "scope": "site_tls"
+    }
+  ],
   "hostname": [
     {
       "text": "Hostname",
@@ -1323,19 +1337,29 @@
     {
       "text": "None",
       "scope": "volume_backend"
+    },
+    {
+      "text": "No hostname",
+      "scope": "site_tls"
     }
   ],
-  "off": {
-    "text": "Off",
-    "scope": "site_domains"
-  },
+  "off": [
+    {
+      "text": "Off",
+      "scope": "site_domains"
+    },
+    {
+      "text": "HTTP only",
+      "scope": "site_tls"
+    }
+  ],
   "password": {
     "text": "Password",
     "scope": "database_tab"
   },
   "payload_url": {
     "text": "Payload URL",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "port": [
     {
@@ -1422,7 +1446,7 @@
   "rollback": [
     {
       "text": "Roll back",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Roll back",
@@ -1435,12 +1459,16 @@
     {
       "text": "Roll back release",
       "scope": "site"
+    },
+    {
+      "text": "Roll back",
+      "scope": "instance"
     }
   ],
   "rollback_confirm": [
     {
       "text": "Activate the previous deploy slot? The current version stops serving.",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Re-deploy the last successful deployment? Current configuration changes stay saved but are not deployed.",
@@ -1449,12 +1477,16 @@
     {
       "text": "Replace the serving release with the retained prior release? The current release is retained as the new rollback target.",
       "scope": "site"
+    },
+    {
+      "text": "Roll back to the previous release? The current release stops serving.",
+      "scope": "instance"
     }
   ],
   "secret": [
     {
       "text": "Secret",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Secret",
@@ -1480,7 +1512,7 @@
   "started": [
     {
       "text": "Started",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Started",
@@ -1512,7 +1544,7 @@
     },
     {
       "text": "Status",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Status",
@@ -1546,7 +1578,7 @@
   "trigger": [
     {
       "text": "Trigger",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Trigger",
@@ -1573,11 +1605,11 @@
   ],
   "webhook": {
     "text": "Push webhook",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "webhook_description": {
     "text": "Configure this URL and secret on your git host (GitHub, GitLab or Gitea) to deploy on every push.",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "onboarding": {
     "text": "Getting started",
@@ -1586,7 +1618,7 @@
   "title": [
     {
       "text": "Deployments",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Create your first site",
@@ -2073,6 +2105,14 @@
     {
       "text": "Rules",
       "scope": "access_rule"
+    },
+    {
+      "text": "Volumes",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "Runtime images",
+      "scope": "runtime_image"
     }
   ],
   "dashboard": [
@@ -2641,10 +2681,16 @@
       "scope": "help"
     }
   ],
-  "managed_by": {
-    "text": "Managed by",
-    "scope": "field"
-  },
+  "managed_by": [
+    {
+      "text": "Managed by",
+      "scope": "field"
+    },
+    {
+      "text": "Managed by",
+      "scope": "instance"
+    }
+  ],
   "record_count": {
     "text": "Records",
     "scope": "dns_zone"
@@ -3287,6 +3333,10 @@
     {
       "text": "Delete this rule? Anything nested inside it goes with it, and the change reaches live traffic immediately.",
       "scope": "access_rule"
+    },
+    {
+      "text": "This removes the workload from its host but keeps its data. Use \"Delete with data\" when the data must go too.",
+      "scope": "instance"
     }
   ],
   "priority": {
@@ -4351,6 +4401,10 @@
     {
       "text": "Redeploy the retained prior release, pinned by image digest, through the same health gate",
       "scope": "site"
+    },
+    {
+      "text": "Redeploy the retained previous release, without rebuilding",
+      "scope": "instance"
     }
   ],
   "rollback_queued": {
@@ -6072,6 +6126,10 @@
     {
       "text": "Add to this directory",
       "scope": "instance_files"
+    },
+    {
+      "text": "Add volume",
+      "scope": "instance_volume"
     }
   ],
   "run_now": {
@@ -6600,10 +6658,16 @@
       "scope": "help"
     }
   ],
-  "rollback_done": {
-    "text": "Rolled back to the retained release",
-    "scope": "site"
-  },
+  "rollback_done": [
+    {
+      "text": "Rolled back to the retained release",
+      "scope": "site"
+    },
+    {
+      "text": "Rolled back {$name}",
+      "scope": "instance"
+    }
+  ],
   "release_probe_failed": {
     "text": "The candidate release never answered a healthy HTTP response: {$reason}",
     "scope": "violations"
@@ -7518,10 +7582,16 @@
     "text": "Configure",
     "scope": "capability"
   },
-  "destroy": {
-    "text": "Destroy",
-    "scope": "capability"
-  },
+  "destroy": [
+    {
+      "text": "Destroy",
+      "scope": "capability"
+    },
+    {
+      "text": "Delete with data",
+      "scope": "instance_volume"
+    }
+  ],
   "exec": [
     {
       "text": "Run commands",
@@ -7691,7 +7761,7 @@
     },
     {
       "text": "{$name} - Deployments",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "{$name} - Domains",
@@ -7712,6 +7782,14 @@
     {
       "text": "Rules of {$name}",
       "scope": "access_rule"
+    },
+    {
+      "text": "{$name} - Volumes",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "{$name} - Deployments",
+      "scope": "instance_deployments"
     }
   ],
   "not_found_title": {
@@ -7852,10 +7930,16 @@
     "text": "The preview could not be queued: {$reason}",
     "scope": "violations"
   },
-  "destroy_confirm": {
-    "text": "This destroys the preview's running environment and releases its hostname.",
-    "scope": "preview_deployment"
-  },
+  "destroy_confirm": [
+    {
+      "text": "This destroys the preview's running environment and releases its hostname.",
+      "scope": "preview_deployment"
+    },
+    {
+      "text": "This permanently deletes the volume's directory on the host and everything in it.",
+      "scope": "instance_volume"
+    }
+  ],
   "probe_now": {
     "text": "Probe now",
     "scope": "server"
@@ -8596,6 +8680,14 @@
     {
       "text": "The rule tree behind one access list.",
       "scope": "access_rule"
+    },
+    {
+      "text": "Host directories mounted into an instance",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "The base images workspaces and applications run inside; built-in ones are managed by Hohenheim",
+      "scope": "runtime_image"
     }
   ],
   "slug": {
@@ -9272,6 +9364,10 @@
     {
       "text": "Detected from this host's volume root: it decides whether a quota can be enforced and a snapshot taken.",
       "scope": "help"
+    },
+    {
+      "text": "Volume storage",
+      "scope": "server_overview"
     }
   ],
   "volume_name": [
@@ -9389,5 +9485,117 @@
   "runtime_image_no_builder": {
     "text": "Runtime image '{$name}' cannot be prepared on host '{$host}': an Incus host that carries workspaces also needs Docker, which is what builds the rootfs the image is imported from.",
     "scope": "violations"
+  },
+  "expose": {
+    "text": "Expose",
+    "scope": "instance"
+  },
+  "expose_hint": {
+    "text": "Create a site that serves this instance on a hostname",
+    "scope": "instance"
+  },
+  "tab_hint": {
+    "text": "Each volume is a directory on the host, mounted into the container at the path you choose. Changes apply at the next deploy.",
+    "scope": "instance_volume"
+  },
+  "usage": {
+    "text": "In use",
+    "scope": "instance_volume"
+  },
+  "quota": {
+    "text": "Size limit",
+    "scope": "instance_volume"
+  },
+  "exclusive": {
+    "text": "Exclusive",
+    "scope": "instance_volume"
+  },
+  "never_measured": {
+    "text": "not measured yet",
+    "scope": "instance_volume"
+  },
+  "no_quota": {
+    "text": "no limit",
+    "scope": "instance_volume"
+  },
+  "destroy_confirm_named": {
+    "text": "This permanently deletes volume \"{$name}\" and everything in it. This cannot be undone.",
+    "scope": "instance_volume"
+  },
+  "destroyed_toast": {
+    "text": "Deleted volume {$name} and its data",
+    "scope": "instance_volume"
+  },
+  "hostnames": {
+    "text": "Hostname",
+    "scope": "site"
+  },
+  "upstream": {
+    "text": "Serves",
+    "scope": "site"
+  },
+  "tls": {
+    "text": "TLS",
+    "scope": "site"
+  },
+  "no_hostnames": {
+    "text": "No hostname yet",
+    "scope": "site"
+  },
+  "partial": {
+    "text": "Mixed",
+    "scope": "site_tls"
+  },
+  "quota_mb": {
+    "text": "Size limit",
+    "scope": "field"
+  },
+  "volume_quota_mb": {
+    "text": "Maximum size of this volume in megabytes. Leave blank for no limit.",
+    "scope": "help"
+  },
+  "volume_unknown": {
+    "text": "No volume named \"{$name}\" exists on this instance",
+    "scope": "violations"
+  },
+  "volume_rename_unsupported": {
+    "text": "A volume cannot be renamed; its name decides where it lives on the host",
+    "scope": "violations"
+  },
+  "volume_rehome_unsupported": {
+    "text": "A volume cannot move to another instance",
+    "scope": "violations"
+  },
+  "volume_home_protected": {
+    "text": "The workspace's home volume cannot be deleted on its own; use the instance's \"Delete with data\"",
+    "scope": "violations"
+  },
+  "volume_kind_unsupported": {
+    "text": "Instances of this kind do not mount volumes",
+    "scope": "violations"
+  },
+  "volume_quota_invalid": {
+    "text": "The size limit must be a positive number of megabytes",
+    "scope": "violations"
+  },
+  "exposed_by": {
+    "text": "Exposed by",
+    "scope": "instance_overview"
+  },
+  "volume_backend_none_title": {
+    "text": "No volume storage",
+    "scope": "server_overview"
+  },
+  "volume_backend_none_body": {
+    "text": "The data root cannot enforce size limits or take snapshots, so workspaces and applications cannot be placed on this host. Mount a btrfs or ZFS filesystem at the data path's volumes directory and re-run preflight.",
+    "scope": "server_overview"
+  },
+  "volume_backend_no_snapshot_title": {
+    "text": "No snapshots",
+    "scope": "server_overview"
+  },
+  "volume_backend_no_snapshot_body": {
+    "text": "The data root enforces size limits but cannot take snapshots, so deploys of applications WITH volumes are refused here. Btrfs or ZFS at the data path lifts this.",
+    "scope": "server_overview"
   }
 }
