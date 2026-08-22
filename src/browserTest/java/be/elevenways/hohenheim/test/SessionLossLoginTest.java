@@ -50,11 +50,12 @@ class SessionLossLoginTest extends HohenheimTestBase {
         // page (and its boot-time CSRF meta) stays loaded.
         Zenit.getSessionStore().revoke(session.id());
 
-        // Soft navigation to a protected page renders the login form IN PLACE:
-        // the admin shell (sidebar) survives.
+        // Navigation to a protected page lands on the login form. The login page
+        // extends the AUTH shell, and soft navigation into another document shell is
+        // a FULL page load since hawkeye af7ac3ec -- so the admin sidebar is gone,
+        // deliberately, instead of hosting a foreign shell's content.
         page.locator("pl-app-sidebar a[href='/admin/sites']").click();
         page.waitForSelector("form[action='/login']");
-        assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
 
         // Submitting that form used to ALWAYS fail with CSRF_INVALID: the
         // client posted the dead boot-time token from the stale shell meta.

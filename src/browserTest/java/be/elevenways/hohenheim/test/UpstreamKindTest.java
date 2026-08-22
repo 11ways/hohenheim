@@ -1,6 +1,13 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.*;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -26,10 +33,10 @@ class UpstreamKindTest extends HohenheimTestBase {
         page.waitForSelector(OPEN_SELECT_POPUP);
     }
 
-    /** Select a value in the upstream_kind pl-select, then flush reactive updates. */
+    /** Click an upstream-kind choice card, then flush reactive updates. */
     private void selectUpstreamKind(String value) {
-        openPlSelect("pl-select[name='upstream_kind']");
-        page.click(OPEN_SELECT_POPUP + " div[role='option'][data-value='" + value + "']");
+        page.click("pl-choice-group[name='upstream_kind'] pl-choice-card[data-value='"
+            + value + "'] button");
 
         waitForReactiveIdle();
         waitForReactiveIdle();
@@ -42,22 +49,20 @@ class UpstreamKindTest extends HohenheimTestBase {
         navigateToApp("/admin/sites/new");
         waitForHydration();
 
-        // 1. The offer is exactly the six upstreams a hostname can resolve to. The
-        //    workload kinds that used to sit in this list live on the instance now, and a
-        //    stale one reappearing here is what this count catches.
-        openPlSelect("pl-select[name='upstream_kind']");
+        // 1. The offer is exactly the six upstreams a hostname can resolve to, drawn as
+        //    CHOICE CARDS (icon + label + one-sentence description) instead of a dropdown.
+        //    A stale workload kind reappearing here is what this count catches.
+        var cards = page.locator(
+            "pl-choice-group[name='upstream_kind'] pl-choice-card[data-value^='hohenheim:']");
+        assertThat(cards.count()).as("step 1: six upstream kinds are offered").isEqualTo(6);
 
-        var items = page.locator(OPEN_SELECT_POPUP + " div[role='option'][data-value^='hohenheim:']");
-        assertThat(items.count()).as("step 1: six upstream kinds are offered").isEqualTo(6);
-
-        String allText = items.allTextContents().toString();
+        String allText = cards.allTextContents().toString();
         assertThat(allText).as("step 1: every member is named").contains("Address", "Static",
             "Redirect", "Instance", "Dev namespace", "TLS passthrough");
+        assertThat(allText).as("step 1: every card explains itself in a sentence")
+            .contains("Serve static files", "Redirect requests", "Forward requests");
         assertThat(allText).as("step 1: no workload kind survives in the upstream list")
             .doesNotContain("Node.js", "Java / Zenit", "Alchemy", "Dead");
-
-        // Close the dropdown again so later interactions start clean.
-        page.keyboard().press("Escape");
 
         // 2. Each upstream swaps in its own settings sub-form, client-side.
         selectUpstreamKind("hohenheim:address");
@@ -88,5 +93,59 @@ class UpstreamKindTest extends HohenheimTestBase {
             .as("step 3: the git source left the site form").isZero();
         assertThat(page.locator("pl-input[name='source_settings.repository_url']").count())
             .as("step 3: and so did its settings").isZero();
+    }
+
+    /**
+     * The site-upstream flow END TO END: the instance pick sleeps until the instance
+     * card is chosen, then offers the exposable application, and the submit lands a
+     * site that names it.
+     */
+    @Test
+    @Order(2)
+    void instanceUpstreamFlowEndToEnd() {
+        var instances = Models.get(InstanceModel.class);
+        Row application = instances.find()
+            .where(InstanceModel.NAME.eq("ukt-exposable-app")).first();
+        if (application == null) {
+            application = instances.createEmptyRow();
+            application.set(InstanceModel.NAME, "ukt-exposable-app");
+            application.set(InstanceModel.KIND, "hohenheim:application");
+            application.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of()));
+            instances.save(application);
+        }
+        Integer applicationId = application.get(InstanceModel.ID);
+
+        navigateToApp("/admin/sites/new");
+        waitForHydration();
+
+        // 1. Under a kind that serves no instance, the pick is DISABLED, not hidden
+        //    behind a surprise: the narrowing has nothing to resolve.
+        selectUpstreamKind("hohenheim:static");
+        waitForSelector("pl-select[name='instance_id'][disabled]");
+
+        // 2. The instance card wakes it, still with no round trip.
+        selectUpstreamKind("hohenheim:instance");
+        page.waitForCondition(() ->
+            page.locator("pl-select[name='instance_id'][disabled]").count() == 0);
+
+        // 3. The application is offered; pick it.
+        openPlSelect("pl-select[name='instance_id']");
+        page.waitForSelector(
+            OPEN_SELECT_POPUP + " div[role='option'][data-value='" + applicationId + "']");
+        page.click(
+            OPEN_SELECT_POPUP + " div[role='option'][data-value='" + applicationId + "']");
+        page.waitForCondition(() -> page.locator(OPEN_SELECT_POPUP).count() == 0);
+
+        // 4. Submit: the site records WHICH workload its hostname serves.
+        type("input[name='name']", "ukt-exposed-site");
+        page.evaluate("document.querySelector('form.cms-form-layout').requestSubmit()");
+        page.waitForCondition(() -> Models.get(SiteModel.class).find()
+            .where(SiteModel.NAME.eq("ukt-exposed-site")).first() != null);
+
+        Row site = Models.get(SiteModel.class).find()
+            .where(SiteModel.NAME.eq("ukt-exposed-site")).first();
+        assertThat((Object) site.get(SiteModel.UPSTREAM_KIND))
+            .isEqualTo("hohenheim:instance");
+        assertThat((Object) site.get(SiteModel.INSTANCE_ID)).isEqualTo(applicationId);
     }
 }

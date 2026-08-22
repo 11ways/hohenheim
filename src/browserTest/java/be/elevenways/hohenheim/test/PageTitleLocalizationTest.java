@@ -103,7 +103,7 @@ class PageTitleLocalizationTest {
         for (String scope : List.of("instance_device", "instance_schedule", "schedule_step",
                 "dns_secondaries", "dns_zone_file", "dns_zone_records", "dev_sessions",
                 "site_databases", "database_restore", "spamservice_sample",
-                "site_deployments", "site_domains")) {
+                "instance_deployments", "instance_volume", "site_domains")) {
             for (String tag : List.of("en", "nl")) {
                 String resolved = Microcopy.of("page_title").withFilter("scope", scope)
                     .withArg("name", "acme-one")

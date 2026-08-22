@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -48,6 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ManagePanelTest extends HohenheimTestBase {
 
     private static Integer siteAId;
+    private static Integer appAId;
     private static Integer siteBId;
     private static Integer domainAId;
     private static Integer operatorId;
@@ -70,8 +72,8 @@ class ManagePanelTest extends HohenheimTestBase {
         siteA.set(SiteModel.STATUS, "active");
         siteA.set(SiteModel.ENABLED, true);
         // The source lives on the application instance the site exposes now (phase-0
-        // design section 3); the deployments tab reads it through there.
-        TestSources.attachGitSource(siteA, Map.of(
+        // design section 3); the Deploys tab lives on that instance too.
+        appAId = TestSources.attachGitSource(siteA, Map.of(
             "repository_url", "ssh://private/manage-a.git",
             "build_command", "private-build-command",
             "webhook_secret", "private-webhook-secret"));
@@ -265,8 +267,15 @@ class ManagePanelTest extends HohenheimTestBase {
             "environment_variables", Map.of("DAEMON_SECRET", "must-not-render"),
             "command", "unsafe-host-command"));
 
+        // The Deploys tab lives on the APPLICATION instance now; reaching it through
+        // /manage takes an instance grant, exactly like production delegation does.
+        // (Revoked again below: a lingering instance grant would keep this principal
+        // ELIGIBLE for /manage and break the eligibility journey that runs later.)
+        RecordGrants.grant(GrantSubjectType.USER, operatorId, InstanceModel.MODEL_ID, appAId,
+            HohenheimAccess.MANAGE, true);
+        try {
         HttpResponse<String> delegated = operatorGet(
-            "/manage/sites/" + siteAId + "/page/deployments");
+            "/manage/instances/" + appAId + "/page/deployments");
         assertThat(delegated.statusCode()).isEqualTo(200);
         assertThat(delegated.body())
             .doesNotContain("private-webhook-secret")
@@ -277,28 +286,32 @@ class ManagePanelTest extends HohenheimTestBase {
         // so deploy actions bounce back to /manage, not /admin.
         assertThat(delegated.body())
             .contains("name=\"_return\"")
-            .contains("value=\"/manage/sites/" + siteAId + "/page/deployments\"");
+            .contains("value=\"/manage/instances/" + appAId + "/page/deployments\"");
 
         HttpResponse<String> admin = adminGet(
-            "/admin/sites/" + siteAId + "/page/deployments");
+            "/admin/instances/" + appAId + "/page/deployments");
         assertThat(admin.statusCode()).isEqualTo(200);
         assertThat(admin.body()).contains("private-webhook-secret").contains("data-webhook-secret");
 
         // No proxy runs in this suite, so deploy is redirect-only: the handler
         // finds no git handler and just answers with the return redirect.
-        String manageTarget = "/manage/sites/" + siteAId + "/page/deployments";
-        HttpResponse<String> fromManage = operatorPost("/sites/" + siteAId + "/deploy",
+        String manageTarget = "/manage/instances/" + appAId + "/page/deployments";
+        HttpResponse<String> fromManage = operatorPost("/instances/" + appAId + "/deploy",
             "_return=" + java.net.URLEncoder.encode(manageTarget, java.nio.charset.StandardCharsets.UTF_8));
         assertThat(fromManage.statusCode()).isIn(302, 303);
         assertThat(fromManage.headers().firstValue("Location")).hasValue(manageTarget);
 
         // A forged _return can never open-redirect: unsafe values fall back
         // to the admin page.
-        HttpResponse<String> forged = operatorPost("/sites/" + siteAId + "/deploy",
+        HttpResponse<String> forged = operatorPost("/instances/" + appAId + "/deploy",
             "_return=" + java.net.URLEncoder.encode("https://evil.example/", java.nio.charset.StandardCharsets.UTF_8));
         assertThat(forged.statusCode()).isIn(302, 303);
         assertThat(forged.headers().firstValue("Location"))
-            .hasValue("/admin/sites/" + siteAId + "/page/deployments");
+            .hasValue("/admin/instances/" + appAId + "/page/deployments");
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, operatorId, InstanceModel.MODEL_ID,
+                appAId, HohenheimAccess.MANAGE);
+        }
 
         HttpResponse<String> subpage = operatorGet("/manage/sites/" + siteAId + "/page/domains");
         assertThat(subpage.statusCode()).isEqualTo(200);
@@ -415,7 +428,9 @@ class ManagePanelTest extends HohenheimTestBase {
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "hohenheim.manage.access", false);
 
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
-        assertThat(operatorPost("/sites/" + siteAId + "/deploy", "").statusCode()).isEqualTo(403);
+        // The deploy verb is instance-keyed now and answers to the POWER capability on
+        // the record; a site grant confers nothing on it.
+        assertThat(operatorPost("/instances/" + appAId + "/deploy", "").statusCode()).isEqualTo(403);
         UserPrincipal principal = new UserPrincipal(operatorId, "Site Operator");
         assertThat(HohenheimAccess.managedSiteIds(principal)).isEmpty();
         assertThat(HohenheimAccess.canManageSite(principal, siteAId)).isFalse();
