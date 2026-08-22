@@ -22,7 +22,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class InstancePreStartHooksTest {
 
     private static final Identifier GAME = Identifier.of("hohenheim", "game_domain_links");
-    private static final Identifier SITE_DB = Identifier.of("hohenheim", "site_database_links");
+    /**
+     * AIDEV-NOTE: was {@code site_database_links}. Phase-0 brief 7 deleted the site-keyed
+     * database lane, so the instance one is the only database hook there is -- and it now
+     * covers an application's releases too, resolving the link OWNER off the deploying row.
+     */
+    private static final Identifier INSTANCE_DB =
+        Identifier.of("hohenheim", "instance_database_links");
     private static final Identifier STACK = Identifier.of("hohenheim", "stack_service_links");
 
     /** A probe that records that it ran; the resolved argument is deliberately ignored. */
@@ -60,12 +66,12 @@ class InstancePreStartHooksTest {
         }
         assertThat(ids)
             .as("step 1: every link-network owner registers itself")
-            .contains(GAME, SITE_DB, STACK);
+            .contains(GAME, INSTANCE_DB, STACK);
         assertThat(ids.indexOf(GAME))
-            .as("step 1: the game-domain hook is dispatched before the site-database hook")
-            .isLessThan(ids.indexOf(SITE_DB));
-        assertThat(ids.indexOf(SITE_DB))
-            .as("step 1: the site-database hook is dispatched before the stack hook")
+            .as("step 1: the game-domain hook is dispatched before the database hook")
+            .isLessThan(ids.indexOf(INSTANCE_DB));
+        assertThat(ids.indexOf(INSTANCE_DB))
+            .as("step 1: the database hook is dispatched before the stack hook")
             .isLessThan(ids.indexOf(STACK));
         assertThat(ids).as("step 1: no hook id is registered twice").doesNotHaveDuplicates();
 

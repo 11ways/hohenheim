@@ -1,17 +1,15 @@
 package be.elevenways.hohenheim.test.database;
 
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDatabaseModel;
-import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -21,7 +19,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,6 +28,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The env-injection resolver contract: prefixed variable families per attached database,
  * DATABASE_URL pinned to the FIRST link, unavailable databases contributing nothing, and
  * URL-encoded credentials. Live ports are stubbed -- no Docker needed.
+ *
+ * AIDEV-NOTE: there is exactly ONE lane left. Phase 0 brief 7 deleted {@code envForSite}
+ * and with it the only public entry point that asked for {@code Style.PUBLISHED_LOOPBACK},
+ * so every journey here now runs the INSTANCE lane, which is always CONTAINER_NETWORK: a
+ * workload's own 127.0.0.1 is itself, and the loopback style would hand it an address that
+ * reaches nothing. The subjects are unchanged -- families, primary-URL pinning, degradation
+ * -- only the address shape they assert moved.
  */
 class DatabaseEnvInjectionTest {
 
@@ -45,20 +50,20 @@ class DatabaseEnvInjectionTest {
         // Generated rows are read-only outside a system scope, fixtures included -- the
         // sweeping scope is the lane that exists for "the declaring record is going away".
         GeneratedRows.sweeping("test", () -> Models.get(InstanceModel.class).find().delete());
-        Models.get(SiteDatabaseModel.class).find().delete();
+        Models.get(InstanceDatabaseModel.class).find().delete();
         Models.get(DatabaseModel.class).find().delete();
-        Models.get(SiteModel.class).find().delete();
     }
 
-    private static Integer site(String name) {
-        SiteModel sites = Models.get(SiteModel.class);
-        Row site = sites.createEmptyRow();
-        site.set(SiteModel.NAME, name);
-        site.set(SiteModel.SLUG, name);
-        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
-        site.set(SiteModel.ENABLED, true);
-        sites.save(site);
-        return site.get(SiteModel.ID);
+    /** The workload whose links are injected: an application, the release-managed kind. */
+    private static Integer application(String name) {
+        InstanceModel instances = Models.get(InstanceModel.class);
+        Row row = instances.createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
+        instances.save(row);
+        return row.get(InstanceModel.ID);
     }
 
     private static Integer database(String name, String engine, String status) {
@@ -79,45 +84,46 @@ class DatabaseEnvInjectionTest {
         return id;
     }
 
-    private static void link(Integer siteId, Integer databaseId, String prefix) {
-        SiteDatabaseModel links = Models.get(SiteDatabaseModel.class);
+    private static void link(Integer instanceId, Integer databaseId, String prefix) {
+        InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
         Row link = links.createEmptyRow();
-        link.set(SiteDatabaseModel.SITE_ID, siteId);
-        link.set(SiteDatabaseModel.DATABASE_ID, databaseId);
-        link.set(SiteDatabaseModel.ENV_PREFIX, prefix);
+        link.set(InstanceDatabaseModel.INSTANCE_ID, instanceId);
+        link.set(InstanceDatabaseModel.DATABASE_ID, databaseId);
+        link.set(InstanceDatabaseModel.ENV_PREFIX, prefix);
         links.save(link);
     }
 
     @Test
     void attachedDatabasesResolveToPrefixedFamiliesWithPrimaryUrl() {
-        Integer siteId = site("inject-two");
-        link(siteId, database("maindb", "postgres", DatabaseModel.STATUS_ACTIVE), "DB");
-        link(siteId, database("cachedb", "redis", DatabaseModel.STATUS_ACTIVE), "CACHE");
+        Integer applicationId = application("inject-two");
+        link(applicationId, database("maindb", "postgres", DatabaseModel.STATUS_ACTIVE), "DB");
+        link(applicationId, database("cachedb", "redis", DatabaseModel.STATUS_ACTIVE), "CACHE");
 
-        Map<String, String> env = DatabaseEnvInjection.envForSite(siteId,
+        Map<String, String> env = DatabaseEnvInjection.envForInstance(applicationId,
             row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING,
                 "maindb".equals(row.get(DatabaseModel.NAME)) ? 5544 : 6380));
 
-        String pgUrl = "postgres://appuser:s3cret@127.0.0.1:5544/appdb";
-        assertThat(env).containsEntry("DB_HOST", "127.0.0.1");
-        assertThat(env).containsEntry("DB_PORT", "5544");
+        String pgUrl = "postgres://appuser:s3cret@" + EngineHandles.of("maindb") + ":5432/appdb";
+        assertThat(env).containsEntry("DB_HOST", EngineHandles.of("maindb"));
+        assertThat(env).containsEntry("DB_PORT", "5432");
         assertThat(env).containsEntry("DB_USER", "appuser");
         assertThat(env).containsEntry("DB_PASSWORD", "s3cret");
         assertThat(env).containsEntry("DB_NAME", "appdb");
         assertThat(env).containsEntry("DB_URL", pgUrl);
         assertThat(env).containsEntry("DATABASE_URL", pgUrl);
-        assertThat(env).containsEntry("CACHE_URL", "redis://:s3cret@127.0.0.1:6380");
-        assertThat(env).containsEntry("CACHE_PORT", "6380");
+        assertThat(env).containsEntry("CACHE_URL",
+            "redis://:s3cret@" + EngineHandles.of("cachedb") + ":6379");
+        assertThat(env).containsEntry("CACHE_PORT", "6379");
     }
 
     @Test
     void unavailableDatabaseContributesNothingAndNeverReassignsPrimaryUrl() {
-        Integer siteId = site("inject-down");
-        link(siteId, database("downdb", "postgres", DatabaseModel.STATUS_ACTIVE), "DB");
-        link(siteId, database("updb", "mysql", DatabaseModel.STATUS_ACTIVE), "SECOND");
+        Integer applicationId = application("inject-down");
+        link(applicationId, database("downdb", "postgres", DatabaseModel.STATUS_ACTIVE), "DB");
+        link(applicationId, database("updb", "mysql", DatabaseModel.STATUS_ACTIVE), "SECOND");
 
         // The primary (first) link's container is stopped; the second resolves.
-        Map<String, String> env = DatabaseEnvInjection.envForSite(siteId,
+        Map<String, String> env = DatabaseEnvInjection.envForInstance(applicationId,
             row -> "downdb".equals(row.get(DatabaseModel.NAME))
                 ? new ManagedDatabase.LiveStatus(ContainerState.STOPPED, null)
                 : new ManagedDatabase.LiveStatus(ContainerState.RUNNING, 3311));
@@ -126,36 +132,37 @@ class DatabaseEnvInjectionTest {
         assertThat(env).doesNotContainKey("DB_URL");
         // DATABASE_URL belongs to the first link; it must not silently point elsewhere.
         assertThat(env).doesNotContainKey("DATABASE_URL");
-        assertThat(env).containsEntry("SECOND_URL", "mysql://appuser:s3cret@127.0.0.1:3311/appdb");
+        assertThat(env).containsEntry("SECOND_URL",
+            "mysql://appuser:s3cret@" + EngineHandles.of("updb") + ":3306/appdb");
     }
 
     @Test
     void nonActiveRecordsAndFailedResolutionDegradeToNoVariables() {
-        Integer siteId = site("inject-failed");
-        link(siteId, database("faileddb", "postgres", DatabaseModel.STATUS_FAILED), "DB");
+        Integer applicationId = application("inject-failed");
+        link(applicationId, database("faileddb", "postgres", DatabaseModel.STATUS_FAILED), "DB");
 
-        Map<String, String> env = DatabaseEnvInjection.envForSite(siteId,
+        Map<String, String> env = DatabaseEnvInjection.envForInstance(applicationId,
             row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, 5544));
         assertThat(env).isEmpty();
 
-        // A site with no links resolves to nothing without touching the resolver.
-        assertThat(DatabaseEnvInjection.envForSite(site("inject-bare"), row -> {
+        // A workload with no links resolves to nothing without touching the resolver.
+        assertThat(DatabaseEnvInjection.envForInstance(application("inject-bare"), row -> {
             throw new AssertionError("resolver must not run without links");
         })).isEmpty();
     }
 
     @Test
     void containerNetworkStyleUsesContainerHostnameAndEnginePort() {
-        Integer siteId = site("inject-container");
-        link(siteId, database("containerdb", "postgres", DatabaseModel.STATUS_ACTIVE), "DB");
-        link(siteId, database("containercache", "redis", DatabaseModel.STATUS_ACTIVE), "CACHE");
+        Integer applicationId = application("inject-container");
+        link(applicationId, database("containerdb", "postgres", DatabaseModel.STATUS_ACTIVE), "DB");
+        link(applicationId, database("containercache", "redis", DatabaseModel.STATUS_ACTIVE),
+            "CACHE");
 
-        // 1. The container style resolves the DB container hostname + the engine's own
-        //    port -- the published loopback port must appear NOWHERE, because inside a
-        //    site container 127.0.0.1 is the container itself.
-        Map<String, String> env = DatabaseEnvInjection.envForSite(siteId,
-            row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, 5544),
-            DatabaseEnvInjection.Style.CONTAINER_NETWORK);
+        // 1. The instance lane resolves the DB container hostname + the engine's own port
+        //    -- the published loopback port must appear NOWHERE, because inside a workload
+        //    container 127.0.0.1 is the container itself.
+        Map<String, String> env = DatabaseEnvInjection.envForInstance(applicationId,
+            row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, 5544));
         String pgUrl = "postgres://appuser:s3cret@"
             + EngineHandles.of("containerdb") + ":5432/appdb";
         assertThat(env).as("step 1: host is the database ENGINE's container hostname")
@@ -172,24 +179,52 @@ class DatabaseEnvInjectionTest {
         assertThat(env.values()).as("step 1: no variable smuggles a loopback address in")
             .noneMatch(value -> value.contains("127.0.0.1"));
 
-        // 2. A running engine with no published port yet still resolves in container
-        //    style (it does not NEED the published port), while the loopback style
-        //    correctly refuses the same state.
-        Map<String, String> unpublished = DatabaseEnvInjection.envForSite(siteId,
-            row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, null),
-            DatabaseEnvInjection.Style.CONTAINER_NETWORK);
-        assertThat(unpublished).as("step 2: container style needs no published port")
+        // 2. A running engine with no published port yet still resolves: the instance lane
+        //    does not NEED the published port to hand out a reachable address.
+        Map<String, String> unpublished = DatabaseEnvInjection.envForInstance(applicationId,
+            row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, null));
+        assertThat(unpublished).as("step 2: the container address needs no published port")
             .containsEntry("DB_HOST", EngineHandles.of("containerdb"));
-        assertThat(DatabaseEnvInjection.envForSite(siteId,
-            row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, null)))
-            .as("step 2: the loopback style still refuses a portless container").isEmpty();
 
-        // 3. A stopped engine contributes nothing in EITHER style: credentials for a
-        //    dead database are the silent-success shape.
-        assertThat(DatabaseEnvInjection.envForSite(siteId,
-            row -> new ManagedDatabase.LiveStatus(ContainerState.STOPPED, null),
-            DatabaseEnvInjection.Style.CONTAINER_NETWORK))
+        // 3. A stopped engine contributes nothing at all: credentials for a dead database
+        //    are the silent-success shape.
+        assertThat(DatabaseEnvInjection.envForInstance(applicationId,
+            row -> new ManagedDatabase.LiveStatus(ContainerState.STOPPED, null)))
             .as("step 3: a stopped database contributes no variables").isEmpty();
+    }
+
+    /**
+     * WHERE an application's links land: the application carries them, but the container
+     * that consumes them is its serving RELEASE -- so the release resolves its link owner
+     * back to the application, and the application resolves its consumer forward.
+     */
+    @Test
+    void anApplicationsLinksAreConsumedByItsReleaseContainer() {
+        Integer applicationId = application("inject-release-owner");
+        link(applicationId, database("releasedb", "postgres", DatabaseModel.STATUS_ACTIVE), "DB");
+
+        // 1. The application's own env is the family its links declare.
+        Map<String, String> owned = DatabaseEnvInjection.envForInstance(applicationId,
+            row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, 5544));
+        assertThat(owned).as("step 1: the application carries the link family")
+            .containsEntry("DB_HOST", EngineHandles.of("releasedb"));
+
+        // 2. A serving release generated FOR that application carries no links of its own.
+        int releaseId = release(applicationId);
+        Row releaseRow = Models.get(InstanceModel.class).findById(releaseId);
+        assertThat(DatabaseEnvInjection.envForInstance(releaseId, row -> {
+            throw new AssertionError("a release declares no links of its own");
+        })).as("step 2: a release has no links keyed to itself").isEmpty();
+
+        // 3. Yet the link OWNER of that release is the application, which is what makes
+        //    the release container start with the application's database variables.
+        assertThat(ApplicationReleases.linkOwnerOf(releaseRow))
+            .as("step 3: a release resolves its link owner back to its application")
+            .isEqualTo(applicationId);
+        assertThat(ApplicationReleases.consumerInstanceOf(applicationId))
+            .as("step 3: and the application resolves forward to the container that"
+                + " actually consumes them")
+            .isEqualTo(releaseId);
     }
 
     @Test
@@ -201,5 +236,21 @@ class DatabaseEnvInjectionTest {
         String mongo = DatabaseEnvInjection.connectionUrl(ManagedDatabase.Engine.MONGO,
             "127.0.0.1", 27017, "root", "secret", "appdb");
         assertThat(mongo).isEqualTo("mongodb://root:secret@127.0.0.1:27017/appdb?authSource=admin");
+    }
+
+    /** A serving release row generated FOR the application, authored in its system scope. */
+    private static int release(int applicationId) {
+        int[] created = new int[1];
+        ApplicationReleases.inScopeUnchecked(applicationId, () -> {
+            InstanceModel instances = Models.get(InstanceModel.class);
+            Row row = instances.createEmptyRow();
+            row.set(InstanceModel.NAME, "inject-release");
+            row.set(InstanceModel.KIND, "hohenheim:release");
+            row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
+            row.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
+            instances.save(row);
+            created[0] = row.get(InstanceModel.ID);
+        });
+        return created[0];
     }
 }

@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.model.DeploymentModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -9,6 +8,7 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.zenit.auth.AuthKeys;
@@ -71,6 +71,8 @@ class PaasApiTest extends HohenheimTestBase {
 
     private static Integer siteAId;
     private static Integer siteBId;
+    private static Integer applicationAId;
+    private static Integer applicationBId;
     private static Integer staticSiteId;
     private static Integer instanceAId;
 
@@ -94,8 +96,12 @@ class PaasApiTest extends HohenheimTestBase {
         tenantAId = user("paas-tenant-a@surface.test", "Paas Tenant A");
         tenantBId = user("paas-tenant-b@surface.test", "Paas Tenant B");
 
+        // Both sites expose an APPLICATION: every deploy verb and every operation
+        // record of the API is keyed to that application now, not to the site.
         siteAId = site(PREFIX + "alpha", "hohenheim:instance");
-        siteBId = site(PREFIX + "bravo", "hohenheim:static");
+        applicationAId = applicationOf(siteAId);
+        siteBId = site(PREFIX + "bravo", "hohenheim:instance");
+        applicationBId = applicationOf(siteBId);
         staticSiteId = site(PREFIX + "static", "hohenheim:static");
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, SiteModel.MODEL_ID, siteAId,
             HohenheimAccess.MANAGE, true);
@@ -119,10 +125,12 @@ class PaasApiTest extends HohenheimTestBase {
         Models.get(EnvironmentModel.class).save(environment);
         environmentId = environment.get(EnvironmentModel.ID);
 
-        releaseOfAId = releaseOperation(siteAId, "release-step-log-of-alpha");
-        releaseOfBId = releaseOperation(siteBId, "release-step-log-of-bravo");
+        releaseOfAId = releaseOperation(applicationAId, "release-step-log-of-alpha");
+        releaseOfBId = releaseOperation(applicationBId, "release-step-log-of-bravo");
         buildOfAId = buildOperation(siteAId, "build-log-of-alpha");
-        deploymentOfAId = deployment(siteAId, "deploy-log-of-alpha");
+        // A git deployment IS a release operation now: the deployments endpoint reads the
+        // same table, so the fixture is one record read through two doors.
+        deploymentOfAId = releaseOperation(applicationAId, "deploy-log-of-alpha");
 
         String siteScope = CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE);
         String instanceScope = CapabilityScopes.format(InstanceModel.MODEL_ID,
@@ -159,16 +167,12 @@ class PaasApiTest extends HohenheimTestBase {
             InstanceVariableModel.ID.getName());
         deleteWhere(Models.get(ReleaseOperationModel.class),
             Models.get(ReleaseOperationModel.class).find()
-                .where(ReleaseOperationModel.FOR_ID.in(siteAId, siteBId)).all(),
+                .where(ReleaseOperationModel.FOR_ID.in(applicationAId, applicationBId)).all(),
             ReleaseOperationModel.ID.getName());
         deleteWhere(Models.get(BuildOperationModel.class),
             Models.get(BuildOperationModel.class).find()
                 .where(BuildOperationModel.FOR_ID.eq(siteAId)).all(),
             BuildOperationModel.ID.getName());
-        deleteWhere(Models.get(DeploymentModel.class),
-            Models.get(DeploymentModel.class).find()
-                .where(DeploymentModel.SITE_ID.eq(siteAId)).all(),
-            DeploymentModel.ID.getName());
         deleteWhere(Models.get(InstanceModel.class),
             Models.get(InstanceModel.class).find()
                 .where(InstanceModel.NAME.startsWith(PREFIX)).all(),
@@ -218,7 +222,7 @@ class PaasApiTest extends HohenheimTestBase {
         // An instance upstream must name the instance it serves (SiteModel's
         // before-validate invariant), and the rollback lane dispatches on exactly that.
         if ("hohenheim:instance".equals(type)) {
-            row.set(SiteModel.INSTANCE_ID, instance(name + "-app"));
+            row.set(SiteModel.INSTANCE_ID, application(name + "-app"));
         }
         Models.get(SiteModel.class).save(row);
         return row.get(SiteModel.ID);
@@ -235,6 +239,22 @@ class PaasApiTest extends HohenheimTestBase {
         return row.get(InstanceModel.ID);
     }
 
+    /** The release-managed workload a site exposes; the API's deploy verbs act on it. */
+    private static int application(String name) {
+        Row row = Models.get(InstanceModel.class).createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
+            Map.of("image", "alpine", "tag", "latest")));
+        row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        Models.get(InstanceModel.class).save(row);
+        return row.get(InstanceModel.ID);
+    }
+
+    private static int applicationOf(int siteId) {
+        return Models.get(SiteModel.class).findById(siteId).get(SiteModel.INSTANCE_ID);
+    }
+
     private static int project(String name) {
         Row row = Models.get(ProjectModel.class).createEmptyRow();
         row.set(ProjectModel.NAME, name);
@@ -242,11 +262,11 @@ class PaasApiTest extends HohenheimTestBase {
         return row.get(ProjectModel.ID);
     }
 
-    private static int releaseOperation(int siteId, String stepLog) {
+    private static int releaseOperation(int applicationId, String stepLog) {
         Row op = Models.get(ReleaseOperationModel.class).createEmptyRow();
         op.set(ReleaseOperationModel.KIND, ReleaseOperationModel.KIND_RELEASE);
-        op.set(ReleaseOperationModel.FOR_MODEL, SiteModel.MODEL_ID.toString());
-        op.set(ReleaseOperationModel.FOR_ID, siteId);
+        op.set(ReleaseOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
+        op.set(ReleaseOperationModel.FOR_ID, applicationId);
         op.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_SUCCEEDED);
         op.set(ReleaseOperationModel.STEP_LOG, stepLog);
         Models.get(ReleaseOperationModel.class).save(op);
@@ -262,15 +282,6 @@ class PaasApiTest extends HohenheimTestBase {
         op.set(BuildOperationModel.LOG, log);
         Models.get(BuildOperationModel.class).save(op);
         return op.get(BuildOperationModel.ID);
-    }
-
-    private static int deployment(int siteId, String log) {
-        Row op = Models.get(DeploymentModel.class).createEmptyRow();
-        op.set(DeploymentModel.SITE_ID, siteId);
-        op.set(DeploymentModel.STATUS, DeploymentModel.STATUS_SUCCESS);
-        op.set(DeploymentModel.LOG, log);
-        Models.get(DeploymentModel.class).save(op);
-        return op.get(DeploymentModel.ID);
     }
 
     // -- transport -------------------------------------------------------------
@@ -342,11 +353,9 @@ class PaasApiTest extends HohenheimTestBase {
             .isEqualTo(absent.body());
 
         // 3. A deploy POST on the unowned site answers the same 404 AND performed no
-        //    work: no deployment record, no release operation appears for site B.
-        long deploysBefore = Models.get(DeploymentModel.class).find()
-            .where(DeploymentModel.SITE_ID.eq(siteBId)).count();
+        //    work: no release operation appears for site B's application.
         long releasesBefore = Models.get(ReleaseOperationModel.class).find()
-            .where(ReleaseOperationModel.FOR_ID.eq(siteBId)).count();
+            .where(ReleaseOperationModel.FOR_ID.eq(applicationBId)).count();
         HttpResponse<String> deployForeign = keyPost(keyPaasA,
             "/api/v1/sites/" + siteBId + "/deploy", "");
         HttpResponse<String> deployAbsent = keyPost(keyPaasA,
@@ -359,13 +368,10 @@ class PaasApiTest extends HohenheimTestBase {
             "/api/v1/sites/" + siteBId + "/rollback", "");
         assertThat(rollbackForeign.statusCode()).as("step 3: rollback likewise")
             .isEqualTo(404);
-        assertThat(Models.get(DeploymentModel.class).find()
-                .where(DeploymentModel.SITE_ID.eq(siteBId)).count())
-            .as("step 3: and no deployment was recorded for the unowned site")
-            .isEqualTo(deploysBefore);
         assertThat(Models.get(ReleaseOperationModel.class).find()
-                .where(ReleaseOperationModel.FOR_ID.eq(siteBId)).count())
-            .as("step 3: and no release operation was recorded either")
+                .where(ReleaseOperationModel.FOR_ID.eq(applicationBId)).count())
+            .as("step 3: and no release operation -- which IS the deployment record now"
+                + " -- was written for the unowned site")
             .isEqualTo(releasesBefore);
 
         // 4. A child record of ANOTHER site answers exactly like a missing one, so
@@ -392,19 +398,19 @@ class PaasApiTest extends HohenheimTestBase {
     @Test
     @Order(3)
     void deployAndRollbackAreTheSameDoorAsTheUi() throws Exception {
-        // 1. This docker site is not git-provisioned (no live handler): deploy has
-        //    nothing to enqueue and says so by name -- exactly the HTML lane's shape,
-        //    where the Deployments tab only exists for git sources.
+        // 1. A site that exposes NO application has nothing to deploy and says so by
+        //    name -- the deploy verb acts on the application behind a site, so a site
+        //    without one refuses rather than quietly doing nothing.
         HttpResponse<String> deploy = keyPost(keyPaasA,
-            "/api/v1/sites/" + siteAId + "/deploy", "");
+            "/api/v1/sites/" + staticSiteId + "/deploy", "");
         assertThat(deploy.statusCode()).as("step 1: refused, typed").isEqualTo(422);
         assertThat(deploy.body()).as("step 1: named").contains("deploy_not_available");
 
         // 2. Rollback on an INSTANCE-upstream site DISPATCHES to the release engine: with no
         //    retained release the engine's own named refusal comes back, which proves
-        //    the call reached SiteReleases rather than a re-implementation.
+        //    the call reached ReleaseEngine rather than a re-implementation.
         long opsBefore = Models.get(ReleaseOperationModel.class).find()
-            .where(ReleaseOperationModel.FOR_ID.eq(siteAId)).count();
+            .where(ReleaseOperationModel.FOR_ID.eq(applicationAId)).count();
         HttpResponse<String> rollback = keyPost(keyPaasA,
             "/api/v1/sites/" + siteAId + "/rollback", "");
         assertThat(rollback.statusCode()).as("step 2: refused, typed").isEqualTo(422);
@@ -412,7 +418,7 @@ class PaasApiTest extends HohenheimTestBase {
             .as("step 2: with the release engine's own violation")
             .contains("release_no_rollback_target");
         assertThat(Models.get(ReleaseOperationModel.class).find()
-                .where(ReleaseOperationModel.FOR_ID.eq(siteAId)).count())
+                .where(ReleaseOperationModel.FOR_ID.eq(applicationAId)).count())
             .as("step 2: and no operation row was minted for the refused rollback")
             .isEqualTo(opsBefore);
 
@@ -518,7 +524,7 @@ class PaasApiTest extends HohenheimTestBase {
 
         HttpResponse<String> deployLog = keyGet(keyPaasA,
             "/api/v1/sites/" + siteAId + "/deployments/" + deploymentOfAId + "/log");
-        assertThat(deployLog.body()).as("step 1: the git deployment log reads back")
+        assertThat(deployLog.body()).as("step 1: the deployment log reads back")
             .contains("deploy-log-of-alpha");
 
         // 2. The instance log tail is a NAMED refusal when the workload has no

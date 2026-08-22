@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.test.source;
 
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.model.DeploymentModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.PreviewDeploymentModel;
+import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.WebhookDeliveryModel;
@@ -36,12 +38,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The webhook front door: a delivery that is unsigned, wrongly signed, aimed at another
  * repository, or on another branch must be refused IDENTICALLY and must queue nothing.
  *
- * AIDEV-NOTE: this class lost its deploy-driven half on 2026-08-22. The site-keyed git
- * checkout lane it awaited was deleted with {@code sites.source} (phase-0 design section 3),
- * so replay-once, the GitLab/Gitea shared-token lanes, the no-ref lane and the
- * webhook-driven preview lifecycle have NO pipeline to observe here any more. They are owed
- * back by the brief that routes webhooks at the instance; what remains is the refusal half,
- * which asserts ABSENCE and therefore needs no pipeline at all.
+ * AIDEV-NOTE: this class lost its deploy-driven half on 2026-08-22 when the site-keyed git
+ * checkout lane was deleted with {@code sites.source} (phase-0 design section 3). Brief 7
+ * re-keyed the webhook onto the APPLICATION INSTANCE -- the URL's last segment is that
+ * instance's id, never a site slug -- and the refusal half below moved with it. Still owed
+ * back, and still unobservable here because nothing in this class ever completes a deploy:
+ * replay-once, the GitLab/Gitea shared-token lanes, the no-ref lane and the webhook-driven
+ * preview lifecycle. What remains asserts ABSENCE and therefore needs no pipeline at all.
  */
 @org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation.class)
 class GitWebhookSecurityTest extends HohenheimTestBase {
@@ -52,6 +55,11 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     private static Integer siteAId;
     private static Integer siteBId;
     private static Integer siteCId;
+
+    /** The webhook URL names the APPLICATION instance the site exposes, not the site. */
+    private static Integer appAId;
+    private static Integer appBId;
+    private static Integer appCId;
 
     private static final String SECRET_A = "hook-secret-a-777";
     private static final String SECRET_B = "hook-secret-b-888";
@@ -69,11 +77,14 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         gitIn(upstreamRepo, "commit", "-q", "-m", "v1");
 
         siteAId = makeGitSite("Hook Site A", "hook-a", SECRET_A, "acme/repo-a", "hook-a.test");
+        appAId = applicationOf(siteAId);
         siteBId = makeGitSite("Hook Site B", "hook-b", SECRET_B, "acme/repo-b", "hook-b.test");
+        appBId = applicationOf(siteBId);
         // Site C is the previews-OPTED-IN site. Its static type makes the preview engine
         // refuse by type the moment the background job starts, so the mapping is observed
         // through the stamped delivery action and nothing is ever built.
         siteCId = makeGitSite("Hook Site C", "hook-c", SECRET_C, "acme/repo-c", "hook-c.test");
+        appCId = applicationOf(siteCId);
         enablePreviews(siteCId);
 
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
@@ -106,23 +117,23 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         // 1. Unsigned delivery: refused, and NOTHING happened -- no delivery claim, no
         //    deployment. The refusal is the proof the endpoint's only authentication is
         //    the signature.
-        String unsigned = post("/api/webhooks/git/hook-a", body,
+        String unsigned = post(hookUrl(appAId), body,
             "X-GitHub-Event: push", "X-GitHub-Delivery: " + UUID.randomUUID());
         assertThat(unsigned).as("step 1: unsigned refused").startsWith("HTTP/1.1 404");
 
         // 2. WRONG-signed (site B's real secret against site A's hook): identical
         //    refusal, still nothing. This is also the cross-site half of isolation: a
         //    party that legitimately holds B's secret gets nothing against A.
-        String wrongSigned = post("/api/webhooks/git/hook-a", body,
+        String wrongSigned = post(hookUrl(appAId), body,
             "X-GitHub-Event: push", "X-GitHub-Delivery: " + UUID.randomUUID(),
             "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_B, body));
         assertThat(wrongSigned).as("step 2: wrong signature refused")
             .startsWith("HTTP/1.1 404");
 
-        // 3. An unknown slug refuses with the SAME status and body as a wrong
-        //    signature on a real site -- the response leaks neither site existence nor
-        //    whether a secret is configured.
-        String unknownSlug = post("/api/webhooks/git/no-such-site", body,
+        // 3. A URL naming no application refuses with the SAME status and body as a
+        //    wrong signature on a real one -- the response leaks neither the existence
+        //    of the application nor whether a secret is configured.
+        String unknownSlug = post(GitWebhookHandler.PREFIX + "999000111", body,
             "X-GitHub-Event: push",
             "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_A, body));
         assertThat(statusAndBody(unknownSlug))
@@ -134,9 +145,62 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         Thread.sleep(300);
         assertThat(deliveryRows())
             .as("step 4: refused deliveries claim no delivery id").isEmpty();
-        assertThat(deploymentsOf(siteAId, "webhook"))
+        assertThat(releaseOperationsOf(appAId))
             .as("step 4: refused deliveries deploy nothing").isEmpty();
-        assertThat(deploymentsOf(siteBId, "webhook")).isEmpty();
+        assertThat(releaseOperationsOf(appBId)).isEmpty();
+    }
+
+    /**
+     * The replay ledger and the not-a-push guard, on a delivery that CLAIMS without
+     * deploying.
+     *
+     * AIDEV-NOTE: the payload is deliberately an OFF-BRANCH push. The claim is taken
+     * before the branch is even looked at, so this exercises the ledger end to end while
+     * starting no checkout -- which is what lets a replay journey stay hermetic. Asserting
+     * it on a deploying delivery would need a repository, a build and a daemon.
+     */
+    @Test
+    @org.junit.jupiter.api.Order(2)
+    void aReplayedDeliveryIsClaimedOnceAndAnEventWithoutARefIsNotAPush() throws Exception {
+
+        String deliveryId = UUID.randomUUID().toString();
+        String body = pushPayload("acme/repo-b", "refs/heads/feature-replay", "cafe2222");
+
+        // 1. The first delivery is acted on and its id is claimed.
+        String first = post(hookUrl(appBId), body, "X-GitHub-Event: push",
+            "X-GitHub-Delivery: " + deliveryId,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_B, body));
+        assertThat(first).as("step 1: the first delivery is acted on")
+            .startsWith("HTTP/1.1 200");
+        assertThat(deliveryRowsOf(appBId, "gh:" + deliveryId))
+            .as("step 1: and its id is claimed").hasSize(1);
+
+        // 2. The SAME delivery id again -- a provider retry, which every provider does on
+        //    a slow or lost response. It must be answered, not ACTED on a second time.
+        String replay = post(hookUrl(appBId), body, "X-GitHub-Event: push",
+            "X-GitHub-Delivery: " + deliveryId,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_B, body));
+        assertThat(replay).as("step 2: the replay is recognized as a duplicate")
+            .startsWith("HTTP/1.1 200").contains("duplicate");
+        assertThat(deliveryRowsOf(appBId, "gh:" + deliveryId))
+            .as("step 2: and the ledger still holds exactly one claim for that id")
+            .hasSize(1);
+
+        // 3. An event carrying NO ref is not a push, whatever else it is: it must be
+        //    ignored rather than fall through to a deploy of the default branch. Every
+        //    unmodelled provider event (issues, stars, releases, review comments) lands
+        //    here, and before the guard existed every one of them queued a deploy.
+        String refless = "{\"repository\":{\"full_name\":\"acme/repo-b\"}}";
+        String ignored = post(hookUrl(appBId), refless, "X-GitHub-Event: issues",
+            "X-GitHub-Delivery: " + UUID.randomUUID(),
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_B, refless));
+        assertThat(ignored).as("step 3: an event with no ref is not a push")
+            .startsWith("HTTP/1.1 200").contains("not a push");
+
+        // 4. The counterfactual for all three: nothing deployed.
+        Thread.sleep(300);
+        assertThat(releaseOperationsOf(appBId))
+            .as("step 4: a replay and an unmodelled event deploy nothing").isEmpty();
     }
 
     @Test
@@ -146,33 +210,34 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         // repo-a: a webhook must authorize exactly the repository binding it was
         // registered for (secret reuse / provider misconfiguration must not cross).
         String body = pushPayload("acme/repo-a", "refs/heads/main", "cafe3333");
-        String response = post("/api/webhooks/git/hook-b", body,
+        String response = post(hookUrl(appBId), body,
             "X-GitHub-Event: push", "X-GitHub-Delivery: " + UUID.randomUUID(),
             "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_B, body));
         assertThat(response).as("the repository mismatch is refused")
             .startsWith("HTTP/1.1 422").contains("repository mismatch");
         Thread.sleep(300);
-        assertThat(deploymentsOf(siteBId, "webhook"))
-            .as("the mismatched delivery deployed nothing on site B").isEmpty();
-        assertThat(deploymentsOf(siteAId, "webhook"))
-            .as("and certainly nothing on site A")
-            .allSatisfy(row -> assertThat((Object) row.get(DeploymentModel.SITE_ID))
-                .isEqualTo(siteAId));
+        assertThat(releaseOperationsOf(appBId))
+            .as("the mismatched delivery deployed nothing on site B's application")
+            .isEmpty();
+        assertThat(releaseOperationsOf(appAId))
+            .as("and certainly nothing on site A's application -- the repository the"
+                + " payload named is A's, which is exactly the crossing being refused")
+            .isEmpty();
     }
 
     @Test
     @org.junit.jupiter.api.Order(4)
     void aPushToAnotherBranchIsIgnored() throws Exception {
-        int before = deploymentsOf(siteBId, "webhook").size();
+        int before = releaseOperationsOf(appBId).size();
         String body = pushPayload("acme/repo-b", "refs/heads/feature-x", "cafe4444");
-        String response = post("/api/webhooks/git/hook-b", body,
+        String response = post(hookUrl(appBId), body,
             "X-GitHub-Event: push", "X-GitHub-Delivery: " + UUID.randomUUID(),
             "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_B, body));
         assertThat(response).as("the off-branch push is acknowledged but ignored")
             .startsWith("HTTP/1.1 200").contains("branch");
         Thread.sleep(300);
-        assertThat(deploymentsOf(siteBId, "webhook"))
-            .as("no deploy for a branch the site is not bound to").hasSize(before);
+        assertThat(releaseOperationsOf(appBId))
+            .as("no deploy for a branch the application is not bound to").hasSize(before);
     }
 
     @Test
@@ -181,7 +246,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         String body = "{\"action\":\"opened\",\"repository\":{\"full_name\":\"acme/repo-b\"},"
             + "\"pull_request\":{\"number\":7,\"head\":{\"ref\":\"feature-x\","
             + "\"sha\":\"cafe5555\"}}}";
-        String response = post("/api/webhooks/git/hook-b", body,
+        String response = post(hookUrl(appBId), body,
             "X-GitHub-Event: pull_request", "X-GitHub-Delivery: " + UUID.randomUUID(),
             "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_B, body));
         assertThat(response)
@@ -200,16 +265,15 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     }
 
     /** A live preview row as the deploy lane would leave one, without building anything. */
-    private static Row seedPreviewRow(Integer siteId, String ref) {
-        var model = Models.get(be.elevenways.hohenheim.model.PreviewDeploymentModel.class);
+    private static Row seedPreviewRow(Integer applicationId, String ref) {
+        var model = Models.get(PreviewDeploymentModel.class);
         Row preview = model.createEmptyRow();
-        preview.set(be.elevenways.hohenheim.model.PreviewDeploymentModel.SITE_ID, siteId);
-        preview.set(be.elevenways.hohenheim.model.PreviewDeploymentModel.REF, ref);
-        preview.set(be.elevenways.hohenheim.model.PreviewDeploymentModel.HOSTNAME,
+        preview.set(PreviewDeploymentModel.APPLICATION_ID, applicationId);
+        preview.set(PreviewDeploymentModel.REF, ref);
+        preview.set(PreviewDeploymentModel.HOSTNAME,
             "hook-c--feature-login.preview.test");
-        preview.set(be.elevenways.hohenheim.model.PreviewDeploymentModel.STATUS,
-            be.elevenways.hohenheim.model.PreviewDeploymentModel.STATUS_RUNNING);
-        preview.set(be.elevenways.hohenheim.model.PreviewDeploymentModel.EXPIRES_AT,
+        preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_RUNNING);
+        preview.set(PreviewDeploymentModel.EXPIRES_AT,
             java.time.Instant.now().plusSeconds(3600));
         model.save(preview);
         return preview;
@@ -232,7 +296,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             + "\"repository\":{\"full_name\":\"acme/repo-c\"},"
             + "\"pull_request\":{\"number\":11,\"head\":{\"ref\":\"feat-gt\","
             + "\"sha\":\"" + sha + "\"}}}";
-        post("/api/webhooks/git/hook-c", body,
+        post(hookUrl(appCId), body,
             "X-Gitea-Event: pull_request", "X-Gitea-Delivery: " + uuid,
             "X-Gitea-Signature: " + SecureTokens.hmacSha256Hex(SECRET_C, body));
         return stampedAction("gt:" + uuid);
@@ -252,7 +316,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             + "\"target_branch\":\"main\",\"action\":\"" + action + "\","
             + (oldrev == null ? "" : "\"oldrev\":\"" + oldrev + "\",")
             + "\"last_commit\":{\"id\":\"cafe7777\"}}}";
-        post("/api/webhooks/git/hook-c", body,
+        post(hookUrl(appCId), body,
             "X-Gitlab-Event: Merge Request Hook",
             "X-Gitlab-Event-UUID: " + uuid,
             "X-Gitlab-Token: " + SECRET_C);
@@ -262,10 +326,10 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     /** The delivery's recorded outcome; the claim is written before the handler acts. */
     private static String stampedAction(String deliveryKey) throws Exception {
         await("delivery " + deliveryKey + " is stamped", () -> {
-            List<Row> rows = deliveryRowsOf(siteCId, deliveryKey);
+            List<Row> rows = deliveryRowsOf(appCId, deliveryKey);
             return !rows.isEmpty() && rows.get(0).get(WebhookDeliveryModel.ACTION) != null;
         });
-        return deliveryRowsOf(siteCId, deliveryKey).get(0).get(WebhookDeliveryModel.ACTION);
+        return deliveryRowsOf(appCId, deliveryKey).get(0).get(WebhookDeliveryModel.ACTION);
     }
 
     // -- fixtures -------------------------------------------------------------
@@ -316,10 +380,25 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             + "\"repository\":{\"full_name\":\"" + repository + "\"}}";
     }
 
-    private static List<Row> deploymentsOf(Integer siteId, String reason) {
-        return Models.get(DeploymentModel.class).find()
-            .where(DeploymentModel.SITE_ID.eq(siteId))
-            .where(DeploymentModel.REASON.eq(reason))
+    /** The webhook URL of an application: its instance id is the whole last segment. */
+    private static String hookUrl(Integer applicationId) {
+        return GitWebhookHandler.PREFIX + applicationId;
+    }
+
+    /** The application instance a site exposes, which the webhook URL names. */
+    private static Integer applicationOf(Integer siteId) {
+        return Models.get(SiteModel.class).findById(siteId).get(SiteModel.INSTANCE_ID);
+    }
+
+    /**
+     * What a completed deploy leaves behind. A git deployment IS a release operation now;
+     * the separate deployments table died with the host-slot lane, so "deployed nothing"
+     * is asserted against the record the release engine actually writes.
+     */
+    private static List<Row> releaseOperationsOf(Integer applicationId) {
+        return Models.get(ReleaseOperationModel.class).find()
+            .where(ReleaseOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+            .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
             .all();
     }
 
@@ -327,9 +406,9 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         return Models.get(WebhookDeliveryModel.class).find().all();
     }
 
-    private static List<Row> deliveryRowsOf(Integer siteId, String key) {
+    private static List<Row> deliveryRowsOf(Integer applicationId, String key) {
         return Models.get(WebhookDeliveryModel.class).find()
-            .where(WebhookDeliveryModel.SITE_ID.eq(siteId))
+            .where(WebhookDeliveryModel.INSTANCE_ID.eq(applicationId))
             .where(WebhookDeliveryModel.DELIVERY_KEY.eq(key))
             .all();
     }

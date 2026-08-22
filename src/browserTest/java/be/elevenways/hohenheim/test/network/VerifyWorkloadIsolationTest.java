@@ -6,15 +6,14 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteDatabaseModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.database.DatabaseContainerKind;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
@@ -130,24 +129,24 @@ class VerifyWorkloadIsolationTest {
                 HostFixtures.admitLocal();
 
                 // 1. FOUR TIERS ON ONE HOST. A stack through the product lane; an
-                //    instance through the product lane (then stamped as a site's
-                //    SERVING release, which is what the link inventory keys on); a
-                //    managed database's network + record; a site-database link
-                //    network + attachment row.
+                //    instance through the product lane (then stamped as an
+                //    application's SERVING release, which is what the link inventory
+                //    keys on); a managed database's network + record; an
+                //    instance-database link network + attachment row.
                 int stackId = stackRecords(stackName);
                 cleanupStack[0] = stackId;
                 io(() -> stacks.deploy(stackId, "verify-isolation test"));
 
-                int instanceId = instanceRecord("vrfy-site-release");
+                int instanceId = instanceRecord("vrfy-app-release");
                 cleanupInstance[0] = instanceId;
                 new InstanceService().deploy(instanceId);
                 String instanceHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-                int fakeSiteId = 800000 + instanceId;
-                // The attribution columns are guarded: only the system scope may stamp
-                // a row as site-generated, so the fixture goes through that same lane.
+                int fakeApplicationId = 800000 + instanceId;
+                // The attribution columns are guarded: only the system scope may stamp a
+                // row as application-generated, so the fixture uses that same lane.
                 try {
-                    GeneratedRows.as(new GeneratedRows.Attribution(SiteInstances.SOURCE,
-                            SiteModel.MODEL_ID.toString(), fakeSiteId), () -> {
+                    GeneratedRows.as(new GeneratedRows.Attribution(ApplicationReleases.SOURCE,
+                            InstanceModel.MODEL_ID.toString(), fakeApplicationId), () -> {
                         Row instance = Models.get(InstanceModel.class).findById(instanceId);
                         instance.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
                         Models.get(InstanceModel.class).save(instance);
@@ -166,17 +165,19 @@ class VerifyWorkloadIsolationTest {
                     Egress.NONE));
                 scratchNetworks.add(WorkloadNetworks.networkName(databaseHandle));
 
-                Row link = Models.get(SiteDatabaseModel.class).createEmptyRow();
-                link.set(SiteDatabaseModel.SITE_ID, fakeSiteId);
-                link.set(SiteDatabaseModel.DATABASE_ID, databaseId);
-                link.set(SiteDatabaseModel.ENV_PREFIX, "DB");
-                Models.get(SiteDatabaseModel.class).save(link);
-                String linkHandle = ControllerScope.handle(ControllerScope.KIND_DBLINK, fakeSiteId) + "-" + databaseId;
+                Row link = Models.get(InstanceDatabaseModel.class).createEmptyRow();
+                link.set(InstanceDatabaseModel.INSTANCE_ID, fakeApplicationId);
+                link.set(InstanceDatabaseModel.DATABASE_ID, databaseId);
+                link.set(InstanceDatabaseModel.ENV_PREFIX, "DB");
+                Models.get(InstanceDatabaseModel.class).save(link);
+                String linkHandle = ControllerScope.handle(
+                    ControllerScope.KIND_INSTANCE_DBLINK, fakeApplicationId)
+                    + "-" + databaseId;
                 DockerInstanceRuntime runtime = new DockerInstanceRuntime(
                     docker, netns.enforcingPolicy());
                 io(() -> runtime.ensureLinkNetwork(linkHandle,
-                    OwnerLabels.of(SiteDatabaseModel.MODEL_ID,
-                        link.get(SiteDatabaseModel.ID)), Egress.NONE));
+                    OwnerLabels.of(InstanceDatabaseModel.MODEL_ID,
+                        link.get(InstanceDatabaseModel.ID)), Egress.NONE));
                 scratchNetworks.add(WorkloadNetworks.networkName(linkHandle));
 
                 String stackNetwork = WorkloadNetworks.networkName(

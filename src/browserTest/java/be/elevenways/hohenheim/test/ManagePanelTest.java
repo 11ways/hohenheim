@@ -559,10 +559,17 @@ class ManagePanelTest extends HohenheimTestBase {
             // probes. Each is still enumerated ONCE; the number this test exists to
             // catch is the un-memoized one, which is per CALLER (a dozen-plus
             // enumerations for the same set) and stays far outside this range.
+            // AIDEV-NOTE: the cap moved 12 -> 14 in phase-0 brief 7. Previews are keyed to
+            // the APPLICATION now, so the preview peer's nav probe asks about
+            // instance#manage where it used to ask about site#manage -- the same number of
+            // distinct sets, but on a render that had not yet enumerated the instance one
+            // it pays that set's first fetch. It is still ONE enumeration per distinct set
+            // per request; the un-memoized shape this pins against is per CALLER and an
+            // order of magnitude outside this range.
             assertThat(perRequest)
                 .as("record-grant finds during one /manage/sites request "
                     + "(6 distinct capability sets + walk confirmations)")
-                .isBetween(1, 12);
+                .isBetween(1, 14);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteAId,
                 HohenheimAccess.MANAGE);

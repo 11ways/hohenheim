@@ -6,12 +6,13 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.build.BuildQuota;
 import be.elevenways.hohenheim.server.build.BuildRequest;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -30,6 +31,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;
@@ -49,7 +51,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * sandbox on every build (kaniko has no cross-build cache here, by design), so this
  * suite is network-heavy and the first run on a host is the slowest. Every full build
  * costs ~2 minutes of nix resolution that no fixture can shrink, so the class runs
- * exactly TWO of them -- the journey's site build plus the identical twin the digest
+ * exactly TWO of them -- the journey's release build plus the identical twin the digest
  * comparison needs -- and the refusal test never builds an image at all.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
@@ -57,14 +59,11 @@ class NixpacksBuildLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
-    /** Owner of the end-to-end nixpacks site journey. */
-    private static final int JOURNEY_SITE_ID = 977_201;
-
     /** Owner of the digest-stability twin build; distinct so histories never mix. */
-    private static final int STABILITY_SITE_ID = 977_202;
+    private static final int STABILITY_OWNER_ID = 977_202;
 
     /** Owner of the undetectable-repository refusal. */
-    private static final int REFUSED_SITE_ID = 977_203;
+    private static final int REFUSED_OWNER_ID = 977_203;
 
     private static SqliteDatasource datasource;
     private static PrivateNetns netns;
@@ -99,8 +98,8 @@ class NixpacksBuildLiveTest {
 
     /**
      * Detection is REAL, the sandbox holds, and the digest is stable, in one journey: a
-     * Dockerfile-less node repository, configured on the SITE as builder=nixpacks,
-     * builds through the ordinary site convergence and the running artifact answers as
+     * Dockerfile-less node repository, configured on the APPLICATION as builder=nixpacks,
+     * builds through the ordinary release convergence and the running artifact answers as
      * a node app -- asserted on what RUNS, not on a detection field. The same build
      * carries the in-build sandbox probes (npm build script = tenant code inside the
      * kaniko build), each with a positive control so the probes discriminate. An
@@ -127,10 +126,12 @@ class NixpacksBuildLiveTest {
                 "container_port", 8080);
 
             long buildStarted = System.nanoTime();
-            SiteInstances.SiteRuntime runtime =
-                SiteInstances.ensureRunning(JOURNEY_SITE_ID, "nixpacks-journey", settings);
-            System.out.println("[timing] site build + start: " + seconds(buildStarted) + "s");
-            int instanceId = runtime.instanceId();
+            int applicationId = application("nixpacks-journey", settings);
+            ApplicationReleases.Release release =
+                ApplicationReleases.converge(applicationId, Map.of());
+            System.out.println("[timing] release build + start: "
+                + seconds(buildStarted) + "s");
+            int instanceId = release.instanceId();
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
             try {
                 // 1. What RUNS answers as a node app: the response carries our nonce AND
@@ -152,8 +153,9 @@ class NixpacksBuildLiveTest {
                 // 2. The detection RECORD says what the detector saw: exactly the node
                 //    provider, the pinned tool version, and the emitted Dockerfile.
                 Row build = Models.get(BuildOperationModel.class)
-                    .latestSuccess(SiteModel.MODEL_ID.toString(), JOURNEY_SITE_ID);
-                assertThat(build).as("step 2: the site's build was recorded").isNotNull();
+                    .latestSuccess(InstanceModel.MODEL_ID.toString(), applicationId);
+                assertThat(build).as("step 2: the application's build was recorded")
+                    .isNotNull();
                 assertThat((String) build.get(BuildOperationModel.BUILDER_KIND))
                     .as("step 2: as a nixpacks build")
                     .isEqualTo(BuildOperationModel.KIND_NIXPACKS);
@@ -203,7 +205,7 @@ class NixpacksBuildLiveTest {
                 //    That is why an earlier pass of it was never a proof.
                 long twinStarted = System.nanoTime();
                 SandboxedBuilds.Result twin =
-                    nixpacksBuild(docker, STABILITY_SITE_ID, twinContext);
+                    nixpacksBuild(docker, STABILITY_OWNER_ID, twinContext);
                 System.out.println("[timing] twin build: " + seconds(twinStarted) + "s, artifact: "
                     + artifactMb(Models.get(BuildOperationModel.class).findById(twin.buildId()))
                     + " MB");
@@ -220,13 +222,14 @@ class NixpacksBuildLiveTest {
                 }
             } finally {
                 try {
-                    SiteInstances.destroyFor(JOURNEY_SITE_ID);
+                    ApplicationReleases.destroyFor(applicationId);
                 } catch (RuntimeException ignored) {
                     // teardown best effort; the assertions above are the outcome
                 }
-                removeImage(docker, ControllerScope.handle(ControllerScope.KIND_SITE, JOURNEY_SITE_ID) + ":latest");
+                removeImage(docker, ControllerScope.handle(
+                    ControllerScope.KIND_INSTANCE, applicationId) + ":latest");
                 Row build = Models.get(BuildOperationModel.class)
-                    .latestSuccess(SiteModel.MODEL_ID.toString(), JOURNEY_SITE_ID);
+                    .latestSuccess(InstanceModel.MODEL_ID.toString(), applicationId);
                 if (build != null) {
                     removeImage(docker, build.get(BuildOperationModel.IMAGE_ID));
                 }
@@ -254,7 +257,7 @@ class NixpacksBuildLiveTest {
 
         Db.run(datasource, () -> {
             HostFixtures.admitLocal();
-            SandboxedBuilds.Result result = nixpacksBuild(docker, REFUSED_SITE_ID, context);
+            SandboxedBuilds.Result result = nixpacksBuild(docker, REFUSED_OWNER_ID, context);
             String log = logOf(result);
 
             // 1. The refusal is OURS and it is named. It cannot be nixpacks': `plan`
@@ -299,11 +302,22 @@ class NixpacksBuildLiveTest {
 
     // -- fixtures -------------------------------------------------------------
 
+    /** The application instance whose converge drives the end-to-end journey build. */
+    private static int application(String name, Map<String, Object> settings) {
+        Row application = Models.get(InstanceModel.class).createEmptyRow();
+        application.set(InstanceModel.NAME, name);
+        application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        application.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
+        Models.get(InstanceModel.class).save(application);
+        return application.get(InstanceModel.ID);
+    }
+
     private static SandboxedBuilds.Result nixpacksBuild(DockerClient docker, int ownerId,
                                                         Path context) {
         String tag = "hohenheim-buildtest-nixpacks-" + System.nanoTime() + ":latest";
         return new SandboxedBuilds(docker, WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), () -> {})
-            .run(new BuildRequest(SiteModel.MODEL_ID, ownerId,
+            .run(new BuildRequest(InstanceModel.MODEL_ID, ownerId,
                 BuildOperationModel.KIND_NIXPACKS, context, null, tag, Map.of(),
                 "test-ref", null, new BuildQuota(2.0, 2048, 4096L * 1024 * 1024,
                     600_000, 256, 512 * 1024, 1024L * 1024 * 1024)));

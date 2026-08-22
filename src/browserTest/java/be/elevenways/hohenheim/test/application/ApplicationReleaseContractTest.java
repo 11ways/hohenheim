@@ -1,15 +1,17 @@
-package be.elevenways.hohenheim.test.docker;
+package be.elevenways.hohenheim.test.application;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.server.docker.SiteInstances;
-import be.elevenways.hohenheim.server.docker.SiteReleases;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -38,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * running containers really listen on loopback, so the engine's health probe is a genuine
  * HTTP round trip and an unhealthy candidate is a real 503 rather than a stubbed boolean.
  *
- * WHAT THIS CANNOT PROVE, and therefore what {@code SiteReleaseLiveTest} remains the only
+ * WHAT THIS CANNOT PROVE, and therefore what {@code ApplicationReleaseLiveTest} remains the only
  * proof of -- read no hermetic green here as total coverage:
  *
  * <ul>
@@ -54,13 +56,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       registry produced one.</li>
  * </ul>
  *
- * AIDEV-NOTE: every journey mints its OWN site record and tears it down through the
+ * AIDEV-NOTE: every journey mints its OWN application record and tears it down through the
  * production {@code destroyFor}, so the port ledger and the fake daemon start each journey
  * clean and no assertion can be satisfied by another journey's leftovers.
  */
-class SiteReleaseContractTest {
+class ApplicationReleaseContractTest {
 
-    private static final String SITE_MODEL = SiteModel.MODEL_ID.toString();
+    private static final String OWNER_MODEL = InstanceModel.MODEL_ID.toString();
 
     private static SqlDatasource datasource;
     private static FakeDockerDaemon daemon;
@@ -105,43 +107,43 @@ class SiteReleaseContractTest {
     /**
      * The health gate as STATE: a candidate that answers but is unhealthy is destroyed,
      * the operation says so durably, and the prior release is still the serving one --
-     * plus the reuse lane in between, which must not mint a release for an unchanged site.
+     * plus the reuse lane in between, which must not mint a release for an unchanged application.
      */
     @Test
     void aRefusedCandidateNeverTakesTrafficAndTheServingReleaseSurvives() {
         Db.run(datasource, () -> {
-            int siteId = site("gate-site");
+            int applicationId = application("gate-app");
             try {
                 // 1. The initial release: nothing to protect, so it deploys directly, and
                 //    the record is pinned to the DIGEST behind the tag, never the tag.
-                SiteInstances.ensureRunning(siteId, "gate-site", settingsFor("v1"));
-                Row serving = servingOf(siteId);
+                converge(applicationId, settingsFor("v1"));
+                Row serving = servingOf(applicationId);
                 assertThat(serving).as("step 1: a serving release exists").isNotNull();
                 int servingId = serving.get(InstanceModel.ID);
                 assertThat(settingsOf(serving).get("image"))
                     .as("step 1: the release is pinned to the image digest, not the tag")
                     .isEqualTo(FakeDockerDaemon.digestOf("fake/app:v1"));
-                assertThat(latestOp(siteId).get(ReleaseOperationModel.STATUS))
+                assertThat(latestOp(applicationId).get(ReleaseOperationModel.STATUS))
                     .as("step 1: the initial release is a recorded, succeeded operation")
                     .isEqualTo(ReleaseOperationModel.STATUS_SUCCEEDED);
                 assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(servingId)))
                     .as("step 1: and the workload is really running at the daemon").isTrue();
 
                 // 2. An unchanged converge is REUSED: no operation, no second workload.
-                int opsAfterFirst = opCount(siteId);
-                SiteInstances.ensureRunning(siteId, "gate-site", settingsFor("v1"));
-                assertThat(opCount(siteId))
-                    .as("step 2: an unchanged site releases nothing at all")
+                int opsAfterFirst = opCount(applicationId);
+                converge(applicationId, settingsFor("v1"));
+                assertThat(opCount(applicationId))
+                    .as("step 2: an unchanged application releases nothing at all")
                     .isEqualTo(opsAfterFirst);
-                assertThat(servingOf(siteId).get(InstanceModel.ID))
+                assertThat(servingOf(applicationId).get(InstanceModel.ID))
                     .as("step 2: and keeps the very same release").isEqualTo(servingId);
 
                 // 3. A changed source whose candidate ANSWERS but is unhealthy. The gate
                 //    must hold: the candidate never becomes serving, and the prior release
-                //    is returned still serving rather than the site going down.
+                //    is returned still serving rather than the application going down.
                 daemon.answerWithForNextWorkload(503);
-                SiteInstances.ensureRunning(siteId, "gate-site", settingsFor("v2"));
-                Row op = latestOp(siteId);
+                converge(applicationId, settingsFor("v2"));
+                Row op = latestOp(applicationId);
                 assertThat(op.get(ReleaseOperationModel.STATUS))
                     .as("step 3: the refused release is recorded FAILED, never forgotten")
                     .isEqualTo(ReleaseOperationModel.STATUS_FAILED);
@@ -171,8 +173,8 @@ class SiteReleaseContractTest {
                         "destroy:" + candidateHandle);
 
                 // 5. The serving release is untouched: same row, same digest, still
-                //    running, and still the ONLY release the site has.
-                Row still = servingOf(siteId);
+                //    running, and still the ONLY release the application has.
+                Row still = servingOf(applicationId);
                 assertThat(still.get(InstanceModel.ID))
                     .as("step 5: the serving release is the SAME instance")
                     .isEqualTo(servingId);
@@ -181,11 +183,11 @@ class SiteReleaseContractTest {
                     .isEqualTo(FakeDockerDaemon.digestOf("fake/app:v1"));
                 assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(servingId)))
                     .as("step 5: and still running at the daemon").isTrue();
-                assertThat(SiteReleases.newestRetired(siteId))
+                assertThat(ReleaseEngine.newestRetired(applicationId))
                     .as("step 5: a refused release leaves NO rollback target behind")
                     .isNull();
             } finally {
-                SiteInstances.destroyFor(siteId);
+                ApplicationReleases.destroyFor(applicationId);
             }
         });
     }
@@ -198,24 +200,24 @@ class SiteReleaseContractTest {
     @Test
     void aHealthySwapDrainsRetainsRollsBackAndReclaims() {
         Db.run(datasource, () -> {
-            int siteId = site("swap-site");
+            int applicationId = application("swap-app");
             try {
                 // 1. Release v1, then v2 through the gate.
-                SiteInstances.ensureRunning(siteId, "swap-site", settingsFor("v1"));
-                int firstId = servingOf(siteId).get(InstanceModel.ID);
-                SiteInstances.ensureRunning(siteId, "swap-site", settingsFor("v2"));
-                Row swapOp = latestOp(siteId);
-                int secondId = servingOf(siteId).get(InstanceModel.ID);
+                converge(applicationId, settingsFor("v1"));
+                int firstId = servingOf(applicationId).get(InstanceModel.ID);
+                converge(applicationId, settingsFor("v2"));
+                Row swapOp = latestOp(applicationId);
+                int secondId = servingOf(applicationId).get(InstanceModel.ID);
                 assertThat(secondId)
                     .as("step 1: a healthy candidate becomes a NEW serving release")
                     .isNotEqualTo(firstId);
-                assertThat(settingsOf(servingOf(siteId)).get("image"))
+                assertThat(settingsOf(servingOf(applicationId)).get("image"))
                     .as("step 1: running the v2 digest")
                     .isEqualTo(FakeDockerDaemon.digestOf("fake/app:v2"));
 
                 // 2. Retention is exactly one release deep, and the drain settles the
                 //    superseded workload: role retired, container STOPPED but kept.
-                assertThat(SiteReleases.newestRetired(siteId).get(InstanceModel.ID))
+                assertThat(ReleaseEngine.newestRetired(applicationId).get(InstanceModel.ID))
                     .as("step 2: the superseded release is the retained rollback target")
                     .isEqualTo(firstId);
                 await("step 2: the release operation completes after the drain window",
@@ -235,9 +237,9 @@ class SiteReleaseContractTest {
                 //    artifact is addressed by content, which is what makes a rollback
                 //    survive a moved tag.
                 int pullsBefore = daemon.callCount("api:POST /images/create");
-                SiteReleases.rollback(siteId);
-                Row rollbackOp = latestOp(siteId);
-                Row back = servingOf(siteId);
+                ReleaseEngine.rollback(applicationId);
+                Row rollbackOp = latestOp(applicationId);
+                Row back = servingOf(applicationId);
                 assertThat(settingsOf(back).get("image"))
                     .as("step 3: the rolled-back release runs the pinned v1 digest")
                     .isEqualTo(FakeDockerDaemon.digestOf("fake/app:v1"));
@@ -260,40 +262,40 @@ class SiteReleaseContractTest {
                 assertThat(daemon.exists(FakeDockerDaemon.handleOf(firstId)))
                     .as("step 4: the older retired release was reclaimed (daemon)")
                     .isFalse();
-                assertThat(SiteReleases.newestRetired(siteId).get(InstanceModel.ID))
+                assertThat(ReleaseEngine.newestRetired(applicationId).get(InstanceModel.ID))
                     .as("step 4: retention stays exactly one release deep")
                     .isEqualTo(secondId);
 
                 // 5. The rollback PINS: the operator rejected exactly this source, so an
                 //    unchanged converge must not release the rejected spec back on.
-                assertThat(SiteReleases.pinnedByRollback(siteId,
-                        SiteReleases.sourceFingerprint(siteId, settingsFor("v2"))))
+                assertThat(ReleaseEngine.pinnedByRollback(applicationId,
+                        ReleaseEngine.sourceFingerprint(applicationId, settingsFor("v2"))))
                     .as("step 5: the rejected source is pinned").isTrue();
-                int opsBefore = opCount(siteId);
-                SiteInstances.ensureRunning(siteId, "swap-site", settingsFor("v2"));
-                assertThat(opCount(siteId))
+                int opsBefore = opCount(applicationId);
+                converge(applicationId, settingsFor("v2"));
+                assertThat(opCount(applicationId))
                     .as("step 5: the pinned converge released nothing")
                     .isEqualTo(opsBefore);
-                assertThat(settingsOf(servingOf(siteId)).get("image"))
+                assertThat(settingsOf(servingOf(applicationId)).get("image"))
                     .as("step 5: and the rollback still stands")
                     .isEqualTo(FakeDockerDaemon.digestOf("fake/app:v1"));
 
                 // 6. A SOURCE CHANGE dissolves the pin: the declared spec wins again
                 //    through a fresh gated release.
-                SiteInstances.ensureRunning(siteId, "swap-site", settingsFor("v3"));
-                assertThat(settingsOf(servingOf(siteId)).get("image"))
+                converge(applicationId, settingsFor("v3"));
+                assertThat(settingsOf(servingOf(applicationId)).get("image"))
                     .as("step 6: a changed source dissolves the pin and releases forward")
                     .isEqualTo(FakeDockerDaemon.digestOf("fake/app:v3"));
-                assertThat(opCount(siteId))
+                assertThat(opCount(applicationId))
                     .as("step 6: as its own recorded operation").isGreaterThan(opsBefore);
                 // The drain runs on a virtual thread; let it settle before the teardown so
                 // the reclaim and destroyFor cannot race over the same rows.
-                Row forwardOp = latestOp(siteId);
+                Row forwardOp = latestOp(applicationId);
                 await("step 6: the forward release completes after its drain window",
                     () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
                         reload(forwardOp).get(ReleaseOperationModel.STATUS)));
             } finally {
-                SiteInstances.destroyFor(siteId);
+                ApplicationReleases.destroyFor(applicationId);
             }
         });
     }
@@ -308,15 +310,15 @@ class SiteReleaseContractTest {
     void bootRecoverySettlesEveryHalfFinishedRelease() {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 600);
         Db.run(datasource, () -> {
-            int siteId = site("recover-site");
+            int applicationId = application("recover-app");
             try {
                 // 1. A real release whose drain will not run for 600 seconds: the
                 //    lost-drain shape a controller crash leaves behind.
-                SiteInstances.ensureRunning(siteId, "recover-site", settingsFor("v1"));
-                int firstId = servingOf(siteId).get(InstanceModel.ID);
-                SiteInstances.ensureRunning(siteId, "recover-site", settingsFor("v2"));
-                int secondId = servingOf(siteId).get(InstanceModel.ID);
-                Row drainingOp = latestOp(siteId);
+                converge(applicationId, settingsFor("v1"));
+                int firstId = servingOf(applicationId).get(InstanceModel.ID);
+                converge(applicationId, settingsFor("v2"));
+                int secondId = servingOf(applicationId).get(InstanceModel.ID);
+                Row drainingOp = latestOp(applicationId);
                 assertThat(drainingOp.get(ReleaseOperationModel.STATUS))
                     .as("step 1: the superseded release is still draining")
                     .isEqualTo(ReleaseOperationModel.STATUS_DRAINING);
@@ -327,27 +329,27 @@ class SiteReleaseContractTest {
                 //    role, the superseded row still does too, and the operation died in
                 //    between. Nothing but recovery can settle this, and until now nothing
                 //    -- hermetic or live -- ever exercised it.
-                int halfCandidate = ownedRelease(siteId, "recover-half",
+                int halfCandidate = ownedRelease(applicationId, "recover-half",
                     InstanceModel.ROLE_SERVING, "v9");
-                int halfRetiring = ownedRelease(siteId, "recover-half-old",
+                int halfRetiring = ownedRelease(applicationId, "recover-half-old",
                     InstanceModel.ROLE_SERVING, "v8");
-                Row switchingOp = operationRow(siteId, ReleaseOperationModel.STATUS_SWITCHING,
+                Row switchingOp = operationRow(applicationId, ReleaseOperationModel.STATUS_SWITCHING,
                     halfCandidate, halfRetiring);
 
                 // 3. A PRE-SWITCH operation with a live candidate: the crash-during-probe
                 //    shape, whose candidate never took traffic and must be destroyed.
-                int probingCandidate = ownedRelease(siteId, "recover-probe",
+                int probingCandidate = ownedRelease(applicationId, "recover-probe",
                     InstanceModel.ROLE_CANDIDATE, "v7");
-                deployOwned(siteId, probingCandidate);
-                Row probingOp = operationRow(siteId, ReleaseOperationModel.STATUS_PROBING,
+                deployOwned(applicationId, probingCandidate);
+                Row probingOp = operationRow(applicationId, ReleaseOperationModel.STATUS_PROBING,
                     probingCandidate, null);
 
                 // 4. And an ORPHAN candidate no operation answers for at all.
-                int orphan = ownedRelease(siteId, "recover-orphan",
+                int orphan = ownedRelease(applicationId, "recover-orphan",
                     InstanceModel.ROLE_CANDIDATE, "v6");
-                deployOwned(siteId, orphan);
+                deployOwned(applicationId, orphan);
 
-                SiteReleases.recoverInterrupted();
+                ReleaseEngine.recoverInterrupted();
 
                 // 5. STATE after recovery, every branch:
                 assertThat(reload(drainingOp).get(ReleaseOperationModel.STATUS))
@@ -384,12 +386,12 @@ class SiteReleaseContractTest {
                 assertThat(daemon.exists(FakeDockerDaemon.handleOf(orphan)))
                     .as("step 5: the orphaned candidate nothing answered for was swept")
                     .isFalse();
-                assertThat(servingOf(siteId).get(InstanceModel.ID))
+                assertThat(servingOf(applicationId).get(InstanceModel.ID))
                     .as("step 5: and no recovery branch touched a serving release")
                     .isIn(secondId, halfCandidate);
             } finally {
                 HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
-                SiteInstances.destroyFor(siteId);
+                ApplicationReleases.destroyFor(applicationId);
             }
         });
     }
@@ -404,17 +406,17 @@ class SiteReleaseContractTest {
      * {@code running() && publishedPort() != null} alone, decided the spec was unchanged,
      * and returned the SAME dead release with the operation recorded succeeded ("spec
      * unchanged; fingerprint adopted without a deploy"). The refusal one layer up
-     * therefore achieved nothing: the site kept pointing at a dead workload and every
-     * converge reported success. See SiteReleases.release.
+     * therefore achieved nothing: the application kept pointing at a dead workload and every
+     * converge reported success. See ReleaseEngine.release.
      */
     @Test
     void aDeadWorkloadIsRedeployedInsteadOfReportedConverged() {
         Db.run(datasource, () -> {
-            int siteId = site("dead-site");
+            int applicationId = application("dead-app");
             try {
                 // 1. A healthy serving release.
-                SiteInstances.ensureRunning(siteId, "dead-site", settingsFor("v1"));
-                int servingId = servingOf(siteId).get(InstanceModel.ID);
+                converge(applicationId, settingsFor("v1"));
+                int servingId = servingOf(applicationId).get(InstanceModel.ID);
                 String handle = FakeDockerDaemon.handleOf(servingId);
                 assertThat(daemon.isRunning(handle))
                     .as("step 1: the release is running").isTrue();
@@ -429,14 +431,14 @@ class SiteReleaseContractTest {
                 // 3. An UNCHANGED converge (a routing reload, the common case) must not
                 //    report success over a dead workload: the release is redeployed.
                 int createsBefore = daemon.callCount("create:" + handle);
-                SiteInstances.ensureRunning(siteId, "dead-site", settingsFor("v1"));
+                converge(applicationId, settingsFor("v1"));
                 assertThat(daemon.callCount("create:" + handle))
                     .as("step 3: the dead workload was REDEPLOYED, not adopted")
                     .isEqualTo(createsBefore + 1);
 
                 // 4. STATE: the same release row still serves (nothing was minted) and its
                 //    workload is alive again -- a recreate is also what clears the flag.
-                assertThat(servingOf(siteId).get(InstanceModel.ID))
+                assertThat(servingOf(applicationId).get(InstanceModel.ID))
                     .as("step 4: the redeploy reused the release row").isEqualTo(servingId);
                 assertThat(new InstanceService().liveStatus(servingId).workloadDead())
                     .as("step 4: and the workload is alive again").isFalse();
@@ -445,7 +447,7 @@ class SiteReleaseContractTest {
                     .as("step 4: recorded running, from the deploy's own fenced stamp")
                     .isEqualTo(InstanceModel.STATUS_RUNNING);
             } finally {
-                SiteInstances.destroyFor(siteId);
+                ApplicationReleases.destroyFor(applicationId);
             }
         });
     }
@@ -465,13 +467,13 @@ class SiteReleaseContractTest {
     @Test
     void aSupersededReleaseWhoseStopFailsNeverTakesTheNewReleaseDownWithIt() {
         Db.run(datasource, () -> {
-            int siteId = site("stop-fails-site");
+            int applicationId = application("stop-fails-app");
             String supersededHandle = null;
             try {
                 // 1. A serving v1 release, and the daemon then wedges ITS handle: every
                 //    stop of that container is refused from here on.
-                SiteInstances.ensureRunning(siteId, "stop-fails-site", settingsFor("v1"));
-                int supersededId = servingOf(siteId).get(InstanceModel.ID);
+                converge(applicationId, settingsFor("v1"));
+                int supersededId = servingOf(applicationId).get(InstanceModel.ID);
                 supersededHandle = FakeDockerDaemon.handleOf(supersededId);
                 daemon.refuseStopOf(supersededHandle);
                 assertThat(daemon.isRunning(supersededHandle))
@@ -479,12 +481,12 @@ class SiteReleaseContractTest {
 
                 // 2. Release v2 over it. The switch happens, then the drain tries -- and
                 //    fails -- to stop the superseded workload.
-                SiteInstances.ensureRunning(siteId, "stop-fails-site", settingsFor("v2"));
-                int servingId = servingOf(siteId).get(InstanceModel.ID);
+                converge(applicationId, settingsFor("v2"));
+                int servingId = servingOf(applicationId).get(InstanceModel.ID);
                 assertThat(servingId)
                     .as("step 2: a NEW release took traffic").isNotEqualTo(supersededId);
                 await("step 2: the operation settles after the drain window",
-                    () -> reload(latestOp(siteId)).get(ReleaseOperationModel.FINISHED_AT)
+                    () -> reload(latestOp(applicationId)).get(ReleaseOperationModel.FINISHED_AT)
                         != null);
 
                 // 3. The POSITIVE anchor: the new release is up and serving. A drain that
@@ -501,7 +503,7 @@ class SiteReleaseContractTest {
                 // 4. The failure is WHERE AN OPERATOR SEES IT -- the durable step log of
                 //    the operation, not a line in a log file nobody reads. And the
                 //    operation is SUCCEEDED: traffic switched, so this release worked.
-                Row op = reload(latestOp(siteId));
+                Row op = reload(latestOp(applicationId));
                 assertThat(Map.of(
                         "status", String.valueOf((Object) op.get(ReleaseOperationModel.STATUS)),
                         "reason", String.valueOf(
@@ -540,14 +542,11 @@ class SiteReleaseContractTest {
                     daemon.allowStopOf(supersededHandle);
                 }
                 HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
-                SiteInstances.destroyFor(siteId);
+                ApplicationReleases.destroyFor(applicationId);
             }
         });
     }
 
-    // -- fixture plumbing -----------------------------------------------------
-
-    /** The site record the engine's fingerprint, activity and ownership all resolve to. */
     /**
      * The operation record's WRITE DISCIPLINE, the {@code stampRole} lesson applied to
      * the record the engine holds open: a step may never carry the rest of a stale
@@ -561,7 +560,7 @@ class SiteReleaseContractTest {
     @Test
     void anOperationStepNeverCarriesAStaleOperationRowBackToTheDatabase() {
         Db.run(datasource, () -> {
-            int siteId = site("stale-op-site");
+            int applicationId = application("stale-op-app");
             try {
                 // 1. A release whose deploy admits a rival writer: by the time the daemon
                 //    is asked to start the workload the operation row already exists, is
@@ -570,20 +569,20 @@ class SiteReleaseContractTest {
                 //    note is exposed through today.
                 int[] touched = new int[1];
                 daemon.duringNextStart(() -> {
-                    Row inFlight = latestOp(siteId);
+                    Row inFlight = latestOp(applicationId);
                     touched[0] = inFlight.get(ReleaseOperationModel.ID);
                     Models.get(ReleaseOperationModel.class).find()
                         .where(ReleaseOperationModel.ID.eq(touched[0]))
-                        .assign(ReleaseOperationModel.SITE_FINGERPRINT, "rival-site-print")
+                        .assign(ReleaseOperationModel.OWNER_FINGERPRINT, "rival-owner-print")
                         .assign(ReleaseOperationModel.SPEC_FINGERPRINT, "rival-spec-print")
                         .updateAll();
                 });
-                SiteInstances.ensureRunning(siteId, "stale-op-site", settingsFor("v1"));
+                converge(applicationId, settingsFor("v1"));
 
                 // 2. The POSITIVE anchor: the operation did finish, and its own terminal
                 //    columns really landed. A write that persisted nothing at all would
                 //    otherwise satisfy step 3 for free.
-                Row op = latestOp(siteId);
+                Row op = latestOp(applicationId);
                 assertThat(op.get(ReleaseOperationModel.ID))
                     .as("step 2: the rival wrote the operation the engine is holding")
                     .isEqualTo(touched[0]);
@@ -602,30 +601,42 @@ class SiteReleaseContractTest {
                 //    both, and a per-value assertion would only report whichever it
                 //    reached first.
                 assertThat(Map.of(
-                        "site_fingerprint",
-                        String.valueOf((Object) op.get(ReleaseOperationModel.SITE_FINGERPRINT)),
+                        "owner_fingerprint",
+                        String.valueOf((Object) op.get(ReleaseOperationModel.OWNER_FINGERPRINT)),
                         "spec_fingerprint",
                         String.valueOf((Object) op.get(ReleaseOperationModel.SPEC_FINGERPRINT))))
                     .as("step 3: every write made to the operation between its creation and"
                         + " its finish SURVIVED it")
-                    .isEqualTo(Map.of("site_fingerprint", "rival-site-print",
+                    .isEqualTo(Map.of("owner_fingerprint", "rival-owner-print",
                         "spec_fingerprint", "rival-spec-print"));
             } finally {
-                SiteInstances.destroyFor(siteId);
+                ApplicationReleases.destroyFor(applicationId);
             }
         });
     }
 
-    private static int site(String slug) {
-        Row site = Models.get(SiteModel.class).createEmptyRow();
-        site.set(SiteModel.NAME, "Release contract " + slug);
-        site.set(SiteModel.SLUG, slug);
-        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
-        site.set(SiteModel.SETTINGS, settingsFor("v1"));
-        site.set(SiteModel.STATUS, "active");
-        site.set(SiteModel.ENABLED, true);
-        Models.get(SiteModel.class).save(site);
-        return site.get(SiteModel.ID);
+    // -- fixture plumbing -----------------------------------------------------
+
+    /** The application record the engine's fingerprint, activity and ownership resolve to. */
+    private static int application(String name) {
+        Row application = Models.get(InstanceModel.class).createEmptyRow();
+        application.set(InstanceModel.NAME, name);
+        application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        application.set(InstanceModel.SETTINGS, settingsFor("v1"));
+        Models.get(InstanceModel.class).save(application);
+        return application.get(InstanceModel.ID);
+    }
+
+    /**
+     * Declare the application's spec and converge it -- the release engine reads the
+     * application row's OWN settings, so the spec is a WRITE, never a converge argument.
+     */
+    private static void converge(int applicationId, Map<String, Object> settings) {
+        Row application = Models.get(InstanceModel.class).findById(applicationId);
+        application.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
+        Models.get(InstanceModel.class).save(application);
+        ApplicationReleases.converge(applicationId, Map.of());
     }
 
     private static Map<String, Object> settingsFor(String tag) {
@@ -636,10 +647,10 @@ class SiteReleaseContractTest {
         return settings;
     }
 
-    /** A site-owned release row in a declared role, authored in the site's system scope. */
-    private static int ownedRelease(int siteId, String name, String role, String tag) {
+    /** An application-owned release row in a role, authored in the application scope. */
+    private static int ownedRelease(int applicationId, String name, String role, String tag) {
         int[] created = new int[1];
-        inSiteScope(siteId, () -> {
+        inApplicationScope(applicationId, () -> {
             Row row = Models.get(InstanceModel.class).createEmptyRow();
             row.set(InstanceModel.NAME, name);
             row.set(InstanceModel.KIND, "hohenheim:release");
@@ -653,15 +664,15 @@ class SiteReleaseContractTest {
         return created[0];
     }
 
-    private static void deployOwned(int siteId, int instanceId) {
-        inSiteScope(siteId, () -> new InstanceService().deploy(instanceId));
+    private static void deployOwned(int applicationId, int instanceId) {
+        inApplicationScope(applicationId, () -> new InstanceService().deploy(instanceId));
     }
 
-    /** The site tier's own attribution scope; owned release rows are unwritable outside it. */
-    private static void inSiteScope(int siteId, Runnable work) {
+    /** The application tier's attribution scope; owned rows are unwritable outside it. */
+    private static void inApplicationScope(int applicationId, Runnable work) {
         try {
-            GeneratedRows.as(new GeneratedRows.Attribution(SiteInstances.SOURCE,
-                SITE_MODEL, siteId), work::run);
+            GeneratedRows.as(new GeneratedRows.Attribution(ApplicationReleases.SOURCE,
+                OWNER_MODEL, applicationId), work::run);
         } catch (RuntimeException unchecked) {
             throw unchecked;
         } catch (Exception e) {
@@ -669,12 +680,12 @@ class SiteReleaseContractTest {
         }
     }
 
-    private static Row operationRow(int siteId, String status, Integer candidateId,
+    private static Row operationRow(int applicationId, String status, Integer candidateId,
                                     Integer retiredId) {
         Row op = Models.get(ReleaseOperationModel.class).createEmptyRow();
         op.set(ReleaseOperationModel.KIND, ReleaseOperationModel.KIND_RELEASE);
-        op.set(ReleaseOperationModel.FOR_MODEL, SITE_MODEL);
-        op.set(ReleaseOperationModel.FOR_ID, siteId);
+        op.set(ReleaseOperationModel.FOR_MODEL, OWNER_MODEL);
+        op.set(ReleaseOperationModel.FOR_ID, applicationId);
         op.set(ReleaseOperationModel.STATUS, status);
         op.set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId);
         op.set(ReleaseOperationModel.RETIRED_INSTANCE_ID, retiredId);
@@ -684,10 +695,10 @@ class SiteReleaseContractTest {
         return op;
     }
 
-    private static Row servingOf(int siteId) {
+    private static Row servingOf(int applicationId) {
         return Models.get(InstanceModel.class).find()
-            .where(InstanceModel.GENERATED_FOR_MODEL.eq(SITE_MODEL))
-            .where(InstanceModel.GENERATED_FOR_ID.eq(siteId))
+            .where(InstanceModel.GENERATED_FOR_MODEL.eq(OWNER_MODEL))
+            .where(InstanceModel.GENERATED_FOR_ID.eq(applicationId))
             .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_SERVING))
             .where(InstanceModel.DELETED_AT.isNull())
             .orderBy(InstanceModel.ID, SortOrder.DESC)
@@ -695,21 +706,21 @@ class SiteReleaseContractTest {
     }
 
     private static Map<String, Object> settingsOf(Row instance) {
-        return SiteInstances.storedSettings(instance);
+        return ApplicationReleases.storedSettings(instance);
     }
 
-    private static Row latestOp(int siteId) {
+    private static Row latestOp(int applicationId) {
         return Models.get(ReleaseOperationModel.class).find()
-            .where(ReleaseOperationModel.FOR_MODEL.eq(SITE_MODEL))
-            .where(ReleaseOperationModel.FOR_ID.eq(siteId))
+            .where(ReleaseOperationModel.FOR_MODEL.eq(OWNER_MODEL))
+            .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
             .orderBy(ReleaseOperationModel.ID, SortOrder.DESC)
             .first();
     }
 
-    private static int opCount(int siteId) {
+    private static int opCount(int applicationId) {
         return Models.get(ReleaseOperationModel.class).find()
-            .where(ReleaseOperationModel.FOR_MODEL.eq(SITE_MODEL))
-            .where(ReleaseOperationModel.FOR_ID.eq(siteId))
+            .where(ReleaseOperationModel.FOR_MODEL.eq(OWNER_MODEL))
+            .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
             .all().size();
     }
 

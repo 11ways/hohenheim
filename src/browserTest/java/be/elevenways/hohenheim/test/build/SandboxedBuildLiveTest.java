@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.build.BuildCredentials;
 import be.elevenways.hohenheim.server.build.BuildQuota;
 import be.elevenways.hohenheim.server.build.BuildRequest;
@@ -14,7 +14,7 @@ import be.elevenways.hohenheim.server.build.BuildSandbox;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
-import be.elevenways.hohenheim.server.docker.SiteInstances;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;
@@ -56,11 +57,8 @@ class SandboxedBuildLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
-    /** Owner of the standalone builds here (a synthetic site id). */
-    private static final int SITE_ID = 977_101;
-
-    /** Owner of the end-to-end site journey; distinct so histories never mix. */
-    private static final int JOURNEY_SITE_ID = 977_102;
+    /** Owner of the standalone builds here (a synthetic instance id). */
+    private static final int OWNER_ID = 977_101;
 
     private static SqliteDatasource datasource;
     private static PrivateNetns netns;
@@ -129,7 +127,7 @@ class SandboxedBuildLiveTest {
             //    absent and unreachable. The probe exits 0 either way -- the ASSERTION is
             //    on what it printed, so a reachable daemon fails THIS step instead of the
             //    build failing for some unrelated reason.
-            SandboxedBuilds.Result probe = build(docker, SITE_ID, "probe", """
+            SandboxedBuilds.Result probe = build(docker, OWNER_ID, "probe", """
                 FROM alpine:latest
                 RUN echo "hh-socket=$(test -S /var/run/docker.sock && echo present || echo absent)"
                 RUN echo "hh-daemon=$(wget -q -T 3 -O - http://172.17.0.1:2375/version >/dev/null 2>&1 && echo reachable || echo unreachable)"
@@ -146,7 +144,7 @@ class SandboxedBuildLiveTest {
 
             // 3. A build that TRIES to use the socket FAILS, rather than succeeding
             //    quietly with a step that silently did nothing.
-            SandboxedBuilds.Result uses = build(docker, SITE_ID, "uses", """
+            SandboxedBuilds.Result uses = build(docker, OWNER_ID, "uses", """
                 FROM alpine:latest
                 RUN test -S /var/run/docker.sock
                 """, Map.of(), 300_000);
@@ -159,7 +157,7 @@ class SandboxedBuildLiveTest {
             //    assertions in the site journey would be proving that nothing at all is
             //    passed, which is a check that cannot fail.
             String registryPassword = "REGISTRY-LEASE-SECRET-" + System.nanoTime();
-            SandboxedBuilds.Result args = buildWithQuota(docker, SITE_ID, "args", """
+            SandboxedBuilds.Result args = buildWithQuota(docker, OWNER_ID, "args", """
                 FROM alpine:latest
                 ARG HH_BUILD_ARG
                 RUN echo "hh-arg=$HH_BUILD_ARG"
@@ -202,7 +200,7 @@ class SandboxedBuildLiveTest {
 
             // 1. TIME: a build that sleeps past its wall-clock quota is killed, the
             //    operation says timed_out, and it carries no image to deploy.
-            SandboxedBuilds.Result timedOut = build(docker, SITE_ID, "slow", """
+            SandboxedBuilds.Result timedOut = build(docker, OWNER_ID, "slow", """
                 FROM alpine:latest
                 RUN sleep 300
                 """, Map.of(), 25_000);
@@ -229,7 +227,7 @@ class SandboxedBuildLiveTest {
 
             // 3. DISK: a build that keeps writing crosses its disk quota and is killed by
             //    the watchdog, with the peak the daemon actually reported on the record.
-            SandboxedBuilds.Result fat = buildWithQuota(docker, SITE_ID, "fat", """
+            SandboxedBuilds.Result fat = buildWithQuota(docker, OWNER_ID, "fat", """
                 FROM alpine:latest
                 RUN i=0; while [ $i -lt 400 ]; do dd if=/dev/zero of=/fill.$i bs=1M count=8 2>/dev/null; sleep 0.2; i=$((i+1)); done
                 """, Map.of(), new BuildQuota(2.0, 1024, 64L * 1024 * 1024, 240_000, 128,
@@ -290,12 +288,13 @@ class SandboxedBuildLiveTest {
                 "build_arguments", Map.of("HH_CONTROL", "control-value"),
                 "environment_variables", Map.of("TENANT_DB_PASSWORD", secret));
 
-            SiteInstances.SiteRuntime runtime =
-                SiteInstances.ensureRunning(JOURNEY_SITE_ID, "build-journey", settings);
-            int instanceId = runtime.instanceId();
+            int applicationId = application("build-journey", settings);
+            ApplicationReleases.Release release =
+                ApplicationReleases.converge(applicationId, Map.of());
+            int instanceId = release.instanceId();
             String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
             try {
-                // 1. The site's release is pinned to a DIGEST, not to the tag the build
+                // 1. The application's release is pinned to a DIGEST, not to the tag the build
                 //    also applied -- a tag is a mutable pointer and cannot be an identity.
                 Row instance = Models.get(InstanceModel.class).findById(instanceId);
                 @SuppressWarnings("unchecked")
@@ -318,8 +317,9 @@ class SandboxedBuildLiveTest {
                 //    inside the builder; the RUNNING workload does have it, so this is a
                 //    separation and not an omission everywhere.
                 Row build = Models.get(BuildOperationModel.class)
-                    .latestSuccess(SiteModel.MODEL_ID.toString(), JOURNEY_SITE_ID);
-                assertThat(build).as("step 3: the site's build was recorded").isNotNull();
+                    .latestSuccess(InstanceModel.MODEL_ID.toString(), applicationId);
+                assertThat(build).as("step 3: the application's build was recorded")
+                    .isNotNull();
                 String log = build.get(BuildOperationModel.LOG);
                 assertThat(log).as("step 3: a real build argument DOES arrive (the control)")
                     .contains("hh-control=control-value");
@@ -336,7 +336,9 @@ class SandboxedBuildLiveTest {
                 // 4. THE tag counterfactual: move the human-facing tag onto a different
                 //    image and redeploy. A tag-pinned release would now run alpine; the
                 //    digest-pinned one still runs what was built.
-                tag(docker, "alpine:latest", ControllerScope.handle(ControllerScope.KIND_SITE, JOURNEY_SITE_ID), "latest");
+                tag(docker, "alpine:latest",
+                    ControllerScope.handle(ControllerScope.KIND_INSTANCE, applicationId),
+                    "latest");
                 new InstanceService().deploy(instanceId);
                 Map<String, Object> after = inspect(docker, handle);
                 assertThat(String.valueOf(after.get("Image")))
@@ -346,13 +348,14 @@ class SandboxedBuildLiveTest {
                     .contains("built-by-the-sandbox");
             } finally {
                 try {
-                    SiteInstances.destroyFor(JOURNEY_SITE_ID);
+                    ApplicationReleases.destroyFor(applicationId);
                 } catch (RuntimeException ignored) {
                     // teardown best effort; the assertions above are the outcome
                 }
-                removeImage(docker, ControllerScope.handle(ControllerScope.KIND_SITE, JOURNEY_SITE_ID) + ":latest");
+                removeImage(docker, ControllerScope.handle(
+                    ControllerScope.KIND_INSTANCE, applicationId) + ":latest");
                 Row build = Models.get(BuildOperationModel.class)
-                    .latestSuccess(SiteModel.MODEL_ID.toString(), JOURNEY_SITE_ID);
+                    .latestSuccess(InstanceModel.MODEL_ID.toString(), applicationId);
                 if (build != null) {
                     removeImage(docker, build.get(BuildOperationModel.IMAGE_ID));
                 }
@@ -366,6 +369,17 @@ class SandboxedBuildLiveTest {
     private static BuildQuota defaultQuota(long timeoutMs) {
         return new BuildQuota(2.0, 1024, 2048L * 1024 * 1024, timeoutMs, 128, 256 * 1024,
             512L * 1024 * 1024);
+    }
+
+    /** The application instance whose converge drives the end-to-end journey build. */
+    private static int application(String name, Map<String, Object> settings) {
+        Row application = Models.get(InstanceModel.class).createEmptyRow();
+        application.set(InstanceModel.NAME, name);
+        application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        application.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        application.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
+        Models.get(InstanceModel.class).save(application);
+        return application.get(InstanceModel.ID);
     }
 
     private static SandboxedBuilds.Result build(DockerClient docker, int ownerId, String name,
@@ -391,7 +405,7 @@ class SandboxedBuildLiveTest {
             String tag = "hohenheim-buildtest-" + name + "-" + System.nanoTime() + ":latest";
             SandboxedBuilds.Result result = new SandboxedBuilds(docker,
                 WorkloadNetworkPolicy.forServer(ServerModel.MODE_LOCAL), () -> {}).run(new BuildRequest(
-                    SiteModel.MODEL_ID, ownerId, BuildOperationModel.KIND_DOCKERFILE,
+                    InstanceModel.MODEL_ID, ownerId, BuildOperationModel.KIND_DOCKERFILE,
                     context, "Dockerfile", tag, args, "test-ref", registry, quota));
             removeImage(docker, result.imageId());
             return result;

@@ -60,7 +60,8 @@ public final class HohenheimTestRuntime {
         AuthSettings.VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerSettings.VALUES.setValue(ServerSettings.Network.AUTO_START_HTTP, false);
         // The suite opts OUT explicitly: its sites have no system user of their own
-        // and would otherwise all fault. WorkloadIdentityTest flips it back on.
+        // and would otherwise all fault. Nothing flips it back on any more -- the
+        // host-user process lane that needed it was deleted in phase 0.
         HohenheimSettings.VALUES.setValue(
             HohenheimSettings.Process.REQUIRE_DEDICATED_USER, false);
         ServerZenitRuntime.init().join();
