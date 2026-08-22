@@ -251,7 +251,7 @@
       "scope": "field"
     },
     {
-      "text": "Eén Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.",
+      "text": "E\u00e9n Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.",
       "scope": "help"
     },
     {
@@ -345,7 +345,7 @@
       "scope": "field"
     },
     {
-      "text": "Shellcommando na checkout en vóór de deployment actief wordt.",
+      "text": "Shellcommando na checkout en v\u00f3\u00f3r de deployment actief wordt.",
       "scope": "help"
     }
   ],
@@ -425,7 +425,7 @@
       "scope": "field"
     },
     {
-      "text": "Kunstmatige vertraging in milliseconden vóór elke aanvraag.",
+      "text": "Kunstmatige vertraging in milliseconden v\u00f3\u00f3r elke aanvraag.",
       "scope": "help"
     }
   ],
@@ -633,7 +633,7 @@
       "scope": "field"
     },
     {
-      "text": "Commandoregelargument vóór het toegewezen poortnummer.",
+      "text": "Commandoregelargument v\u00f3\u00f3r het toegewezen poortnummer.",
       "scope": "help"
     }
   ],
@@ -937,16 +937,16 @@
   ],
   "auto_deploy_disabled": {
     "text": "Automatische uitrol staat uit: pushes worden aanvaard maar niet uitgerold. Schakel dit in bij de broninstellingen van de site.",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "build_log": {
     "text": "Buildlog",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "cancel": [
     {
       "text": "Deployment annuleren",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Annuleren",
@@ -985,23 +985,23 @@
   },
   "commit": {
     "text": "Commit",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "connection": {
     "text": "Verbinding",
     "scope": "database_tab"
   },
   "copy_password": {
-    "text": "Wachtwoord kopiëren",
+    "text": "Wachtwoord kopi\u00ebren",
     "scope": "database_tab"
   },
   "copy_webhook_secret": {
-    "text": "Webhookgeheim kopiëren",
-    "scope": "site_deployments"
+    "text": "Webhookgeheim kopi\u00ebren",
+    "scope": "deployments"
   },
   "copy_webhook_url": {
-    "text": "Webhook-URL kopiëren",
-    "scope": "site_deployments"
+    "text": "Webhook-URL kopi\u00ebren",
+    "scope": "deployments"
   },
   "cpu": {
     "text": "CPU",
@@ -1009,7 +1009,7 @@
   },
   "current_commit": {
     "text": "Serveert momenteel commit {$commit}.",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "database": [
     {
@@ -1071,7 +1071,7 @@
   ],
   "deploy_now": {
     "text": "Nu uitrollen",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "down": {
     "text": "Onbereikbaar",
@@ -1084,7 +1084,7 @@
   "duration": [
     {
       "text": "Duur",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Duur",
@@ -1102,7 +1102,7 @@
     },
     {
       "text": "Nog geen deployments",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Geen dev-servers verbonden",
@@ -1147,6 +1147,10 @@
     {
       "text": "Nog geen regels",
       "scope": "access_rule"
+    },
+    {
+      "text": "Geen volumes",
+      "scope": "instance_volume"
     }
   ],
   "empty_description": [
@@ -1160,7 +1164,7 @@
     },
     {
       "text": "Deployments via webhook, polling of handmatige start verschijnen hier.",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Een stack bestaat uit services, elk een container-image. Voeg de eerste toe om te beschrijven wat deze stack draait.",
@@ -1185,6 +1189,10 @@
     {
       "text": "Haal hieronder een ISO op om die als installatiemedia aan de virtuele machines van deze host te kunnen koppelen.",
       "scope": "server_media"
+    },
+    {
+      "text": "Deze instantie heeft nog geen datamappen.",
+      "scope": "instance_volume"
     }
   ],
   "engine": [
@@ -1253,10 +1261,16 @@
       "scope": "dns_transfer"
     }
   ],
-  "forced": {
-    "text": "Verplicht",
-    "scope": "site_domains"
-  },
+  "forced": [
+    {
+      "text": "Verplicht",
+      "scope": "site_domains"
+    },
+    {
+      "text": "HTTPS",
+      "scope": "site_tls"
+    }
+  ],
   "hostname": [
     {
       "text": "Hostnaam",
@@ -1323,19 +1337,29 @@
     {
       "text": "Geen",
       "scope": "volume_backend"
+    },
+    {
+      "text": "Geen hostnaam",
+      "scope": "site_tls"
     }
   ],
-  "off": {
-    "text": "Uit",
-    "scope": "site_domains"
-  },
+  "off": [
+    {
+      "text": "Uit",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Alleen HTTP",
+      "scope": "site_tls"
+    }
+  ],
   "password": {
     "text": "Wachtwoord",
     "scope": "database_tab"
   },
   "payload_url": {
     "text": "Payload-URL",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "port": [
     {
@@ -1422,7 +1446,7 @@
   "rollback": [
     {
       "text": "Terugrollen",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Terugrollen",
@@ -1435,12 +1459,16 @@
     {
       "text": "Release terugdraaien",
       "scope": "site"
+    },
+    {
+      "text": "Terugdraaien",
+      "scope": "instance"
     }
   ],
   "rollback_confirm": [
     {
       "text": "De vorige deploymentsleuf activeren? De huidige versie stopt met serveren.",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "De laatste geslaagde deployment opnieuw deployen? Huidige wijzigingen blijven bewaard maar zijn niet gedeployed.",
@@ -1449,12 +1477,16 @@
     {
       "text": "De actieve release vervangen door de bewaarde vorige release? De huidige release wordt bewaard als nieuw terugdraaidoel.",
       "scope": "site"
+    },
+    {
+      "text": "Terug naar de vorige release? De huidige release stopt met bedienen.",
+      "scope": "instance"
     }
   ],
   "secret": [
     {
       "text": "Geheim",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Geheim",
@@ -1480,7 +1512,7 @@
   "started": [
     {
       "text": "Gestart",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Gestart",
@@ -1512,7 +1544,7 @@
     },
     {
       "text": "Status",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Status",
@@ -1546,7 +1578,7 @@
   "trigger": [
     {
       "text": "Trigger",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Aanleiding",
@@ -1563,7 +1595,7 @@
   },
   "variables": [
     {
-      "text": "Geïnjecteerde variabelen",
+      "text": "Ge\u00efnjecteerde variabelen",
       "scope": "site_databases"
     },
     {
@@ -1573,11 +1605,11 @@
   ],
   "webhook": {
     "text": "Push-webhook",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "webhook_description": {
     "text": "Configureer deze URL en dit geheim bij je Git-host (GitHub, GitLab of Gitea) om bij elke push uit te rollen.",
-    "scope": "site_deployments"
+    "scope": "deployments"
   },
   "onboarding": {
     "text": "Aan de slag",
@@ -1586,7 +1618,7 @@
   "title": [
     {
       "text": "Deployments",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "Maak je eerste site",
@@ -1684,11 +1716,11 @@
     }
   ],
   "copy_record_name": {
-    "text": "Naam van TXT-record kopiëren",
+    "text": "Naam van TXT-record kopi\u00ebren",
     "scope": "certificate_request"
   },
   "copy_record_value": {
-    "text": "Waarde van TXT-record kopiëren",
+    "text": "Waarde van TXT-record kopi\u00ebren",
     "scope": "certificate_request"
   },
   "verify_dns": {
@@ -1802,7 +1834,7 @@
     "scope": "certificate_request"
   },
   "any": {
-    "text": "Eén regel volstaat",
+    "text": "E\u00e9n regel volstaat",
     "scope": "access_satisfy"
   },
   "all": {
@@ -1838,7 +1870,7 @@
     "scope": "certificate_request_error"
   },
   "domain_required": {
-    "text": "Er is minstens één domein vereist",
+    "text": "Er is minstens \u00e9\u00e9n domein vereist",
     "scope": "certificate_request_error"
   },
   "unknown_validation": {
@@ -2073,6 +2105,14 @@
     {
       "text": "Regels",
       "scope": "access_rule"
+    },
+    {
+      "text": "Volumes",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "Runtime-images",
+      "scope": "runtime_image"
     }
   ],
   "dashboard": [
@@ -2641,10 +2681,16 @@
       "scope": "help"
     }
   ],
-  "managed_by": {
-    "text": "Beheerd door",
-    "scope": "field"
-  },
+  "managed_by": [
+    {
+      "text": "Beheerd door",
+      "scope": "field"
+    },
+    {
+      "text": "Beheerd door",
+      "scope": "instance"
+    }
+  ],
   "record_count": {
     "text": "Records",
     "scope": "dns_zone"
@@ -3287,6 +3333,10 @@
     {
       "text": "Deze regel verwijderen? Alles wat erin genest zit gaat mee, en de wijziging geldt meteen voor live verkeer.",
       "scope": "access_rule"
+    },
+    {
+      "text": "Dit verwijdert de workload van zijn host maar bewaart de data. Gebruik \"Verwijderen met data\" als de data ook weg moet.",
+      "scope": "instance"
     }
   ],
   "priority": {
@@ -4351,6 +4401,10 @@
     {
       "text": "Zet de bewaarde vorige release, vastgepind op image-digest, opnieuw in via dezelfde gezondheidscontrole",
       "scope": "site"
+    },
+    {
+      "text": "Zet de bewaarde vorige release terug, zonder opnieuw te bouwen",
+      "scope": "instance"
     }
   ],
   "rollback_queued": {
@@ -5090,7 +5144,7 @@
     "scope": "violations"
   },
   "host_kernel_lane_missing": {
-    "text": "Host '{$name}' aanvaardt tenant-workloads maar heeft geen kanaal om zijn eigen kernel te lezen, dus workload-isolatie valt er niet te verifiëren; geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet zijn houding op trusted-only",
+    "text": "Host '{$name}' aanvaardt tenant-workloads maar heeft geen kanaal om zijn eigen kernel te lezen, dus workload-isolatie valt er niet te verifi\u00ebren; geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet zijn houding op trusted-only",
     "scope": "violations"
   },
   "host_kernel_lane_unproven": {
@@ -5268,7 +5322,7 @@
     }
   ],
   "snapshot_confirm": {
-    "text": "Snapshot nemen? Drivers die volumes kopiëren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
+    "text": "Snapshot nemen? Drivers die volumes kopi\u00ebren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
     "scope": "instance"
   },
   "snapshot_taken": {
@@ -6072,6 +6126,10 @@
     {
       "text": "Toevoegen aan deze map",
       "scope": "instance_files"
+    },
+    {
+      "text": "Volume toevoegen",
+      "scope": "instance_volume"
     }
   ],
   "run_now": {
@@ -6600,10 +6658,16 @@
       "scope": "help"
     }
   ],
-  "rollback_done": {
-    "text": "Teruggedraaid naar de bewaarde release",
-    "scope": "site"
-  },
+  "rollback_done": [
+    {
+      "text": "Teruggedraaid naar de bewaarde release",
+      "scope": "site"
+    },
+    {
+      "text": "{$name} teruggedraaid",
+      "scope": "instance"
+    }
+  ],
   "release_probe_failed": {
     "text": "De kandidaat-release gaf nooit een gezond HTTP-antwoord: {$reason}",
     "scope": "violations"
@@ -7518,10 +7582,16 @@
     "text": "Configureren",
     "scope": "capability"
   },
-  "destroy": {
-    "text": "Vernietigen",
-    "scope": "capability"
-  },
+  "destroy": [
+    {
+      "text": "Vernietigen",
+      "scope": "capability"
+    },
+    {
+      "text": "Verwijderen met data",
+      "scope": "instance_volume"
+    }
+  ],
   "exec": [
     {
       "text": "Opdrachten uitvoeren",
@@ -7691,7 +7761,7 @@
     },
     {
       "text": "{$name} - Deployments",
-      "scope": "site_deployments"
+      "scope": "deployments"
     },
     {
       "text": "{$name} - Domeinen",
@@ -7712,6 +7782,14 @@
     {
       "text": "Regels van {$name}",
       "scope": "access_rule"
+    },
+    {
+      "text": "{$name} - Volumes",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "{$name} - Deployments",
+      "scope": "instance_deployments"
     }
   ],
   "not_found_title": {
@@ -7852,10 +7930,16 @@
     "text": "De preview kon niet worden ingepland: {$reason}",
     "scope": "violations"
   },
-  "destroy_confirm": {
-    "text": "Dit vernietigt de draaiende previewomgeving en geeft de hostnaam vrij.",
-    "scope": "preview_deployment"
-  },
+  "destroy_confirm": [
+    {
+      "text": "Dit vernietigt de draaiende previewomgeving en geeft de hostnaam vrij.",
+      "scope": "preview_deployment"
+    },
+    {
+      "text": "Dit verwijdert de map van dit volume op de host definitief, met alles erin.",
+      "scope": "instance_volume"
+    }
+  ],
   "probe_now": {
     "text": "Nu peilen",
     "scope": "server"
@@ -8594,8 +8678,16 @@
       "scope": "role"
     },
     {
-      "text": "De regelboom achter één toegangslijst.",
+      "text": "De regelboom achter \u00e9\u00e9n toegangslijst.",
       "scope": "access_rule"
+    },
+    {
+      "text": "Hostmappen die in een instantie gemonteerd worden",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "De basisimages waarin workspaces en applicaties draaien; ingebouwde worden door Hohenheim beheerd",
+      "scope": "runtime_image"
     }
   ],
   "slug": {
@@ -8669,7 +8761,7 @@
     "scope": "access_rule"
   },
   "root_any": {
-    "text": "Een verzoek wordt toegelaten zodra ÉÉN van deze regels slaagt.",
+    "text": "Een verzoek wordt toegelaten zodra \u00c9\u00c9N van deze regels slaagt.",
     "scope": "access_rule"
   },
   "root_all": {
@@ -8717,7 +8809,7 @@
     "scope": "access_rule"
   },
   "move_up_hint": {
-    "text": "Verplaats deze regel één plaats omhoog binnen haar eigen groep.",
+    "text": "Verplaats deze regel \u00e9\u00e9n plaats omhoog binnen haar eigen groep.",
     "scope": "access_rule"
   },
   "move_down": {
@@ -8725,7 +8817,7 @@
     "scope": "access_rule"
   },
   "move_down_hint": {
-    "text": "Verplaats deze regel één plaats omlaag binnen haar eigen groep.",
+    "text": "Verplaats deze regel \u00e9\u00e9n plaats omlaag binnen haar eigen groep.",
     "scope": "access_rule"
   },
   "moved": {
@@ -8753,7 +8845,7 @@
     "scope": "access_rule"
   },
   "summary_group_any": {
-    "text": "Één van de regels hierin moet slagen",
+    "text": "\u00c9\u00e9n van de regels hierin moet slagen",
     "scope": "access_rule"
   },
   "summary_group_all": {
@@ -8826,7 +8918,7 @@
       "scope": "field"
     },
     {
-      "text": "Eén IP-adres of CIDR-netwerk, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
+      "text": "E\u00e9n IP-adres of CIDR-netwerk, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
       "scope": "help"
     }
   ],
@@ -8845,7 +8937,7 @@
     "scope": "field"
   },
   "rule_satisfy": {
-    "text": "Of één regel in deze groep volstaat, of ze allemaal nodig zijn.",
+    "text": "Of \u00e9\u00e9n regel in deze groep volstaat, of ze allemaal nodig zijn.",
     "scope": "help"
   },
   "access_rule_type_invalid": {
@@ -8853,7 +8945,7 @@
     "scope": "violations"
   },
   "access_rule_network_invalid": {
-    "text": "Geef één IP-adres of CIDR-netwerk op, bijvoorbeeld 10.0.0.0/8",
+    "text": "Geef \u00e9\u00e9n IP-adres of CIDR-netwerk op, bijvoorbeeld 10.0.0.0/8",
     "scope": "violations"
   },
   "access_rule_credential_incomplete": {
@@ -9272,6 +9364,10 @@
     {
       "text": "Gedetecteerd op de volumemap van deze host: bepaalt of een quota afgedwongen en een momentopname gemaakt kan worden.",
       "scope": "help"
+    },
+    {
+      "text": "Volume-opslag",
+      "scope": "server_overview"
     }
   ],
   "volume_name": [
@@ -9389,5 +9485,117 @@
   "runtime_image_no_builder": {
     "text": "Runtime-image '{$name}' kan niet voorbereid worden op host '{$host}': een Incus-host met workspaces heeft ook Docker nodig, want dat bouwt de rootfs waaruit de image geimporteerd wordt.",
     "scope": "violations"
+  },
+  "expose": {
+    "text": "Publiceren",
+    "scope": "instance"
+  },
+  "expose_hint": {
+    "text": "Maak een site die deze instantie op een hostnaam beschikbaar maakt",
+    "scope": "instance"
+  },
+  "tab_hint": {
+    "text": "Elk volume is een map op de host, gemonteerd in de container op het pad dat je kiest. Wijzigingen gelden vanaf de volgende deploy.",
+    "scope": "instance_volume"
+  },
+  "usage": {
+    "text": "In gebruik",
+    "scope": "instance_volume"
+  },
+  "quota": {
+    "text": "Groottelimiet",
+    "scope": "instance_volume"
+  },
+  "exclusive": {
+    "text": "Exclusief",
+    "scope": "instance_volume"
+  },
+  "never_measured": {
+    "text": "nog niet gemeten",
+    "scope": "instance_volume"
+  },
+  "no_quota": {
+    "text": "geen limiet",
+    "scope": "instance_volume"
+  },
+  "destroy_confirm_named": {
+    "text": "Dit verwijdert volume \"{$name}\" definitief, met alles erin. Dit kan niet ongedaan worden gemaakt.",
+    "scope": "instance_volume"
+  },
+  "destroyed_toast": {
+    "text": "Volume {$name} en zijn data verwijderd",
+    "scope": "instance_volume"
+  },
+  "hostnames": {
+    "text": "Hostnaam",
+    "scope": "site"
+  },
+  "upstream": {
+    "text": "Bedient",
+    "scope": "site"
+  },
+  "tls": {
+    "text": "TLS",
+    "scope": "site"
+  },
+  "no_hostnames": {
+    "text": "Nog geen hostnaam",
+    "scope": "site"
+  },
+  "partial": {
+    "text": "Gemengd",
+    "scope": "site_tls"
+  },
+  "quota_mb": {
+    "text": "Groottelimiet",
+    "scope": "field"
+  },
+  "volume_quota_mb": {
+    "text": "Maximale grootte van dit volume in megabytes. Laat leeg voor geen limiet.",
+    "scope": "help"
+  },
+  "volume_unknown": {
+    "text": "Er bestaat geen volume met de naam \"{$name}\" op deze instantie",
+    "scope": "violations"
+  },
+  "volume_rename_unsupported": {
+    "text": "Een volume kan niet hernoemd worden; de naam bepaalt waar het op de host staat",
+    "scope": "violations"
+  },
+  "volume_rehome_unsupported": {
+    "text": "Een volume kan niet naar een andere instantie verhuizen",
+    "scope": "violations"
+  },
+  "volume_home_protected": {
+    "text": "Het home-volume van een workspace kan niet apart verwijderd worden; gebruik \"Verwijderen met data\" op de instantie",
+    "scope": "violations"
+  },
+  "volume_kind_unsupported": {
+    "text": "Instanties van deze soort monteren geen volumes",
+    "scope": "violations"
+  },
+  "volume_quota_invalid": {
+    "text": "De groottelimiet moet een positief aantal megabytes zijn",
+    "scope": "violations"
+  },
+  "exposed_by": {
+    "text": "Beschikbaar via",
+    "scope": "instance_overview"
+  },
+  "volume_backend_none_title": {
+    "text": "Geen volume-opslag",
+    "scope": "server_overview"
+  },
+  "volume_backend_none_body": {
+    "text": "De dataroot kan geen groottelimieten afdwingen of snapshots nemen, dus workspaces en applicaties kunnen niet op deze host geplaatst worden. Mount een btrfs- of ZFS-bestandssysteem op de volumes-map van het datapad en draai de preflight opnieuw.",
+    "scope": "server_overview"
+  },
+  "volume_backend_no_snapshot_title": {
+    "text": "Geen snapshots",
+    "scope": "server_overview"
+  },
+  "volume_backend_no_snapshot_body": {
+    "text": "De dataroot dwingt groottelimieten af maar kan geen snapshots nemen, dus deploys van applicaties MET volumes worden hier geweigerd. Btrfs of ZFS op het datapad lost dit op.",
+    "scope": "server_overview"
   }
 }
