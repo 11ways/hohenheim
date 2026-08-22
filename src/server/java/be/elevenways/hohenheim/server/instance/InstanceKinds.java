@@ -66,6 +66,24 @@ public final class InstanceKinds {
     }
 
     /**
+     * Whether a PERSON may power a record of this kind, or whether its lifecycle belongs
+     * to the product tier that generated it.
+     *
+     * AIDEV-NOTE: it reads {@code generatedOnly()} rather than adding a fact: a kind only
+     * its owning tier may WRITE is a kind only its owning tier may DEPLOY -- the engine
+     * container of a database is started by allocating the database, never by an operator
+     * pressing Deploy in the fleet list. Adding a second declaration would let the two
+     * drift, which is the defect requireAuthorable's note already records.
+     *
+     * @return false for an UNKNOWN kind (fail closed): a kind with no handler has no
+     *         driver to deploy through, so the affordance could only refuse
+     */
+    public static boolean isUserDeployable(@Nullable String kind) {
+        InstanceKindHandler handler = getHandler(kind);
+        return handler != null && !handler.generatedOnly();
+    }
+
+    /**
      * Refuse a kind only an owning tier may author, in the ONE place that decides it.
      *
      * AIDEV-NOTE: the offer ({@link #authorableOptions}) and this refusal answer to one

@@ -45,6 +45,7 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
@@ -69,6 +70,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -242,6 +245,32 @@ public class InstanceResource extends RowResource {
             return managedByCellOf(row);
         }
         return super.cellValue(row, column);
+    }
+
+    /**
+     * Blank the status column's install subtext for a record with no install lifecycle.
+     *
+     * AIDEV-NOTE: the PRESENTATION seam, deliberately not {@link #cellValue}: that one is
+     * the DATA value (the raw stored key filters, sort and the copy chip read), while
+     * rowCells is asked once per RENDERED row and is what the composite cell reads both
+     * halves out of. A null second half renders nothing at all, so a record whose install
+     * state says nothing shows only its status pill. The column itself stays declared and
+     * filterable -- this hides a member's badge, never the vocabulary.
+     */
+    @Override
+    public @NonNull Map<String, Object> rowCells(TableView.Applied<Row> applied, @NonNull Row row) {
+
+        Map<String, Object> cells = super.rowCells(applied, row);
+        String column = InstanceModel.INSTALL_STATE.getName();
+
+        if (!cells.containsKey(column)
+                || InstanceModel.isNotableInstallState(cells.get(column))) {
+            return cells;
+        }
+
+        Map<String, Object> quiet = new LinkedHashMap<>(cells);
+        quiet.put(column, null);
+        return Collections.unmodifiableMap(quiet);
     }
 
     /**
@@ -755,12 +784,26 @@ public class InstanceResource extends RowResource {
         return handler != null && handler.supportsTemplateCapture();
     }
 
+    /**
+     * Deploy, offered only where it means something: the record is not owned by a product
+     * tier AND its KIND is one a person may power at all
+     * ({@link InstanceKinds#isUserDeployable}, which reads the kind's own
+     * {@code generatedOnly()} declaration).
+     *
+     * AIDEV-NOTE: the kind half is not a restatement of {@code isGenerated(row)}. That one
+     * is a per-RECORD fact (generated_by), so it says nothing about a record of an
+     * owner-managed kind whose attribution column is unset, and it answers TRUE for a kind
+     * that has no handler at all -- a Deploy button whose invoke could only refuse. Asking
+     * the kind is what makes the offer and the driver answer to one declaration.
+     */
     protected @NonNull RowAction<Row> deployAction() {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "deploy_instance"))
             .label(Microcopy.of("deploy").withFilter("scope", "instance"))
             .icon(Icon.of("play"))
-            .visibleFor((row, ctx) -> !isGenerated(row) && HohenheimAccess.reachesRecord(ctx,
-                InstanceModel.MODEL_ID, row.get(InstanceModel.ID), HohenheimAccess.POWER))
+            .visibleFor((row, ctx) -> !isGenerated(row)
+                && InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND))
+                && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
+                    row.get(InstanceModel.ID), HohenheimAccess.POWER))
             .handler((row, ctx) -> {
                 this.instances.deploy(row.get(InstanceModel.ID));
                 return CmsActionResult.refreshWithToast(

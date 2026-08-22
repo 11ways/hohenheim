@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
@@ -230,6 +231,36 @@ public class InstanceModel extends Model {
             .label(Microcopy.of("install_failed").withFilter("scope", "install_state")).color("red"))
         .defaultValue(INSTALL_NONE)
         .build());
+
+    /**
+     * Whether an {@link #INSTALL_STATE} member is worth SHOWING as a badge.
+     *
+     * AIDEV-NOTE: it lives HERE, beside the vocabulary it classifies, because the two
+     * presenters (the fleet list's status subtext and InstanceOverviewPage's state band)
+     * must answer identically -- and because adding a member is then ONE edit. The switch
+     * has no enum to be exhaustive over (the vocabulary is String constants), so
+     * AdminUiSurfaceTest.everyInstallStateMemberIsClassified pins the declared key set for
+     * EXACT equality: a sixth member fails the build until a human has classified it.
+     *
+     * AIDEV-NOTE: {@link #INSTALL_NONE} is the overwhelming majority -- a badge nearly
+     * every record carries tells an operator nothing -- and a null column is the same
+     * absence. Everything else is a state an operator can act on and stays visible with
+     * its declared colour. An UNDECLARED stored key is SHOWN: hiding a state nobody
+     * classified is how a stuck install becomes invisible, so the unknown case degrades
+     * towards saying too much rather than too little.
+     */
+    public static boolean isNotableInstallState(@Nullable Object state) {
+
+        if (state == null) {
+            return false;
+        }
+
+        return switch (String.valueOf(state)) {
+            case INSTALL_NONE -> false;
+            case INSTALL_PENDING, INSTALL_INSTALLING, INSTALL_INSTALLED, INSTALL_FAILED -> true;
+            default -> true;
+        };
+    }
 
     /** {@link #CRASH_POLICY}: an unexpected exit stamps Stopped and nothing restarts. */
     public static final String CRASH_NONE = "none";

@@ -1,20 +1,28 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.instance.InstanceKindInfo;
+import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -303,6 +311,147 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         String list = adminGet("/admin/sites").body();
         assertThat(list).as("the toggle verb renders").contains("toggle_site");
         assertThat(list).as("the synthesized delete renders").contains("data-action-id=\"zenitcms:delete\"");
+    }
+
+    /**
+     * The install-state vocabulary is PINNED against its classifier: a sixth member fails
+     * here until a human has decided whether it is worth a badge. The switch in
+     * {@code InstanceModel.isNotableInstallState} has no enum to be exhaustive over, so
+     * this equality IS the exhaustiveness.
+     */
+    @Test
+    void everyInstallStateMemberIsClassified() {
+        assertThat(InstanceModel.INSTALL_STATE.getValues().keySet())
+            .as("the declared install-state vocabulary")
+            .containsExactlyInAnyOrder(InstanceModel.INSTALL_NONE, InstanceModel.INSTALL_PENDING,
+                InstanceModel.INSTALL_INSTALLING, InstanceModel.INSTALL_INSTALLED,
+                InstanceModel.INSTALL_FAILED);
+
+        assertThat(InstanceModel.isNotableInstallState(InstanceModel.INSTALL_NONE))
+            .as("'no install step' is the majority and says nothing").isFalse();
+        assertThat(InstanceModel.isNotableInstallState(null))
+            .as("an absent column is the same absence").isFalse();
+
+        for (String notable : List.of(InstanceModel.INSTALL_PENDING,
+                InstanceModel.INSTALL_INSTALLING, InstanceModel.INSTALL_INSTALLED,
+                InstanceModel.INSTALL_FAILED)) {
+            assertThat(InstanceModel.isNotableInstallState(notable))
+                .as("'" + notable + "' is a state an operator can act on").isTrue();
+        }
+
+        assertThat(InstanceModel.isNotableInstallState("wedged"))
+            .as("an undeclared key is SHOWN: hiding what nobody classified is how a stuck"
+                + " install becomes invisible")
+            .isTrue();
+    }
+
+    /**
+     * Steps 1-5: the install badge renders only where there IS an install lifecycle, on
+     * BOTH surfaces that present one. Step 3 and 4 are the falsification.
+     */
+    @Test
+    void installBadgeRendersOnlyWhereThereIsAnInstallLifecycle() throws Exception {
+        var instances = Models.get(InstanceModel.class);
+        Row workspace = instances.findById(workspaceId);
+
+        // 1. The fixture is a template-less record, which is the overwhelming majority.
+        assertThat((Object) workspace.get(InstanceModel.INSTALL_STATE))
+            .as("step 1: the fixture declares no install step")
+            .isEqualTo(InstanceModel.INSTALL_NONE);
+
+        // 2. So neither the fleet list nor the record's state band spends a badge on it.
+        assertThat(adminGet("/admin/instances?filter.name=ui-wave").body())
+            .as("step 2: no per-row 'no install step' badge")
+            .doesNotContain("No install step");
+        String quietOverview = adminGet("/admin/instances/" + workspaceId
+            + "/page/overview").body();
+        assertThat(quietOverview).as("step 2: nor one in the record's state band")
+            .doesNotContain("No install step");
+        assertThat(quietOverview)
+            .as("step 2: the band itself still renders the states that DO say something")
+            .contains("widget-status-badges");
+
+        try {
+            // 3. FALSIFICATION: a pending install is a state an operator acts on, and it
+            //    reads on both surfaces.
+            workspace.set(InstanceModel.INSTALL_STATE, InstanceModel.INSTALL_PENDING);
+            instances.save(workspace);
+            assertThat(adminGet("/admin/instances?filter.name=ui-wave-workspace").body())
+                .as("step 3: a pending install still reads under the status pill")
+                .contains("Install pending");
+            assertThat(adminGet("/admin/instances/" + workspaceId + "/page/overview").body())
+                .as("step 3: and in the state band")
+                .contains("Install pending");
+
+            // 4. FALSIFICATION 2: a failed install is never quietly dropped.
+            workspace.set(InstanceModel.INSTALL_STATE, InstanceModel.INSTALL_FAILED);
+            instances.save(workspace);
+            assertThat(adminGet("/admin/instances/" + workspaceId + "/page/overview").body())
+                .as("step 4: a failed install keeps its own wording")
+                .contains("Install failed");
+        } finally {
+            workspace.set(InstanceModel.INSTALL_STATE, InstanceModel.INSTALL_NONE);
+            instances.save(workspace);
+        }
+
+        // 5. Back to the majority case, and the list is quiet again.
+        assertThat(adminGet("/admin/instances?filter.name=ui-wave").body())
+            .as("step 5: the badge leaves with the lifecycle")
+            .doesNotContain("No install step");
+    }
+
+    /**
+     * Steps 1-4: Deploy is offered per KIND DECLARATION, never per kind name, and an
+     * unrecognised kind fails closed. Steps 3 and 4 are the falsification.
+     */
+    @Test
+    void deployIsOfferedOnlyForKindsAPersonMayPower() throws Exception {
+        // 1. Every registered kind answers from its own generatedOnly() declaration.
+        List<String> deployable = new ArrayList<>();
+        for (InstanceKindInfo entry : InstanceKindRegistry.REGISTRY) {
+            Identifier id = InstanceKindRegistry.REGISTRY.getId(entry);
+            if (id == null) {
+                continue;
+            }
+            InstanceKindHandler handler = InstanceKinds.getHandler(id.toString());
+            boolean expected = handler != null && !handler.generatedOnly();
+            assertThat(InstanceKinds.isUserDeployable(id.toString()))
+                .as("step 1: " + id + " is deployable exactly when it is not owner-managed")
+                .isEqualTo(expected);
+            if (expected) {
+                deployable.add(id.toString());
+            }
+        }
+
+        // 2. And that is the SAME declaration the create form's kind offer reads, so what
+        //    a person may author and what a person may power cannot drift apart.
+        List<String> authorable = new ArrayList<>();
+        for (FieldOption<String> option : InstanceKinds.authorableOptions()) {
+            authorable.add(option.value());
+        }
+        assertThat(deployable)
+            .as("step 2: deployable kinds are exactly the authorable ones")
+            .containsExactlyInAnyOrderElementsOf(authorable);
+
+        // 3. FALSIFICATION: a kind with no handler has no driver to deploy through, so
+        //    the affordance is NOT offered -- fail closed, never a button that can only
+        //    refuse.
+        assertThat(InstanceKinds.isUserDeployable("hohenheim:not_a_registered_kind"))
+            .as("step 3: an unknown kind is not deployable").isFalse();
+        assertThat(InstanceKinds.isUserDeployable(null))
+            .as("step 3: neither is an absent one").isFalse();
+
+        // 4. On the surface itself, narrowed to one row each: the authored workspace
+        //    offers Deploy, the generated database engine does not.
+        assertThat(adminGet("/admin/instances?filter.name=ui-wave-workspace").body())
+            .as("step 4: the control -- an authored workspace offers Deploy")
+            .contains("deploy_instance");
+        String engine = adminGet("/admin/instances?filter.name=ui-wave-db-engine").body();
+        assertThat(engine).as("step 4: the engine row is the one listed")
+            .contains("ui-wave-db-engine");
+        assertThat(engine)
+            .as("step 4: an owner-managed kind is never offered Deploy")
+            .doesNotContain("deploy_instance");
     }
 
     /** The Expose action's target: the site create form arrives prefilled. */
