@@ -47,7 +47,7 @@ public final class InstanceConsoles {
     /** How long an armed readiness matcher waits before stamping error. */
     private static final long READINESS_TIMEOUT_MS = 180_000;
 
-    /** Flap protection (the ManagedProcessSiteHandler shape): this many crashes ... */
+    /** Flap protection (the deleted process lane's shape): this many crashes ... */
     private static final int FLAP_THRESHOLD = 3;
 
     /** ... within this window stop the auto-restarts until the next manual deploy. */

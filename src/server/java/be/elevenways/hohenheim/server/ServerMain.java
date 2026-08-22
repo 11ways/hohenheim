@@ -26,11 +26,6 @@ import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.process.PortAllocator;
-import be.elevenways.hohenheim.server.process.ProcessCapacity;
-import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
-import be.elevenways.hohenheim.server.process.ProcessReaper;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -70,21 +65,12 @@ public class ServerMain {
         // Load Hohenheim's own settings (settings/hohenheim.dry + HOHENHEIM__*
         // env). The context roots at the hohenheim group, so file keys keep the
         // flat proxy/ssl/... shape. Also captures the HohenheimRoles snapshot,
-        // which every role gate below reads. BEFORE UpstreamKindHandlers.boot(): the
-        // process-monitor thread is a roles.processes side effect and nothing
-        // between the old order and this one read a setting.
+        // which every role gate below reads.
         HohenheimSettingsFiles.load();
 
-        // Site types and auth-provider types self-register through compile-time
-        // discovery (BlastAutoLoadInit); only the shared process infrastructure
-        // needs an explicit boot before the proxy loads its routes -- and only
-        // on a node that actually runs managed processes.
-        if (HohenheimRoles.enabled(HohenheimRoles.Role.PROCESSES)) {
-            UpstreamKindHandlers.boot();
-        } else {
-            roleSkip(HohenheimRoles.Role.PROCESSES,
-                "process monitor and port/socket allocators not started");
-        }
+        // Upstream kinds and auth-provider types self-register through compile-time
+        // discovery (BlastAutoLoadInit); nothing needs an explicit boot here since the
+        // host-user process lane was deleted (phase-0 design section 7).
 
         HohenheimEndpoints.init();
         HohenheimChannels.init();
@@ -95,23 +81,6 @@ public class ServerMain {
         // registry writes, so nothing here needs the database.
         HohenheimAccess.declareGrantableModels();
         HohenheimDatabase.init();   // also registers the SQLite datasource as the framework default
-
-        // Managed-process port claims outlive the JVM that made them, so a previous run's
-        // rows are reconciled HERE: after the database exists (UpstreamKindHandlers.boot() runs long
-        // before it) and before anything can load a site and allocate. A port still bound
-        // by a child that outlived its controller keeps its claim -- see the sweep's note.
-        PortAllocator allocator = ProcessInfrastructure.portAllocator();
-        if (allocator != null) {
-            // ORDER: reap, then sweep, then reset the memory bookings. A child that
-            // outlived the previous controller still holds its port and its host-memory
-            // charge; both may only be handed back once it is actually dead. Reaping
-            // FIRST is what turns the sweep's "still bound, kill it by hand" case back
-            // into an ordinary release, and what makes the process-capacity reset honest
-            // instead of a way to over-book a host that is still full.
-            ProcessReaper.reapOrphans();
-            allocator.sweepPreviousControllerClaims();
-            ProcessCapacity.resetOn(ServerModel.localServerId());
-        }
 
         // Install zenit-auth (session store, CSRF, middleware, /login + /setup + /account + /admin).
         // Password login is native; Proteus SSO is added below when configured.
@@ -220,12 +189,11 @@ public class ServerMain {
             roleSkip(HohenheimRoles.Role.PROXY, "proxy listeners not started");
         }
 
-        // The secret-normalization hooks (site api keys, reserved env, enable
-        // invariant) install via the discovered HohenheimWriteHooks ZenitModule
-        // at the MODULES stage inside ServerZenitRuntime.main() above, BEFORE
-        // the HTTP server binds; the one-time sweep of pre-existing plaintext
-        // rides SiteApiKeySeeder at the SEED stage. (Dyndns tokens live hashed
-        // in dns_dyndns_credentials; DynamicDnsService.mintFor is the one writer.)
+        // The secret-normalization hooks (the site enable invariant, dyndns token
+        // hashing) install via the discovered HohenheimWriteHooks ZenitModule at the
+        // MODULES stage inside ServerZenitRuntime.main() above, BEFORE the HTTP server
+        // binds. (Dyndns tokens live hashed in dns_dyndns_credentials;
+        // DynamicDnsService.mintFor is the one writer.)
 
         if (HohenheimRoles.enabled(HohenheimRoles.Role.DNS)) {
             // The zone store loads regardless of the listeners so zones stay
@@ -314,7 +282,6 @@ public class ServerMain {
             if (dnsServer != null) dnsServer.stop();
             if (secondaryZoneService != null) secondaryZoneService.stop();
             SpamserviceManager.get().shutdown();
-            ProcessInfrastructure.shutdown();
             // Hand the host leases back so a successor controller does not have to
             // wait out the TTL; a crash still recovers through expiry.
             HostLeases.production().releaseAll();

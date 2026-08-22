@@ -221,7 +221,7 @@ final class PortPublications {
         return "127.0.0.1".equals(reported);
     }
 
-    // ORDER (the PortAllocator doctrine): ledger first (a held claim gives the NAMED
+    // ORDER (the ledger doctrine): ledger first (a held claim gives the NAMED
     // refusal), OS probe second (sees consumers no ledger contains), claim last (the
     // unique key backstops the read-claim race with the same named refusal).
     private static void claimOrRefuse(int serverId, @NonNull String bind, int port,

@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.server.process.ProcessInfrastructure;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -9,13 +8,11 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.server.task.CleanOldActivity;
-import be.elevenways.hohenheim.server.task.CleanOldProclogs;
 import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
 import be.elevenways.hohenheim.server.task.MonitorStacks;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
 import be.elevenways.hohenheim.server.task.ResignDnssecZones;
 import be.elevenways.hohenheim.server.task.SecuritySweep;
-import be.elevenways.hohenheim.server.task.UpdateNodeVersions;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -93,9 +90,6 @@ class RoleRestrictedBootTest {
         assertThat(ServerMain.getDnsServer())
             .as("step 3: the DNS subsystem, the one enabled role, IS constructed")
             .isNotNull();
-        assertThat(ProcessInfrastructure.processMonitor())
-            .as("step 3: roles.processes=false means the process monitor never started")
-            .isNull();
 
         // 4. No Docker socket was ever touched: with stacks and databases off,
         //    not a single DockerClient may have been constructed, and the boot
@@ -160,8 +154,6 @@ class RoleRestrictedBootTest {
                 MonitorStacks.class.getName(),
                 ReclaimDockerImages.class.getName(),
                 BackupDatabases.class.getName(),
-                CleanOldProclogs.class.getName(),
-                UpdateNodeVersions.class.getName(),
                 UpdateSystemUsers.class.getName(),
                 SecuritySweep.class.getName(),
                 CleanOrphanCertificates.class.getName(),

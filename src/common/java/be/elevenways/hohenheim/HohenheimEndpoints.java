@@ -24,11 +24,6 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
-    public static final ParameterDefinition<Long> PID = ParameterDefinition.builder(Long.class)
-        .name("pid")
-        .stringResolver(Long::parseLong)
-        .build();
-
     public static final ParameterDefinition<Integer> CERT_ID = ParameterDefinition.builder(Integer.class)
         .name("certId")
         .stringResolver(Integer::parseInt)
@@ -427,30 +422,6 @@ public class HohenheimEndpoints {
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
             .addDelimiter().addStatic("rollback").build())
         .rateLimit(DEPLOY_LIMIT)
-        .build();
-
-    // --- Process control (forms on the site Processes tab) ---
-    public static final Endpoint<Object> SITES_PROCESS_START = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_process_start"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("processes").addDelimiter().addStatic("start").build())
-        .build();
-
-    public static final Endpoint<Object> SITES_PROCESS_KILL = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_process_kill"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("processes").addDelimiter().addParameter(PID)
-            .addDelimiter().addStatic("kill").build())
-        .build();
-
-    public static final Endpoint<Object> SITES_PROCESS_ISOLATE = Endpoint.<Object>builder()
-        .identifier(Identifier.of("hohenheim", "sites_process_isolate"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
-            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addStatic("processes").addDelimiter().addParameter(PID)
-            .addDelimiter().addStatic("isolate").build())
         .build();
 
     // --- Automation API (znit_ bearer keys via zenit-auth) ---
@@ -989,21 +960,10 @@ public class HohenheimEndpoints {
             .addStatic("api").addDelimiter().addStatic("health").build())
         .build();
 
-    // --- Interactive process terminal ---
+    // --- Interactive terminals ---
 
-    /** How often a live terminal session's per-site manage grant is re-checked (revoked = 1008). */
+    /** How often a live terminal session's per-record manage grant is re-checked (revoked = 1008). */
     public static final long TERMINAL_REVALIDATION_INTERVAL_MS = 15_000;
-
-    public static final WebSocketEndpoint PROCESS_TERMINAL = WebSocketEndpoint.builder()
-        .identifier(Identifier.of("hohenheim", "process_terminal"))
-        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
-            .addStatic("ws").addDelimiter().addStatic("terminal")
-            .addDelimiter().addParameter(SITE_ID)
-            .addDelimiter().addParameter(PID).build())
-        .requiresLogin()
-        .revalidateEvery(TERMINAL_REVALIDATION_INTERVAL_MS)
-        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
-        .build();
 
     // --- Instance console: live output over a WebSocket, commands over a POST form ---
 

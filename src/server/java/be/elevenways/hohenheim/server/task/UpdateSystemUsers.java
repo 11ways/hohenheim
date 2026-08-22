@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
-import be.elevenways.hohenheim.server.options.SystemUserOptions;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
@@ -42,9 +41,12 @@ public class UpdateSystemUsers extends ScheduledTask {
 
     @Override
     public @NonNull List<ScheduleDeclaration> schedules() {
+        // AIDEV-NOTE: re-roled from PROCESSES to FIREWALL when the host-user process lane
+        // was deleted (phase-0 brief 6). The only surviving consumer of system_users is the
+        // spamservice's dedicated run-as user, and FIREWALL is the role that runs it.
         return HohenheimRoles.schedulesWhen(
             List.of(ScheduleDeclaration.bootAndCron("11 * * * *")),
-            HohenheimRoles.Role.PROCESSES);
+            HohenheimRoles.Role.FIREWALL);
     }
 
     @Override
@@ -111,7 +113,6 @@ public class UpdateSystemUsers extends ScheduledTask {
             }
         }
 
-        SystemUserOptions.refresh();
         Blast.log("TASK: UpdateSystemUsers reconciled", parsed.size(), "users");
     }
 

@@ -63,10 +63,9 @@ import java.util.Set;
  * BOOKED MEMORY -- the instance bucket alone, compared across hosts -- which answers a
  * different question from the one the example asks in two independent ways. It is
  * BUDGET-BLIND: a 4 GB host holding nothing scores 0 and outranks a 128 GB host holding
- * 1 GB, so the example's own 128 GB machine loses to any idle small one. And it is blind
- * to the OTHER TIER: managed child processes book into ProcessCapacity's bucket, so a
- * 32 GB host with 24 GB of managed children also scores 0 and outranks a host with real
- * room. Nothing ever overspent -- the eligibility CEILING has always been
+ * 1 GB, so the example's own 128 GB machine loses to any idle small one. (It was also
+ * blind to the host-user process tier's separate bucket, deleted with that lane in
+ * phase-0 brief 6.) Nothing ever overspent -- the eligibility CEILING has always been
  * {@link InstanceCapacity#bookableMbOn} and is unchanged -- but the fleet was packed onto
  * whichever machine happened to hold the fewest instance megabytes. The score is now the
  * same subtraction the ceiling and the {@code no_placement_capacity} refusal already

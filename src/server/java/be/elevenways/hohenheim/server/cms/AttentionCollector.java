@@ -16,7 +16,6 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.hohenheim.server.WorkloadIdentity;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
@@ -97,7 +96,7 @@ public final class AttentionCollector {
             // task, never a per-render daemon probe.
             items.addAll(DockerReconciler.attentionItems());
         }
-        if (HohenheimRoles.anyEnabled(Role.PROXY, Role.DATABASES, Role.STACKS, Role.PROCESSES)) {
+        if (HohenheimRoles.anyEnabled(Role.PROXY, Role.DATABASES, Role.STACKS)) {
             stuckReleasingPorts(items, Instant.now().minus(RELEASING_STUCK_AFTER));
         }
         failedTasks(items);
@@ -107,9 +106,6 @@ public final class AttentionCollector {
         }
         if (HohenheimRoles.enabled(Role.FIREWALL)) {
             spamserviceIssue(items);
-        }
-        if (HohenheimRoles.enabled(Role.PROCESSES)) {
-            identityIssues(items);
         }
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
             crashedInstances(items);
@@ -376,23 +372,6 @@ public final class AttentionCollector {
             copy("docker_unreachable", "attention_title"),
             literal(health.problem()),
             CmsRoutes.list(ADMIN, "settings")));
-    }
-
-    /**
-     * Managed-process sites without their own exclusively-claimed system user. An
-     * "error" means the site faults (enforcement applies to it right now); a
-     * "warning" means it still runs leniently but blocks enabling
-     * process.require_dedicated_user.
-     */
-    private static void identityIssues(List<AttentionItem> items) {
-        for (WorkloadIdentity.Finding finding : WorkloadIdentity.auditAll()) {
-            boolean enforced = WorkloadIdentity.enforcementRequired(finding.siteId());
-            items.add(item(enforced ? "error" : "warning", "user-lock",
-                copy("workload_identity", "attention_title", "name",
-                    finding.siteName() != null ? finding.siteName() : finding.siteId()),
-                literal(finding.problem()),
-                CmsRoutes.detail(ADMIN, "sites", finding.siteId())));
-        }
     }
 
     /** Surfaces an enabled managed Spamservice that is not currently ready. */

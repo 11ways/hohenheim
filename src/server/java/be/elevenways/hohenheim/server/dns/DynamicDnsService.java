@@ -49,7 +49,7 @@ public final class DynamicDnsService {
     /**
      * Marks a STORED value as a SHA-256 digest. The token is a live HTTP-Basic
      * password that drives DNS updates, so only its digest is ever at rest (the
-     * {@code SiteApiKeys} shape). The client presents the plaintext {@code hdyn_}
+     * hashed-bearer shape). The client presents the plaintext {@code hdyn_}
      * token; the service hashes what it is handed and looks the credential up BY
      * DIGEST.
      */

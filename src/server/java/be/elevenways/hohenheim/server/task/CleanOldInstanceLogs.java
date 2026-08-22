@@ -11,9 +11,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.List;
 
 /**
- * Deletes stored instance console episodes past the retention window. Runs daily -- the
- * SAME rule and the same sweeper as {@link CleanOldProclogs}, so the two log tiers cannot
- * drift into two retention policies.
+ * Deletes stored instance console episodes past the retention window. Runs daily, and is
+ * THE log-retention rule now that the proclog tier is gone.
  */
 public class CleanOldInstanceLogs extends ScheduledTask {
 
@@ -46,8 +45,8 @@ public class CleanOldInstanceLogs extends ScheduledTask {
     /**
      * Delete instance console log rows whose last write is past the retention window.
      *
-     * AIDEV-NOTE: SAVED_AT, not CREATED_AT -- the rule for every UPSERTED log tier
-     * (CleanOldProclogs sweeps the same way). An instance log row is UPSERTED for the whole life of ONE
+     * AIDEV-NOTE: SAVED_AT, not CREATED_AT -- the rule for every UPSERTED log tier.
+     * An instance log row is UPSERTED for the whole life of ONE
      * console episode (InstanceConsoleLogs.sinkFor), so on a workload that has been
      * streaming for a month CREATED_AT is the age of the EPISODE, never the age of its
      * text: sweeping by it deleted a row still being written to, and the sink's next flush

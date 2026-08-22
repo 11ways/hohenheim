@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.process.PortAllocator;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
@@ -228,74 +227,6 @@ class HostFencingTest {
             } finally {
                 resumeA.countDown();
                 cleanup(docker, handle);
-            }
-        });
-    }
-
-    /**
-     * The boot-sweep regression: the old sweep ran unconditionally and deleted a live
-     * peer's not-yet-bound claim (the whole allocate-to-spawn window). Under the host
-     * lease it is structurally impossible: a rival cannot sweep while the peer holds
-     * the lease, cannot allocate either, and once the peer's lease is gone the claims
-     * are honestly a previous generation's.
-     */
-    @Test
-    void theBootSweepCannotDeleteALivePeersClaims() {
-        Db.run(datasource, () -> {
-            HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.FIRST_PORT, 34748);
-            int serverId = ServerModel.localServerId();
-
-            HostLeases controllerA = new HostLeases(Leases::of, Duration.ofSeconds(30));
-            PortAllocator allocatorA = new PortAllocator(controllerA);
-
-            Leases rival = Leases.independent(datasource);
-            HostLeases controllerB = new HostLeases(d -> rival, Duration.ofSeconds(30));
-            PortAllocator allocatorB = new PortAllocator(controllerB);
-
-            try {
-                // 1. A allocates: this is the allocate-to-spawn window -- the port is
-                //    claimed in the ledger but nothing is bound at the kernel yet.
-                int port = allocatorA.allocate(11);
-                String key = PortLedger.claimKeyOf(serverId, "", port, "tcp");
-                assertThat(PortLedger.holderOf(key))
-                    .as("step 1: A's claim is in the ledger").isNotNull();
-
-                // 2. Rival controller B boots and sweeps: it cannot take the host lease,
-                //    so it deletes NOTHING -- the old code deleted A's claim right here
-                //    (owner-less, note-matched, port observed free).
-                PortAllocator.SweepResult swept = allocatorB.sweepPreviousControllerClaims();
-                assertThat(swept.released())
-                    .as("step 2: a rival's sweep releases nothing while A lives").isZero();
-                assertThat(PortLedger.holderOf(key))
-                    .as("step 2: A's claim SURVIVES the rival's boot sweep").isNotNull();
-
-                // 3. B cannot allocate on this host either: one fenced controller owns
-                //    each host mutation.
-                assertThat(catchThrowable(() -> allocatorB.allocate(12)))
-                    .as("step 3: a rival controller cannot allocate while A holds the host")
-                    .isInstanceOf(Violations.class);
-
-                // 4. A dies (releases its lease). B's next sweep takes the lease over and
-                //    NOW judges A's claims as a previous generation: the port is unbound,
-                //    so the claim is released.
-                controllerA.releaseAll();
-                PortAllocator.SweepResult after = allocatorB.sweepPreviousControllerClaims();
-                assertThat(after.released())
-                    .as("step 4: the dead controller's unbound claim is released").isEqualTo(1);
-                assertThat(PortLedger.holderOf(key))
-                    .as("step 4: and its row is gone").isNull();
-
-                // 5. A legacy fence-less claim (pre-M056 rows) is still sweepable.
-                PortLedger.claim(serverId, "", 34999, "tcp", null, null,
-                    "managed process site=9 controller=deadbeefcafe");
-                assertThat(allocatorB.sweepPreviousControllerClaims().released())
-                    .as("step 5: a legacy fence-less claim is judged like a previous"
-                        + " generation's").isEqualTo(1);
-            } finally {
-                controllerA.releaseAll();
-                controllerB.releaseAll();
-                HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.FIRST_PORT, 4748);
-                Models.get(PortAllocationModel.class).find().delete();
             }
         });
     }

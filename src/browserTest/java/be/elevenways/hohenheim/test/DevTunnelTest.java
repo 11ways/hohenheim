@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -86,7 +85,6 @@ class DevTunnelTest {
     static void boot() throws Exception {
         if (!initialized) {
             initialized = true;
-            UpstreamKindHandlers.boot();
             HohenheimEndpoints.init();
             TestDatabases.freshDatabase();
             // The discovered HohenheimHostWiring module installs the client script

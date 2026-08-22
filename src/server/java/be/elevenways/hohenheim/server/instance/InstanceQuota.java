@@ -47,8 +47,8 @@ import java.util.Set;
  * conservative one. Charge == cap survives the choice intact: the number booked here is
  * the number {@code ResourceLimits.fromSettings(settings, defaultFootprintMb(settings))}
  * hands the driver as the cgroup / VM memory cap, so nothing is booked that is not also
- * enforced. A kind whose handler class is gone prices at 0 and books nothing -- the
- * ProcessCapacity.reserve rule: a declaration nothing enforces is charged nothing.
+ * enforced. A kind whose handler class is gone prices at 0 and books nothing: a
+ * declaration nothing enforces is charged nothing.
  *
  * AIDEV-NOTE: the owner budget and {@code InstanceCapacity}'s host budget book the SAME
  * number into DIFFERENT buckets, and both must hold: the host answers "is there RAM here",

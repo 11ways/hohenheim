@@ -23,23 +23,20 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.http.WebSocket;
-import java.net.http.WebSocketHandshakeException;
 import java.time.Instant;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Per-site access control: a non-admin principal is refused everywhere until it
- * holds a manage grant on a specific site, admin-only installation endpoints
- * refuse non-admins outright, and the terminal WebSocket enforces both login
- * (handshake 401) and per-site authorization (policy close).
+ * holds a manage grant on a specific site, and admin-only installation endpoints
+ * refuse non-admins outright.
+ *
+ * AIDEV-NOTE: the site-keyed terminal WebSocket half (handshake 401, policy close 1008)
+ * died with the host-user process lane in phase-0 brief 6. The surviving socket of that
+ * shape is the INSTANCE console, which carries its own tests.
  */
 class SiteAccessControlTest extends HohenheimTestBase {
 
@@ -140,8 +137,8 @@ class SiteAccessControlTest extends HohenheimTestBase {
 
     /**
      * One continuous journey: the limited principal is refused everywhere, a manage grant on
-     * site A unlocks only site A over HTTP and the terminal socket, and then trashing site A
-     * withdraws that authority for good -- restoring it hands nothing back.
+     * site A unlocks only site A over HTTP, and then trashing site A withdraws that
+     * authority for good -- restoring it hands nothing back.
      *
      * AIDEV-NOTE: this WAS two @Order-coupled methods over shared @BeforeAll statics with no
      * per-test reset, so step 8 consumed the grant step 5 created. That is one journey wearing
@@ -155,8 +152,6 @@ class SiteAccessControlTest extends HohenheimTestBase {
             "step 1: deploy on an ungranted site");
         assertAuthorizationRefusal(limitedPost("/sites/" + siteAId + "/rollback"),
             "step 1: rollback on an ungranted site");
-        assertAuthorizationRefusal(limitedPost("/sites/" + siteAId + "/processes/start"),
-            "step 1: process start on an ungranted site");
 
         // 2. Installation-scoped sensitive endpoints are admin-only.
         assertAuthorizationRefusal(limitedGet("/certificates/1/download"),
@@ -190,9 +185,6 @@ class SiteAccessControlTest extends HohenheimTestBase {
         assertThat(limitedPost("/sites/" + siteAId + "/deploy").statusCode())
             .describedAs("step 5: deploy passes once the grant exists")
             .isIn(302, 303);
-        assertThat(limitedPost("/sites/" + siteAId + "/processes/start").statusCode())
-            .describedAs("step 5: and so does starting a process")
-            .isIn(302, 303);
 
         // 6. The grant is per RECORD: site B stays refused.
         assertAuthorizationRefusal(limitedPost("/sites/" + siteBId + "/deploy"),
@@ -207,41 +199,6 @@ class SiteAccessControlTest extends HohenheimTestBase {
             .describedAs("step 7: site A is manageable").isTrue();
         assertThat(HohenheimAccess.canManageSite(principal, siteBId))
             .describedAs("step 7: site B is not").isFalse();
-
-        // 8. The terminal socket refuses an anonymous handshake outright.
-        HttpClient anonymous = HttpClient.newHttpClient();
-        try {
-            anonymous.newWebSocketBuilder()
-                .buildAsync(URI.create("ws://localhost:" + port() + "/ws/terminal/" + siteBId + "/1"),
-                    new WebSocket.Listener() {})
-                .get(15, TimeUnit.SECONDS);
-            throw new AssertionError("Anonymous terminal handshake was accepted");
-        } catch (Exception e) {
-            Throwable cause = e instanceof CompletionException || e.getCause() != null ? e.getCause() : e;
-            assertThat(cause).isInstanceOf(WebSocketHandshakeException.class);
-            assertThat(((WebSocketHandshakeException) cause).getResponse().statusCode()).isEqualTo(401);
-        }
-
-        CompletableFuture<Integer> closeCode = new CompletableFuture<>();
-        WebSocket.Listener listener = new WebSocket.Listener() {
-            @Override
-            public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-                closeCode.complete(statusCode);
-                return null;
-            }
-        };
-
-        HttpClient client = HttpClient.newHttpClient();
-        // Site B: authenticated (handshake passes requiresLogin) but no grant.
-        WebSocket socket = client.newWebSocketBuilder()
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + limitedSession)
-            .buildAsync(URI.create("ws://localhost:" + port() + "/ws/terminal/" + siteBId + "/1"), listener)
-            .get(15, TimeUnit.SECONDS);
-        socket.request(10);
-
-        assertThat(closeCode.get(15, TimeUnit.SECONDS))
-            .describedAs("step 8: an authenticated socket on an ungranted site closes on policy")
-            .isEqualTo(1008);
 
         // AIDEV-NOTE: from here the journey turns to trashing. Sites soft-delete by HAND
         // (SiteResource stamps deleted_at without SoftDeleteBehaviour), so the row stays

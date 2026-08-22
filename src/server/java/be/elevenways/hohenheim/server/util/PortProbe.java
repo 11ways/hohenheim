@@ -7,7 +7,7 @@ import java.net.ServerSocket;
 /**
  * THE local-host bind probe: answers whether a port is free on THIS machine, only for
  * the instant it runs. The one observer that can see consumers no ledger will ever
- * contain (IpcChannel's kernel-ephemeral sockets, testcontainers, orphaned children),
+ * contain (kernel-ephemeral sockets, testcontainers, orphaned children),
  * and worthless for a REMOTE host -- probing locally answers a question about the
  * controller, never about the remote machine.
  */

@@ -89,9 +89,8 @@ public final class OwnerQuota {
 
     /**
      * Spend {@code amount} of the bucket against {@code limit}, or refuse BY NAME with the
-     * numbers in it. A non-positive amount books nothing: the ProcessCapacity.reserve
-     * precedent -- a declaration of nothing is capped by nothing, so charging it would
-     * book what no gate enforces.
+     * numbers in it. A non-positive amount books nothing: a declaration of nothing is
+     * capped by nothing, so charging it would book what no gate enforces.
      *
      * @throws Violations {@code violationKey}, carrying used and limit
      */

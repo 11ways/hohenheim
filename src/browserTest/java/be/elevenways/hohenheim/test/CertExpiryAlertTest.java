@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.server.Comms;
@@ -43,7 +42,6 @@ class CertExpiryAlertTest {
         if (initialized) return;
         initialized = true;
 
-        UpstreamKindHandlers.boot();
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();

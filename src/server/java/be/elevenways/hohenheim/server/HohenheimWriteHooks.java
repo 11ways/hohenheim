@@ -18,11 +18,9 @@ import be.elevenways.hohenheim.server.instance.InstanceImagePin;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceRootDiskQuota;
-import be.elevenways.hohenheim.server.process.ReservedEnv;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.hohenheim.server.quota.DatabaseQuota;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
-import be.elevenways.hohenheim.server.process.SiteApiKeys;
 import be.elevenways.zenit.common.ZenitModule;
 
 /**
@@ -45,11 +43,6 @@ public final class HohenheimWriteHooks implements ZenitModule {
 
     @Override
     public void init() {
-        // No plaintext site api key reaches the datasource, on ANY write path.
-        SiteApiKeys.install();
-        // No reserved control variable (HOHENHEIM_*, PORT, the security-report
-        // pair) can be persisted as an operator environment variable.
-        ReservedEnv.install();
         // No disabled site can go live on a hostname an enabled site already
         // owns (form, toggle, delegated save, revision restore).
         SiteResource.installEnableInvariant();

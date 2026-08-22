@@ -4,8 +4,6 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
-import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -18,9 +16,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Enforces the identity premise the IPC channel's security argument rests on: a managed
@@ -38,9 +33,6 @@ import java.util.Map;
  * @since 0.2.0
  */
 public final class WorkloadIdentity {
-
-    /** One site's identity problem, for the attention list and the settings gate. */
-    public record Finding(int siteId, @Nullable String siteName, @NonNull String problem) {}
 
     private WorkloadIdentity() {
     }
@@ -93,60 +85,6 @@ public final class WorkloadIdentity {
                 "(tolerated because process.require_dedicated_user is off)");
         }
         return user;
-    }
-
-    /**
-     * Read-only identity audit of every enabled, non-deleted, managed-process site.
-     * Never claims or mutates anything; feeds the dashboard attention list.
-     */
-    public static @NonNull List<Finding> auditAll() {
-        List<Finding> findings = new ArrayList<>();
-        List<Row> sites = Models.get(SiteModel.class).find()
-            .where(SiteModel.ENABLED.eq(true))
-            .where(SiteModel.DELETED_AT.isNull())
-            .all();
-        for (Row site : sites) {
-            Integer siteId = site.get(SiteModel.ID);
-            if (siteId == null) {
-                continue;
-            }
-            UpstreamKindHandler type = UpstreamKindHandlers.getHandler((String) site.get(SiteModel.UPSTREAM_KIND));
-            if (type == null || !type.managedProcessEnvironment()) {
-                continue;
-            }
-            Object settings = site.get(SiteModel.SETTINGS);
-            Object userKey = settings instanceof Map<?, ?> map ? map.get("user") : null;
-            String problem = audit(siteId, userKey);
-            if (problem != null) {
-                findings.add(new Finding(siteId, site.get(SiteModel.NAME), problem));
-            }
-        }
-        return findings;
-    }
-
-    /** @return the site's identity problem, or null when it has a dedicated resolvable user */
-    static @Nullable String audit(int siteId, @Nullable Object userKey) {
-        SystemUsers.RunAsUser user;
-        try {
-            user = SystemUsers.resolve(userKey);
-        } catch (IllegalStateException dangling) {
-            return dangling.getMessage();
-        }
-        if (user == null) {
-            return "no dedicated system user configured";
-        }
-        String daemonProblem = daemonIdentityProblem(user);
-        if (daemonProblem != null) {
-            return daemonProblem;
-        }
-        Row row = Models.get(SystemUserModel.class).find()
-            .where(SystemUserModel.NAME.eq(user.name()))
-            .first();
-        Integer owner = row != null ? row.get(SystemUserModel.SITE_ID) : null;
-        if (owner != null && owner != siteId && siteExists(owner)) {
-            return "system user '" + user.name() + "' is already claimed by site " + owner;
-        }
-        return null;
     }
 
     /** @return true when this site must have a dedicated identity (setting, or tenant-managed) */

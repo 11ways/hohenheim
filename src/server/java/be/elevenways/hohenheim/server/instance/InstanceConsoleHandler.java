@@ -12,7 +12,7 @@ import java.util.function.Consumer;
 
 /**
  * Streams an instance's live console to a read-only pl-terminal (the
- * ProcessTerminalHandler shape). OUTPUT ONLY by design: a non-TTY container never
+ * deleted process-terminal shape). OUTPUT ONLY by design: a non-TTY container never
  * echoes, so raw keystrokes would be invisible typing -- commands ride the console
  * form's POST endpoint, which also funnels stop-command observation through the hub.
  */

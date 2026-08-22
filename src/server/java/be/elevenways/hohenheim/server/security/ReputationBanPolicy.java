@@ -78,7 +78,7 @@ public final class ReputationBanPolicy {
     // Each lookup can block up to the client's 10s HTTP timeout, so a
     // thread-per-lookup executor would mint unbounded blocked threads under a
     // flood; and blocking HTTP on a virtual thread risks carrier pinning (see
-    // ManagedProcessSiteHandler's pump-thread incident) -- a single platform
+    // the deleted process lane's pump-thread incident) -- a single platform
     // thread is correct. Queue overflow DROPS the lookup: reputation banning
     // is fail-open by contract, a missed lookup only delays a ban.
     private static final int LOOKUP_QUEUE_CAPACITY = 256;

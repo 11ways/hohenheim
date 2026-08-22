@@ -13,7 +13,7 @@ import java.util.List;
  * The persisted console output of ONE workload episode of one instance -- what the
  * in-memory replay ring holds, written down so history survives a controller restart.
  *
- * AIDEV-NOTE: this is the {@link ProclogModel} shape, deliberately, not a third one. Same
+ * AIDEV-NOTE: this is the deleted proclog tier's shape, deliberately, not a third one. Same
  * discipline end to end: one UPSERTED row per episode carrying a rolling buffer, a periodic
  * flush plus a final flush at exit, and a day-based {@code RetentionSweep} cleaner. It is a
  * separate TABLE only because the owner column differs (an instance, not a site+pid) and

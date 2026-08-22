@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
-import be.elevenways.hohenheim.server.task.CleanOldProclogs;
+import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.task.TaskStatus;
 import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
@@ -232,7 +232,7 @@ class InstanceAttentionTest {
                 Models.registerInstance(new SystemTaskHistoryModel(datasource));
             }
             String nightly = BackupControlPlane.class.getName();
-            String chatty = CleanOldProclogs.class.getName();
+            String chatty = CleanOldInstanceLogs.class.getName();
 
             // 1. One FAILED nightly run, then 250 newer successful runs of another task.
             taskRun(nightly, TaskStatus.FAILED,

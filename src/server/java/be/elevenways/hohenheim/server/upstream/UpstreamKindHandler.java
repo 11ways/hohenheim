@@ -21,20 +21,6 @@ public interface UpstreamKindHandler extends UpstreamKindInfo {
     SiteRequestHandler createHandler(Row site, Map<String, Object> settings);
 
     /**
-     * Whether sites with this upstream spawn OS processes through the managed-process
-     * pipeline (workload identity claims, reserved control variables).
-     *
-     * AIDEV-NOTE: no shipped kind answers true any more -- the host-user process lane's
-     * site types (node, java, command, alchemy) were deleted with the upstream rename on
-     * 2026-08-22. The declaration stays only so its two remaining readers
-     * ({@code WorkloadIdentity}, {@code ReservedEnv}) keep compiling honestly until the
-     * deletion wave removes them; nothing new may implement it.
-     */
-    default boolean managedProcessEnvironment() {
-        return false;
-    }
-
-    /**
      * Called when a site's configuration changes.
      * Default: destroy old handler and create a new one.
      */

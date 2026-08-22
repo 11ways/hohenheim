@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
-import be.elevenways.hohenheim.server.options.SystemUserOptions;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -12,9 +12,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Resolves a site's configured {@code system_user_id} to the numeric unix uid used
- * for per-site privilege drop. Single source of truth for the node,
- * command, and git provisioning site paths.
+ * Resolves a configured system user to the numeric unix uid used for privilege drop,
+ * and builds the hardened ProcessBuilder every spawn goes through. Single source of truth
+ * for the git provisioning and spamservice paths.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0
@@ -146,7 +146,8 @@ public final class SystemUsers {
             }
             row = Models.get(SystemUserModel.class).findById(id);
         } else if (userKeyObj instanceof String key && !key.isBlank()) {
-            String username = SystemUserOptions.usernameFromKey(key);
+            Identifier parsed = Identifier.tryParse(key);
+            String username = parsed != null ? parsed.getPath() : key;
             row = Models.get(SystemUserModel.class).find()
                 .where(SystemUserModel.NAME.eq(username))
                 .first();

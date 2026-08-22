@@ -13,9 +13,6 @@ import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.process.ManagedProcessSiteHandler;
-import be.elevenways.hohenheim.server.security.ProcessNetworkPolicy;
-import be.elevenways.hohenheim.server.sitetype.SiteHandlers;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
@@ -43,8 +40,7 @@ import java.util.Map;
  * The reconciler that closes the Docker tiers' reboot window: every policied workload
  * network (instances, site releases, managed databases, stacks, link networks) is
  * re-checked against the daemon host's ACTUAL nftables, repaired through the verified
- * applier, and CONTAINED when the repair does not take. The controller's own
- * managed-process sites ride the same sweep on their uid chains.
+ * applier, and CONTAINED when the repair does not take.
  *
  * AIDEV-NOTE: renamed from VerifyDockerIsolation 2026-08-06 when the managed-process tier
  * joined it. The unit stopped being "a policied Docker network" -- a host process has no
@@ -110,8 +106,7 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
         return HohenheimRoles.schedulesWhen(
             List.of(ScheduleDeclaration.bootAndCron("*/5 * * * *")),
             HohenheimRoles.Role.INSTANCES, HohenheimRoles.Role.STACKS,
-            HohenheimRoles.Role.DATABASES, HohenheimRoles.Role.PROXY,
-            HohenheimRoles.Role.PROCESSES);
+            HohenheimRoles.Role.DATABASES, HohenheimRoles.Role.PROXY);
     }
 
     @Override
@@ -183,114 +178,7 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
                 inventory.getOrDefault(serverId, List.of()),
                 inventoryErrors.getOrDefault(serverId, List.of())));
         }
-        HostOutcome processes = sweepProcesses(liveProcessSubjects(),
-            ProcessNetworkPolicy.current());
-        if (processes != null) {
-            outcomes.add(processes);
-        }
         return List.copyOf(outcomes);
-    }
-
-    // -- the managed-process tier -----------------------------------------------------
-
-    /** How this tier's outcome names itself; it is a uid inventory, not a host inventory. */
-    public static final String PROCESS_SUBJECT = "managed processes (this controller)";
-
-    /** One live process site: the identity the kernel must carry, and how to contain it. */
-    public record ProcessSubject(int uid, @NonNull String site, @NonNull Containment containment) {
-    }
-
-    /**
-     * Every site with LIVE children and a run-as uid, deduplicated BY UID.
-     *
-     * AIDEV-NOTE: the key is the uid, not the site, because the chain is. Two sites sharing
-     * a system user (possible only while {@code process.require_dedicated_user} is off, and
-     * a finding {@code WorkloadIdentity.auditAll} already reports) share ONE chain, so
-     * sweeping them separately would verify and repair the same chain twice and, worse,
-     * contain the second site for the first one's divergence.
-     */
-    private static @NonNull List<ProcessSubject> liveProcessSubjects() {
-        if (!HohenheimRoles.enabled(HohenheimRoles.Role.PROCESSES)) {
-            return List.of();
-        }
-        Map<Integer, ProcessSubject> byUid = new LinkedHashMap<>();
-        for (Row site : Models.get(SiteModel.class).find()
-                .where(SiteModel.ENABLED.eq(true))
-                .where(SiteModel.DELETED_AT.isNull()).all()) {
-            Integer siteId = site.get(SiteModel.ID);
-            ManagedProcessSiteHandler handler = SiteHandlers.managedProcess(siteId);
-            if (handler == null || handler.runningProcessCount() == 0) {
-                continue;   // nothing of ours is running as that identity right now
-            }
-            Integer uid = handler.runAsUid();
-            if (uid == null) {
-                continue;   // no dedicated identity: nothing to key a policy on (warned at spawn)
-            }
-            String name = String.valueOf(site.get(SiteModel.NAME));
-            byUid.putIfAbsent(uid, new ProcessSubject(uid, name, () -> {
-                handler.killAllProcesses();
-                return "killed the child processes of site '" + name + "'";
-            }));
-        }
-        return List.copyOf(byUid.values());
-    }
-
-    /**
-     * The uid-keyed half of the sweep: every live process site's OUTPUT chain must be in
-     * this controller's own kernel.
-     *
-     * AIDEV-NOTE: this tier's REBOOT window is already closed without a sweep -- every
-     * child is spawned by us and every spawn re-applies -- so what is swept here is the
-     * MID-LIFE divergence the container tiers share: something else on the host flushing
-     * the table under a child that keeps running. Containment is therefore killing the
-     * children rather than stopping a container: the respawn goes straight back through
-     * the applier, so a host that still cannot enforce simply keeps the site down with a
-     * named refusal in the log instead of running it unisolated.
-     *
-     * @return null when this controller runs no isolatable managed processes at all
-     */
-    public static @Nullable HostOutcome sweepProcesses(
-            @NonNull List<ProcessSubject> subjects, @NonNull ProcessNetworkPolicy policy) {
-        if (subjects.isEmpty()) {
-            return null;
-        }
-        if (!policy.isEnabled()) {
-            return new HostOutcome(PROCESS_SUBJECT, false, List.of(), List.of(), List.of(),
-                List.of("per-process enforcement is off (security.nftables_enabled); "
-                    + subjects.size() + " site process identity/identities can be neither"
-                    + " verified nor repaired"));
-        }
-        List<String> enforced = new ArrayList<>();
-        List<String> repaired = new ArrayList<>();
-        List<String> contained = new ArrayList<>();
-        List<String> errors = new ArrayList<>();
-        for (ProcessSubject subject : subjects) {
-            String named = "site '" + subject.site() + "' (uid " + subject.uid() + ")";
-            try {
-                if (policy.isEnforced(subject.uid(), subject.site())) {
-                    enforced.add(named);
-                    continue;
-                }
-            } catch (IOException unreadable) {
-                // An unreadable kernel is "unverifiable", never "unenforced".
-                errors.add(named + ": kernel unreadable, isolation UNCONFIRMED: "
-                    + unreadable.getMessage());
-                continue;
-            }
-            try {
-                policy.apply(subject.uid(), subject.site());
-                repaired.add(named);
-            } catch (IOException unrepairable) {
-                errors.add(named + ": " + unrepairable.getMessage());
-                try {
-                    contained.add(subject.containment().contain());
-                } catch (Exception containFailed) {
-                    errors.add(named + ": containment failed: " + containFailed.getMessage());
-                }
-            }
-        }
-        return new HostOutcome(PROCESS_SUBJECT, true, List.copyOf(enforced),
-            List.copyOf(repaired), List.copyOf(contained), List.copyOf(errors));
     }
 
     // -- one host ---------------------------------------------------------------
