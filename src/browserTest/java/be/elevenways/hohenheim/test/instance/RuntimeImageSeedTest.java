@@ -70,10 +70,12 @@ class RuntimeImageSeedTest {
                 .as("step 3: '%s' has a committed Dockerfile at %s", name, context)
                 .isTrue();
 
-            // 4. The Incus variant is honestly absent rather than a guessed alias: the
-            //    picker reads this null as "cannot run on an Incus host".
-            assertThat(image.get(RuntimeImageModel.INCUS_IMAGE))
-                .as("step 4: '%s' publishes no Incus variant yet", name).isNull();
+            // 4. The Incus variant is the LOCAL alias the conversion imports under
+            //    (RuntimeImages), never a public-catalog name -- the same "no registry"
+            //    decision the docker reference follows.
+            assertThat((String) image.get(RuntimeImageModel.INCUS_IMAGE))
+                .as("step 4: '%s' names its local Incus alias", name)
+                .isEqualTo("hohenheim/" + name);
         }
     }
 
