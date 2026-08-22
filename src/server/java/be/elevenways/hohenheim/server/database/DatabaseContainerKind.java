@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -99,6 +100,14 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
     /** Size cap for an ephemeral (tmpfs) data mount: 1 GiB -- generous for tests and small
      *  preview databases, while bounding RAM use (tmpfs only consumes RAM for live data). */
     public static final long EPHEMERAL_DATA_SIZE_BYTES = 1024L * 1024 * 1024;
+
+    // Which engine, which image and whether the data survives a restart are the decisions;
+    // the rest is what DatabaseService writes for you.
+    static {
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME,
+            List.of(DATA_VOLUME.getName(), COMMAND.getName(), ENVIRONMENT_VARIABLES.getName(),
+                MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+    }
 
     @Override
     public @NonNull Identifier typeId() { return ID; }

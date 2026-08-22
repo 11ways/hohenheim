@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -140,6 +141,16 @@ public final class DockerContainerKind implements InstanceKindHandler {
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
         DoubleField.builder().name("cpu_limit").label(HohenheimFormCopy.label("cpu_limit"))
             .help(HohenheimFormCopy.help("cpu_limit")).build());
+
+    // Image, tag, command, port and what the container carries are the create decisions;
+    // HOW the port is published and what it may consume have safe defaults and fold.
+    // AIDEV-NOTE: after the fields -- Schema.addSection validates membership eagerly.
+    static {
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.PORTS,
+            List.of(PORT_PROTOCOL.getName(), PORT_EXPOSURE.getName(), HOST_PORT.getName())));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.LIMITS,
+            List.of(MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+    }
 
     @Override
     public @NonNull Identifier typeId() { return ID; }

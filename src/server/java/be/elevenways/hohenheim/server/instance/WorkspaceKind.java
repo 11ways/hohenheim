@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -119,6 +120,28 @@ public final class WorkspaceKind implements InstanceKindHandler {
         DoubleField.builder().name("cpu_limit")
             .label(HohenheimFormCopy.label("cpu_limit"))
             .help(HohenheimFormCopy.help("cpu_limit")).build());
+
+    // What a person DECIDES when creating a workspace is where the code comes from, what
+    // builds it, what starts it and which port it serves. Everything else has a working
+    // default, so it folds -- in NAMED sections, because a fold whose header says "Build"
+    // is browsable and one that says "Advanced" is a drawer. The home cap folds WITH the
+    // other ceilings: blank means the declaration's own quota, which makes it a limit and
+    // not a decision, and it was the only ceiling in the form rendered outside a fold.
+    //
+    // AIDEV-NOTE: declared here, after the fields, because Schema.addSection validates
+    // membership against the fields declared SO FAR. The git half's members come from
+    // GitSourceSchema's own groups, so a field added there lands in the same fold for
+    // every kind that hosts it.
+    static {
+        SETTINGS_SCHEMA.addSection(
+            HohenheimFormSections.collapsed(HohenheimFormSections.BUILD, GitSourceSchema.BUILD_DETAIL));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.DEPLOYMENT,
+            HohenheimFormSections.join(GitSourceSchema.DELIVERY, GitSourceSchema.PREVIEWS)));
+        SETTINGS_SCHEMA.addSection(
+            HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME, List.of(
+                HOME_QUOTA_MB.getName(), ENVIRONMENT_VARIABLES.getName(),
+                MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+    }
 
     @Override public @NonNull Identifier typeId() { return ID; }
 

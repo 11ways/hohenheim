@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -145,6 +146,15 @@ public final class VmKind implements InstanceKindHandler {
         BooleanField.builder("guest_agent").defaultValue(true)
             .label(HohenheimFormCopy.label("guest_agent"))
             .help(HohenheimFormCopy.help("guest_agent")).build());
+
+    // A VM is SIZED when it is created, so memory, cores and disk stay visible -- this is
+    // the one kind where the ceilings ARE the decision. What folds is the guest half:
+    // a first-boot cloud-config nobody pastes while creating, and two image declarations
+    // whose defaults suit every catalog image.
+    static {
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.GUEST,
+            List.of(CLOUD_INIT.getName(), SECURE_BOOT.getName(), GUEST_AGENT.getName())));
+    }
 
     @Override
     public @NonNull Identifier typeId() { return ID; }
