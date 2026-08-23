@@ -112,9 +112,10 @@ class InstanceVolumesTest {
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("volume_backend_unimplemented");
 
-            // 3. And the pre-deploy snapshot refuses SEPARATELY, naming the host -- a
-            //    backend can have quota and still have no snapshot (xfs project quota), so
-            //    the two capabilities are two refusals.
+            // 3. And the pre-deploy snapshot refuses SEPARATELY, naming the host: quota
+            //    and snapshot are two capabilities and therefore two refusals, and a
+            //    backend can lose them independently (a filesystem that caps but does not
+            //    snapshot, or one this build simply has no operations for).
             setBackend(VolumeBackend.XFS_PRJQUOTA);
             assertThatThrownBy(() -> InstanceVolumes.snapshotAll(4242, local, "predeploy"))
                 .as("step 3: a quota-capable backend that cannot snapshot refuses the"

@@ -140,7 +140,17 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
                 text("volume_backend", locales, resolver),
                 WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
                     volumeBackend.color(), volumeBackend.icon())))));
-        if (!volumeBackend.supportsQuota()) {
+        if (!volumeBackend.supportsQuota() && volumeBackend.filesystemEnforcesQuota()) {
+            // The filesystem COULD enforce a quota; this build has no operations for it.
+            // Telling the operator to mount something else here would be a lie in the
+            // other direction -- they already mounted a quota-capable filesystem.
+            state.add(alert(AlertVariant.WARNING, NoticeData.of(
+                text("volume_backend_unsupported_title", locales, resolver),
+                Microcopy.of("volume_backend_unsupported_body")
+                    .withFilter("scope", "server_overview")
+                    .withArg("backend", volumeBackend.label())
+                    .resolve(locales, resolver))));
+        } else if (!volumeBackend.supportsQuota()) {
             state.add(alert(AlertVariant.WARNING, NoticeData.of(
                 text("volume_backend_none_title", locales, resolver),
                 text("volume_backend_none_body", locales, resolver))));

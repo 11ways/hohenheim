@@ -9111,11 +9111,11 @@
     "scope": "violations"
   },
   "host_no_volume_quota": {
-    "text": "Host '{$name}' cannot enforce a volume quota (backend: {$backend}), so it cannot run a {$kind}. Mount a btrfs or zfs filesystem at the volume root, or pick another host.",
+    "text": "Host '{$name}' cannot enforce a volume quota (backend: {$backend}), so it cannot run a {$kind}. Mount a btrfs filesystem at the volume root, or pick another host.",
     "scope": "violations"
   },
   "volume_backend_unimplemented": {
-    "text": "Volume backend {$backend} is not implemented yet; only btrfs can create, quota and snapshot a volume today.",
+    "text": "Hohenheim cannot manage volumes on the {$backend} backend; only btrfs can create, quota and snapshot a volume today.",
     "scope": "violations"
   },
   "volume_create_failed": {
@@ -9135,7 +9135,7 @@
     "scope": "violations"
   },
   "volume_no_snapshot_support": {
-    "text": "Host '{$name}' cannot snapshot a volume (backend: {$backend}), so a deploy that would write to declared volumes is refused. Mount a btrfs or zfs filesystem at the volume root, or remove the volumes.",
+    "text": "Host '{$name}' cannot snapshot a volume (backend: {$backend}), so a deploy that would write to declared volumes is refused. Mount a btrfs filesystem at the volume root, or remove the volumes.",
     "scope": "violations"
   },
   "volume_host_unknown": {
@@ -9603,7 +9603,15 @@
     "scope": "server_overview"
   },
   "volume_backend_none_body": {
-    "text": "The data root cannot enforce size limits or take snapshots, so workspaces and applications cannot be placed on this host. Mount a btrfs or ZFS filesystem at the data path's volumes directory and re-run preflight.",
+    "text": "The data root cannot enforce size limits or take snapshots, so workspaces and applications cannot be placed on this host. Mount a btrfs filesystem at the data path's volumes directory and re-run preflight.",
+    "scope": "server_overview"
+  },
+  "volume_backend_unsupported_title": {
+    "text": "Volume backend not supported",
+    "scope": "server_overview"
+  },
+  "volume_backend_unsupported_body": {
+    "text": "The data root is {$backend}, which Hohenheim cannot manage volumes on, so workspaces and applications cannot be placed on this host. Only btrfs is implemented today: mount a btrfs filesystem at the data path's volumes directory and re-run preflight.",
     "scope": "server_overview"
   },
   "volume_backend_no_snapshot_title": {
@@ -9611,7 +9619,7 @@
     "scope": "server_overview"
   },
   "volume_backend_no_snapshot_body": {
-    "text": "The data root enforces size limits but cannot take snapshots, so deploys of applications WITH volumes are refused here. Btrfs or ZFS at the data path lifts this.",
+    "text": "The data root enforces size limits but cannot take snapshots, so deploys of applications WITH volumes are refused here. Btrfs at the data path lifts this.",
     "scope": "server_overview"
   },
   "build": {

@@ -729,13 +729,19 @@ class InstancePlacementTest {
                 .as("step 4: and an application")
                 .isEqualTo(plain);
 
-            // 5. XFS with project quota can cap a volume but cannot snapshot one, and the
-            //    placement gate asks only about the quota -- so it is eligible here, and
-            //    the snapshot half stays a deploy-time question.
+            // 5. XFS with project quota is a mount that CAN cap a volume and that this
+            //    build has no operations for, so placement refuses it exactly like a host
+            //    with no quota at all. Until 2026-08-23 it was offered here and the FIRST
+            //    deploy died in VolumeOperations instead -- a promise made by placement and
+            //    broken one screen later.
             setVolumeBackend(plain, VolumeBackend.XFS_PRJQUOTA);
-            assertThat(InstancePlacement.chooseForBucket(BUCKET, workspaceLoad, null))
-                .as("step 5: quota is the placement question, snapshot is not")
-                .isEqualTo(plain);
+            assertThat(VolumeBackend.XFS_PRJQUOTA.filesystemEnforcesQuota())
+                .as("step 5: the mount itself could enforce a cap")
+                .isTrue();
+            assertThat(keyOf(catchThrowable(() ->
+                    InstancePlacement.chooseForBucket(BUCKET, workspaceLoad, null))))
+                .as("step 5: and placement still refuses, because nothing here can apply one")
+                .isEqualTo("host_no_volume_quota");
         });
     }
 

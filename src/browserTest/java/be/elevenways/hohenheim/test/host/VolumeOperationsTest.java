@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -152,39 +153,96 @@ class VolumeOperationsTest {
     }
 
     /**
-     * Every backend nothing implements yet refuses BY NAME, on every operation.
+     * THE drift guard: what {@link VolumeBackend#isImplemented} declares is what this
+     * factory actually does, member by member, in BOTH directions.
      *
-     * AIDEV-NOTE: this is the falsification of the fail-closed claim. A degrading stub
+     * AIDEV-NOTE: this is deliberately not a comparison against a list of member names
+     * beside the enum -- such a test is circular and catches nothing. It walks
+     * {@code values()} and DRIVES each member through the factory: a member that declares
+     * itself implemented must perform a real command, and one that does not must refuse by
+     * name having touched no host. Declaring ZFS implemented without writing
+     * ZfsVolumeOperations fails here; writing them and forgetting the flag fails here too.
+     *
+     * AIDEV-NOTE: this is also the falsification of the fail-closed claim. A degrading stub
      * (create a plain directory for ZFS, skip the quota for XFS) would pass every other
      * test in this suite and hand a workspace a cap nothing enforces.
      */
     @Test
-    void everyUnimplementedBackendRefusesByName() {
+    void theImplementedFlagIsWhatTheOperationsActuallyDo() {
 
-        for (VolumeBackend backend : List.of(VolumeBackend.ZFS, VolumeBackend.XFS_PRJQUOTA,
-                VolumeBackend.NONE)) {
+        String path = "/srv/data/volumes/1/data";
+        List<VolumeBackend> implemented = new ArrayList<>();
+        List<VolumeBackend> refusing = new ArrayList<>();
+
+        for (VolumeBackend backend : VolumeBackend.values()) {
             FakeShell shell = FakeShell.succeeding();
             VolumeOperations operations = VolumeOperations.forBackend(backend, shell);
-            String path = "/srv/data/volumes/1/data";
 
+            if (backend.isImplemented()) {
+                // 1. A member that DECLARES itself implemented must actually act: create
+                //    runs a command on the host and does not answer with the refusal.
+                implemented.add(backend);
+                assertThatCode(() -> operations.create(path))
+                    .as("step 1: %s declares itself implemented, so create must not answer"
+                        + " with the unimplemented refusal", backend)
+                    .doesNotThrowAnyException();
+                assertThat(shell.all())
+                    .as("step 1: %s declares itself implemented, so create must run a"
+                        + " command on the host", backend)
+                    .isNotEmpty();
+                continue;
+            }
+
+            // 2. A member that does NOT is refused by name on every single operation --
+            //    never a create that quietly makes a plain directory, which is a volume
+            //    with no cap that looks exactly like one with a cap.
+            refusing.add(backend);
             assertThatThrownBy(() -> operations.create(path))
-                .as(backend + ": create refuses")
+                .as("step 2: %s: create refuses", backend)
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("volume_backend_unimplemented");
             assertThatThrownBy(() -> operations.setQuota(path, 1L))
-                .as(backend + ": setQuota refuses").isInstanceOf(Violations.class);
+                .as("step 2: %s: setQuota refuses", backend).isInstanceOf(Violations.class);
             assertThatThrownBy(() -> operations.usage(path))
-                .as(backend + ": usage refuses").isInstanceOf(Violations.class);
+                .as("step 2: %s: usage refuses", backend).isInstanceOf(Violations.class);
             assertThatThrownBy(() -> operations.snapshot(path, "x"))
-                .as(backend + ": snapshot refuses").isInstanceOf(Violations.class);
+                .as("step 2: %s: snapshot refuses", backend).isInstanceOf(Violations.class);
             assertThatThrownBy(() -> operations.deleteSnapshot(path))
-                .as(backend + ": deleteSnapshot refuses").isInstanceOf(Violations.class);
+                .as("step 2: %s: deleteSnapshot refuses", backend).isInstanceOf(Violations.class);
             assertThatThrownBy(() -> operations.destroy(path))
-                .as(backend + ": destroy refuses").isInstanceOf(Violations.class);
+                .as("step 2: %s: destroy refuses", backend).isInstanceOf(Violations.class);
+            assertThatThrownBy(() -> operations.own(path, 200001))
+                .as("step 2: %s: own refuses", backend).isInstanceOf(Violations.class);
 
             assertThat(shell.all())
-                .as(backend + ": and it never ran a command on the host to find out")
+                .as("step 2: %s: and it never ran a command on the host to find out", backend)
                 .isEmpty();
+        }
+
+        // 3. Both halves are non-empty, so neither branch above can pass by never running:
+        //    an all-refusing enum would make step 1 vacuous, and an all-implemented one
+        //    would make step 2 vacuous.
+        assertThat(implemented)
+            .as("step 3: at least one backend is actually implemented")
+            .isNotEmpty();
+        assertThat(refusing)
+            .as("step 3: and the refusing half is exercised too")
+            .isNotEmpty();
+
+        // 4. The capability facts placement narrows on FOLD implementedness in, so the
+        //    picker can never offer a host whose first deploy would refuse. This is the
+        //    exact lie this test was written for: ZFS declared a quota, placement believed
+        //    it, and VolumeOperations refused the deploy.
+        for (VolumeBackend backend : refusing) {
+            assertThat(backend.supportsQuota())
+                .as("step 4: %s is not implemented, so it enforces no quota for us", backend)
+                .isFalse();
+            assertThat(backend.supportsSnapshot())
+                .as("step 4: nor can it snapshot for us", backend)
+                .isFalse();
+            assertThat(VolumeBackend.quotaCapableTokens())
+                .as("step 4: and a picker narrowing on the tokens never offers it", backend)
+                .doesNotContain(backend.token());
         }
     }
 }
