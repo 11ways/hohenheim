@@ -174,14 +174,18 @@ public final class InstanceService {
      * @throws Violations naming the failure; the record is stamped {@code error}
      */
     public @NonNull InstanceStatus deploy(int instanceId) {
-        return deploy(instanceId, DEFAULT_DEPLOY_REASON);
+        return deploy(instanceId, DeployTrigger.SYSTEM);
     }
 
     /**
-     * {@link #deploy(int)} with the trigger the surface wants recorded ({@code manual},
-     * {@code webhook}, a schedule's own word).
+     * {@link #deploy(int)} with the trigger that asked for it.
+     *
+     * AIDEV-NOTE: a MEMBER, never a word. The trigger decides whether this deploy may
+     * start a workload an operator stopped ({@link DeployStartPolicy}), and while it
+     * travelled as a free-form string every surface was one typo away from buying the
+     * permissive classification. The word survives only where the deploy is RECORDED.
      */
-    public @NonNull InstanceStatus deploy(int instanceId, @NonNull String reason) {
+    public @NonNull InstanceStatus deploy(int instanceId, @NonNull DeployTrigger trigger) {
         // The ONE power gate, on the service every surface funnels through: the CMS row
         // action, the automation API and anything later. A tenant-originated call must
         // hold power; operator and system work (crash restarts, schedule chains, installs)
@@ -192,15 +196,15 @@ public final class InstanceService {
         // before any driver work, so every existing power surface deploys an application
         // with nothing wired at the call site.
         if (releaseManaged(instanceId)) {
-            return ApplicationDeploys.deploy(instanceId, null, reason).status();
+            return ApplicationDeploys.deploy(instanceId, null, trigger).status();
         }
         // The workspace's own fold, on exactly the same terms: WorkspaceBuilds stays THE
         // mechanism and brings the workload up through deployWorkload below, so this is a
         // branch and never a second deploy path.
         if (WorkspaceBuilds.deploysSource(liveRow(instanceId))) {
-            return new WorkspaceBuilds(this).deploy(instanceId, null, reason).status();
+            return new WorkspaceBuilds(this).deploy(instanceId, null, trigger).status();
         }
-        return deployWorkload(instanceId);
+        return deployWorkload(instanceId, trigger);
     }
 
     /**
@@ -216,13 +220,28 @@ public final class InstanceService {
      * @throws Violations naming the failure; the record is stamped {@code error}
      */
     @NonNull InstanceStatus deployWorkload(int instanceId) {
-        return inFlight(instanceId, () -> deployWorkloadNow(instanceId));
+        return deployWorkload(instanceId, DeployTrigger.SYSTEM);
+    }
+
+    /** {@link #deployWorkload(int)} on a named trigger; the workload half enforces it too. */
+    @NonNull InstanceStatus deployWorkload(int instanceId, @NonNull DeployTrigger trigger) {
+        return inFlight(instanceId, () -> deployWorkloadNow(instanceId, trigger));
     }
 
     /** {@link #deployWorkload}'s body; the in-flight mark is the wrapper's job. */
-    private @NonNull InstanceStatus deployWorkloadNow(int instanceId) {
+    private @NonNull InstanceStatus deployWorkloadNow(int instanceId,
+                                                      @NonNull DeployTrigger trigger) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
         Resolved resolved = resolve(instanceId);
+        // The trigger policy for every kind that owns a container directly -- a preview
+        // refreshed by a push is the lane that reaches here on a third party's trigger.
+        // The STORED status is the evidence: it is what an operator's stop wrote, and a
+        // record nobody ever deployed is `created`, never `stopped`.
+        Microcopy declined =
+            DeployStartPolicy.declineToStartStored(trigger, resolved.row(), resolved.row());
+        if (declined != null) {
+            throw Violations.ofForm(declined);
+        }
         // Settle-then-refuse: a start under a live capture/restore corrupts the very
         // data those operations exist to protect; a start before the template's install
         // step completed runs the workload on half-written data.
@@ -848,8 +867,20 @@ public final class InstanceService {
      * adds no gate of its own, so a restart can never be a wider door than a stop.
      */
     public void restart(int instanceId) {
+        restart(instanceId, DeployTrigger.SYSTEM);
+    }
+
+    /**
+     * {@link #restart(int)} on a named trigger, for the surfaces where a person asked.
+     *
+     * AIDEV-NOTE: the deploy half runs AFTER a stop that stamped {@code stopped}, so a
+     * restart on a trigger that may not start a stopped workload would refuse its own
+     * second half. No such surface exists -- a forge push never restarts -- and the
+     * refusal is the honest outcome if one is ever wired.
+     */
+    public void restart(int instanceId, @NonNull DeployTrigger trigger) {
         stop(instanceId);
-        deploy(instanceId);
+        deploy(instanceId, trigger);
     }
 
     /**

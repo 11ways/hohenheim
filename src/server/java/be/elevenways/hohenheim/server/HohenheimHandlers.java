@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -105,7 +106,7 @@ public final class HohenheimHandlers {
             }
             Datasource datasource = Db.currentOrDefault();
             JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
-                ApplicationDeploys.deployQuietly(applicationId, null, "api")));
+                ApplicationDeploys.deployQuietly(applicationId, null, DeployTrigger.API)));
             return HandlerSupport.jsonUntyped(Map.of("status", "queued", "site", siteId));
         });
     }

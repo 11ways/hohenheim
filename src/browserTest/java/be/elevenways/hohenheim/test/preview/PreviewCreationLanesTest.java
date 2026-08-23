@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ManagePreviewDeploymentResource;
@@ -113,7 +114,8 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             // 1. queue() returns SYNCHRONOUSLY with a claimed, quota-charged row: the
             //    manual lane's refusals and charges happen before the caller's form
             //    round-trip ends, not in a background job nobody sees.
-            Row first = PreviewDeployments.queue(applicationId, "manual-a", null, null);
+            Row first = PreviewDeployments.queue(applicationId, "manual-a", null, null,
+                DeployTrigger.MANUAL);
             assertThat((String) first.get(PreviewDeploymentModel.STATUS))
                 .as("step 1: the claim is stamped deploying before any build ran")
                 .isEqualTo(PreviewDeploymentModel.STATUS_DEPLOYING);
@@ -126,7 +128,8 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             // 2. THE CAP DECISION: the second manual preview is refused BY NAME,
             //    synchronously -- never an eviction of the running first one.
             Throwable refused = catchThrowable(() ->
-                PreviewDeployments.queue(applicationId, "manual-b", null, null));
+                PreviewDeployments.queue(applicationId, "manual-b", null, null,
+                DeployTrigger.MANUAL));
             assertThat(refused).as("step 2: over-cap manual create refused by name")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("preview_quota_reached");
@@ -149,7 +152,8 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             //    schedule armed at claim time is the backstop); destroying it releases
             //    the slot and the refused ref now fits.
             PreviewDeployments.destroy(firstId, "operator");
-            Row second = PreviewDeployments.queue(applicationId, "manual-b", null, null);
+            Row second = PreviewDeployments.queue(applicationId, "manual-b", null, null,
+                DeployTrigger.MANUAL);
             assertThat(second.get(PreviewDeploymentModel.ID))
                 .as("step 4: the released slot is claimable again").isNotNull();
             PreviewDeployments.destroy(second.get(PreviewDeploymentModel.ID), "operator");
@@ -227,7 +231,8 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         // 1. No site names this application, so the claim refuses by name -- before any
         //    quota charge, any checkout and any build.
         Throwable refused = catchThrowable(() ->
-            PreviewDeployments.queue(orphan, "orphan-ref", null, null));
+            PreviewDeployments.queue(orphan, "orphan-ref", null, null,
+                DeployTrigger.MANUAL));
         assertThat(refused)
             .as("step 1: an application with no exposing site is refused by name")
             .isInstanceOf(Violations.class)
@@ -250,7 +255,8 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         lender.set(SiteModel.ENABLED, true);
         siteModel.save(lender);
 
-        Row claimed = PreviewDeployments.queue(orphan, "orphan-ref", null, null);
+        Row claimed = PreviewDeployments.queue(orphan, "orphan-ref", null, null,
+                DeployTrigger.MANUAL);
         assertThat((String) claimed.get(PreviewDeploymentModel.STATUS))
             .as("step 2: with an exposing site the same claim lands")
             .isEqualTo(PreviewDeploymentModel.STATUS_DEPLOYING);

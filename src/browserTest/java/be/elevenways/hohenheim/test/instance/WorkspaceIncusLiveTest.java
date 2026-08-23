@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceExec;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
@@ -226,7 +227,7 @@ class WorkspaceIncusLiveTest {
 
             // 6. Checkout and build INSIDE the container, as that uid.
             WorkspaceBuilds.Outcome deployed = new WorkspaceBuilds()
-                .deploy(instanceId, "master", "live test");
+                .deploy(instanceId, "master", DeployTrigger.MANUAL);
             assertThat(deployed.commitSha())
                 .as("step 6: the checkout reports a commit").hasSize(40);
             assertThat(deployed.built())

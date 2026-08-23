@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceExposure;
@@ -895,7 +896,7 @@ public class InstanceResource extends RowResource {
                 && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
                     row.get(InstanceModel.ID), HohenheimAccess.POWER))
             .handler((row, ctx) -> {
-                this.instances.deploy(row.get(InstanceModel.ID));
+                this.instances.deploy(row.get(InstanceModel.ID), DeployTrigger.MANUAL);
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("deployed").withFilter("scope", "instance")
                         .withArg("name", row.get(InstanceModel.NAME)));
@@ -920,7 +921,7 @@ public class InstanceResource extends RowResource {
                 .confirmLabel(Microcopy.of("restart").withFilter("scope", "instance"))
                 .build())
             .handler((row, ctx) -> {
-                this.instances.restart(row.get(InstanceModel.ID));
+                this.instances.restart(row.get(InstanceModel.ID), DeployTrigger.MANUAL);
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("restarted_toast").withFilter("scope", "instance")
                         .withArg("name", row.get(InstanceModel.NAME)));

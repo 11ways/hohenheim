@@ -100,11 +100,11 @@ public final class InstanceApi {
             InstanceService service = new InstanceService();
             try {
                 switch (action) {
-                    case "start" -> service.deploy(instanceId);
+                    case "start" -> service.deploy(instanceId, DeployTrigger.MANUAL);
                     case "stop" -> service.stop(instanceId);
                     case "restart" -> {
                         service.stop(instanceId);
-                        service.deploy(instanceId);
+                        service.deploy(instanceId, DeployTrigger.MANUAL);
                     }
                     default -> {
                         return ApiConduits.refusal(conduit, Violations.ofField("action", action,

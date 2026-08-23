@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -156,7 +157,8 @@ public class PreviewDeploymentResource extends RowResource {
                 CmsSupport.violationText("preview_ref_required"));
         }
         try {
-            Row preview = PreviewDeployments.queue(applicationNumber.intValue(), ref, null, null);
+            Row preview = PreviewDeployments.queue(applicationNumber.intValue(), ref, null, null,
+                DeployTrigger.MANUAL);
             ActivityLog.record(Models.get(InstanceModel.class), applicationNumber.intValue(),
                 "preview_triggered", "manual:" + ref);
             return preview.get(PreviewDeploymentModel.ID);

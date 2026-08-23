@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceExec;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
@@ -238,7 +239,7 @@ class WorkspaceDockerLiveTest {
             //    workspace into WorkspaceBuilds); this proves the verb directly and proves
             //    a re-deploy over an existing checkout FETCHES rather than re-cloning.
             WorkspaceBuilds.Outcome deployed = new WorkspaceBuilds()
-                .deploy(instanceId, "master", "live test");
+                .deploy(instanceId, "master", DeployTrigger.MANUAL);
             Row recorded = Models.get(BuildOperationModel.class)
                 .findById(deployed.operationId());
             assertThat((String) recorded.get(BuildOperationModel.STATUS))

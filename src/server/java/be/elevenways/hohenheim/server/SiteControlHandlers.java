@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.cms.InstanceConsolePage;
 import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceShellHandler;
@@ -55,7 +56,7 @@ final class SiteControlHandlers {
             // InstanceService.deploy knows which verb the record's kind wants.
             JobRunner.startVirtualThread(() -> Db.run(datasource, () -> {
                 try {
-                    new InstanceService().deploy(instanceId, "manual");
+                    new InstanceService().deploy(instanceId, DeployTrigger.MANUAL);
                 } catch (RuntimeException refused) {
                     Blast.log("INSTANCE: manual deploy of", instanceId, "refused -",
                         refused.getMessage());

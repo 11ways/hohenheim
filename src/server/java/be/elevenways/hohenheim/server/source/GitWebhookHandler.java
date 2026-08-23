@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.preview.PreviewBranches;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -230,7 +231,8 @@ public class GitWebhookHandler {
             JobRunner.startVirtualThread(() -> withScope(datasource, () ->
                 PreviewDeployments
                     .deployQuietly(applicationId, branch,
-                        pushedSha.isEmpty() ? null : pushedSha, null)));
+                        pushedSha.isEmpty() ? null : pushedSha, null,
+                        DeployTrigger.WEBHOOK)));
             ActivityLog.record(Models.get(InstanceModel.class), applicationId,
                 "preview_triggered", "webhook:" + branch);
             WebhookDeliveries.stampAction(claimed, "preview_queued");
@@ -266,9 +268,11 @@ public class GitWebhookHandler {
             .equals(application.get(InstanceModel.KIND));
         JobRunner.startVirtualThread(() -> withScope(deployDatasource, () -> {
             if (workspace) {
-                new WorkspaceBuilds().deployQuietly(applicationId, deployBranch, "webhook");
+                new WorkspaceBuilds().deployQuietly(applicationId, deployBranch,
+                    DeployTrigger.WEBHOOK);
             } else {
-                ApplicationDeploys.deployQuietly(applicationId, deployBranch, "webhook");
+                ApplicationDeploys.deployQuietly(applicationId, deployBranch,
+                    DeployTrigger.WEBHOOK);
             }
         }));
         WebhookDeliveries.stampAction(claimed, "deploy_queued");
@@ -358,7 +362,8 @@ public class GitWebhookHandler {
                 // The build takes minutes; the provider expects an answer in seconds.
                 JobRunner.startVirtualThread(() -> withScope(datasource, () ->
                     PreviewDeployments
-                        .deployQuietly(applicationId, ref, previewEvent.sha(), previewEvent.number())));
+                        .deployQuietly(applicationId, ref, previewEvent.sha(),
+                            previewEvent.number(), DeployTrigger.WEBHOOK)));
                 WebhookDeliveries.stampAction(claimed, "preview_queued");
                 ActivityLog.record(Models.get(InstanceModel.class), applicationId,
                     "preview_triggered", "webhook:" + ref);

@@ -76,7 +76,7 @@ class WorkspacePushPolicyTest {
             // 1. A MANUAL deploy of a workspace that has never run brings it up and
             //    deploys its source -- the behaviour the trigger policy must not break.
             WorkspaceBuilds.Outcome manual =
-                new WorkspaceBuilds(service).deploy(id, null, DeployTrigger.MANUAL.word());
+                new WorkspaceBuilds(service).deploy(id, null, DeployTrigger.MANUAL);
             assertThat(manual.commitSha())
                 .as("step 1: a manual deploy checks the source out")
                 .isEqualTo(FakeWorkspaceDaemon.COMMIT);
@@ -93,11 +93,11 @@ class WorkspacePushPolicyTest {
             // 3. THE DEFECT: someone else pushes. The deploy is refused BY NAME, and the
             //    refusal says what was decided rather than blaming a failure.
             Throwable pushed = catchThrowable(() -> new WorkspaceBuilds(service)
-                .deploy(id, null, DeployTrigger.WEBHOOK.word()));
+                .deploy(id, null, DeployTrigger.WEBHOOK));
             assertThat(pushed)
                 .as("step 3: a push does not start a workspace someone stopped")
                 .isInstanceOf(Violations.class)
-                .hasMessageContaining("workspace_push_does_not_start")
+                .hasMessageContaining("push_does_not_start_stopped_workload")
                 .as("step 3: and names the workspace it is talking about")
                 .hasMessageContaining("push-policy");
             assertThat(daemon.isRunning(handle))
@@ -115,7 +115,7 @@ class WorkspacePushPolicyTest {
                     + " violation key")
                 .contains("push-policy")
                 .contains("git push")
-                .doesNotContain("workspace_push_does_not_start");
+                .doesNotContain("push_does_not_start_stopped_workload");
             assertThat((String) operation.get(BuildOperationModel.LOG))
                 .as("step 4: and the deploy log states it too")
                 .contains("not deployed:");
@@ -123,7 +123,7 @@ class WorkspacePushPolicyTest {
             // 5. FALSIFIED on the TRIGGER, with the state held constant: the identical
             //    call from a person, against the same stopped workspace, starts it.
             WorkspaceBuilds.Outcome byHand =
-                new WorkspaceBuilds(service).deploy(id, null, DeployTrigger.MANUAL.word());
+                new WorkspaceBuilds(service).deploy(id, null, DeployTrigger.MANUAL);
             assertThat(byHand.status().running())
                 .as("step 5: a manual deploy of the same stopped workspace starts it")
                 .isTrue();
@@ -134,7 +134,7 @@ class WorkspacePushPolicyTest {
             // 6. FALSIFIED on the STATE, with the trigger held constant: the webhook lane
             //    is untouched for a workspace that is running -- the ordinary push.
             WorkspaceBuilds.Outcome push = new WorkspaceBuilds(service)
-                .deploy(id, null, DeployTrigger.WEBHOOK.word());
+                .deploy(id, null, DeployTrigger.WEBHOOK);
             assertThat(push.commitSha())
                 .as("step 6: a push to a RUNNING workspace deploys exactly as before")
                 .isEqualTo(FakeWorkspaceDaemon.COMMIT);
@@ -155,12 +155,12 @@ class WorkspacePushPolicyTest {
             int id = workspace("push-unreachable");
 
             // 1. Bring it up by hand first, so the record is an ordinary running one.
-            new WorkspaceBuilds(service).deploy(id, null, DeployTrigger.MANUAL.word());
+            new WorkspaceBuilds(service).deploy(id, null, DeployTrigger.MANUAL);
 
             // 2. The host becomes unaddressable. A push arrives.
             daemon.setUnreachable(true);
             Throwable pushed = catchThrowable(() -> new WorkspaceBuilds(service)
-                .deploy(id, null, DeployTrigger.WEBHOOK.word()));
+                .deploy(id, null, DeployTrigger.WEBHOOK));
 
             // 3. It must NOT be told "you stopped this workspace": an unreachable daemon
             //    is not evidence that anybody stopped anything.
@@ -169,7 +169,7 @@ class WorkspacePushPolicyTest {
                 .isInstanceOf(Violations.class);
             assertThat(String.valueOf(pushed.getMessage()))
                 .as("step 3: but never with the trigger policy's refusal")
-                .doesNotContain("workspace_push_does_not_start");
+                .doesNotContain("push_does_not_start_stopped_workload");
 
             // 4. And it is recorded as a FAILURE, which is what it is -- the refused
             //    status is reserved for a decision, never for a broken host.
@@ -181,38 +181,58 @@ class WorkspacePushPolicyTest {
         });
     }
 
-    /** The trigger vocabulary reads the reason word every surface already passes. */
+    /**
+     * The stored reason word reads back onto its member, and anything else fails CLOSED.
+     *
+     * AIDEV-NOTE: {@code of} used to be the vocabulary's ENTRY point -- every surface
+     * passed a free string and this method classified it, answering SYSTEM (the permissive
+     * member) for anything it did not recognise. The surfaces now pass MEMBERS, so this is
+     * the storage-boundary parser and nothing else; what it reads is a word that was
+     * WRITTEN by {@link DeployTrigger#word()}, and a word that was not is unattributable
+     * rather than trusted.
+     */
     @Test
-    void theTriggerVocabularyReadsTheReasonWordTheCallersAlreadyPass() {
-        // 1. The two words the shipped surfaces pass today, and what each decides.
+    void theStoredReasonWordReadsBackAndAnUnknownOneFailsClosed() {
+        // 1. The words the shipped surfaces record, and what each decides.
         assertThat(DeployTrigger.of("manual"))
             .as("step 1: the row action's word")
             .isEqualTo(DeployTrigger.MANUAL);
         assertThat(DeployTrigger.of("webhook"))
             .as("step 1: and the forge webhook's")
             .isEqualTo(DeployTrigger.WEBHOOK);
+        assertThat(DeployTrigger.of("api"))
+            .as("step 1: and the automation API's, which stays its own word")
+            .isEqualTo(DeployTrigger.API);
         assertThat(DeployTrigger.WEBHOOK.startsStoppedWorkload())
             .as("step 1: only the webhook is barred from starting a stopped workload")
             .isFalse();
 
         // 2. The funnel's own default reason resolves, so a deploy that names no trigger
-        //    is control-plane convergence and keeps starting what it converges.
+        //    is control-plane convergence and keeps starting what it converges. The stack
+        //    adoption lane is one of those: it reaches the funnel with no word at all.
         assertThat(DeployTrigger.of(InstanceService.DEFAULT_DEPLOY_REASON))
             .as("step 2: the default reason is the system trigger")
             .isEqualTo(DeployTrigger.SYSTEM);
         assertThat(DeployTrigger.SYSTEM.startsStoppedWorkload())
             .as("step 2: which may start what it is converging")
             .isTrue();
+        assertThat(DeployTrigger.MANUAL.startsStoppedWorkload()
+                && DeployTrigger.API.startsStoppedWorkload())
+            .as("step 2: and so may a person and an API key holder who asked")
+            .isTrue();
 
-        // 3. An unrecognised word answers like SYSTEM, by declared decision: every
-        //    in-house lane is convergence, and the third-party lane is the one that has
-        //    to be built (and declared).
-        assertThat(DeployTrigger.of("adoption"))
-            .as("step 3: an undeclared word reads as control-plane convergence")
-            .isEqualTo(DeployTrigger.SYSTEM);
-        assertThat(DeployTrigger.of(null))
-            .as("step 3: and so does no word at all")
-            .isEqualTo(DeployTrigger.SYSTEM);
+        // 3. THE FAIL-CLOSED HALF: an unrecognised word buys NO permission. It used to buy
+        //    the permissive classification, so a typo, a renamed member or a new surface
+        //    spelling its own word silently earned the right to start a stopped workload.
+        assertThat(DeployTrigger.of("adoption").startsStoppedWorkload())
+            .as("step 3: an undeclared word may not start a stopped workload")
+            .isFalse();
+        assertThat(DeployTrigger.of(null).startsStoppedWorkload())
+            .as("step 3: and neither may no word at all")
+            .isFalse();
+        assertThat(DeployTrigger.of("  WEBHOOK  "))
+            .as("step 3: while a known word is still read through whitespace and case")
+            .isEqualTo(DeployTrigger.WEBHOOK);
     }
 
     private static Row lastOperation(int instanceId) {

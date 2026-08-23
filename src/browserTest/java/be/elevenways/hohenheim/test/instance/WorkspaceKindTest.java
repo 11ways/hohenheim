@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.build.BuildLog;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceReadiness;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -535,7 +536,7 @@ class WorkspaceKindTest {
             int id = row.get(InstanceModel.ID);
             instances.add(id);
 
-            assertThatThrownBy(() -> new WorkspaceBuilds().deploy(id, "main", "test"))
+            assertThatThrownBy(() -> new WorkspaceBuilds().deploy(id, "main", DeployTrigger.MANUAL))
                 .as("the in-container checkout only applies to a workspace")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("workspace_kind_required");
