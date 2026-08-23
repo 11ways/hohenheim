@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ControllerIdentityModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.test.live.LiveNamespaces;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -172,6 +173,11 @@ public final class TestDatabases {
      * "controllers" the same token while their record ids both restart at 1 -- exactly
      * the collision the namespace exists to remove. Dropping the row makes the next
      * resolve mint a fresh one.
+     *
+     * AIDEV-NOTE: that fresh token is ALSO the name every Docker network this database's
+     * workloads will get, so it is recorded with {@link LiveNamespaces} here -- this is
+     * the one place that knows a namespace was born, and a namespace nobody recorded is
+     * one nobody can reap after a worker JVM is killed mid-run.
      */
     private static void remintControllerIdentity() {
         Db.run(HohenheimDatabase.datasource(), () ->
@@ -180,6 +186,7 @@ public final class TestDatabases {
                     .delete(row.get(ControllerIdentityModel.ID))));
         ControllerIdentity.forgetForTest();
         ControllerIdentity.resolve();
+        LiveNamespaces.note(ControllerIdentity.token());
     }
 
     /**

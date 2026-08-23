@@ -2,13 +2,17 @@ package be.elevenways.hohenheim.test.live;
 
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
+import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.test.live.LiveLane.Need;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.TestAbortedException;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Tag;
 
@@ -18,11 +22,15 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 /**
  * The live lane's own mechanism, with no daemon and no host: the gate names what is
  * missing, the declared policy turns a named skip into a FAILURE, the image gate PULLS
- * instead of skipping on a cold cache, and the report renders what a run actually skipped.
+ * instead of skipping on a cold cache, the report renders what a run actually skipped, and
+ * the namespace reaper removes a dead jvm's Docker debris without touching a live one's.
  *
  * AIDEV-NOTE: this class is the reason the rest of the suite may be trusted to REPORT its
- * skips. Everything here is hermetic on purpose -- a live-lane gate that only worked on a
- * host with a daemon would be the exact failure it exists to prevent.
+ * skips, so the gate/report/ledger halves are hermetic on purpose -- a live-lane gate that
+ * only worked on a host with a daemon would be the exact failure it exists to prevent. The
+ * ONE exception is {@link #theReapRemovesOnlyItsOwnNamespacesNetworks}, which asks a real
+ * daemon whether a network is really gone; it gates through {@link LiveLane} like every
+ * other live test, and the reaper's SAFETY property is proved daemon-free beside it.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class LiveLaneTest {
@@ -191,6 +199,111 @@ class LiveLaneTest {
         report.trackFinished("[test:unstarted]");
         assertThat(report.renderTruncation())
             .as("step 3: a fully settled run renders no truncation").isEmpty();
+    }
+
+    /**
+     * The namespace reaper's SAFETY property, with no daemon: a namespace is reaped only
+     * when the JVM that minted it is provably gone, and a LIVE session's ledger survives
+     * untouched -- two agents run live lanes concurrently and one may never sweep the
+     * other's networks.
+     */
+    @Test
+    void theNamespaceReaperConsumesADeadJvmsLedgerAndNeverALiveOnes() throws Exception {
+        Path dir = Files.createTempDirectory("hohenheim-ns-ledger");
+        String previous = System.getProperty(LiveNamespaces.DIR_PROPERTY);
+        System.setProperty(LiveNamespaces.DIR_PROPERTY, dir.toString());
+        long self = ProcessHandle.current().pid();
+        try {
+            // 1. Minting a namespace leaves a reapable trace on disk IMMEDIATELY, which is
+            //    the whole SIGKILL story: a shutdown hook never runs, a file already does.
+            LiveNamespaces.note("zzlivea1");
+            Path ours = dir.resolve("jvm-" + self + ".txt");
+            assertThat(Files.readString(ours))
+                .as("step 1: this jvm's ledger names the namespace it just minted")
+                .contains("zzlivea1");
+
+            // 2. A ledger written by a pid that no longer exists is claimed and consumed.
+            long dead = deadPid();
+            Path abandoned = dir.resolve("jvm-" + dead + ".txt");
+            Files.writeString(abandoned, dead + " 1\nzzdeadb2\n");
+            LiveNamespaces.sweepAbandoned();
+            assertThat(abandoned)
+                .as("step 2: the dead jvm's ledger is consumed, so its namespace is reaped"
+                    + " exactly once")
+                .doesNotExist();
+
+            // 3. THE ANCHOR that makes step 2 mean anything: this jvm is alive, so the
+            //    same sweep left OUR ledger completely alone. A reaper that consumed
+            //    everything would have passed step 2 while destroying a concurrent
+            //    session's running workloads.
+            assertThat(ours)
+                .as("step 3: a LIVE jvm's ledger is never claimed by another fork's sweep")
+                .exists();
+            assertThat(Files.readString(ours))
+                .as("step 3: and still carries its namespace").contains("zzlivea1");
+
+            // 4. The owning jvm's own plan-finish sweep is what drops it.
+            LiveNamespaces.sweepOwn();
+            assertThat(ours).as("step 4: a finished plan retires its own ledger")
+                .doesNotExist();
+        } finally {
+            if (previous == null) {
+                System.clearProperty(LiveNamespaces.DIR_PROPERTY);
+            } else {
+                System.setProperty(LiveNamespaces.DIR_PROPERTY, previous);
+            }
+        }
+    }
+
+    /**
+     * The reap itself, against a REAL daemon: a namespaced network goes, a network of
+     * another namespace stays. Asserted from the daemon's own listing, never from the
+     * reaper's return value -- a reaper that reported names it never removed is precisely
+     * the "reports success" shape this lane exists to catch.
+     */
+    @Test
+    void theReapRemovesOnlyItsOwnNamespacesNetworks() throws Exception {
+        LiveLane.require(Need.DOCKER_SOCKET,
+            Files.exists(Path.of(DockerClient.DEFAULT_SOCKET)), "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        String mine = "zzreap" + Long.toHexString(System.nanoTime() & 0xffff);
+        String theirs = "zzkeep" + Long.toHexString(System.nanoTime() & 0xffff);
+        String ourNetwork = "hohenheim-" + mine + "-instance-1-net";
+        String theirNetwork = "hohenheim-" + theirs + "-instance-1-net";
+        try {
+            docker.createNetwork(ourNetwork,
+                Map.of(OwnerLabels.CONTROLLER, mine), null, null, false);
+            docker.createNetwork(theirNetwork,
+                Map.of(OwnerLabels.CONTROLLER, theirs), null, null, false);
+
+            // 1. The reap removes the network of the namespace it was asked about.
+            LiveNamespaces.reap(mine);
+            assertThat(docker.findNetworkByName(ourNetwork))
+                .as("step 1: the namespace's own network is gone from the daemon").isNull();
+
+            // 2. THE ANCHOR: another namespace's network -- a concurrent session's, in
+            //    the shape that actually happens -- is untouched.
+            assertThat(docker.findNetworkByName(theirNetwork))
+                .as("step 2: a foreign namespace's network survives the reap").isNotNull();
+        } finally {
+            for (String network : List.of(ourNetwork, theirNetwork)) {
+                try {
+                    docker.removeNetwork(network);
+                } catch (java.io.IOException absent) {
+                    // step 1 already removed one of them; the other is this cleanup's job
+                }
+            }
+        }
+    }
+
+    /** A pid no live process holds, so a ledger written under it is provably abandoned. */
+    private static long deadPid() {
+        for (long pid = 4_000_000L; pid > 100_000L; pid--) {
+            if (ProcessHandle.of(pid).isEmpty()) {
+                return pid;
+            }
+        }
+        throw new IllegalStateException("every pid on this machine is in use");
     }
 
     /**
