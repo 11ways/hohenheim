@@ -9606,6 +9606,14 @@
     "text": "The data root cannot enforce size limits or take snapshots, so workspaces and applications cannot be placed on this host. Mount a btrfs filesystem at the data path's volumes directory and re-run preflight.",
     "scope": "server_overview"
   },
+  "create_title": {
+    "text": "New instance",
+    "scope": "instance"
+  },
+  "edit_title": {
+    "text": "Edit instance",
+    "scope": "instance"
+  },
   "volume_backend_unsupported_title": {
     "text": "Volume backend not supported",
     "scope": "server_overview"

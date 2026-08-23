@@ -95,6 +95,14 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         assertThat(cardsText).as("step 1: generated kinds are not offered")
             .doesNotContain("Release", "Database container", "Stack service");
 
+        // 1b. The heading names what is being CREATED. A resource form page falls back to
+        //     the RESOURCE label for its heading, and this resource's label is the plural
+        //     the nav needs -- so this screen was headed "Instances" while it created
+        //     exactly one. createTitle is the only seam the framework offers.
+        assertThat(page.locator("h1").first().textContent().trim())
+            .as("step 1b: the create screen names one instance, not the list")
+            .isEqualTo("New instance");
+
         // 2. No kind chosen: host and runtime image cannot narrow, so both are disabled.
         waitForSelector(HOST_SELECT + "[disabled]");
         waitForSelector(IMAGE_SELECT + "[disabled]");

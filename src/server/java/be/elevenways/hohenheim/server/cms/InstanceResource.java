@@ -112,6 +112,14 @@ public class InstanceResource extends RowResource {
      */
     private @NonNull FormSpec buildFormSpec() {
         return FormSpec.builder()
+            // AIDEV-NOTE: a form page falls back to the RESOURCE label for its heading
+            // (zenit-cms ResourceFormPageRenderer.resolvePageTitle), and this resource's
+            // label is the PLURAL the nav needs -- so the create screen was headed
+            // "Instances" while it created exactly one. createTitle/editTitle are the only
+            // seam the framework offers; there is no singular label and no derivation, so
+            // every resource that wants an honest heading has to spell one here.
+            .createTitle(Microcopy.of("create_title").withFilter("scope", "instance"))
+            .editTitle(Microcopy.of("edit_title").withFilter("scope", "instance"))
             // AIDEV-NOTE: the kind entry offers only what a human may author (the
             // generated kinds are refused by OwnedInstances anyway -- an option that can
             // only refuse is the affordance shape this panel bans). Supplied (never a

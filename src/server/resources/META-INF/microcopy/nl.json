@@ -9606,6 +9606,14 @@
     "text": "De dataroot kan geen groottelimieten afdwingen of snapshots nemen, dus workspaces en applicaties kunnen niet op deze host geplaatst worden. Mount een btrfs-bestandssysteem op de volumes-map van het datapad en draai de preflight opnieuw.",
     "scope": "server_overview"
   },
+  "create_title": {
+    "text": "Nieuwe instantie",
+    "scope": "instance"
+  },
+  "edit_title": {
+    "text": "Instantie bewerken",
+    "scope": "instance"
+  },
   "volume_backend_unsupported_title": {
     "text": "Volume-backend niet ondersteund",
     "scope": "server_overview"
