@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
@@ -42,6 +43,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -123,6 +125,7 @@ class VerifyWorkloadIsolationTest {
         StackRuntime stacks = new StackRuntime(docker, datasource);
         int[] cleanupInstance = new int[] {-1};
         int[] cleanupStack = new int[] {-1};
+        int[] cleanupApplication = new int[] {-1};
         List<String> scratchNetworks = new ArrayList<>();
         try {
             Db.run(datasource, () -> {
@@ -141,12 +144,19 @@ class VerifyWorkloadIsolationTest {
                 cleanupInstance[0] = instanceId;
                 new InstanceService().deploy(instanceId);
                 String instanceHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-                int fakeApplicationId = 800000 + instanceId;
+                // AIDEV-NOTE: a REAL application record, never a made-up id. The link owner
+                // is what InstanceDatabaseNetworks.liveLinkHandles reads the host off, and
+                // the only writer of instance_databases (InstanceDatabaseResource.validate)
+                // refuses an instance_id with no live row -- so an owner-less link row is a
+                // state the product cannot produce, and a fixture that invents one asserts
+                // the sweep against a world that does not exist.
+                int applicationId = applicationRecord("vrfy-app");
+                cleanupApplication[0] = applicationId;
                 // The attribution columns are guarded: only the system scope may stamp a
                 // row as application-generated, so the fixture uses that same lane.
                 try {
                     GeneratedRows.as(new GeneratedRows.Attribution(ApplicationReleases.SOURCE,
-                            InstanceModel.MODEL_ID.toString(), fakeApplicationId), () -> {
+                            InstanceModel.MODEL_ID.toString(), applicationId), () -> {
                         Row instance = Models.get(InstanceModel.class).findById(instanceId);
                         instance.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
                         Models.get(InstanceModel.class).save(instance);
@@ -166,12 +176,12 @@ class VerifyWorkloadIsolationTest {
                 scratchNetworks.add(WorkloadNetworks.networkName(databaseHandle));
 
                 Row link = Models.get(InstanceDatabaseModel.class).createEmptyRow();
-                link.set(InstanceDatabaseModel.INSTANCE_ID, fakeApplicationId);
+                link.set(InstanceDatabaseModel.INSTANCE_ID, applicationId);
                 link.set(InstanceDatabaseModel.DATABASE_ID, databaseId);
                 link.set(InstanceDatabaseModel.ENV_PREFIX, "DB");
                 Models.get(InstanceDatabaseModel.class).save(link);
                 String linkHandle = ControllerScope.handle(
-                    ControllerScope.KIND_INSTANCE_DBLINK, fakeApplicationId)
+                    ControllerScope.KIND_INSTANCE_DBLINK, applicationId)
                     + "-" + databaseId;
                 DockerInstanceRuntime runtime = new DockerInstanceRuntime(
                     docker, netns.enforcingPolicy());
@@ -282,6 +292,7 @@ class VerifyWorkloadIsolationTest {
             });
         } finally {
             cleanupAll(stacks, cleanupStack[0], cleanupInstance[0], scratchNetworks);
+            trashApplication(cleanupApplication[0]);
         }
     }
 
@@ -423,6 +434,25 @@ class VerifyWorkloadIsolationTest {
     }
 
     /**
+     * The APPLICATION record a release's database links are owned by: a real
+     * {@code hohenheim:application} instance row on the local server.
+     *
+     * AIDEV-NOTE: deliberately left in its default {@code created} status. An application
+     * has no container of its own ({@code ApplicationKind.runtimeFor} refuses by name), so
+     * a live status would make the isolation sweep's instance collector try to resolve it
+     * and report an inventory error the journey asserts is empty.
+     */
+    private static int applicationRecord(String name) {
+        Row row = Models.get(InstanceModel.class).createEmptyRow();
+        row.set(InstanceModel.NAME, name + "-" + System.nanoTime());
+        row.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+        row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        row.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "tag", "latest"));
+        Models.get(InstanceModel.class).save(row);
+        return row.get(InstanceModel.ID);
+    }
+
+    /**
      * The owned {@code database_container} instance of a database record, stamped
      * RUNNING so the sweep's inventory claims a live workload for it.
      *
@@ -483,6 +513,28 @@ class VerifyWorkloadIsolationTest {
             } catch (Exception ignored) {
                 // best effort
             }
+        }
+    }
+
+    /**
+     * Trash the fixture's application so the link row it owns stops resolving for the
+     * NEXT test on this shared datasource; the class's own destroy verb is not used
+     * because it would re-destroy the already-destroyed release it owns.
+     */
+    private void trashApplication(int applicationId) {
+        if (applicationId <= 0) {
+            return;
+        }
+        try {
+            Db.run(datasource, () -> {
+                Row application = Models.get(InstanceModel.class).findById(applicationId);
+                if (application != null) {
+                    application.set(InstanceModel.DELETED_AT, Instant.now());
+                    Models.get(InstanceModel.class).save(application);
+                }
+            });
+        } catch (Exception ignored) {
+            // best effort
         }
     }
 
