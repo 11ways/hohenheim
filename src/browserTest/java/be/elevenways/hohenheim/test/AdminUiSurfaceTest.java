@@ -82,8 +82,21 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, kind);
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of()));
+        // A kind that cannot run without a runtime image may not be written without one
+        // (InstanceDeclarations); the seeded builtin is what the create form would pick.
+        InstanceKindHandler handler = InstanceKinds.getHandler(kind);
+        if (handler != null && handler.requiresRuntimeImage()) {
+            row.set(InstanceModel.RUNTIME_IMAGE_ID, builtinRuntimeImageId());
+        }
         instances.save(row);
         return row.get(InstanceModel.ID);
+    }
+
+    /** The seeded node-22 runtime image every workspace fixture here runs inside. */
+    private static Integer builtinRuntimeImageId() {
+        Row image = Models.get(RuntimeImageModel.class).find()
+            .where(RuntimeImageModel.NAME.eq("node-22")).first();
+        return image == null ? null : image.get(RuntimeImageModel.ID);
     }
 
     private static Integer generated(String name, String kind, String source, int ownerId) {

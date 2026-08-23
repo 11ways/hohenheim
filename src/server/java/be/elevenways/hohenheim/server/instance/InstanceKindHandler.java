@@ -236,6 +236,21 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
+     * Whether a record of this kind CANNOT be deployed without one, as opposed to merely
+     * being offered the pick.
+     *
+     * AIDEV-NOTE: a second fact and not a rename, because the two answers genuinely
+     * differ: an application MAY name a runtime image as its build base and deploys fine
+     * without one, while a workspace has nothing to run inside. Only the requiring kinds
+     * are refused at the WRITE (InstanceDeclarations); the deploy-time
+     * {@code RuntimeImages.requireFor} stays the late half. Declaring this true without
+     * {@link #usesRuntimeImage()} would demand a column the form never offers.
+     */
+    default boolean requiresRuntimeImage() {
+        return false;
+    }
+
+    /**
      * Whether a site's {@code instance} upstream can serve records of this kind (their
      * serving container publishes a loopback port the routing tier can resolve). Drives
      * the site form's dependent instance pick and the Expose action's visibility --

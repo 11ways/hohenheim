@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.GeneratedInstanceFiles;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.hohenheim.server.instance.InstanceDeclarations;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceImagePin;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
@@ -79,6 +80,10 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // quota hook fires (beforeValidate vs beforeWrite), so a refused image never
         // spends a reservation.
         InstanceImagePolicy.install();
+        // A workload that runs INSIDE a runtime image must name one, and a raw repository
+        // URL may not carry a credential -- both refused on the form the operator typed
+        // them on rather than on a deploy hours later.
+        InstanceDeclarations.install();
         // Concurrent instance creates cannot both spend the last quota slot, and the
         // soft-delete transition hands the slot back (the remove hooks never fire on
         // the destroy path -- it soft-deletes through save()).
