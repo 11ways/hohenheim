@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.runtime;
 
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.DockerPtyExec;
+import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 
@@ -47,12 +49,26 @@ public final class DockerInstanceRuntime
         implements InstanceRuntime, VolumeSnapshotSupport, WorkloadAttribution,
                    FileStagingSupport, InstallSupport,
                    ConsoleStreamSupport, LinkNetworkSupport, InstanceFileSupport,
-                   StatsStreamSupport, ExecSupport {
+                   StatsStreamSupport, ExecSupport, PtySupport {
 
     private final @NonNull DockerClient docker;
     private final @NonNull WorkloadNetworkPolicy policy;
     private final @NonNull NetworkPosture posture;
     private final @NonNull Egress egress;
+
+    /**
+     * The daemon transport an interactive shell streams over, or null when the kind that
+     * built this runtime offers no shell.
+     *
+     * AIDEV-NOTE: it is a SEPARATE constructor argument rather than something read off
+     * {@link DockerClient} because that client keeps its transport private and is owned by
+     * another lane right now. Only kinds whose workloads run as a NON-ROOT uid thread it
+     * through (today: WorkspaceKind), and the shell surface's uid gate refuses every other
+     * kind before {@link #openPty} could ever be reached -- so a null here is unreachable
+     * in production rather than a silent downgrade. {@link #supportsPty()} is what a caller
+     * asks, so the absence is still a named refusal and never an exception mid-handshake.
+     */
+    private final @Nullable DockerTransport ptyTransport;
 
     public DockerInstanceRuntime(@NonNull DockerClient docker,
                                  @NonNull WorkloadNetworkPolicy policy) {
@@ -70,10 +86,23 @@ public final class DockerInstanceRuntime
                                  @NonNull WorkloadNetworkPolicy policy,
                                  @NonNull NetworkPosture posture,
                                  @NonNull Egress egress) {
+        this(docker, policy, posture, egress, null);
+    }
+
+    /**
+     * @param ptyTransport the daemon transport an interactive shell streams over; null for
+     *        every kind that offers no shell (see the field's note)
+     */
+    public DockerInstanceRuntime(@NonNull DockerClient docker,
+                                 @NonNull WorkloadNetworkPolicy policy,
+                                 @NonNull NetworkPosture posture,
+                                 @NonNull Egress egress,
+                                 @Nullable DockerTransport ptyTransport) {
         this.docker = docker;
         this.policy = policy;
         this.posture = posture;
         this.egress = egress;
+        this.ptyTransport = ptyTransport;
     }
 
     /** The KIND-declared network posture this runtime was built with. */
@@ -748,6 +777,61 @@ public final class DockerInstanceRuntime
         String combined = result.stdout()
             + (result.stderr().isEmpty() ? "" : result.stderr());
         return new ExecSupport.ExecOutcome(result.exitCode(), combined);
+    }
+
+    // -- PtySupport -----------------------------------------------------------
+
+    @Override
+    public boolean supportsPty() {
+        return this.ptyTransport != null;
+    }
+
+    @Override
+    public PtySupport.@NonNull PtySession openPty(@NonNull InstanceSpec spec,
+                                                  @NonNull List<String> command,
+                                                  int cols, int rows) throws IOException {
+        DockerTransport transport = this.ptyTransport;
+        if (transport == null) {
+            throw new IOException("This docker runtime was built without a streaming lane;"
+                + " an interactive shell inside '" + spec.handle() + "' is unavailable"
+                + " (the kind that built it declares no shell)");
+        }
+        DockerPtyExec.Session session;
+        try {
+            // The identity is the WORKLOAD's, exactly as runExec decided: a shell lands as
+            // the same uid the workspace's files are owned by, and there is no argument by
+            // which a caller could ask for another.
+            session = DockerPtyExec.open(transport, spec.handle(), command,
+                spec.runUser() == null ? null : String.valueOf(spec.runUser()),
+                null, Map.of("TERM", "xterm-256color"), cols, rows);
+        } catch (DockerClient.ApiException e) {
+            // 409 = not running; 404 = no such container. Named, so an operator can tell
+            // "the workload refused" from "the daemon is gone".
+            throw new IOException("An interactive shell inside '" + spec.handle()
+                + "' was refused: " + e.getMessage());
+        }
+        return new PtySupport.PtySession() {
+
+            @Override
+            public @NonNull ConsoleStream stream() {
+                return session.stream();
+            }
+
+            @Override
+            public void resize(int newCols, int newRows) throws IOException {
+                session.resize(newCols, newRows);
+            }
+
+            @Override
+            public boolean failedToStart() throws IOException {
+                return session.failedToStart();
+            }
+
+            @Override
+            public void close() {
+                session.close();
+            }
+        };
     }
 
     // -- StatsStreamSupport ---------------------------------------------------

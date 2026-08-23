@@ -9,9 +9,11 @@ import be.elevenways.hohenheim.server.cms.InstanceConsolePage;
 import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
+import be.elevenways.hohenheim.server.instance.InstanceShellHandler;
 import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
-import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -47,9 +49,18 @@ final class SiteControlHandlers {
             if (refusedInstancePower(conduit, instanceId)) {
                 return null;
             }
-            Datasource datasource = Db.current();
-            JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
-                ApplicationDeploys.deployQuietly(instanceId, null, "manual")));
+            Datasource datasource = Db.currentOrDefault();
+            // THE funnel, not the release engine directly: this button sits on a tab that
+            // an application AND a source-declared workspace both have, and only
+            // InstanceService.deploy knows which verb the record's kind wants.
+            JobRunner.startVirtualThread(() -> Db.run(datasource, () -> {
+                try {
+                    new InstanceService().deploy(instanceId, "manual");
+                } catch (RuntimeException refused) {
+                    Blast.log("INSTANCE: manual deploy of", instanceId, "refused -",
+                        refused.getMessage());
+                }
+            }));
             return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, instanceId));
         });
 
@@ -66,6 +77,13 @@ final class SiteControlHandlers {
     static void initInstanceConsole() {
         HohenheimEndpoints.INSTANCE_CONSOLE.setHandlerFactory(session ->
             new InstanceConsoleHandler(session,
+                session.getParameter(HohenheimEndpoints.INSTANCE_ID)));
+
+        // The interactive shell rides the SAME transport as the console and is a SEPARATE
+        // endpoint on purpose: it answers to `shell`, not `console` (see the endpoint's
+        // own note). Registered here so nothing new has to be added to HohenheimHandlers.
+        HohenheimEndpoints.INSTANCE_SHELL.setHandlerFactory(session ->
+            new InstanceShellHandler(session,
                 session.getParameter(HohenheimEndpoints.INSTANCE_ID)));
 
         HohenheimEndpoints.VM_FRAMEBUFFER.setHandlerFactory(session ->

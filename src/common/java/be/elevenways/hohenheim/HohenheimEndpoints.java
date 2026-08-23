@@ -983,6 +983,27 @@ public class HohenheimEndpoints {
         .build();
 
     /**
+     * ONE interactive shell session inside an instance's workload: keystrokes up, terminal
+     * output down, and a {@code {"type":"resize",...}} control frame for the geometry.
+     *
+     * Authorization is the handshake's requiresLogin plus the handler's per-record
+     * {@code shell} check, revalidated mid-session (revoked = 1008). Deliberately its own
+     * endpoint rather than a mode of {@link #INSTANCE_CONSOLE}: the console attaches to
+     * the workload's OWN primary process and answers to {@code console}, this starts a new
+     * program and answers to a different, elevated verb -- one socket serving both would
+     * make the wider door indistinguishable from the narrower one at the handshake.
+     */
+    public static final WebSocketEndpoint INSTANCE_SHELL = WebSocketEndpoint.builder()
+        .identifier(Identifier.of("hohenheim", "instance_shell"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("ws").addDelimiter().addStatic("instance-shell")
+            .addDelimiter().addParameter(INSTANCE_ID).build())
+        .requiresLogin()
+        .revalidateEvery(TERMINAL_REVALIDATION_INTERVAL_MS)
+        .handler(session -> null) // Placeholder: set in HohenheimHandlers.init(), at the MODULES stage
+        .build();
+
+    /**
      * VM framebuffer rescue console: server-captured VGA snapshots down (binary frames),
      * keyboard/mouse input up (DRY frames). requiresLogin at the handshake plus the
      * handler's per-record CONSOLE check (see VmFramebufferHandler's note on the verb),

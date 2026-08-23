@@ -138,6 +138,29 @@ public class ServerService extends DatasourceScoped {
         return new DockerClient(transportFor(row));
     }
 
+    /**
+     * The raw daemon transport for a named server -- the streaming lane an interactive
+     * shell rides.
+     *
+     * AIDEV-NOTE: it exists because a PTY exec is a STREAM, not a round trip, and
+     * {@link DockerClient} keeps its own transport private. Same row lookup and same
+     * refusals as {@link #clientFor}, so the two can never address different daemons.
+     *
+     * @throws IllegalArgumentException for an unknown host, or one declaring the incus
+     *         runtime (which addresses no Docker daemon at all)
+     */
+    public DockerTransport transportFor(String name) {
+        Row row = query(() -> model().findByName(name));
+        if (row == null && LOCAL.equals(name)) {
+            ensureLocal();
+            row = query(() -> model().findByName(name));
+        }
+        if (row == null) {
+            throw new IllegalArgumentException("No server named '" + name + "'");
+        }
+        return transportFor(row);
+    }
+
     /** @return the stored SSH target for a named remote server, or null for unknown/local */
     public String sshTarget(String name) {
         Row row = query(() -> model().findByName(name));

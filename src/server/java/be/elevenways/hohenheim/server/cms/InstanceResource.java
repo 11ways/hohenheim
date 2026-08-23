@@ -630,6 +630,11 @@ public class InstanceResource extends RowResource {
             // tab under another name: exec is admin-only and single-shot, this is a
             // delegable tenant verb bounded to a workload that runs as a non-root uid.
             new InstanceShellPage(),
+            // The interactive shell tab hides AND 404s itself without the `shell`
+            // capability on the record (InstanceShellPage.visibleFor). It is NOT the exec
+            // tab under another name: exec is admin-only and single-shot, this is a
+            // delegable tenant verb bounded to a workload that runs as a non-root uid.
+            new InstanceShellPage(),
             new InstanceSnapshotsPage(new InstanceSnapshotResource()),
             new InstanceBackupsPage(new InstanceBackupResource()),
             new InstanceSchedulesPage(), new InstanceDevicesPage(),
