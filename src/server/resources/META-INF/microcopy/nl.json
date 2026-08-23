@@ -9354,6 +9354,10 @@
     "text": "Volumenaam '{$name}' is geen gewone mapnaam",
     "scope": "violations"
   },
+  "volume_container_path_conflict": {
+    "text": "Volumes '{$first}' en '{$second}' koppelen allebei op '{$path}', dus de workload zou twee mappen op een pad krijgen. Geef er een een ander containerpad.",
+    "scope": "violations"
+  },
   "application_not_found": {
     "text": "Er bestaat geen applicatie met id {$id}",
     "scope": "violations"

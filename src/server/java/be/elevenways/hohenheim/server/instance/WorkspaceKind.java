@@ -176,7 +176,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
         return 1024;
     }
 
-    /** Mounts its declared volumes ({@code home} first); placement demands quota via the default. */
+    /** Mounts every declared volume plus its {@code home}; placement demands quota for them. */
     @Override public boolean supportsVolumes() { return true; }
 
     /** Runs inside a runtime image; {@link RuntimeImages#requireFor} refuses without one. */
@@ -230,10 +230,22 @@ public final class WorkspaceKind implements InstanceKindHandler {
         Map<String, String> env = new LinkedHashMap<>(
             EnvVars.toMap(settings.get("environment_variables")));
 
-        // AIDEV-NOTE: the host paths are DERIVED here and MATERIALIZED in prepareForDeploy.
-        // Two calls, one derivation (InstanceVolumes.hostPathFor), so the directory the
-        // daemon binds and the directory the controller creates can never be two paths.
-        Map<String, String> binds = Map.of(
+        // AIDEV-NOTE: the mounted SET is derived here and MATERIALIZED in prepareForDeploy,
+        // both from InstanceVolumes.declaredMounts -- one derivation, so a volume the
+        // operator declares is a volume the container actually mounts. Until 2026-08-23
+        // this was a hardcoded single-entry map while prepareForDeploy created, quota'd and
+        // chowned every declaration and threw the result away: every volume but `home` was
+        // listed in the Volumes tab with a usage figure while the container wrote to its
+        // ephemeral rootfs at that path, and lost it on the next deploy.
+        //
+        // AIDEV-NOTE: `home` IS an ordinary declared row (ensureHomeDeclared), but it is
+        // ensured in prepareForDeploy, which the deploy funnel calls AFTER it resolved the
+        // spec -- so a workspace's FIRST deploy has no home row yet and the union below is
+        // what makes the home mount unconditional. It is added last on purpose: the kind
+        // decides where home lives (HOHENHEIM_WORKDIR, the checkout path and the shell all
+        // spell HOME_PATH), so an edited container_path on that row never moves it.
+        Map<String, String> binds = InstanceVolumes.declaredMounts(instanceId);
+        InstanceVolumes.addMount(binds,
             InstanceVolumes.hostPathFor(instanceId, HOME_VOLUME), HOME_PATH);
 
         InstanceSpec.Builder spec = InstanceSpec.builder(handle,
@@ -265,8 +277,15 @@ public final class WorkspaceKind implements InstanceKindHandler {
     }
 
     /**
-     * Materialize the home volume with its quota and its ownership, and make the runtime
-     * image present on the host.
+     * Materialize every declared volume with its quota and its ownership, and make the
+     * runtime image present on the host.
+     *
+     * AIDEV-NOTE: the funnel calls this BETWEEN resolving the spec and creating the
+     * container ({@code InstanceService.deployWorkloadNow}), which is the ordering the
+     * mounts depend on: a bind whose source does not exist yet is created root-owned by the
+     * daemon, so every directory the spec names must exist, be quota'd and be chowned
+     * before the create. The returned map is deliberately not re-read here -- specFor
+     * derives the identical set from the same declarations.
      */
     @Override
     public void prepareForDeploy(int instanceId, @NonNull String serverName,

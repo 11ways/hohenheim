@@ -9354,6 +9354,10 @@
     "text": "Volume name '{$name}' is not a plain directory name",
     "scope": "violations"
   },
+  "volume_container_path_conflict": {
+    "text": "Volumes '{$first}' and '{$second}' both mount at '{$path}', so the workload would get two directories at one path. Give one of them a different container path.",
+    "scope": "violations"
+  },
   "application_not_found": {
     "text": "No application with id {$id} exists",
     "scope": "violations"

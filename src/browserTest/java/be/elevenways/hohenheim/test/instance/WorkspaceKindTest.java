@@ -97,8 +97,9 @@ class WorkspaceKindTest {
             InstanceSpec spec = InstanceKinds.getHandler(KIND)
                 .specFor(id, storedSettings(id));
 
-            // 1. THE bind, and only it. Everything outside /home/site is disposable, so a
-            //    second declared mount would be a promise the reclaim story cannot keep.
+            // 1. THE bind. This record declares no volumes of its own, so the home the
+            //    kind guarantees is the whole set; everything outside it is disposable.
+            //    A record that DOES declare more mounts them all (WorkspaceVolumeMountTest).
             assertThat(spec.binds())
                 .as("step 1: exactly one owned host directory, at the workspace home")
                 .containsExactly(Map.entry("/srv/hoh-ws/volumes/" + id + "/home",
