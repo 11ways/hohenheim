@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
+import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
@@ -221,6 +223,203 @@ class ContainerEscapeKeyTest {
             .hasMessageContaining("bind mount");
         assertThat(transport.lastCreateBody)
             .as("step 7: STATE -- no folded escape reached the daemon at all").isNull();
+    }
+
+    /**
+     * The TOP-LEVEL create-body keys the policy permits, pinned at the wire the same way
+     * -- and the {@code NetworkingConfig} bypass it now constrains structurally.
+     *
+     * AIDEV-NOTE: until 2026-08-23 this level was not gated at all. Only
+     * {@code spec.get("HostConfig")} was hardened and the REST of the body was forwarded
+     * verbatim, so the sibling claim ("a new instance kind cannot lose isolation by
+     * accident") held for exactly one key of the body. The proven bypass is step 4: a
+     * SECOND {@code EndpointsConfig} entry attaches the container to any existing network
+     * at create time, and the per-workload nft policy is keyed on ONE subnet, so nothing
+     * that isolates the workload matches the addresses it gets on the other network.
+     */
+    @Test
+    void onlyPermittedCreateBodyKeysReachTheDaemon() throws Exception {
+        RecordingTransport transport = new RecordingTransport();
+        DockerClient docker = new DockerClient(transport);
+
+        // 1. The positive anchor: the body the instance runtime really sends -- EVERY
+        //    permitted top-level key at once -- reaches the daemon intact.
+        Map<String, Object> legitimate = new LinkedHashMap<>();
+        legitimate.put("Image", "alpine:latest");
+        legitimate.put("Labels", instanceLabels(41));
+        legitimate.put("Cmd", List.of("sleep", "30"));
+        legitimate.put("Env", List.of("HOME=/home/site"));
+        legitimate.put("User", "10041");
+        legitimate.put("ExposedPorts", Map.of("80/tcp", Map.of()));
+        legitimate.put("Healthcheck", Map.of("Test", List.of("CMD-SHELL", "true")));
+        legitimate.put("OpenStdin", Boolean.TRUE);
+        legitimate.put("StdinOnce", Boolean.FALSE);
+        legitimate.put("NetworkingConfig",
+            Map.of("EndpointsConfig", Map.of("hohenheim-wl-41", Map.of())));
+        legitimate.put("HostConfig",
+            new LinkedHashMap<>(Map.of("NetworkMode", "hohenheim-wl-41")));
+        assertThat(legitimate.keySet())
+            .as("step 1: this body really does exercise EVERY permitted create-body key")
+            .containsExactlyInAnyOrderElementsOf(
+                ContainerHardening.PERMITTED_BODY_KEYS.keySet());
+        transport.lastCreateBody = null;
+        docker.createContainer("body-permitted-all", legitimate, DockerContainerKind.HARDENING);
+        assertThat(transport.lastCreateBody)
+            .as("step 1: every permitted body key survives the funnel with its value intact")
+            .isNotNull()
+            .contains("\"User\":\"10041\"")
+            .contains("hohenheim-wl-41")
+            .contains("CMD-SHELL")
+            .contains("no-new-privileges");
+
+        // 2. THE OWNERSHIP CLAIM at this level: every other body key is refused BY NAME
+        //    and never reaches the daemon -- including a made-up one standing in for
+        //    whatever the next API version adds.
+        Map<String, Object> refused = new LinkedHashMap<>();
+        refused.put("Entrypoint", List.of("/bin/sh"));
+        refused.put("MacAddress", "02:42:ac:11:00:02");
+        refused.put("Hostname", "impersonator");
+        refused.put("Domainname", "internal");
+        refused.put("NetworkDisabled", Boolean.TRUE);
+        refused.put("WorkingDir", "/");
+        refused.put("StopSignal", "SIGKILL");
+        refused.put("StopTimeout", 0);
+        refused.put("Shell", List.of("/bin/sh", "-c"));
+        refused.put("Volumes", Map.of("/anonymous", Map.of()));
+        refused.put("Tty", Boolean.TRUE);
+        refused.put("AttachStdin", Boolean.TRUE);
+        refused.put("OnBuild", List.of("RUN true"));
+        refused.put("ArgsEscaped", Boolean.TRUE);
+        refused.put("SomeFutureDockerBodyKey", "whatever the next API version adds");
+
+        for (Map.Entry<String, Object> probe : refused.entrySet()) {
+            String key = probe.getKey();
+            assertThat(ContainerHardening.PERMITTED_BODY_KEYS)
+                .as("step 2: probe '" + key + "' must be a body key the policy does NOT permit")
+                .doesNotContainKey(key);
+            Map<String, Object> carrying = spec();
+            carrying.put(key, probe.getValue());
+            transport.lastCreateBody = null;
+            assertThatThrownBy(() -> docker.createContainer("body-" + key.toLowerCase(Locale.ROOT),
+                    carrying, DockerContainerKind.HARDENING))
+                .as("step 2: create-body key " + key + " is not permitted and must be"
+                    + " refused, not silently forwarded")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(key);
+            assertThat(transport.lastCreateBody)
+                .as("step 2: STATE, not just the throw -- " + key + " must not have reached"
+                    + " the daemon")
+                .isNull();
+        }
+
+        // 3. THE CASE FOLD, both directions: Go decodes the create body the same way it
+        //    decodes HostConfig, so "entrypoint" is the same field and "image" is still
+        //    the permitted one.
+        Map<String, Object> foldedRefusal = spec();
+        foldedRefusal.put("entrypoint", List.of("/bin/sh"));
+        transport.lastCreateBody = null;
+        assertThatThrownBy(() -> docker.createContainer("body-fold-refused", foldedRefusal,
+                DockerContainerKind.HARDENING))
+            .as("step 3: a lowercase entrypoint is the same field to the daemon")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("entrypoint");
+        assertThat(transport.lastCreateBody)
+            .as("step 3: STATE -- the folded body escape never reached the daemon").isNull();
+
+        Map<String, Object> foldedPermitted = new LinkedHashMap<>();
+        foldedPermitted.put("image", "alpine:latest");
+        foldedPermitted.put("cmd", List.of("true"));
+        transport.lastCreateBody = null;
+        docker.createContainer("body-fold-permitted", foldedPermitted,
+            DockerContainerKind.HARDENING);
+        assertThat(transport.lastCreateBody)
+            .as("step 3: and a lowercase permitted key is recognised, never refused")
+            .isNotNull();
+
+        // 4. THE PROVEN BYPASS. A second EndpointsConfig entry attached the container to
+        //    any existing network -- another tenant's per-workload network included -- and
+        //    passed this funnel with no refusal at all before 2026-08-23.
+        Map<String, Object> secondNetwork = spec();
+        secondNetwork.put("HostConfig",
+            new LinkedHashMap<>(Map.of("NetworkMode", "hohenheim-wl-41")));
+        Map<String, Object> endpoints = new LinkedHashMap<>();
+        endpoints.put("hohenheim-wl-41", Map.of());
+        endpoints.put("hohenheim-wl-99", Map.of());
+        secondNetwork.put("NetworkingConfig", Map.of("EndpointsConfig", endpoints));
+        transport.lastCreateBody = null;
+        assertThatThrownBy(() -> docker.createContainer("body-second-network", secondNetwork,
+                DockerContainerKind.HARDENING))
+            .as("step 4: a second network endpoint is the per-workload isolation bypassed"
+                + " by a map entry, and must be refused")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("EXACTLY")
+            .hasMessageContaining("ONE network");
+        assertThat(transport.lastCreateBody)
+            .as("step 4: STATE -- the second attachment never reached the daemon").isNull();
+
+        // 5. And the one endpoint it may carry is TIED to its own NetworkMode: attaching
+        //    to somebody else's network instead is the same bypass wearing one entry.
+        Map<String, Object> foreignNetwork = spec();
+        foreignNetwork.put("HostConfig",
+            new LinkedHashMap<>(Map.of("NetworkMode", "hohenheim-wl-41")));
+        foreignNetwork.put("NetworkingConfig",
+            Map.of("EndpointsConfig", Map.of("hohenheim-wl-99", Map.of())));
+        transport.lastCreateBody = null;
+        assertThatThrownBy(() -> docker.createContainer("body-foreign-network", foreignNetwork,
+                DockerContainerKind.HARDENING))
+            .as("step 5: the create-body attachment may only be the workload's OWN network")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("hohenheim-wl-99");
+
+        Map<String, Object> noMode = spec();
+        noMode.put("NetworkingConfig",
+            Map.of("EndpointsConfig", Map.of("hohenheim-wl-99", Map.of())));
+        assertThatThrownBy(() -> docker.createContainer("body-no-mode", noMode,
+                DockerContainerKind.HARDENING))
+            .as("step 5: a container naming no network mode may attach to nothing at all")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("no network at all");
+
+        // 6. Endpoint OPTIONS are unreviewed and refused: a workload choosing its own
+        //    address inside a subnet-keyed policy is the policy deciding nothing.
+        Map<String, Object> staticAddress = spec();
+        staticAddress.put("HostConfig",
+            new LinkedHashMap<>(Map.of("NetworkMode", "hohenheim-wl-41")));
+        staticAddress.put("NetworkingConfig", Map.of("EndpointsConfig",
+            Map.of("hohenheim-wl-41", Map.of("IPAMConfig",
+                Map.of("IPv4Address", "172.31.5.99")))));
+        transport.lastCreateBody = null;
+        assertThatThrownBy(() -> docker.createContainer("body-static-ip", staticAddress,
+                DockerContainerKind.HARDENING))
+            .as("step 6: endpoint options are not reviewed here and must be refused")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("is not empty");
+        assertThat(transport.lastCreateBody)
+            .as("step 6: STATE -- no endpoint option reached the daemon").isNull();
+
+        // 7. The fold again, on the structural rule this time: NetworkingConfig and
+        //    EndpointsConfig are decoded case-insensitively like everything else.
+        Map<String, Object> foldedEndpoints = spec();
+        foldedEndpoints.put("HostConfig",
+            new LinkedHashMap<>(Map.of("networkMode", "hohenheim-wl-41")));
+        Map<String, Object> twoFolded = new LinkedHashMap<>();
+        twoFolded.put("hohenheim-wl-41", Map.of());
+        twoFolded.put("hohenheim-wl-99", Map.of());
+        foldedEndpoints.put("networkingConfig", Map.of("endpointsConfig", twoFolded));
+        transport.lastCreateBody = null;
+        assertThatThrownBy(() -> docker.createContainer("body-fold-endpoints", foldedEndpoints,
+                DockerContainerKind.HARDENING))
+            .as("step 7: a folded NetworkingConfig is the same attachment to the daemon")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("ONE network");
+        assertThat(transport.lastCreateBody)
+            .as("step 7: STATE -- no folded attachment reached the daemon").isNull();
+    }
+
+    /** Owner labels without a controller identity, which needs no datasource to PARSE. */
+    private static Map<String, String> instanceLabels(int instanceId) {
+        return Map.of(OwnerLabels.MODEL, InstanceModel.MODEL_ID.toString(),
+            OwnerLabels.ID, String.valueOf(instanceId));
     }
 
     private static Map<String, Object> refusedProbes() {
