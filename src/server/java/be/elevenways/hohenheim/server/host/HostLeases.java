@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.host;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.lease.Lease;
 import be.elevenways.zenit.common.orm.lease.Leases;
@@ -169,15 +168,6 @@ public final class HostLeases {
 
     /** The datasource the models resolve right now: the Db scope when one is active. */
     private static @NonNull Datasource currentDatasource() {
-        Datasource scoped = Db.current();
-        if (scoped != null) {
-            return scoped;
-        }
-        Datasource fallback = Datasources.getDefault();
-        if (fallback == null) {
-            throw new IllegalStateException(
-                "No datasource available for host leases: neither a Db scope nor a default");
-        }
-        return fallback;
+        return Db.currentOrDefault();
     }
 }

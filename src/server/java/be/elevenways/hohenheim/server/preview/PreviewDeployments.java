@@ -134,7 +134,7 @@ public final class PreviewDeployments {
         synchronized (lockFor(applicationId, ref)) {
             preview = claimLocked(applicationId, ref, prNumber);
         }
-        Datasource datasource = Db.current();
+        Datasource datasource = Db.currentOrDefault();
         String pinnedSha = sha;
         JobRunner.startVirtualThread(() -> {
             Runnable build = () -> {

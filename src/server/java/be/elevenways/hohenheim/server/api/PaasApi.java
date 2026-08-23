@@ -163,7 +163,7 @@ public final class PaasApi {
                     ApiConduits.violationText("deploy_not_available")));
             }
             // The build takes minutes; an API caller expects an answer in seconds.
-            Datasource datasource = Db.current();
+            Datasource datasource = Db.currentOrDefault();
             JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
                 ApplicationDeploys.deployQuietly(applicationId, null, ApiConduits.ORIGIN)));
             return ApiConduits.json(Map.of("id", siteId, "status", "queued"));

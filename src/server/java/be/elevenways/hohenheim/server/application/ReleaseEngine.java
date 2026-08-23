@@ -465,7 +465,7 @@ public final class ReleaseEngine {
                 "instance " + candidateId + " now serving; instance " + servingId
                     + " retained as the rollback target, draining");
             scheduleDrain(applicationId, op.get(ReleaseOperationModel.ID), servingId,
-                str(desired.get("image")), Db.current());
+                str(desired.get("image")), Db.currentOrDefault());
             return new ApplicationReleases.Release(candidateId, candidateStatus);
         } catch (RuntimeException gateHeld) {
             finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(gateHeld),
