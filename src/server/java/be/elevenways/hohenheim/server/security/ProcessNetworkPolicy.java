@@ -201,13 +201,19 @@ public final class ProcessNetworkPolicy {
     }
 
     /**
-     * Remove one uid's chain, VERIFIED absent afterwards.
+     * Remove one uid's chain AND the shared table once nothing is left in it, VERIFIED
+     * absent afterwards.
      *
      * @throws IOException when enforcement is off, nft refuses, or the chain survives
      */
     public void remove(int uid, @NonNull String site) throws IOException {
         requireEnabled(site);
         this.chains.remove(outputChain(uid));
+        // The same completeness the network-keyed owner needs, and the same table: a host
+        // that only ever ran PROCESS sites leaked the table exactly as one that only ever
+        // ran containers did. Emptiness is what keeps the two owners from removing each
+        // other's table.
+        this.chains.removeTableIfEmpty();
     }
 
     /** @return the nft chain carrying one run-as uid's denies */

@@ -133,12 +133,27 @@ class WorkloadNetworkPolicyTest {
                 .as("step 4: still blocked after a re-apply").isEqualTo("BLOCKED");
 
             // 5. THE COUNTERFACTUAL: remove the policy and the same probes pass again, so
-            //    step 2 measured the policy and not a broken fixture.
+            //    step 2 measured the policy and not a broken fixture. A SECOND workload is
+            //    applied first, because removal must spare a table that still holds
+            //    somebody else's chains -- a live namespace losing its policy to another
+            //    workload's teardown would be the isolation failure, not the leak.
+            WorkloadNetwork sibling = new WorkloadNetwork("hohenheim-instance-9-net",
+                "172.31.9.0/24", "172.31.9.1", null);
+            policy.apply(sibling, Egress.OPEN);
+
             policy.remove(network.name());
             assertThat(netns.inHost("nft", "list", "table", "inet",
                 WorkloadNetworkPolicy.table()).stdout())
                 .as("step 5: the chains are gone from the kernel")
                 .doesNotContain("fwd_hohenheim_instance_1_net");
+            assertThat(netns.inHost("nft", "list", "table", "inet",
+                WorkloadNetworkPolicy.table()).ok())
+                .as("step 5: the TABLE survives while another workload's chains live in it")
+                .isTrue();
+            assertThat(netns.inHost("nft", "list", "table", "inet",
+                WorkloadNetworkPolicy.table()).stdout())
+                .as("step 5: and the sibling's chains are untouched by the removal")
+                .contains("fwd_hohenheim_instance_9_net");
             assertThat(netns.probe(tenant, METADATA, PEER_PORT))
                 .as("step 5: the metadata service is reachable again once the policy is removed")
                 .isEqualTo("REACHABLE");
@@ -146,7 +161,21 @@ class WorkloadNetworkPolicyTest {
                 .as("step 5: the host is reachable again once the policy is removed")
                 .isEqualTo("REACHABLE");
 
-            // 6. Removing a policy that was never applied is an observed no-op, not an error.
+            // 6. The LAST workload leaves and the table goes with it. Removal used to stop
+            //    at the chains, so every namespace that had ever run a workload kept an
+            //    empty hohenheim_net_<namespace> table forever (two were found by hand on
+            //    daystrom 2026-08-23).
+            policy.remove(sibling.name());
+            assertThat(netns.inHost("nft", "list", "table", "inet",
+                WorkloadNetworkPolicy.table()).ok())
+                .as("step 6: the empty table is removed with the last workload in it")
+                .isFalse();
+            assertThat(netns.inHost("nft", "list", "ruleset").stdout())
+                .as("step 6: nothing of ours is left in the kernel at all")
+                .doesNotContain(WorkloadNetworkPolicy.table());
+
+            // 7. Removing a policy that was never applied is an observed no-op, not an
+            //    error -- table already gone included.
             policy.remove("hohenheim-instance-does-not-exist-net");
         }
     }
