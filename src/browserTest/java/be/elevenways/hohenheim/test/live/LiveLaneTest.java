@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.test.live.LiveLane.Need;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.TestAbortedException;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,9 +29,10 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * AIDEV-NOTE: this class is the reason the rest of the suite may be trusted to REPORT its
  * skips, so the gate/report/ledger halves are hermetic on purpose -- a live-lane gate that
  * only worked on a host with a daemon would be the exact failure it exists to prevent. The
- * ONE exception is {@link #theReapRemovesOnlyItsOwnNamespacesNetworks}, which asks a real
- * daemon whether a network is really gone; it gates through {@link LiveLane} like every
- * other live test, and the reaper's SAFETY property is proved daemon-free beside it.
+ * ONE exception is {@link #theReapRemovesOnlyItsOwnNamespacesResources}, which asks a real
+ * daemon whether a network and a volume are really gone; it gates through {@link LiveLane}
+ * like every other live test, and the reaper's SAFETY property is proved daemon-free
+ * beside it.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class LiveLaneTest {
@@ -256,13 +258,19 @@ class LiveLaneTest {
     }
 
     /**
-     * The reap itself, against a REAL daemon: a namespaced network goes, a network of
-     * another namespace stays. Asserted from the daemon's own listing, never from the
-     * reaper's return value -- a reaper that reported names it never removed is precisely
-     * the "reports success" shape this lane exists to catch.
+     * The reap itself, against a REAL daemon: everything of the named namespace goes --
+     * network AND volume -- and the same two shapes of another namespace stay. Asserted
+     * from the daemon's own listing, never from the reaper's return value: a reaper that
+     * reported names it never removed is precisely the "reports success" shape this lane
+     * exists to catch.
+     *
+     * AIDEV-NOTE: the volume half is asserted here rather than trusted, because it is the
+     * one place {@link LiveNamespaces} deliberately parts company with the DockerReclaim
+     * rule that refuses to delete volumes. A deletion that broad has to be shown to be
+     * narrow.
      */
     @Test
-    void theReapRemovesOnlyItsOwnNamespacesNetworks() throws Exception {
+    void theReapRemovesOnlyItsOwnNamespacesResources() throws Exception {
         LiveLane.require(Need.DOCKER_SOCKET,
             Files.exists(Path.of(DockerClient.DEFAULT_SOCKET)), "Docker socket not present");
         DockerClient docker = new DockerClient();
@@ -270,29 +278,56 @@ class LiveLaneTest {
         String theirs = "zzkeep" + Long.toHexString(System.nanoTime() & 0xffff);
         String ourNetwork = "hohenheim-" + mine + "-instance-1-net";
         String theirNetwork = "hohenheim-" + theirs + "-instance-1-net";
+        String ourVolume = "hohenheim-" + mine + "-instance-1-vol-data";
+        String theirVolume = "hohenheim-" + theirs + "-instance-1-vol-data";
         try {
             docker.createNetwork(ourNetwork,
                 Map.of(OwnerLabels.CONTROLLER, mine), null, null, false);
             docker.createNetwork(theirNetwork,
                 Map.of(OwnerLabels.CONTROLLER, theirs), null, null, false);
+            docker.createVolume(ourVolume, Map.of(OwnerLabels.CONTROLLER, mine));
+            docker.createVolume(theirVolume, Map.of(OwnerLabels.CONTROLLER, theirs));
 
             // 1. The reap removes the network of the namespace it was asked about.
             LiveNamespaces.reap(mine);
             assertThat(docker.findNetworkByName(ourNetwork))
                 .as("step 1: the namespace's own network is gone from the daemon").isNull();
 
-            // 2. THE ANCHOR: another namespace's network -- a concurrent session's, in
-            //    the shape that actually happens -- is untouched.
+            // 2. And its named volume, which no operator sweep would touch -- a dead test
+            //    namespace's scratch is not tenant data.
+            assertThat(volumeExists(docker, ourVolume))
+                .as("step 2: the namespace's own volume is gone too").isFalse();
+
+            // 3. THE ANCHOR: another namespace -- a concurrent session's, in the shape
+            //    that actually happens -- keeps both.
             assertThat(docker.findNetworkByName(theirNetwork))
-                .as("step 2: a foreign namespace's network survives the reap").isNotNull();
+                .as("step 3: a foreign namespace's network survives the reap").isNotNull();
+            assertThat(volumeExists(docker, theirVolume))
+                .as("step 3: and so does its volume").isTrue();
         } finally {
             for (String network : List.of(ourNetwork, theirNetwork)) {
                 try {
                     docker.removeNetwork(network);
-                } catch (java.io.IOException absent) {
+                } catch (IOException absent) {
                     // step 1 already removed one of them; the other is this cleanup's job
                 }
             }
+            for (String volume : List.of(ourVolume, theirVolume)) {
+                try {
+                    docker.removeVolume(volume, true);
+                } catch (IOException absent) {
+                    // as above: the reaped one is already gone
+                }
+            }
+        }
+    }
+
+    /** Whether the daemon still holds a named volume. */
+    private static boolean volumeExists(DockerClient docker, String name) throws IOException {
+        try {
+            return docker.inspectVolume(name) != null;
+        } catch (IOException absent) {
+            return false;
         }
     }
 
