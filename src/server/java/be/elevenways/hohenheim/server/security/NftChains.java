@@ -143,6 +143,71 @@ final class NftChains {
         }
     }
 
+    /**
+     * Delete the table itself once it holds nothing at all -- the other half of
+     * {@link #remove}, without which a host accumulates one empty table per namespace
+     * forever.
+     *
+     * AIDEV-NOTE: OBSERVED, not theoretical: two empty {@code hohenheim_net_<namespace>}
+     * tables were found and removed by hand on daystrom 2026-08-23, one per namespace that
+     * had ever run a workload. {@link #remove} deletes chains by name and stops there, so
+     * the table survives every workload it ever held.
+     *
+     * AIDEV-NOTE: the emptiness test is what makes this SAFE rather than a sweep, and it
+     * is not paranoia -- this table is shared by TWO owners
+     * ({@link WorkloadNetworkPolicy} keyed on networks, {@link ProcessNetworkPolicy} keyed
+     * on uids, same {@code table()}), so a host running a container workload and a host
+     * process at once has both families in it. Anything the kernel still renders inside
+     * the table body -- another owner's chain, a set, a map, a live rule -- aborts the
+     * delete, so the table can only ever go when the LAST thing in it went. It is also why
+     * this is never "delete the table when I removed my chains": that is exactly the
+     * blanket sweep that would strip a live namespace of its policy.
+     *
+     * @throws IOException when nft refuses the delete, or the table survives it
+     */
+    void removeTableIfEmpty() throws IOException {
+
+        String table = this.table.get();
+        NftRunner.Result listed = this.runner.run(
+            List.of("list", "table", "inet", table), null);
+
+        if (!listed.ok()) {
+            if (listed.failureText().contains("No such file or directory")) {
+                return;   // observed absent: the outcome this method exists for
+            }
+            throw new IOException("Could not read back the policy table '" + table
+                + "' (exit " + listed.exitCode() + "): " + listed.failureText());
+        }
+
+        for (String line : listed.stdout().split("\n")) {
+            String rendered = line.trim();
+            // The kernel renders the table as `table inet <name> {` ... `}`; ANY other
+            // declaration line means something still lives in it. Unrecognised content
+            // keeps the table, which is the fail-closed direction here.
+            if (rendered.isEmpty() || rendered.equals("}")
+                    || rendered.startsWith("table inet " + table)) {
+                continue;
+            }
+            return;
+        }
+
+        NftRunner.Result removed = this.runner.run(List.of("-f", "-"),
+            "delete table inet " + table + '\n');
+
+        if (!removed.ok()) {
+            throw new IOException("Could not remove the empty policy table '" + table
+                + "' (exit " + removed.exitCode() + "): " + removed.failureText());
+        }
+
+        NftRunner.Result after = this.runner.run(List.of("list", "table", "inet", table), null);
+
+        if (after.ok()) {
+            throw new IOException("The policy table '" + table + "' still exists after nft"
+                + " reported a successful delete; the kernel state of this host is not what"
+                + " nft says it is.");
+        }
+    }
+
     private static boolean hooked(@NonNull List<String> present, @NonNull String hook) {
         return present.stream().anyMatch(line -> line.startsWith("type filter hook " + hook + " ")
             && line.contains("policy accept"));

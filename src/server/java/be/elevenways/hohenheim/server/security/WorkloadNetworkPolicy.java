@@ -217,8 +217,8 @@ public final class WorkloadNetworkPolicy {
     }
 
     /**
-     * Remove a workload's chains, VERIFIED absent afterwards; a policy that was never
-     * applied is an observed no-op.
+     * Remove a workload's chains AND the table once nothing is left in it, VERIFIED absent
+     * afterwards; a policy that was never applied is an observed no-op.
      *
      * @throws IOException when nft refuses, or a chain survives the delete
      */
@@ -242,6 +242,13 @@ public final class WorkloadNetworkPolicy {
         for (String chain : List.of(forwardChain(key), inputChain(key))) {
             this.chains.remove(chain);
         }
+        // AIDEV-NOTE: removal used to stop at the chains, so the table outlived every
+        // workload it ever held -- one empty hohenheim_net_<namespace> per namespace,
+        // forever (two were found and removed by hand on daystrom 2026-08-23). This only
+        // fires when the table has nothing left in it, so the OTHER owner of this same
+        // table (ProcessNetworkPolicy, keyed on uids) keeps its chains and a live
+        // namespace's table survives.
+        this.chains.removeTableIfEmpty();
     }
 
     /** @return the nft chain identifier suffix for a Docker network name */
