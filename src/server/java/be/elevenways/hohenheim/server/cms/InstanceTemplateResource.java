@@ -68,7 +68,12 @@ public class InstanceTemplateResource extends RowResource {
         .add(InstanceTemplateModel.INSTALL_SCRIPT)
         .add(InstanceTemplateModel.UPDATE_SCRIPT)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceTemplateModel.REINSTALL_POLICY))
+        // READINESS_KIND is what DECIDES whether the line below is ever read; leaving it
+        // out of the form left the enum unreachable, every template on the column default
+        // `port`, and every readiness_line dead data (2026-08-22 regression).
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceTemplateModel.READINESS_KIND))
         .add(InstanceTemplateModel.READINESS_LINE)
+        .add(InstanceTemplateModel.READINESS_TARGET)
         .add(InstanceTemplateModel.STOP_COMMAND)
         .build();
 
@@ -113,6 +118,12 @@ public class InstanceTemplateResource extends RowResource {
     /**
      * The catalog metadata an operator corrects while reading the list: the version string
      * it advertises, the log line that means "ready", and the graceful stop command.
+     *
+     * AIDEV-NOTE: READINESS_KIND is deliberately NOT here even though it is on the form.
+     * The model refuses a readiness line beside a kind that would never read it, and an
+     * inline cell commits ONE column: offering the kind here would let a single cell put
+     * the record into a state no other single cell can undo. A cross-field invariant
+     * belongs on the surface that can submit both halves at once.
      *
      * AIDEV-NOTE: INSTALL_SCRIPT and UPDATE_SCRIPT are excluded. Their vocabulary gate runs
      * at APPROVE time only, so a cell edit would let an already-approved recipe be rewritten

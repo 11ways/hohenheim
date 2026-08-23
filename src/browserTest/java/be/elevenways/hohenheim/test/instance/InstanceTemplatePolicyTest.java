@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
+import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -95,6 +96,77 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
 
     // -- fixtures -------------------------------------------------------------
 
+    /**
+     * A readiness line beside a kind that ignores it used to be DEAD DATA: the column
+     * default is {@code port}, so an operator who wrote "the log line that means ready"
+     * got a workload stamped running the instant its container came up, and nothing
+     * anywhere said so (2026-08-22, InstanceConsoles started gating the line on the
+     * kind without the form, the seeder or the exporter ever declaring one).
+     */
+    @Test
+    void aReadinessLineIsRefusedBesideAKindThatWouldNeverReadIt() {
+        Model templates = Models.get(InstanceTemplateModel.class);
+
+        // 1. The default kind is `port`: a line written beside it is refused BY NAME
+        //    rather than stored and silently never matched.
+        Row onDefault = templates.createEmptyRow();
+        onDefault.set(InstanceTemplateModel.NAME, PREFIX + "readiness-default");
+        onDefault.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
+        onDefault.set(InstanceTemplateModel.READINESS_LINE, "SERVER READY");
+        Throwable refused = catchThrowable(() -> templates.save(onDefault));
+        assertThat(refused)
+            .as("step 1: a line on the `port` default is refused, not silently ignored")
+            .isInstanceOf(Violations.class);
+        assertThat(((Violations) refused).all().get(0).fieldName())
+            .as("step 1: and the refusal names the field that must change")
+            .isEqualTo(InstanceTemplateModel.READINESS_KIND.getName());
+
+        // 2. An explicit http kind is refused the same way: this is about the DECIDING
+        //    vocabulary, not about the default in particular.
+        Row onHttp = templates.createEmptyRow();
+        onHttp.set(InstanceTemplateModel.NAME, PREFIX + "readiness-http");
+        onHttp.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
+        onHttp.set(InstanceTemplateModel.READINESS_KIND, ReadinessKind.HTTP.token());
+        onHttp.set(InstanceTemplateModel.READINESS_LINE, "SERVER READY");
+        assertThat(catchThrowable(() -> templates.save(onHttp)))
+            .as("step 2: an http probe never reads a console line either")
+            .isInstanceOf(Violations.class);
+
+        // 3. Declaring console_line is what makes the line meaningful, and it saves.
+        Row declared = templates.createEmptyRow();
+        declared.set(InstanceTemplateModel.NAME, PREFIX + "readiness-console");
+        declared.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
+        declared.set(InstanceTemplateModel.READINESS_KIND, ReadinessKind.CONSOLE_LINE.token());
+        declared.set(InstanceTemplateModel.READINESS_LINE, "SERVER READY");
+        templates.save(declared);
+        assertThat((String) templates.findById(declared.get(InstanceTemplateModel.ID))
+                .get(InstanceTemplateModel.READINESS_LINE))
+            .as("step 3: a declared console line is stored")
+            .isEqualTo("SERVER READY");
+
+        // 4. A PARTIAL update (what an inline cell edit submits) is judged against the
+        //    STORED kind, not against the nulls the submitted row happens to carry --
+        //    otherwise every inline readiness_line edit would refuse itself.
+        Row partial = templates.createEmptyRow();
+        partial.set(InstanceTemplateModel.ID, declared.get(InstanceTemplateModel.ID));
+        partial.set(InstanceTemplateModel.READINESS_LINE, "SERVER READY NOW");
+        templates.save(partial);
+        assertThat((String) templates.findById(declared.get(InstanceTemplateModel.ID))
+                .get(InstanceTemplateModel.READINESS_LINE))
+            .as("step 4: an inline edit of just the line still lands")
+            .isEqualTo("SERVER READY NOW");
+
+        // 5. Clearing the line lifts the requirement: the invariant is about a line that
+        //    would never be read, not about the kind on its own.
+        Row cleared = templates.createEmptyRow();
+        cleared.set(InstanceTemplateModel.NAME, PREFIX + "readiness-none");
+        cleared.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
+        cleared.set(InstanceTemplateModel.READINESS_LINE, "   ");
+        templates.save(cleared);
+        assertThat((Object) cleared.get(InstanceTemplateModel.ID))
+            .as("step 5: a blank line on the default kind saves untouched").isNotNull();
+    }
+
     private static int template(String name, boolean approved, Map<String, Object> settings) {
         Model templates = Models.get(InstanceTemplateModel.class);
         Row row = templates.createEmptyRow();
@@ -167,6 +239,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
         source.set(InstanceTemplateModel.INSTALL_IMAGE, "alpine");
         source.set(InstanceTemplateModel.INSTALL_SCRIPT, "echo install >> /data/runs");
         source.set(InstanceTemplateModel.REINSTALL_POLICY, InstanceTemplateModel.REINSTALL_CLEAR);
+        source.set(InstanceTemplateModel.READINESS_KIND, ReadinessKind.CONSOLE_LINE.token());
         source.set(InstanceTemplateModel.READINESS_LINE, "Done (");
         source.set(InstanceTemplateModel.STOP_COMMAND, "stop");
         Models.get(InstanceTemplateModel.class).save(source);
@@ -199,6 +272,11 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
             .as("step 3: install script round-trips").isEqualTo("echo install >> /data/runs");
         assertThat((String) imported.get(InstanceTemplateModel.READINESS_LINE))
             .as("step 3: matcher data rides the export").isEqualTo("Done (");
+        assertThat((String) imported.get(InstanceTemplateModel.READINESS_KIND))
+            .as("step 3: and the KIND that decides whether the line is ever read rides"
+                + " with it -- without it the import lands on the `port` default and the"
+                + " line is dead data")
+            .isEqualTo(ReadinessKind.CONSOLE_LINE.token());
         assertThat((Object) imported.get(InstanceTemplateModel.APPROVED_AT))
             .as("step 3: an import NEVER lands approved").isNull();
         assertThat((String) imported.get(InstanceTemplateModel.SOURCE))

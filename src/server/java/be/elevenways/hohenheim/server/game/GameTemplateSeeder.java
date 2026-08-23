@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.game;
 
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
+import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -103,6 +104,11 @@ public final class GameTemplateSeeder implements Seeder {
         row.set(InstanceTemplateModel.DESCRIPTION, description);
         row.set(InstanceTemplateModel.KIND, KIND_DOCKER);
         row.set(InstanceTemplateModel.SETTINGS, settings);
+        // A seeded line is CONSOLE readiness by declaration: the column default is `port`,
+        // and a port probe on a game server answers long before the world has generated.
+        if (readinessLine != null && !readinessLine.isBlank()) {
+            row.set(InstanceTemplateModel.READINESS_KIND, ReadinessKind.CONSOLE_LINE.token());
+        }
         row.set(InstanceTemplateModel.READINESS_LINE, readinessLine);
         row.set(InstanceTemplateModel.STOP_COMMAND, stopCommand);
         row.set(InstanceTemplateModel.SOURCE, "hohenheim:starter");

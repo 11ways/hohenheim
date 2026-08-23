@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
+import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -367,6 +368,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.DESCRIPTION, "isolation fixture");
         row.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
         row.set(InstanceTemplateModel.VERSION, 1);
+        row.set(InstanceTemplateModel.READINESS_KIND, ReadinessKind.CONSOLE_LINE.token());
         row.set(InstanceTemplateModel.READINESS_LINE, "ready");
         row.set(InstanceTemplateModel.STOP_COMMAND, "stop");
         templates.save(row);

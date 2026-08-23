@@ -5712,7 +5712,7 @@
       "scope": "field"
     },
     {
-      "text": "Console line marking the workload ready; consumed by the console-matcher wave, stored and exported now",
+      "text": "Console line marking the workload ready; only read when Ready when is Console line",
       "scope": "help"
     }
   ],
@@ -9308,6 +9308,10 @@
   },
   "upstream_instance_required": {
     "text": "This upstream serves an instance, so it needs one chosen",
+    "scope": "violations"
+  },
+  "readiness_line_needs_console_line": {
+    "text": "A readiness line is only read when the readiness kind is Console line",
     "scope": "violations"
   },
   "upstream_instance_unexpected": {
