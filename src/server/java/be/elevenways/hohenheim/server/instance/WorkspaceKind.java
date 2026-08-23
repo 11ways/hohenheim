@@ -19,8 +19,10 @@ import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
+import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -70,6 +72,9 @@ public final class WorkspaceKind implements InstanceKindHandler {
 
     /** Where {@link #HOME_VOLUME} is mounted; everything outside it is disposable. */
     public static final String HOME_PATH = "/home/site";
+
+    /** What a workspace runs when it has no service to run; see {@link #startCommandOf}. */
+    public static final String IDLE_COMMAND = "sleep infinity";
 
     /**
      * The DECLARED isolation profile: the same one every ordinary published image runs
@@ -177,6 +182,9 @@ public final class WorkspaceKind implements InstanceKindHandler {
     /** Runs inside a runtime image; {@link RuntimeImages#requireFor} refuses without one. */
     @Override public boolean usesRuntimeImage() { return true; }
 
+    /** And it is not optional: there is nothing for a workspace to run inside otherwise. */
+    @Override public boolean requiresRuntimeImage() { return true; }
+
     /** Its container port is exposable through a site's {@code instance} upstream. */
     @Override public boolean supportsSiteUpstream() { return true; }
 
@@ -194,8 +202,15 @@ public final class WorkspaceKind implements InstanceKindHandler {
                 Egress.OPEN, IncusWorkloadType.CONTAINER, serverName);
         }
 
-        return new DockerInstanceRuntime(new ServerService().clientFor(serverName),
-            WorkloadNetworkPolicy.forServer(serverName));
+        // AIDEV-NOTE: the STREAMING transport is threaded in only here, and only for this
+        // kind, because this is the one kind whose workloads run as a non-root uid -- the
+        // gate that makes an interactive shell defensible at all (see InstanceShell). Every
+        // other Docker kind runs as root in its container and its shell is refused by name
+        // long before a runtime could be asked for a pseudo-terminal.
+        ServerService servers = new ServerService();
+        return new DockerInstanceRuntime(servers.clientFor(serverName),
+            WorkloadNetworkPolicy.forServer(serverName),
+            NetworkPosture.PRIVATE, Egress.OPEN, servers.transportFor(serverName));
     }
 
     @Override
@@ -295,9 +310,37 @@ public final class WorkspaceKind implements InstanceKindHandler {
         InstanceVolumes.declare(instanceId, HOME_VOLUME, HOME_PATH, quota, true);
     }
 
-    /** The command the workspace supervises: the instance's override, else the image's. */
+    /**
+     * The command the workspace supervises: the instance's override, else the image's.
+     *
+     * AIDEV-NOTE: a workspace that DECLARES a repository runs its command IN THE CHECKOUT,
+     * and idles until there is one. Both halves are load-bearing. The build command already
+     * runs in {@code WorkspaceBuilds.CHECKOUT_PATH}, so a start command left one directory
+     * up would build the app in one place and start it in another; and the deploy's own
+     * checkout is an exec INSIDE this container, so a first start that ran the declared
+     * command against an empty home would exit and take the container -- and the exec about
+     * to fill it -- with it. A workspace with no repository is untouched: it starts exactly
+     * what it always did, in the image's own workdir.
+     */
     public static @NonNull String startCommandOf(@NonNull Map<String, Object> settings,
                                           @NonNull Row image) {
+        String command = declaredStartCommandOf(settings, image);
+        if (!SiteSources.hasRepository(settings)) {
+            return command;
+        }
+        String checkout = WorkspaceBuilds.shellQuote(WorkspaceBuilds.CHECKOUT_PATH);
+        // exec, twice, because PID 1 is the process a stop signals: a non-interactive bash
+        // waiting on a forked child never forwards SIGTERM to it, so every graceful stop
+        // would be a hard kill wearing a ten-second delay. The inner `bash -lc` is what the
+        // command already ran under, so a compound command behaves exactly as it did.
+        return "if [ ! -d " + checkout + " ]; then exec " + IDLE_COMMAND + "; fi;"
+            + " cd " + checkout + "; exec /bin/bash -lc "
+            + WorkspaceBuilds.shellQuote(command);
+    }
+
+    /** What the record and the image say to run, before the source lane wraps it. */
+    private static @NonNull String declaredStartCommandOf(@NonNull Map<String, Object> settings,
+                                                          @NonNull Row image) {
         String declared = str(settings.get("start_command"));
         if (!declared.isEmpty()) {
             return declared;
@@ -305,7 +348,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
         String fromImage = str(image.get(RuntimeImageModel.DEFAULT_COMMAND));
         // A runtime image with no default command is a userland to live in, not a service:
         // it idles so the shell and the files tab have something to attach to.
-        return fromImage.isEmpty() ? "sleep infinity" : fromImage;
+        return fromImage.isEmpty() ? IDLE_COMMAND : fromImage;
     }
 
     /** The build command run inside the workspace: the instance's override, else the image's. */

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -173,7 +174,11 @@ class WorkspaceIncusLiveTest {
             instanceId = workspaceRecord(imageId, settings);
             int uid = WorkspaceUids.forInstance(instanceId);
 
-            // 2. Deploy: image converted and imported, home volume carved, container up.
+            // 2. Deploy through the FUNNEL: image converted and imported, home volume
+            //    carved, container up -- and, because this workspace names a repository,
+            //    its source checked out and built inside it before the workload comes
+            //    back. Pre-fix this produced a running container over an EMPTY /home/site.
+            //    (WorkspaceBuilds had one caller outside its tests: the forge webhook.)
             InstanceStatus status = new InstanceService().deploy(instanceId);
             assertThat(status.state())
                 .as("step 2: the workspace is running on the real daemon")

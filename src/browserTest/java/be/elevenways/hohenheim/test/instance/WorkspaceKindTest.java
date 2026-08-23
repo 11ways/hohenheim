@@ -9,10 +9,12 @@ import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostShell;
+import be.elevenways.hohenheim.server.build.BuildLog;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceReadiness;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
+import be.elevenways.hohenheim.server.instance.RuntimeImages;
 import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.hohenheim.server.instance.WorkspaceUids;
@@ -41,6 +43,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * What a workspace DECLARES, and what it refuses -- hermetic: no daemon, no host, no
@@ -212,13 +215,39 @@ class WorkspaceKindTest {
         });
     }
 
-    /** A record naming no runtime image at all is refused before anything is created. */
+    /**
+     * A record naming no runtime image is refused at the WRITE, and still at the deploy.
+     *
+     * AIDEV-NOTE: the pre-fix defect -- the pick was clearable and the requirement lived
+     * only in RuntimeImages.requireFor, so an imageless workspace SAVED happily and its
+     * first Deploy refused, hours later and on a screen the operator was not on.
+     */
     @Test
     void aWorkspaceWithoutARuntimeImageRefusesByName() {
         Db.run(datasource, () -> {
-            int id = workspace("ws-no-image", null, ServerModel.localServerId(), Map.of());
-            assertThatThrownBy(() -> InstanceKinds.getHandler(KIND).specFor(id, Map.of()))
-                .as("a workspace must name what it runs inside")
+            // 1. The early half: the write itself refuses, on the form that submitted it.
+            //    catchThrowable and not assertThatThrownBy: the latter's own "expecting a
+            //    throwable" failure carries no description, so a broken guard would report
+            //    an unnamed assertion.
+            assertThat(catchThrowable(() -> workspace("ws-no-image", null,
+                    ServerModel.localServerId(), Map.of())))
+                .as("step 1: a workspace must name what it runs inside, at the write")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("runtime_image_required");
+
+            // 2. FALSIFIED: the identical record saves the moment it names one, so the
+            //    refusal is about the missing image and not about the kind.
+            int imageId = runtimeImage("node-22i", "hohenheim/node-22:1",
+                "hohenheim/node-22", "npm start", 3000, null);
+            int id = workspace("ws-no-image", imageId, ServerModel.localServerId(), Map.of());
+            assertThat(id).as("step 2: naming an image is all that was missing").isPositive();
+
+            // 3. The LATE half is untouched: a row that names none is still refused where
+            //    the spec is derived, which is what covers records written before step 1
+            //    existed and every writer that never goes through the model funnel.
+            Row imageless = Models.get(InstanceModel.class).createEmptyRow();
+            assertThatThrownBy(() -> RuntimeImages.requireFor(imageless))
+                .as("step 3: and the deploy-time half still refuses by the same name")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("runtime_image_required");
         });
@@ -306,8 +335,8 @@ class WorkspaceKindTest {
                 InstanceKinds.getHandler(KIND).specFor(id, settings),
                 ServerModel.localServerId(), Map.of(), settings);
 
-            String commit = new WorkspaceBuilds()
-                .checkout(resolved, "main", settings, new StringBuilder());
+            BuildLog log = new BuildLog(64 * 1024);
+            String commit = new WorkspaceBuilds().checkout(resolved, "main", settings, log);
 
             assertThat(commit)
                 .as("step 1: the checkout reports the commit git printed last")
@@ -333,6 +362,163 @@ class WorkspaceKindTest {
             assertThat(runtime.lastOptions.env())
                 .as("step 5: a source with no provider passes no credential")
                 .isEmpty();
+
+            // 6. And what the checkout printed is CAPTURED, because the durable operation
+            //    record the Deploys tab renders is exactly this text.
+            assertThat(log.text())
+                .as("step 6: the checkout's own output is captured for the deploy record")
+                .contains("Cloning into '/home/site/app'");
+        });
+    }
+
+    /**
+     * The funnel's own decision: what deploying a record MEANS.
+     *
+     * AIDEV-NOTE: the pre-fix defect -- WorkspaceBuilds had exactly one caller outside its
+     * tests, GitWebhookHandler, so pressing Deploy on a workspace produced a running
+     * container over an EMPTY /home/site and the only way to get the code in was to
+     * configure a webhook at the forge.
+     */
+    @Test
+    void aWorkspaceDeploysItsSourceExactlyWhenItNamesARepository() {
+        Db.run(datasource, () -> {
+            int imageId = runtimeImage("node-22f", "hohenheim/node-22:1",
+                "hohenheim/node-22", "npm start", 3000, null);
+
+            // 1. A bare workspace is a bare container up, exactly as before: nothing to
+            //    check out means nothing to check out.
+            int bare = workspace("ws-lane-bare", imageId, ServerModel.localServerId(),
+                Map.of());
+            assertThat(WorkspaceBuilds.deploysSource(
+                    Models.get(InstanceModel.class).findById(bare)))
+                .as("step 1: a workspace with no repository deploys no source")
+                .isFalse();
+
+            // 2. The moment it names a raw repository URL, its deploy IS a source deploy.
+            int sourced = workspace("ws-lane-url", imageId, ServerModel.localServerId(),
+                Map.of("repository_url", "https://git.example.test/team/app.git"));
+            assertThat(WorkspaceBuilds.deploysSource(
+                    Models.get(InstanceModel.class).findById(sourced)))
+                .as("step 2: a repository URL puts the record on the source lane")
+                .isTrue();
+
+            // 3. And so does the PROVIDER-bound spelling, which names no URL at all --
+            //    reading only repository_url would have left every provider-bound
+            //    workspace on the bare lane.
+            int bound = workspace("ws-lane-bound", imageId, ServerModel.localServerId(),
+                Map.of("repository", "team/app"));
+            assertThat(WorkspaceBuilds.deploysSource(
+                    Models.get(InstanceModel.class).findById(bound)))
+                .as("step 3: a provider-bound repository counts as a source too")
+                .isTrue();
+
+            // 4. FALSIFIED across kinds: the same settings on another kind do NOT put it on
+            //    the workspace lane -- the branch is about the KIND, not about the keys.
+            Row other = Models.get(InstanceModel.class).createEmptyRow();
+            other.set(InstanceModel.NAME, "ws-lane-other-kind");
+            other.set(InstanceModel.KIND, "hohenheim:docker_container");
+            other.set(InstanceModel.SETTINGS, Map.of("image", "nginx",
+                "repository_url", "https://git.example.test/team/app.git"));
+            other.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            Models.get(InstanceModel.class).save(other);
+            instances.add(other.get(InstanceModel.ID));
+            assertThat(WorkspaceBuilds.deploysSource(other))
+                .as("step 4: another kind carrying the same keys stays on its own lane")
+                .isFalse();
+
+            // 5. A record that is gone answers false rather than throwing: the funnel asks
+            //    this before it resolves anything.
+            assertThat(WorkspaceBuilds.deploysSource(null))
+                .as("step 5: no record, no source lane").isFalse();
+        });
+    }
+
+    /**
+     * A source-declared workspace starts IN its checkout, and idles until there is one.
+     *
+     * AIDEV-NOTE: both halves are load-bearing. The build command already runs in
+     * {@code WorkspaceBuilds.CHECKOUT_PATH}, so starting one directory up builds the app
+     * in one place and runs it in another; and the deploy's checkout is an exec INSIDE
+     * this container, so a first start that ran `npm start` against an empty home would
+     * exit, take the container with it, and take the exec that was about to fill it too.
+     */
+    @Test
+    void aSourcedWorkspaceStartsInsideItsCheckoutAndIdlesUntilThereIsOne() {
+        Db.run(datasource, () -> {
+            int imageId = runtimeImage("node-22g", "hohenheim/node-22:1",
+                "hohenheim/node-22", "npm start", 3000, null);
+            Map<String, Object> settings = Map.of(
+                "repository_url", "https://git.example.test/team/app.git");
+            int id = workspace("ws-start-sourced", imageId, ServerModel.localServerId(),
+                settings);
+
+            List<String> command = InstanceKinds.getHandler(KIND)
+                .specFor(id, settings).command();
+
+            assertThat(command)
+                .as("step 1: still one bash -lc, so nothing about the driver changed")
+                .startsWith("bash", "-lc")
+                .hasSize(3);
+            assertThat(command.get(2))
+                .as("step 2: it idles while the checkout is absent, so the deploy's own"
+                    + " exec has a live container to run in")
+                .contains("if [ ! -d '" + WorkspaceBuilds.CHECKOUT_PATH + "' ]; then exec "
+                    + WorkspaceKind.IDLE_COMMAND)
+                .as("step 3: and once there is one, the declared command runs INSIDE it")
+                .contains("cd '" + WorkspaceBuilds.CHECKOUT_PATH + "'; exec /bin/bash -lc"
+                    + " 'npm start'");
+
+            // 4. FALSIFIED: a workspace with NO repository is untouched -- it starts what
+            //    it always started, in the image's own workdir.
+            int bare = workspace("ws-start-bare", imageId, ServerModel.localServerId(),
+                Map.of());
+            assertThat(InstanceKinds.getHandler(KIND).specFor(bare, Map.of()).command())
+                .as("step 4: a repository-less workspace starts exactly what it always did")
+                .containsExactly("bash", "-lc", "npm start");
+        });
+    }
+
+    /**
+     * A credential typed into the raw repository URL is refused AT THE WRITE.
+     *
+     * AIDEV-NOTE: the provider lane's token travels in the exec environment and is never
+     * written down; a hand-typed {@code https://user:token@host/repo.git} is the one
+     * spelling git PERSISTS into .git/config inside the volume, where it outlives the
+     * deploy that put it there.
+     */
+    @Test
+    void aCredentialInTheRepositoryUrlIsRefusedOnTheForm() {
+        Db.run(datasource, () -> {
+            int imageId = runtimeImage("node-22h", "hohenheim/node-22:1",
+                "hohenheim/node-22", "npm start", 3000, null);
+
+            // 1. A token in the user-info is refused, by name, before anything is stored.
+            assertThat(catchThrowable(() -> workspace("ws-token-url", imageId,
+                    ServerModel.localServerId(),
+                    Map.of("repository_url", "https://someone:ghp_secrettoken@git.example.test/a.git"))))
+                .as("step 1: a credentialed clone URL never reaches the volume")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("repository_url_credential");
+
+            // 2. So is a bare token with no username half.
+            assertThat(catchThrowable(() -> workspace("ws-token-only", imageId,
+                    ServerModel.localServerId(),
+                    Map.of("repository_url", "https://ghp_secrettoken@git.example.test/a.git"))))
+                .as("step 2: user-info with no colon is still a credential over https")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("repository_url_credential");
+
+            // 3. FALSIFIED: the same URL without the credential saves, so the refusal is
+            //    about the credential and not about the field.
+            int clean = workspace("ws-clean-url", imageId, ServerModel.localServerId(),
+                Map.of("repository_url", "https://git.example.test/a.git"));
+            assertThat(clean).as("step 3: a clean URL is stored").isPositive();
+
+            // 4. And an ssh clone URL keeps its username, which is how every one of them
+            //    is spelled -- refusing it would refuse the whole ssh lane.
+            int ssh = workspace("ws-ssh-url", imageId, ServerModel.localServerId(),
+                Map.of("repository_url", "ssh://git@git.example.test/a.git"));
+            assertThat(ssh).as("step 4: an ssh username is not a credential").isPositive();
         });
     }
 

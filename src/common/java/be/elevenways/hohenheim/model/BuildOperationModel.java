@@ -51,6 +51,15 @@ public class BuildOperationModel extends Model {
     public static final String KIND_NIXPACKS = "nixpacks";
 
     /**
+     * A workspace SOURCE deploy: a checkout and a build run INSIDE the workspace's own
+     * container, as its own uid -- no sandbox, no artifact, no image identity. It shares
+     * this record because "what did my last deploy do, and what did it print" is one
+     * question whatever ran it; {@code Builders.forKind} has no plan for it and refuses
+     * it by name, which is the fail-closed half.
+     */
+    public static final String KIND_WORKSPACE = "workspace";
+
+    /**
      * The builder kind a site's stored {@code builder} setting names, defaulting to
      * {@link #KIND_DOCKERFILE} for the blank/legacy value. An unknown kind passes
      * through unmapped so {@code Builders.forKind} refuses it by name.
@@ -76,6 +85,7 @@ public class BuildOperationModel extends Model {
     public static final EnumField BUILDER_KIND = SCHEMA.addField(EnumField.builder("builder_kind")
         .value(KIND_DOCKERFILE, v -> v.displayName("Dockerfile").icon("file-code").color("info"))
         .value(KIND_NIXPACKS, v -> v.displayName("Nixpacks").icon("box").color("secondary"))
+        .value(KIND_WORKSPACE, v -> v.displayName("Workspace").icon("code").color("violet"))
         .build());
 
     public static final StringField FOR_MODEL = SCHEMA.addField(
@@ -162,6 +172,25 @@ public class BuildOperationModel extends Model {
             .orderBy(ID, SortOrder.DESC)
             .limit(limit)
             .all();
+    }
+
+    /**
+     * Keep the newest {@code keep} operations of one owning record and delete the rest.
+     *
+     * @param keep history depth; a non-positive value falls back to 50
+     */
+    public void pruneHistory(String forModel, int forId, int keep) {
+        int limit = keep > 0 ? keep : 50;
+        List<Row> stale = find()
+            .where(FOR_MODEL.eq(forModel))
+            .where(FOR_ID.eq(forId))
+            .orderBy(ID, SortOrder.DESC)
+            .offset(limit)
+            .limit(1000)
+            .all();
+        for (Row old : stale) {
+            delete(old.get(ID));
+        }
     }
 
     /** The newest SUCCEEDED build of one owning record, or null. */

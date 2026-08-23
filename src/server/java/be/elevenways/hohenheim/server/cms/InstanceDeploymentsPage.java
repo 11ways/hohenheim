@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -9,6 +10,7 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -34,13 +36,21 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Deploys tab on a release-managed instance (an application): the release history with
- * captured build logs, deploy-now / rollback controls and the push webhook.
+ * Deploys tab on a record whose deploy has a HISTORY worth reading: an application's
+ * releases, or a source-declared workspace's checkouts and builds. Captured logs,
+ * deploy-now (and rollback, where releases exist) and the push webhook.
  *
  * AIDEV-NOTE: this REPLACED the site's Deployments tab when the release engine was
  * re-keyed to the application (phase-0 brief 7): the deploy history belongs to the
  * record that OWNS the releases, and an application that no site exposes yet still
  * deploys. The site keeps only what a site is -- a hostname.
+ *
+ * AIDEV-NOTE: the workspace lane reads {@code build_operations} instead of
+ * {@code release_operations} and everything else is the same page, deliberately. A
+ * workspace deploy has no release and no rollback (its home volume IS its state, and
+ * nothing about a previous checkout survives to roll back TO), so those two controls
+ * are the only difference the reader sees -- widening this page rather than growing a
+ * second one is what keeps "where do I see my deploy" one answer.
  */
 public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
 
@@ -51,10 +61,15 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
 
-    /** Only release-managed kinds have a release history; the tab hides for the rest. */
+    /**
+     * A record has this tab when deploying it means deploying a SOURCE: a release-managed
+     * kind always does, a workspace does once it names a repository. A workspace with no
+     * repository deploys a bare container and has no history to show.
+     */
     @Override
     public boolean visibleFor(@NonNull Row record) {
-        return InstanceKinds.isReleaseManaged(record.get(InstanceModel.KIND));
+        return InstanceKinds.isReleaseManaged(record.get(InstanceModel.KIND))
+            || WorkspaceBuilds.deploysSource(record);
     }
 
     @Override
@@ -67,6 +82,42 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
             instance.get(InstanceModel.NAME)));
         vars.put("instanceId", instanceId);
         vars.put("instanceName", instance.get(InstanceModel.NAME));
+
+        boolean releaseManaged = InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND));
+        // The trigger column is the release lane's own vocabulary (deploy/webhook/rollback);
+        // a workspace build operation records no such word, and a column of blanks reads as
+        // missing data rather than as "not applicable".
+        vars.put("showTrigger", releaseManaged);
+
+        if (releaseManaged) {
+            putReleaseVars(vars, instanceId);
+        } else {
+            putWorkspaceVars(vars, instanceId);
+        }
+
+        if (HohenheimAccess.isAdmin(accessContext)) {
+            putAdminOnlyVars(vars, instance);
+        }
+
+        // The deploy/rollback forms echo this as _return so their handlers redirect
+        // back to whichever panel rendered this page.
+        vars.put("returnUrl", ReturnTarget.capture(conduit));
+        // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
+        // ReturnTarget is server-only, so the common template cannot reach it.
+        vars.put("returnParam", ReturnTarget.PARAM);
+        vars.put("deployTarget", HohenheimEndpoints.INSTANCES_DEPLOY
+            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
+        vars.put("rollbackTarget", HohenheimEndpoints.INSTANCES_ROLLBACK
+            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
+        vars.put("recordTabs", recordTabs(conduit));
+        vars.put("timeWording", RelativeTimeWording.resolve(
+            conduit.getLocales(), conduit.getMessageResolver()));
+
+        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-deployments"), vars);
+    }
+
+    /** The application lane: release operations, the serving commit and the rollback offer. */
+    private static void putReleaseVars(Map<String, Object> vars, int instanceId) {
 
         List<Row> operations = Models.get(ReleaseOperationModel.class)
             .findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50);
@@ -89,7 +140,8 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
             Map<String, Object> entry = new HashMap<>();
             entry.put("id", row.get(ReleaseOperationModel.ID));
             entry.put("status", orEmpty(row.get(ReleaseOperationModel.STATUS)));
-            entry.put("statusVariant", statusVariant(row.get(ReleaseOperationModel.STATUS)));
+            entry.put("statusVariant",
+                variantOf(ReleaseOperationModel.STATUS, row.get(ReleaseOperationModel.STATUS)));
             entry.put("reason", orEmpty(row.get(ReleaseOperationModel.KIND)));
             entry.put("commit", shortSha(row.get(ReleaseOperationModel.IMAGE_ID)));
             entry.put("duration", durationLabel(row.get(ReleaseOperationModel.DURATION_MS)));
@@ -102,26 +154,48 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
             deployments.add(entry);
         }
         vars.put("deployments", deployments);
+    }
 
-        if (HohenheimAccess.isAdmin(accessContext)) {
-            putAdminOnlyVars(vars, instance);
+    /**
+     * The workspace lane: the checkout+build operations WorkspaceBuilds records.
+     *
+     * AIDEV-NOTE: no rollback and no serving release. A workspace's state IS its home
+     * volume, so there is no previous artifact to point back at -- offering the control
+     * would be an affordance that can only refuse.
+     */
+    private static void putWorkspaceVars(Map<String, Object> vars, int instanceId) {
+
+        BuildOperationModel model = Models.get(BuildOperationModel.class);
+        List<Row> operations = model.findForOwner(InstanceModel.MODEL_ID.toString(),
+            instanceId, 50);
+
+        vars.put("isDeploying", operations.stream().anyMatch(row ->
+            BuildOperationModel.STATUS_RUNNING.equals(row.get(BuildOperationModel.STATUS))));
+        vars.put("canRollback", false);
+
+        Row latest = model.latestSuccess(InstanceModel.MODEL_ID.toString(), instanceId);
+        vars.put("currentCommit", latest == null ? ""
+            : shortSha(latest.get(BuildOperationModel.SOURCE_REF)));
+
+        List<Map<String, Object>> deployments = new ArrayList<>();
+        for (Row row : operations) {
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("id", row.get(BuildOperationModel.ID));
+            entry.put("status", orEmpty(row.get(BuildOperationModel.STATUS)));
+            entry.put("statusVariant",
+                variantOf(BuildOperationModel.STATUS, row.get(BuildOperationModel.STATUS)));
+            entry.put("reason", "");
+            entry.put("commit", shortSha(row.get(BuildOperationModel.SOURCE_REF)));
+            entry.put("duration", durationLabel(row.get(BuildOperationModel.DURATION_MS)));
+            entry.put("error", orEmpty(row.get(BuildOperationModel.FAILURE_REASON)));
+            Instant startedAt = row.get(BuildOperationModel.STARTED_AT);
+            entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
+            String log = row.get(BuildOperationModel.LOG);
+            entry.put("log", log != null ? log : "");
+            entry.put("hasLog", log != null && !log.isBlank());
+            deployments.add(entry);
         }
-
-        // The deploy/rollback forms echo this as _return so their handlers redirect
-        // back to whichever panel rendered this page.
-        vars.put("returnUrl", ReturnTarget.capture(conduit));
-        // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
-        // ReturnTarget is server-only, so the common template cannot reach it.
-        vars.put("returnParam", ReturnTarget.PARAM);
-        vars.put("deployTarget", HohenheimEndpoints.INSTANCES_DEPLOY
-            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
-        vars.put("rollbackTarget", HohenheimEndpoints.INSTANCES_ROLLBACK
-            .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
-        vars.put("recordTabs", recordTabs(conduit));
-        vars.put("timeWording", RelativeTimeWording.resolve(
-            conduit.getLocales(), conduit.getMessageResolver()));
-
-        return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-deployments"), vars);
+        vars.put("deployments", deployments);
     }
 
     /**
@@ -161,15 +235,17 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
     }
 
     /**
-     * The badge variant DECLARED on the release-operation status enum value itself.
+     * The badge variant DECLARED on the status enum value itself, for either vocabulary.
      *
-     * AIDEV-NOTE: read off the model rather than switched on here, so a new status
-     * carries its colour everywhere at once. Unknown/blank degrades to secondary, the
-     * honest answer for a value the vocabulary does not contain.
+     * AIDEV-NOTE: read off the field rather than switched on here, so a new status carries
+     * its colour everywhere at once -- and so the two status vocabularies this page renders
+     * (release operations, build operations) need no mapping table between them.
+     * Unknown/blank degrades to secondary, the honest answer for a value the vocabulary
+     * does not contain.
      */
-    private static String statusVariant(@Nullable Object status) {
+    private static String variantOf(@NonNull EnumField field, @Nullable Object status) {
         EnumField.EnumValue value = status == null
-            ? null : ReleaseOperationModel.STATUS.getValues().get(String.valueOf(status));
+            ? null : field.getValues().get(String.valueOf(status));
         String color = value != null ? value.getColor() : null;
         return color != null ? color : "secondary";
     }
