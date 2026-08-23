@@ -351,10 +351,33 @@ public final class ReleaseEngine {
      * from a tag -- the artifact is addressed by content, so a deleted checkout or a
      * moved tag cannot change what this deploys.
      *
+     * AIDEV-NOTE: the operator verbs mint a candidate for the same application a webhook
+     * converge does, so they take the SAME per-application convergence lock -- a rollback
+     * racing a push would otherwise leave both their candidates role {@code serving}.
+     *
      * @throws Violations when no rollback target exists or the candidate fails its
      *         probe (the current release keeps serving either way)
      */
     public static void rollback(int applicationId) {
+        synchronized (ConvergenceLocks.forApplication(applicationId)) {
+            rollbackLocked(applicationId);
+        }
+        // AIDEV-NOTE: no proxy reload any more, and that is the point of the re-keying. A
+        // flip no longer changes the ROUTE TABLE at all -- the site's route names an
+        // application, and the instance upstream handler re-resolves the serving release's
+        // address off the generation gatedSwap just bumped. Rebuilding every site's handler
+        // to move one upstream was the site-keyed shape.
+        // AIDEV-NOTE: recorded HERE, in the engine, not on the surfaces. The admin row
+        // action (SiteResource#rollbackAction) recorded nothing while the automation API
+        // recorded "rollback_triggered" -- the same one-surface-audited asymmetry the
+        // instance power path had. The engine writes its state through role saves and
+        // ReleaseOperation rows, neither of which is an activity row about the SITE.
+        ActivityLog.record(Models.get(InstanceModel.class), applicationId, ACTIVITY_ROLLBACK_ACTION,
+            null);
+    }
+
+    /** {@link #rollback}'s body; callers hold the application's convergence lock. */
+    private static void rollbackLocked(int applicationId) {
         ApplicationReleases.inScopeUnchecked(applicationId, () -> {
             Row serving = ApplicationReleases.ownedServing(applicationId);
             Row target = newestRetired(applicationId);
@@ -388,18 +411,6 @@ public final class ReleaseEngine {
             gatedSwap(docker, op, applicationId, serving.get(InstanceModel.NAME), serverId,
                 serving, desired);
         });
-        // AIDEV-NOTE: no proxy reload any more, and that is the point of the re-keying. A
-        // flip no longer changes the ROUTE TABLE at all -- the site's route names an
-        // application, and the instance upstream handler re-resolves the serving release's
-        // address off the generation gatedSwap just bumped. Rebuilding every site's handler
-        // to move one upstream was the site-keyed shape.
-        // AIDEV-NOTE: recorded HERE, in the engine, not on the surfaces. The admin row
-        // action (SiteResource#rollbackAction) recorded nothing while the automation API
-        // recorded "rollback_triggered" -- the same one-surface-audited asymmetry the
-        // instance power path had. The engine writes its state through role saves and
-        // ReleaseOperation rows, neither of which is an activity row about the SITE.
-        ActivityLog.record(Models.get(InstanceModel.class), applicationId, ACTIVITY_ROLLBACK_ACTION,
-            null);
     }
 
     /**
@@ -641,6 +652,62 @@ public final class ReleaseEngine {
             }
         }
         sweepOrphanCandidates(answered);
+        sweepDuplicateServing();
+    }
+
+    /**
+     * The repair lane for an application left with MORE THAN ONE serving release: every
+     * row but {@link ApplicationReleases#ownedServing}'s own pick (the newest id) is
+     * retired and reclaimed, loudly.
+     *
+     * AIDEV-NOTE: this is a NET, not the fix -- the per-application convergence lock is.
+     * It exists because a lock is a per-PROCESS guarantee while the state it prevents is
+     * durable: a database written by a controller from before the lock (or by two of them)
+     * can already hold it, and nothing else would ever notice -- {@link #reclaimOlderRetired}
+     * walks only {@code retired} rows and {@link #sweepOrphanCandidates} only
+     * {@code candidate} ones, so a second serving release runs forever, holding its port
+     * claim and its booked capacity.
+     */
+    public static void sweepDuplicateServing() {
+        Map<Integer, List<Row>> byApplication = new LinkedHashMap<>();
+        for (Row serving : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_SERVING))
+                .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+                .where(InstanceModel.DELETED_AT.isNull())
+                .orderBy(InstanceModel.ID, SortOrder.DESC)
+                .all()) {
+            Integer applicationId = serving.get(InstanceModel.GENERATED_FOR_ID);
+            if (applicationId != null) {
+                byApplication.computeIfAbsent(applicationId, ignored -> new ArrayList<>())
+                    .add(serving);
+            }
+        }
+        for (Map.Entry<Integer, List<Row>> entry : byApplication.entrySet()) {
+            List<Row> serving = entry.getValue();
+            if (serving.size() < 2) {
+                continue;
+            }
+            int applicationId = entry.getKey();
+            // Newest-first, the ordering ownedServing itself resolves by: the row the proxy
+            // is already forwarding to stays, every stranded older one is reclaimed.
+            int keepId = serving.get(0).get(InstanceModel.ID);
+            for (Row stranded : serving.subList(1, serving.size())) {
+                int strandedId = stranded.get(InstanceModel.ID);
+                Blast.log("RELEASE: application", applicationId, "had", serving.size(),
+                    "serving releases; instance", keepId, "serves, reclaiming stranded"
+                        + " instance", strandedId);
+                ApplicationReleases.inScopeUnchecked(applicationId, () -> {
+                    try {
+                        InstanceService instances = new InstanceService();
+                        instances.assignRuntimeRole(strandedId, InstanceModel.ROLE_RETIRED);
+                        instances.destroy(strandedId);
+                    } catch (RuntimeException e) {
+                        Blast.log("RELEASE: could not reclaim stranded serving instance",
+                            strandedId, "-", reasonOf(e));
+                    }
+                });
+            }
+        }
     }
 
     /**
