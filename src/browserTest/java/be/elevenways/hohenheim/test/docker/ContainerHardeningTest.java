@@ -14,9 +14,11 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
+import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -37,9 +39,12 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,6 +65,33 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * authorities declare SERVICE since 2026-08-03 (see {@link DockerContainerKind#HARDENING}
  * for why that is an image-shape statement and not a trust statement), so 0xcb is what
  * every running container here must show and 0xa80425fb is what none of them may.
+ *
+ * <h2>How to run it</h2>
+ * <pre>zenit-dev test --class ContainerHardeningTest --no-fail-fast</pre>
+ * ONE command, and the verdict is only half of it: a {@code --class} filter disables the
+ * slow-tag exclusion so this class really runs, but on a host with no daemon every method
+ * ABORTS and the run is still green. The gate is the SKIP COUNT -- {@code zd_test} returns
+ * it as data and the LIVE LANE REPORT names each skip and the need behind it. Six methods
+ * ran and zero skipped is the pass; anything else did not test this boundary.
+ *
+ * AIDEV-NOTE: the {@code -Dhohenheim.live.require=...} policy that would turn those skips
+ * into FAILURES is not reachable through this lane, measured 2026-08-23. {@code zenit-dev
+ * test} rejects any flag outside its own vocabulary, so a {@code -D} cannot be passed, and
+ * {@code GRADLE_OPTS} is swallowed by an already-running Gradle daemon -- probed with
+ * {@code GRADLE_OPTS=-Dhohenheim.live.require=docker-socket} against LiveLaneTest, whose
+ * declared-need step stayed a skip instead of failing. Until zenit-dev forwards the
+ * property, read the count; do not believe a green run that ran nothing.
+ *
+ * <p>It runs against the LOCAL Docker socket by design -- the boundary under test is
+ * {@code ContainerHardening} plus a kernel, and both are the same on any Linux, so an ssh
+ * hop to a remote host would add a transport this class does not test and a host that gets
+ * reinstalled. A remote daemon is a {@code DockerClient} transport concern with its own
+ * live classes.
+ *
+ * <p>The class stays declared non-hermetic in {@code .zenit-dev.json}: a green receipt
+ * here describes a DAEMON, not a source tree, so it must never be reused across a run
+ * whose host state changed. Non-hermetic means "never reuse the receipt", not "never
+ * run" -- the command above is the lane, and {@code zenit-dev test --all} includes it.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class ContainerHardeningTest {
@@ -89,6 +121,15 @@ class ContainerHardeningTest {
 
     /** Key {@link #kernelStatusOf} files the pids cgroup cap under. */
     private static final String PIDS_MAX = "PidsMax";
+
+    /**
+     * Filesystem types whose mounts are never a host path, however their mount ROOT reads
+     * -- Docker's masked /proc entries are tmpfs subtrees, not binds of anything on disk.
+     */
+    private static final Set<String> PSEUDO_FILESYSTEMS = Set.of(
+        "proc", "sysfs", "tmpfs", "devpts", "mqueue", "cgroup", "cgroup2", "overlay",
+        "shm", "devtmpfs", "securityfs", "debugfs", "tracefs", "bpf", "fusectl",
+        "configfs", "pstore", "hugetlbfs", "ramfs", "binfmt_misc", "nsfs");
 
     // AIDEV-NOTE: the class-wide netns override is for the paths that resolve their
     // applier through WorkloadNetworkPolicy.forServer (the site tier's deploy AND its
@@ -348,6 +389,130 @@ class ContainerHardeningTest {
     }
 
     /**
+     * THE tenant-shell gate: exactly ONE host path crosses into a workspace container --
+     * its own declared volume directory -- and it is read out of the container's KERNEL
+     * mount table, not out of the spec we sent.
+     *
+     * AIDEV-NOTE: this is the assertion the product is about to depend on. Everything
+     * else in this class proves what a container may NOT be created with; this proves
+     * what a legitimately-created one can actually REACH, which is the question a tenant
+     * with a shell in it is asking. The bind lane ({@code InstanceSpec.binds} ->
+     * {@code ContainerHardening.requireVolumeRootSource}) is what WorkspaceKind deploys
+     * through in production and had no live coverage at all: the daemon-side proof was a
+     * container on daystrom (2026-08-23), not a test.
+     *
+     * AIDEV-NOTE: /proc/self/mountinfo field 4 is the SUBTREE of the source filesystem a
+     * mount exposes, so a host bind is exactly a mount whose field 4 is not "/". That is
+     * what makes "no arbitrary host path" checkable rather than assertable by faith: the
+     * whole set is enumerated and compared, so a bind nobody predicted FAILS instead of
+     * being silently absent from a list of things we thought to look for.
+     */
+    @Test
+    void aWorkspaceContainerReachesItsOwnVolumeAndNoOtherHostPath() throws IOException {
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        LiveLane.requireImage(docker, TEST_IMAGE);
+        LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
+            "no private netns: the instance tier refuses to"
+            + " deploy where its network policy cannot be enforced");
+
+        int instanceId = 999_107;
+        int neighbourId = 999_108;
+        Path volumeRoot = Files.createTempDirectory("hohenheim-volume-root");
+        String savedRoot = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Storage.VOLUME_ROOT);
+        HohenheimSettings.VALUES.setValue(
+            HohenheimSettings.Storage.VOLUME_ROOT, volumeRoot.toString());
+        PrivateNetns netns = new PrivateNetns();
+        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
+        DockerInstanceRuntime runtime = new DockerInstanceRuntime(docker,
+            netns.enforcingPolicy());
+        String created = null;
+        try {
+            // The two directories the controller owns: ours, and the neighbour instance's.
+            String ourVolume = InstanceVolumes.hostPathFor(instanceId, "home");
+            String neighbourVolume = InstanceVolumes.hostPathFor(neighbourId, "home");
+            Files.createDirectories(Path.of(ourVolume));
+            Files.createDirectories(Path.of(neighbourVolume));
+            Files.writeString(Path.of(ourVolume, "marker"), "our-own-volume\n");
+            Files.writeString(Path.of(neighbourVolume, "marker"), "another-tenants\n");
+
+            // The WorkspaceKind shape: one bind of this instance's own volume directory.
+            created = runtime.create(InstanceSpec.builder(handle, TEST_IMAGE,
+                    ResourceLimits.none(), DockerContainerKind.HARDENING,
+                    OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+                .command(List.of("sleep", "600"))
+                .binds(Map.of(ourVolume, "/home/site"))
+                .build());
+            runtime.start(created);
+
+            // 1. THE POSITIVE ANCHOR: the declared volume really is there. Without it,
+            //    every containment assertion below would pass on a container that mounted
+            //    nothing at all.
+            DockerClient.ExecResult ours = docker.exec(created,
+                List.of("cat", "/home/site/marker"));
+            assertThat(ours.output().trim())
+                .as("step 1: the workspace reads its own declared volume")
+                .isEqualTo("our-own-volume");
+
+            // 2. THE WHOLE host surface, from the kernel: every mount exposing a SUBTREE
+            //    of a host filesystem, keyed by mount point. Docker's own three plumbing
+            //    files plus our volume, and nothing else -- an extra bind fails here by
+            //    name rather than needing somebody to have thought of it.
+            Map<String, String> hostMounts = hostBindsOf(docker, created);
+            assertThat(hostMounts.keySet())
+                .as("step 2: the ONLY host paths inside a workspace container")
+                .containsExactlyInAnyOrder("/home/site", "/etc/resolv.conf",
+                    "/etc/hostname", "/etc/hosts");
+            assertThat(hostMounts.get("/home/site"))
+                .as("step 2: and the one that is not Docker plumbing is exactly the"
+                    + " declared volume directory")
+                .isEqualTo(ourVolume);
+            for (Map.Entry<String, String> mount : hostMounts.entrySet()) {
+                if (mount.getKey().equals("/home/site")) {
+                    continue;
+                }
+                assertThat(mount.getValue())
+                    .as("step 2: %s comes from the daemon's own per-container directory",
+                        mount.getKey())
+                    .startsWith("/var/lib/docker/containers/");
+            }
+
+            // 3. The neighbour instance's volume -- a directory under the SAME volume root
+            //    the hardening funnel permits binds from -- never crossed the boundary.
+            assertThat(docker.exec(created, List.of("cat", neighbourVolume + "/marker"))
+                    .exitCode())
+                .as("step 3: another instance's volume directory is not reachable")
+                .isNotEqualTo(0);
+            assertThat(docker.exec(created, List.of("ls", volumeRoot.toString()))
+                    .exitCode())
+                .as("step 3: nor is the volume root that contains both")
+                .isNotEqualTo(0);
+
+            // 4. The Docker socket, the one bind that would be host root, is absent as a
+            //    FILE and not merely refused as a spec key (step 3 of the refusal journey
+            //    proves the spec half).
+            assertThat(docker.exec(created,
+                    List.of("test", "-e", DockerClient.DEFAULT_SOCKET)).exitCode())
+                .as("step 4: no docker socket inside the container")
+                .isNotEqualTo(0);
+
+            // 5. And a container that mounts a host directory is hardened exactly like one
+            //    that does not: the bind buys no capability and no privilege.
+            assertKernelState(docker, created, "step 5: bind-mounting workspace",
+                SERVICE_CAPS, ContainerHardening.pidsLimit());
+        } finally {
+            if (created != null) {
+                runtime.destroy(created);
+            }
+            netns.close();
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.VOLUME_ROOT, savedRoot);
+            deleteTree(volumeRoot);
+        }
+    }
+
+    /**
      * The refusals are a property of the FUNNEL, not of a profile: the instance tier's
      * widened profile buys a caller nothing structural. Same escapes, asserted with the
      * exact profile the instance tier now declares.
@@ -544,6 +709,60 @@ class ContainerHardeningTest {
         }
     }
 
+    /**
+     * Every mount inside the container that exposes a SUBTREE of a host filesystem, as
+     * {@code container mount point -> host source path}.
+     *
+     * AIDEV-NOTE: read from {@code /proc/self/mountinfo} rather than from the daemon's
+     * {@code Mounts} array, because the daemon's array is a record of what it was ASKED
+     * for -- it cannot show a mount the runtime added, and the question here is what the
+     * process can reach. Field 4 (the mount ROOT) is the subtree of the source filesystem:
+     * "/" for a whole filesystem (proc, sysfs, the overlay rootfs, every tmpfs), an
+     * absolute host path for a bind. Kernel pseudo-filesystems are excluded by fs TYPE,
+     * so a bind hidden under /proc or /dev would still be listed.
+     */
+    private static Map<String, String> hostBindsOf(DockerClient docker, String container)
+            throws IOException {
+        DockerClient.ExecResult result = docker.exec(container,
+            List.of("cat", "/proc/self/mountinfo"));
+        assertThat(result.exitCode())
+            .withFailMessage("could not read the mount table inside %s: %s",
+                container, result.output())
+            .isEqualTo(0);
+        Map<String, String> binds = new LinkedHashMap<>();
+        for (String line : result.output().split("\\R")) {
+            int separator = line.indexOf(" - ");
+            if (separator < 0) {
+                continue;
+            }
+            String[] head = line.substring(0, separator).trim().split("\\s+");
+            String[] tail = line.substring(separator + 3).trim().split("\\s+");
+            if (head.length < 5 || tail.length < 1) {
+                continue;
+            }
+            String mountRoot = head[3];
+            String mountPoint = head[4];
+            String type = tail[0];
+            if (mountRoot.equals("/") || PSEUDO_FILESYSTEMS.contains(type)) {
+                continue;
+            }
+            binds.put(mountPoint, mountRoot);
+        }
+        return binds;
+    }
+
+    /** Remove a directory tree; the temporary volume root this class mints is all it sees. */
+    private static void deleteTree(Path root) throws IOException {
+        if (!Files.exists(root)) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            for (Path path : walk.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        }
+    }
+
     /** Whether ONE named container exists on the daemon right now. */
     private static boolean containerExists(DockerClient docker, String name) throws IOException {
         try {
@@ -721,12 +940,18 @@ class ContainerHardeningTest {
         String name = prefix + "-" + System.nanoTime();
         Map<String, Object> spec = Map.of("Image", TEST_IMAGE, "Cmd", List.of("sleep", "30"),
             "HostConfig", hostConfig);
-        assertThatThrownBy(() -> docker.createContainer(name, spec, profile))
-            .as("the escape is refused, naming what was refused")
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("REFUSED")
-            .hasMessageContaining(expected);
+        // AIDEV-NOTE: the create is INSIDE the try, and that is the whole point of the
+        // finally below. It used to sit outside it, so the one run that matters -- a
+        // weakened funnel, where createContainer SUCCEEDS and the first assertion fails --
+        // left its container on the daemon with nothing to remove it. Measured while
+        // falsifying this guard on 2026-08-23: `hh-inst-privileged-<nanos>` survived the
+        // run. A cleanup that only runs when there is nothing to clean up is not one.
         try {
+            assertThatThrownBy(() -> docker.createContainer(name, spec, profile))
+                .as("the escape is refused, naming what was refused")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("REFUSED")
+                .hasMessageContaining(expected);
             assertThatThrownBy(() -> docker.inspectContainer(name))
                 .as("nothing reached the daemon")
                 .isInstanceOf(DockerClient.ApiException.class);
