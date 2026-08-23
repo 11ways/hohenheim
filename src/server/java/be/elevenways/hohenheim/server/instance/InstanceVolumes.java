@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.host.VolumeOperations;
@@ -59,6 +61,112 @@ public final class InstanceVolumes {
     public static @NonNull String hostPathFor(int instanceId, @NonNull String name) {
         requirePlainName(name);
         return rootFor(instanceId) + "/" + name;
+    }
+
+    /**
+     * The instance whose volume directory a host path names -- the INVERSE of
+     * {@link #hostPathFor}, and the reason the container funnel can test containment
+     * structurally instead of trusting that nothing else ever mints a bind source.
+     *
+     * AIDEV-NOTE: it recognises exactly what {@link #hostPathFor} could have produced and
+     * nothing else: the volume root, then an all-digits instance id, then ONE plain volume
+     * name. Two segments, never more -- a deeper path, a traversal, a stray directory
+     * beside the volume root and a non-numeric first segment all answer null, which the
+     * funnel reads as "refuse". Fail closed by construction: a shape this cannot parse is
+     * never a shape it permits.
+     *
+     * @return the owning instance id, or null when this is not a path this class mints
+     */
+    public static @Nullable Integer instanceOfHostPath(@NonNull String hostPath) {
+
+        String root = VolumeBackends.volumeRoot();
+
+        if (!hostPath.startsWith(root + "/")) {
+            return null;
+        }
+
+        String[] segments = hostPath.substring(root.length() + 1).split("/", -1);
+
+        if (segments.length != 2 || segments[0].isEmpty()) {
+            return null;
+        }
+
+        for (int index = 0; index < segments[0].length(); index++) {
+            char digit = segments[0].charAt(index);
+            if (digit < '0' || digit > '9') {
+                return null;
+            }
+        }
+
+        try {
+            requirePlainName(segments[1]);
+            return Integer.valueOf(segments[0]);
+        } catch (Violations | NumberFormatException notAVolumePath) {
+            return null;
+        }
+    }
+
+    /**
+     * THE containment refusal both container drivers apply to a bind source: a host path
+     * must be a volume directory the mounting instance may mount.
+     *
+     * AIDEV-NOTE: it lives HERE, beside the minter, and both transports call it -- the
+     * Docker funnel ({@code ContainerHardening.requireOwnVolumeSource}) and the Incus disk
+     * devices ({@code IncusInstanceRuntime.bindDevices}). Two spellings of this rule is how
+     * one driver ends up permitting what the other refuses, and the Incus lane had NO
+     * containment check at all until 2026-08-23 -- not even the volume-root bound.
+     *
+     * @throws IllegalArgumentException naming the path, the mounting instance and the
+     *         instance the directory actually belongs to
+     */
+    public static void requireMountableBy(@NonNull String hostPath, int instanceId) {
+
+        Integer volumeOwner = instanceOfHostPath(hostPath);
+
+        if (volumeOwner == null) {
+            throw new IllegalArgumentException("REFUSED to create container: host path '"
+                + hostPath + "' is not a volume directory InstanceVolumes could have minted"
+                + " (<volume root>/<instance id>/<volume name>). The derivation IS the"
+                + " containment guarantee, so a path this policy cannot attribute to an"
+                + " instance is refused rather than trusted.");
+        }
+
+        if (!mayMountVolumesOf(instanceId, volumeOwner)) {
+            throw new IllegalArgumentException("REFUSED to create container: instance #"
+                + instanceId + " would bind '" + hostPath + "', which is a volume directory"
+                + " of instance #" + volumeOwner + ". A workload mounts its OWN volumes,"
+                + " and a release additionally mounts those of the application that"
+                + " generated it; nothing else. Being under the volume root is the outer"
+                + " bound, never permission to reach another tenant's data.");
+        }
+    }
+
+    /**
+     * Whether a workload of one instance may mount a volume directory owned by another.
+     *
+     * AIDEV-NOTE: the owner question is already answered once, by
+     * {@link ApplicationReleases#linkOwnerOf} ("a release carries neither links nor
+     * volumes, its application carries both") -- this asks that SAME derivation from the
+     * containment side rather than being a second rule that could disagree with it. The
+     * relation is read off the instance RECORD ({@code generated_for_*}), never off the
+     * spec, so a caller cannot declare itself into another instance's data.
+     *
+     * @return false whenever the relation cannot be established -- an unreadable model, no
+     *         datasource in scope, a row that is gone -- because "cannot verify" and
+     *         "permitted" must never be the same answer here
+     */
+    public static boolean mayMountVolumesOf(int instanceId, int volumeOwnerId) {
+
+        if (instanceId == volumeOwnerId) {
+            return true;
+        }
+
+        try {
+            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            return instance != null && ApplicationReleases.linkOwnerOf(instance) == volumeOwnerId;
+        } catch (RuntimeException unreadable) {
+            return false;
+        }
     }
 
     /** This instance's declared volumes, name-ordered. */

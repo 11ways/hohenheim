@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
+import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -328,8 +330,10 @@ public final class ContainerHardening {
      *
      * @param containerSpec the /containers/create body; its HostConfig is created when absent
      * @param profile       the workload kind's declared capability needs
-     * @throws IllegalArgumentException when the spec sets a key this policy owns or a
-     *                                  host namespace -- loud, never silently overwritten
+     * @throws IllegalArgumentException when the spec sets a key this policy owns, a host
+     *                                  namespace, or a bind of a host path its declared
+     *                                  instance owner may not mount -- loud, never
+     *                                  silently overwritten
      */
     public static void applyTo(@NonNull Map<String, Object> containerSpec, @NonNull Profile profile) {
         applyTo(containerSpec, profile, null);
@@ -351,15 +355,13 @@ public final class ContainerHardening {
                                @NonNull Profile profile,
                                @Nullable Integer tighterPidsLimit) {
         Object existing = containerSpec.get("HostConfig");
-        Map<String, Object> hostConfig;
+        Map<String, Object> hostConfig = new LinkedHashMap<>();
         if (existing instanceof Map<?, ?> map) {
-            hostConfig = new LinkedHashMap<>();
             map.forEach((key, value) -> hostConfig.put(String.valueOf(key), value));
-        } else {
-            hostConfig = new LinkedHashMap<>();
         }
 
-        refuseEscapes(hostConfig);
+        refuseEscapes(hostConfig, OwnerLabels.parse(
+            labelsOf(containerSpec) instanceof Map<?, ?> labels ? labels : null));
 
         hostConfig.put("CapDrop", List.of("ALL"));
         if (!profile.capabilities().isEmpty()) {
@@ -448,7 +450,8 @@ public final class ContainerHardening {
      * a mount entry's own {@code Type}/{@code Source} members, because Go decodes those
      * structs the same way. Never compare a caller-supplied HostConfig key with equals().
      */
-    private static void refuseEscapes(Map<String, Object> hostConfig) {
+    private static void refuseEscapes(Map<String, Object> hostConfig,
+                                      OwnerLabels.@Nullable Owner owner) {
         Map<String, Object> folded = caseFolded(hostConfig);
         for (Object rawKey : hostConfig.keySet()) {
             String key = String.valueOf(rawKey);
@@ -485,7 +488,9 @@ public final class ContainerHardening {
                 Map<String, Object> foldedMount = caseFolded(entry);
                 Object type = foldedMount.get(fold("Type"));
                 if (type instanceof String text && text.equalsIgnoreCase("bind")) {
-                    requireVolumeRootSource(foldedMount.get(fold("Source")));
+                    Object source = foldedMount.get(fold("Source"));
+                    requireVolumeRootSource(source);
+                    requireOwnVolumeSource(source, owner);
                 }
             }
         }
@@ -504,6 +509,12 @@ public final class ContainerHardening {
      * test cannot see through a symlink, which is why nothing outside {@link
      * be.elevenways.hohenheim.server.instance.InstanceVolumes} may mint a bind source -- the
      * derivation there is what guarantees the path is one the controller created.
+     *
+     * AIDEV-NOTE: this is the OUTER bound only. It says "somewhere under the volume root",
+     * which is a statement about this DEPLOYMENT and says nothing about which INSTANCE --
+     * so on its own it let one instance bind another's data directory.
+     * {@link #requireOwnVolumeSource} is the per-instance half and runs immediately after
+     * it; keep both, they answer different questions.
      *
      * @throws IllegalArgumentException naming the refused source
      */
@@ -529,6 +540,54 @@ public final class ContainerHardening {
                 + " is a volume directory under '" + root + "/', created by InstanceVolumes;"
                 + " everything else stays a named volume or a tmpfs.");
         }
+    }
+
+    /**
+     * The instance-level half of bind containment: a bind source must be a volume
+     * directory THIS container's owner may mount.
+     *
+     * AIDEV-NOTE: {@link #requireVolumeRootSource} above is the OUTER bound (somewhere
+     * under the volume root) and it was, until 2026-08-23, the whole rule -- which made
+     * containment between instances entirely conventional: instance A's spec could legally
+     * bind instance B's data directory, and nothing structural stopped it. Proven live:
+     * one extra bind naming a neighbour's volume directory passed this funnel with no
+     * refusal and was caught only by a kernel-side mountinfo assertion. This is the
+     * structural half. The identity comes off the create body's OWN owner labels -- the
+     * attribution every managed resource already carries and that {@code removeIfOwnedBy}
+     * and the reconciler already answer against -- so no call site had to be trusted to
+     * pass it, and a caller that omits the labels can bind NOTHING rather than anything.
+     *
+     * AIDEV-NOTE: the permitted set is {itself} plus whatever
+     * {@code ApplicationReleases.linkOwnerOf} derives from the instance RECORD, which is
+     * how a release container legitimately mounts its APPLICATION's volumes. That is one
+     * derivation asked from two sides, not a second rule: the release lane cannot widen
+     * here without widening there.
+     *
+     * @throws IllegalArgumentException naming the source, this container's owner and the
+     *                                  instance the directory actually belongs to
+     */
+    static void requireOwnVolumeSource(@Nullable Object rawSource,
+                                       OwnerLabels.@Nullable Owner owner) {
+
+        String source = rawSource == null ? "" : String.valueOf(rawSource).trim();
+        Integer instanceId = OwnerLabels.instanceIdOf(owner);
+
+        if (instanceId == null) {
+            throw new IllegalArgumentException("REFUSED to create container: it binds host"
+                + " path '" + source + "' while declaring no instance owner ("
+                + OwnerLabels.MODEL + "=" + InstanceModel.MODEL_ID + " plus a numeric "
+                + OwnerLabels.ID + "). A bind is permitted per INSTANCE, so a container"
+                + " with no instance identity may bind nothing: there is nobody to check"
+                + " the directory against.");
+        }
+
+        InstanceVolumes.requireMountableBy(source, instanceId);
+    }
+
+    /** The Labels value Go's decoder would resolve, exact spelling preferred. */
+    private static @Nullable Object labelsOf(@NonNull Map<String, Object> containerSpec) {
+        Object exact = containerSpec.get("Labels");
+        return exact != null ? exact : caseFolded(containerSpec).get(fold("Labels"));
     }
 
     /**

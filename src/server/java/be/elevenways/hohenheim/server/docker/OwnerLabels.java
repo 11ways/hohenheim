@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.protoblast.common.registry.Identifier;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -56,6 +57,25 @@ public final class OwnerLabels {
     public static @NonNull Map<String, String> of(@NonNull Identifier model, @NonNull Object recordId) {
         return Map.of(MODEL, model.toString(), ID, String.valueOf(recordId),
             CONTROLLER, ControllerIdentity.token());
+    }
+
+    /**
+     * The instance id an owner claim names, or null when it names anything else.
+     *
+     * AIDEV-NOTE: lives here rather than in either driver because BOTH transports gate a
+     * bind on it (ContainerHardening for Docker, IncusInstanceRuntime for Incus disk
+     * devices), and two spellings of "is this owner an instance, and which one" is exactly
+     * the drift that would let one driver permit what the other refuses.
+     */
+    public static @Nullable Integer instanceIdOf(@Nullable Owner owner) {
+        if (owner == null || !owner.model().equals(InstanceModel.MODEL_ID)) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(owner.id());
+        } catch (NumberFormatException notARecordId) {
+            return null;
+        }
     }
 
     /** @return whether an owner claim was made by THIS controller */
