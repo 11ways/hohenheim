@@ -20,8 +20,6 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -315,11 +313,6 @@ public class InstanceScheduleResource extends RowResource {
     }
 
     static @NonNull RecordSchedules recordSchedules() {
-        Datasource current = Db.current();
-        Datasource datasource = current != null ? current : Datasources.getDefault();
-        if (datasource == null) {
-            throw new IllegalStateException("no datasource available for record schedules");
-        }
-        return new RecordSchedules(datasource);
+        return new RecordSchedules(Db.currentOrDefault());
     }
 }

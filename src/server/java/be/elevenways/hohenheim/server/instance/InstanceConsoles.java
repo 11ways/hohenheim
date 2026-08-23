@@ -123,14 +123,14 @@ public final class InstanceConsoles {
             // Incus shape: the attach happens in arm(), AFTER start; the gap between
             // start and attach is closed by seeding the driver's console backlog.
             return new Watch(null, readiness, stopCommand, support, resolved,
-                resolved.serverId(), leases, Db.current(), row.get(InstanceModel.NAME));
+                resolved.serverId(), leases, Db.currentOrDefault(), row.get(InstanceModel.NAME));
         }
         // A fresh deploy is a fresh episode only insofar as the flap window has aged
         // out; rapid deploy-crash cycles stay throttled by design.
         InstanceConsoleSession session = open(support, resolved, instanceId, stopCommand,
-            leases, Db.current());
+            leases, Db.currentOrDefault());
         return new Watch(session, readiness, stopCommand, support, resolved,
-            resolved.serverId(), leases, Db.current(), row.get(InstanceModel.NAME));
+            resolved.serverId(), leases, Db.currentOrDefault(), row.get(InstanceModel.NAME));
     }
 
     /**
@@ -238,7 +238,7 @@ public final class InstanceConsoles {
         String stopCommand = trimmedOrNull(
             templateValue(resolved.row(), InstanceTemplateModel.STOP_COMMAND));
         return open(support, resolved, instanceId, stopCommand,
-            service.leases(), Db.current());
+            service.leases(), Db.currentOrDefault());
     }
 
     /**

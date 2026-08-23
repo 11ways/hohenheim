@@ -226,7 +226,7 @@ public class GitWebhookHandler {
                     PreviewBranches.patternsOf(
                         sourceSettings.get("preview_branches")), branch)) {
             String pushedSha = payload instanceof Map<?, ?> map ? str(map.get("after")) : "";
-            Datasource datasource = Db.current();
+            Datasource datasource = Db.currentOrDefault();
             JobRunner.startVirtualThread(() -> withScope(datasource, () ->
                 PreviewDeployments
                     .deployQuietly(applicationId, branch,
@@ -257,7 +257,7 @@ public class GitWebhookHandler {
             GitProviderClient.StatusState.PENDING, DeployStatuses.CONTEXT_DEPLOY,
             "Deploy queued", null);
         // The build takes minutes; the provider expects an answer in seconds.
-        Datasource deployDatasource = Db.current();
+        Datasource deployDatasource = Db.currentOrDefault();
         String deployBranch = configuredBranch;
         // Which deploy verb depends on WHAT the record is: an application converges a
         // release, a workspace checks out and builds inside its own container. The branch
@@ -326,7 +326,7 @@ public class GitWebhookHandler {
 
     private static void queuePreviewTeardown(int applicationId, @NonNull String ref,
                                              @NonNull String reason) {
-        Datasource datasource = Db.current();
+        Datasource datasource = Db.currentOrDefault();
         JobRunner.startVirtualThread(() -> withScope(datasource, () ->
             PreviewDeployments
                 .destroyForRefQuietly(applicationId, ref, reason)));
@@ -352,7 +352,7 @@ public class GitWebhookHandler {
 
         int applicationId = application.get(InstanceModel.ID);
         String ref = previewEvent.ref();
-        Datasource datasource = Db.current();
+        Datasource datasource = Db.currentOrDefault();
         switch (previewEvent.intent()) {
             case DEPLOY -> {
                 // The build takes minutes; the provider expects an answer in seconds.

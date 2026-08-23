@@ -103,7 +103,7 @@ public final class HohenheimHandlers {
                 conduit.notFound();
                 return null;
             }
-            Datasource datasource = Db.current();
+            Datasource datasource = Db.currentOrDefault();
             JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
                 ApplicationDeploys.deployQuietly(applicationId, null, "api")));
             return HandlerSupport.jsonUntyped(Map.of("status", "queued", "site", siteId));
