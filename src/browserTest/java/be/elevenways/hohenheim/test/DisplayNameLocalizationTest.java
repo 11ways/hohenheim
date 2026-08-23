@@ -113,6 +113,15 @@ class DisplayNameLocalizationTest {
             .as("the upstream-kind registry is populated (an empty walk is vacuous)")
             .isNotNull();
 
+        // The discriminator ITSELF, pinned here rather than left to fork allocation:
+        // whether a fixture that declares a fake kind happens to share this JVM is luck,
+        // so the rule is proven directly on both sides instead of hoping for the polluted
+        // fork that would otherwise be the only place it is exercised.
+        assertThat(ships(UpstreamKinds.REGISTRY.iterator().next()))
+            .as("a kind declared outside the test tree is judged").isTrue();
+        assertThat(ships(new TestTreeDeclaration()))
+            .as("a kind declared inside the test tree is skipped").isFalse();
+
         // The DESCRIPTION is walked beside the label because it became a Microcopy too
         // (the card presentations draw it): an English literal there rots exactly the same
         // way, and nothing else would notice.
@@ -182,6 +191,10 @@ class DisplayNameLocalizationTest {
         assertThat(broken)
             .as("every label embedded in a refusal is read back as TEXT")
             .isEmpty();
+    }
+
+    /** Stands in for a fixture-declared kind; its PACKAGE is the whole point. */
+    private static final class TestTreeDeclaration {
     }
 
     /**
