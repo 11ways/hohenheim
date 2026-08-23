@@ -69,13 +69,16 @@ import java.util.stream.Stream;
  * whose owning JVM is provably dead, so its volumes hold nothing but a finished test's
  * scratch. Leaving them behind is how a live host fills up instead.
  *
- * AIDEV-NOTE: this reaps DOCKER resources only, and it is the whole namespace on a
- * Docker-backed host. What it deliberately cannot reach: Incus instances, their storage
- * subvolumes and btrfs qgroups on an enrolled REMOTE host (measured on daystrom
- * 2026-08-23: a killed workspace run left a running container, a network, and a 2 GiB
- * quota'd btrfs subvolume under /opt/hohenheim/data/volumes). Those live on another
- * machine behind another client; a reaper for them belongs beside the Incus live fixtures,
- * not here, and until one exists an operator sweeps them by namespace prefix.
+ * AIDEV-NOTE: this reaps DOCKER resources only, and on a Docker-backed host that is the
+ * whole namespace. Three things it deliberately cannot reach, all measured on daystrom
+ * 2026-08-23. Incus instances and their btrfs storage subvolumes plus qgroups live on
+ * another machine behind another client, so a reaper for them belongs beside the Incus
+ * live fixtures. The per-namespace nftables TABLE outlives its chains --
+ * {@code WorkloadNetworkPolicy.remove} deletes the chain, never the table, so a host that
+ * runs workloads in its OWN netns accumulates one empty {@code hohenheim_net_<token>}
+ * table per namespace forever (two found and removed there). This lane never sees that
+ * one: its policies live inside a {@code PrivateNetns} that dies with the fixture, which
+ * is why the leak only shows on a real deployment.
  */
 public final class LiveNamespaces {
 
