@@ -2,7 +2,9 @@ package be.elevenways.hohenheim;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
+import be.elevenways.zenit.common.edit.EmptyNarrowingReason;
 import be.elevenways.zenit.common.edit.SiblingRulesResolver;
 import be.elevenways.zenit.common.orm.query.rules.Combinator;
 import be.elevenways.zenit.common.orm.query.rules.Rule;
@@ -18,6 +20,11 @@ import java.util.Map;
  * The dependent-picker resolvers of the admin forms (host by kind, template by kind,
  * runtime image by kind, exposable instance by upstream kind), each a DRY value type
  * the browser re-runs on every form-scope publish.
+ *
+ * A resolver that can say WHY it legitimately narrows to nothing also implements
+ * {@link EmptyNarrowingReason}, so the empty picker explains itself instead of reading
+ * as a broken list; the explanation is derived from the same sibling values and the same
+ * branches the narrowing is.
  *
  * AIDEV-NOTE: the records are DECLARED and touched here (common) but the instances the
  * forms use are built SERVER-side with handler-derived data ({@code InstanceKinds}):
@@ -72,7 +79,7 @@ public final class HohenheimPickRules {
         @NonNull String kindSibling,
         @NonNull Map<String, List<String>> runtimesByKind,
         @NonNull List<String> volumeQuotaKinds
-    ) implements SiblingRulesResolver {
+    ) implements SiblingRulesResolver, EmptyNarrowingReason {
 
         @Override
         public @Nullable RuleGroup resolve(@NonNull Map<String, Object> siblingValues) {
@@ -92,9 +99,42 @@ public final class HohenheimPickRules {
             }
             return rules.build();
         }
+
+        /**
+         * AIDEV-NOTE: the two branches are the two RULES above, and they must stay that
+         * way: a reason naming something the narrowing does not test (host ADMISSION is
+         * the tempting one -- it refuses at placement, not here) sends an operator to fix
+         * a fact that would not have widened this list. The runtime tokens are
+         * interpolated raw, the same spelling {@code InstanceKinds.runtimeMismatch}
+         * already shows an operator.
+         */
+        @Override
+        public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
+            String kind = chosen(siblingValues, this.kindSibling);
+            if (kind == null) {
+                return null;
+            }
+            List<String> runtimes = this.runtimesByKind.get(kind);
+            if (runtimes == null || runtimes.isEmpty()) {
+                return null;
+            }
+            String key = this.volumeQuotaKinds.contains(kind)
+                ? "no_quota_capable_host"
+                : "no_runtime_host";
+            return Microcopy.of(key).withFilter("scope", "instance")
+                .withArg("runtimes", String.join(", ", runtimes));
+        }
     }
 
-    /** Narrow to records whose {@code fieldName} equals the sibling's chosen value. */
+    /**
+     * Narrow to records whose {@code fieldName} equals the sibling's chosen value.
+     *
+     * AIDEV-NOTE: deliberately NO {@link EmptyNarrowingReason}. This one carries two
+     * NAMES and no domain knowledge, so the only sentence it could write is a restatement
+     * that the list is empty -- which is what the generic empty text already says, and
+     * which the interface exists to replace. A caller that knows what its narrowing means
+     * should declare its own resolver rather than teach this one to guess.
+     */
     @HawkeyeClass
     public record SiblingEqualsRules(
         @NonNull String siblingName,
@@ -121,7 +161,7 @@ public final class HohenheimPickRules {
         @NonNull String kindSibling,
         @NonNull List<String> imageKinds,
         @NonNull List<String> incusOnlyKinds
-    ) implements SiblingRulesResolver {
+    ) implements SiblingRulesResolver, EmptyNarrowingReason {
 
         @Override
         public @Nullable RuleGroup resolve(@NonNull Map<String, Object> siblingValues) {
@@ -136,6 +176,19 @@ public final class HohenheimPickRules {
             }
             return rules.build();
         }
+
+        /** The Incus-only kinds fail on a DIFFERENT rule, so they get their own sentence. */
+        @Override
+        public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
+            String kind = chosen(siblingValues, this.kindSibling);
+            if (kind == null || !this.imageKinds.contains(kind)) {
+                return null;
+            }
+            String key = this.incusOnlyKinds.contains(kind)
+                ? "no_incus_runtime_image"
+                : "no_enabled_runtime_image";
+            return Microcopy.of(key).withFilter("scope", "instance");
+        }
     }
 
     /**
@@ -147,7 +200,7 @@ public final class HohenheimPickRules {
         @NonNull String kindSibling,
         @NonNull String instanceKindValue,
         @NonNull List<String> exposableKinds
-    ) implements SiblingRulesResolver {
+    ) implements SiblingRulesResolver, EmptyNarrowingReason {
 
         @Override
         public @Nullable RuleGroup resolve(@NonNull Map<String, Object> siblingValues) {
@@ -157,6 +210,16 @@ public final class HohenheimPickRules {
             }
             return RuleGroup.and(
                 Rule.list("kind", RuleOperator.IN, List.copyOf(this.exposableKinds)));
+        }
+
+        /** One rule, so one sentence: nothing this installation runs publishes a port. */
+        @Override
+        public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
+            String kind = chosen(siblingValues, this.kindSibling);
+            if (kind == null || !this.instanceKindValue.equals(kind)) {
+                return null;
+            }
+            return Microcopy.of("no_exposable_instance").withFilter("scope", "site");
         }
     }
 }
