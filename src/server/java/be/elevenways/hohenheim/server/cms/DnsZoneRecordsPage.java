@@ -157,7 +157,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
                 ? ReturnTarget.bind(CmsRoutes.delete(PANEL, resource.slug(), resource.rowKey(row)),
                     returnTo).toUrl()
                 : null,
-            resource.deleteConfirmation(),
+            row -> resource.deleteConfirmationFor(row),
             // Promoted seam: the framework's own affordance answer, which the generated
             // list page uses too -- this page used to carry a copy of it.
             row -> InlineEditStates.editableCellsFor(resource, applied, row, accessContext),
