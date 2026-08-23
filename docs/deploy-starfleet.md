@@ -202,3 +202,55 @@ spamservice supplies its own URL and key). Harmless, but they are dead keys.
 service that actually runs lives under
 `/opt/hohenheim/data/managed-services/spamservice/`. Nothing reads
 `/opt/spamservice/` any more; it is ~660 MB of stale jars.
+
+## Deploy 2026-08-23: the Phase 0 schema cutover (a repeatable lane)
+
+hohenheim ships ONE migration edited in place, so a Phase 0-sized schema change
+makes the live database refuse the new jar, and `--repair-migration-checksums`
+correctly refuses real drift. The 2026-08-19 deploy hand-carried a delta because
+the reshaped tables happened to be empty. That does not generalize. This one did:
+
+    fresh schema  = the new jar's own `--run-migrations` into an empty database
+    live content  = a column-INTERSECTION copy of every non-empty table
+
+The copier lives at `/root/hh-rehearse-20260823/import.py` on the host (keep it;
+it is the lane, not a one-off). It carries every table present in both schemas,
+leaves behind columns the new schema dropped, lets added columns take their
+declared default, and REFUSES loudly on an unmapped value rather than guessing.
+Tables the new build regenerates are deliberately not carried: `zenit_migrations`
+(the fresh ledger is the authority), `zenit_seeds` (so every once-seed re-runs
+against the new shape), `system_task` + `system_task_history`, `zenit_leases`,
+`reconcile_findings`, and the instance templates (re-seeded by game-templates).
+The only carried table needing a value map was `sites`: `site_type` became
+`upstream_kind`, `hohenheim:proxy` -> `hohenheim:address`.
+
+Keep the KEYRING. A fresh keyring cannot read carried encrypted columns
+(certificate private keys, host identity keys, incus client keys). The database
+is new; the keyring is not; that pairing is the whole point.
+
+Rehearsal that actually proves something (all of it on copies, service running):
+  1. `--run-migrations` into the scratch dir, then import, then an INERT boot
+     (every role false, ports moved) -- proves the jar boots on the new data.
+  2. A SECOND boot with proxy+dns roles TRUE but ports moved (18080/18443,
+     127.0.0.1:15353) and firewall/stacks/databases/instances FALSE -- the role
+     set that must never touch the live Docker daemon or the live spamservice.
+     Then query it: `dig +norecurse -p 15353 @127.0.0.1 starfleet.life SOA`
+     (expect the `aa` flag), the NS RRset, an out-of-zone name (expect REFUSED),
+     and `curl -H 'Host: admin.starfleet.life' http://127.0.0.1:18080/` (expect
+     301). That is the difference between "the jar started" and "the zone and the
+     routes survived the migration".
+Downtime was ~1 minute because the fresh-migrated database was staged BEFORE the
+service stopped; only the import and the two moves happen inside the window.
+`cutover.sh` in `/root/hh-cutover-20260823/` restarts the OLD service untouched
+on any failure before the swap.
+
+Rollback: `/root/hohenheim-preflight-20260823-011900/` holds the old jar
+(`hohenheim-server.jar.rollback`), the pre-deploy database, the at-swap database,
+the settings directory and the keyring. `hohenheim.db.pre-phase0` in that same
+directory is the live file as it stood at the swap.
+
+Verified after both restarts: 0 exceptions, listeners on 53 udp+tcp / 80 / 443 /
+3000, `aa` SOA + NS + admin A over TCP + out-of-zone REFUSED on the public IP,
+all three public names `ssl_verify_result=0` from outside (302 / 200 / 200, HTTP
+301), RSS 324 MB, `/opt/hohenheim/public/` holding only `apex`, and `/cms.js`
+served at exactly the jar's byte count (4655418) -- the Aug 15 shadowing check.
