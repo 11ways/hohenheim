@@ -65,6 +65,7 @@ public final class AuthProviderResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "auth_provider"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "auth_provider"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "auth_provider"); }
     @Override public @NonNull String slug() { return "auth-providers"; }
     @Override public @NonNull Model model() { return Models.get(SiteAuthProviderModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

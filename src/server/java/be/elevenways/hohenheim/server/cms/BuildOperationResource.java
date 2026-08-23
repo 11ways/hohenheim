@@ -78,6 +78,7 @@ public final class BuildOperationResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "build_operation"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "build_operation"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "build_operation"); }
     @Override public @NonNull String slug() { return "builds"; }
     @Override public @NonNull Model model() { return Models.get(BuildOperationModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

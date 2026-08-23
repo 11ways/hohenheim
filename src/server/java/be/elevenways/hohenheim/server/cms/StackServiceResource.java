@@ -101,6 +101,7 @@ public class StackServiceResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "stack_service"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "stack_service"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "stack_service"); }
     @Override public @NonNull String slug() { return "stack-services"; }
     @Override public @NonNull Model model() { return Models.get(StackServiceModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

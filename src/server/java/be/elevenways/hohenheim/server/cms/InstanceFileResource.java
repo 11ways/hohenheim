@@ -54,6 +54,7 @@ public final class InstanceFileResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_file"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_file"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_file"); }
     @Override public @NonNull String slug() { return "instance-files"; }
     @Override public @NonNull Model model() { return Models.get(InstanceFileModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

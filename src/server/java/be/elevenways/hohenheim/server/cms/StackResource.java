@@ -90,6 +90,7 @@ public class StackResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "stack"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "stack"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "stack"); }
     @Override public @NonNull String slug() { return "stacks"; }
     @Override public @NonNull Model model() { return Models.get(StackModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

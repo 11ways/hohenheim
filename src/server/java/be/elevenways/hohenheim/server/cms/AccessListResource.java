@@ -68,6 +68,7 @@ public final class AccessListResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "access_list"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "access_list"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "access_list"); }
     @Override public @NonNull String slug() { return "access-lists"; }
     @Override public @NonNull Model model() { return Models.get(AccessListModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

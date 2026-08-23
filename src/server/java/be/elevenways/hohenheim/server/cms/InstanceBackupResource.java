@@ -23,6 +23,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -60,6 +61,7 @@ public class InstanceBackupResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_backup"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_backup"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_backup"); }
     @Override public @NonNull String slug() { return "instance-backups"; }
     @Override public @NonNull Model model() { return Models.get(InstanceBackupModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

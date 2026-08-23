@@ -67,6 +67,7 @@ public final class EnvironmentVariableResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "environment_variable"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "environment_variable"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "environment_variable"); }
     @Override public @NonNull String slug() { return "environment-variables"; }
     @Override public @NonNull Model model() { return Models.get(InstanceVariableModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

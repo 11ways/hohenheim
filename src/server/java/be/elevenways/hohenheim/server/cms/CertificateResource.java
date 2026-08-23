@@ -98,6 +98,7 @@ public class CertificateResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "certificate"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "certificate"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "certificate"); }
     @Override public @NonNull String slug() { return "certificates"; }
     @Override public @NonNull Model model() { return Models.get(CertificateModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

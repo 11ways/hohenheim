@@ -68,6 +68,7 @@ public class PreviewDeploymentResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "preview_deployment"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "preview_deployment"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "preview_deployment"); }
     @Override public @NonNull String slug() { return "previews"; }
     @Override public @NonNull Model model() { return Models.get(PreviewDeploymentModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

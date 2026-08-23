@@ -47,6 +47,7 @@ public final class BackupTargetResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "backup_target"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "backup_target"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "backup_target"); }
     @Override public @NonNull String slug() { return "backup-targets"; }
     @Override public @NonNull Model model() { return Models.get(BackupTargetModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

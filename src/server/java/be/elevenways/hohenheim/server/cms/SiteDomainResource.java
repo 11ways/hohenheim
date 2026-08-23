@@ -118,6 +118,7 @@ public class SiteDomainResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site_domain"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "site_domain"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "site_domain"); }
     @Override public @NonNull String slug() { return "domains"; }
     @Override public @NonNull Model model() { return Models.get(SiteDomainModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

@@ -62,6 +62,11 @@ public final class SpamserviceSamplesResource extends SpamserviceRemoteResource<
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_sample"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "spamservice_sample"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "spamservice_sample"); }
+
+    /** Without this the analysis page is headed by the sample's UUID. */
+    @Override public @Nullable String recordTitle(@NonNull SampleSummary row) { return row.ip(); }
+
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Schema schema() { return SCHEMA; }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

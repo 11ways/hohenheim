@@ -67,6 +67,7 @@ public final class AccessRuleResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "access_rule"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "access_rule"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "access_rule"); }
     @Override public @NonNull String slug() { return "access-rules"; }
     @Override public @NonNull Model model() { return Models.get(AccessRuleModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

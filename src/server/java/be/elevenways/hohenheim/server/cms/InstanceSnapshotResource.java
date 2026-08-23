@@ -25,6 +25,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -56,6 +57,7 @@ public class InstanceSnapshotResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_snapshot"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_snapshot"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_snapshot"); }
     @Override public @NonNull String slug() { return "instance-snapshots"; }
     @Override public @NonNull Model model() { return Models.get(InstanceSnapshotModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

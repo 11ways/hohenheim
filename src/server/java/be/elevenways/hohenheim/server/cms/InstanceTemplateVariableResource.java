@@ -72,6 +72,7 @@ public final class InstanceTemplateVariableResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_template_variable"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "template_variable"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "template_variable"); }
     @Override public @NonNull String slug() { return "instance-template-variables"; }
     @Override public @NonNull Model model() { return Models.get(InstanceTemplateVariableModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

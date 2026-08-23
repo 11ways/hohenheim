@@ -152,6 +152,7 @@ public final class ServerResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "server"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "server"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "server"); }
     @Override public @NonNull String slug() { return "servers"; }
     @Override public @NonNull Model model() { return Models.get(ServerModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

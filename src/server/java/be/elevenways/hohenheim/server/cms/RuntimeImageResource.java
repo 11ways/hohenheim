@@ -67,6 +67,7 @@ public class RuntimeImageResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "runtime_image"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "runtime_image"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "runtime_image"); }
     @Override public @NonNull String slug() { return "runtime-images"; }
     @Override public @NonNull Model model() { return Models.get(RuntimeImageModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

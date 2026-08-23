@@ -98,6 +98,7 @@ public final class NotificationChannelResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "notification_channel"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "notification_channel"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "notification_channel"); }
     @Override public @NonNull String slug() { return "notifications"; }
     @Override public @NonNull Model model() { return Models.get(NotificationChannelModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
