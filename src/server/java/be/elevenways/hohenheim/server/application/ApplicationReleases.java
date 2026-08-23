@@ -89,12 +89,40 @@ public final class ApplicationReleases {
      * for a git-sourced application, then deploy ONLY when the desired settings changed or
      * the workload is not running -- an unchanged, running release is reused.
      *
+     * AIDEV-NOTE: the whole pass -- read the serving release, resolve/build the spec, flip
+     * the roles, schedule the drain -- runs under the application's convergence lock, and
+     * that read-to-flip span is exactly what the lock is for. Without it a webhook and a
+     * Deploy button (or two pushes) both read the SAME serving release, both build, and
+     * both flip: two rows end up role {@code serving}, {@code ownedServing} picks the
+     * newer, and the older runs forever -- no sweeper walks a second serving row, and it
+     * keeps its port claim and its booked capacity.
+     *
+     * AIDEV-NOTE: the second converge WAITS, it does not coalesce. Waiting is the honest
+     * default: a push of commit N+1 arriving during the release of N must still deploy
+     * N+1, and only the queued caller's own source can answer whether an in-flight
+     * converge is equivalent to it. The cost of waiting is already paid for by the fast
+     * lane below -- the waiter re-reads the freshly flipped release, finds its source
+     * fingerprint equal and returns it without resolving a spec, so a duplicate deploy
+     * costs one daemon inspect rather than a second build.
+     *
+     * The lock is NEVER held across the drain: {@code scheduleDrain} only hands work to a
+     * virtual thread, and that thread sleeps out the drain window after this method (and
+     * the lock) has returned.
+     *
      * @param overrides source facts resolved outside the record (a fresh checkout's
      *        {@code build_context} and {@code commit_sha}); empty for a plain converge
      * @throws Violations naming the refusal (quota, image, fence, daemon)
      */
     public static @NonNull Release converge(int applicationId,
                                             @NonNull Map<String, Object> overrides) {
+        synchronized (ConvergenceLocks.forApplication(applicationId)) {
+            return convergeLocked(applicationId, overrides);
+        }
+    }
+
+    /** {@link #converge}'s body; callers hold the application's convergence lock. */
+    private static @NonNull Release convergeLocked(int applicationId,
+                                                   @NonNull Map<String, Object> overrides) {
 
         Row application = requireApplication(applicationId);
         Map<String, Object> settings = resolvedSettings(application, overrides);

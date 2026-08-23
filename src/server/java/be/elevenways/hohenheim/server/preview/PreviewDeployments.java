@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.application.ConvergenceLocks;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -55,7 +56,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The preview-deployment lifecycle: create/refresh one git ref OF AN APPLICATION, serve it
@@ -81,9 +81,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * code path into a preview spec.
  */
 public final class PreviewDeployments {
-
-    /** Per-(application, ref) serialization so a webhook burst cannot race itself. */
-    private static final Map<String, Object> LOCKS = new ConcurrentHashMap<>();
 
     private PreviewDeployments() {
     }
@@ -736,8 +733,13 @@ public final class PreviewDeployments {
             PreviewDeploymentModel.MODEL_ID.toString(), previewId), work::run);
     }
 
+    /**
+     * Per-(application, ref) serialization so a webhook burst cannot race itself; the
+     * monitor comes from the shared registry the release lane locks on, in its own key
+     * space -- a preview build must never block a production deploy.
+     */
     private static @NonNull Object lockFor(int applicationId, @NonNull String ref) {
-        return LOCKS.computeIfAbsent(applicationId + "\n" + ref, ignored -> new Object());
+        return ConvergenceLocks.forPreview(applicationId, ref);
     }
 
     private static @NonNull Microcopy violation(@NonNull String key) {
