@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusWebSocket;
+import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -1104,11 +1105,26 @@ public final class IncusInstanceRuntime
 
         Map<String, Object> devices = new LinkedHashMap<>();
         int index = 0;
+        // AIDEV-NOTE: the SAME containment rule the Docker funnel applies
+        // (InstanceVolumes.requireMountableBy, called from
+        // ContainerHardening.requireOwnVolumeSource), and it is called here because this
+        // driver never passes through that funnel -- until 2026-08-23 an Incus workload's
+        // disk devices were built from spec.binds() with NO check at all, not even the
+        // volume-root bound the Docker side has had for weeks. A host path is a mount of
+        // real tenant data whichever daemon materializes it.
+        Integer instanceId = OwnerLabels.instanceIdOf(OwnerLabels.parse(spec.ownerLabels()));
 
         for (Map.Entry<String, String> bind : spec.binds().entrySet()) {
             if (bind.getValue() == null || bind.getValue().isBlank()) {
                 continue;
             }
+            if (instanceId == null) {
+                throw new IllegalArgumentException("REFUSED to create container: '"
+                    + spec.handle() + "' binds host path '" + bind.getKey() + "' while"
+                    + " declaring no instance owner. A bind is permitted per INSTANCE, so a"
+                    + " workload with no instance identity may bind nothing.");
+            }
+            InstanceVolumes.requireMountableBy(bind.getKey(), instanceId);
             Map<String, Object> device = new LinkedHashMap<>();
             device.put("type", "disk");
             device.put("source", bind.getKey());

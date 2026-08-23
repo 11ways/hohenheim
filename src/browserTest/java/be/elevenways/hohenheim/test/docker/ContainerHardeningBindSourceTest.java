@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
+import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -27,8 +29,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * directly. What must hold is that a spec reaching {@code DockerClient.createContainer}
  * cannot carry an escaping bind; asserting the helper in isolation would keep passing if
  * somebody stopped calling it.
+ *
+ * AIDEV-NOTE: there are TWO rules here, and the second one arrived on 2026-08-23 because
+ * the first was never enough. The volume-ROOT rule is a statement about this DEPLOYMENT
+ * and says nothing about which INSTANCE, so instance A's spec could legally bind instance
+ * B's data directory -- proven live, and caught only by a kernel-side mountinfo assertion.
+ * {@code aVolumeOfAnotherInstanceIsRefused} is the falsification of that hole and must
+ * never be weakened into "somewhere under the root is enough".
  */
 class ContainerHardeningBindSourceTest {
+
+    /** The instance every spec here is created for. */
+    private static final int OWNER = 42;
+
+    /** Another instance, whose volume directory sits under the SAME permitted root. */
+    private static final int NEIGHBOUR = 43;
 
     private static String savedDataPath;
 
@@ -54,7 +69,7 @@ class ContainerHardeningBindSourceTest {
         String root = "/srv/hoh-test/volumes";
 
         // 1. The shape the release engine actually emits: <root>/<instance>/<name>.
-        Map<String, Object> permitted = specWithBind(root + "/42/home");
+        Map<String, Object> permitted = specWithBind(root + "/" + OWNER + "/home");
         ContainerHardening.applyTo(permitted, ContainerHardening.SERVICE);
         assertThat(hostConfigOf(permitted).get("CapDrop"))
             .as("step 1: a volume-directory bind is accepted and still hardened")
@@ -69,7 +84,7 @@ class ContainerHardeningBindSourceTest {
             root,                                 // the root itself is not a volume
             root + "/",                           // nor is a trailing slash a volume
             root + "/../../etc",                  // traversal out, textually visible
-            root + "/42/../../../etc/shadow",
+            root + "/" + OWNER + "/../../../etc/shadow",
             "srv/hoh-test/volumes/42/home",       // relative: not an absolute host path
             "/srv/hoh-test/volumes-evil/42/home", // prefix match without the separator
             "");
@@ -119,14 +134,14 @@ class ContainerHardeningBindSourceTest {
     @Test
     void theRuleFollowsTheConfiguredDataPath() {
 
-        Map<String, Object> spec = specWithBind("/srv/moved/volumes/7/home");
+        Map<String, Object> spec = specWithBind("/srv/moved/volumes/7/home", 7);
         assertThatThrownBy(() -> ContainerHardening.applyTo(spec, ContainerHardening.SERVICE))
             .as("step 1: a path under the OLD root is refused while data_path says otherwise")
             .isInstanceOf(IllegalArgumentException.class);
 
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, "/srv/moved");
         try {
-            Map<String, Object> moved = specWithBind("/srv/moved/volumes/7/home");
+            Map<String, Object> moved = specWithBind("/srv/moved/volumes/7/home", 7);
             ContainerHardening.applyTo(moved, ContainerHardening.SERVICE);
             assertThat(hostConfigOf(moved))
                 .as("step 2: and accepted once data_path names it")
@@ -137,11 +152,105 @@ class ContainerHardeningBindSourceTest {
         }
     }
 
+    /**
+     * THE cross-instance hole: a bind source under the volume root that belongs to
+     * ANOTHER instance is refused, however legitimate the root looks.
+     *
+     * AIDEV-NOTE: this is the falsification of the defect proven live on 2026-08-23 --
+     * injecting one extra bind naming a neighbour instance's volume directory passed the
+     * hardening funnel with no refusal, because the only rule was "somewhere under the
+     * volume root". Containment between instances rested entirely on
+     * {@code InstanceVolumes.hostPathFor} being the only minter of those paths, which
+     * nothing enforced. It is enforced here now.
+     */
+    @Test
+    void aVolumeOfAnotherInstanceIsRefused() {
+
+        String root = "/srv/hoh-test/volumes";
+
+        // 1. The positive anchor: this instance's OWN volume directory still mounts, and
+        //    is still hardened. Without it every refusal below could be a policy that
+        //    refuses everything.
+        Map<String, Object> own = specWithBind(root + "/" + OWNER + "/home");
+        ContainerHardening.applyTo(own, ContainerHardening.SERVICE);
+        assertThat(hostConfigOf(own).get("CapDrop"))
+            .as("step 1: an instance mounts its own volume directory")
+            .isEqualTo(List.of("ALL"));
+
+        // 2. THE HOLE. The neighbour's directory sits under the SAME volume root the outer
+        //    rule permits, so only the per-instance rule can refuse it -- and it must name
+        //    both instances, or an operator cannot tell what was refused from what.
+        Map<String, Object> neighbour = specWithBind(root + "/" + NEIGHBOUR + "/home");
+        assertThatThrownBy(() -> ContainerHardening.applyTo(neighbour, ContainerHardening.SERVICE))
+            .as("step 2: another instance's volume directory is not this instance's to bind")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("REFUSED")
+            .hasMessageContaining("#" + OWNER)
+            .hasMessageContaining("#" + NEIGHBOUR);
+
+        // 3. FAIL CLOSED: a container that declares no instance owner may bind NOTHING,
+        //    not everything. An unattributable spec is the shape a bind injected past the
+        //    kind would have, so "no labels" must never mean "no check".
+        Map<String, Object> anonymous = specWithBind(root + "/" + OWNER + "/home", null);
+        assertThatThrownBy(() -> ContainerHardening.applyTo(anonymous, ContainerHardening.SERVICE))
+            .as("step 3: no declared instance owner means no bind at all")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("no instance owner");
+
+        // 4. And an owner of another MODEL is not an instance either: a build operation or
+        //    a site owns no volume directories, so it may bind none.
+        Map<String, Object> otherModel = new LinkedHashMap<>();
+        Map<String, Object> hostConfig = new LinkedHashMap<>();
+        hostConfig.put("Mounts", List.of(Map.of("Type", "bind",
+            "Source", root + "/" + OWNER + "/home", "Target", "/home/site")));
+        otherModel.put("Labels", Map.of(OwnerLabels.MODEL, "hohenheim:build_operation",
+            OwnerLabels.ID, String.valueOf(OWNER)));
+        otherModel.put("HostConfig", hostConfig);
+        assertThatThrownBy(() -> ContainerHardening.applyTo(otherModel, ContainerHardening.SERVICE))
+            .as("step 4: an owner that is not an instance owns no volume directory")
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("no instance owner");
+
+        // 5. The path must be one InstanceVolumes could have MINTED, not merely something
+        //    under the root: two segments, an all-digits instance id, a plain volume name.
+        //    A shape this policy cannot attribute to an instance is refused, never trusted.
+        for (String unmintable : List.of(
+                root + "/" + OWNER,                    // the instance directory itself
+                root + "/" + OWNER + "/home/sub",      // deeper than a volume directory
+                root + "/" + OWNER + "/",              // a trailing slash is not a name
+                root + "/notanumber/home",             // no instance to attribute it to
+                root + "/" + OWNER + "/.")) {          // a plain name is a plain name
+            Map<String, Object> spec = specWithBind(unmintable);
+            assertThatThrownBy(() ->
+                    ContainerHardening.applyTo(spec, ContainerHardening.SERVICE))
+                .as("step 5: bind source '" + unmintable + "' is not a mintable volume path")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("REFUSED");
+        }
+    }
+
+    /** A spec binding one host path, owned by instance {@link #OWNER}. */
     private static Map<String, Object> specWithBind(String source) {
+        return specWithBind(source, OWNER);
+    }
+
+    /**
+     * A spec binding one host path on behalf of one instance.
+     *
+     * AIDEV-NOTE: the labels are built from the CONSTANTS rather than through
+     * {@code OwnerLabels.of}, which mints a controller token out of the control-plane
+     * database. Parsing needs no datasource, which is what keeps this class hermetic --
+     * and the funnel only ever PARSES.
+     */
+    private static Map<String, Object> specWithBind(String source, Integer instanceId) {
         Map<String, Object> hostConfig = new LinkedHashMap<>();
         hostConfig.put("Mounts", List.of(
             Map.of("Type", "bind", "Source", source, "Target", "/home/site")));
         Map<String, Object> spec = new LinkedHashMap<>();
+        if (instanceId != null) {
+            spec.put("Labels", Map.of(OwnerLabels.MODEL, InstanceModel.MODEL_ID.toString(),
+                OwnerLabels.ID, String.valueOf(instanceId)));
+        }
         spec.put("HostConfig", hostConfig);
         return spec;
     }

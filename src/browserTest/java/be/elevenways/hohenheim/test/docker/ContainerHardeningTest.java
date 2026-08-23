@@ -502,6 +502,32 @@ class ContainerHardeningTest {
             //    that does not: the bind buys no capability and no privilege.
             assertKernelState(docker, created, "step 5: bind-mounting workspace",
                 SERVICE_CAPS, ContainerHardening.pidsLimit());
+
+            // 6. THE INJECTED BIND, which is what actually proved the hole on 2026-08-23:
+            //    the very same spec plus ONE extra mount naming the neighbour's volume
+            //    directory passed this funnel with no refusal, and only step 3's
+            //    mountinfo reading caught it. It is refused at the funnel now, so a
+            //    daemon never sees it -- asserted on the SPEC SHAPE the runtime emits
+            //    rather than through runtime.create, whose replace path would remove the
+            //    container the steps above are still asserting against.
+            String injectedName = "hh-crossbind-" + System.nanoTime();
+            Map<String, Object> injected = new LinkedHashMap<>();
+            injected.put("Image", TEST_IMAGE);
+            injected.put("Labels", OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+            injected.put("Cmd", List.of("sleep", "30"));
+            injected.put("HostConfig", Map.of("Mounts", List.of(
+                Map.of("Type", "bind", "Source", ourVolume, "Target", "/home/site"),
+                Map.of("Type", "bind", "Source", neighbourVolume, "Target", "/mnt/theirs"))));
+            assertThatThrownBy(() -> docker.createContainer(injectedName, injected,
+                    DockerContainerKind.HARDENING))
+                .as("step 6: an extra bind naming ANOTHER instance's volume directory is"
+                    + " refused at the funnel, naming both instances")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("#" + instanceId)
+                .hasMessageContaining("#" + neighbourId);
+            assertThat(catchThrowable(() -> docker.inspectContainer(injectedName)))
+                .as("step 6: STATE, not just the throw -- the daemon has no such container")
+                .isInstanceOf(DockerClient.ApiException.class);
         } finally {
             if (created != null) {
                 runtime.destroy(created);
