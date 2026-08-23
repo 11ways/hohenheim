@@ -407,6 +407,10 @@ task browserTest(type: Test) {
     // (TestDatabases); wiped up front so a migration change can never leak in.
     systemProperty 'hohenheim.testdb.template.dir',
         "${buildDir}/test-db-templates/browserTest"
+    // Namespace ledgers for the Docker network reaper (test/live/LiveNamespaces). SHARED
+    // by all three lanes and deliberately NOT wiped in doFirst: its job is to survive the
+    // invocation that wrote it, so a killed worker's leaked networks are reaped next run.
+    systemProperty 'hohenheim.namespace.dir', "${buildDir}/live-lane-namespaces"
     doFirst {
         delete "${buildDir}/live-lane-truncations/browserTest"
         delete "${buildDir}/test-db-templates/browserTest"
@@ -474,6 +478,10 @@ task browserTestStandalone(type: Test) {
     // See browserTest: one migrated template shared across this invocation's forks.
     systemProperty 'hohenheim.testdb.template.dir',
         "${buildDir}/test-db-templates/browserTestStandalone"
+    // Namespace ledgers for the Docker network reaper (test/live/LiveNamespaces). SHARED
+    // by all three lanes and deliberately NOT wiped in doFirst: its job is to survive the
+    // invocation that wrote it, so a killed worker's leaked networks are reaped next run.
+    systemProperty 'hohenheim.namespace.dir', "${buildDir}/live-lane-namespaces"
     doFirst {
         delete "${buildDir}/live-lane-truncations/browserTestStandalone"
         delete "${buildDir}/test-db-templates/browserTestStandalone"
@@ -535,6 +543,10 @@ task browserTestSolo(type: Test) {
     // See browserTest: one migrated template shared across this invocation's forks.
     systemProperty 'hohenheim.testdb.template.dir',
         "${buildDir}/test-db-templates/browserTestSolo"
+    // Namespace ledgers for the Docker network reaper (test/live/LiveNamespaces). SHARED
+    // by all three lanes and deliberately NOT wiped in doFirst: its job is to survive the
+    // invocation that wrote it, so a killed worker's leaked networks are reaped next run.
+    systemProperty 'hohenheim.namespace.dir', "${buildDir}/live-lane-namespaces"
     doFirst {
         delete "${buildDir}/live-lane-truncations/browserTestSolo"
         delete "${buildDir}/test-db-templates/browserTestSolo"

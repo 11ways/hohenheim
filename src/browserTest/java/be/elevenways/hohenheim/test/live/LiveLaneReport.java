@@ -38,6 +38,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * it only when the test plan finishes, and prints a truncation banner from a shutdown
  * hook when the JVM dies with tests still unaccounted for.
  *
+ * <p>Being the one thing that observes a forked JVM's whole lifetime also makes it the
+ * home of the Docker namespace reap ({@link LiveNamespaces}): abandoned namespaces at
+ * plan start, this JVM's own at plan finish. The two are the same story from two ends --
+ * a run that was killed left both an unsettled test and a network eating address-pool
+ * space, and only one of them used to be reported.
+ *
  * AIDEV-NOTE: one report per forked JVM, each stamped with its pid, and it counts only
  * what THIS JVM ran -- browserTest shares JVMs across up to four parallel forks, so a
  * daemon-wide total would be a number about nothing.
@@ -81,6 +87,10 @@ public final class LiveLaneReport implements TestExecutionListener {
                 new Thread(this::reportTruncation, "live-lane-truncation"));
         }
         writeMarker();
+        // The other half of the truncation story: a killed JVM's finally blocks never ran,
+        // so its Docker networks are still on the daemon eating address-pool space. Reap
+        // the namespaces of JVMs that are provably gone before this run needs a subnet.
+        reportReaped("abandoned by a dead test jvm", LiveNamespaces.sweepAbandoned());
     }
 
     @Override
@@ -229,10 +239,28 @@ public final class LiveLaneReport implements TestExecutionListener {
         this.inFlight.clear();
         this.plan = null;
         writeMarker();
+        // Whatever the verdict: this JVM's namespaces are dead the moment its plan is,
+        // and a FAILED test is precisely the one whose teardown never ran.
+        reportReaped("left behind by this jvm", LiveNamespaces.sweepOwn());
         String report = render();
         if (!report.isEmpty()) {
             System.out.println(report);
         }
+    }
+
+    /** Say what the namespace reaper removed; silence when it found nothing. */
+    private void reportReaped(@NonNull String what, @NonNull List<String> removed) {
+        if (removed.isEmpty()) {
+            return;
+        }
+        StringBuilder report = new StringBuilder("\n=== LIVE LANE NAMESPACE REAP (jvm ")
+            .append(ProcessHandle.current().pid()).append(") ===\n")
+            .append("Docker resources ").append(what).append(":\n");
+        for (String resource : removed) {
+            report.append("    - ").append(resource).append('\n');
+        }
+        report.append("=== END LIVE LANE NAMESPACE REAP ===\n");
+        System.out.println(report);
     }
 
     /** The report text, or empty when this JVM skipped nothing. */
