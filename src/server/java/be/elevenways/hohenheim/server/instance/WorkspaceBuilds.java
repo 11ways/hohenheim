@@ -18,10 +18,13 @@ import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -112,8 +115,13 @@ public final class WorkspaceBuilds {
      * source-declared workspace rather than only the half a forge webhook needed: the first
      * press of Deploy has no container at all, a push has one that is already serving.
      *
+     * AIDEV-NOTE: and only if the TRIGGER may. A webhook deploy of a workspace that is
+     * down stops here -- see {@link #declineToStart}. The decision is taken after the
+     * durable operation row exists, so a push that changes nothing is still visible as a
+     * push that arrived.
+     *
      * @param  ref the branch/tag/sha to deploy, or null for the source's declared branch
-     * @throws Violations naming the refusal (no repository, checkout, build)
+     * @throws Violations naming the refusal (no repository, declined start, checkout, build)
      */
     public @NonNull Outcome deploy(int instanceId, @Nullable String ref,
                                    @NonNull String reason) {
@@ -137,11 +145,35 @@ public final class WorkspaceBuilds {
         // visible evidence instead of a clean-looking absence.
         int operationId = startOperation(instanceId, branch);
 
+        // The workload's live state, read ONCE: the trigger policy needs it, and so does
+        // the bring-up below -- and asking the daemon twice would let the two answers
+        // disagree about the very thing being decided.
+        ContainerState state = this.instances.liveStatus(instanceId).state();
+        Microcopy declined = declineToStart(reason, state, resolved.row());
+
+        if (declined != null) {
+            // Resolved HERE rather than stored as a violation key: this text lands in the
+            // build record and on the forge's commit status, both read later by a person,
+            // and Violations.getMessage() is a debug rendering by its own contract. There
+            // is no reader to localize for, so it is the installation's default content
+            // locale -- the ErrorPages/InstanceShellHandler precedent.
+            String message = declined.resolve(LocaleChain.of(ContentLocales.getDefault()),
+                MessageResolvers.getDefault());
+            log.line("[hohenheim] deploying " + branch);
+            log.line("[hohenheim] not deployed: " + message);
+            // REFUSED, not FAILED: nothing broke. The row is the honest record that the
+            // push arrived, which branch it named, and what was decided about it.
+            finish(operationId, BuildOperationModel.STATUS_REFUSED, null, message, log,
+                startedAt);
+            reportDeclined(settings, message);
+            throw Violations.ofForm(declined);
+        }
+
         try {
             DeployStatuses.report(settings, null, GitProviderClient.StatusState.PENDING,
                 DeployStatuses.CONTEXT_DEPLOY, "Deploying", null);
             log.line("[hohenheim] deploying " + branch);
-            ensureRunning(instanceId);
+            ensureRunning(instanceId, state);
             String commitSha = checkout(resolved, branch, settings, log);
             boolean built = build(resolved, settings, log);
             // The workload restarts LAST: the files it will serve are on disk and owned by
@@ -174,9 +206,53 @@ public final class WorkspaceBuilds {
      * AIDEV-NOTE: {@code liveStatus} never throws, so an absent container reads as ABSENT
      * and gets deployed rather than blowing up here.
      */
-    private void ensureRunning(int instanceId) {
-        if (this.instances.liveStatus(instanceId).state() != ContainerState.RUNNING) {
+    private void ensureRunning(int instanceId, @NonNull ContainerState state) {
+        if (state != ContainerState.RUNNING) {
             this.instances.deployWorkload(instanceId);
+        }
+    }
+
+    /**
+     * Why this trigger must not start this workload, or null when it may.
+     *
+     * AIDEV-NOTE: THE webhook policy, and it lives here because {@link WorkspaceBuilds} is
+     * where a trigger word and a workload state are both in hand. {@code
+     * InstanceService.deploy} now ends by bringing the workload up, which is right for a
+     * manual deploy (a person is standing there asking) and wrong for a forge push: an
+     * operator who stopped a workspace decided something about their host's resources,
+     * and someone else's commit is not an argument against it.
+     *
+     * AIDEV-NOTE: {@code UNREACHABLE} deliberately does NOT decline. "The daemon says the
+     * container is down" and "I could not ask the daemon" are different answers (see
+     * {@link ContainerState}), and telling a pusher "you stopped this workspace" because a
+     * host was briefly unaddressable would be a confident lie. An unreachable host falls
+     * through to the ordinary bring-up, which fails loudly and records FAILED with the
+     * daemon's own reason.
+     *
+     * @param state the live state the daemon just reported
+     * @return the named refusal, or null when the deploy may proceed
+     */
+    static Microcopy declineToStart(@NonNull String reason, @NonNull ContainerState state,
+                                    @NonNull Row instance) {
+        if (DeployTrigger.of(reason).startsStoppedWorkload()) {
+            return null;
+        }
+        if (state != ContainerState.STOPPED && state != ContainerState.ABSENT) {
+            return null;
+        }
+        return violation("workspace_push_does_not_start")
+            .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)));
+    }
+
+    /** Tell the forge the push landed and was deliberately not deployed. */
+    private static void reportDeclined(@NonNull Map<String, Object> settings,
+                                       @NonNull String message) {
+        try {
+            DeployStatuses.report(settings, null, GitProviderClient.StatusState.FAILURE,
+                DeployStatuses.CONTEXT_DEPLOY, "Not deployed: " + message, null);
+        } catch (RuntimeException unreported) {
+            Blast.log("WORKSPACE: could not report the declined deploy -",
+                unreported.getMessage());
         }
     }
 
