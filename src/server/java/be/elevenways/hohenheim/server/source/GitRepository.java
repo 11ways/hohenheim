@@ -214,18 +214,31 @@ public class GitRepository {
         }
     }
 
-    private static void rejectEmbeddedCredentials(String repositoryUrl) {
+    /**
+     * THE question "does this repository URL carry a credential", with one home.
+     *
+     * AIDEV-NOTE: a bare {@code ssh://user@host} username is deliberately NOT a
+     * credential -- it is how every ssh clone URL is spelled -- while anything else in
+     * the user-info (a password, a token, an encoded colon) is. {@code UrlPolicy} in
+     * zenit core answers the same question for an ordinary URL, but its
+     * {@code allowUserInfo} is all-or-nothing and it additionally demands an http(s)
+     * scheme and a parseable authority, which would refuse both that ssh spelling and
+     * the scp-style {@code git@host:org/repo.git} this has always accepted.
+     *
+     * @return the offending user-info, or null when the URL embeds no credential
+     */
+    public static @Nullable String embeddedCredential(@Nullable String repositoryUrl) {
         if (repositoryUrl == null) {
-            return;
+            return null;
         }
         var matcher = URI_AUTHORITY.matcher(repositoryUrl);
         if (!matcher.find()) {
-            return;
+            return null;
         }
         String authority = matcher.group(2);
         int at = authority.lastIndexOf('@');
         if (at < 0) {
-            return;
+            return null;
         }
         String scheme = matcher.group(1);
         String userInfo = authority.substring(0, at);
@@ -233,7 +246,11 @@ public class GitRepository {
             || scheme.equalsIgnoreCase("git+ssh"))
             && !userInfo.contains(":")
             && !userInfo.toLowerCase(Locale.ROOT).contains("%3a");
-        if (!sshUsername) {
+        return sshUsername ? null : userInfo;
+    }
+
+    private static void rejectEmbeddedCredentials(String repositoryUrl) {
+        if (embeddedCredential(repositoryUrl) != null) {
             throw new IllegalArgumentException(
                 "Repository URL must not contain embedded user-info credentials");
         }

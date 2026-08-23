@@ -1647,6 +1647,10 @@
     {
       "text": "Exec",
       "scope": "instance_exec"
+    },
+    {
+      "text": "Interactive shell",
+      "scope": "instance_shell"
     }
   ],
   "description": [
@@ -1669,6 +1673,10 @@
     {
       "text": "Run one command inside this instance's workload and read its exit code and output.",
       "scope": "instance_exec"
+    },
+    {
+      "text": "A terminal inside this workspace, running as its own user. Everything you type runs in the container.",
+      "scope": "instance_shell"
     }
   ],
   "create_site": {
@@ -6100,6 +6108,10 @@
     {
       "text": "Not running",
       "scope": "instance_exec"
+    },
+    {
+      "text": "Not running",
+      "scope": "instance_shell"
     }
   ],
   "not_running_description": [
@@ -6118,6 +6130,10 @@
     {
       "text": "Start the instance to run a command inside it.",
       "scope": "instance_exec"
+    },
+    {
+      "text": "Start this instance to open a shell inside it.",
+      "scope": "instance_shell"
     }
   ],
   "runs": {
@@ -7582,10 +7598,192 @@
     "text": "{$name}: removed {$removed} shared object(s) of departed controllers, refused {$refused}",
     "scope": "server"
   },
-  "singular": {
-    "text": "Project",
-    "scope": "project"
-  },
+  "singular": [
+    {
+      "text": "project",
+      "scope": "project"
+    },
+    {
+      "text": "access list",
+      "scope": "access_list"
+    },
+    {
+      "text": "rule",
+      "scope": "access_rule"
+    },
+    {
+      "text": "auth provider",
+      "scope": "auth_provider"
+    },
+    {
+      "text": "backup target",
+      "scope": "backup_target"
+    },
+    {
+      "text": "IP ban",
+      "scope": "ban"
+    },
+    {
+      "text": "build",
+      "scope": "build_operation"
+    },
+    {
+      "text": "certificate",
+      "scope": "certificate"
+    },
+    {
+      "text": "database",
+      "scope": "database"
+    },
+    {
+      "text": "DNS peer",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "DNS record",
+      "scope": "dns_record"
+    },
+    {
+      "text": "zone secondary",
+      "scope": "dns_zone_peer"
+    },
+    {
+      "text": "DNS zone",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "environment",
+      "scope": "environment"
+    },
+    {
+      "text": "environment variable",
+      "scope": "environment_variable"
+    },
+    {
+      "text": "game domain",
+      "scope": "game_domain"
+    },
+    {
+      "text": "Git provider",
+      "scope": "git_provider"
+    },
+    {
+      "text": "instance backup",
+      "scope": "instance_backup"
+    },
+    {
+      "text": "attached database",
+      "scope": "instance_database"
+    },
+    {
+      "text": "device",
+      "scope": "instance_device"
+    },
+    {
+      "text": "instance file",
+      "scope": "instance_file"
+    },
+    {
+      "text": "instance quota",
+      "scope": "instance_quota"
+    },
+    {
+      "text": "step",
+      "scope": "schedule_step"
+    },
+    {
+      "text": "instance snapshot",
+      "scope": "instance_snapshot"
+    },
+    {
+      "text": "template file",
+      "scope": "template_file"
+    },
+    {
+      "text": "instance template",
+      "scope": "instance_template"
+    },
+    {
+      "text": "template variable",
+      "scope": "template_variable"
+    },
+    {
+      "text": "volume",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "project member",
+      "scope": "project_member"
+    },
+    {
+      "text": "notification channel",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "preview deployment",
+      "scope": "preview_deployment"
+    },
+    {
+      "text": "unexpected workload",
+      "scope": "reconcile_finding"
+    },
+    {
+      "text": "release",
+      "scope": "release_operation"
+    },
+    {
+      "text": "released hostname",
+      "scope": "released_claim"
+    },
+    {
+      "text": "runtime image",
+      "scope": "runtime_image"
+    },
+    {
+      "text": "host",
+      "scope": "server"
+    },
+    {
+      "text": "site domain",
+      "scope": "site_domain"
+    },
+    {
+      "text": "site",
+      "scope": "site"
+    },
+    {
+      "text": "client key",
+      "scope": "spamservice_key"
+    },
+    {
+      "text": "Spamservice client",
+      "scope": "spamservice_client"
+    },
+    {
+      "text": "sample",
+      "scope": "spamservice_sample"
+    },
+    {
+      "text": "security event",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "spam word",
+      "scope": "spamservice_word"
+    },
+    {
+      "text": "stack file",
+      "scope": "stack_file"
+    },
+    {
+      "text": "stack",
+      "scope": "stack"
+    },
+    {
+      "text": "stack service",
+      "scope": "stack_service"
+    }
+  ],
   "member": {
     "text": "Member",
     "scope": "project"
@@ -7618,10 +7816,16 @@
       "scope": "instance"
     }
   ],
-  "run": {
-    "text": "Run",
-    "scope": "instance_exec"
-  },
+  "run": [
+    {
+      "text": "Run",
+      "scope": "instance_exec"
+    },
+    {
+      "text": "schedule run",
+      "scope": "instance_schedule"
+    }
+  ],
   "exit_code": {
     "text": "Exit code {$code}",
     "scope": "instance_exec"
@@ -9338,10 +9542,20 @@
     "text": "Runtime image",
     "scope": "field"
   },
-  "shell": {
-    "text": "Shell",
-    "scope": "field"
-  },
+  "shell": [
+    {
+      "text": "Shell",
+      "scope": "field"
+    },
+    {
+      "text": "Shell",
+      "scope": "capability"
+    },
+    {
+      "text": "Shell",
+      "scope": "instance"
+    }
+  ],
   "stop_grace_seconds": [
     {
       "text": "Stop grace period",
@@ -9653,5 +9867,85 @@
   "forwarding": {
     "text": "Forwarding options",
     "scope": "form_section"
+  },
+  "audit_hint": {
+    "text": "Opening and closing a shell is recorded in this instance's activity log.",
+    "scope": "instance_shell"
+  },
+  "limits_hint": {
+    "text": "At most {$sessions} shell sessions per workspace; an idle session closes after {$minutes} minutes.",
+    "scope": "instance_shell"
+  },
+  "repository_url_credential": {
+    "text": "Remove the credential from the repository URL: it would be written into the checkout's .git/config and stay there. Use a git provider instead, which hands its token to git per operation and never writes it down.",
+    "scope": "violations"
+  },
+  "runs_as_root": {
+    "text": "This workload runs as root",
+    "scope": "instance_shell"
+  },
+  "runs_as_root_description": {
+    "text": "A shell is only offered where the workload runs as its own non-root user, because root inside the container is root on the host.",
+    "scope": "instance_shell"
+  },
+  "shell_failed": {
+    "text": "Could not open a shell inside {$name}: {$reason}",
+    "scope": "violations"
+  },
+  "shell_missing_in_image": {
+    "text": "The image of instance {$name} carries none of these shells: {$shell}",
+    "scope": "violations"
+  },
+  "shell_not_running": {
+    "text": "Instance {$name} is not running, so there is no shell to open",
+    "scope": "violations"
+  },
+  "shell_requires_nonroot_workload": {
+    "text": "Instance {$name} runs as root inside its container, so hohenheim refuses to open a shell there",
+    "scope": "violations"
+  },
+  "shell_too_many_sessions": {
+    "text": "Instance {$name} already has the maximum of {$max} shell sessions open",
+    "scope": "violations"
+  },
+  "shell_unsupported_runtime": {
+    "text": "The runtime of instance {$name} has no interactive shell lane yet",
+    "scope": "violations"
+  },
+  "unsupported_runtime": {
+    "text": "No shell lane for this runtime yet",
+    "scope": "instance_shell"
+  },
+  "unsupported_runtime_description": {
+    "text": "This workload runs on a runtime hohenheim cannot open an interactive terminal on yet.",
+    "scope": "instance_shell"
+  },
+  "no_quota_capable_host": {
+    "text": "No host both runs a runtime this kind supports ({$runtimes}) and has a data root that can enforce quotas. Under Hosts, mount a host's volumes directory on btrfs and re-run its preflight.",
+    "scope": "instance"
+  },
+  "no_runtime_host": {
+    "text": "No host runs a runtime this kind supports ({$runtimes}). Enrol one under Hosts first.",
+    "scope": "instance"
+  },
+  "no_enabled_runtime_image": {
+    "text": "No runtime image is enabled. Enable the one this instance should run inside under Runtime images first.",
+    "scope": "instance"
+  },
+  "no_incus_runtime_image": {
+    "text": "No enabled runtime image names an Incus image, and this kind runs on Incus only. Give one an Incus image under Runtime images.",
+    "scope": "instance"
+  },
+  "no_exposable_instance": {
+    "text": "No instance publishes a port for a site to serve. Create an application, workspace or container instance under Instances first.",
+    "scope": "site"
+  },
+  "no_repositories": {
+    "text": "This connection lists no repositories. Check that its token is allowed to read them, then re-test the connection under Git providers.",
+    "scope": "git_provider"
+  },
+  "no_branches": {
+    "text": "This repository lists no branches. Check that the provider's token is allowed to read it, then re-test the connection under Git providers.",
+    "scope": "git_provider"
   }
 }

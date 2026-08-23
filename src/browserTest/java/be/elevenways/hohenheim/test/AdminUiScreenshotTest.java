@@ -6,6 +6,9 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
@@ -140,6 +143,15 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
         row.set(InstanceModel.SERVER_ID, serverId);
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of()));
+        // A kind that cannot run without a runtime image may not be written without one
+        // (InstanceDeclarations); the seeded builtin is what the create form would pick.
+        InstanceKindHandler handler = InstanceKinds.getHandler(kind);
+        if (handler != null && handler.requiresRuntimeImage()) {
+            Row image = Models.get(RuntimeImageModel.class).find()
+                .where(RuntimeImageModel.NAME.eq("node-22")).first();
+            row.set(InstanceModel.RUNTIME_IMAGE_ID,
+                image == null ? null : image.get(RuntimeImageModel.ID));
+        }
         instances.save(row);
         return row.get(InstanceModel.ID);
     }

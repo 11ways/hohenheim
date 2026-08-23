@@ -1647,6 +1647,10 @@
     {
       "text": "Exec",
       "scope": "instance_exec"
+    },
+    {
+      "text": "Interactieve shell",
+      "scope": "instance_shell"
     }
   ],
   "description": [
@@ -1669,6 +1673,10 @@
     {
       "text": "Voer een opdracht uit in de workload van deze instantie en lees de afsluitcode en uitvoer.",
       "scope": "instance_exec"
+    },
+    {
+      "text": "Een terminal in deze workspace, die draait als de eigen gebruiker ervan. Alles wat je typt draait in de container.",
+      "scope": "instance_shell"
     }
   ],
   "create_site": {
@@ -6100,6 +6108,10 @@
     {
       "text": "Niet actief",
       "scope": "instance_exec"
+    },
+    {
+      "text": "Draait niet",
+      "scope": "instance_shell"
     }
   ],
   "not_running_description": [
@@ -6118,6 +6130,10 @@
     {
       "text": "Start de instantie om er een opdracht in uit te voeren.",
       "scope": "instance_exec"
+    },
+    {
+      "text": "Start deze instantie om er een shell in te openen.",
+      "scope": "instance_shell"
     }
   ],
   "runs": {
@@ -7582,10 +7598,192 @@
     "text": "{$name}: {$removed} gedeeld(e) object(en) van vertrokken controllers verwijderd, {$refused} geweigerd",
     "scope": "server"
   },
-  "singular": {
-    "text": "Project",
-    "scope": "project"
-  },
+  "singular": [
+    {
+      "text": "project",
+      "scope": "project"
+    },
+    {
+      "text": "toegangslijst",
+      "scope": "access_list"
+    },
+    {
+      "text": "regel",
+      "scope": "access_rule"
+    },
+    {
+      "text": "authenticatieprovider",
+      "scope": "auth_provider"
+    },
+    {
+      "text": "back-updoel",
+      "scope": "backup_target"
+    },
+    {
+      "text": "IP-verbanning",
+      "scope": "ban"
+    },
+    {
+      "text": "build",
+      "scope": "build_operation"
+    },
+    {
+      "text": "certificaat",
+      "scope": "certificate"
+    },
+    {
+      "text": "databank",
+      "scope": "database"
+    },
+    {
+      "text": "DNS-peer",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "DNS-record",
+      "scope": "dns_record"
+    },
+    {
+      "text": "zone-secondary",
+      "scope": "dns_zone_peer"
+    },
+    {
+      "text": "DNS-zone",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "omgeving",
+      "scope": "environment"
+    },
+    {
+      "text": "omgevingsvariabele",
+      "scope": "environment_variable"
+    },
+    {
+      "text": "gamedomein",
+      "scope": "game_domain"
+    },
+    {
+      "text": "Git-provider",
+      "scope": "git_provider"
+    },
+    {
+      "text": "instantieback-up",
+      "scope": "instance_backup"
+    },
+    {
+      "text": "gekoppelde databank",
+      "scope": "instance_database"
+    },
+    {
+      "text": "apparaat",
+      "scope": "instance_device"
+    },
+    {
+      "text": "instantiebestand",
+      "scope": "instance_file"
+    },
+    {
+      "text": "instantiequotum",
+      "scope": "instance_quota"
+    },
+    {
+      "text": "stap",
+      "scope": "schedule_step"
+    },
+    {
+      "text": "instantiesnapshot",
+      "scope": "instance_snapshot"
+    },
+    {
+      "text": "sjabloonbestand",
+      "scope": "template_file"
+    },
+    {
+      "text": "instantiesjabloon",
+      "scope": "instance_template"
+    },
+    {
+      "text": "sjabloonvariabele",
+      "scope": "template_variable"
+    },
+    {
+      "text": "volume",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "projectlid",
+      "scope": "project_member"
+    },
+    {
+      "text": "meldingskanaal",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "preview-deployment",
+      "scope": "preview_deployment"
+    },
+    {
+      "text": "onverwachte workload",
+      "scope": "reconcile_finding"
+    },
+    {
+      "text": "release",
+      "scope": "release_operation"
+    },
+    {
+      "text": "vrijgegeven hostnaam",
+      "scope": "released_claim"
+    },
+    {
+      "text": "runtime-image",
+      "scope": "runtime_image"
+    },
+    {
+      "text": "host",
+      "scope": "server"
+    },
+    {
+      "text": "sitedomein",
+      "scope": "site_domain"
+    },
+    {
+      "text": "site",
+      "scope": "site"
+    },
+    {
+      "text": "clientsleutel",
+      "scope": "spamservice_key"
+    },
+    {
+      "text": "Spamservice-client",
+      "scope": "spamservice_client"
+    },
+    {
+      "text": "voorbeeld",
+      "scope": "spamservice_sample"
+    },
+    {
+      "text": "beveiligingsgebeurtenis",
+      "scope": "spamservice_event"
+    },
+    {
+      "text": "spamwoord",
+      "scope": "spamservice_word"
+    },
+    {
+      "text": "stack-bestand",
+      "scope": "stack_file"
+    },
+    {
+      "text": "stack",
+      "scope": "stack"
+    },
+    {
+      "text": "stack-service",
+      "scope": "stack_service"
+    }
+  ],
   "member": {
     "text": "Lid",
     "scope": "project"
@@ -7618,10 +7816,16 @@
       "scope": "instance"
     }
   ],
-  "run": {
-    "text": "Uitvoeren",
-    "scope": "instance_exec"
-  },
+  "run": [
+    {
+      "text": "Uitvoeren",
+      "scope": "instance_exec"
+    },
+    {
+      "text": "uitvoering",
+      "scope": "instance_schedule"
+    }
+  ],
   "exit_code": {
     "text": "Afsluitcode {$code}",
     "scope": "instance_exec"
@@ -9338,10 +9542,20 @@
     "text": "Runtime-image",
     "scope": "field"
   },
-  "shell": {
-    "text": "Shell",
-    "scope": "field"
-  },
+  "shell": [
+    {
+      "text": "Shell",
+      "scope": "field"
+    },
+    {
+      "text": "Shell",
+      "scope": "capability"
+    },
+    {
+      "text": "Shell",
+      "scope": "instance"
+    }
+  ],
   "stop_grace_seconds": [
     {
       "text": "Respijt bij stoppen",
@@ -9653,5 +9867,85 @@
   "forwarding": {
     "text": "Doorstuuropties",
     "scope": "form_section"
+  },
+  "audit_hint": {
+    "text": "Het openen en sluiten van een shell wordt vastgelegd in het activiteitenlogboek van deze instantie.",
+    "scope": "instance_shell"
+  },
+  "limits_hint": {
+    "text": "Maximaal {$sessions} shell-sessies per workspace; een inactieve sessie sluit na {$minutes} minuten.",
+    "scope": "instance_shell"
+  },
+  "repository_url_credential": {
+    "text": "Haal de inloggegevens uit de repository-URL: die zouden in de .git/config van de checkout terechtkomen en daar blijven staan. Gebruik een git-provider; die geeft zijn token per operatie aan git door en schrijft het nooit weg.",
+    "scope": "violations"
+  },
+  "runs_as_root": {
+    "text": "Deze workload draait als root",
+    "scope": "instance_shell"
+  },
+  "runs_as_root_description": {
+    "text": "Een shell wordt alleen aangeboden waar de workload als eigen niet-root gebruiker draait, omdat root in de container ook root op de host is.",
+    "scope": "instance_shell"
+  },
+  "shell_failed": {
+    "text": "Kon geen shell openen in {$name}: {$reason}",
+    "scope": "violations"
+  },
+  "shell_missing_in_image": {
+    "text": "De image van instantie {$name} bevat geen van deze shells: {$shell}",
+    "scope": "violations"
+  },
+  "shell_not_running": {
+    "text": "Instantie {$name} draait niet, dus er is geen shell om te openen",
+    "scope": "violations"
+  },
+  "shell_requires_nonroot_workload": {
+    "text": "Instantie {$name} draait als root in haar container; hohenheim weigert daar een shell te openen",
+    "scope": "violations"
+  },
+  "shell_too_many_sessions": {
+    "text": "Instantie {$name} heeft al het maximum van {$max} shell-sessies open",
+    "scope": "violations"
+  },
+  "shell_unsupported_runtime": {
+    "text": "De runtime van instantie {$name} heeft nog geen interactieve shell",
+    "scope": "violations"
+  },
+  "unsupported_runtime": {
+    "text": "Nog geen shell voor deze runtime",
+    "scope": "instance_shell"
+  },
+  "unsupported_runtime_description": {
+    "text": "Deze workload draait op een runtime waarop hohenheim nog geen interactieve terminal kan openen.",
+    "scope": "instance_shell"
+  },
+  "no_quota_capable_host": {
+    "text": "Geen enkele host draait een runtime die deze soort ondersteunt ({$runtimes}) en heeft tegelijk een dataroot die quota kan afdwingen. Mount onder Hosts de volumes-map van een host op btrfs en draai de preflight opnieuw.",
+    "scope": "instance"
+  },
+  "no_runtime_host": {
+    "text": "Geen enkele host draait een runtime die deze soort ondersteunt ({$runtimes}). Voeg er onder Hosts eerst een toe.",
+    "scope": "instance"
+  },
+  "no_enabled_runtime_image": {
+    "text": "Er is geen enkele runtime-image ingeschakeld. Schakel onder Runtime-images eerst de image in waarin deze instantie moet draaien.",
+    "scope": "instance"
+  },
+  "no_incus_runtime_image": {
+    "text": "Geen enkele ingeschakelde runtime-image benoemt een Incus-image, en deze soort draait enkel op Incus. Geef er onder Runtime-images een Incus-image aan.",
+    "scope": "instance"
+  },
+  "no_exposable_instance": {
+    "text": "Geen enkele instantie publiceert een poort die een site kan bedienen. Maak onder Instanties eerst een applicatie-, workspace- of containerinstantie aan.",
+    "scope": "site"
+  },
+  "no_repositories": {
+    "text": "Deze verbinding toont geen repositories. Controleer of het token ze mag lezen en test de verbinding daarna opnieuw onder Git-providers.",
+    "scope": "git_provider"
+  },
+  "no_branches": {
+    "text": "Deze repository toont geen branches. Controleer of het token van de provider ze mag lezen en test de verbinding daarna opnieuw onder Git-providers.",
+    "scope": "git_provider"
   }
 }

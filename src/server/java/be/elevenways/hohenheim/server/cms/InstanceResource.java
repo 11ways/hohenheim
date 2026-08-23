@@ -150,6 +150,9 @@ public class InstanceResource extends RowResource {
             // The runtime image ("yolk") only resolves for kinds that run inside one;
             // for every other kind the picker stays disabled -- its deploy never reads
             // the column, and a choice the deploy ignores is worse than no choice.
+            // clearable stays TRUE because most kinds have no image to name; what makes
+            // it REQUIRED for the kinds that do is InstanceDeclarations, on the write, so
+            // the refusal lands on this form instead of on a deploy hours later.
             .add(RelationPick.of(InstanceModel.RUNTIME_IMAGE_ID, RuntimeImageModel.MODEL_ID)
                 .creatable(false).clearable(true)
                 .rulesFromSiblings(new HohenheimPickRules.RuntimeImageRules(
@@ -622,6 +625,11 @@ public class InstanceResource extends RowResource {
             // on the record (InstanceExecPage.visibleFor); the admin panel gate is not
             // the only thing standing between a delegate and an arbitrary command.
             new InstanceExecPage(),
+            // The interactive shell tab hides AND 404s itself without the `shell`
+            // capability on the record (InstanceShellPage.visibleFor). It is NOT the exec
+            // tab under another name: exec is admin-only and single-shot, this is a
+            // delegable tenant verb bounded to a workload that runs as a non-root uid.
+            new InstanceShellPage(),
             new InstanceSnapshotsPage(new InstanceSnapshotResource()),
             new InstanceBackupsPage(new InstanceBackupResource()),
             new InstanceSchedulesPage(), new InstanceDevicesPage(),
