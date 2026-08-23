@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
@@ -121,6 +122,8 @@ class IncusCommunityAppLiveTest {
             int templateId = CommunityScripts.importApp("gotify");
             Row template = Models.get(InstanceTemplateModel.class).findById(templateId);
             template.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+            template.set(InstanceTemplateModel.READINESS_KIND,
+                ReadinessKind.CONSOLE_LINE.token());
             template.set(InstanceTemplateModel.READINESS_LINE, "Debian GNU/Linux");
             Models.get(InstanceTemplateModel.class).save(template);
 

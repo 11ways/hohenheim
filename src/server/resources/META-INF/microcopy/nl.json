@@ -5712,7 +5712,7 @@
       "scope": "field"
     },
     {
-      "text": "Consoleregel die aangeeft dat de workload klaar is; gebruikt door de console-matchergolf, nu al opgeslagen en geexporteerd",
+      "text": "Consoleregel die aangeeft dat de workload klaar is; wordt alleen gelezen als Klaar wanneer op Consoleregel staat",
       "scope": "help"
     }
   ],
@@ -9308,6 +9308,10 @@
   },
   "upstream_instance_required": {
     "text": "Deze upstream serveert een instantie, dus die moet gekozen worden",
+    "scope": "violations"
+  },
+  "readiness_line_needs_console_line": {
+    "text": "Een gereedheidsregel wordt alleen gelezen als de gereedheidssoort Consoleregel is",
     "scope": "violations"
   },
   "upstream_instance_unexpected": {

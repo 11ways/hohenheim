@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
@@ -90,6 +91,8 @@ class InstanceConsoleLiveTest {
         Row template = Models.get(InstanceTemplateModel.class).createEmptyRow();
         template.set(InstanceTemplateModel.NAME, name);
         template.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
+        // The line only decides when the KIND says so; the column default is `port`.
+        template.set(InstanceTemplateModel.READINESS_KIND, ReadinessKind.CONSOLE_LINE.token());
         template.set(InstanceTemplateModel.READINESS_LINE, readinessLine);
         template.set(InstanceTemplateModel.STOP_COMMAND, stopCommand);
         Models.get(InstanceTemplateModel.class).save(template);

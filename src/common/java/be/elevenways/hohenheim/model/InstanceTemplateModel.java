@@ -10,8 +10,10 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.validation.Violations;
 
 import java.util.List;
 
@@ -30,10 +32,11 @@ import java.util.List;
  * because the runtime honors exactly one publication per instance; grow the list only
  * together with the runtime that enforces it.
  *
- * AIDEV-NOTE: {@code readiness_line} and {@code stop_command} are DECLARED matcher data
- * for the Phase 6 console wave (log-stream readiness detection, graceful stop via
- * console command). They are carried, edited and exported here so that wave only wires
- * them; nothing streams or matches yet -- the driver seam is single-shot by contract.
+ * AIDEV-NOTE: {@code readiness_line} is only read when {@link #READINESS_KIND} says
+ * {@code console_line} -- the other two kinds probe a port after start. That is why the
+ * static block REFUSES a line beside a kind that ignores it: the column default is
+ * {@code port}, so a line written on an undeclared template used to be dead data and the
+ * workload was stamped running the instant its container came up (2026-08-22 regression).
  */
 public class InstanceTemplateModel extends Model {
 
@@ -219,6 +222,36 @@ public class InstanceTemplateModel extends Model {
 
     static {
         SCHEMA.setDisplayFields(NAME);
+
+        // THE readiness-declaration invariant. A readiness_line is matcher data for ONE
+        // kind; stored beside any other it is silently never read, and the operator who
+        // wrote "the log line that means ready" gets a workload stamped running before it
+        // is. Refusing here is the only reading that cannot be missed -- the column
+        // default is `port`, so silence is what an undeclared template gets for free.
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row == null) return;
+            Object line = effective(row, READINESS_LINE);
+            if (line == null || line.toString().trim().isEmpty()) return;
+            Object kind = effective(row, READINESS_KIND);
+            if (ReadinessKind.forToken(kind == null ? null : kind.toString())
+                    != ReadinessKind.CONSOLE_LINE) {
+                throw Violations.ofField(READINESS_KIND.getName(), kind,
+                    Microcopy.of("readiness_line_needs_console_line")
+                        .withFilter("scope", "violations"));
+            }
+        });
+    }
+
+    /**
+     * A field's value AFTER this write lands: an inline cell edit submits only the column
+     * it touched, so reading the row alone would judge a partial update against nulls.
+     */
+    private static Object effective(Row row, Field<?, ?> field) {
+        if (row.has(field.getName())) return row.get(field.getName());
+        if (!row.has(ID.getName())) return null;
+        Row stored = Models.get(InstanceTemplateModel.class).findById(row.get(ID));
+        return stored != null ? stored.get(field.getName()) : null;
     }
 
     /** Every template, name order (catalog listings). */

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
+import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypes;
@@ -72,7 +73,11 @@ public final class TemplatePortability {
         body.put("install_script", template.get(InstanceTemplateModel.INSTALL_SCRIPT));
         body.put("update_script", template.get(InstanceTemplateModel.UPDATE_SCRIPT));
         body.put("reinstall_policy", template.get(InstanceTemplateModel.REINSTALL_POLICY));
+        // The KIND rides with the line: without it an export of a console-readiness
+        // template re-imports on the column default and its line is never read again.
+        body.put("readiness_kind", template.get(InstanceTemplateModel.READINESS_KIND));
         body.put("readiness_line", template.get(InstanceTemplateModel.READINESS_LINE));
+        body.put("readiness_target", template.get(InstanceTemplateModel.READINESS_TARGET));
         body.put("stop_command", template.get(InstanceTemplateModel.STOP_COMMAND));
 
         List<Map<String, Object>> variables = new ArrayList<>();
@@ -242,7 +247,13 @@ public final class TemplatePortability {
         template.set(InstanceTemplateModel.REINSTALL_POLICY,
             InstanceTemplateModel.REINSTALL_CLEAR.equals(body.get("reinstall_policy"))
                 ? InstanceTemplateModel.REINSTALL_CLEAR : InstanceTemplateModel.REINSTALL_PRESERVE);
+        // An unknown token fails CLOSED to the column default rather than to a guess;
+        // the model then refuses the document if it also carried a readiness line.
+        ReadinessKind readinessKind = ReadinessKind.forToken(str(body.get("readiness_kind")));
+        template.set(InstanceTemplateModel.READINESS_KIND,
+            readinessKind == null ? ReadinessKind.PORT.token() : readinessKind.token());
         template.set(InstanceTemplateModel.READINESS_LINE, str(body.get("readiness_line")));
+        template.set(InstanceTemplateModel.READINESS_TARGET, str(body.get("readiness_target")));
         template.set(InstanceTemplateModel.STOP_COMMAND, str(body.get("stop_command")));
         // NEVER approved by import -- that is the operator's explicit act.
         template.set(InstanceTemplateModel.SOURCE,
