@@ -207,10 +207,27 @@ public final class ManagePanel extends Panel {
             return;
         }
         sourceRegistered = true;
-        // SiteModel has no display fields, so zenit-cms derives no source. This server-side
-        // declaration is the only source: its scope reads zenit-auth grants unavailable to
-        // the common/browser registration lane.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SiteModel.class)
+        declareSources();
+    }
+
+    /**
+     * The registration body {@link #registerSiteSource} runs exactly once at boot,
+     * callable again so a test can replay it against a fresh registry.
+     *
+     * AIDEV-NOTE: every declaration here is an override(), never a register(). zenit-cms
+     * derives a default source for every model a RowResource exposes whose schema has a
+     * display field -- and the display-field CONVENTION means a plain "name" column is
+     * enough, so all of these models derive one. Replacement is complete and never a
+     * merge, so an explicit source that changes the derived gate is REFUSED at boot
+     * unless it says the change is deliberate; every source below narrows the derived
+     * admin gate to a walk-confirmed manage scope, which IS that deliberate change.
+     */
+    static void declareSources() {
+        // The SiteModel default source. zenit-cms derives one from SiteModel.NAME through
+        // both the admin SiteResource and the delegated ManageSiteResource; this server-side
+        // declaration replaces it deliberately, because its scope reads zenit-auth grants
+        // unavailable to the common/browser registration lane.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteModel.class)
             .search(SiteModel.NAME, SiteModel.SLUG)
             .baseCriteria(() -> SiteModel.DELETED_AT.isNull())
             .accessCriteria(ManagePanel::siteScope)
@@ -232,9 +249,9 @@ public final class ManagePanel extends Panel {
             .accessCriteria(ManagePanel::domainScope)
             .build());
 
-        // DNS records have no display fields and therefore no derived source. This one scopes
-        // child rows by their parent zone: a tenant reaches names inside a zone it cannot
-        // otherwise enumerate.
+        // DNS records: this one scopes child rows by their parent zone, so a tenant reaches
+        // names inside a zone it cannot otherwise enumerate -- a deliberate narrowing of the
+        // admin-gated default zenit-cms derives from DnsRecordModel.NAME.
         // The create half serves the list pages' quick-add bar. It is ADMIN-gated on top
         // of the source's own read scope, because its form carries zone_id: adding "into
         // an arbitrary zone" is an operator act, while a tenant's create lane is
@@ -244,11 +261,10 @@ public final class ManagePanel extends Panel {
         //
         // AIDEV-NOTE: the provider is the FRAMEWORK's own resource-backed one
         // (CmsRecordSources.createProviderFor), which is what zenit-cms derives for every
-        // creatable RowResource whose source it registers itself. hohenheim registers this
-        // source explicitly (DnsRecordModel declares no display fields, so nothing is
-        // derived for it) and an explicit source replaces the derived default whole -- so
-        // the create half has to be declared here or the bar simply never appears. It used
-        // to be a hand-written copy of that provider; nothing about the reduction or the
+        // creatable RowResource whose source it registers itself. An explicit source
+        // replaces the derived default WHOLE -- facets never merge -- so the create half
+        // has to be declared here or the bar simply never appears. It used to be a
+        // hand-written copy of that provider; nothing about the reduction or the
         // persistence path was ever hohenheim-specific.
         var dnsRecords = RecordSource.of(DnsRecordModel.class)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
@@ -257,7 +273,7 @@ public final class ManagePanel extends Panel {
         if (dnsCreate != null) {
             dnsRecords.creatable(dnsCreate, HohenheimSources.ADMIN_ACCESS);
         }
-        RecordSourceRegistry.INSTANCE.register(dnsRecords.build());
+        RecordSourceRegistry.INSTANCE.override(dnsRecords.build());
 
         // Certificates: this REPLACES the common ADMIN_ACCESS-gated registration (which the
         // browser registry keeps, legitimately -- the scope below reads zenit-auth record
@@ -295,10 +311,10 @@ public final class ManagePanel extends Panel {
                 ? null : InstanceTemplateModel.APPROVED_AT.isNotNull())
             .build());
 
-        // Record schedules have no display fields and therefore no derived source. This
-        // declaration carries the SAME scope the delegated resource enforces, so a picker
-        // and the resource can never disagree.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(RecordScheduleModel.class)
+        // Record schedules: this declaration carries the SAME scope the delegated resource
+        // enforces, so a picker and the resource can never disagree -- a deliberate
+        // narrowing of the default derived from RecordScheduleModel.NAME.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(RecordScheduleModel.class)
             .search(RecordScheduleModel.NAME)
             .accessCriteria(ManagePanel::recordScheduleScope)
             .build());
@@ -357,10 +373,10 @@ public final class ManagePanel extends Panel {
             .accessCriteria(HohenheimAccess::gitProviderScope)
             .build());
 
-        // Instance-database attachments have no display fields and therefore no derived
-        // source. The row names both a workload and a credential store, so this sole source
-        // must carry the parent instance's visibility scope.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(InstanceDatabaseModel.class)
+        // Instance-database attachments: the row names both a workload and a credential
+        // store, so this source must carry the parent instance's visibility scope instead
+        // of the admin gate zenit-cms derives.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDatabaseModel.class)
             .title()
             .accessCriteria(ManagePanel::instanceDatabaseScope)
             .build());
