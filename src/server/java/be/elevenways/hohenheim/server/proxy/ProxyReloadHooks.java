@@ -28,6 +28,18 @@ import java.util.Set;
  */
 public final class ProxyReloadHooks {
 
+    // AIDEV-NOTE: InstanceModel is DELIBERATELY absent, and the absence was re-decided when
+    // the non-release-managed stale-address defect was fixed (2026-08-23). Instance rows are
+    // written constantly -- a status stamp every couple of minutes per record, deploy
+    // progress, install lifecycle -- and every entry here regenerates the WHOLE routing
+    // table on write, so adding it would rebuild every site's handler chain on a heartbeat.
+    // It is also unnecessary: what a site's instance upstream needs is not a new handler but
+    // a fresh ADDRESS, and that is targeted invalidation's job. Every path that moves an
+    // instance's address or liveness now bumps its generation -- the InstanceService funnel
+    // (deploy/stop/destroy, every kind), the release engine, and the status reconciler on a
+    // CORRECTION -- and a handler holding NULL retries on its own short timer. A routing
+    // hook here would be a broadcast standing in for facts we already have precisely.
+    //
     // AIDEV-NOTE: DatabaseModel is here for the ROUTE, not for convergence. Routing no
     // longer converges anything (phase-0 brief 7: the instance upstream handler resolves an
     // address and nothing else), so a database status flip reaches a workload through the

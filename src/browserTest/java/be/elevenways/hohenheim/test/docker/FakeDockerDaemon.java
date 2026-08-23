@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -151,6 +152,25 @@ public final class FakeDockerDaemon implements DockerTransport {
     /** Let this handle be stopped again; the refusal is per-daemon and must not leak. */
     public void allowStopOf(@NonNull String handle) {
         this.stopFails.remove(handle);
+    }
+
+    /**
+     * The workload's process EXITS with nobody watching: the container is down and its
+     * published port is unbound, and no control-plane path was told.
+     *
+     * AIDEV-NOTE: deliberately not the runtime's {@code stop}, which is what an operator
+     * stop calls and therefore what releases the port claims and stamps the record. This is
+     * the crash the status reconciler exists for -- the record still says running, the
+     * ledger still holds an OBSERVED claim, and only a daemon question can tell.
+     */
+    public void killWorkload(@NonNull String handle) {
+        Workload workload = this.workloads.get(handle);
+        if (workload == null) {
+            throw new IllegalStateException("no workload " + handle);
+        }
+        unbind(workload);
+        workload.running = false;
+        this.calls.add("killed:" + handle);
     }
 
     /** Every recorded act against ONE handle, in order: the workload's whole life. */
@@ -338,10 +358,92 @@ public final class FakeDockerDaemon implements DockerTransport {
         DockerClient.overrideLocalTransportForTest(() -> this);
     }
 
-    /** Undo {@link #install()}; safe to call when it was never installed. */
+    /**
+     * ALSO point {@code hohenheim:docker_container} at this fake, so a NON-release-managed
+     * workload can be deployed hermetically.
+     *
+     * AIDEV-NOTE: opt-in rather than folded into {@link #install()}, because the two
+     * existing consumers are release journeys and a fake standing in for a kind their
+     * subject never uses would be scaffolding in their environment. It arrives with its
+     * first consumer ({@code InstanceUpstreamStalenessTest}), which needs the ONE shape the
+     * release kind cannot produce: an ephemeral loopback publication on a record a site
+     * points at DIRECTLY, whose host port really moves when the workload restarts.
+     */
+    public void installContainerKind() {
+        InstanceKinds.register(new FakeContainerKind(this));
+    }
+
+    /** Undo {@link #install()} and {@link #installContainerKind()}; safe either way. */
     public static void restore() {
         InstanceKinds.register(new ReleaseKind());
+        InstanceKinds.register(new DockerContainerKind());
         DockerClient.overrideLocalTransportForTest(null);
+    }
+
+    /**
+     * The real docker-container kind with its runtime swapped: schema, spec derivation,
+     * publication shape and footprint all come from production.
+     */
+    private static final class FakeContainerKind implements InstanceKindHandler {
+
+        private final DockerContainerKind real = new DockerContainerKind();
+        private final FakeDockerDaemon daemon;
+
+        FakeContainerKind(@NonNull FakeDockerDaemon daemon) {
+            this.daemon = daemon;
+        }
+
+        @Override
+        public @NonNull Identifier typeId() { return DockerContainerKind.ID; }
+
+        @Override
+        public @NonNull String getDisplayName() { return this.real.getDisplayName(); }
+
+        @Override
+        public @NonNull Microcopy getLabel() { return this.real.getLabel(); }
+
+        @Override
+        public @NonNull Microcopy getDescription() { return this.real.getDescription(); }
+
+        @Override
+        public Icon getIcon() { return this.real.getIcon(); }
+
+        @Override
+        public String getColor() { return this.real.getColor(); }
+
+        @Override
+        public Schema getSchema() { return this.real.getSchema(); }
+
+        @Override
+        public @NonNull Set<String> supportedRuntimes() { return this.real.supportedRuntimes(); }
+
+        @Override
+        public boolean supportsSiteUpstream() { return this.real.supportsSiteUpstream(); }
+
+        @Override
+        public boolean supportsVolumes() { return this.real.supportsVolumes(); }
+
+        @Override
+        public boolean tenantAuthored() { return this.real.tenantAuthored(); }
+
+        @Override
+        public @NonNull WorkloadIsolation isolation() { return this.real.isolation(); }
+
+        @Override
+        public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
+            return this.daemon.runtime();
+        }
+
+        @Override
+        public @NonNull InstanceSpec specFor(int instanceId,
+                                             @NonNull Map<String, Object> settings) {
+            return this.real.specFor(instanceId, settings);
+        }
+
+        @Override
+        public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
+            return this.real.defaultFootprintMb(settings);
+        }
     }
 
     /**

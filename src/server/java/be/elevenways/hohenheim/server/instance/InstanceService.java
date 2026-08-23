@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
@@ -115,6 +116,19 @@ public final class InstanceService {
     /**
      * Run one runtime operation with the record marked in flight; re-entrant safe (only
      * the OUTERMOST scope clears the mark).
+     *
+     * AIDEV-NOTE: the upstream invalidation lives HERE, at the one funnel deploy, stop and
+     * destroy all pass through, rather than in each kind's lane. Only the release engine
+     * used to invalidate, so a site exposing a WORKSPACE or a DOCKER CONTAINER (both kinds
+     * declare supportsSiteUpstream, neither bumps any generation) froze its resolved address
+     * at route-build time: routes built while the workload was down answered 503 forever,
+     * and -- worse -- a loopback publication's host port is EPHEMERAL, so after a restart the
+     * site kept forwarding to a number the daemon may already have handed to somebody else's
+     * container. One placement covers every kind, including the ones added later.
+     *
+     * It runs in a finally, and on the INNER scopes of a nested operation too, because a
+     * failed or partial operation moves the address exactly as a settled one does -- a
+     * refused stop parks the claims, and the next resolution must see that.
      */
     private <T> T inFlight(int instanceId, @NonNull Supplier<T> body) {
         boolean marked = IN_FLIGHT.add(instanceId);
@@ -124,6 +138,7 @@ public final class InstanceService {
             if (marked) {
                 IN_FLIGHT.remove(instanceId);
             }
+            ApplicationUpstreams.invalidateForInstance(instanceId);
         }
     }
 
