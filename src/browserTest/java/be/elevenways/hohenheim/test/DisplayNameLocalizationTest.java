@@ -19,6 +19,7 @@ import be.elevenways.protoblast.guard.Violation;
 import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -45,6 +46,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  * non-user-facing one declares itself with the same-line marker.
  */
 class DisplayNameLocalizationTest {
+
+    /** Where the browserTest source root's classes live; see {@link #ships}. */
+    private static final String TEST_PACKAGE = "be.elevenways.hohenheim.test.";
+
+    /**
+     * The fewest shipped kinds the two registries can honestly hold -- six upstream kinds
+     * are documented in CLAUDE.md and the instance kinds outnumber them.
+     */
+    private static final int SHIPPED_KIND_FLOOR = 10;
 
     /** A CALL of getDisplayName; the declaration carries no dot and never matches. */
     private static final Pattern CALL = Pattern.compile("\\.getDisplayName\\(\\)");
@@ -106,17 +116,31 @@ class DisplayNameLocalizationTest {
         // The DESCRIPTION is walked beside the label because it became a Microcopy too
         // (the card presentations draw it): an English literal there rots exactly the same
         // way, and nothing else would notice.
+        int walked = 0;
         for (InstanceKindInfo handler : InstanceKindRegistry.REGISTRY) {
+            if (!ships(handler)) {
+                continue;
+            }
+            walked++;
             check(handler.getLabel(), "instance kind " + handler.typeId(), catalogs, broken);
             check(handler.getDescription(), "instance kind description "
                 + handler.typeId(), catalogs, broken);
         }
         for (UpstreamKindInfo type : UpstreamKinds.REGISTRY) {
+            if (!ships(type)) {
+                continue;
+            }
+            walked++;
             check(type.getLabel(), "upstream kind " + type.typeId(), catalogs, broken);
             check(type.getDescription(), "upstream kind description "
                 + type.typeId(), catalogs, broken);
         }
 
+        // The skip above must never be able to empty the walk: a filter that quietly
+        // excluded everything would report green about nothing at all.
+        assertThat(walked)
+            .as("shipped kinds actually walked, after the test-declared ones were skipped")
+            .isGreaterThanOrEqualTo(SHIPPED_KIND_FLOOR);
         assertThat(broken)
             .as("every type label and description resolves to real copy in en AND nl")
             .isEmpty();
@@ -141,10 +165,16 @@ class DisplayNameLocalizationTest {
         List<String> broken = new ArrayList<>();
 
         for (InstanceKindInfo handler : InstanceKindRegistry.REGISTRY) {
+            if (!ships(handler)) {
+                continue;
+            }
             checkRefusal(handler.getLabel(), "instance kind " + handler.typeId(),
                 catalogs, described, broken);
         }
         for (UpstreamKindInfo type : UpstreamKinds.REGISTRY) {
+            if (!ships(type)) {
+                continue;
+            }
             checkRefusal(type.getLabel(), "upstream kind " + type.typeId(),
                 catalogs, described, broken);
         }
@@ -152,6 +182,21 @@ class DisplayNameLocalizationTest {
         assertThat(broken)
             .as("every label embedded in a refusal is read back as TEXT")
             .isEmpty();
+    }
+
+    /**
+     * Whether a registration SHIPS, as opposed to being declared by a test fixture.
+     *
+     * AIDEV-NOTE: both registries are global and populated at CLASS LOAD, so any fixture
+     * that declares a fake kind pollutes this walk for every test sharing the JVM fork --
+     * which is how three `hohenheim:fake_*` kinds appeared here overnight without one of
+     * them changing (2026-08-23). The discriminator is STRUCTURAL, never a name list: a
+     * shipped kind can only be excluded by moving its class into the test source root,
+     * and anything unrecognised is still checked. The count assertion above is what stops
+     * this from silently emptying the walk.
+     */
+    private static boolean ships(@NonNull Object registration) {
+        return !registration.getClass().getName().startsWith(TEST_PACKAGE);
     }
 
     private static void checkRefusal(Microcopy label, String what, DefaultCatalogLoader catalogs,
