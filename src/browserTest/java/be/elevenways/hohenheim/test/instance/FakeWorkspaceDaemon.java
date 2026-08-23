@@ -45,6 +45,18 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
     /** Every script this daemon was asked to exec, in order. */
     final List<String> execs = new ArrayList<>();
 
+    /** Every spec this daemon was asked to CREATE a workload from, in order. */
+    final List<InstanceSpec> created = new ArrayList<>();
+
+    /**
+     * Host preparation and container creation, in the order the funnel performed them.
+     *
+     * AIDEV-NOTE: the ordering is load-bearing, not decoration -- a bind whose source does
+     * not exist when the container is created is silently created root-owned by the daemon,
+     * so {@code prepareForDeploy} must land before every {@code create}.
+     */
+    final List<String> events = new ArrayList<>();
+
     /** The commit the scripted checkout lands on. */
     static final String COMMIT = "cafebabecafebabecafebabecafebabecafebabe";
 
@@ -91,8 +103,18 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
     @Override
     public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
         requireReachable();
+        this.created.add(spec);
+        this.events.add("create:" + spec.handle());
         this.workloads.putIfAbsent(spec.handle(), false);
         return spec.handle();
+    }
+
+    /** The spec of the last container this daemon was asked to create. */
+    @NonNull InstanceSpec lastCreated() {
+        if (this.created.isEmpty()) {
+            throw new IllegalStateException("no container was created");
+        }
+        return this.created.get(this.created.size() - 1);
     }
 
     @Override
@@ -186,11 +208,14 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
         }
 
         /**
-         * Deliberately a no-op: the real one materializes host directories with a quota
-         * and builds a runtime image on the host, both of which need a real machine.
+         * Deliberately does no host work: the real one materializes host directories with a
+         * quota and builds a runtime image on the host, both of which need a real machine.
+         * It records that it RAN, because when it ran relative to create is the whole
+         * ordering contract the mounts depend on.
          */
         @Override public void prepareForDeploy(int instanceId, @NonNull String serverName,
                                                @NonNull Map<String, Object> settings) {
+            this.daemon.events.add("prepare:" + instanceId);
         }
     }
 }

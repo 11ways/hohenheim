@@ -212,6 +212,52 @@ public final class InstanceVolumes {
     }
 
     /**
+     * The bind mounts an owner's DECLARATIONS make, deriving nothing on the host.
+     *
+     * AIDEV-NOTE: THE one derivation of the mounted SET. {@link #mountsFor} materializes
+     * exactly this map and a spec carries exactly this map, so the volumes a container
+     * mounts and the directories the controller creates can never be two different sets --
+     * which is precisely what the workspace kind's hardcoded single-entry bind map made
+     * them until 2026-08-23 (declared, quota'd, listed in the Volumes tab, never mounted).
+     *
+     * @return host path -&gt; container path, in declaration order
+     */
+    public static @NonNull Map<String, String> declaredMounts(int ownerInstanceId) {
+        Map<String, String> mounts = new LinkedHashMap<>();
+        for (Row volume : declaredFor(ownerInstanceId)) {
+            mountOf(mounts, ownerInstanceId, volume);
+        }
+        return mounts;
+    }
+
+    /**
+     * Add one bind to a mount map, refusing a container path another host directory claims.
+     *
+     * AIDEV-NOTE: one guard, deliberately not a validation framework. Two declarations at
+     * the same container path used to be harmless because the second one was never mounted;
+     * now that every declaration reaches the spec, the daemon gets two binds at one path and
+     * answers with a create failure that names neither volume. Overlap and exclusivity
+     * semantics remain separate work -- this refuses only the exact collision.
+     *
+     * @throws Violations {@code volume_container_path_conflict} naming both volumes
+     */
+    public static void addMount(@NonNull Map<String, String> mounts, @NonNull String hostPath,
+                                @NonNull String containerPath) {
+        for (Map.Entry<String, String> mounted : mounts.entrySet()) {
+            if (containerPath.equals(mounted.getValue())
+                    && !hostPath.equals(mounted.getKey())) {
+                throw Violations.ofField(InstanceVolumeModel.CONTAINER_PATH.getName(),
+                    containerPath, Microcopy.of("volume_container_path_conflict")
+                        .withFilter("scope", "violations")
+                        .withArg("path", containerPath)
+                        .withArg("first", nameOfHostPath(mounted.getKey()))
+                        .withArg("second", nameOfHostPath(hostPath)));
+            }
+        }
+        mounts.put(hostPath, containerPath);
+    }
+
+    /**
      * Create every declared volume of an owner on its host, apply the quotas, and hand back
      * the bind mounts a spec carries.
      *
@@ -234,23 +280,28 @@ public final class InstanceVolumes {
                                                          @NonNull String serverName,
                                                          @Nullable Integer ownerUid) {
 
-        List<Row> declared = declaredFor(ownerInstanceId);
         Map<String, String> mounts = new LinkedHashMap<>();
+        Map<String, Row> rows = new LinkedHashMap<>();
 
-        if (declared.isEmpty()) {
+        // The SET is derived FIRST, and refuses as a whole: a conflicting declaration must
+        // not be discovered halfway through creating directories on the host.
+        for (Row volume : declaredFor(ownerInstanceId)) {
+            String hostPath = mountOf(mounts, ownerInstanceId, volume);
+            if (hostPath != null) {
+                rows.put(hostPath, volume);
+            }
+        }
+
+        if (mounts.isEmpty()) {
             return mounts;
         }
 
         Row server = requireServer(serverName);
         VolumeOperations operations = operationsFor(server);
 
-        for (Row volume : declared) {
-            String name = volume.get(InstanceVolumeModel.NAME);
-            String containerPath = volume.get(InstanceVolumeModel.CONTAINER_PATH);
-            if (name == null || containerPath == null || containerPath.isBlank()) {
-                continue;
-            }
-            String hostPath = hostPathFor(ownerInstanceId, name);
+        for (Map.Entry<String, Row> mounted : rows.entrySet()) {
+            String hostPath = mounted.getKey();
+            Row volume = mounted.getValue();
             operations.create(hostPath);
             Long quota = volume.get(InstanceVolumeModel.QUOTA_BYTES);
             if (quota != null && quota > 0) {
@@ -266,7 +317,6 @@ public final class InstanceVolumes {
             if (ownerUid != null) {
                 operations.own(hostPath, ownerUid);
             }
-            mounts.put(hostPath, containerPath);
         }
 
         return mounts;
@@ -416,6 +466,28 @@ public final class InstanceVolumes {
     }
 
     // -- internals -------------------------------------------------------------
+
+    /**
+     * Derive one declaration into a mount map.
+     *
+     * @return its host path, or null when the row names no mount at all
+     */
+    private static @Nullable String mountOf(@NonNull Map<String, String> mounts,
+                                            int ownerInstanceId, @NonNull Row volume) {
+        String name = volume.get(InstanceVolumeModel.NAME);
+        String containerPath = volume.get(InstanceVolumeModel.CONTAINER_PATH);
+        if (name == null || containerPath == null || containerPath.isBlank()) {
+            return null;
+        }
+        String hostPath = hostPathFor(ownerInstanceId, name);
+        addMount(mounts, hostPath, containerPath);
+        return hostPath;
+    }
+
+    /** The volume name a minted host path ends in; see {@link #hostPathFor}. */
+    private static @NonNull String nameOfHostPath(@NonNull String hostPath) {
+        return hostPath.substring(hostPath.lastIndexOf('/') + 1);
+    }
 
     private static @NonNull VolumeOperations operationsFor(@NonNull Row server) {
         return VolumeOperations.forBackend(ServerModel.volumeBackendOf(server),
