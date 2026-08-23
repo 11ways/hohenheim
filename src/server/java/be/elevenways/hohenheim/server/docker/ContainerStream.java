@@ -38,6 +38,18 @@ public final class ContainerStream implements ConsoleStream {
     /** Cap on an error-response body read at open time (protects the heap, not UX). */
     private static final int MAX_ERROR_BODY = 64 * 1024;
 
+    /** How long the error-body drain keeps asking a silent connection for more. */
+    private static final long ERROR_BODY_TIMEOUT_MS = 2_000;
+
+    /** Pause between zero-byte reads, so "nothing yet" never becomes a busy loop. */
+    private static void idle() {
+        try {
+            Thread.sleep(1);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private final DockerStreamConnection connection;
     private final boolean stdinOpen;
 
@@ -75,11 +87,31 @@ public final class ContainerStream implements ConsoleStream {
     public static @NonNull ContainerStream open(@NonNull DockerStreamTransport transport,
                                          byte @NonNull [] request, long headerTimeoutMs,
                                          boolean stdinOpen) throws IOException {
+        return open(transport, request, headerTimeoutMs, stdinOpen, false);
+    }
+
+    /**
+     * {@link #open(DockerStreamTransport, byte[], long, boolean)} for an endpoint whose
+     * framing the CALLER knows: a TTY exec is never multiplexed.
+     *
+     * AIDEV-NOTE: the 4-arg overload DISCOVERS the framing from the first byte (a value
+     * above 2 cannot be a Docker frame type, so the stream is raw). That heuristic is
+     * right for attach, where the container's TTY-ness is not ours to know, and wrong for
+     * a PTY exec we ourselves created with {@code Tty: true}: a first output byte of
+     * 0x00-0x02 would be eaten as a frame header and the next four bytes read as a length.
+     * Declaring the framing is not an optimization here -- it removes a guess from a lane
+     * whose bytes a tenant chooses.
+     *
+     * @param rawStream true when the response body carries no 8-byte stdout/stderr frames
+     */
+    public static @NonNull ContainerStream open(@NonNull DockerStreamTransport transport,
+                                         byte @NonNull [] request, long headerTimeoutMs,
+                                         boolean stdinOpen, boolean rawStream) throws IOException {
         DockerStreamConnection connection = transport.openStream(request, headerTimeoutMs);
         ScheduledFuture<?> watchdog = WATCHDOG.schedule(
             connection::close, headerTimeoutMs, TimeUnit.MILLISECONDS);
         try {
-            return new ContainerStream(connection, stdinOpen);
+            return new ContainerStream(connection, stdinOpen, rawStream, headerTimeoutMs);
         } catch (IOException e) {
             connection.close();
             String evidence = connection.diagnostics();
@@ -92,12 +124,13 @@ public final class ContainerStream implements ConsoleStream {
         }
     }
 
-    private ContainerStream(DockerStreamConnection connection, boolean stdinOpen)
-            throws IOException {
+    private ContainerStream(DockerStreamConnection connection, boolean stdinOpen,
+                            boolean rawStream, long headerTimeoutMs) throws IOException {
         this.connection = connection;
         this.stdinOpen = stdinOpen;
+        this.rawFallback = rawStream;
 
-        String head = this.readHead();
+        String head = this.readHead(headerTimeoutMs);
         int lineEnd = head.indexOf("\r\n");
         String statusLine = lineEnd < 0 ? head : head.substring(0, lineEnd);
         String[] parts = statusLine.split(" ", 3);
@@ -126,14 +159,27 @@ public final class ContainerStream implements ConsoleStream {
         }
     }
 
-    /** Accumulate bytes until the blank line ending the response head; keep the rest buffered. */
-    private @NonNull String readHead() throws IOException {
+    /**
+     * Accumulate bytes until the blank line ending the response head; keep the rest buffered.
+     *
+     * AIDEV-NOTE: it reads through {@link #readMore}, NOT {@link #fill}, and that is the
+     * whole point. {@code fill()} short-circuits while ANY byte is still buffered -- correct
+     * for the body loops, fatal here: this loop deliberately keeps the last 3 bytes back (a
+     * terminator can straddle two reads), so once a read leaves a tail of 3 or fewer bytes
+     * with no terminator in it, {@code consume} is 0, {@code fill()} hands the same 3 bytes
+     * back without touching the socket, and the loop spins on the CPU forever. MEASURED
+     * 2026-08-23: a shell handshake was found burning a core here for minutes, its stack
+     * pointing at this loop's BACKEDGE, whenever the daemon's response head happened to
+     * arrive split. It is flaky by nature -- it depends on how the head is chunked -- and it
+     * is not new: attach and follow-logs ride the same loop.
+     *
+     * The deadline is its own second guard: the external close watchdog did not end that
+     * spin, because a spinning thread never asks the socket anything.
+     */
+    private @NonNull String readHead(long timeoutMs) throws IOException {
+        long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 1);
         StringBuilder head = new StringBuilder();
         while (true) {
-            int filled = this.fill();
-            if (filled == -1) {
-                throw new IOException("Docker stream closed before a response header arrived");
-            }
             // Scan the buffered window for the terminator, keeping scanned bytes buffered
             // so body bytes that arrived with the header are not lost.
             for (int i = this.bufferStart; i + 3 < this.bufferEnd; i++) {
@@ -156,17 +202,62 @@ public final class ContainerStream implements ConsoleStream {
             if (head.length() > 64 * 1024) {
                 throw new IOException("Docker stream response header exceeded 64KiB");
             }
+            int more = this.readMore();
+            if (more == -1) {
+                throw new IOException("Docker stream closed before a response header arrived");
+            }
+            if (more == 0) {
+                if (System.currentTimeMillis() >= deadline) {
+                    throw new IOException("Docker stream produced no response header within "
+                        + timeoutMs + "ms");
+                }
+                idle();
+            }
         }
+    }
+
+    /**
+     * Read ADDITIONAL bytes, keeping whatever is still unconsumed (compacted to the front).
+     *
+     * @return the number of new bytes, 0 when the read produced none, -1 at EOF
+     */
+    private int readMore() throws IOException {
+        if (this.bufferStart > 0) {
+            int kept = this.bufferEnd - this.bufferStart;
+            System.arraycopy(this.buffer, this.bufferStart, this.buffer, 0, kept);
+            this.bufferStart = 0;
+            this.bufferEnd = kept;
+        }
+        if (this.bufferEnd >= this.buffer.length) {
+            // Unreachable for a header (the 64KiB guard fires first), but a full buffer
+            // must never be reported as EOF.
+            return 0;
+        }
+        int n = this.connection.read(this.buffer, this.bufferEnd,
+            this.buffer.length - this.bufferEnd);
+        if (n == -1) {
+            return -1;
+        }
+        this.bufferEnd += n;
+        return n;
     }
 
     /** Drain a (bounded) error body so the ApiException carries the daemon's reason. */
     private @NonNull String readErrorBody() {
         StringBuilder body = new StringBuilder();
+        long deadline = System.currentTimeMillis() + ERROR_BODY_TIMEOUT_MS;
         try {
             while (body.length() < MAX_ERROR_BODY) {
                 int filled = this.fill();
                 if (filled == -1) {
                     break;
+                }
+                if (filled == 0) {
+                    if (System.currentTimeMillis() >= deadline) {
+                        break;
+                    }
+                    idle();
+                    continue;
                 }
                 body.append(new String(this.buffer, this.bufferStart,
                     this.bufferEnd - this.bufferStart, StandardCharsets.UTF_8));
@@ -209,6 +300,12 @@ public final class ContainerStream implements ConsoleStream {
                 if (filled == -1) {
                     this.settle(this.eofTermination(), this.connection.diagnostics());
                     return null;
+                }
+                if (filled == 0) {
+                    // Nothing on the wire yet. This loop is deliberately unbounded in TIME
+                    // (a console or a shell may sit silent for hours) but must never be
+                    // unbounded in CPU -- see readHead's note.
+                    idle();
                 }
             }
         } catch (IOException e) {

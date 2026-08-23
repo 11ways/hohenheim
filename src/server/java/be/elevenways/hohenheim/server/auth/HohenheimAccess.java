@@ -126,6 +126,25 @@ public final class HohenheimAccess {
     public static final String EXEC = "exec";
 
     /**
+     * Open an INTERACTIVE login shell inside the workload -- the tenant verb the product's
+     * "your own box" promise is made of, and deliberately NOT {@link #EXEC}.
+     *
+     * ELEVATED and DELEGABLE: unlike exec it is bounded to a workload that already runs as
+     * a NON-ROOT uid (the shell surface refuses every other kind BY NAME), so what it hands
+     * out is authority over the tenant's own files and processes rather than
+     * root-in-container. That is what makes it something an operator may hand to a tenant
+     * lead, where exec never can be.
+     *
+     * AIDEV-NOTE: deliberately NOT listed in any {@code impliedBy}, {@link #MANAGE}
+     * included. Implication is retroactive -- it changes what every ALREADY-STORED grant
+     * row means -- so folding a shell into the manage umbrella would silently hand an
+     * interactive terminal to every existing manage holder. Same reasoning that keeps
+     * the file, snapshot and backup verbs out of that umbrella; an operator grants this one
+     * deliberately, on the record, or it is not held.
+     */
+    public static final String SHELL = "shell";
+
+    /**
      * Read a managed database's CREDENTIALS -- the plaintext {@code db_password} the
      * record stores encrypted. ELEVATED and deliberately separate from {@link #VIEW}: a
      * read-only teammate may see that a database exists, its engine and its status, and
@@ -316,7 +335,7 @@ public final class HohenheimAccess {
                 .label(Microcopy.of("view").withFilter("scope", "capability"))
                 .asDelegable()
                 .impliedBy(MANAGE, CONSOLE, POWER, CONFIG, DESTROY,
-                    FILES_READ, SNAPSHOTS, BACKUPS),
+                    FILES_READ, SNAPSHOTS, BACKUPS, SHELL),
             KnownCapability.of(CONSOLE)
                 .label(Microcopy.of("console").withFilter("scope", "capability"))
                 .asDelegable()
@@ -378,6 +397,15 @@ public final class HohenheimAccess {
                 .asDelegable(),
             KnownCapability.of(FILES_WRITE)
                 .label(Microcopy.of("files_write").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable(),
+            // The interactive shell lands WITH its enforcing surface (InstanceShell behind
+            // the Shell tab and the instance-shell WebSocket), per the no-unwired rule. It
+            // rides the same subjects x capabilities matrix the verbs above already
+            // surface, and it implies VIEW so a shell delegate is not 404'd off the record
+            // carrying the tab -- the defect files.read/snapshots/backups shipped with.
+            KnownCapability.of(SHELL)
+                .label(Microcopy.of("shell").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
         RecordGrantCapabilityChecker.declareRules(InstanceModel.MODEL_ID,

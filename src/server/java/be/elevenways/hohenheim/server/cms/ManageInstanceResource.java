@@ -127,6 +127,12 @@ public final class ManageInstanceResource extends InstanceResource {
             new InstanceProvisioningPage(),
             new InstanceDeploymentsPage(),
             new InstanceFilesPage(), new InstanceStatsPage(),
+            // Offered on the TENANT panel too, unlike the exec tab beside it in the
+            // operator resource: exec is ADMIN-sensitivity with deliberately no /manage
+            // surface, while `shell` is a delegable tenant verb bounded to a workload that
+            // runs as its own non-root uid -- a tenant who cannot reach it here has "your
+            // own box" and no way into it. It hides AND 404s itself without the capability.
+            new InstanceShellPage(),
             // The DELEGATED artifact resources: ManageInstanceBackupResource declares no
             // row actions, which is how restore-to-new stays operator-only here too.
             new InstanceSnapshotsPage(new ManageInstanceSnapshotResource()),
