@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
 import java.net.http.HttpResponse;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -337,6 +339,110 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             .as("step 6: the section holding the refusal is open").isEqualTo("false");
         assertThat(sectionOpenState(refused.body(), "ports"))
             .as("step 6: and the one that holds none stays folded").isEqualTo("true");
+    }
+
+    /**
+     * An empty host picker EXPLAINS itself. The narrowing is correct when it matches
+     * nothing -- a fresh installation has no host with a quota-capable data root -- and
+     * until KindHostRules declared an {@link be.elevenways.zenit.common.edit.EmptyNarrowingReason}
+     * the operator was told only "No results found", with the real explanation sitting on
+     * the host overview page they had no reason to open.
+     *
+     * Steps 1-2 are the SIBLING-SPECIFIC contract (a kind that only needs a runtime and a
+     * kind that also needs quota-capable storage get DIFFERENT sentences, each naming the
+     * runtimes that kind accepts); step 3 puts the picker in the genuinely empty state and
+     * proves the sentence is what the operator actually sees.
+     */
+    @Test
+    @Order(5)
+    void anEmptyHostNarrowingExplainsItself() {
+        navigateToApp("/admin/instances/new");
+        waitForHydration();
+
+        // 1. A kind that demands nothing of the data root names only the runtime rule.
+        clickKindCard("docker_container");
+        page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
+        assertThat(hostEmptyText())
+            .as("step 1: a runtime-only narrowing names the runtimes that kind accepts")
+            .isEqualTo(RUNTIME_ONLY_REASON);
+
+        // 2. A kind that mounts volumes fails on a SECOND rule, and says so -- the whole
+        //    point of handing the resolver the sibling values.
+        clickKindCard("workspace");
+        page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
+        assertThat(hostEmptyText())
+            .as("step 2: a quota-demanding kind names the data-root rule too")
+            .isEqualTo(QUOTA_REASON);
+
+        // 3. And in the state a fresh install is actually in -- no host with a
+        //    quota-capable data root -- the list really is empty and the sentence is what
+        //    renders in it, not the generic "No results found".
+        Map<Integer, String> backends = withoutQuotaCapableHosts();
+        try {
+            navigateToApp("/admin/instances/new");
+            waitForHydration();
+            clickKindCard("workspace");
+            page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
+            openPlSelect(HOST_SELECT);
+            page.waitForCondition(() -> page.locator(
+                OPEN_SELECT_POPUP + " div[role='option']").count() == 0);
+            assertThat(page.locator(OPEN_SELECT_POPUP + " .pl-select-empty").isVisible())
+                .as("step 3: nothing qualifies, so the empty row is what the operator sees")
+                .isTrue();
+            assertThat(page.locator(OPEN_SELECT_POPUP + " .pl-select-empty").textContent().trim())
+                .as("step 3: and it explains WHY, instead of reading as a broken list")
+                .isEqualTo(QUOTA_REASON);
+            closeOpenPopup();
+        } finally {
+            restoreHostBackends(backends);
+        }
+    }
+
+    /** The declared reason for a kind whose only host rule is the runtime. */
+    private static final String RUNTIME_ONLY_REASON =
+        "No host runs a runtime this kind supports (docker)."
+            + " Enrol one under Hosts first.";
+
+    /** The declared reason for a kind that also demands a quota-capable data root. */
+    private static final String QUOTA_REASON =
+        "No host both runs a runtime this kind supports (docker, incus) and has a data"
+            + " root that can enforce quotas. Under Hosts, mount a host's volumes"
+            + " directory on btrfs and re-run its preflight.";
+
+    /**
+     * pl-select keeps its empty row in the (portalled) popup whether or not the list came
+     * back empty and lets CSS decide whether it SHOWS, so the declared text is readable
+     * with options present -- which is what makes steps 1 and 2 assertable without
+     * touching any data.
+     */
+    private String hostEmptyText() {
+        openPlSelect(HOST_SELECT);
+        String text = page.locator(OPEN_SELECT_POPUP + " .pl-select-empty").textContent().trim();
+        closeOpenPopup();
+        return text;
+    }
+
+    /** @return every host's previous volume backend, after taking the quota away */
+    private static Map<Integer, String> withoutQuotaCapableHosts() {
+        Map<Integer, String> previous = new LinkedHashMap<>();
+        var servers = Models.get(ServerModel.class);
+        for (Row row : servers.find().all()) {
+            previous.put(row.get(ServerModel.ID), row.get(ServerModel.VOLUME_BACKEND));
+            row.set(ServerModel.VOLUME_BACKEND, VolumeBackend.NONE.token());
+            servers.save(row);
+        }
+        return previous;
+    }
+
+    private static void restoreHostBackends(Map<Integer, String> previous) {
+        var servers = Models.get(ServerModel.class);
+        for (Map.Entry<Integer, String> entry : previous.entrySet()) {
+            Row row = servers.find().where(ServerModel.ID.eq(entry.getKey())).first();
+            if (row != null) {
+                row.set(ServerModel.VOLUME_BACKEND, entry.getValue());
+                servers.save(row);
+            }
+        }
     }
 
     /** The kind settings sub-form: the one fieldset whose path is the settings field. */
