@@ -9812,6 +9812,14 @@
     "text": "Exposed by",
     "scope": "instance_overview"
   },
+  "status_confirmed": {
+    "text": "Status confirmed",
+    "scope": "instance_overview"
+  },
+  "status_never_confirmed": {
+    "text": "Never checked against the host",
+    "scope": "instance_overview"
+  },
   "volume_backend_none_title": {
     "text": "No volume storage",
     "scope": "server_overview"

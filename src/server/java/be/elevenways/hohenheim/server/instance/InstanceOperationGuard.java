@@ -200,6 +200,46 @@ final class InstanceOperationGuard {
     }
 
     /**
+     * THE reconciler's write: {@link #stamp}'s guard, assigning the status the DAEMON was
+     * observed in together with the moment it answered.
+     *
+     * AIDEV-NOTE: separate from {@link #stamp} because the two write different claims.
+     * {@code stamp} records what an OPERATION did (including {@code error}, which no
+     * daemon ever reported), so folding {@code status_observed_at} into it would stamp
+     * "confirmed against the host" onto statuses nothing confirmed. It also deliberately
+     * leaves {@code updated_at} ALONE when the status is unchanged, so a confirmation
+     * cannot look like a state transition to the boot settle's process-start clock.
+     *
+     * @param changed whether the status actually moved (an unchanged one still records
+     *                the confirmation, and only that)
+     * @throws Violations {@code instance_fenced_out}
+     */
+    static void stampObserved(@NonNull HostLeases leases, int instanceId, int serverId,
+                              long fence, @NonNull String status, boolean changed,
+                              @NonNull Object instanceName) {
+        var statement = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .where(hostScope(serverId))
+            .where(Criteria.or(
+                InstanceModel.CLAIM_FENCE.isNull(),
+                InstanceModel.CLAIM_FENCE.lte(fence)))
+            .assign(InstanceModel.STATUS, status)
+            .assign(InstanceModel.STATUS_OBSERVED_AT, Instant.now())
+            .assign(InstanceModel.CLAIM_FENCE, fence);
+        if (changed) {
+            statement = statement.assign(InstanceModel.UPDATED_AT, Instant.now());
+        }
+        if (statement.updateAll() == 0) {
+            leases.fencedOut(serverId);
+            throw Violations.ofForm(Microcopy.of("instance_fenced_out")
+                .withFilter("scope", "violations")
+                .withArg("name", String.valueOf(instanceName))
+                .withArg("server", ServerModel.nameOf(serverId)));
+        }
+    }
+
+    /**
      * Open a migration window: the same fenced guard as {@link #stamp}, additionally
      * recording the destination host AND the amount the window reserved on it -- the
      * settle releases that stored amount verbatim, never a recompute (see
