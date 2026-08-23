@@ -371,10 +371,20 @@ public final class InstanceFiles {
 
     // -- plumbing -------------------------------------------------------------
 
-    /** Deepest root first, so a nested volume claims its own paths before its parent does. */
+    /**
+     * Deepest root first, so a nested volume claims its own paths before its parent does.
+     *
+     * AIDEV-NOTE: BOTH mount maps, because a spec has two and they are not alternatives:
+     * {@code volumes()} is the driver-managed named volume (docker_container, database,
+     * stack service) and {@code binds()} is the Hohenheim-owned host directory under the
+     * volume root (workspace, application -- see {@code InstanceVolumes}). Reading only
+     * the first left every WORKSPACE with an empty root set, which is the one kind whose
+     * whole point is browsing its own files.
+     */
     private static @NonNull List<String> sortedRoots(InstanceService.@NonNull Resolved resolved) {
-        List<String> roots = new ArrayList<>(
-            InstanceFilePath.rootsOf(resolved.spec().volumes().values()));
+        List<String> mounted = new ArrayList<>(resolved.spec().volumes().values());
+        mounted.addAll(resolved.spec().binds().values());
+        List<String> roots = new ArrayList<>(InstanceFilePath.rootsOf(mounted));
         roots.sort(Comparator.comparingInt(String::length).reversed().thenComparing(root -> root));
         return roots;
     }

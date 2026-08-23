@@ -11,6 +11,10 @@
 {% declare entries: List %}
 {% declare canWrite: Boolean = false %}
 {% declare supported: Boolean = true %}
+{#- A refusal from InstanceFiles (no volumes, not found, not a directory, ...). It is
+    RENDERED: the page used to stash it in a variable the template never declared, so
+    every refusal drew an empty page with nothing but the tabs on it. -#}
+{% declare error: String = "" %}
 {% declare maxFileBytes: Long = 0 %}
 {% declare editPath: String = "" %}
 {% declare editContent: String = "" %}
@@ -44,6 +48,8 @@
         <pl-empty-state-description>{{ t("unsupported_hint", scope: "instance_files") }}</pl-empty-state-description>
     </pl-empty-state>
     {% /if %}
+
+    {% if error != "" %}<pl-alert variant="destructive" data-files-error="1">{{ error }}</pl-alert>{% /if %}
 
 
     {% if volumes %}
