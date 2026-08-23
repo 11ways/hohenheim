@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.BootSettle;
+import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
@@ -212,6 +213,13 @@ public final class InstanceStatusReconciler {
         if (!changed) {
             return new Outcome(instanceId, Verdict.CONFIRMED, stored, state);
         }
+        // A CORRECTION is also a routing fact, and only a correction: this record just
+        // stopped claiming a live workload, so every handler holding its address must ask
+        // again ({@code InstanceModel.SERVABLE_STATUSES} is what the resolution reads). The
+        // stamp above is a hook-free updateAll, so nothing else would ever notice -- and the
+        // dead workload's OBSERVED port claim survives in the ledger, because only a settled
+        // stop releases one. A mere confirmation moves no address and must bump nothing.
+        ApplicationUpstreams.invalidateForInstance(instanceId);
         // A correction is accountability, not decoration: the record just contradicted
         // itself and the operator must be able to see when, and on whose evidence.
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,

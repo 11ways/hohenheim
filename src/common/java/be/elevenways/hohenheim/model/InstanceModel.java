@@ -112,6 +112,29 @@ public class InstanceModel extends Model {
         List.of(STATUS_CAPTURING, STATUS_RESTORING, STATUS_MIGRATING);
 
     /**
+     * The statuses under which the RECORD ITSELF still leaves something traffic could
+     * reach, and therefore the only ones a site's {@code instance} upstream resolves an
+     * address for.
+     *
+     * AIDEV-NOTE: an ALLOWLIST, so a status added later is unroutable until somebody
+     * classifies it here -- a new member silently joining the routable set is how a paused
+     * workload keeps taking traffic ({@code InstanceUpstreamStalenessTest} fails the build
+     * on an unclassified member). Deliberately WIDER than {@link #LIVE_GUEST_STATUSES}: the
+     * three protected statuses keep their container running, so a backup must not 503 the
+     * site it is protecting, and {@code error} is the status whose own words are "the daemon
+     * may disagree" (a failed operation already parked its port claims, so the ledger
+     * answers null there anyway).
+     *
+     * AIDEV-NOTE: what this EXCLUDES is the pair that claims no workload at all, and that
+     * exclusion is what lets the status reconciler's correction reach the proxy. A workload
+     * that died without a stop leaves its OBSERVED port claim in the ledger -- only a
+     * settled stop releases one -- so the ledger alone cannot tell that the address is dead.
+     */
+    public static final List<String> SERVABLE_STATUSES =
+        List.of(STATUS_STARTING, STATUS_RUNNING, STATUS_ERROR,
+            STATUS_CAPTURING, STATUS_RESTORING, STATUS_MIGRATING);
+
+    /**
      * Whether another operator operation may start on this record right now.
      *
      * @see #PROTECTED_STATUSES

@@ -25,8 +25,19 @@ import java.net.URI;
  * ({@link ApplicationUpstreams}), which is what makes a flip visible to a handler that was
  * built generations ago. Caching the URI without that check is exactly the stale-address
  * defect -- traffic kept going to the container the drain was about to stop.
+ *
+ * AIDEV-NOTE: a NULL resolution additionally expires on a short timer. The generation check
+ * alone makes "nothing is serving" permanent for anything this JVM did not do itself -- a
+ * site whose routes were built while its workspace was down answered 503 until a restart,
+ * and on a multi-controller estate a deploy driven by the OTHER controller moves no
+ * generation here at all. Only the negative case is retried: it costs at most one resolution
+ * per interval while the site is already down, whereas expiring a held ADDRESS would put a
+ * database read on the request path this cache exists to keep off it.
  */
 public final class InstanceUpstreamHandler implements SiteRequestHandler {
+
+    /** How long a "nothing is serving" answer is trusted before it is asked again. */
+    private static final long NEGATIVE_RETRY_NANOS = 2_000_000_000L;
 
     private final int siteId;
     private final int applicationId;
@@ -34,6 +45,9 @@ public final class InstanceUpstreamHandler implements SiteRequestHandler {
     private final String scheme;
 
     private volatile ApplicationUpstreams.Resolution resolution;
+
+    /** When the held resolution was taken (nanoTime); read only while that answer is NULL. */
+    private volatile long negativeSince;
 
     public InstanceUpstreamHandler(int siteId, int applicationId) {
         this(siteId, applicationId, true, "http");
@@ -50,7 +64,7 @@ public final class InstanceUpstreamHandler implements SiteRequestHandler {
         this.applicationId = applicationId;
         this.websocketEnabled = websocketEnabled;
         this.scheme = scheme;
-        this.resolution = ApplicationUpstreams.resolve(applicationId, scheme);
+        hold(ApplicationUpstreams.resolve(applicationId, scheme));
     }
 
     @Override
@@ -93,10 +107,19 @@ public final class InstanceUpstreamHandler implements SiteRequestHandler {
     /** The upstream this request must go to, re-resolved when the application flipped. */
     public @Nullable URI current() {
         ApplicationUpstreams.Resolution held = this.resolution;
-        if (held.generation() != ApplicationUpstreams.generationOf(this.applicationId)) {
+        boolean expiredNegative = held.upstream() == null
+            && System.nanoTime() - this.negativeSince >= NEGATIVE_RETRY_NANOS;
+        if (expiredNegative
+                || held.generation() != ApplicationUpstreams.generationOf(this.applicationId)) {
             held = ApplicationUpstreams.resolve(this.applicationId, this.scheme);
-            this.resolution = held;
+            hold(held);
         }
         return held.upstream();
+    }
+
+    /** Keep a resolution together with the moment it was taken. */
+    private void hold(ApplicationUpstreams.@NonNull Resolution resolved) {
+        this.negativeSince = System.nanoTime();
+        this.resolution = resolved;
     }
 }
