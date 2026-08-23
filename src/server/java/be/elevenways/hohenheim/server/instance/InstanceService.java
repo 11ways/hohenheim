@@ -25,8 +25,6 @@ import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -34,6 +32,7 @@ import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -79,6 +78,9 @@ public final class InstanceService {
     /** The activity action a SETTLED deploy is recorded under. */
     public static final String ACTIVITY_DEPLOY_ACTION = "deployed";
 
+    /** The trigger a deploy records when its caller names none. */
+    public static final String DEFAULT_DEPLOY_REASON = "deploy";
+
     /** The activity action a SETTLED stop is recorded under. */
     public static final String ACTIVITY_STOP_ACTION = "stopped";
 
@@ -104,13 +106,27 @@ public final class InstanceService {
     }
 
     /**
-     * Create (replacing only an own leftover container) and start the instance's
-     * workload, then record the observed published port in the ledger (record-after:
-     * the OwnerLabels landed at create, so a crash inside the window stays attributable).
+     * THE deploy verb, and the one place a kind decides what deploying it MEANS.
+     *
+     * AIDEV-NOTE: three lanes, chosen here and nowhere else. A release-managed record
+     * converges a release; a workspace that DECLARES a repository deploys its SOURCE
+     * (checkout + build + restart, {@link WorkspaceBuilds}); everything else is the plain
+     * workload half. The fold lives on the service rather than on the surfaces because
+     * the row action, the automation API, the schedule chain and the crash restart all
+     * reach it -- a surface that had to know which verb its kind wanted is how the
+     * workspace's git deploy ended up reachable ONLY from a forge webhook.
      *
      * @throws Violations naming the failure; the record is stamped {@code error}
      */
     public @NonNull InstanceStatus deploy(int instanceId) {
+        return deploy(instanceId, DEFAULT_DEPLOY_REASON);
+    }
+
+    /**
+     * {@link #deploy(int)} with the trigger the surface wants recorded ({@code manual},
+     * {@code webhook}, a schedule's own word).
+     */
+    public @NonNull InstanceStatus deploy(int instanceId, @NonNull String reason) {
         // The ONE power gate, on the service every surface funnels through: the CMS row
         // action, the automation API and anything later. A tenant-originated call must
         // hold power; operator and system work (crash restarts, schedule chains, installs)
@@ -121,8 +137,31 @@ public final class InstanceService {
         // before any driver work, so every existing power surface deploys an application
         // with nothing wired at the call site.
         if (releaseManaged(instanceId)) {
-            return ApplicationDeploys.deploy(instanceId, null, "deploy").status();
+            return ApplicationDeploys.deploy(instanceId, null, reason).status();
         }
+        // The workspace's own fold, on exactly the same terms: WorkspaceBuilds stays THE
+        // mechanism and brings the workload up through deployWorkload below, so this is a
+        // branch and never a second deploy path.
+        if (WorkspaceBuilds.deploysSource(liveRow(instanceId))) {
+            return new WorkspaceBuilds(this).deploy(instanceId, null, reason).status();
+        }
+        return deployWorkload(instanceId);
+    }
+
+    /**
+     * Create (replacing only an own leftover container) and start the instance's
+     * workload, then record the observed published port in the ledger (record-after:
+     * the OwnerLabels landed at create, so a crash inside the window stays attributable).
+     *
+     * AIDEV-NOTE: the WORKLOAD half of {@link #deploy}, with none of its kind folds. A
+     * source-deploying kind calls THIS to bring its container up and back, which is what
+     * keeps {@code deploy -> WorkspaceBuilds.deploy -> restart -> deploy} from being a
+     * cycle. It asks the power gate itself so no in-package caller can be a wider door.
+     *
+     * @throws Violations naming the failure; the record is stamped {@code error}
+     */
+    @NonNull InstanceStatus deployWorkload(int instanceId) {
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
         Resolved resolved = resolve(instanceId);
         // Settle-then-refuse: a start under a live capture/restore corrupts the very
         // data those operations exist to protect; a start before the template's install
@@ -339,10 +378,8 @@ public final class InstanceService {
                 () -> Models.get(InstanceModel.class).save(row)));
         // Schedules must die with their record, and destroy SOFT-deletes (remove hooks
         // never fire here), so the cleanup is explicit -- nothing else will do it.
-        Datasource scheduleStore = Db.current() != null ? Db.current() : Datasources.getDefault();
-        if (scheduleStore != null) {
-            new RecordSchedules(scheduleStore).deleteForRecord(InstanceModel.MODEL_ID, instanceId);
-        }
+        new RecordSchedules(Db.currentOrDefault())
+            .deleteForRecord(InstanceModel.MODEL_ID, instanceId);
         // Game-domain mappings die with either of their instances, the same explicit-
         // cleanup shape as schedules: generated DNS rows and forced-hosts entries come
         // down rather than dangle at a dead backend.
@@ -433,11 +470,16 @@ public final class InstanceService {
 
     /** Whether this record's kind deploys through the release engine instead of a driver. */
     private static boolean releaseManaged(int instanceId) {
-        Row row = Models.get(InstanceModel.class).find()
+        Row row = liveRow(instanceId);
+        return row != null && InstanceKinds.isReleaseManaged(row.get(InstanceModel.KIND));
+    }
+
+    /** The record as it stands, or null when it is missing or trashed. */
+    private static @Nullable Row liveRow(int instanceId) {
+        return Models.get(InstanceModel.class).find()
             .where(InstanceModel.ID.eq(instanceId))
             .where(InstanceModel.DELETED_AT.isNull())
             .first();
-        return row != null && InstanceKinds.isReleaseManaged(row.get(InstanceModel.KIND));
     }
 
     /**
@@ -722,6 +764,17 @@ public final class InstanceService {
     public void restart(int instanceId) {
         stop(instanceId);
         deploy(instanceId);
+    }
+
+    /**
+     * {@link #restart} without the kind folds, for the source-deploying lane that IS one
+     * of those folds -- see {@link #deployWorkload}.
+     *
+     * @return the status the workload came back with
+     */
+    @NonNull InstanceStatus restartWorkload(int instanceId) {
+        stop(instanceId);
+        return deployWorkload(instanceId);
     }
 
     /**

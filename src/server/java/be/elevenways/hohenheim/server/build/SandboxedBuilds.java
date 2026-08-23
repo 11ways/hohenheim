@@ -8,14 +8,12 @@ import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.List;
 
 /**
  * THE build entry point: one durable operation record and one log stream, shared by
@@ -207,18 +205,13 @@ public final class SandboxedBuilds {
 
     /** Keep the newest N operations per owning record; older rows go. */
     private static void prune(@NonNull BuildOperationModel model, @NonNull BuildRequest request) {
+        model.pruneHistory(request.forModel().toString(), request.forId(), historyPerOwner());
+    }
+
+    /** The configured history depth, shared with every other writer of this record. */
+    public static int historyPerOwner() {
         Integer keep = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Builds.HISTORY_PER_OWNER);
-        int limit = keep != null && keep > 0 ? keep : 50;
-        List<Row> stale = model.find()
-            .where(BuildOperationModel.FOR_MODEL.eq(request.forModel().toString()))
-            .where(BuildOperationModel.FOR_ID.eq(request.forId()))
-            .orderBy(BuildOperationModel.ID, SortOrder.DESC)
-            .offset(limit)
-            .limit(1000)
-            .all();
-        for (Row old : stale) {
-            model.delete(old.get(BuildOperationModel.ID));
-        }
+        return keep != null ? keep : 0;
     }
 }

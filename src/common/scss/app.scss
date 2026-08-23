@@ -91,16 +91,10 @@
         }
     }
 
-    // Deployment build log (site Deployments tab)
+    // Deployment build log (Deploys tab): pl-log-view owns the frame, the mono type and
+    // the scrolling; all this declares is how tall the pane may get here.
     .hh-deploy-log {
-        font-size: var(--pl-font-size-xs);
-        background: var(--pl-color-surface-muted, var(--pl-color-surface));
-        border: 1px solid var(--pl-color-border);
-        border-radius: var(--pl-radius-md);
-        padding: var(--pl-space-md);
-        overflow-x: auto;
-        max-height: 24rem;
-        overflow-y: auto;
+        --pl-log-view-max-height: 24rem;
     }
 
     // Dashboard attention panel

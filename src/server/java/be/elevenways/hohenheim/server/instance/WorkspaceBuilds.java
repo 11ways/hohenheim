@@ -1,23 +1,33 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.build.BuildLog;
+import be.elevenways.hohenheim.server.build.BuildQuota;
+import be.elevenways.hohenheim.server.build.SandboxedBuilds;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
+import be.elevenways.hohenheim.server.orm.RecordStamp;
+import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.ExecSupport;
+import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.source.DeployStatuses;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitProviders;
+import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -61,12 +71,46 @@ public final class WorkspaceBuilds {
         this.instances = instances;
     }
 
-    /** What one deploy did, for the surface that asked for it. */
-    public record Outcome(@Nullable String commitSha, boolean built, @NonNull String output) {
+    /**
+     * What one deploy did, for the surface that asked for it.
+     *
+     * @param status      the state the workload came back in
+     * @param operationId the {@code build_operations} row this deploy is recorded on
+     */
+    public record Outcome(@Nullable String commitSha, boolean built, @NonNull String output,
+                          @NonNull InstanceStatus status, int operationId) {
+    }
+
+    /**
+     * Whether deploying this record means deploying its SOURCE: a workspace that names a
+     * repository. {@link InstanceService#deploy} asks this to pick its lane.
+     *
+     * <p>A workspace with no repository is NOT a source deploy and stays a plain
+     * container up, which is what an operator who wants a bare box asks for.</p>
+     */
+    public static boolean deploysSource(@Nullable Row instance) {
+
+        if (instance == null) {
+            return false;
+        }
+
+        InstanceKindHandler handler = InstanceKinds.getHandler(instance.get(InstanceModel.KIND));
+
+        if (handler == null || !WorkspaceKind.ID.equals(handler.typeId())) {
+            return false;
+        }
+
+        return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
+            && SiteSources.hasRepository(castSettings(map));
     }
 
     /**
      * Check the source out, build it, and restart the workspace.
+     *
+     * AIDEV-NOTE: the workload is brought UP first (and only if it is not already), because
+     * the checkout is an exec INSIDE it. That is what makes this the whole deploy of a
+     * source-declared workspace rather than only the half a forge webhook needed: the first
+     * press of Deploy has no container at all, a push has one that is already serving.
      *
      * @param  ref the branch/tag/sha to deploy, or null for the source's declared branch
      * @throws Violations naming the refusal (no repository, checkout, build)
@@ -86,26 +130,53 @@ public final class WorkspaceBuilds {
         }
 
         String branch = ref != null && !ref.isBlank() ? ref : declaredBranch(settings);
-        String commitSha;
-        StringBuilder output = new StringBuilder();
+        BuildLog log = new BuildLog(BuildQuota.fromSettings().logBytes());
+        long startedAt = System.currentTimeMillis();
+        // The durable in-flight mark, SandboxedBuilds' contract verbatim: it lands before
+        // any daemon work, so a controller that dies mid-deploy leaves `running` behind as
+        // visible evidence instead of a clean-looking absence.
+        int operationId = startOperation(instanceId, branch);
 
         try {
             DeployStatuses.report(settings, null, GitProviderClient.StatusState.PENDING,
                 DeployStatuses.CONTEXT_DEPLOY, "Deploying", null);
-            commitSha = checkout(resolved, branch, settings, output);
-            boolean built = build(resolved, settings, output);
+            log.line("[hohenheim] deploying " + branch);
+            ensureRunning(instanceId);
+            String commitSha = checkout(resolved, branch, settings, log);
+            boolean built = build(resolved, settings, log);
             // The workload restarts LAST: the files it will serve are on disk and owned by
             // the uid it comes back as, so there is no window where a live process reads a
-            // half-written checkout.
-            this.instances.restart(instanceId);
+            // half-written checkout. restartWorkload and not restart: restart re-enters
+            // InstanceService.deploy, whose workspace branch is THIS method.
+            InstanceStatus status = this.instances.restartWorkload(instanceId);
             ActivityLog.record(Models.get(InstanceModel.class), instanceId,
                 InstanceService.ACTIVITY_DEPLOY_ACTION, reason);
             DeployStatuses.report(settings, commitSha, GitProviderClient.StatusState.SUCCESS,
                 DeployStatuses.CONTEXT_DEPLOY, "Deployed", null);
-            return new Outcome(commitSha, built, output.toString());
+            finish(operationId, BuildOperationModel.STATUS_SUCCEEDED, commitSha, null, log,
+                startedAt);
+            return new Outcome(commitSha, built, log.text(), status, operationId);
         } catch (RuntimeException failed) {
-            reportFailure(settings, null, String.valueOf(failed.getMessage()));
+            String message = String.valueOf(failed.getMessage());
+            // Appended THROUGH the log, so the secrets the checkout registered are redacted
+            // out of a refusal that quotes git's own output back.
+            log.line("[hohenheim] deploy failed: " + message);
+            finish(operationId, BuildOperationModel.STATUS_FAILED, null, message, log,
+                startedAt);
+            reportFailure(settings, null, message);
             throw failed;
+        }
+    }
+
+    /**
+     * Bring the workload up unless it already is: the checkout runs inside it.
+     *
+     * AIDEV-NOTE: {@code liveStatus} never throws, so an absent container reads as ABSENT
+     * and gets deployed rather than blowing up here.
+     */
+    private void ensureRunning(int instanceId) {
+        if (this.instances.liveStatus(instanceId).state() != ContainerState.RUNNING) {
+            this.instances.deployWorkload(instanceId);
         }
     }
 
@@ -125,7 +196,7 @@ public final class WorkspaceBuilds {
      * @return the commit the checkout landed on
      */
     public String checkout(@NonNull Resolved resolved, @NonNull String ref,
-                    @NonNull Map<String, Object> settings, @NonNull StringBuilder output) {
+                    @NonNull Map<String, Object> settings, @NonNull BuildLog log) {
 
         String boundUrl = GitProviders.boundCloneUrl(settings);
         String repository = boundUrl != null ? boundUrl : str(settings.get("repository_url"));
@@ -144,6 +215,17 @@ public final class WorkspaceBuilds {
                 throw Violations.ofForm(violation("source_checkout_failed")
                     .withArg("reason", String.valueOf(unavailable.getMessage())));
             }
+        }
+
+        // Registered BEFORE the first append: a builder we do not control decides what it
+        // echoes, and git prints a remote's URL back on plenty of ordinary failures. The
+        // embedded half covers a raw URL stored before InstanceDeclarations refused those.
+        for (String value : credentials.values()) {
+            log.redact(value);
+        }
+        String embedded = GitRepository.embeddedCredential(repository);
+        if (embedded != null) {
+            log.redact(embedded);
         }
 
         // AIDEV-NOTE: the URL handed to git carries NO credential, and no `-c` option is
@@ -168,7 +250,7 @@ public final class WorkspaceBuilds {
 
         ExecSupport.ExecOutcome run = exec(resolved, script,
             ExecSupport.ExecOptions.in(WorkspaceKind.HOME_PATH).withEnv(credentials));
-        output.append(run.outputTail());
+        log.append(run.outputTail());
 
         if (!run.succeeded()) {
             throw Violations.ofForm(violation("source_checkout_failed")
@@ -191,7 +273,7 @@ public final class WorkspaceBuilds {
      * @return whether a build command was declared at all
      */
     public boolean build(@NonNull Resolved resolved, @NonNull Map<String, Object> settings,
-                  @NonNull StringBuilder output) {
+                  @NonNull BuildLog log) {
 
         String command = WorkspaceKind.buildCommandOf(settings,
             RuntimeImages.requireFor(resolved.row()));
@@ -202,7 +284,7 @@ public final class WorkspaceBuilds {
 
         ExecSupport.ExecOutcome run = exec(resolved, command,
             ExecSupport.ExecOptions.in(CHECKOUT_PATH));
-        output.append(run.outputTail());
+        log.append(run.outputTail());
 
         if (!run.succeeded()) {
             throw Violations.ofForm(violation("workspace_build_failed")
@@ -226,6 +308,56 @@ public final class WorkspaceBuilds {
             throw Violations.ofForm(violation("workspace_exec_failed")
                 .withArg("reason", String.valueOf(failed.getMessage())));
         }
+    }
+
+    // -- the durable operation record ------------------------------------------
+
+    /**
+     * The {@code running} row, written before any daemon work.
+     *
+     * AIDEV-NOTE: the SAME record every sandboxed build writes, deliberately. "What did my
+     * last deploy do and what did it print" is one question whatever ran it, and the
+     * Deploys tab reads one table -- a workspace-only history table would be a second
+     * vocabulary over one job. What a workspace build does NOT have is an artifact, so
+     * image_id/tag/peak_disk stay null by construction and never look like a promotable
+     * image.
+     */
+    private static int startOperation(int instanceId, @NonNull String branch) {
+        BuildOperationModel model = Models.get(BuildOperationModel.class);
+        Row row = model.createEmptyRow();
+        row.set(BuildOperationModel.BUILDER_KIND, BuildOperationModel.KIND_WORKSPACE);
+        row.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
+        row.set(BuildOperationModel.FOR_ID, instanceId);
+        row.set(BuildOperationModel.STATUS, BuildOperationModel.STATUS_RUNNING);
+        row.set(BuildOperationModel.SOURCE_REF, branch);
+        row.set(BuildOperationModel.TIMEOUT_SECONDS, (int) (BUILD_TIMEOUT_MS / 1000));
+        row.set(BuildOperationModel.STARTED_AT, Instant.now());
+        model.save(row);
+        return row.get(BuildOperationModel.ID);
+    }
+
+    /** Stamp the terminal status, the log and the timings; a NARROW write, never a save. */
+    private static void finish(int operationId, @NonNull String status,
+                               @Nullable String commitSha, @Nullable String failureReason,
+                               @NonNull BuildLog log, long startedAt) {
+        BuildOperationModel model = Models.get(BuildOperationModel.class);
+        Row row = model.findById(operationId);
+        if (row == null) {
+            return;
+        }
+        Instant finished = Instant.now();
+        RecordStamp.on(model, row)
+            .set(BuildOperationModel.STATUS, status)
+            .set(BuildOperationModel.SOURCE_REF, commitSha != null
+                ? commitSha : row.get(BuildOperationModel.SOURCE_REF))
+            .set(BuildOperationModel.FAILURE_REASON, failureReason)
+            .set(BuildOperationModel.LOG, log.text())
+            .set(BuildOperationModel.FINISHED_AT, finished)
+            .set(BuildOperationModel.DURATION_MS,
+                (int) (finished.toEpochMilli() - startedAt))
+            .write();
+        model.pruneHistory(InstanceModel.MODEL_ID.toString(),
+            row.get(BuildOperationModel.FOR_ID), SandboxedBuilds.historyPerOwner());
     }
 
     /** The branch a source declares, defaulting to {@code main}. */
@@ -286,5 +418,10 @@ public final class WorkspaceBuilds {
 
     private static @NonNull String str(@Nullable Object value) {
         return value == null ? "" : value.toString().trim();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @NonNull Map<String, Object> castSettings(@NonNull Map<?, ?> settings) {
+        return (Map<String, Object>) settings;
     }
 }

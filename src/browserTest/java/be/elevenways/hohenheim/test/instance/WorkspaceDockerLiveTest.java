@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -185,7 +186,11 @@ class WorkspaceDockerLiveTest {
             instanceId = workspaceRecord(imageId, settings);
             int uid = WorkspaceUids.forInstance(instanceId);
 
-            // 2. Deploy: image built on the host, home volume carved, container up.
+            // 2. Deploy through the FUNNEL: image built on the host, home volume carved,
+            //    container up -- and, because this workspace names a repository, its source
+            //    checked out and built inside it before the workload comes back. Pre-fix
+            //    this produced a running container over an EMPTY /home/site.
+            //    (WorkspaceBuilds had one caller outside its tests: the forge webhook.)
             InstanceStatus status = new InstanceService().deploy(instanceId);
             assertThat(status.state())
                 .as("step 2: the workspace is running on the real daemon")
@@ -227,9 +232,27 @@ class WorkspaceDockerLiveTest {
                 .as("step 5: owned by the same number on both sides")
                 .isEqualTo(String.valueOf(uid));
 
-            // 6. Checkout and build INSIDE the container, as that uid.
+            // 6. Checkout and build INSIDE the container, as that uid -- and the durable
+            //    build_operations row the Deploys tab reads, with the captured log on it.
+            //    Step 2's deploy already ran this lane (the funnel folds a source-declared
+            //    workspace into WorkspaceBuilds); this proves the verb directly and proves
+            //    a re-deploy over an existing checkout FETCHES rather than re-cloning.
             WorkspaceBuilds.Outcome deployed = new WorkspaceBuilds()
                 .deploy(instanceId, "master", "live test");
+            Row recorded = Models.get(BuildOperationModel.class)
+                .findById(deployed.operationId());
+            assertThat((String) recorded.get(BuildOperationModel.STATUS))
+                .as("step 6: the deploy is recorded as a durable operation")
+                .isEqualTo(BuildOperationModel.STATUS_SUCCEEDED);
+            assertThat((String) recorded.get(BuildOperationModel.BUILDER_KIND))
+                .as("step 6: under the workspace builder kind, never a sandboxed one")
+                .isEqualTo(BuildOperationModel.KIND_WORKSPACE);
+            assertThat((String) recorded.get(BuildOperationModel.LOG))
+                .as("step 6: carrying what the checkout and the build printed")
+                .isNotBlank();
+            assertThat((String) recorded.get(BuildOperationModel.IMAGE_ID))
+                .as("step 6: and NO artifact identity -- a workspace build promotes nothing")
+                .isNull();
             assertThat(deployed.commitSha())
                 .as("step 6: the checkout reports a commit").hasSize(40);
             assertThat(deployed.built())
