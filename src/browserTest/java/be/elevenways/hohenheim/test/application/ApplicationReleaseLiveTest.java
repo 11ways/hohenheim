@@ -556,11 +556,7 @@ class ApplicationReleaseLiveTest {
 
     /** The site that LENDS the application its hostname: the {@code instance} upstream. */
     private static Row exposingSite(int applicationId, String name, String slug) {
-        Row site = ProxyTestSupport.setupSite("hohenheim:instance", name, slug,
-            new LinkedHashMap<>());
-        site.set(SiteModel.INSTANCE_ID, applicationId);
-        Models.get(SiteModel.class).save(site);
-        return site;
+        return ProxyTestSupport.setupInstanceSite(name, slug, applicationId);
     }
 
     /**
