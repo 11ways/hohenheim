@@ -23,11 +23,14 @@ import java.util.stream.Collectors;
  *
  * AIDEV-NOTE: this is a POLICY, not a caller option, and the shape enforces that. Every
  * authority that creates a container passes a {@link Profile} to createContainer; they
- * cannot pass "none", they cannot hand-add a capability, and they cannot set any of the
- * HostConfig key outside {@link #PERMITTED_KEYS} -- a spec carrying one is REFUSED, so a
- * later feature cannot quietly reintroduce {@code Privileged}, and neither can a Docker
- * API version that invents a new escape. A NEW authority added later reaches the same
- * funnel or it reaches no daemon at all.
+ * cannot pass "none", they cannot hand-add a capability, and they cannot set any key
+ * outside {@link #PERMITTED_BODY_KEYS} at the top level or {@link #PERMITTED_KEYS} inside
+ * HostConfig -- a spec carrying one is REFUSED, so a later feature cannot quietly
+ * reintroduce {@code Privileged}, and neither can a Docker API version that invents a new
+ * escape. A NEW authority added later reaches the same funnel or it reaches no daemon at
+ * all. BOTH levels are gated as of 2026-08-23; before that the top level was passed
+ * verbatim, which is how {@code NetworkingConfig} could attach a container to any
+ * existing network with no refusal.
  *
  * AIDEV-NOTE: this note used to enumerate "the four container authorities (stacks, Docker
  * sites, managed databases, instances)", and after three lowerings that count is wrong in a
@@ -221,6 +224,75 @@ public final class ContainerHardening {
      * deployment owns -- a bind of /var/run/docker.sock is still root on the host, and
      * still refused.
      */
+    /**
+     * THE closed set of TOP-LEVEL {@code /containers/create} keys a caller may set, each
+     * with the reason it is on the list. Every other key is REFUSED at
+     * {@link #refuseBodyKeys}, exactly as {@link #PERMITTED_KEYS} does one level down.
+     *
+     * AIDEV-NOTE: until 2026-08-23 only {@code HostConfig} was gated and the REST of the
+     * create body reached the daemon verbatim, which made the sibling claim
+     * ("a new instance kind cannot lose isolation by accident") false for everything
+     * outside it. The proven bypass was {@code NetworkingConfig}: a second
+     * {@code EndpointsConfig} entry attaches the container to ANY existing network at
+     * create time -- another tenant's per-workload network included -- and the
+     * per-workload policy chains, which are scoped to ONE subnet, match nothing for the
+     * addresses it gets on the other one. The key is permitted rather than refused
+     * because attaching in the CREATE body is what keeps a container off the default
+     * bridge for the interval a post-hoc connect would leave it there
+     * ({@code DockerInstanceRuntime.buildSpec}), so it is STRUCTURALLY CONSTRAINED
+     * instead: see {@link #requireOwnNetworkEndpoint}.
+     *
+     * AIDEV-NOTE: what is deliberately NOT here, with the reason, because these are the
+     * ones the next feature will reach for. {@code Entrypoint} has no consumer -- every
+     * authority overrides {@code Cmd} -- and an allow-list earns nothing by listing a key
+     * nobody sets. {@code MacAddress} hands the workload a chosen identity on the bridge
+     * it shares with its neighbours. {@code Hostname}/{@code Domainname} are how a
+     * container names itself to the daemon's embedded resolver, which is what a service
+     * alias is for. {@code NetworkDisabled} would silently produce a workload the network
+     * policy has nothing to bind to. {@code WorkingDir}, {@code StopSignal},
+     * {@code StopTimeout}, {@code Shell}, {@code Volumes} (anonymous volumes with no
+     * owner labels, so unattributable debris) and the {@code AttachStd*}/{@code Tty}
+     * family are refused not for danger but for the allow-list's whole point: permission
+     * is DECLARED once a caller needs it and a reviewer has read the reason, never
+     * inherited by silence.
+     *
+     * AIDEV-NOTE: {@code Labels} is LOAD-BEARING since the bind rule below reads the
+     * instance identity off it. Forging it does not widen anything -- it re-attributes
+     * the WHOLE container to the record it names, which is the identity every other rule
+     * in this tier (removeIfOwnedBy, the reconciler, the volume rule here) then answers
+     * against consistently. There is no spelling of the labels that grants a container
+     * one record's ownership and another record's data.
+     */
+    public static final Map<String, String> PERMITTED_BODY_KEYS = orderedMap(
+        "Image", "the image reference the authority resolved; the workload is the image.",
+        "Labels", "the OwnerLabels attribution every managed resource must carry, and the"
+            + " identity the bind rule derives volume permission from.",
+        "Cmd", "the command override an authority declares; running a command inside an"
+            + " already-capability-bounded container buys nothing this policy bounds.",
+        "Env", "the workload's declared environment; product- and operator-authored, and"
+            + " outside the isolation boundary by construction.",
+        "User", "the DECLARED numeric uid a workspace runs as. It cannot escalate past the"
+            + " floor: CapDrop ALL plus no-new-privileges apply to uid 0 in the container"
+            + " exactly as they apply to any other.",
+        "ExposedPorts", "the container-side half of a declared publication, paired with"
+            + " HostConfig.PortBindings which the ledger already claimed.",
+        "Healthcheck", "the DECLARED in-workload probe; it runs a command in the container,"
+            + " which Cmd already does.",
+        "OpenStdin", "console stdin: attach is silently discarded without it, and the game"
+            + " console lane takes commands on stdin.",
+        "StdinOnce", "kept false beside OpenStdin so a console reconnect never half-closes"
+            + " the workload's stdin.",
+        "NetworkingConfig", "attaching to the per-workload network AT CREATE, which is what"
+            + " keeps the container off the default bridge for the window a post-hoc"
+            + " connect would leave it there. Structurally constrained to that ONE network"
+            + " below -- a second endpoint is the isolation bypass this gate closes.",
+        "HostConfig", "the host-side half, gated key by key by PERMITTED_KEYS above.");
+
+    /** {@link #PERMITTED_BODY_KEYS} folded once, for the same Go reason as below. */
+    private static final Set<String> PERMITTED_BODY_FOLDED = PERMITTED_BODY_KEYS.keySet().stream()
+        .map(ContainerHardening::fold)
+        .collect(Collectors.toUnmodifiableSet());
+
     public static final Map<String, String> PERMITTED_KEYS = orderedMap(
         "NetworkMode", "the per-workload private network the caller just created;"
             + " the host and container: spellings are refused below, so what this can name"
@@ -330,10 +402,11 @@ public final class ContainerHardening {
      *
      * @param containerSpec the /containers/create body; its HostConfig is created when absent
      * @param profile       the workload kind's declared capability needs
-     * @throws IllegalArgumentException when the spec sets a key this policy owns, a host
-     *                                  namespace, or a bind of a host path its declared
-     *                                  instance owner may not mount -- loud, never
-     *                                  silently overwritten
+     * @throws IllegalArgumentException when the spec sets a key this policy owns, a key
+     *                                  outside either allow-list, a host namespace, a
+     *                                  second network endpoint, or a bind of a host path
+     *                                  its declared instance owner may not mount -- loud,
+     *                                  never silently overwritten
      */
     public static void applyTo(@NonNull Map<String, Object> containerSpec, @NonNull Profile profile) {
         applyTo(containerSpec, profile, null);
@@ -354,14 +427,20 @@ public final class ContainerHardening {
     public static void applyTo(@NonNull Map<String, Object> containerSpec,
                                @NonNull Profile profile,
                                @Nullable Integer tighterPidsLimit) {
-        Object existing = containerSpec.get("HostConfig");
+        refuseBodyKeys(containerSpec);
+
+        // Taken by FOLD and removed: a body carrying both "HostConfig" and "hostconfig"
+        // would otherwise keep the sibling this method never hardened, and Go's decoder
+        // reads whichever one it finds.
+        Object existing = takeFolded(containerSpec, "HostConfig");
         Map<String, Object> hostConfig = new LinkedHashMap<>();
         if (existing instanceof Map<?, ?> map) {
             map.forEach((key, value) -> hostConfig.put(String.valueOf(key), value));
         }
 
         refuseEscapes(hostConfig, OwnerLabels.parse(
-            labelsOf(containerSpec) instanceof Map<?, ?> labels ? labels : null));
+            takeFoldedView(containerSpec, "Labels") instanceof Map<?, ?> labels ? labels : null));
+        requireOwnNetworkEndpoint(containerSpec, hostConfig);
 
         hostConfig.put("CapDrop", List.of("ALL"));
         if (!profile.capabilities().isEmpty()) {
@@ -543,6 +622,109 @@ public final class ContainerHardening {
     }
 
     /**
+     * Refuse a create body carrying a top-level key outside {@link #PERMITTED_BODY_KEYS}.
+     *
+     * AIDEV-NOTE: the same discipline as {@link #refuseEscapes}, one level up, and for the
+     * same reason -- a deny-list of today's dangerous body keys silently admits tomorrow's,
+     * and it silently admitted {@code NetworkingConfig} for as long as this gate covered
+     * only HostConfig.
+     */
+    private static void refuseBodyKeys(@NonNull Map<String, Object> containerSpec) {
+        for (Object rawKey : containerSpec.keySet()) {
+            String key = String.valueOf(rawKey);
+            if (!PERMITTED_BODY_FOLDED.contains(fold(key))) {
+                throw new IllegalArgumentException("REFUSED to create container: "
+                    + key + " is not on ContainerHardening's permitted create-body key list "
+                    + PERMITTED_BODY_KEYS.keySet() + ", so it may not be set by a caller."
+                    + " Permission on this list is DECLARED with a reviewed reason, never"
+                    + " inherited by silence; a key the product genuinely needs is added"
+                    + " there with the reason it is safe here.");
+            }
+        }
+    }
+
+    /**
+     * The ONE network a create body may attach to: the one its own {@code NetworkMode}
+     * names, with no endpoint options.
+     *
+     * AIDEV-NOTE: THE proven bypass, closed structurally rather than by refusing the key.
+     * {@code NetworkingConfig.EndpointsConfig} is a MAP of network name to endpoint
+     * config, and Docker attaches the container to every entry in it -- so a second entry
+     * naming an existing network (another tenant's per-workload network, a link network,
+     * anything the daemon already has) put the container on it with no refusal anywhere.
+     * The per-workload policy chains are keyed on ONE subnet, so the addresses it gets on
+     * the second network are outside every deny rule that is supposed to bound it. Tying
+     * the endpoint to {@code HostConfig.NetworkMode} means the attachment can only ever be
+     * the network the value check a few lines up already vetted (no {@code host}, no
+     * {@code container:<id>}), and a container that names no network mode may attach to
+     * nothing at all.
+     *
+     * AIDEV-NOTE: the endpoint config must be EMPTY, which is what every authority emits.
+     * A non-empty one carries {@code IPAMConfig} (the workload choosing its own address
+     * inside a subnet-keyed policy), {@code Links} and {@code DriverOpts}; DNS aliases are
+     * a CONNECT-time argument in this codebase ({@code connectContainerToNetwork}), never
+     * a create-body one. Nothing legitimate loses anything here today, and a later need
+     * arrives as a reviewed widening rather than as an unread map.
+     *
+     * @throws IllegalArgumentException naming what was attached and what was permitted
+     */
+    private static void requireOwnNetworkEndpoint(@NonNull Map<String, Object> containerSpec,
+                                                  @NonNull Map<String, Object> hostConfig) {
+
+        Object raw = caseFolded(containerSpec).get(fold("NetworkingConfig"));
+
+        if (raw == null) {
+            return;
+        }
+
+        if (!(raw instanceof Map<?, ?> config)) {
+            throw new IllegalArgumentException("REFUSED to create container:"
+                + " NetworkingConfig is not an object, so what it would attach the"
+                + " container to cannot be read, let alone bounded.");
+        }
+
+        for (Object rawKey : config.keySet()) {
+            if (!fold(String.valueOf(rawKey)).equals(fold("EndpointsConfig"))) {
+                throw new IllegalArgumentException("REFUSED to create container:"
+                    + " NetworkingConfig." + rawKey + " is not EndpointsConfig, which is"
+                    + " the only member of it this policy has reviewed.");
+            }
+        }
+
+        Object endpointsRaw = caseFolded(config).get(fold("EndpointsConfig"));
+        String networkMode = caseFolded(hostConfig).get(fold("NetworkMode")) instanceof String mode
+            ? mode : null;
+
+        if (!(endpointsRaw instanceof Map<?, ?> endpoints) || endpoints.size() != 1) {
+            throw new IllegalArgumentException("REFUSED to create container:"
+                + " NetworkingConfig.EndpointsConfig must attach the container to EXACTLY"
+                + " ONE network -- the private one this workload's own policy is keyed to."
+                + " A second endpoint puts it on a network whose subnet no deny rule of"
+                + " this workload names, which is the per-workload isolation bypassed by a"
+                + " map entry.");
+        }
+
+        Map.Entry<?, ?> only = endpoints.entrySet().iterator().next();
+        String attached = String.valueOf(only.getKey());
+
+        if (networkMode == null || !networkMode.equals(attached)) {
+            throw new IllegalArgumentException("REFUSED to create container: it would attach"
+                + " to network '" + attached + "' while HostConfig.NetworkMode names "
+                + (networkMode == null ? "no network at all" : "'" + networkMode + "'")
+                + ". The create-body attachment may only ever be the workload's own"
+                + " network, which is the one the namespace value check above vetted.");
+        }
+
+        if (!(only.getValue() instanceof Map<?, ?> options) || !options.isEmpty()) {
+            throw new IllegalArgumentException("REFUSED to create container: the endpoint"
+                + " config for network '" + attached + "' is not empty. Endpoint options"
+                + " (IPAMConfig, Links, DriverOpts) are not reviewed here -- a workload"
+                + " choosing its own address inside a subnet-keyed policy is the policy"
+                + " deciding nothing. DNS aliases are a connect-time argument.");
+        }
+    }
+
+    /**
      * The instance-level half of bind containment: a bind source must be a volume
      * directory THIS container's owner may mount.
      *
@@ -584,10 +766,35 @@ public final class ContainerHardening {
         InstanceVolumes.requireMountableBy(source, instanceId);
     }
 
-    /** The Labels value Go's decoder would resolve, exact spelling preferred. */
-    private static @Nullable Object labelsOf(@NonNull Map<String, Object> containerSpec) {
-        Object exact = containerSpec.get("Labels");
-        return exact != null ? exact : caseFolded(containerSpec).get(fold("Labels"));
+    /**
+     * Remove EVERY entry whose key folds to {@code name} and return the value Go would
+     * have decoded (the exact spelling when present, else the first).
+     */
+    private static @Nullable Object takeFolded(@NonNull Map<String, Object> source,
+                                               @NonNull String name) {
+        Object exact = null;
+        Object first = null;
+        boolean found = false;
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            if (!fold(entry.getKey()).equals(fold(name))) {
+                continue;
+            }
+            if (entry.getKey().equals(name)) {
+                exact = entry.getValue();
+            } else if (!found) {
+                first = entry.getValue();
+            }
+            found = true;
+        }
+        source.keySet().removeIf(key -> fold(key).equals(fold(name)));
+        return exact != null ? exact : first;
+    }
+
+    /** {@link #takeFolded} without the removal: the value Go would decode for {@code name}. */
+    private static @Nullable Object takeFoldedView(@NonNull Map<String, Object> source,
+                                                   @NonNull String name) {
+        Object exact = source.get(name);
+        return exact != null ? exact : caseFolded(source).get(fold(name));
     }
 
     /**
