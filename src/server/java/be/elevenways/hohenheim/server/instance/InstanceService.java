@@ -367,7 +367,10 @@ public final class InstanceService {
      * Verified teardown + soft delete: the container is removed (or observed absent),
      * the port claims are released as observed, and only then is the record trashed
      * (deleted_at; the grant liveWhen predicate keys on it). Named volumes survive --
-     * the reconciler reports them as orphans until an operator decides.
+     * the reconciler reports them as orphans until an operator decides -- and every site
+     * that exposed the workload is DISABLED rather than left serving a permanent 503
+     * ({@link InstanceExposure}); the site itself, its hostnames and its certificate are
+     * never touched.
      *
      * AIDEV-NOTE: the deleted_at write itself rides save(), NOT the guarded updateAll,
      * because the instance-quota release lives in a beforeWrite hook on the deleted_at
@@ -392,6 +395,7 @@ public final class InstanceService {
         if (releaseManaged(instanceId)) {
             ApplicationReleases.destroyFor(instanceId);
             trash(instanceId);
+            InstanceExposure.disableForDestroyedInstance(instanceId);
             return;
         }
         Resolved resolved = resolve(instanceId);
@@ -450,6 +454,12 @@ public final class InstanceService {
         // surviving row would keep a dead workload named in the database's in-use refusal
         // and keep its link network at the daemon forever.
         InstanceDatabaseLinks.deleteForInstance(instanceId);
+        // A site that exposed this workload has no backend any more, and nothing else
+        // consults sites.instance_id on a teardown -- so it would keep its hostnames,
+        // its DNS records and its certificate while answering 503 forever. It is
+        // DISABLED, never deleted: the hostnames, certificates and access rules are the
+        // SITE's, and re-pointing it at another instance is one toggle away.
+        InstanceExposure.disableForDestroyedInstance(instanceId);
         Blast.log("INSTANCE: destroyed", resolved.spec().handle(),
             "- container removed, volumes kept, record soft-deleted");
     }

@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
+import be.elevenways.hohenheim.server.instance.InstanceExposure;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -453,6 +454,38 @@ public class InstanceResource extends RowResource {
             Microcopy.of("delete_confirm").withFilter("scope", "instance"));
     }
 
+    /**
+     * The same dialog for ONE record, NAMING the sites the destroy will disable -- the
+     * second fact an operator must know, and one that only exists per record.
+     *
+     * AIDEV-NOTE: the wording lives here and the guarantee lives in
+     * {@code InstanceExposure.disableForDestroyedInstance}, called by
+     * {@code InstanceService.destroy}. A non-UI caller (the API, the release engine)
+     * never sees this text and still gets the disable; a surface that only WARNED would
+     * have left the 503 in place for everything but the button.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
+        String sites = strandedSites(record);
+        return sites == null ? deleteConfirmation()
+            : deleteConfirmation(Microcopy.of("delete_confirm_stranding")
+                .withFilter("scope", "instance").withArg("sites", sites));
+    }
+
+    /**
+     * The live sites this record is the upstream of, joined for a dialog.
+     *
+     * @return null when nothing exposes it, so the caller keeps the generic wording
+     */
+    private static @Nullable String strandedSites(@NonNull Row record) {
+        Integer instanceId = record.get(InstanceModel.ID);
+        if (instanceId == null) {
+            return null;
+        }
+        List<String> names = InstanceExposure.liveSiteNamesExposing(instanceId);
+        return names.isEmpty() ? null : String.join(", ", names);
+    }
+
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
@@ -557,8 +590,7 @@ public class InstanceResource extends RowResource {
                 .build())
             .dynamicConfirmation(row -> ConfirmationSpec.builder()
                 .title(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
-                .body(Microcopy.of("delete_with_data_confirm").withFilter("scope", "instance")
-                    .withArg("name", row.get(InstanceModel.NAME)))
+                .body(withDataBody(row))
                 .confirmLabel(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
                 .style(ActionStyle.DESTRUCTIVE)
                 .requireTypedConfirmation(String.valueOf((Object) row.get(InstanceModel.NAME)))
@@ -570,6 +602,19 @@ public class InstanceResource extends RowResource {
                         .withArg("name", row.get(InstanceModel.NAME)));
             })
             .build();
+    }
+
+    /**
+     * The delete-with-data body, naming the sites the destroy will disable when any do.
+     * The typed-name gate on the dialog is unchanged either way.
+     */
+    private static @NonNull Microcopy withDataBody(@NonNull Row row) {
+        String sites = strandedSites(row);
+        Microcopy body = sites == null
+            ? Microcopy.of("delete_with_data_confirm").withFilter("scope", "instance")
+            : Microcopy.of("delete_with_data_confirm_stranding")
+                .withFilter("scope", "instance").withArg("sites", sites);
+        return body.withArg("name", row.get(InstanceModel.NAME));
     }
 
     /**
@@ -625,11 +670,6 @@ public class InstanceResource extends RowResource {
             // on the record (InstanceExecPage.visibleFor); the admin panel gate is not
             // the only thing standing between a delegate and an arbitrary command.
             new InstanceExecPage(),
-            // The interactive shell tab hides AND 404s itself without the `shell`
-            // capability on the record (InstanceShellPage.visibleFor). It is NOT the exec
-            // tab under another name: exec is admin-only and single-shot, this is a
-            // delegable tenant verb bounded to a workload that runs as a non-root uid.
-            new InstanceShellPage(),
             // The interactive shell tab hides AND 404s itself without the `shell`
             // capability on the record (InstanceShellPage.visibleFor). It is NOT the exec
             // tab under another name: exec is admin-only and single-shot, this is a

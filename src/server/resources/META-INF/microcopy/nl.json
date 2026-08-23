@@ -9959,5 +9959,13 @@
   "no_branches": {
     "text": "Deze repository toont geen branches. Controleer of het token van de provider ze mag lezen en test de verbinding daarna opnieuw onder Git-providers.",
     "scope": "git_provider"
+  },
+  "delete_confirm_stranding": {
+    "text": "Dit verwijdert de workload van zijn host maar behoudt de gegevens. Deze sites stellen hem beschikbaar en worden UITGESCHAKELD zodat ze niet langer antwoorden: {$sites}. Hun hostnamen, certificaten en toegangsregels blijven behouden -- richt ze op een andere workload en schakel ze opnieuw in.",
+    "scope": "instance"
+  },
+  "delete_with_data_confirm_stranding": {
+    "text": "Dit verwijdert de container van '{$name}' \u00c9N elk volume dat hij bezit. De bestanden zijn definitief weg. Deze sites stellen hem beschikbaar en worden UITGESCHAKELD: {$sites}. Typ de naam om te bevestigen.",
+    "scope": "instance"
   }
 }

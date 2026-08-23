@@ -9959,5 +9959,13 @@
   "no_branches": {
     "text": "This repository lists no branches. Check that the provider's token is allowed to read it, then re-test the connection under Git providers.",
     "scope": "git_provider"
+  },
+  "delete_confirm_stranding": {
+    "text": "This removes the workload from its host but keeps its data. These sites expose it and will be DISABLED so they stop answering: {$sites}. Their hostnames, certificates and access rules are kept -- point them at another workload and enable them again.",
+    "scope": "instance"
+  },
+  "delete_with_data_confirm_stranding": {
+    "text": "This removes the container of '{$name}' AND every volume it owns. The files are gone for good. These sites expose it and will be DISABLED: {$sites}. Type the name to confirm.",
+    "scope": "instance"
   }
 }
