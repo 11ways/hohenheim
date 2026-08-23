@@ -57,6 +57,7 @@ public final class GameDomainResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "game_domain"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "game_domain"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "game_domain"); }
     @Override public @NonNull String slug() { return "game-domains"; }
     @Override public @NonNull Model model() { return Models.get(GameDomainModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

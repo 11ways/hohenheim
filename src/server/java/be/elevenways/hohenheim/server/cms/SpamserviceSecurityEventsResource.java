@@ -58,6 +58,13 @@ public final class SpamserviceSecurityEventsResource extends SpamserviceRemoteRe
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_security_event"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "spamservice_event"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "spamservice_event"); }
+
+    /** Type plus origin: the two facts that tell one aggregated event row from the next. */
+    @Override public @Nullable String recordTitle(@NonNull SecurityEventEntry row) {
+        return row.type() + " " + row.ip();
+    }
+
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Schema schema() { return SCHEMA; }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

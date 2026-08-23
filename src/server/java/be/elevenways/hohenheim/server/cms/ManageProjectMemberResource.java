@@ -54,8 +54,11 @@ public final class ManageProjectMemberResource extends Resource<ManageProjectMem
 
     private static final Schema SCHEMA = new Schema();
 
+    // The COLUMN header naming which project a membership is in; it reads the shared
+    // field-label vocabulary, not the project scope's own `singular`, which is now the
+    // record label ("New project") and is deliberately lowercase mid-sentence.
     private static final StringField PROJECT = SCHEMA.addField(StringField.builder("project")
-        .label(Microcopy.of("singular").withFilter("scope", "project")).build());
+        .label(Microcopy.of("project").withFilter("scope", "field")).build());
     private static final StringField MEMBER = SCHEMA.addField(StringField.builder("member")
         .label(Microcopy.of("member").withFilter("scope", "project")).build());
     private static final StringField KIND = SCHEMA.addField(StringField.builder("kind")
@@ -65,6 +68,14 @@ public final class ManageProjectMemberResource extends Resource<ManageProjectMem
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_project_member"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("members").withFilter("scope", "project"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "project_member"); }
+
+    /**
+     * A typed resource has no {@code Model.getDisplayTitle} to fall back on, so without
+     * this the read-only membership page is headed by its opaque row key.
+     */
+    @Override public @Nullable String recordTitle(@NonNull Membership row) { return row.member(); }
+
     @Override public @NonNull String slug() { return "project-members"; }
     @Override public @NonNull Schema schema() { return SCHEMA; }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

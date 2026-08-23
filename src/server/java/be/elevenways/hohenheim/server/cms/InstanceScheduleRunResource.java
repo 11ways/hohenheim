@@ -56,6 +56,7 @@ public class InstanceScheduleRunResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedule_run"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("runs").withFilter("scope", "instance_schedule"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("run").withFilter("scope", "instance_schedule"); }
     @Override public @NonNull String slug() { return "instance-schedule-runs"; }
     @Override public @NonNull Model model() { return Models.get(RecordScheduleRunModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

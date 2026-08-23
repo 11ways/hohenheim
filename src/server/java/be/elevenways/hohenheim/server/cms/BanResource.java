@@ -84,6 +84,7 @@ public final class BanResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "ban"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "ban"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "ban"); }
     @Override public @NonNull String slug() { return "bans"; }
     @Override public @NonNull Model model() { return Models.get(BanModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

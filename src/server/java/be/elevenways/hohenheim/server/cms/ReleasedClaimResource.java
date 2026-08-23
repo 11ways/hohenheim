@@ -65,6 +65,7 @@ public class ReleasedClaimResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "released_claim"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "released_claim"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "released_claim"); }
     @Override public @NonNull String slug() { return "released-claims"; }
     @Override public @NonNull Model model() { return Models.get(ReleasedRouteClaimModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

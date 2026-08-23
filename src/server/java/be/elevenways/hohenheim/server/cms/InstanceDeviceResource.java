@@ -70,6 +70,7 @@ public class InstanceDeviceResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_device"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_device"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_device"); }
     @Override public @NonNull String slug() { return "instance-devices"; }
     @Override public @NonNull Model model() { return Models.get(InstanceDeviceModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

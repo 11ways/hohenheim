@@ -56,6 +56,7 @@ public final class DnsZonePeerResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_peer"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_zone_peer"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_zone_peer"); }
     @Override public @NonNull String slug() { return "dns-zone-peers"; }
     @Override public @NonNull Model model() { return Models.get(DnsZonePeerModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

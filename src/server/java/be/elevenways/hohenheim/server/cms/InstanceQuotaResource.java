@@ -55,6 +55,7 @@ public final class InstanceQuotaResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_quota"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_quota"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_quota"); }
     @Override public @NonNull String slug() { return "instance-quotas"; }
     @Override public @NonNull Model model() { return Models.get(InstanceQuotaModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

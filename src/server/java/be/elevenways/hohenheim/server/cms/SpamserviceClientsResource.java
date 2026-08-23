@@ -72,6 +72,7 @@ public final class SpamserviceClientsResource extends SpamserviceRemoteResource<
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "spamservice_client"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "spamservice_client"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "spamservice_client"); }
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Schema schema() { return SCHEMA; }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

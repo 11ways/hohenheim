@@ -292,6 +292,7 @@ public class SiteResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "site"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "site"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "site"); }
     @Override public @NonNull String slug() { return "sites"; }
     @Override public @NonNull Model model() { return Models.get(SiteModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

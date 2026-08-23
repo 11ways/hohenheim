@@ -55,6 +55,7 @@ public class GitProviderResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "git_provider"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "git_provider"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "git_provider"); }
     @Override public @NonNull String slug() { return "git-providers"; }
     @Override public @NonNull Model model() { return Models.get(GitProviderModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

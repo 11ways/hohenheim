@@ -113,6 +113,7 @@ public class DatabaseResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "database"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "database"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "database"); }
     @Override public @NonNull String slug() { return "databases"; }
     @Override public @NonNull Model model() { return Models.get(DatabaseModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }

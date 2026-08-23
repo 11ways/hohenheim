@@ -61,6 +61,7 @@ public class ProjectResource extends RowResource {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "project"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "project"); }
+    @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "project"); }
     @Override public @NonNull String slug() { return "projects"; }
     @Override public @NonNull Model model() { return Models.get(ProjectModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
