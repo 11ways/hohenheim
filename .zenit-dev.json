@@ -11,7 +11,7 @@
             "HostFencingTest", "HostKeyPinningTest", "HostPreflightTest",
             "InstanceBackupRetentionRefusalTest", "InstanceNetworkIsolationTest",
             "InstanceSnapshotRetentionTest", "ManagedDatabaseTest",
-            "ManagedNodeSocketTest", "OrphanActionsTest", "ProcessCapacityTest",
+            "OrphanActionsTest", "ProcessCapacityTest",
             "ProcessConfinementTest", "ProcessNetworkIsolationTest",
             "ProclogProxyIngressTest", "StackInstancesTest", "StackNetworkIsolationTest",
             "StackRuntimeFlowTest", "VerifyWorkloadIsolationTest", "WorkloadNetworkPolicyTest"
