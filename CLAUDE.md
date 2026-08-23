@@ -57,8 +57,13 @@ silently aborts used to make a run of nothing look green.
 - `requireImage` PULLS a missing image rather than skipping: a cold image cache
   on a working daemon is one command away from running the test.
 - A host that can satisfy a need DECLARES it:
-  `zenit-dev test ... -Dhohenheim.live.require=docker-socket,netns` turns a skip
-  for those needs into a FAILURE. Unset means report-only, which is the default
+  `zenit-dev test ... --define hohenheim.live.require=docker-socket,netns` (MCP:
+  `zd_test` `define: ["hohenheim.live.require=docker-socket,netns"]`) turns a skip
+  for those needs into a FAILURE. It must be `--define`: a bare `-D` or
+  `GRADLE_OPTS` reaches the gradle daemon only, never the forked test worker, so
+  the declared need silently stays a skip and the run still reports green. A
+  declared property is part of the run identity, so a declaring run never reuses a
+  plain green receipt. Unset means report-only, which is the default
   because whether a skip is a defect is a property of the HOST, not the test.
 - Every live-capable test class carries `@Tag("slow")` and is listed (by name or
   by the `*Live*`/`*Incus*` globs) in `.zenit-dev.json` nonHermeticClasses.
