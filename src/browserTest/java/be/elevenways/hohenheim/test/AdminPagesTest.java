@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.server.http.RateLimitMiddleware;
+import com.microsoft.playwright.Locator;
 import org.junit.jupiter.api.*;
 
 import java.net.URI;
@@ -187,13 +188,36 @@ class AdminPagesTest extends HohenheimTestBase {
 
         // The filesystem-path browser picks a server directory; the pick is
         // deliberately left unsaved (it must never reach the settings file).
+        //
+        // AIDEV-NOTE: this source declares ONE root, "/", and a single-root browser opens
+        // INSIDE it -- there is no root-list step to click through any more (zenit-forms
+        // 7da018e replaced it with the listing's own multi-root switcher). So the first
+        // option is a CHILD of "/", and what this pins is that the option navigated into
+        // is the directory the footer then chooses: a picker that chose something other
+        // than where the operator is standing is the defect worth catching.
         var pathField = page.locator("[data-path='app.storage.data_path']");
         pathField.locator("[data-zf-path-browse]").click();
         var dialog = page.locator("he-bottom .pl-dialog-modal[data-open]");
         dialog.waitFor();
-        dialog.locator("pl-command-item div[role='option']").first().click();
+        page.waitForCondition(() -> "/".equals(currentDirectory(dialog)));
+        assertThat(currentDirectory(dialog))
+            .as("a single-root browser opens inside its declared root")
+            .isEqualTo("/");
+        var firstEntry = dialog.locator("pl-command-item").first();
+        // Directories sort first, so the first row is a child DIRECTORY of "/". Its path
+        // is read from the rendered name rather than the element's value, which
+        // pl-command-item carries as a property and never reflects as an attribute.
+        String entryName = firstEntry.locator(".zf-path-entry-name").textContent().trim();
+        assertThat(entryName)
+            .as("the root listing offers a real child to descend into")
+            .isNotEmpty().doesNotContain("/");
+        String entryPath = "/" + entryName;
+        firstEntry.locator("div[role='option']").click();
+        page.waitForCondition(() -> entryPath.equals(currentDirectory(dialog)));
         dialog.locator("[data-zf-path-choose-directory]").click();
-        assertThat(pathField.locator("input").inputValue()).isEqualTo("/");
+        assertThat(pathField.locator("input").inputValue())
+            .as("the chosen path is the directory the browser was standing in")
+            .isEqualTo(entryPath);
 
         // A number input sanitizes garbage client-side, so exercise the server
         // rejection with a raw POST: an uncoercible port must rerender with a
@@ -209,6 +233,12 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(raw).doesNotContain("not-a-port");
         assertThat(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT))
             .isEqualTo(before);
+    }
+
+    /** The directory the open path browser is standing in, or null before it has loaded. */
+    private static String currentDirectory(Locator dialog) {
+        String text = dialog.locator(".zf-path-current").textContent();
+        return text == null ? null : text.trim();
     }
 
     // -----------------------------------------------------------------------
