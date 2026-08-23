@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.common.Zenit;
@@ -19,6 +20,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -56,6 +58,23 @@ public final class ProxyTestSupport {
     /** Persist an enabled site without domains; add them via {@link #addDomain}. */
     public static Row setupSite(String siteType, String siteName, String slug,
                          Map<String, Object> settings) {
+        return setupSite(siteType, siteName, slug, settings, null);
+    }
+
+    /**
+     * Persist an enabled site whose one upstream IS this instance.
+     *
+     * The id rides the FIRST write on purpose: SiteModel refuses an instance upstream
+     * with no instance to serve, so a fixture that saved the kind and then stamped the
+     * id was writing a row the product has never accepted.
+     */
+    public static Row setupInstanceSite(String siteName, String slug, int instanceId) {
+        return setupSite(InstanceUpstreamKind.ID.toString(), siteName, slug,
+            new LinkedHashMap<>(), instanceId);
+    }
+
+    private static Row setupSite(String siteType, String siteName, String slug,
+                                 Map<String, Object> settings, Integer instanceId) {
         var siteModel = Models.get(SiteModel.class);
         Row site = siteModel.createEmptyRow();
         site.set(SiteModel.NAME, siteName);
@@ -64,6 +83,9 @@ public final class ProxyTestSupport {
         site.set(SiteModel.SETTINGS, settings);
         site.set(SiteModel.STATUS, "active");
         site.set(SiteModel.ENABLED, true);
+        if (instanceId != null) {
+            site.set(SiteModel.INSTANCE_ID, instanceId);
+        }
         siteModel.save(site);
         return site;
     }

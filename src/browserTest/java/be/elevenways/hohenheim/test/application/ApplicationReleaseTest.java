@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
 import be.elevenways.hohenheim.server.application.InstanceUpstreamHandler;
@@ -15,7 +16,6 @@ import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
-import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
@@ -346,15 +346,8 @@ class ApplicationReleaseTest {
 
     /** A site whose one upstream is this application. */
     private static int siteExposing(int applicationId, String slug) {
-        Row site = Models.get(SiteModel.class).createEmptyRow();
-        site.set(SiteModel.NAME, "Site " + slug);
-        site.set(SiteModel.SLUG, slug);
-        site.set(SiteModel.UPSTREAM_KIND, InstanceUpstreamKind.ID.toString());
-        site.set(SiteModel.INSTANCE_ID, applicationId);
-        site.set(SiteModel.STATUS, "active");
-        site.set(SiteModel.ENABLED, true);
-        Models.get(SiteModel.class).save(site);
-        return site.get(SiteModel.ID);
+        return ProxyTestSupport.setupInstanceSite("Site " + slug, slug, applicationId)
+            .get(SiteModel.ID);
     }
 
     private static Row latestOp(int applicationId) {
