@@ -40,7 +40,7 @@
     "scope": "violations"
   },
   "database_remote": {
-    "text": "Databank '{$name}' draait op server '{$server}': haar poort is enkel op de loopback van die host gepubliceerd, dus sites op deze server kunnen ze niet bereiken",
+    "text": "Databank '{$name}' draait op host '{$server}': haar poort is enkel op de loopback van die host gepubliceerd, dus sites op deze host kunnen ze niet bereiken",
     "scope": "violations"
   },
   "database_required": {
@@ -48,7 +48,7 @@
     "scope": "violations"
   },
   "database_server_mismatch": {
-    "text": "Databank '{$name}' draait op server '{$server}' terwijl deze site op server '{$site_server}' draait: een Docker-site bereikt haar databank via een linknetwerk, dat enkel bestaat wanneer beide op dezelfde server draaien",
+    "text": "Databank '{$name}' draait op host '{$server}' terwijl deze site op host '{$site_server}' draait: een Docker-site bereikt haar databank via een linknetwerk, dat enkel bestaat wanneer beide op dezelfde host draaien",
     "scope": "violations"
   },
   "hostname_required": {
@@ -663,7 +663,7 @@
       "scope": "field"
     },
     {
-      "text": "Git-clone-URL. SSH gebruikt de geconfigureerde serversleutels.",
+      "text": "Git-clone-URL. SSH gebruikt de geconfigureerde sleutels van de host.",
       "scope": "help"
     }
   ],
@@ -729,7 +729,7 @@
   ],
   "server": [
     {
-      "text": "Server",
+      "text": "Host",
       "scope": "field"
     },
     {
@@ -2904,7 +2904,7 @@
     "scope": "violations"
   },
   "game_domain_cross_host": {
-    "text": "De backend en de proxy moeten op dezelfde server draaien",
+    "text": "De backend en de proxy moeten op dezelfde host draaien",
     "scope": "violations"
   },
   "game_domain_duplicate": {
@@ -4380,7 +4380,7 @@
     "scope": "stack"
   },
   "reclaim_images_hint": {
-    "text": "Verwijder losse en vervangen images op elke server die een stack draait",
+    "text": "Verwijder losse en vervangen images op elke host die een stack draait",
     "scope": "stack"
   },
   "reclaim_images_confirm": {
@@ -4906,7 +4906,7 @@
     "scope": "violations"
   },
   "server_in_use": {
-    "text": "Server {$name} bezit nog {$stacks} stack(s), {$databases} database(s) en {$instances} instantie(s); verwijder of verplaats die eerst",
+    "text": "Host {$name} bezit nog {$stacks} stack(s), {$databases} database(s) en {$instances} instantie(s); verwijder of verplaats die eerst",
     "scope": "violations"
   },
   "preflight": {
@@ -7258,7 +7258,7 @@
       "scope": "field"
     },
     {
-      "text": "Naam van een ISO-volume dat op de host van de instantie is gepubliceerd (zie het tabblad Installatiemedia van het serverrecord). Alleen installatiemedia-apparaten gebruiken dit.",
+      "text": "Naam van een ISO-volume dat op de host van de instantie is gepubliceerd (zie het tabblad Installatiemedia van het hostrecord). Alleen installatiemedia-apparaten gebruiken dit.",
       "scope": "help"
     }
   ],

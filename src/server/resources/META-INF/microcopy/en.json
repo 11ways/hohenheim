@@ -40,7 +40,7 @@
     "scope": "violations"
   },
   "database_remote": {
-    "text": "Database '{$name}' runs on server '{$server}': its port is only published on that host's loopback, so sites on this server cannot reach it",
+    "text": "Database '{$name}' runs on host '{$server}': its port is only published on that host's loopback, so sites on this host cannot reach it",
     "scope": "violations"
   },
   "database_required": {
@@ -48,7 +48,7 @@
     "scope": "violations"
   },
   "database_server_mismatch": {
-    "text": "Database '{$name}' runs on server '{$server}' while this site deploys on server '{$site_server}': a Docker site reaches its database over a link network, which only exists when both run on the same server",
+    "text": "Database '{$name}' runs on host '{$server}' while this site deploys on host '{$site_server}': a Docker site reaches its database over a link network, which only exists when both run on the same host",
     "scope": "violations"
   },
   "hostname_required": {
@@ -663,7 +663,7 @@
       "scope": "field"
     },
     {
-      "text": "Git clone URL. SSH authentication uses the server's configured SSH keys.",
+      "text": "Git clone URL. SSH authentication uses the host's configured SSH keys.",
       "scope": "help"
     }
   ],
@@ -729,7 +729,7 @@
   ],
   "server": [
     {
-      "text": "Server",
+      "text": "Host",
       "scope": "field"
     },
     {
@@ -2904,7 +2904,7 @@
     "scope": "violations"
   },
   "game_domain_cross_host": {
-    "text": "The backend and the proxy must run on the same server",
+    "text": "The backend and the proxy must run on the same host",
     "scope": "violations"
   },
   "game_domain_duplicate": {
@@ -4380,7 +4380,7 @@
     "scope": "stack"
   },
   "reclaim_images_hint": {
-    "text": "Remove dangling and superseded images on every server that hosts a stack",
+    "text": "Remove dangling and superseded images on every host that runs a stack",
     "scope": "stack"
   },
   "reclaim_images_confirm": {
@@ -4906,7 +4906,7 @@
     "scope": "violations"
   },
   "server_in_use": {
-    "text": "Server {$name} still owns {$stacks} stack(s), {$databases} database(s) and {$instances} instance(s); remove or move them first",
+    "text": "Host {$name} still owns {$stacks} stack(s), {$databases} database(s) and {$instances} instance(s); remove or move them first",
     "scope": "violations"
   },
   "preflight": {
@@ -7258,7 +7258,7 @@
       "scope": "field"
     },
     {
-      "text": "Name of an ISO volume published on the instance's host (see the server record's Install media tab). Only install-media devices use it.",
+      "text": "Name of an ISO volume published on the instance's host (see the host record's Install media tab). Only install-media devices use it.",
       "scope": "help"
     }
   ],
