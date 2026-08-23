@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -165,7 +166,7 @@ public final class PaasApi {
             // The build takes minutes; an API caller expects an answer in seconds.
             Datasource datasource = Db.currentOrDefault();
             JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
-                ApplicationDeploys.deployQuietly(applicationId, null, ApiConduits.ORIGIN)));
+                ApplicationDeploys.deployQuietly(applicationId, null, DeployTrigger.API)));
             return ApiConduits.json(Map.of("id", siteId, "status", "queued"));
         });
 

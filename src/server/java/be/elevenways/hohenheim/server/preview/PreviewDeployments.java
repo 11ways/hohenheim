@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ConvergenceLocks;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.game.GameDomains;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -94,9 +95,10 @@ public final class PreviewDeployments {
      * without it a capped preview was invisible everywhere but the controller log.
      */
     public static void deployQuietly(int applicationId, @NonNull String ref, @Nullable String sha,
-                                     @Nullable Integer prNumber) {
+                                     @Nullable Integer prNumber,
+                                     @NonNull DeployTrigger trigger) {
         try {
-            deploy(applicationId, ref, sha, prNumber);
+            deploy(applicationId, ref, sha, prNumber, trigger);
         } catch (Exception e) {
             Blast.log("PREVIEW: deploy of application", applicationId, "ref", ref, "failed -",
                 e.getMessage());
@@ -126,7 +128,8 @@ public final class PreviewDeployments {
      * @throws Violations naming the refusal
      */
     public static @NonNull Row queue(int applicationId, @NonNull String ref, @Nullable String sha,
-                                     @Nullable Integer prNumber) throws Exception {
+                                     @Nullable Integer prNumber,
+                                     @NonNull DeployTrigger trigger) throws Exception {
         Row preview;
         synchronized (lockFor(applicationId, ref)) {
             preview = claimLocked(applicationId, ref, prNumber);
@@ -136,7 +139,7 @@ public final class PreviewDeployments {
         JobRunner.startVirtualThread(() -> {
             Runnable build = () -> {
                 try {
-                    deploy(applicationId, ref, pinnedSha, prNumber);
+                    deploy(applicationId, ref, pinnedSha, prNumber, trigger);
                 } catch (Exception e) {
                     // The row already records status failed + last_error.
                     Blast.log("PREVIEW: queued deploy of application", applicationId, "ref", ref,
@@ -162,9 +165,10 @@ public final class PreviewDeployments {
      *         build failure, probe failure)
      */
     public static @NonNull Row deploy(int applicationId, @NonNull String ref, @Nullable String sha,
-                                      @Nullable Integer prNumber) throws Exception {
+                                      @Nullable Integer prNumber,
+                                      @NonNull DeployTrigger trigger) throws Exception {
         synchronized (lockFor(applicationId, ref)) {
-            return deployLocked(applicationId, ref, sha, prNumber);
+            return deployLocked(applicationId, ref, sha, prNumber, trigger);
         }
     }
 
@@ -223,7 +227,8 @@ public final class PreviewDeployments {
 
     private static @NonNull Row deployLocked(int applicationId, @NonNull String ref,
                                              @Nullable String sha,
-                                             @Nullable Integer prNumber) throws Exception {
+                                             @Nullable Integer prNumber,
+                                             @NonNull DeployTrigger trigger) throws Exception {
         Row preview = claimLocked(applicationId, ref, prNumber);
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         Row application = ApplicationReleases.requireApplication(applicationId);
@@ -267,7 +272,7 @@ public final class PreviewDeployments {
             // 3. Deploy the attributed instance and probe it.
             Map<String, Object> desired = desiredSettings(siteSettings, sourceSettings,
                 build.imageId(), commitSha);
-            InstanceStatus status = converge(preview, site, desired, hostname);
+            InstanceStatus status = converge(preview, site, desired, hostname, trigger);
             Integer port = status.publishedPort();
             if (port == null) {
                 throw Violations.ofForm(violation("preview_no_published_port"));
@@ -525,7 +530,9 @@ public final class PreviewDeployments {
     /** Instance + generated domain + DNS rows, all inside the preview's attribution. */
     private static @NonNull InstanceStatus converge(@NonNull Row preview, @NonNull Row site,
                                                     @NonNull Map<String, Object> desired,
-                                                    @NonNull String hostname) throws Exception {
+                                                    @NonNull String hostname,
+                                                    @NonNull DeployTrigger trigger)
+            throws Exception {
         int previewId = preview.get(PreviewDeploymentModel.ID);
         int hostSiteId = site.get(SiteModel.ID);
         InstanceStatus[] status = new InstanceStatus[1];
@@ -547,7 +554,9 @@ public final class PreviewDeployments {
             preview.set(PreviewDeploymentModel.INSTANCE_ID, freshInstanceId);
             Models.get(PreviewDeploymentModel.class).save(preview);
 
-            status[0] = new InstanceService().deploy(freshInstanceId);
+            // The trigger travels all the way to the workload: a preview instance an
+            // operator stopped is not restarted by the next push to its branch either.
+            status[0] = new InstanceService().deploy(freshInstanceId, trigger);
 
             ensureGeneratedDomain(previewId, hostSiteId, hostname);
             reconcileGeneratedDns(previewId, hostname);

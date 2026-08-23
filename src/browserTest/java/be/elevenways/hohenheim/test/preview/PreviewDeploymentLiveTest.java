@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
@@ -202,10 +203,11 @@ class PreviewDeploymentLiveTest {
         // step rather than an async side effect of proxy start. It runs FIRST and
         // SYNCHRONOUSLY: both deploys take the same host lease, and the ordering is what
         // the old awaitInitialDeployFinished() bought by waiting on a race.
-        ApplicationDeploys.deploy(applicationId, "main", "preview live fixture");
+        ApplicationDeploys.deploy(applicationId, "main", DeployTrigger.MANUAL);
 
         // 1. CREATE: build the feature ref through the sandbox and deploy it.
-        Row preview = PreviewDeployments.deploy(applicationId, "feature-x", null, 41);
+        Row preview = PreviewDeployments.deploy(applicationId, "feature-x", null, 41,
+            DeployTrigger.WEBHOOK);
         int previewId = preview.get(PreviewDeploymentModel.ID);
         Integer instanceId = preview.get(PreviewDeploymentModel.INSTANCE_ID);
         String hostname = preview.get(PreviewDeploymentModel.HOSTNAME);

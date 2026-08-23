@@ -9646,8 +9646,8 @@
     "text": "Het build-commando van de workspace is mislukt: {$reason}",
     "scope": "violations"
   },
-  "workspace_push_does_not_start": {
-    "text": "Workspace '{$name}' draait niet, dus de gepushte commit is niet uitgerold: een git push start nooit een workspace die iemand heeft gestopt. Rol hem zelf uit om deze commit op te pikken.",
+  "push_does_not_start_stopped_workload": {
+    "text": "'{$name}' draait niet, dus de gepushte commit is niet uitgerold: een git push start nooit een workload die iemand heeft gestopt. Rol hem zelf uit om deze commit op te pikken.",
     "scope": "violations"
   },
   "workspace_exec_failed": {

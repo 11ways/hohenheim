@@ -9646,8 +9646,8 @@
     "text": "The workspace build command failed: {$reason}",
     "scope": "violations"
   },
-  "workspace_push_does_not_start": {
-    "text": "Workspace '{$name}' is not running, so the pushed commit was not deployed: a git push never starts a workspace someone stopped. Deploy it yourself to pick this commit up.",
+  "push_does_not_start_stopped_workload": {
+    "text": "'{$name}' is not running, so the pushed commit was not deployed: a git push never starts a workload someone stopped. Deploy it yourself to pick this commit up.",
     "scope": "violations"
   },
   "workspace_exec_failed": {
