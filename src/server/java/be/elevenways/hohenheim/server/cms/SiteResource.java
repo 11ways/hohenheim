@@ -147,6 +147,34 @@ public class SiteResource extends RowResource {
         return Map.copyOf(values);
     }
 
+    /**
+     * A brand-new site lands on its Domains tab, because it has no hostname yet and
+     * therefore serves nothing.
+     *
+     * AIDEV-NOTE: this closes the Expose journey. The instance page's Expose action
+     * prefills this form, the operator saves, and the site then answers 503 to nobody --
+     * hostnames are {@code site_domains} child rows and the create form carries no
+     * hostname field, so the one screen that finishes the job was an undirected
+     * discovery. The Domains tab's own empty state already says what to do there
+     * ("Add a hostname so traffic routes to this site"); all that was missing was
+     * arriving at it. CREATE only: after an ordinary Save the operator stays on the
+     * form, which is the framework's own rule.
+     *
+     * AIDEV-NOTE: the panel slug is spelled because {@code createdRecordUrl} is declared
+     * as a String and never sees the Panel -- the framework's own escape-hatch note. It
+     * is safe HERE and nowhere by luck: the only other mount of this resource is
+     * {@code ManageSiteResource}, whose {@code creatable()} is false, so the delegated
+     * panel never reaches this method. A third, creatable mount would have to revisit it.
+     */
+    @Override
+    public @Nullable String createdRecordUrl(@NonNull Row record) {
+        Object id = record.get(SiteModel.ID);
+        if (id == null) {
+            return null;
+        }
+        return CmsRoutes.subpage("admin", slug(), id, new SiteDomainsPage().slug()).toUrl();
+    }
+
     // AIDEV-NOTE: STATUS is deliberately absent. SiteModel.STATUS declares exactly ONE
     // member ("active") and every write sets it, so the column rendered the same pill on
     // every row forever -- a filter over it could only ever return the whole list.

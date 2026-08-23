@@ -70,6 +70,21 @@ class SiteCrudTest extends HohenheimTestBase {
         assertThat((String) site.get(SiteModel.STATUS)).isEqualTo(SiteModel.STATUS_ACTIVE);
         Integer siteId = site.get(SiteModel.ID);
 
+        // A saved site has NO hostname yet -- the create form carries no hostname field
+        // and hostnames are site_domains child rows -- so it serves 503 to nobody until
+        // one is added on the Domains tab. The create therefore LANDS there, which is
+        // what closes the instance page's Expose journey; without it the last screen was
+        // an undirected discovery.
+        assertThat(response.headers().firstValue("Location"))
+            .as("a new site lands on its Domains tab, where the hostname goes")
+            .hasValueSatisfying(location -> assertThat(location)
+                .startsWith("/admin/sites/" + siteId + "/page/domains"));
+        navigateToApp("/admin/sites/" + siteId + "/page/domains");
+        waitForHydration();
+        assertThat(page.content())
+            .as("and that tab says what to do there")
+            .contains("Add a hostname so traffic routes to this site");
+
         navigateToApp("/admin/sites/" + siteId);
         waitForHydration();
         assertThat(page.content()).contains("Crud Test Site");
