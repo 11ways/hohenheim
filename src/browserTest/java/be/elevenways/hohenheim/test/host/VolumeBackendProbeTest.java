@@ -34,11 +34,13 @@ class VolumeBackendProbeTest {
     @DisplayName("the probe reads the filesystem, and an unrecognised one refuses")
     void classificationIsEvidenceBased() {
 
-        // 1. btrfs and zfs carry both capabilities.
+        // 1. The probe names the FILESYSTEM it found. Whether this build can drive it is
+        //    a separate fact on the member (isImplemented), never the probe's business.
         assertThat(classify("/data\nbtrfs\nrw,relatime,subvol=/x").backend())
-            .as("step 1: btrfs is quota- and snapshot-capable").isEqualTo(VolumeBackend.BTRFS);
+            .as("step 1: btrfs is recognised").isEqualTo(VolumeBackend.BTRFS);
         assertThat(classify("/data\nzfs\nrw,xattr,noacl").backend())
-            .as("step 1: zfs too").isEqualTo(VolumeBackend.ZFS);
+            .as("step 1: zfs is recognised too, unimplemented as it is")
+            .isEqualTo(VolumeBackend.ZFS);
 
         // 2. XFS is the whole reason the mount options are read: the SAME fstype answers
         //    differently depending on whether project quota is actually on.
@@ -71,14 +73,25 @@ class VolumeBackendProbeTest {
     @DisplayName("only quota-capable backends declare a quota, and the token round-trips")
     void capabilitiesAndTokensAgree() {
 
-        // 1. The two facts placement reads are declared per member, with NONE as the
+        // 1. The facts placement reads are declared per member, with NONE as the
         //    fail-closed floor.
         assertThat(VolumeBackend.NONE.supportsQuota()).as("step 1: none enforces nothing").isFalse();
         assertThat(VolumeBackend.NONE.supportsSnapshot()).isFalse();
+        assertThat(VolumeBackend.NONE.filesystemEnforcesQuota())
+            .as("step 1: and its filesystem could not either").isFalse();
+
+        // 1b. XFS-with-prjquota is the member that separates the two questions: the mount
+        //     CAN enforce a size cap, and this build still cannot apply one -- so the fact
+        //     placement reads says no while the fact the host page explains with says yes.
+        assertThat(VolumeBackend.XFS_PRJQUOTA.filesystemEnforcesQuota())
+            .as("step 1b: an xfs prjquota mount can enforce a size cap").isTrue();
+        assertThat(VolumeBackend.XFS_PRJQUOTA.isImplemented())
+            .as("step 1b: but nothing here drives it").isFalse();
         assertThat(VolumeBackend.XFS_PRJQUOTA.supportsQuota())
-            .as("step 1: xfs project quota enforces a size cap").isTrue();
+            .as("step 1b: so placement must not be told it can, which is the promise the"
+                + " first deploy used to break").isFalse();
         assertThat(VolumeBackend.XFS_PRJQUOTA.supportsSnapshot())
-            .as("step 1: but it cannot snapshot, and must not pretend").isFalse();
+            .as("step 1b: and it cannot snapshot either way").isFalse();
 
         // 2. The stored token is the spelling, not the enum name -- the DatabaseEngine
         //    lesson: valueOf would bind the column to a Java identifier.

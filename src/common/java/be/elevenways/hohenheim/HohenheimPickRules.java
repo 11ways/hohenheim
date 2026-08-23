@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
+import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import be.elevenways.zenit.common.edit.SiblingRulesResolver;
 import be.elevenways.zenit.common.orm.query.rules.Combinator;
@@ -59,6 +60,12 @@ public final class HohenheimPickRules {
      * Hosts that can carry the chosen kind: runtime in the kind's declared set, plus a
      * quota-capable volume backend for the kinds that demand one. An unknown kind
      * narrows to nothing resolvable (fail closed).
+     *
+     * AIDEV-NOTE: the backend narrowing reads {@link VolumeBackend#quotaCapableTokens},
+     * never a spelled-out token comparison. It used to say {@code volume_backend != none},
+     * which offered every ZFS and XFS-prjquota host -- backends this build cannot drive --
+     * and the first deploy then refused. The picker must narrow on the SAME fact
+     * {@code VolumeBackends.requireQuotaCapableHost} refuses on, or the two disagree again.
      */
     @HawkeyeClass
     public record KindHostRules(
@@ -80,7 +87,8 @@ public final class HohenheimPickRules {
             RuleGroup.Builder rules = RuleGroup.builder(Combinator.AND)
                 .add(Rule.list("runtime", RuleOperator.IN, List.copyOf(runtimes)));
             if (this.volumeQuotaKinds.contains(kind)) {
-                rules.add(Rule.of("volume_backend", RuleOperator.NOT_EQUALS, "none"));
+                rules.add(Rule.list("volume_backend", RuleOperator.IN,
+                    VolumeBackend.quotaCapableTokens()));
             }
             return rules.build();
         }

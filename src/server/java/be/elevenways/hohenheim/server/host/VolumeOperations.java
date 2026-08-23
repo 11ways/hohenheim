@@ -20,6 +20,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * than degrading, because a volume whose quota was never applied looks exactly like one
  * whose quota is enforced until the day it fills the host's disk.
  *
+ * AIDEV-NOTE: which members this file implements is DECLARED on the enum
+ * ({@link VolumeBackend#isImplemented}), and that declaration is what the picker and
+ * placement narrow on. The two cannot be trusted to agree by inspection -- they did not,
+ * from the day ZFS was declared quota-capable until 2026-08-23 -- so
+ * {@code VolumeOperationsTest.theImplementedFlagIsWhatTheOperationsActuallyDo} drives every
+ * member through this factory and fails the build when a flag and a behaviour disagree.
+ *
  * @author Jelle De Loecker
  * @since  0.1.0
  */
