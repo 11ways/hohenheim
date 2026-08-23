@@ -39,6 +39,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * Orchestrates instance records through the driver seam: deploy (create + start +
@@ -86,6 +89,43 @@ public final class InstanceService {
 
     /** The activity detail a verified destroy renames its soft-delete row with. */
     public static final String ACTIVITY_DESTROY_DETAIL = "destroy";
+
+    /**
+     * The instance ids THIS controller has a runtime operation in flight for.
+     *
+     * AIDEV-NOTE: the missing half of the transitional story, and it exists for exactly
+     * one reader: {@link InstanceStatusReconciler}. A deploy is not marked by any status
+     * -- the record keeps its PREVIOUS status until the fenced stamp at the very end --
+     * so between {@code create} and that stamp the daemon legitimately disagrees with a
+     * record that says {@code running}, and a sweeper reading only the daemon would
+     * "correct" a workload that is being brought up right now.
+     *
+     * The host LEASE cannot answer this: {@code HostLeases.requireFence} acquires on miss
+     * and then holds for the process lifetime, so "we hold host X" means "no RIVAL is
+     * working on X", never "we are idle on X". The two guards are complementary and both
+     * are needed -- the lease excludes other controllers, this set excludes ourselves.
+     */
+    private static final Set<Integer> IN_FLIGHT = ConcurrentHashMap.newKeySet();
+
+    /** Whether this controller is inside a deploy, stop or destroy of this record. */
+    static boolean hasOperationInFlight(int instanceId) {
+        return IN_FLIGHT.contains(instanceId);
+    }
+
+    /**
+     * Run one runtime operation with the record marked in flight; re-entrant safe (only
+     * the OUTERMOST scope clears the mark).
+     */
+    private <T> T inFlight(int instanceId, @NonNull Supplier<T> body) {
+        boolean marked = IN_FLIGHT.add(instanceId);
+        try {
+            return body.get();
+        } finally {
+            if (marked) {
+                IN_FLIGHT.remove(instanceId);
+            }
+        }
+    }
 
     private final HostLeases leases;
 
@@ -161,6 +201,11 @@ public final class InstanceService {
      * @throws Violations naming the failure; the record is stamped {@code error}
      */
     @NonNull InstanceStatus deployWorkload(int instanceId) {
+        return inFlight(instanceId, () -> deployWorkloadNow(instanceId));
+    }
+
+    /** {@link #deployWorkload}'s body; the in-flight mark is the wrapper's job. */
+    private @NonNull InstanceStatus deployWorkloadNow(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
         Resolved resolved = resolve(instanceId);
         // Settle-then-refuse: a start under a live capture/restore corrupts the very
@@ -276,6 +321,14 @@ public final class InstanceService {
      * @throws Violations naming the failure; the claims are parked, the status untouched
      */
     public void stop(int instanceId) {
+        inFlight(instanceId, () -> {
+            stopNow(instanceId);
+            return null;
+        });
+    }
+
+    /** {@link #stop}'s body; the in-flight mark is the wrapper's job. */
+    private void stopNow(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
         if (releaseManaged(instanceId)) {
             ApplicationReleases.stopFor(instanceId);
@@ -326,6 +379,14 @@ public final class InstanceService {
      *         (status {@code error}), the claims are parked, and the operator retries
      */
     public void destroy(int instanceId) {
+        inFlight(instanceId, () -> {
+            destroyNow(instanceId);
+            return null;
+        });
+    }
+
+    /** {@link #destroy}'s body; the in-flight mark is the wrapper's job. */
+    private void destroyNow(int instanceId) {
         // Destroy is its OWN verb, not a power action: stopping is reversible, this is not.
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.DESTROY);
         if (releaseManaged(instanceId)) {

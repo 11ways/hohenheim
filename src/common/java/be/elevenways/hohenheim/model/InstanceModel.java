@@ -380,6 +380,20 @@ public class InstanceModel extends Model {
         DateTimeField.builder().name("disk_observed_at").build());
 
     /**
+     * When a runtime last CONFIRMED {@link #STATUS} against the daemon; null while it
+     * never did.
+     *
+     * AIDEV-NOTE: this is what makes the status badge honest rather than merely stored.
+     * {@code STATUS} is stamped by whichever operation last settled and then stands
+     * unchanged forever -- a workload that died an hour after its deploy still reads
+     * {@code running}. Only {@code InstanceStatusReconciler} writes this column, and only
+     * when the daemon actually ANSWERED: an unreachable host stamps nothing, so "I could
+     * not ask" can never be read as "I checked and it is fine".
+     */
+    public static final DateTimeField STATUS_OBSERVED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("status_observed_at").build());
+
+    /**
      * The RESOLVED image identity the workload actually runs (incus: the image
      * fingerprint behind {@code volatile.base_image}), recorded at deploy. A mutable
      * alias is not a deployment identity: recreating an absent workload uses this pin,

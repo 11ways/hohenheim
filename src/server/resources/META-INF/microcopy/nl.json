@@ -9812,6 +9812,14 @@
     "text": "Beschikbaar via",
     "scope": "instance_overview"
   },
+  "status_confirmed": {
+    "text": "Status bevestigd",
+    "scope": "instance_overview"
+  },
+  "status_never_confirmed": {
+    "text": "Nog nooit bij de host gecontroleerd",
+    "scope": "instance_overview"
+  },
   "volume_backend_none_title": {
     "text": "Geen volume-opslag",
     "scope": "server_overview"

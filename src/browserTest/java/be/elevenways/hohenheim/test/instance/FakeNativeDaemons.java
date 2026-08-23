@@ -126,6 +126,18 @@ final class FakeNativeDaemons {
         String ownerId;
     }
 
+    /**
+     * Handles whose daemon REFUSES TO ANSWER: {@code status} reports UNREACHABLE for
+     * them, never ABSENT.
+     *
+     * AIDEV-NOTE: every fake must be able to say "I do not know", and this one could not.
+     * ABSENT and UNREACHABLE are distinct identities on {@link ContainerState} precisely
+     * because conflating them is a real defect class -- a status reconciler that
+     * downgrades a workload because a host was briefly unaddressable -- and a fake that
+     * can only answer ABSENT makes that defect untestable.
+     */
+    static final Set<String> UNREACHABLE_HANDLES = ConcurrentHashMap.newKeySet();
+
     /** One named daemon volume: owner labels stamped at create, contents keyed strings. */
     static final class FakeVolume {
         final Map<String, String> data = new LinkedHashMap<>();
@@ -322,6 +334,9 @@ final class FakeNativeDaemons {
 
         @Override
         public @NonNull InstanceStatus status(@NonNull String handle) {
+            if (UNREACHABLE_HANDLES.contains(handle)) {
+                return new InstanceStatus(ContainerState.UNREACHABLE, null);
+            }
             FakeWorkload workload = this.daemon.get(handle);
             if (workload == null) {
                 return new InstanceStatus(ContainerState.ABSENT, null);

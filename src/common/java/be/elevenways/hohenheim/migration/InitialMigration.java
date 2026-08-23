@@ -937,6 +937,8 @@ public class InitialMigration extends HohenheimMigration {
                 column -> column.nullable(true));
             table.addColumn("disk_observed_at", ColumnType.DATETIME,
                 column -> column.nullable(true));
+            table.addColumn("status_observed_at", ColumnType.DATETIME,
+                column -> column.nullable(true));
             table.addColumn("quota_memory_mb", ColumnType.INTEGER,
                 column -> column.nullable(true));
             table.addColumn("migrate_reserved_mb", ColumnType.INTEGER,

@@ -103,6 +103,14 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
             Map.of("label", HohenheimWidgetCopy.localized("state", "instance_overview")))
             .withData(statusBadges(instance, locales, resolver)));
 
+        // The badge above renders a STORED column, and a stored column is a claim about
+        // the past. This says how old that claim is, from the only write that means "a
+        // runtime actually answered" (InstanceStatusReconciler). It is a stored fact too,
+        // deliberately: reading it costs nothing, while dialling the daemon per render is
+        // the thing the disk band already refuses to do.
+        state.add(new WidgetInstance(FactWidget.ID, Map.of())
+            .withData(statusConfirmation(instance, locales, resolver)));
+
         // AIDEV-NOTE: the host is operator inventory, and BOTH halves leak it -- the name
         // is the machine's identity and the link carries its numeric server id, which is
         // the id every host-scoped admin route is keyed on. A tenant is told WHAT their
@@ -256,6 +264,28 @@ public final class InstanceOverviewPage extends RecordDashboardPage<Row> {
             addBadge(badges, InstanceModel.INSTALL_STATE, installState, locales, resolver);
         }
         return badges;
+    }
+
+    /**
+     * When a runtime last CONFIRMED the badge above, or the honest admission that none
+     * ever has.
+     *
+     * AIDEV-NOTE: null is NOT rendered as "just now" and not hidden either -- a record
+     * deployed before this column existed, one on a host that has been unreachable since
+     * boot, and one nothing has swept yet are all the same answer: nobody has checked.
+     * Hiding the fact would leave the badge looking freshly verified, which is exactly
+     * the lie the reconciler exists to stop telling.
+     */
+    private static @NonNull WidgetFact statusConfirmation(@NonNull Row instance,
+                                                          @NonNull LocaleChain locales,
+                                                          @Nullable MessageResolver resolver) {
+        String label = text("status_confirmed", "instance_overview", locales, resolver);
+        Instant observedAt = instance.get(InstanceModel.STATUS_OBSERVED_AT);
+        if (observedAt == null) {
+            return WidgetFact.of(label,
+                text("status_never_confirmed", "instance_overview", locales, resolver));
+        }
+        return WidgetFact.instant(label, observedAt.toString());
     }
 
     private static void addBadge(@NonNull List<WidgetBadge> badges, @NonNull EnumField field,

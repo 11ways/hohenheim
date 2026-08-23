@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.task.ObserveInstanceDisk;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
 import be.elevenways.hohenheim.server.task.ReconcileDockerResources;
+import be.elevenways.hohenheim.server.task.ReconcileInstanceStatus;
 import be.elevenways.hohenheim.server.task.ResignDnssecZones;
 import be.elevenways.hohenheim.server.task.SecuritySweep;
 import be.elevenways.hohenheim.server.task.SuperviseProxyListeners;
@@ -73,6 +74,7 @@ class HohenheimTaskBootstrapTest {
         ReapIncusControllers.class,
         ReclaimDockerImages.class,
         ReconcileDockerResources.class,
+        ReconcileInstanceStatus.class,
         ResignDnssecZones.class,
         SecuritySweep.class,
         SuperviseProxyListeners.class,
