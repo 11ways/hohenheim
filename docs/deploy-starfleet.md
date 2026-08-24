@@ -133,8 +133,41 @@ in phoenix's authorized_keys. The archive carries the MASTER KEYS IN THE CLEAR
 -- treat that directory like the keyring file. Manual run:
 `sudo -u hohenheim java -jar hohenheim-server.jar --backup-control-plane`.
 
+## What is deployed? (`zenit-dev deployed starfleet`, since 2026-08-24)
+
+Every jar built since 2026-08-24 carries `META-INF/blast/build-info.tsv`: one
+line per bundled module naming the git repo, commit, branch, dirty flag and
+commit date (the protoblast Gradle plugin stamps every module jar; the fat-jar
+lane line-merges them, so the deployable names protoblast/hawkeye/zenit/... beside
+hohenheim's own commit). Three readers of that one file:
+
+- `zenit-dev deployed starfleet` (MCP `zd_deployed`): reads the stamp out of the
+  jar over ssh with `unzip -p` -- the application is NEVER started on the host --
+  and diffs every repo against the local checkout. Per-repo verdicts: `current`,
+  `local-ahead` (a deploy is pending), `deployed-ahead`, `diverged`,
+  `unknown-commit` (fetch first), `unknown-repo`, `undiffable` (built from a
+  DIRTY worktree: the sha does not describe it), `inconsistent` (one repo, several
+  builds). It also reads the service's main-process start time, so a jar swapped
+  on disk but not restarted shows as RESTART PENDING. `unstamped` means the jar
+  predates the stamps (true of everything deployed before 2026-08-24) and nothing
+  can be diffed -- never read it as current. The host comes from
+  `~/.config/zenit-dev/config.json`:
+  `"deployments": { "starfleet": { "ssh": "root@starfleet.life", "jar":
+  "/opt/hohenheim/hohenheim-server.jar", "service": "hohenheim" } }`.
+- On the host: `java -jar hohenheim-server.jar --build-info` (an offline command,
+  no database, no HTTP; run it from a scratch dir as in step 4 below, never as
+  root beside the live service).
+- In the panel: System > Build info (`/admin/build-info`), authenticated like every
+  other panel page. There is deliberately no public version endpoint.
+
+Run `zenit-dev deployed starfleet` BEFORE a deploy (is the fix already live? is the
+host running something local HEAD does not have?) and AFTER the restart (does the
+host now report `current` for every repo?). A `dirty` stamp on a deployed build is
+a process failure: deploy from a committed worktree, always.
+
 ## Deploy procedure (as exercised 2026-08-11)
 
+0. `zenit-dev deployed starfleet` -- know what runs before touching it.
 1. Build in an ISOLATED worktree (`git worktree add --detach <path> HEAD`),
    never the main one, via `zenit-dev build`. The jar lands in
    `build/libs/hohenheim-0.1.0-SNAPSHOT-server.jar` and contains the whole
@@ -158,6 +191,8 @@ in phoenix's authorized_keys. The archive carries the MASTER KEYS IN THE CLEAR
 5. Swap the jar (`install -o hohenheim -g hohenheim -m 644`, then `mv` into
    place) and `systemctl restart hohenheim`.
 6. Verify from OUTSIDE, then restart AGAIN and verify again.
+7. `zenit-dev deployed starfleet` must now answer `current` for every repo with
+   no RESTART PENDING warning; anything else is the deploy not being finished.
 
 ## Verification commands
 
