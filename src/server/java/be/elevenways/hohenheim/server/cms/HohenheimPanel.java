@@ -12,6 +12,7 @@ import be.elevenways.zenit.auth.server.cms.AuthUsersResource;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
+import be.elevenways.zenit.cms.server.page.BuildInfoPage;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
@@ -203,6 +204,8 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new SpamserviceWordsResource(), Role.FIREWALL);
         addIf(peers, new SpamserviceReputationPage(), Role.FIREWALL);
         peers.add(new AdminActivityResource());
+        // What is this server running: every bundled module's git commit (System group).
+        peers.add(new BuildInfoPage());
         SettingsPage settings = settingsPage();
         if (settings != null) {
             peers.add(settings);
