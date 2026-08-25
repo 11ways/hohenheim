@@ -28,9 +28,10 @@ import java.util.Map;
  * every other type must carry. The access list itself is the implicit ROOT group, and its
  * {@code satisfy} column is that root's mode -- there is no root row.
  *
- * A leaf is created DISABLED and cannot be enabled until its data validates (see the
+ * A leaf is created DISABLED and cannot be enabled until its data is COMPLETE (see the
  * hook below): the tree is enforced per REQUEST, so a half-typed rule that counted as a
- * FAIL would lock live traffic out of the site between two clicks.
+ * FAIL would lock live traffic out of the site between two clicks. An empty draft is
+ * therefore saveable, but a value that is present and nonsense never is.
  */
 public class AccessRuleModel extends Model {
 
@@ -183,9 +184,9 @@ public class AccessRuleModel extends Model {
     static {
         // AIDEV-NOTE: enforcement lives on the model pipeline, never on a form spec, so
         // the row cannot hold a type outside the vocabulary however it was written (an
-        // EnumField does NOT enforce membership on save). Data completeness is checked
-        // only for an ENABLED rule: an unconfigured leaf is a DRAFT, and the request-time
-        // gate skips disabled rules entirely.
+        // EnumField does NOT enforce membership on save). The type-specific data is
+        // checked on EVERY save through the one home below; only the COMPLETENESS half
+        // of that check waits for the rule to be switched on.
         SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
             if (row == null) {
@@ -198,45 +199,90 @@ public class AccessRuleModel extends Model {
                         Microcopy.of("access_rule_type_invalid").withFilter("scope", "violations"));
                 }
             }
-            if (Boolean.TRUE.equals(row.get(ENABLED))) {
-                requireUsableData(row.get(TYPE), row.get(DATA));
-            }
+            validateData(row.get(TYPE), row.get(DATA), Boolean.TRUE.equals(row.get(ENABLED)));
             row.set(SEARCH_TEXT, searchTextFor(row.get(TYPE), row.get(DATA)));
         });
     }
 
     /**
-     * Refuse to ENABLE a rule whose data cannot answer a request.
+     * THE check on a rule's type-specific data, for BOTH gates: a value that is PRESENT
+     * but cannot answer a request is refused whichever way the switch stands, while an
+     * ABSENT value is only refused for a rule that is on.
      *
-     * @throws Violations when the rule is enabled and its type-specific data is unusable
+     * AIDEV-NOTE: the two halves are deliberately different. A leaf is born switched off
+     * and empty, so refusing absence at save time would refuse the rule the add form just
+     * created; garbage is never a draft state, and letting it through meant a nonsense
+     * network was only reported later, at the enable gate, by which time the operator had
+     * been told the value was accepted.
+     *
+     * @param enabled whether this save leaves the rule switched on
+     * @throws Violations when the data cannot answer a request
      */
-    private static void requireUsableData(@Nullable String type, @Nullable Object data) {
+    public static void validateData(@Nullable String type, @Nullable Object data, boolean enabled) {
         Map<?, ?> map = data instanceof Map<?, ?> values ? values : Map.of();
         switch (type == null ? "" : type) {
+            case TYPE_GROUP -> {
+                String satisfy = text(map.get(GROUP_SATISFY.getName()));
+                if (satisfy != null && !GROUP_SATISFY.isValidValue(satisfy)) {
+                    throw Violations.ofField("data." + GROUP_SATISFY.getName(), satisfy,
+                        Microcopy.of("access_rule_satisfy_invalid").withFilter("scope", "violations"));
+                }
+            }
             case TYPE_IP_ALLOW, TYPE_IP_DENY -> {
-                if (parseNetwork(text(map.get(NETWORK.getName()))) == null) {
+                String network = text(map.get(NETWORK.getName()));
+                if (network == null ? enabled : parseNetwork(network) == null) {
                     throw Violations.ofField("data." + NETWORK.getName(),
                         map.get(NETWORK.getName()),
                         Microcopy.of("access_rule_network_invalid").withFilter("scope", "violations"));
                 }
             }
             case TYPE_BASIC_AUTH -> {
-                if (text(map.get(BASIC_AUTH_USERNAME.getName())) == null
-                        || text(map.get(BASIC_AUTH_PASSWORD.getName())) == null) {
+                String username = text(map.get(BASIC_AUTH_USERNAME.getName()));
+                // A colon ENDS the userid in the credential a browser sends (RFC 7617),
+                // so a username carrying one can never be presented back to this rule.
+                if (username != null && username.indexOf(':') >= 0) {
+                    throw Violations.ofField("data." + BASIC_AUTH_USERNAME.getName(), username,
+                        Microcopy.of("access_rule_username_invalid").withFilter("scope", "violations"));
+                }
+                if (enabled && (username == null
+                        || text(map.get(BASIC_AUTH_PASSWORD.getName())) == null)) {
                     throw Violations.ofField("data." + BASIC_AUTH_USERNAME.getName(),
                         map.get(BASIC_AUTH_USERNAME.getName()),
                         Microcopy.of("access_rule_credential_incomplete").withFilter("scope", "violations"));
                 }
             }
             case TYPE_AUTH_PROVIDER -> {
-                if (map.get(PROVIDER_ID.getName()) == null) {
+                Object raw = map.get(PROVIDER_ID.getName());
+                Integer providerId = providerId(raw);
+                if (providerId == null && text(raw) != null) {
+                    throw Violations.ofField("data." + PROVIDER_ID.getName(), raw,
+                        Microcopy.of("access_rule_provider_invalid").withFilter("scope", "violations"));
+                }
+                if (enabled && providerId == null) {
                     throw Violations.ofField("data." + PROVIDER_ID.getName(), null,
                         Microcopy.of("access_rule_provider_missing").withFilter("scope", "violations"));
                 }
             }
             default -> {
-                // A group carries nothing that can be incomplete: an empty group is inert.
+                // An unknown type is already refused above, by the vocabulary check.
             }
+        }
+    }
+
+    /** @return the stored provider reference as a usable record id, or null */
+    private static @Nullable Integer providerId(@Nullable Object value) {
+        if (value instanceof Number number) {
+            return number.intValue() > 0 ? number.intValue() : null;
+        }
+        String text = text(value);
+        if (text == null) {
+            return null;
+        }
+        try {
+            int parsed = Integer.parseInt(text);
+            return parsed > 0 ? parsed : null;
+        } catch (NumberFormatException notAnId) {
+            return null;
         }
     }
 
