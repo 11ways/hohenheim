@@ -44,7 +44,10 @@
         </pl-card-content>
     </pl-card>
 
-    <form use:Zenit.form={% importTarget %}>
+    {#- The import REPLACES every operator-managed record of the zone, so it is a
+        destructive submit and confirms like one. -#}
+    <form use:Zenit.form={% importTarget %}
+          use:CmsConfirm.destructive={% t("import_confirm", scope: "dns_zone") %}>
         <pl-card>
             <pl-card-header>
                 <pl-card-title>{{ t("import_zone_file", scope: "dns_zone") }}</pl-card-title>
@@ -59,7 +62,7 @@
             </pl-card-content>
         </pl-card>
         <div class="cms-form-actions">
-            <pl-button variant="primary" type="submit">{{ t("import_action", scope: "dns_zone") }}</pl-button>
+            <pl-button variant="destructive" type="submit">{{ t("import_action", scope: "dns_zone") }}</pl-button>
         </div>
     </form>
 </section>

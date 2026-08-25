@@ -10,6 +10,8 @@ import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -269,18 +271,22 @@ public final class DnsZoneResource extends RowResource {
             return null;
         }
         if ("record_count".equals(column.name())) {
-            Integer zoneId = row.get(DnsZoneModel.ID);
-            Conduit conduit = RouteScope.currentConduit();
-            Map<Integer, Long> counted = conduit == null ? null : conduit.getAttribute(RECORD_COUNTS);
-            if (counted != null && counted.containsKey(zoneId)) {
-                return counted.get(zoneId);
-            }
-            // A row outside the memoized page (a detail render, a conduit-less caller).
-            return Models.get(DnsRecordModel.class).find()
-                .where(DnsRecordModel.ZONE_ID.eq(zoneId))
-                .count();
+            return recordCount(row.get(DnsZoneModel.ID));
         }
         return super.cellValue(row, column);
+    }
+
+    /** @return the zone's stored record count, off the page memo when this row is on it */
+    private static long recordCount(@Nullable Integer zoneId) {
+        Conduit conduit = RouteScope.currentConduit();
+        Map<Integer, Long> counted = conduit == null ? null : conduit.getAttribute(RECORD_COUNTS);
+        if (counted != null && counted.containsKey(zoneId)) {
+            return counted.get(zoneId);
+        }
+        // A row outside the memoized page (a detail render, a conduit-less caller).
+        return Models.get(DnsRecordModel.class).find()
+            .where(DnsRecordModel.ZONE_ID.eq(zoneId))
+            .count();
     }
 
     @Override
@@ -345,6 +351,65 @@ public final class DnsZoneResource extends RowResource {
             .delete());
         super.deleteRow(existing, accessContext);
         DnsZoneStore.INSTANCE.reload();
+    }
+
+    /**
+     * The record-LESS dialog can only speak about the type, and a zone delete is never
+     * generic enough for that: it always resolves per record.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(
+            Microcopy.of("delete_confirm").withFilter("scope", "dns_zone"), null);
+    }
+
+    /**
+     * Names the zone, how many stored records go with it, everything that resolves inside
+     * it, and -- the one that can lock an operator out of the surface they are clicking in
+     * -- whether the zone answers for the hostname THIS request arrived on.
+     *
+     * AIDEV-NOTE: the four bodies are a deliberate 2x2 (dependents yes/no x admin-host
+     * yes/no) rather than one sentence with an optional clause: microcopy args echo
+     * verbatim, so an "empty when absent" argument would render a dangling colon in every
+     * locale. The typed confirmation is unconditional -- a zone delete removes an
+     * authoritative name and every record under it, and there is no undo.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
+        String origin = record.get(DnsZoneModel.ORIGIN);
+        long records = recordCount(record.get(DnsZoneModel.ID));
+        String dependents = DeleteImpact.join(DeleteImpact.dependentsOfZone(origin));
+        String adminHost = DeleteImpact.adminHostnameInZone(origin);
+
+        String key = adminHost != null
+            ? (dependents.isEmpty() ? "delete_confirm_admin" : "delete_confirm_admin_dependents")
+            : (dependents.isEmpty() ? "delete_confirm_named" : "delete_confirm_dependents");
+
+        Microcopy body = Microcopy.of(key).withFilter("scope", "dns_zone")
+            .withArg("origin", origin == null ? "" : origin)
+            .withArg("records", records);
+        if (!dependents.isEmpty()) {
+            body = body.withArg("dependents", dependents);
+        }
+        if (adminHost != null) {
+            body = body.withArg("host", adminHost);
+        }
+        return deleteConfirmation(body, origin);
+    }
+
+    /** The generic delete dialog with a zone-specific body, typed-confirmation gated. */
+    private static @NonNull ConfirmationSpec deleteConfirmation(@NonNull Microcopy body,
+                                                                @Nullable String origin) {
+        ConfirmationSpec.Builder builder = ConfirmationSpec.builder()
+            .title(Microcopy.of("confirm_title").withFilter("scope", "cms"))
+            .body(body)
+            .confirmLabel(Microcopy.of("delete").withFilter("scope", "cms"))
+            .cancelLabel(Microcopy.of("cancel").withFilter("scope", "cms"))
+            .style(ActionStyle.DESTRUCTIVE);
+        if (origin != null && !origin.isEmpty()) {
+            builder.requireTypedConfirmation(origin);
+        }
+        return builder.build();
     }
 
     private static void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing,

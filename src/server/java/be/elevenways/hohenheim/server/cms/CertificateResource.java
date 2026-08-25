@@ -2,13 +2,18 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.RelativeTime;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -20,18 +25,24 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldGroup;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
 import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
+import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.ui.Timezones;
 import be.elevenways.zenit.common.validation.Violations;
 import org.bouncycastle.openssl.PEMParser;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -40,7 +51,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.ByteArrayInputStream;
 import java.io.StringReader;
 import java.security.cert.CertificateFactory;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -51,18 +67,58 @@ import java.util.Map;
  */
 public class CertificateResource extends RowResource {
 
+    /**
+     * Display-only form entries: VIRTUAL string fields, never schema columns.
+     *
+     * AIDEV-NOTE: the stored columns cannot be shown directly here. A readonly entry
+     * renders its raw value and NOTHING when that value is null, which is what left the
+     * renewal panel with three labels above empty boxes and the DNS publisher with a
+     * label, a description and no control at all. These carry an already-resolved
+     * sentence instead, so an absent value reads "None" / "Not scheduled" rather than as
+     * a rendering bug. They are bound {@code alwaysReadonly} below, so the submit
+     * pipeline strips them before any write and the missing columns are never touched.
+     */
+    private static final StringField COVERED_NAMES_DISPLAY = displayField("covered_names_display",
+        "cert_domain_names", "coverage");
+    private static final StringField EXPIRY_DISPLAY = displayField("expiry_display",
+        "cert_expires_on", "coverage");
+    private static final StringField CHALLENGE_DISPLAY = displayField("challenge_type_display",
+        "cert_challenge_type", "renewal");
+    private static final StringField DNS_PUBLISHER_DISPLAY = displayField("dns_publisher_display",
+        "cert_dns_publisher", "renewal");
+    private static final StringField RENEWAL_ERROR_DISPLAY = displayField("renewal_error_display",
+        "cert_renewal_error", "renewal");
+    private static final StringField NEXT_ATTEMPT_DISPLAY = displayField("next_attempt_display",
+        "cert_next_attempt_at", "renewal");
+
+    /** Wall-clock shape of {@code Dates.wallText}, which needs a RenderContext this hook has not. */
+    private static final DateTimeFormatter WALL_CLOCK = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(CertificateModel.NICE_NAME)
         .add(CertificateModel.CERTIFICATE_PEM)
         .add(CertificateModel.PRIVATE_KEY_PEM)
         .add(CertificateModel.AUTO_RENEW)
-        .add(CertificateModel.CHALLENGE_TYPE)
-        .add(CertificateModel.DNS_PUBLISHER)
-        .add(CertificateModel.RENEWAL_ERROR)
+        .add(COVERED_NAMES_DISPLAY)
+        .add(EXPIRY_DISPLAY)
+        .add(CHALLENGE_DISPLAY)
+        .add(DNS_PUBLISHER_DISPLAY)
+        .add(RENEWAL_ERROR_DISPLAY)
         .add(CertificateModel.ERROR_COUNT)
-        .add(CertificateModel.NEXT_ATTEMPT_AT)
+        .add(NEXT_ATTEMPT_DISPLAY)
+        .group(FieldGroup.of("coverage", Microcopy.of("coverage").withFilter("scope", "certificate")))
         .group(FieldGroup.of("renewal", Microcopy.of("renewal_status").withFilter("scope", "certificate")))
         .build();
+
+    /** One virtual read-only entry: a label from the field catalog, no column behind it. */
+    private static @NonNull StringField displayField(@NonNull String name, @NonNull String labelKey,
+                                                     @NonNull String group) {
+        return StringField.builder().name(name)
+            .visibleIn(EditView.EDIT)
+            .attribute(FieldAttributes.GROUP, group)
+            .label(HohenheimFormCopy.label(labelKey))
+            .build();
+    }
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         // AIDEV-NOTE: eight visible columns down to five. Each pair below answers ONE
@@ -121,6 +177,28 @@ public class CertificateResource extends RowResource {
     }
     @Override public @NonNull Icon icon() { return Icon.of("certificate"); }
 
+    /** Deleting a certificate destroys its private key; the type-level dialog says so. */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(Microcopy.of("delete_confirm").withFilter("scope", "certificate"));
+    }
+
+    /**
+     * The same warning NAMING the domains this certificate secures, so an operator sees
+     * which hostnames stop serving HTTPS before the key is gone.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
+        String domains = DeleteImpact.join(CertificateCoverage.namesOf(record));
+        if (domains.isEmpty()) {
+            return deleteConfirmation();
+        }
+        return deleteConfirmation(Microcopy.of("delete_confirm_domains")
+            .withFilter("scope", "certificate")
+            .withArg("name", String.valueOf((Object) record.get(CertificateModel.NICE_NAME)))
+            .withArg("domains", domains));
+    }
+
 
     /** provider/status are staged by persistRow but are not form entries; stamp them here. */
     @Override
@@ -135,15 +213,76 @@ public class CertificateResource extends RowResource {
         return row;
     }
 
-    /** Renewal diagnostics are written by the ACME machinery, never by hand. */
+    /** Coverage and renewal diagnostics are written by the ACME machinery, never by hand. */
     @Override
     public @NonNull List<ResourceFieldBinding> fieldBindings() {
         return List.of(
-            ResourceFieldBinding.of(CertificateModel.RENEWAL_ERROR.getName(), FieldAccess.alwaysReadonly()),
+            ResourceFieldBinding.of(COVERED_NAMES_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
+            ResourceFieldBinding.of(EXPIRY_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
+            ResourceFieldBinding.of(CHALLENGE_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
+            ResourceFieldBinding.of(DNS_PUBLISHER_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
+            ResourceFieldBinding.of(RENEWAL_ERROR_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
             ResourceFieldBinding.of(CertificateModel.ERROR_COUNT.getName(), FieldAccess.alwaysReadonly()),
-            ResourceFieldBinding.of(CertificateModel.NEXT_ATTEMPT_AT.getName(), FieldAccess.alwaysReadonly()),
-            ResourceFieldBinding.of(CertificateModel.CHALLENGE_TYPE.getName(), FieldAccess.alwaysReadonly()),
-            ResourceFieldBinding.of(CertificateModel.DNS_PUBLISHER.getName(), FieldAccess.alwaysReadonly()));
+            ResourceFieldBinding.of(NEXT_ATTEMPT_DISPLAY.getName(), FieldAccess.alwaysReadonly()));
+    }
+
+    /**
+     * Fill the display-only entries: what this certificate covers, when it expires, and
+     * why the last renewal did or did not happen -- each as a sentence that says
+     * something when the underlying column is empty.
+     */
+    @Override
+    public @NonNull Map<String, Object> valuesFromRow(@NonNull Row row) {
+        Map<String, Object> values = new LinkedHashMap<>(super.valuesFromRow(row));
+        List<String> names = CertificateCoverage.namesOf(row);
+        values.put(COVERED_NAMES_DISPLAY.getName(),
+            names.isEmpty() ? copy("coverage_none") : String.join(", ", names));
+        values.put(EXPIRY_DISPLAY.getName(), instantText(row.get(CertificateModel.EXPIRES_ON),
+            copy("expiry_none")));
+        values.put(CHALLENGE_DISPLAY.getName(), orNone(
+            CmsSupport.enumLabel(CertificateModel.CHALLENGE_TYPE, row.get(CertificateModel.CHALLENGE_TYPE))));
+        values.put(DNS_PUBLISHER_DISPLAY.getName(), orNone(
+            CmsSupport.enumLabel(CertificateModel.DNS_PUBLISHER, row.get(CertificateModel.DNS_PUBLISHER))));
+        values.put(RENEWAL_ERROR_DISPLAY.getName(), orNone(row.get(CertificateModel.RENEWAL_ERROR)));
+        Integer errors = row.get(CertificateModel.ERROR_COUNT);
+        values.put(CertificateModel.ERROR_COUNT.getName(), errors != null ? errors : 0);
+        values.put(NEXT_ATTEMPT_DISPLAY.getName(), instantText(row.get(CertificateModel.NEXT_ATTEMPT_AT),
+            copy("next_attempt_none")));
+        return values;
+    }
+
+    /** An absolute wall-clock stamp plus the relative wording, or the absence sentence. */
+    private static @NonNull String instantText(@Nullable Instant instant, @NonNull String absent) {
+        if (instant == null) {
+            return absent;
+        }
+        return WALL_CLOCK.format(instant.atZone(viewerZone()))
+            + " (" + RelativeTime.ago(instant, wording()) + ")";
+    }
+
+    /** The viewer's own zone, falling back to UTC when no request or cookie says otherwise. */
+    private static @NonNull ZoneId viewerZone() {
+        try {
+            return ZoneId.of(Timezones.current(RouteScope.currentConduit()));
+        } catch (RuntimeException unknownZone) {
+            return ZoneOffset.UTC;
+        }
+    }
+
+    /** Request-locale relative-time wording; null falls back to the English defaults. */
+    private static @Nullable RelativeTimeWording wording() {
+        Conduit conduit = RouteScope.currentConduit();
+        return conduit == null ? null
+            : RelativeTimeWording.resolve(conduit.getLocales(), conduit.getMessageResolver());
+    }
+
+    private static @NonNull String orNone(@Nullable Object value) {
+        String text = value == null ? "" : String.valueOf(value).trim();
+        return text.isEmpty() ? copy("value_none") : text;
+    }
+
+    private static @NonNull String copy(@NonNull String key) {
+        return CmsSupport.resolvedTextOrDefault(Microcopy.of(key).withFilter("scope", "certificate"));
     }
 
     /** Scope out the internal ACME account row everywhere. */
