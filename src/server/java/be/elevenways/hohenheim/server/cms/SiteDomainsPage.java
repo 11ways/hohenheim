@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -21,6 +23,7 @@ import be.elevenways.zenit.server.http.ReturnTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -47,12 +50,19 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             .equals(site.get(SiteModel.UPSTREAM_KIND));
         String panel = CmsSupport.panelSlug(conduit);
         boolean administerDomains = HohenheimAccess.isAdmin(accessContext);
-        // Binding a hostname to a site the principal MANAGES is delegated (the write pipeline
-        // decides what such a write may carry); requesting a certificate stays installation
-        // administration, because an issued certificate is authority over a name.
-        boolean canEditDomains = administerDomains
-            || HohenheimAccess.canManageSite(accessContext, siteId);
+        // Requesting a certificate stays installation administration, because an issued
+        // certificate is authority over a name.
         boolean canRequestCert = administerDomains && !tlsPassthrough;
+        // AIDEV-NOTE: per-row write authority is the DOMAIN RESOURCE's answer, never a
+        // second hand-rolled one. This page used to ask canManageSite while the resource's
+        // writableBy asks reachesRecord -- two mechanisms deciding one question, so a
+        // narrowed override on ManageDomainResource would have moved the endpoint without
+        // moving the affordance. DnsZoneRecordsPage converges on this same seam.
+        SiteDomainResource resource = domainResource(panel);
+        boolean canAddDomain = resource != null && resource.creatable()
+            && HohenheimAccess.reachesRecord(accessContext, SiteModel.MODEL_ID, siteId,
+                HohenheimAccess.MANAGE);
+        boolean anyRowActions = false;
         List<Map<String, Object>> domains = new ArrayList<>();
         for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {
             Map<String, Object> entry = new HashMap<>();
@@ -60,17 +70,26 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             entry.put("hostname", domain.get(SiteDomainModel.HOSTNAME));
             entry.put("matchType", domain.get(SiteDomainModel.MATCH_TYPE));
             entry.put("forceSsl", Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)));
-            entry.put("editTarget", CmsRoutes.detail(panel, "domains",
-                domain.get(SiteDomainModel.ID)));
+            boolean canEditRow = resource != null && resource.updatable()
+                && resource.updatableBy(domain, accessContext);
+            entry.put("canEdit", canEditRow);
+            if (canEditRow) {
+                entry.put("editTarget", CmsRoutes.detail(panel, "domains",
+                    domain.get(SiteDomainModel.ID)));
+            }
             // AIDEV-NOTE: the row's own remove, bound back to THIS tab. Detaching a hostname
             // used to be reachable only from the nav-hidden domains list or a hand-typed
             // /delete URL, so the tab that owns the hostnames could add one and never take
-            // one away. Gated on the same boolean the edit link is: the endpoint re-decides
-            // through the resource's writableBy, this only decides the affordance.
-            if (canEditDomains) {
+            // one away. The endpoint re-decides through the resource's deletableBy; asking
+            // the resource here is what keeps the affordance and the endpoint one answer.
+            boolean canRemoveRow = resource != null && resource.deletable()
+                && resource.deletableBy(domain, accessContext);
+            entry.put("canRemove", canRemoveRow);
+            if (canRemoveRow) {
                 entry.put("deleteTarget", ReturnTarget.bind(
                     CmsRoutes.delete(panel, "domains", domain.get(SiteDomainModel.ID)), conduit));
             }
+            anyRowActions |= canEditRow || canRemoveRow;
             if (tlsPassthrough) entry.put("certStatus", "");
             else putCertCoverage(entry, domain);
             domains.add(entry);
@@ -82,12 +101,13 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         vars.put("siteId", siteId);
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("domains", domains);
-        vars.put("canEditDomains", canEditDomains);
+        vars.put("hasRowActions", anyRowActions);
+        vars.put("canAddDomain", canAddDomain);
         vars.put("canRequestCert", canRequestCert);
         // AIDEV-NOTE: a CMS route PLUS a query parameter cannot be built from CmsRoutes --
         // its builders return the RouteTarget interface, which has no with(...). Composing
         // off CmsEndpoints keeps it fully typed; the alternative is a concatenated URL.
-        vars.put("addDomainTarget", canEditDomains ? CmsEndpoints.CREATE_FORM
+        vars.put("addDomainTarget", canAddDomain ? CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, "domains")
             .with(HohenheimParams.SITE_ID_PREFILL, siteId) : null);
@@ -104,6 +124,18 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             .with(HohenheimParams.CERTIFICATE_REQUEST_SITE, siteId) : null);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/site-domains"), vars);
+    }
+
+    /**
+     * The domain resource of the panel this tab is rendering under, whose write predicates
+     * decide every affordance here.
+     *
+     * @return null when the panel carries no domain peer, which offers no write affordance
+     */
+    private static @Nullable SiteDomainResource domainResource(@NonNull String panelSlug) {
+        Panel panel = PanelRegistry.getBySlug(panelSlug);
+        return panel != null && panel.peerBySlug("domains") instanceof SiteDomainResource peer
+            ? peer : null;
     }
 
     /**
