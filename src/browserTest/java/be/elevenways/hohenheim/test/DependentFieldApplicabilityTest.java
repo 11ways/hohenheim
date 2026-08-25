@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimPickRules;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -8,8 +11,14 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.rules.RuleCompiler;
+import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
+import be.elevenways.zenit.common.orm.query.rules.Vocabulary;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import org.junit.jupiter.api.Test;
 
@@ -129,6 +138,71 @@ class DependentFieldApplicabilityTest extends HohenheimTestBase {
                     .isNotEqualTo(reason.key());
             }
         }
+    }
+
+    /**
+     * Step 1-5: every narrowing a dependent picker can produce is a query against the
+     * TARGET record source, and a source's projection IS its rule vocabulary -- so a tree
+     * naming a variable the source does not project answers 400 instead of narrowing.
+     *
+     * AIDEV-NOTE: this is the assertion the old "resolves to non-null" checks could not
+     * make. The deny-all branches used to be spelled {@code enabled IS_TRUE AND enabled
+     * IS_FALSE}, which validated against the runtime-image source (it projects enabled)
+     * and FAILED against the instance source (name and kind only) -- a picker that 400'd
+     * exactly where it was supposed to offer nothing.
+     */
+    @Test
+    void everyPickRuleTreeValidatesAgainstItsTargetSourceVocabulary() {
+        // 1. The instance form's HOST pick, both branches: a volume-mounting kind adds the
+        //    quota rule, a plain one does not. Target: the ServerModel source.
+        HohenheimPickRules.KindHostRules hosts = new HohenheimPickRules.KindHostRules(
+            "kind",
+            InstanceKinds.runtimesByKind(),
+            InstanceKinds.kindsWhere(InstanceKindHandler::supportsVolumes));
+        assertValidates("step 1: host pick, docker", ServerModel.MODEL_ID,
+            hosts.resolve(Map.of("kind", DockerContainerKind.ID.toString())));
+        assertValidates("step 1: host pick, workspace", ServerModel.MODEL_ID,
+            hosts.resolve(Map.of("kind", WorkspaceKind.ID.toString())));
+
+        // 2. The RUNTIME IMAGE pick's narrowing branch, against the image source.
+        HohenheimPickRules.RuntimeImageRules images = new HohenheimPickRules.RuntimeImageRules(
+            "kind",
+            InstanceKinds.kindsWhere(InstanceKindHandler::usesRuntimeImage),
+            List.of());
+        assertValidates("step 2: image pick, an image-reading kind", RuntimeImageModel.MODEL_ID,
+            images.resolve(Map.of("kind", WorkspaceKind.ID.toString())));
+
+        // 3. Its DENY-ALL branch, against the same source. This one validated even as a
+        //    contradiction, because that source projects enabled -- which is precisely why
+        //    the hack survived review.
+        assertValidates("step 3: image pick, a kind that reads no image",
+            RuntimeImageModel.MODEL_ID,
+            images.resolve(Map.of("kind", DockerContainerKind.ID.toString())));
+
+        // 4. The SITE form's instance pick, narrowing branch, against the instance source.
+        HohenheimPickRules.UpstreamInstanceRules instances =
+            new HohenheimPickRules.UpstreamInstanceRules(
+                "upstream_kind", "hohenheim:instance",
+                InstanceKinds.kindsWhere(InstanceKindHandler::supportsSiteUpstream));
+        assertValidates("step 4: instance pick, the instance upstream", InstanceModel.MODEL_ID,
+            instances.resolve(Map.of("upstream_kind", "hohenheim:instance")));
+
+        // 5. Its DENY-ALL branch. THE regression: the instance source projects name and
+        //    kind, so a tree naming enabled is an unknown variable there.
+        assertValidates("step 5: instance pick, an upstream that serves files",
+            InstanceModel.MODEL_ID,
+            instances.resolve(Map.of("upstream_kind", "hohenheim:static")));
+    }
+
+    /** The resolved tree validates against the vocabulary the target source actually offers. */
+    private static void assertValidates(String step, Identifier modelId, RuleGroup tree) {
+        assertThat(tree).as(step + ": resolves to a tree").isNotNull();
+        Vocabulary vocabulary = RecordSourceRegistry.INSTANCE
+            .requireDefaultFor(modelId).vocabulary();
+        Violations violations = RuleCompiler.validate(tree, vocabulary);
+        assertThat(violations.isEmpty())
+            .as(step + ": validates against the source vocabulary (" + violations.getMessage() + ")")
+            .isTrue();
     }
 
     /**
