@@ -106,7 +106,11 @@ public class SiteDomainResource extends RowResource {
         .column(ColumnSpec.fromField(SiteDomainModel.MATCH_TYPE).filterable().subtext("path").build())
         .column(ColumnSpec.fromField(SiteDomainModel.PATH).hidden().build())
         .column(ColumnSpec.fromField(SiteDomainModel.FORCE_SSL).filterable().build())
+        // The cell resolves the site's NAME, so the header says "Site". fromField stamps
+        // labelFor (the column name humanized, "Site id"); a relation column wants the
+        // labelForRelation spelling, which is the one that drops the _id suffix.
         .column(ColumnSpec.fromField(SiteDomainModel.SITE_ID)
+            .label(FieldLabels.labelForRelation(SiteDomainModel.SITE_ID))
             .relation(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build()).build())
         .filter(FilterSpec.forField(SiteDomainModel.HOSTNAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(SiteDomainModel.HOSTNAME)).build())

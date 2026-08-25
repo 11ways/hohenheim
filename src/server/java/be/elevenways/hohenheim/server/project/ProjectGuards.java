@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.zenit.auth.cms.RoleOwnership;
+import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
@@ -83,6 +85,21 @@ public final class ProjectGuards {
         // have no soft delete).
         ProjectModel.SCHEMA.addBeforeRemoveHook(ProjectGuards::refuseNonEmptyAndCapture);
         ProjectModel.SCHEMA.addAfterRemoveHook(ProjectGuards::removeDoomedGroups);
+
+        // The other direction of the same invariant: /admin/roles offers a plain Delete on
+        // every group, including the ones this tier creates, and taking one out there left
+        // the project pointing at a group id that no longer existed -- every member and
+        // every owned record silently ungrouped. The roles resource is final and exposes no
+        // per-record seam, so the refusal is declared HERE, on the model, where it also
+        // covers a direct save. The project's own teardown deletes the project row first,
+        // so this never fires on removeGroupFor.
+        PermissionGroupModel.SCHEMA.addBeforeRemoveHook(ProjectGuards::refuseProjectOwnedGroup);
+
+        // ...and the FRONT of that same invariant: declaring the ownership to zenit-auth
+        // takes the Delete affordance off a project-owned role entirely, so the hook above
+        // is the last line of defence (a direct save, a second surface) rather than the
+        // only one. The hook alone left the operator pressing a button that always failed.
+        RoleOwnership.INSTANCE.register(new ProjectRoleOwner());
 
         // An environment cannot move to another project while anything references it:
         // that would re-home the grouping across owners without any grant moving.
@@ -181,6 +198,21 @@ public final class ProjectGuards {
         return Models.get(InstanceVariableModel.class).find()
             .where(InstanceVariableModel.ENVIRONMENT_ID.eq(environmentId))
             .count() > 0;
+    }
+
+    /** A permission group a live project still points at cannot be deleted on its own. */
+    private static void refuseProjectOwnedGroup(@NonNull RemoveFromDatasource context) {
+        for (Row group : doomedRows(context)) {
+            Integer groupId = group.get(PermissionGroupModel.ID);
+            if (groupId == null) {
+                continue;
+            }
+            Row project = Projects.projectForGroup(groupId);
+            if (project != null) {
+                throw Violations.ofForm(violation("role_owned_by_project")
+                    .withArg("name", String.valueOf((Object) project.get(ProjectModel.NAME))));
+            }
+        }
     }
 
     private static void refuseNonEmptyAndCapture(@NonNull RemoveFromDatasource context) {

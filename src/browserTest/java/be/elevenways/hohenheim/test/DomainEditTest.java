@@ -48,6 +48,18 @@ class DomainEditTest extends HohenheimTestBase {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    private HttpResponse<String> get(String path) throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
+            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
+            .GET()
+            .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     @Test
     @Order(1)
     void createSiteAndDomain() throws Exception {
@@ -86,7 +98,36 @@ class DomainEditTest extends HohenheimTestBase {
         waitForHydration();
 
         assertThat(page.locator("body").textContent()).contains("edit-test.example.com");
-        assertThat(page.locator("a[href='/admin/domains/" + domainId + "']").count()).isEqualTo(1);
+        // The hostname itself opens the form; the actions cell offers the same edit
+        // explicitly plus the remove this tab used to have no way to reach.
+        assertThat(page.locator("a[href='/admin/domains/" + domainId + "']").count())
+            .isGreaterThanOrEqualTo(1);
+        var actions = page.locator(".hh-domain-row-actions");
+        assertThat(actions.count()).as("the row carries an actions cell").isEqualTo(1);
+        assertThat(actions.locator("a.hh-domain-edit[href='/admin/domains/" + domainId + "']").count())
+            .as("with an explicit edit link").isEqualTo(1);
+        assertThat(actions.locator("form[action*='/admin/domains/" + domainId + "/delete']").count())
+            .as("and a remove form posting to the delete route").isEqualTo(1);
+        assertThat(actions.locator("form pl-button[type='submit']").count())
+            .as("removal is a real submit, never a bare link").isEqualTo(1);
+    }
+
+    /**
+     * The domains catalog is REACHABLE: the Sites list names it in its related-pages menu,
+     * and its own site column is labelled for the value it shows (the name, not the id).
+     */
+    @Test
+    @Order(18)
+    void domainsCatalogIsNamedByTheSitesListAndLabelsItsSiteColumn() throws Exception {
+        String sites = get("/admin/sites").body();
+        assertThat(sites)
+            .as("the nav-hidden domains peer is named by the Sites list")
+            .contains("href=\"/admin/domains\"");
+
+        String domains = get("/admin/domains").body();
+        assertThat(domains)
+            .as("the relation column is headed by what it shows")
+            .doesNotContain("Site id");
     }
 
     @Test
@@ -409,10 +450,38 @@ class DomainEditTest extends HohenheimTestBase {
             .isFalse();
     }
 
+    /** The tab's own remove control detaches the hostname and returns to the tab. */
+    @Test
+    @Order(98)
+    void theDomainsTabRemoveControlDetachesTheHostname() throws Exception {
+        var created = postForm("/admin/domains/new",
+            "site_id=" + siteId + "&hostname=removable.example.com&match_type=exact");
+        assertThat(created.statusCode()).isIn(200, 302, 303);
+        Row throwaway = Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.HOSTNAME.eq("removable.example.com")).first();
+        assertThat(throwaway).isNotNull();
+        Integer throwawayId = throwaway.get(SiteDomainModel.ID);
+
+        navigateToApp("/admin/sites/" + siteId + "/page/domains");
+        waitForHydration();
+        // The POST goes to the target the page RENDERED, so the assertion covers the
+        // affordance and the route it points at, not a hand-written URL.
+        String action = page.locator("form[action*='/admin/domains/" + throwawayId + "/delete']")
+            .first().getAttribute("action");
+        assertThat(action).as("the remove form returns to this tab")
+            .contains("_return");
+
+        var removed = postForm(action, confirmed(""));
+        assertThat(removed.statusCode()).isIn(200, 302, 303);
+        assertThat(Models.get(SiteDomainModel.class).findById(throwawayId))
+            .as("the hostname is detached from the site")
+            .isNull();
+    }
+
     @Test
     @Order(99)
     void deleteRemovesTheDomain() throws Exception {
-        var response = postForm("/admin/domains/" + domainId + "/delete", "");
+        var response = postForm("/admin/domains/" + domainId + "/delete", confirmed(""));
         assertThat(response.statusCode()).isIn(200, 302, 303);
         assertThat(Models.get(SiteDomainModel.class).findById(domainId)).isNull();
     }

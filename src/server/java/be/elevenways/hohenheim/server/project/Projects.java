@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -18,11 +19,13 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.PermissionResolver;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -316,17 +319,62 @@ public final class Projects {
         Row group = groups.createEmptyRow();
         group.set(PermissionGroupModel.SLUG, slug);
         group.set(PermissionGroupModel.TITLE, projectName);
+        group.set(PermissionGroupModel.DESCRIPTION, managedDescription(projectName));
         groups.save(group);
         return group.get(PermissionGroupModel.ID);
     }
 
-    /** Keep the group's TITLE mirroring a renamed project (the slug never moves). */
+    /** Keep the group's TITLE and provenance mirroring a renamed project (the slug never moves). */
     static void syncGroupTitle(int groupId, @NonNull String projectName) {
         Row group = AuthModels.permissionGroups().findById(groupId);
-        if (group != null && !projectName.equals(group.get(PermissionGroupModel.TITLE))) {
-            group.set(PermissionGroupModel.TITLE, projectName);
-            AuthModels.permissionGroups().save(group);
+        if (group == null) {
+            return;
         }
+        String description = managedDescription(projectName);
+        if (projectName.equals(group.get(PermissionGroupModel.TITLE))
+                && description.equals(group.get(PermissionGroupModel.DESCRIPTION))) {
+            return;
+        }
+        group.set(PermissionGroupModel.TITLE, projectName);
+        group.set(PermissionGroupModel.DESCRIPTION, description);
+        AuthModels.permissionGroups().save(group);
+    }
+
+    /**
+     * The provenance sentence a project-owned role carries in the roles list.
+     *
+     * AIDEV-NOTE: resolved in the SERVER default locale, not the creating operator's --
+     * this is stored data sitting beside the project name, and a description whose
+     * language depended on who happened to create the project would read as noise. The
+     * roles list ALSO states the provenance per viewer, through the {@code RoleOwner}
+     * this tier registers; this stored copy is what a reader outside that surface (a
+     * grants export, a direct query) sees. The DELETE refusal -- now both the hidden
+     * affordance and the {@code ProjectGuards} hook -- is what makes the sentence true.
+     */
+    private static @NonNull String managedDescription(@NonNull String projectName) {
+        Microcopy copy = managedByCopy(projectName);
+        try {
+            return copy.resolve(LocaleChain.of(RouteLocales.get().getDefaultLocale()),
+                Zenit.getMessageResolver());
+        } catch (RuntimeException unbooted) {
+            return copy.key();
+        }
+    }
+
+    /**
+     * THE provenance sentence of a project-owned role, unresolved: the stored
+     * description resolves it once in the server locale, the roles surface resolves it
+     * per viewer through {@code ProjectRoleOwner}.
+     */
+    static @NonNull Microcopy managedByCopy(@NonNull String projectName) {
+        return Microcopy.of("managed_by_project").withFilter("scope", "role")
+            .withArg("name", projectName);
+    }
+
+    /** The project whose backing auth group this is, if any. */
+    static @Nullable Row projectForGroup(int groupId) {
+        return Models.get(ProjectModel.class).find()
+            .where(ProjectModel.GROUP_ID.eq(groupId)).first();
     }
 
     /**

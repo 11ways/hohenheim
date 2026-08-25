@@ -107,6 +107,9 @@ public final class AttentionCollector {
         if (HohenheimRoles.enabled(Role.FIREWALL)) {
             spamserviceIssue(items);
         }
+        if (HohenheimRoles.anyEnabled(Role.STACKS, Role.DATABASES, Role.INSTANCES)) {
+            hostsNotAdmitted(items);
+        }
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
             crashedInstances(items);
             failedInstanceBackups(items);
@@ -114,6 +117,28 @@ public final class AttentionCollector {
             instancesLowOnDisk(items);
         }
         return items;
+    }
+
+    /**
+     * Enrolled hosts that are not admitted for placement.
+     *
+     * AIDEV-NOTE: this list used to say "All clear" directly beneath the onboarding card
+     * naming a host the deploy lane would refuse -- the checklist watched admission and
+     * this collector did not, so the dashboard contradicted itself on one screen. Gated
+     * on the same roles that put the Servers list in the panel, so the link always exists.
+     * CORDONED is deliberately absent: an operator drained that host on purpose, and a
+     * permanent warning over a deliberate state is how a warning stops being read.
+     */
+    public static void hostsNotAdmitted(List<AttentionItem> items) {
+        for (Row server : Models.get(ServerModel.class).find()
+                .where(ServerModel.ADMISSION.eq(ServerModel.ADMISSION_BLOCKED))
+                .all()) {
+            items.add(item("warning", "server",
+                copy("host_not_admitted", "attention_title",
+                    "name", server.get(ServerModel.NAME)),
+                copy("host_not_admitted", "attention_detail"),
+                CmsRoutes.detail(ADMIN, "servers", server.get(ServerModel.ID))));
+        }
     }
 
     // AIDEV-NOTE: the three instance collectors are PUBLIC for the same reason

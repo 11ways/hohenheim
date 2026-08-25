@@ -34,6 +34,7 @@
             <pl-table-head>{{ t("match_type", scope: "site_domains") }}</pl-table-head>
             <pl-table-head>{{ t("ssl", scope: "site_domains") }}</pl-table-head>
             <pl-table-head>{{ t("certificate", scope: "site_domains") }}</pl-table-head>
+            {% if canEditDomains %}<pl-table-head></pl-table-head>{% /if %}
         </pl-table-row></pl-table-header>
         <pl-table-body>
             {% each domains as index, domain %}
@@ -58,6 +59,25 @@
                     <pl-badge variant={% "outline" %}>{{ t("none", scope: "site_domains") }}</pl-badge>
                     {% /if %}
                 </pl-table-cell>
+                {#- Row actions: the hostname link opens the form, but a row an operator
+                    can add must also be one they can edit and detach from HERE. Remove is
+                    a real destructive POST behind the shell's confirm dialog, never a
+                    bare link. -#}
+                {% if canEditDomains %}
+                <pl-table-cell class="hh-domain-row-actions">
+                    <a class="hh-domain-edit" use:Zenit.route={% domain.get("editTarget") %}>
+                        <pl-icon name="pen" size="sm"></pl-icon>
+                        {{ t("edit", scope: "site_domains") }}
+                    </a>
+                    <form use:Zenit.form={% domain.get("deleteTarget") %}
+                          use:CmsConfirm.destructive={% t("remove_confirm", scope: "site_domains", hostname: domain.get("hostname")) %}>
+                        <pl-button variant={% "ghost" %} type={% "submit" %} size="sm" class="hh-domain-remove">
+                            <pl-icon name="trash-can" size="sm"></pl-icon>
+                            {{ t("remove", scope: "site_domains") }}
+                        </pl-button>
+                    </form>
+                </pl-table-cell>
+                {% /if %}
             </pl-table-row>
             {% /each %}
         </pl-table-body>

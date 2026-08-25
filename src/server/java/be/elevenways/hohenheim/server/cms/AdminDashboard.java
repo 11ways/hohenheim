@@ -56,21 +56,28 @@ public final class AdminDashboard extends DashboardPanelPeer {
         boolean proxy = HohenheimRoles.enabled(Role.PROXY);
         boolean firewall = HohenheimRoles.enabled(Role.FIREWALL);
 
-        WidgetTree stats = new WidgetTree(List.of(
-            stat("site", "hohenheim.site", "sites", "globe"),
-            stat("certificate", "hohenheim.certificate", "certificates", "lock"),
-            stat("access_list", "hohenheim.access_list", "access-lists", "shield-halved")));
-
-        // Security band: the active-ban count (event analytics live in
-        // spamservice now, so bans are the only security records here).
-        WidgetTree securityStats = new WidgetTree(List.of(
-            new WidgetInstance(StatWidget.ID, Map.of(
+        // AIDEV-NOTE: ONE stat grid, whatever the role mix. The firewall tile used to be a
+        // band of its own with its own column count, so a proxy+firewall install rendered
+        // four tiles as a 3-wide grid followed by a lone half-width card underneath -- two
+        // grids the operator reads as two unrelated groups. Roles decide WHICH tiles exist,
+        // never how many grids there are.
+        List<WidgetInstance> tiles = new ArrayList<>();
+        if (proxy) {
+            tiles.add(stat("site", "hohenheim.site", "sites", "globe"));
+            tiles.add(stat("certificate", "hohenheim.certificate", "certificates", "lock"));
+            tiles.add(stat("access_list", "hohenheim.access_list", "access-lists", "shield-halved"));
+        }
+        if (firewall) {
+            // The active-ban count (event analytics live in spamservice now, so bans are
+            // the only security records here).
+            tiles.add(new WidgetInstance(StatWidget.ID, Map.of(
                 "label", HohenheimWidgetCopy.localized("active_bans", "dashboard"),
                 "source", "hohenheim.ban",
                 "rules", RuleGroup.and(Rule.of("active", RuleOperator.IS_TRUE)),
                 "icon", "ban",
                 // StatWidget's stored "link" is a String, so the typed target renders here.
-                "link", CmsRoutes.list(ADMIN, "bans").toUrl()))));
+                "link", CmsRoutes.list(ADMIN, "bans").toUrl())));
+        }
 
         List<WidgetInstance> widgets = new ArrayList<>();
 
@@ -89,16 +96,14 @@ public final class AdminDashboard extends DashboardPanelPeer {
         }
         widgets.add(section(new WidgetInstance(AttentionWidget.ID, Map.of())
             .withData(AttentionCollector.collect())));
-        if (proxy) {
-            widgets.add(section(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 3), stats)));
-        }
-        if (firewall) {
-            widgets.add(section(new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", 2), securityStats)));
-            // AIDEV-NOTE: the 30-day bans chart used to live here and is deliberately gone.
-            // On any fleet that is not under attack it is an all-zero series, i.e. ~450px of
-            // flat line above the content an operator opened the page for. The count itself
-            // stays, as the tile right above. If the trend is wanted, it belongs on the
-            // firewall operator's own overview page, which they open on purpose.
+        if (!tiles.isEmpty()) {
+            widgets.add(section(new WidgetInstance(ColumnsWidget.ID,
+                Map.of("column_count", Math.min(tiles.size(), 4)), new WidgetTree(tiles))));
+            // AIDEV-NOTE: the 30-day bans chart used to live beside these and is deliberately
+            // gone. On any fleet that is not under attack it is an all-zero series, i.e. ~450px
+            // of flat line above the content an operator opened the page for. The count itself
+            // stays, as a tile. If the trend is wanted, it belongs on the firewall operator's
+            // own overview page, which they open on purpose.
         }
         widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
                 "title", HohenheimWidgetCopy.localized("recent_activity", "dashboard"),

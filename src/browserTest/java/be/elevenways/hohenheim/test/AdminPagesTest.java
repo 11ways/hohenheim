@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.Zenit;
@@ -22,6 +23,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -394,6 +397,12 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator("[data-path='auto_renew'], [data-group='renewal']").count()).isZero();
     }
 
+    /** The rendered text of one read-only form entry, by its form path. */
+    private String readonlyEntry(String path) {
+        return page.locator("pl-field[data-path='" + path + "'] .zf-field-readonly")
+            .first().innerText().trim();
+    }
+
     /** A failed renewal is diagnosable from the list, the detail page and the dashboard. */
     @Test
     @Order(21)
@@ -420,14 +429,61 @@ class AdminPagesTest extends HohenheimTestBase {
                 .as("the renewal error is a visible list column")
                 .contains("DNS problem: NXDOMAIN");
 
+            // 1. The detail page states what the certificate covers, when it expires and why
+            //    the last renewal failed -- all three used to live on the LIST only, and the
+            //    renewal panel rendered three labels above empty boxes.
             navigateToApp("/admin/certificates/" + cert.get(CertificateModel.ID));
             waitForHydration();
             String detail = page.content();
-            assertThat(detail).contains("Renewal status");
+            assertThat(detail).as("the renewal group still has its heading").contains("Renewal status");
+            assertThat(detail).as("the coverage group is on the detail page").contains("Coverage");
+            assertThat(detail).as("the covered host names are on the detail page")
+                .contains("broken.example.test");
             assertThat(detail).contains("DNS problem: NXDOMAIN");
-            // Diagnostics are read-only: no editable input carries the field.
+            // 2. Every absent renewal value SAYS it is absent instead of rendering a labelled
+            //    empty box; the DNS publisher label is no longer an orphan.
+            assertThat(readonlyEntry("expiry_display"))
+                .as("an unissued certificate says so where its expiry goes")
+                .isEqualTo("None - not issued yet");
+            assertThat(readonlyEntry("next_attempt_display"))
+                .as("no scheduled retry reads as such").isEqualTo("Not scheduled");
+            assertThat(readonlyEntry("dns_publisher_display"))
+                .as("the DNS publisher label is no longer an orphan").isEqualTo("None");
+            assertThat(readonlyEntry("covered_names_display"))
+                .as("the covered names are the certificate's own SAN list")
+                .isEqualTo("broken.example.test");
+            // 3. Diagnostics are read-only: no editable input carries the field.
             assertThat(page.locator("input[name='renewal_error'], textarea[name='renewal_error']").count())
                 .isZero();
+            assertThat(page.locator("input[name='expiry_display'], input[name='covered_names_display']")
+                .count())
+                .as("the display entries are never inputs")
+                .isZero();
+
+            // 4. Give it an expiry and a publisher: the same entries now read as an absolute
+            //    stamp plus the relative wording, and the enum reads as its LABEL.
+            Instant expiry = Instant.now().plus(Duration.ofDays(40));
+            cert.set(CertificateModel.EXPIRES_ON, expiry);
+            cert.set(CertificateModel.CHALLENGE_TYPE, CertificateModel.CHALLENGE_DNS);
+            cert.set(CertificateModel.DNS_PUBLISHER, CertificateModel.DNS_PUBLISHER_INTERNAL);
+            cert.set(CertificateModel.NEXT_ATTEMPT_AT, Instant.now().plus(Duration.ofHours(6)));
+            certModel.save(cert);
+
+            navigateToApp("/admin/certificates/" + cert.get(CertificateModel.ID));
+            waitForHydration();
+            String dated = page.content();
+            // The stamp is rendered in the VIEWER's zone, so the assertion is on the SHAPE
+            // (absolute wall-clock plus the relative wording), never on a zone-dependent day.
+            assertThat(readonlyEntry("expiry_display"))
+                .as("the expiry reads as an absolute stamp plus the relative wording")
+                .matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2} \\(.+ from now\\)");
+            assertThat(readonlyEntry("next_attempt_display"))
+                .as("a scheduled retry replaces the absence sentence")
+                .matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2} \\(.+ from now\\)");
+            assertThat(dated).as("the next attempt is no longer 'Not scheduled'")
+                .doesNotContain("Not scheduled");
+            assertThat(readonlyEntry("dns_publisher_display"))
+                .as("the DNS publisher reads as its declared label").isEqualTo("Internal DNS");
 
             // The dashboard attention panel lists the failing cert with a link.
             navigateToApp("/admin/dashboard");
@@ -670,6 +726,84 @@ class AdminPagesTest extends HohenheimTestBase {
                 .isTrue();
         } finally {
             RateLimitMiddleware.setPolicyResolver((conduit, endpoint, declared) -> null);
+        }
+    }
+
+    /**
+     * The dashboard must not contradict itself: a host that cannot take workloads is an
+     * attention item, the checklist step that is BLOCKED does not wear a checkmark, and the
+     * stat tiles form ONE grid whatever the role mix.
+     */
+    @Test
+    @Order(24)
+    void dashboardAttentionOnboardingAndStatsAgreeWithEachOther() throws Exception {
+        var serverModel = Models.get(ServerModel.class);
+        Row local = serverModel.findById(ServerModel.localServerId());
+        String admission = local.get(ServerModel.ADMISSION);
+        try {
+            // 1. A host that is not admitted: the amber onboarding card and the attention
+            //    list must agree, so "All clear" is impossible while the card is up.
+            local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+            serverModel.save(local);
+
+            List<AttentionItem> blocked = new ArrayList<>();
+            AttentionCollector.hostsNotAdmitted(blocked);
+            assertThat(blocked)
+                .as("step 1: a blocked host raises exactly one attention item")
+                .hasSize(1);
+            assertThat(blocked.get(0).severity()).as("step 1: as a warning").isEqualTo("warning");
+
+            navigateToApp("/admin/dashboard");
+            waitForHydration();
+            assertThat(page.locator(".hh-attention-clear").count())
+                .as("step 1: the dashboard never says 'All clear' while a host is blocked")
+                .isZero();
+            assertThat(page.locator(".hh-attention-item > a.hh-attention-target[href='/admin/servers/"
+                + local.get(ServerModel.ID) + "']").count())
+                .as("step 1: and the item links to the host that has to be admitted")
+                .isEqualTo(1);
+
+            // 2. The blocked checklist step wears a warning marker, never a checkmark.
+            var blockedStep = page.locator(".hh-onboarding-step[data-state='blocked']");
+            assertThat(blockedStep.count()).as("step 2: the admit step is blocked")
+                .isGreaterThanOrEqualTo(1);
+            assertThat(blockedStep.first()
+                .locator(".hh-onboarding-marker pl-icon[name='circle-check']").count())
+                .as("step 2: a blocking step must not look completed")
+                .isZero();
+            assertThat(blockedStep.first()
+                .locator(".hh-onboarding-marker pl-icon[name='triangle-exclamation']").count())
+                .as("step 2: it wears the warning marker instead")
+                .isEqualTo(1);
+
+            // 3. Every stat tile sits in ONE grid: proxy and firewall no longer contribute
+            //    a region each, which used to split four tiles across two grids.
+            assertThat(page.locator(".hh-dashboard-band .widget-columns").count())
+                .as("step 3: exactly one stat grid on the dashboard")
+                .isEqualTo(1);
+            var grid = page.locator(".hh-dashboard-band .widget-columns").first();
+            assertThat(grid.locator("a.widget-stat-link[href='/admin/sites']").count())
+                .as("step 3: the sites tile is in it").isEqualTo(1);
+            assertThat(grid.locator("a.widget-stat-link[href='/admin/bans']").count())
+                .as("step 3: and so is the firewall tile that used to sit in its own grid")
+                .isEqualTo(1);
+
+            // 4. Admitting the host retracts the item; the collector answers negatively too.
+            local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+            serverModel.save(local);
+            List<AttentionItem> admitted = new ArrayList<>();
+            AttentionCollector.hostsNotAdmitted(admitted);
+            assertThat(admitted).as("step 4: an admitted host raises nothing").isEmpty();
+
+            // 5. A CORDONED host is a deliberate operator state, never a warning.
+            local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_CORDONED);
+            serverModel.save(local);
+            List<AttentionItem> cordoned = new ArrayList<>();
+            AttentionCollector.hostsNotAdmitted(cordoned);
+            assertThat(cordoned).as("step 5: a cordoned host raises nothing either").isEmpty();
+        } finally {
+            local.set(ServerModel.ADMISSION, admission);
+            serverModel.save(local);
         }
     }
 }

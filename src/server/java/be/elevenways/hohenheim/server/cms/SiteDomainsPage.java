@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
+import be.elevenways.zenit.server.http.ReturnTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -45,6 +46,13 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         boolean tlsPassthrough = SiteModel.UPSTREAM_TLS_PASSTHROUGH
             .equals(site.get(SiteModel.UPSTREAM_KIND));
         String panel = CmsSupport.panelSlug(conduit);
+        boolean administerDomains = HohenheimAccess.isAdmin(accessContext);
+        // Binding a hostname to a site the principal MANAGES is delegated (the write pipeline
+        // decides what such a write may carry); requesting a certificate stays installation
+        // administration, because an issued certificate is authority over a name.
+        boolean canEditDomains = administerDomains
+            || HohenheimAccess.canManageSite(accessContext, siteId);
+        boolean canRequestCert = administerDomains && !tlsPassthrough;
         List<Map<String, Object>> domains = new ArrayList<>();
         for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(siteId)) {
             Map<String, Object> entry = new HashMap<>();
@@ -54,6 +62,15 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             entry.put("forceSsl", Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)));
             entry.put("editTarget", CmsRoutes.detail(panel, "domains",
                 domain.get(SiteDomainModel.ID)));
+            // AIDEV-NOTE: the row's own remove, bound back to THIS tab. Detaching a hostname
+            // used to be reachable only from the nav-hidden domains list or a hand-typed
+            // /delete URL, so the tab that owns the hostnames could add one and never take
+            // one away. Gated on the same boolean the edit link is: the endpoint re-decides
+            // through the resource's writableBy, this only decides the affordance.
+            if (canEditDomains) {
+                entry.put("deleteTarget", ReturnTarget.bind(
+                    CmsRoutes.delete(panel, "domains", domain.get(SiteDomainModel.ID)), conduit));
+            }
             if (tlsPassthrough) entry.put("certStatus", "");
             else putCertCoverage(entry, domain);
             domains.add(entry);
@@ -65,13 +82,6 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         vars.put("siteId", siteId);
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("domains", domains);
-        boolean administerDomains = HohenheimAccess.isAdmin(accessContext);
-        // Binding a hostname to a site the principal MANAGES is delegated (the write pipeline
-        // decides what such a write may carry); requesting a certificate stays installation
-        // administration, because an issued certificate is authority over a name.
-        boolean canEditDomains = administerDomains
-            || HohenheimAccess.canManageSite(accessContext, siteId);
-        boolean canRequestCert = administerDomains && !tlsPassthrough;
         vars.put("canEditDomains", canEditDomains);
         vars.put("canRequestCert", canRequestCert);
         // AIDEV-NOTE: a CMS route PLUS a query parameter cannot be built from CmsRoutes --
