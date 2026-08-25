@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -513,10 +514,101 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         assertThat(groupId).as("step 2: the write hook created the backing group").isNotNull();
         assertThat(AuthModels.permissionGroups().findById(groupId))
             .as("step 2: and the group row exists").isNotNull();
+        // 3. Before it goes: the group SAYS where it came from, so /admin/roles no longer
+        //    lists a bare "project-..." row with an empty description column.
+        Row group = AuthModels.permissionGroups().findById(groupId);
+        assertThat((String) group.get(PermissionGroupModel.DESCRIPTION))
+            .as("step 3: the auto-created role names its owning project")
+            .contains(PREFIX + "throwaway");
+
+        // 4. Deleting that role on its own is REFUSED while the project points at it --
+        //    it used to succeed and leave the project pointing at nothing.
+        Throwable orphaning = catchThrowable(() ->
+            AuthModels.permissionGroups().delete(groupId));
+        assertThat(violationKeys(orphaning))
+            .as("step 4: a project-owned role cannot be deleted from the roles surface")
+            .contains("role_owned_by_project");
+        assertThat(AuthModels.permissionGroups().findById(groupId))
+            .as("step 4: and the row is still there").isNotNull();
+
+        // 5. Renaming the project moves the provenance sentence with it.
+        Row renamed = Models.get(ProjectModel.class).findById(throwawayId);
+        renamed.set(ProjectModel.NAME, PREFIX + "renamed");
+        Models.get(ProjectModel.class).save(renamed);
+        assertThat((String) AuthModels.permissionGroups().findById(groupId)
+                .get(PermissionGroupModel.DESCRIPTION))
+            .as("step 5: the description follows the project name")
+            .contains(PREFIX + "renamed");
+
         Models.get(ProjectModel.class).delete(throwawayId);
         assertThat(AuthModels.permissionGroups().findById(groupId))
-            .as("step 2: deleting the project deleted its group explicitly")
+            .as("step 6: deleting the project deleted its group explicitly")
             .isNull();
+    }
+
+    /**
+     * The roles SURFACE agrees with the guard: a project-owned role is named as managed
+     * and offers no delete at all, while an operator-created role keeps both.
+     */
+    @Test
+    @Order(6)
+    void projectOwnedRolesAreNamedAndUndeletableOnTheRolesSurface() throws Exception {
+        int ownedProjectId = project(PREFIX + "surface");
+        Row surfaceProject = Models.get(ProjectModel.class).findById(ownedProjectId);
+        Integer ownedGroupId = surfaceProject.get(ProjectModel.GROUP_ID);
+        assertThat(ownedGroupId).as("step 0: the project has its backing group").isNotNull();
+
+        // A hand-made role is the counterfactual: everything asserted below must be
+        // TRUE of it, or the assertions are only measuring an empty page.
+        Row plain = AuthModels.permissionGroups().createEmptyRow();
+        plain.set(PermissionGroupModel.SLUG, PREFIX + "plain");
+        plain.set(PermissionGroupModel.TITLE, PREFIX + "plain");
+        AuthModels.permissionGroups().save(plain);
+        Integer plainGroupId = plain.get(PermissionGroupModel.ID);
+
+        // 1. The list declares the managed-by column and names the owning project.
+        HttpResponse<String> list = adminGet("/admin/roles");
+        assertThat(list.statusCode()).as("step 1: the roles list renders").isEqualTo(200);
+        assertThat(list.body())
+            .as("step 1: the roles table carries the managed-by column")
+            .contains("data-column=\"managed_by\"");
+        assertThat(list.body())
+            .as("step 1: and the owning project is named on the page")
+            .contains("Managed by project " + PREFIX + "surface");
+
+        // 2. The delete affordance is GONE for the owned role -- the row's own delete
+        //    URL never renders -- while the hand-made role still offers its own.
+        assertThat(list.body())
+            .as("step 2: no delete affordance for the project-owned role")
+            .doesNotContain("/admin/roles/" + ownedGroupId + "/delete");
+        assertThat(list.body())
+            .as("step 2: and the counterfactual proves the assertion can see one")
+            .contains("/admin/roles/" + plainGroupId + "/delete");
+
+        // 3. The record page says WHY, and drops its Delete for the same reason.
+        HttpResponse<String> detail = adminGet("/admin/roles/" + ownedGroupId);
+        assertThat(detail.statusCode()).as("step 3: the record page renders").isEqualTo(200);
+        assertThat(detail.body())
+            .as("step 3: the record page carries the managed-role notice")
+            .contains("maintained automatically");
+        assertThat(detail.body())
+            .as("step 3: and offers no delete")
+            .doesNotContain("/admin/roles/" + ownedGroupId + "/delete");
+        assertThat(adminGet("/admin/roles/" + plainGroupId).body())
+            .as("step 3: while the hand-made role's page still does")
+            .contains("/admin/roles/" + plainGroupId + "/delete");
+
+        // 4. The refusal is not cosmetic: the submit is refused too, and the row stays.
+        HttpResponse<String> deleted = httpPostForm(
+            "/admin/roles/" + ownedGroupId + "/delete", "", sessionToken, csrfToken);
+        assertThat(deleted.statusCode())
+            .as("step 4: the delete submit is refused, not merely hidden")
+            .isIn(403, 404);
+        assertThat(AuthModels.permissionGroups().findById(ownedGroupId))
+            .as("step 4: and the role is still there").isNotNull();
+
+        AuthModels.permissionGroups().delete(plainGroupId);
+        Models.get(ProjectModel.class).delete(ownedProjectId);
     }
 
     private static void variable(Integer instanceId, Integer envId, String key, String value) {

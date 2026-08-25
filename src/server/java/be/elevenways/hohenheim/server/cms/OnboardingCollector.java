@@ -85,7 +85,8 @@ public final class OnboardingCollector {
     private static OnboardingStep hostAcceptsWorkloads(boolean placeable, @Nullable Microcopy refusal) {
         return new OnboardingStep(
             placeable ? OnboardingStep.DONE : OnboardingStep.BLOCKED,
-            "circle-check",
+            // The step's SUBJECT, never its state -- the template picks the state marker.
+            "shield-halved",
             copy("checklist_admit"),
             // The gate's OWN words when it refuses -- the operator reads the same sentence the
             // deploy would have produced, which is what makes this a route to the fix.

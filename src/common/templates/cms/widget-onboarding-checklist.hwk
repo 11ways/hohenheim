@@ -13,8 +13,14 @@
         {% each data as step %}
         <li class="hh-onboarding-step" data-state={% step.state %}>
             <span class="hh-onboarding-marker">
+                {#- The marker states the step's STATE, never its subject: done is a check,
+                    blocked is a warning, and only an open step shows its own subject icon.
+                    A step whose own icon happened to be "circle-check" used to render a
+                    completed-looking tick while it was blocking the whole checklist. -#}
                 {% if step.state == "done" %}
                 <pl-icon name="circle-check" size="sm"></pl-icon>
+                {% elseif step.state == "blocked" %}
+                <pl-icon name="triangle-exclamation" size="sm"></pl-icon>
                 {% else %}
                 <pl-icon name={% step.icon %} size="sm"></pl-icon>
                 {% /if %}
