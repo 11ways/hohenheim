@@ -104,6 +104,58 @@ class NotificationAdminTest extends HohenheimTestBase {
         assertThat(page.content()).contains("Test delivery failed");
     }
 
+    /**
+     * An incomplete channel is refused field by field: every missing REQUIRED field is
+     * named, and the URL shape rule only speaks about a URL that was actually typed.
+     */
+    @Test
+    @Order(3)
+    void incompleteChannelSubmitNamesEveryMissingFieldJourney() throws Exception {
+        // 1. A wholly empty submit: all three required fields are named at once, and the
+        //    shape rule stays quiet about a box nobody filled in.
+        var empty = postForm("/admin/notifications/new", "name=&format=&url=");
+        assertThat(empty.statusCode()).as("step 1: the form rerenders").isEqualTo(200);
+        assertThat(empty.body()).as("step 1: name is required").contains("name is required");
+        assertThat(empty.body()).as("step 1: format is required").contains("format is required");
+        assertThat(empty.body()).as("step 1: url is required").contains("url is required");
+        assertThat(empty.body()).as("step 1: no format rule for an empty url")
+            .doesNotContain("must start with http");
+
+        // 2. Only the url left blank: still a required refusal, never the shape rule.
+        var blankUrl = postForm("/admin/notifications/new", "name=half-filled&format=slack&url=");
+        assertThat(blankUrl.body()).as("step 2: url is required").contains("url is required");
+        assertThat(blankUrl.body()).as("step 2: no shape rule for a blank url")
+            .doesNotContain("must start with http");
+        assertThat(channelNamed("half-filled")).as("step 2: nothing persisted").isNull();
+
+        // 3. A url that IS filled in but unusable: now the shape rule is the right answer.
+        var garbage = postForm("/admin/notifications/new", "name=half-filled&format=slack&url=nonsense");
+        assertThat(garbage.body()).as("step 3: the shape rule speaks").contains("must start with http");
+        assertThat(garbage.body()).as("step 3: not a required refusal")
+            .doesNotContain("url is required");
+        assertThat(channelNamed("half-filled")).as("step 3: nothing persisted").isNull();
+
+        // 4. Everything present: the same form now saves.
+        var complete = postForm("/admin/notifications/new",
+            "name=half-filled&format=slack&url=https%3A%2F%2Fhooks.example%2Fok");
+        assertThat(complete.statusCode()).as("step 4: saved").isIn(200, 302, 303);
+        assertThat(channelNamed("half-filled")).as("step 4: persisted").isNotNull();
+    }
+
+    /** An empty events subscription means "every event", and the form says so. */
+    @Test
+    @Order(4)
+    void eventsPickerExplainsThatEmptyMeansEveryEvent() throws Exception {
+        navigateToApp("/admin/notifications/new");
+        waitForHydration();
+        assertThat(page.content()).contains("Leave empty to receive every event");
+    }
+
+    private Row channelNamed(String name) {
+        return Models.get(NotificationChannelModel.class).find()
+            .where(NotificationChannelModel.NAME.eq(name)).first();
+    }
+
     private HttpResponse<String> postForm(String path, String body) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)

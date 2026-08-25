@@ -6,6 +6,7 @@ import be.elevenways.zenit.comms.AdHocRecipient;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.CommsRecipient;
 import be.elevenways.zenit.comms.server.Comms;
+import be.elevenways.zenit.comms.server.NotifyOutcome;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -73,12 +74,21 @@ public final class Alerts {
      * @return true when the delivery went out
      */
     public static boolean testChannel(@NonNull Row row, @NonNull String subject, @Nullable String message) {
+        return testChannelOutcome(row, subject, message).sent();
+    }
+
+    /**
+     * The reason-carrying form of {@link #testChannel}, so the CMS test button
+     * can name the failure instead of only reporting one.
+     */
+    public static @NonNull NotifyOutcome testChannelOutcome(@NonNull Row row, @NonNull String subject,
+                                                            @Nullable String message) {
         CommsRecipient recipient = recipientFor(row);
 
         if (recipient == null) {
-            return false;
+            return NotifyOutcome.failed("Channel row has no usable url or format");
         }
-        return Comms.notifyNow(new AlertNotification("test", subject, message), recipient);
+        return Comms.notifyNowWithReason(new AlertNotification("test", subject, message), recipient);
     }
 
     private static boolean subscribes(@NonNull Row channel, @NonNull String event) {
