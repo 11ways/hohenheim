@@ -97,6 +97,52 @@ class MicrocopyCatalogParsesTest {
         assertThat(orphaned).as("nl entries with no en counterpart").isEmpty();
     }
 
+    /**
+     * Every {@code test_failed} variant must render the reason its call site passes.
+     *
+     * AIDEV-NOTE: the three "Send test" buttons (notification channel, backup target,
+     * git provider) all hand this key a {@code reason} arg. An entry without the
+     * placeholder still resolves -- the arg is simply dropped -- so the operator reads
+     * "Test delivery failed" and has nothing to act on, and nothing else fails. The
+     * notification_channel entry lost its placeholder in a catalog rewrite and stayed
+     * that way undetected, which is what this test exists to catch.
+     */
+    @Test
+    void everyTestFailedVariantNamesItsReason() throws Exception {
+        Path resources = Path.of("src/server/resources");
+        assertThat(Files.isDirectory(resources))
+            .as("the check needs the hohenheim project dir as its working directory").isTrue();
+
+        List<String> missing = new ArrayList<>();
+        int checked = 0;
+
+        try (URLClassLoader own = new URLClassLoader(
+                new URL[] {resources.toUri().toURL()}, null)) {
+            DefaultCatalogLoader loader = new DefaultCatalogLoader("META-INF/microcopy/", own);
+
+            for (String tag : List.of("en", "nl")) {
+                for (Translation candidate
+                        : loader.findCandidates("test_failed", LocaleChain.ofTags(tag))) {
+                    String source = candidate.getSource();
+
+                    if (source == null) {
+                        continue;
+                    }
+                    checked++;
+
+                    if (!source.contains("{$reason}")) {
+                        missing.add(tag + " '" + source + "'");
+                    }
+                }
+            }
+        }
+        assertThat(checked).as("the test_failed variants were actually loaded")
+            .isGreaterThanOrEqualTo(6);
+        assertThat(missing)
+            .as("every test_failed variant renders the {$reason} its caller passes")
+            .isEmpty();
+    }
+
     /** Every {@code key|filters} pair one locale's catalog declares. */
     private static TreeSet<String> pairsOf(DefaultCatalogLoader loader, String tag) {
         LocaleChain chain = LocaleChain.ofTags(tag);

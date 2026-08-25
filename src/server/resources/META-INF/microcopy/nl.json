@@ -2189,7 +2189,7 @@
   ],
   "test_failed": [
     {
-      "text": "Testbezorging mislukt",
+      "text": "Testbezorging mislukt: {$reason}",
       "scope": "notification_channel"
     },
     {

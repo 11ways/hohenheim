@@ -2189,7 +2189,7 @@
   ],
   "test_failed": [
     {
-      "text": "Test delivery failed",
+      "text": "Test delivery failed: {$reason}",
       "scope": "notification_channel"
     },
     {

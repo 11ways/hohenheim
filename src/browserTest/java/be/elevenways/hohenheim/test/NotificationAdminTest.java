@@ -3,8 +3,10 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.comms.server.CommsDeliveryModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import org.junit.jupiter.api.*;
 
@@ -101,7 +103,22 @@ class NotificationAdminTest extends HohenheimTestBase {
 
         navigateToApp("/admin/notifications/" + id);
         waitForHydration();
-        assertThat(page.content()).contains("Test delivery failed");
+        String content = page.content();
+        assertThat(content).contains("Test delivery failed");
+        // THAT it failed is not feedback; the toast must name WHY. The reason rides
+        // the flash as an arg, so a catalog entry without {$reason} silently drops it.
+        assertThat(content)
+            .as("the failure toast must name the transport's own reason")
+            .containsPattern("Test delivery failed:\\s*\\S");
+
+        // A test send is one-shot: the row it left behind is terminal, so the sweeper
+        // never goes back to hammer a URL the operator was already told is dead.
+        Row delivery = Models.get(CommsDeliveryModel.class).find()
+            .orderBy(CommsDeliveryModel.ID, SortOrder.DESC).first();
+        assertThat(delivery).as("the test send persisted a delivery row").isNotNull();
+        assertThat((String) delivery.get(CommsDeliveryModel.STATUS))
+            .as("an inline test delivery must not stay queued for retry")
+            .isEqualTo("failed");
     }
 
     /**
