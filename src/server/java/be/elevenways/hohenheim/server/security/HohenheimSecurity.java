@@ -12,6 +12,9 @@ import be.elevenways.zenit.server.security.SecurityEvent;
 import be.elevenways.zenit.server.security.SecurityEvents;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * Boot wiring for the native security engine: the process-wide
  * {@link ThreatScorer} (fed by the proxy dispatcher and the in-process
@@ -89,21 +92,41 @@ public final class HohenheimSecurity {
         }
     }
 
+    /**
+     * THE label of every security event type this application shows an operator, keyed by
+     * the stored dotted type.
+     *
+     * AIDEV-NOTE: a MAP rather than a run of describe() calls, because it is the only
+     * thing that can be drift-tested: {@code SecurityEventTypeLabelsTest} asserts it
+     * covers {@link SecurityEventTypes#builtIns()} and that every key it names resolves
+     * in en AND nl. A type described nowhere renders as its raw dotted token in the ban
+     * list, which is the state the F6(c) finding reported for {@code proxy.domain_miss}.
+     */
+    static final Map<String, Microcopy> EVENT_LABELS = eventLabels();
+
+    private static @NonNull Map<String, Microcopy> eventLabels() {
+        Map<String, Microcopy> labels = new LinkedHashMap<>();
+        labels.put(SecurityEventTypes.DOMAIN_MISS, label("domain_miss"));
+        labels.put(SecurityEventTypes.AUTH_LOGIN_FAILED, label("login_failed"));
+        labels.put(SecurityEventTypes.AUTH_LOGIN_SUCCEEDED, label("login_succeeded"));
+        labels.put(SecurityEventTypes.AUTH_LOCKOUT, label("lockout"));
+        labels.put(SecurityEventTypes.RATE_LIMITED, label("rate_limited"));
+        labels.put(SecurityEventTypes.CSRF_FAILURE, label("csrf_failure"));
+        labels.put(SecurityEventTypes.WS_ORIGIN_REFUSED, label("ws_origin_refused"));
+        labels.put(SecurityEventTypes.WS_AUTH_REFUSED, label("ws_auth_refused"));
+        return Map.copyOf(labels);
+    }
+
     /** Describe the event types the admin surfaces display (labels resolve via microcopy). */
     private static void describeEventTypes() {
         KnownSecurityEvents.register(SecurityEventTypes.DOMAIN_MISS);
-        describe(SecurityEventTypes.DOMAIN_MISS, "domain_miss");
-        describe(SecurityEventTypes.AUTH_LOGIN_FAILED, "login_failed");
-        describe(SecurityEventTypes.AUTH_LOCKOUT, "lockout");
-        describe(SecurityEventTypes.RATE_LIMITED, "rate_limited");
-        describe(SecurityEventTypes.CSRF_FAILURE, "csrf_failure");
-        describe(SecurityEventTypes.WS_ORIGIN_REFUSED, "ws_origin_refused");
-        describe(SecurityEventTypes.WS_AUTH_REFUSED, "ws_auth_refused");
+        for (Map.Entry<String, Microcopy> label : EVENT_LABELS.entrySet()) {
+            KnownSecurityEvents.describe(label.getKey(), label.getValue());
+        }
     }
 
-    private static void describe(@NonNull String type, @NonNull String key) {
-        KnownSecurityEvents.describe(type,
-            Microcopy.of(key).withFilter("scope", "security_event_type"));
+    private static @NonNull Microcopy label(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "security_event_type");
     }
 
     /**

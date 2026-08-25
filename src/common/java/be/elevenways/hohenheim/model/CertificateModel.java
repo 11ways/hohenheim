@@ -151,6 +151,12 @@ public class CertificateModel extends Model {
             .all();
     }
 
+    static {
+        // The operator-given name first; a certificate requested straight from a domain
+        // carries none, and then the names it covers ARE its identity.
+        SCHEMA.setDisplayFields(NICE_NAME, DOMAIN_NAMES_TEXT);
+    }
+
     @Override
     public Identifier getModelId() { return MODEL_ID; }
 

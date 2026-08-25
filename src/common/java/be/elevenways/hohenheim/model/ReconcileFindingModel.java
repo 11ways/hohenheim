@@ -66,6 +66,11 @@ public class ReconcileFindingModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("updated_at").build());
 
+    static {
+        // A finding is about ONE named resource on a host; the kind and bucket are badges.
+        SCHEMA.setDisplayFields(RESOURCE_NAME);
+    }
+
     @Override
     public Identifier getModelId() { return MODEL_ID; }
 

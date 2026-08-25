@@ -52,6 +52,20 @@ public final class HohenheimPickRules {
         return true;
     }
 
+    /**
+     * A RESOLVED narrowing no record can satisfy, for a dependency that is settled and
+     * legitimately admits nothing.
+     *
+     * AIDEV-NOTE: spelled as a contradiction on one boolean column because {@code RuleGroup}
+     * has no match-none literal ({@code RuleCompiler} says so in as many words: an empty
+     * group is match-ALL and is dropped). Both halves are ordinary rules, so it compiles
+     * and answers identically on all eight backends. A first-class match-none belongs in
+     * zenit's rule vocabulary; until it exists this is the portable spelling.
+     */
+    private static final RuleGroup NOTHING_QUALIFIES = RuleGroup.and(
+        Rule.of("enabled", RuleOperator.IS_TRUE),
+        Rule.of("enabled", RuleOperator.IS_FALSE));
+
     /** @return the sibling's raw value as trimmed text, or null when nothing is chosen */
     private static @Nullable String chosen(@NonNull Map<String, Object> siblings,
                                            @NonNull String name) {
@@ -163,11 +177,23 @@ public final class HohenheimPickRules {
         @NonNull List<String> incusOnlyKinds
     ) implements SiblingRulesResolver, EmptyNarrowingReason {
 
+        /**
+         * AIDEV-NOTE: a kind that does NOT run inside an image resolves to
+         * {@code NOTHING_QUALIFIES} rather than to null. Null is the "the sibling is not
+         * chosen yet" state, which renders the picker disabled under the framework's own
+         * "choose the kind first" placeholder -- a sentence that is simply FALSE once a
+         * kind IS chosen, and which was what an operator saw after picking Docker
+         * container. Resolving instead lets the declared reason below say the true
+         * precondition: runtime images belong to the kinds that run inside one.
+         */
         @Override
         public @Nullable RuleGroup resolve(@NonNull Map<String, Object> siblingValues) {
             String kind = chosen(siblingValues, this.kindSibling);
-            if (kind == null || !this.imageKinds.contains(kind)) {
+            if (kind == null) {
                 return null;
+            }
+            if (!this.imageKinds.contains(kind)) {
+                return NOTHING_QUALIFIES;
             }
             RuleGroup.Builder rules = RuleGroup.builder(Combinator.AND)
                 .add(Rule.of("enabled", RuleOperator.IS_TRUE));
@@ -177,16 +203,25 @@ public final class HohenheimPickRules {
             return rules.build();
         }
 
-        /** The Incus-only kinds fail on a DIFFERENT rule, so they get their own sentence. */
+        /**
+         * Three branches, one per rule the resolve above can narrow with: the kind reads
+         * no image at all, the Incus-only kinds fail on the variant rule, and everything
+         * else fails on the enabled rule.
+         */
         @Override
         public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
             String kind = chosen(siblingValues, this.kindSibling);
-            if (kind == null || !this.imageKinds.contains(kind)) {
+            if (kind == null) {
                 return null;
             }
-            String key = this.incusOnlyKinds.contains(kind)
-                ? "no_incus_runtime_image"
-                : "no_enabled_runtime_image";
+            String key;
+            if (!this.imageKinds.contains(kind)) {
+                key = "runtime_image_not_applicable";
+            } else if (this.incusOnlyKinds.contains(kind)) {
+                key = "no_incus_runtime_image";
+            } else {
+                key = "no_enabled_runtime_image";
+            }
             return Microcopy.of(key).withFilter("scope", "instance");
         }
     }

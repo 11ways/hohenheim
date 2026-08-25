@@ -130,6 +130,12 @@ public class DnsZoneModel extends Model {
         return find().where(ORIGIN.eq(origin)).first();
     }
 
+    static {
+        // The origin IS the zone: it is what an operator typed, what every breadcrumb and
+        // picker must say, and the only value here that is not a timer or a diagnostic.
+        SCHEMA.setDisplayFields(ORIGIN);
+    }
+
     @Override
     public Identifier getModelId() { return MODEL_ID; }
 

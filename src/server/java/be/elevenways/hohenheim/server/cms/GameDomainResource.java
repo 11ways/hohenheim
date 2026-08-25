@@ -75,6 +75,19 @@ public final class GameDomainResource extends RowResource {
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("gamepad"); }
 
+    /**
+     * A game domain has no name of its own: it IS the hostname it accelerates, which is
+     * the site domain it points at.
+     */
+    @Override
+    public @NonNull String recordTitle(@NonNull Row record) {
+        Integer domainId = record.get(GameDomainModel.SITE_DOMAIN_ID);
+        Row domain = domainId != null
+            ? Models.get(SiteDomainModel.class).findById(domainId) : null;
+        String hostname = domain != null ? domain.get(SiteDomainModel.HOSTNAME) : null;
+        return hostname != null && !hostname.isBlank() ? hostname : super.recordTitle(record);
+    }
+
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {

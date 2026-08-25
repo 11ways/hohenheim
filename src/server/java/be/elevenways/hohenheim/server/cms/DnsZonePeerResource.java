@@ -114,11 +114,27 @@ public final class DnsZonePeerResource extends RowResource {
     @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
         if ("peer_name".equals(column.name())) {
-            Integer peerId = row.get(DnsZonePeerModel.PEER_ID);
-            Row peer = peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null;
-            return peer != null ? peer.get(DnsPeerModel.NAME) : null;
+            return peerName(row);
         }
         return super.cellValue(row, column);
+    }
+
+    /**
+     * A link row carries no name of its own, so it borrows the peer's: the zone is
+     * already the breadcrumb this row hangs under, which leaves the peer as the only
+     * thing that distinguishes one link from the next.
+     */
+    @Override
+    public @NonNull String recordTitle(@NonNull Row record) {
+        String peer = peerName(record);
+        return peer != null && !peer.isBlank() ? peer : super.recordTitle(record);
+    }
+
+    /** @return the linked peer's name, or null when the peer is gone */
+    private static @Nullable String peerName(@NonNull Row row) {
+        Integer peerId = row.get(DnsZonePeerModel.PEER_ID);
+        Row peer = peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null;
+        return peer != null ? peer.get(DnsPeerModel.NAME) : null;
     }
 
     @Override

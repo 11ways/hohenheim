@@ -69,6 +69,18 @@ public class InstanceScheduleStepResource extends RowResource {
     @Override public @NonNull Icon icon() { return Icon.of("list-ol"); }
     @Override public boolean showInNav() { return false; }
 
+    /**
+     * A step IS its action; the offset and the failure policy are how it runs, not what
+     * it is. The label is read off the action registry's own declaration, never a switch
+     * here -- an action added to the registry titles its steps with no edit.
+     */
+    @Override
+    public @NonNull String recordTitle(@NonNull Row record) {
+        String action = CmsSupport.enumLabel(RecordScheduleStepModel.ACTION,
+            record.get(RecordScheduleStepModel.ACTION));
+        return action != null && !action.isBlank() ? action : super.recordTitle(record);
+    }
+
     @Override
     public @Nullable ResourceParent<Row> parent() {
         return ResourceParent.<Row>of("instance-schedules",

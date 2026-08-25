@@ -55,7 +55,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         Map.entry("networking", List.of("dns-zones", "certificates", "access-lists",
             "released-claims")),
         Map.entry("security", List.of("users", "roles", "spamservice", "bans")),
-        Map.entry("system", List.of("activity", "notifications", "settings")));
+        Map.entry("system", List.of("activity", "notifications", "settings", "build-info")));
 
     /**
      * Every peer demoted out of the sidebar, with the surface that adopted it. showInNav(false)
@@ -104,7 +104,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         int visible = sections.stream().mapToInt(section -> section.peers().size()).sum();
         assertThat(visible)
             .as("step 1: the whole sidebar stays scannable (it was 39)")
-            .isEqualTo(21);
+            .isEqualTo(22);
 
         // 2. Every visible entry explains itself, and no two entries of one group share a
         //    navOrder -- a tie makes the rendered order depend on declaration order, which is

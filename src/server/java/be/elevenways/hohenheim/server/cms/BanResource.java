@@ -24,6 +24,7 @@ import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.KnownSecurityEvents;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -130,6 +131,26 @@ public final class BanResource extends RowResource {
 
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull ListChrome listChrome() { return CmsSupport.FILTERABLE_LIST; }
+
+    /**
+     * The cause of an automatic ban, in the reader's own words.
+     *
+     * AIDEV-NOTE: the stored value is the dotted machine type ({@code proxy.domain_miss})
+     * and it was rendered raw. The label is read off the ONE description registry the
+     * event vocabulary already declares into ({@code HohenheimSecurity.EVENT_LABELS}
+     * feeds it at boot), never a second switch here -- and an undescribed type keeps its
+     * dotted spelling rather than borrowing another type's words.
+     */
+    @Override
+    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        if (!BanModel.EVENT_TYPE.getName().equals(column.name())) {
+            return super.cellValue(row, column);
+        }
+        String type = row.get(BanModel.EVENT_TYPE);
+        Microcopy described = KnownSecurityEvents.descriptionOf(type);
+        String label = described == null ? null : CmsSupport.resolvedText(described);
+        return label != null ? label : type;
+    }
 
     /** The address is what an operator arrived with and what they leave with. */
     @Override

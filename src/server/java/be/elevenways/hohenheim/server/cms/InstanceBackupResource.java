@@ -73,6 +73,21 @@ public class InstanceBackupResource extends RowResource {
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("box-archive"); }
 
+    /**
+     * The key the archive was committed under names this backup.
+     *
+     * AIDEV-NOTE: declared HERE and not as a schema display field, because a display
+     * field is also the derived record source's SEARCH field and {@code remote_key} is
+     * {@code filterable(false)} on purpose. A backup that never reached its target has
+     * no key and keeps the framework's id fallback -- there is nothing else on the row a
+     * human wrote.
+     */
+    @Override
+    public @NonNull String recordTitle(@NonNull Row record) {
+        String key = record.get(InstanceBackupModel.REMOTE_KEY);
+        return key != null && !key.isBlank() ? key : super.recordTitle(record);
+    }
+
     /** Backups are born from the instance action or the nightly task, never a form. */
     @Override
     public boolean creatable() { return false; }

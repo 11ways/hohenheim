@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import com.microsoft.playwright.Locator;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -120,8 +121,21 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         assertCount(hostOption(incusHostId), 0);
         closeOpenPopup();
 
-        // ...and the runtime image stays disabled: a raw container ignores the column.
-        assertCount(IMAGE_SELECT + "[disabled]", 1);
+        // ...and the runtime image picker is no longer held by the missing kind: it opens
+        // and states why nothing qualifies, because a raw container ignores the column.
+        page.waitForCondition(() -> page.locator(IMAGE_SELECT + "[disabled]").count() == 0);
+        openPlSelect(IMAGE_SELECT);
+        // The reason lands with the provider's (empty) answer, so wait for it rather
+        // than reading the slot the instant the popup opens; scoped to the OPEN popup,
+        // since every closed picker keeps its portalled popup (and its own empty
+        // slot) in the document.
+        Locator emptySlot = page.locator(OPEN_SELECT_POPUP + " .pl-select-empty");
+        page.waitForCondition(() -> emptySlot.count() > 0
+            && emptySlot.first().textContent().contains("does not run inside a runtime image"));
+        assertThat(emptySlot.first().textContent().trim())
+            .as("the empty picker names the reason, not a generic no-results line")
+            .contains("does not run inside a runtime image");
+        closeOpenPopup();
 
         // 4. An Incus-only kind flips the offer around.
         clickKindCard("vm");
