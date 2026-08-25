@@ -113,7 +113,7 @@ class ServerAdminTest extends HohenheimTestBase {
             .as("the implicit local host must not accept an SSH target")
             .isNull();
 
-        postForm("/admin/servers/" + localId + "/delete", "");
+        postForm("/admin/servers/" + localId + "/delete", confirmed(""));
         assertThat(Models.get(ServerModel.class).findById(localId))
             .as("the implicit local host must not be deletable")
             .isNotNull();

@@ -86,7 +86,7 @@ class SecurityAdminTest extends HohenheimTestBase {
 
         Row ban = Models.get(BanModel.class).find()
             .where(BanModel.IP.eq("203.0.113.77")).first();
-        var lift = postForm("/admin/bans/" + ban.get(BanModel.ID) + "/action/lift_ban", "");
+        var lift = postForm("/admin/bans/" + ban.get(BanModel.ID) + "/action/lift_ban", confirmed(""));
         assertThat(lift.statusCode()).isIn(200, 302, 303);
 
         Row lifted = Models.get(BanModel.class).findById(ban.get(BanModel.ID));

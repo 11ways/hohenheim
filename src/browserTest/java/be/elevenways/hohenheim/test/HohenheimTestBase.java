@@ -18,6 +18,7 @@ import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.cms.common.flash.CmsFlash;
 import be.elevenways.zenit.cms.common.flash.FlashEncoding;
 import be.elevenways.zenit.cms.common.flash.FlashToast;
+import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
@@ -30,9 +31,11 @@ import com.microsoft.playwright.options.Cookie;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import be.elevenways.zenit.common.session.SessionToken;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -228,6 +231,25 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
 
     protected @NonNull String baseUrl() {
         return "http://localhost:" + getServerPort();
+    }
+
+    /**
+     * A confirmed CMS POST body: a delete or confirmed action whose body carries no
+     * {@link CmsConfirmation#FIELD} proof gets the interstitial instead of mutating, so
+     * every raw form POST that used to rely on the client dialog must stamp it here.
+     */
+    protected static @NonNull String confirmed(@Nullable String body) {
+        return confirmed(body, null);
+    }
+
+    /**
+     * @param typedPhrase the phrase the action's typed confirmation requires, null for a
+     *                    single-click confirmation
+     */
+    protected static @NonNull String confirmed(@Nullable String body, @Nullable String typedPhrase) {
+        String proof = CmsConfirmation.FIELD + "=" + URLEncoder.encode(
+            CmsConfirmation.proofValue(typedPhrase, typedPhrase), StandardCharsets.UTF_8);
+        return body == null || body.isEmpty() ? proof : body + "&" + proof;
     }
 
     protected HttpResponse<String> httpGet(String path, @Nullable String session)

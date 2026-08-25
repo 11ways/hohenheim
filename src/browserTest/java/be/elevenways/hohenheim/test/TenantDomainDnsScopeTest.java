@@ -286,7 +286,8 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             .as("deleting a foreign domain is missing, not forbidden").isEqualTo(404);
         assertThat(Models.get(SiteDomainModel.class).findById(foreignDomainId))
             .as("and the foreign row is still there").isNotNull();
-        assertThat(tenantPost("/manage/domains/" + renamed.get(SiteDomainModel.ID) + "/delete", "")
+        assertThat(tenantPost("/manage/domains/" + renamed.get(SiteDomainModel.ID) + "/delete",
+            confirmed(""))
             .statusCode()).as("a tenant may unbind its own hostname").isIn(302, 303);
         assertThat(domainByHostname("renamed.tenantscope.test"))
             .as("the unbound row is gone").isNull();
@@ -855,7 +856,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         assertThat((String) model.findById(created.get(DnsRecordModel.ID))
             .get(DnsRecordModel.VALUE)).isEqualTo("10.0.0.6");
         assertThat(tenantPost("/manage/dns-records/" + created.get(DnsRecordModel.ID) + "/delete",
-            "").statusCode()).isIn(302, 303);
+            confirmed("")).statusCode()).isIn(302, 303);
         assertThat(model.findById(created.get(DnsRecordModel.ID)))
             .as("a tenant may remove its own row").isNull();
 

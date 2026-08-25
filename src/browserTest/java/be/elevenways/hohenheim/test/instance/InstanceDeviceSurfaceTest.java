@@ -273,7 +273,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         // 5. Deleting the row DETACHES at the daemon and DELETES the volume -- the
         //    reason this delete is typed-confirmed destructive rather than a row removal.
         HttpResponse<String> detached = postForm(
-            "/admin/instance-devices/" + row.get(InstanceDeviceModel.ID) + "/delete", "");
+            "/admin/instance-devices/" + row.get(InstanceDeviceModel.ID) + "/delete", confirmed(""));
         assertThat(detached.statusCode())
             .as("step 5: the detach was accepted").isIn(200, 302, 303);
         assertThat(DAEMON.get(handle).disks)

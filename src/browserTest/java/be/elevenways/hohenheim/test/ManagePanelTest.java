@@ -348,7 +348,8 @@ class ManagePanelTest extends HohenheimTestBase {
             .where(SiteDomainModel.HOSTNAME.eq("delegated.example.com")).first();
         assertThat(boundDomain).isNotNull();
         assertThat(boundDomain.get(SiteDomainModel.SITE_ID)).isEqualTo(siteAId);
-        assertThat(operatorPost("/manage/domains/" + boundDomain.get(SiteDomainModel.ID) + "/delete", "")
+        assertThat(operatorPost("/manage/domains/" + boundDomain.get(SiteDomainModel.ID) + "/delete",
+            confirmed(""))
             .statusCode()).isIn(302, 303);
         assertThat(Models.get(SiteDomainModel.class).find()
             .where(SiteDomainModel.HOSTNAME.eq("delegated.example.com")).first()).isNull();

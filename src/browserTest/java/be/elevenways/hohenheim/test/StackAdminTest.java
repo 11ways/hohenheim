@@ -360,7 +360,7 @@ class StackAdminTest extends HohenheimTestBase {
     @Test
     @Order(99)
     void deletingTheStackCascadesToServicesAndFiles() throws Exception {
-        var response = postForm("/admin/stacks/" + stackId + "/delete", "");
+        var response = postForm("/admin/stacks/" + stackId + "/delete", confirmed(""));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         assertThat(Models.get(StackModel.class).findById(stackId)).isNull();

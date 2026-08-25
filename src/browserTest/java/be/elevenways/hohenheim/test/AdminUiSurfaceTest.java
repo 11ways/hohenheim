@@ -269,7 +269,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         HttpResponse<String> destroyHome = httpPostForm(
             "/admin/instance-volumes/" + home.get(InstanceVolumeModel.ID)
                 + "/action/destroy_volume",
-            "", sessionToken, csrfToken);
+            confirmed("", "home"), sessionToken, csrfToken);
         assertThat(destroyHome.statusCode()).isIn(302, 303);
         assertThat(Models.get(InstanceVolumeModel.class)
             .findById(home.get(InstanceVolumeModel.ID)))
