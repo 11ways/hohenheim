@@ -17,11 +17,12 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.edit.Array;
-import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
+import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
+import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -31,6 +32,7 @@ import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.comms.server.NotifyOutcome;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -45,9 +47,19 @@ import java.util.Map;
  */
 public final class NotificationChannelResource extends RowResource {
 
+    // AIDEV-NOTE: the format select is spelled out to keep it CLEARABLE even though the
+    // field is required. The derived entry drops clearable for a required field, and a
+    // non-clearable select refuses a blank AT COERCION -- which aborts the whole submit
+    // before FormValidator runs, so an empty create form would answer "Choose one of the
+    // offered options" for format and say NOTHING about the missing name and url. A blank
+    // option plus the field's Required validator names all three at once. The options come
+    // from the enum's own declared home, never a second list.
     private final FormSpec formSpec = FormSpec.builder()
         .add(NotificationChannelModel.NAME)
-        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(NotificationChannelModel.FORMAT))
+        .add(Select.of(NotificationChannelModel.FORMAT)
+            .options(FieldFormEntryDefaults.enumOptionSource(NotificationChannelModel.FORMAT))
+            .clearable(true)
+            .build())
         .add(NotificationChannelModel.URL)
         .add(Array.of(NotificationChannelModel.EVENTS, NotificationChannelModel.EVENTS.getItemField())
             // Derived from the vocabulary itself: an event cannot exist and be unofferable.
@@ -81,9 +93,15 @@ public final class NotificationChannelResource extends RowResource {
     @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
 
     /**
-     * The event summary under the name.
+     * The event summary under the name, in the reader's own words.
      *
-     * @return the subscribed tokens, or null when the channel takes every event (an
+     * AIDEV-NOTE: the tokens are STORED data and were rendered raw here, so the subtext
+     * read "cert_expiring" while the very same events read "Certificate expiring" in the
+     * form's picker two clicks away. Each token is resolved through its own declared
+     * member label; a token this build no longer declares keeps its raw spelling, which
+     * is the honest rendering of a subscription nothing can route.
+     *
+     * @return the subscribed events, or null when the channel takes every event (an
      *         empty subscription means "all", and a second line saying nothing is worse
      *         than no second line)
      */
@@ -93,7 +111,16 @@ public final class NotificationChannelResource extends RowResource {
             return super.cellValue(row, column);
         }
         List<String> events = row.get(NotificationChannelModel.EVENTS);
-        return events == null || events.isEmpty() ? null : String.join(", ", events);
+        if (events == null || events.isEmpty()) {
+            return null;
+        }
+        List<String> labels = new ArrayList<>();
+        for (String token : events) {
+            NotificationEvents event = NotificationEvents.byToken(token);
+            String label = event == null ? null : CmsSupport.resolvedText(event.label());
+            labels.add(label != null ? label : token);
+        }
+        return String.join(", ", labels);
     }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "notification_channel"); }
@@ -187,7 +214,10 @@ public final class NotificationChannelResource extends RowResource {
         Object urlValue = coerced.containsKey("url") ? coerced.get("url")
             : existing != null ? existing.get(NotificationChannelModel.URL) : null;
         String url = urlValue != null ? String.valueOf(urlValue).trim() : "";
-        if (url.isEmpty() || !(url.startsWith("http://") || url.startsWith("https://"))) {
+        // A BLANK url is the field's own Required validator to refuse ("Url is required"),
+        // and it already did so before this runs -- describing a format rule for an empty
+        // box only ever told the operator the wrong thing.
+        if (!url.isEmpty() && !(url.startsWith("http://") || url.startsWith("https://"))) {
             throw Violations.ofField("url", null, CmsSupport.violationText("url_scheme"));
         }
         if (coerced.get("events") instanceof List<?> events) {
@@ -213,15 +243,16 @@ public final class NotificationChannelResource extends RowResource {
                 // Outbound copy has no requesting user to follow: it speaks the
                 // server's default locale, like every other alert should.
                 LocaleChain locales = LocaleChain.of(RouteLocales.get().getDefaultLocale());
-                boolean delivered = Alerts.testChannel(row,
+                NotifyOutcome outcome = Alerts.testChannelOutcome(row,
                     Microcopy.of("test_subject").withFilter("scope", "notification_channel")
                         .resolve(locales, Zenit.getMessageResolver()),
                     Microcopy.of("test_body").withFilter("scope", "notification_channel")
                         .resolve(locales, Zenit.getMessageResolver()));
                 ActivityLog.record(this.model(), row.get(NotificationChannelModel.ID), "tested", name);
-                return delivered
+                return outcome.sent()
                     ? CmsActionResult.refreshWithToast(Microcopy.of("test_ok").withFilter("scope", "notification_channel"))
-                    : CmsActionResult.errorToast(Microcopy.of("test_failed").withFilter("scope", "notification_channel"));
+                    : CmsActionResult.errorToast(Microcopy.of("test_failed").withFilter("scope", "notification_channel")
+                        .withArg("reason", outcome.reasonOr("unknown error")));
             })
             .build());
         return actions;
