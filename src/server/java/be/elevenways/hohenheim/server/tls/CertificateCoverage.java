@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -51,18 +52,31 @@ public final class CertificateCoverage {
         return fallback;
     }
 
-    private static boolean covers(@NonNull Row cert, @NonNull String hostname) {
+    /**
+     * THE stored SAN-list parse: comma- or whitespace-separated, lowercased, blanks
+     * dropped -- so a reader of a certificate's names never re-spells the separator.
+     *
+     * @return the names the certificate declares, in stored order
+     */
+    public static @NonNull List<String> namesOf(@NonNull Row cert) {
         String names = cert.get(CertificateModel.DOMAIN_NAMES_TEXT);
         if (names == null || names.isEmpty()) {
-            return false;
+            return List.of();
         }
-        int dot = hostname.indexOf('.');
-        String wildcard = dot > 0 ? "*" + hostname.substring(dot) : null;
+        List<String> parsed = new ArrayList<>();
         for (String raw : names.split("[,\\s]+")) {
             String name = BlastString.lower(raw.trim());
-            if (name.isEmpty()) {
-                continue;
+            if (!name.isEmpty()) {
+                parsed.add(name);
             }
+        }
+        return parsed;
+    }
+
+    private static boolean covers(@NonNull Row cert, @NonNull String hostname) {
+        int dot = hostname.indexOf('.');
+        String wildcard = dot > 0 ? "*" + hostname.substring(dot) : null;
+        for (String name : namesOf(cert)) {
             if (name.equals(hostname) || name.equals(wildcard)) {
                 return true;
             }

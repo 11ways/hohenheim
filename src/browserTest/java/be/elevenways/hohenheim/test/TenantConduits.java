@@ -34,7 +34,15 @@ public final class TenantConduits {
 
     /** Run {@code body} inside a request scope whose principal is {@code principal}. */
     public static void as(@Nullable Principal principal, Runnable body) {
-        RouteScope.run(stub(principal), body);
+        RouteScope.run(stub(principal, null), body);
+    }
+
+    /**
+     * The same carrier answering as a request that ARRIVED at {@code origin}, for code
+     * that reads the hostname the surface is being reached at.
+     */
+    public static void arrivingAt(String origin, Runnable body) {
+        RouteScope.run(stub(null, origin), body);
     }
 
     /**
@@ -42,10 +50,10 @@ public final class TenantConduits {
      * takes an AccessContext rather than a scope ({@code AccessContext.of(conduit)}).
      */
     public static Conduit stubFor(@Nullable Principal principal) {
-        return stub(principal);
+        return stub(principal, null);
     }
 
-    private static Conduit stub(@Nullable Principal principal) {
+    private static Conduit stub(@Nullable Principal principal, @Nullable String origin) {
         Map<IdentifierKey<?>, Object> attributes = new HashMap<>();
         if (principal != null) {
             attributes.put(ConduitAttributes.PRINCIPAL, principal);
@@ -61,6 +69,7 @@ public final class TenantConduits {
                 }
                 yield null;
             }
+            case "getRequestOrigin" -> origin;
             case "getConduit" -> self[0];
             case "equals" -> proxy == args[0];
             case "hashCode" -> System.identityHashCode(proxy);

@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.hohenheim.site.SiteTlsCell;
 import be.elevenways.hohenheim.site.SiteUpstreamCell;
+import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -33,6 +34,7 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
+import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -41,6 +43,7 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
+import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -122,6 +125,37 @@ public class SiteResource extends RowResource {
             SiteModel.AUTH_PROVIDER_ID.getName(),
             SiteModel.ACCESS_LIST_ID.getName()))
         .build();
+
+    /**
+     * The instance pick belongs to the kinds that RESOLVE to an instance; on a stored
+     * site of any other kind it is not "disabled", it is not a property of that site at
+     * all, and rendering it greyed out with its help text still reading "The instance
+     * whose port this hostname serves" invited an operator to fix something that was
+     * never wrong.
+     *
+     * AIDEV-NOTE: the answer is the kind's OWN declaration ({@code requiresInstance()}),
+     * never an id comparison -- the same fact the write hook refuses on, so the form and
+     * the write can never disagree about which kinds carry an instance. Record-LESS (the
+     * CREATE form) deliberately stays EDITABLE rather than failing closed: no kind is
+     * stored yet, the Expose journey prefills this very field, and the picker's own
+     * sibling narrowing is what keeps it inert until the instance kind is chosen. The
+     * update endpoint passes the record, so the stored side is still enforced.
+     */
+    @Override
+    public @NonNull List<ResourceFieldBinding> fieldBindings() {
+        return List.of(ResourceFieldBinding.of(SiteModel.INSTANCE_ID.getName(),
+            FieldAccess.customRecordAware((ctx, record) ->
+                !(record instanceof Row site) || usesInstance(site)
+                    ? FieldAccess.Decision.EDITABLE
+                    : FieldAccess.Decision.HIDDEN)));
+    }
+
+    /** @return whether this site's stored upstream kind resolves to an instance record */
+    private static boolean usesInstance(@NonNull Row site) {
+        UpstreamKindInfo kind = UpstreamKinds.REGISTRY.get(
+            Identifier.tryParse(String.valueOf(site.get(SiteModel.UPSTREAM_KIND))));
+        return kind != null && kind.requiresInstance();
+    }
 
     /**
      * Prefill from the instance page's Expose action
@@ -553,6 +587,29 @@ public class SiteResource extends RowResource {
             () -> this.model().save(existing));
     }
 
+    /** A site delete drops a hostname; the record-less dialog can only say that much. */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(Microcopy.of("delete_confirm").withFilter("scope", "site"));
+    }
+
+    /**
+     * The same warning NAMING the hostnames that stop answering, which is the whole
+     * consequence of a site delete and only exists per record.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
+        String hostnames = DeleteImpact.join(
+            DeleteImpact.hostnamesOfSite(record.get(SiteModel.ID)));
+        if (hostnames.isEmpty()) {
+            return deleteConfirmation();
+        }
+        return deleteConfirmation(Microcopy.of("delete_confirm_hostnames")
+            .withFilter("scope", "site")
+            .withArg("name", String.valueOf((Object) record.get(SiteModel.NAME)))
+            .withArg("hostnames", hostnames));
+    }
+
     /**
      * The application a site exposes.
      *
@@ -731,6 +788,9 @@ public class SiteResource extends RowResource {
     @Override
     public @NonNull List<RelatedPage> relatedPages() {
         return List.of(
+            // The hostname catalog itself: nav-hidden, so without this entry the only way
+            // to the cross-site domain list was a hand-typed URL.
+            RelatedPage.toPeer("domains"),
             RelatedPage.toPeer("auth-providers"),
             RelatedPage.toPeer("previews"));
     }
