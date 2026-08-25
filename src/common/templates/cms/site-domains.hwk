@@ -6,7 +6,11 @@
 {% declare domains: List %}
 {% declare addDomainTarget: RouteTarget = null %}
 {% declare requestCertTarget: RouteTarget = null %}
-{% declare canEditDomains: Boolean = true %}
+{#- Row affordances are per ROW (domain.canEdit / domain.deleteTarget): the domain
+    resource answers write authority record by record, and this page renders exactly
+    what it answers. hasRowActions only decides whether the column exists at all. -#}
+{% declare hasRowActions: Boolean = true %}
+{% declare canAddDomain: Boolean = true %}
 {% declare canRequestCert: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
@@ -21,7 +25,7 @@
         {% if canRequestCert %}
         <pl-button variant="outline" use:Zenit.route={% requestCertTarget %} id="request-cert-link">{{ t("request_certificate", scope: "site_domains") }}</pl-button>
         {% /if %}
-        {% if canEditDomains %}<pl-button variant="primary" use:Zenit.route={% addDomainTarget %} id="add-domain-link">{{ t("add_domain", scope: "site_domains") }}</pl-button>{% /if %}
+        {% if canAddDomain %}<pl-button variant="primary" use:Zenit.route={% addDomainTarget %} id="add-domain-link">{{ t("add_domain", scope: "site_domains") }}</pl-button>{% /if %}
     </header>
 
     {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
@@ -34,12 +38,12 @@
             <pl-table-head>{{ t("match_type", scope: "site_domains") }}</pl-table-head>
             <pl-table-head>{{ t("ssl", scope: "site_domains") }}</pl-table-head>
             <pl-table-head>{{ t("certificate", scope: "site_domains") }}</pl-table-head>
-            {% if canEditDomains %}<pl-table-head></pl-table-head>{% /if %}
+            {% if hasRowActions %}<pl-table-head></pl-table-head>{% /if %}
         </pl-table-row></pl-table-header>
         <pl-table-body>
             {% each domains as index, domain %}
             <pl-table-row>
-                <pl-table-cell>{% if canEditDomains %}<a use:Zenit.route={% domain.get("editTarget") %}>{{ domain.get("hostname") }}</a>{% else %}{{ domain.get("hostname") }}{% /if %}</pl-table-cell>
+                <pl-table-cell>{% if domain.get("canEdit") == true %}<a use:Zenit.route={% domain.get("editTarget") %}>{{ domain.get("hostname") }}</a>{% else %}{{ domain.get("hostname") }}{% /if %}</pl-table-cell>
                 <pl-table-cell><pl-badge variant={% "secondary" %}>{{ domain.get("matchType") }}</pl-badge></pl-table-cell>
                 <pl-table-cell>
                     {% if domain.get("forceSsl") == true %}
@@ -62,13 +66,17 @@
                 {#- Row actions: the hostname link opens the form, but a row an operator
                     can add must also be one they can edit and detach from HERE. Remove is
                     a real destructive POST behind the shell's confirm dialog, never a
-                    bare link. -#}
-                {% if canEditDomains %}
+                    bare link. Each half renders only where the resource said yes, so the
+                    cell can hold one, both or neither. -#}
+                {% if hasRowActions %}
                 <pl-table-cell class="hh-domain-row-actions">
+                    {% if domain.get("canEdit") == true %}
                     <a class="hh-domain-edit" use:Zenit.route={% domain.get("editTarget") %}>
                         <pl-icon name="pen" size="sm"></pl-icon>
                         {{ t("edit", scope: "site_domains") }}
                     </a>
+                    {% /if %}
+                    {% if domain.get("canRemove") == true %}
                     <form use:Zenit.form={% domain.get("deleteTarget") %}
                           use:CmsConfirm.destructive={% t("remove_confirm", scope: "site_domains", hostname: domain.get("hostname")) %}>
                         <pl-button variant={% "ghost" %} type={% "submit" %} size="sm" class="hh-domain-remove">
@@ -76,6 +84,7 @@
                             {{ t("remove", scope: "site_domains") }}
                         </pl-button>
                     </form>
+                    {% /if %}
                 </pl-table-cell>
                 {% /if %}
             </pl-table-row>

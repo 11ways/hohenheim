@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
@@ -12,6 +14,8 @@ import be.elevenways.hohenheim.server.cms.InstanceDatabaseResource;
 import be.elevenways.hohenheim.server.cms.InstanceResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
+import be.elevenways.hohenheim.server.cms.SiteDomainResource;
+import be.elevenways.hohenheim.server.cms.SiteDomainsPage;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.cms.common.action.RowAction;
@@ -63,6 +67,8 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     private static Integer zoneId;
     private static Integer recordId;
     private static Integer foreignTypeRecordId;
+    private static Integer siteId;
+    private static Integer domainId;
 
     @BeforeAll
     static void seed() {
@@ -108,6 +114,26 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         zones.save(zone);
         zoneId = zone.get(DnsZoneModel.ID);
 
+        Model sites = Models.get(SiteModel.class);
+        Row site = sites.createEmptyRow();
+        site.set(SiteModel.NAME, PREFIX + "site");
+        site.set(SiteModel.SLUG, PREFIX + "site");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        site.set(SiteModel.STATUS, "active");
+        site.set(SiteModel.ENABLED, true);
+        sites.save(site);
+        siteId = site.get(SiteModel.ID);
+
+        Model domains = Models.get(SiteDomainModel.class);
+        Row domain = domains.createEmptyRow();
+        domain.set(SiteDomainModel.SITE_ID, siteId);
+        domain.set(SiteDomainModel.HOSTNAME, "affparity.example.com");
+        domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domain.set(SiteDomainModel.FORCE_SSL, false);
+        domains.save(domain);
+        domainId = domain.get(SiteDomainModel.ID);
+
         recordId = dnsRecord("editable", DnsRecordModel.TYPE_A, "192.0.2.10");
         foreignTypeRecordId = dnsRecord("delegated", DnsRecordModel.TYPE_NS, "ns1.example.org");
 
@@ -128,6 +154,8 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             HohenheimAccess.EDIT, true);
         RecordGrants.grant(GrantSubjectType.USER, holderId, DnsRecordModel.MODEL_ID, foreignTypeRecordId,
             HohenheimAccess.EDIT, true);
+        RecordGrants.grant(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, siteId,
+            HohenheimAccess.MANAGE, true);
     }
 
     private static int dnsRecord(String name, String type, String value) {
@@ -145,6 +173,12 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
 
     @AfterAll
     static void cleanUp() {
+        if (domainId != null) {
+            Models.get(SiteDomainModel.class).delete(domainId);
+        }
+        if (siteId != null) {
+            Models.get(SiteModel.class).delete(siteId);
+        }
         if (linkId != null) {
             Models.get(InstanceDatabaseModel.class).delete(linkId);
         }
@@ -286,6 +320,49 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             .as("the operator keeps the NS editor").isTrue();
         assertThat(resource.deletableBy(editable, operator()))
             .as("and every delete button").isTrue();
+    }
+
+    /**
+     * The site's Domains tab renders the DOMAIN RESOURCE's answer, per row, instead of a
+     * second hand-rolled boolean: the page asked {@code canManageSite} while the resource's
+     * {@code writableBy} asks {@code reachesRecord}, so a narrowed override on the
+     * delegated mirror would have moved the endpoint without moving the affordance.
+     */
+    @Test
+    void theSiteDomainsTabFollowsTheDomainResource() {
+        Row domain = Models.get(SiteDomainModel.class).findById(domainId);
+        Row site = Models.get(SiteModel.class).findById(siteId);
+        SiteDomainResource resource = new SiteDomainResource();
+
+        // 1. The resource's own answer: manage on the OWNING SITE, nothing else.
+        assertThat(resource.updatableBy(domain, viewer()))
+            .as("a delegate without manage on the site is offered no domain editor").isFalse();
+        assertThat(resource.updatableBy(domain, holder()))
+            .as("a manage holder keeps its editor").isTrue();
+        assertThat(resource.deletableBy(domain, holder()))
+            .as("and its detach button").isTrue();
+
+        // 2. The TAB answers exactly the same, row by row.
+        assertThat(rowAffordances(site, viewer()))
+            .as("the tab offers a non-holder no row affordances")
+            .containsExactly(false, false);
+        assertThat(rowAffordances(site, holder()))
+            .as("and offers the holder exactly what the resource grants")
+            .containsExactly(true, true);
+        assertThat(rowAffordances(site, operator()))
+            .as("the operator, whom the resource never gates, keeps both")
+            .containsExactly(true, true);
+    }
+
+    /** The Domains tab's rendered (edit link, remove form) pair for its one domain row. */
+    @SuppressWarnings("unchecked")
+    private static List<Boolean> rowAffordances(Row site, AccessContext ctx) {
+        Map<String, Object> vars = (Map<String, Object>) new SiteDomainsPage()
+            .render(ctx.conduit(), ctx, site).get();
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) vars.get("domains");
+        assertThat(rows).as("the tab lists its one domain").hasSize(1);
+        return List.of(Boolean.TRUE.equals(rows.get(0).get("canEdit")),
+            Boolean.TRUE.equals(rows.get(0).get("canRemove")));
     }
 
     // --- Query budgets: per-row predicates answer off the request memo ---------------
