@@ -50,6 +50,13 @@
         min-width: 0;
     }
 
+    // The on/off pill sits between the summary and the buttons; the wrapper only
+    // carries the state marker the row is read by.
+    .hh-rule-state {
+        display: inline-flex;
+        align-items: center;
+    }
+
     .hh-rule-actions {
         display: flex;
         align-items: center;
@@ -135,6 +142,10 @@
         border-color: var(--pl-color-warning);
     }
 
+    .hh-onboarding-step[data-state="blocked"] .hh-onboarding-marker {
+        color: var(--pl-color-warning);
+    }
+
     .hh-onboarding-body {
         display: flex;
         flex-direction: column;
@@ -160,6 +171,22 @@
         color: var(--pl-color-primary);
         text-decoration: none;
         font-size: var(--pl-font-size-sm);
+    }
+
+    /* The domains tab's row actions: edit link and remove form on one line. */
+    .hh-domain-row-actions {
+        white-space: nowrap;
+    }
+
+    .hh-domain-row-actions > * {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--pl-space-xs);
+        vertical-align: middle;
+    }
+
+    .hh-domain-row-actions form {
+        margin: 0;
     }
 
         .hh-attention-list {
