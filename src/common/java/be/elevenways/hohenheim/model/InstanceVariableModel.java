@@ -64,10 +64,13 @@ public class InstanceVariableModel extends Model {
 
     // secret() masks it on every form surface and keeps it out of derived surfaces;
     // encrypted() is the at-rest representation. Both are STATIC declarations.
+    // AIDEV-NOTE: its own label, deliberately NOT "variable_value". The two carriers are
+    // separate columns on one form, and two entries labelled "Value" leave the operator
+    // guessing which one is stored -- the label is the only thing telling them apart.
     public static final TextField SECRET_VALUE = SCHEMA.addField(TextField.builder().name("secret_value")
         .secret()
         .encrypted()
-        .label(HohenheimFormCopy.label("variable_value"))
+        .label(HohenheimFormCopy.label("variable_secret_value"))
         .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());

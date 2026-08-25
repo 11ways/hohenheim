@@ -58,6 +58,16 @@
     {% /if %}
 
     {% if table.rows %}
+    {#- AIDEV-NOTE: the shared row partial renders its overflow/context menu items as
+        native submit buttons carrying form="cms-resource-list-form" -- the dropdown
+        content is PORTALLED out of the table, so form= association is the only way the
+        submit (and its formaction override) survives. This bespoke tab must therefore
+        provide that form itself: without it every invoke row action (dyndns token,
+        dyndns revoke, delete) was an inert button that closed the menu and sent nothing,
+        and a confirmed one could not even resolve a form to hold. The id is the
+        framework's, not ours -- see zenitcms:pages/resource-list-row. -#}
+    <form id="cms-resource-list-form" method="post" action={% listUrl %}>
+        {% csrf() %}
     <div class="cms-table-scroll">
     <pl-table class="cms-resource-list-table">
         <pl-table-header>
@@ -79,6 +89,7 @@
         </pl-table-body>
     </pl-table>
     </div>
+    </form>
     {% elseif searchActive %}
     <pl-empty-state icon="list-ul" data-cms-empty-state="filtered">
         <pl-empty-state-title>{{ t("empty", scope: "cms", target: "filtered_title") }}</pl-empty-state-title>

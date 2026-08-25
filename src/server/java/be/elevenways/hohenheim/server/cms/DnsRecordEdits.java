@@ -71,10 +71,10 @@ public final class DnsRecordEdits {
         Integer port = DnsRecordModel.dataInt(data, "port");
 
         String origin = zone.get(DnsZoneModel.ORIGIN);
-        Integer zoneTtl = zone.get(DnsZoneModel.DEFAULT_TTL);
+        int zoneTtl = DnsZoneModel.defaultTtlOf(zone);
         try {
             Name originName = Name.fromString(origin + ".");
-            long effectiveTtl = DnsRecordCodec.resolveTtl(ttl, zoneTtl != null ? zoneTtl : 3600);
+            long effectiveTtl = DnsRecordCodec.resolveTtl(ttl, zoneTtl);
             DnsRecordCodec.toRecord(originName, owner, type, effectiveTtl, value, priority, weight, port);
         }
         catch (TextParseException e) {

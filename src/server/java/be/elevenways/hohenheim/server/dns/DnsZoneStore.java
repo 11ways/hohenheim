@@ -168,7 +168,7 @@ public final class DnsZoneStore {
         Name origin = Name.fromString(originString + ".");
 
         int serial = valueOr(zone.get(DnsZoneModel.SERIAL), 1);
-        int defaultTtl = valueOr(zone.get(DnsZoneModel.DEFAULT_TTL), 3600);
+        int defaultTtl = DnsZoneModel.defaultTtlOf(zone);
         int negativeTtl = valueOr(zone.get(DnsZoneModel.NEGATIVE_TTL), 300);
         int refresh = valueOr(zone.get(DnsZoneModel.SOA_REFRESH), 7200);
         int retry = valueOr(zone.get(DnsZoneModel.SOA_RETRY), 3600);
