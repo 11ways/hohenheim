@@ -94,7 +94,7 @@ class SiteCrudTest extends HohenheimTestBase {
         waitForHydration();
         assertThat(page.content()).contains("Crud Test Site");
 
-        response = post("/admin/sites/" + siteId + "/delete", "");
+        response = post("/admin/sites/" + siteId + "/delete", confirmed(""));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row after = Models.get(SiteModel.class).findById(siteId);
@@ -102,6 +102,11 @@ class SiteCrudTest extends HohenheimTestBase {
         assertThat((Object) after.get(SiteModel.DELETED_AT))
             .as("delete must soft-delete, not remove the row")
             .isNotNull();
+
+        // The success toast rides the SESSION the browser shares, so pop it (proving the
+        // outcome was reported) before asserting on the next render's content.
+        assertThat(popFlash()).as("the delete reports itself as a toast").isNotNull()
+            .extracting(flash -> flash.message().key()).isEqualTo("deleted");
 
         // Soft-deleted sites disappear from the list.
         navigateToApp("/admin/sites");

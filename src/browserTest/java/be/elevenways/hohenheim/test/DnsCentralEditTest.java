@@ -375,7 +375,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.status = 200;
         stub.body = "{\"status\":\"ok\",\"key_name\":\"" + keyName + "\",\"peer\":\"us\"}";
 
-        var negotiated = postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", "");
+        var negotiated = postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
         assertThat(negotiated.statusCode()).describedAs("the action runs").isIn(200, 302, 303);
 
         // 2. The peer was called on the symmetric endpoint, with the API key.
@@ -399,7 +399,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // 4. Falsification -- a peer confirming a DIFFERENT key name stores nothing: the
         //    two sides would look each other up under names that never match.
         stub.body = "{\"status\":\"ok\",\"key_name\":\"xfer-somebody-else\",\"peer\":\"us\"}";
-        postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", "");
+        postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
         assertThat((String) peers.findById(peerId).get(DnsPeerModel.TSIG_SECRET))
             .describedAs("a mismatched confirmation must not rotate the working key")
             .isEqualTo(sentSecret);
@@ -407,7 +407,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         // 5. Falsification -- a peer that refuses leaves the working key alone too.
         stub.status = 500;
         stub.body = "nope";
-        postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", "");
+        postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
         assertThat((String) peers.findById(peerId).get(DnsPeerModel.TSIG_SECRET))
             .isEqualTo(sentSecret);
 

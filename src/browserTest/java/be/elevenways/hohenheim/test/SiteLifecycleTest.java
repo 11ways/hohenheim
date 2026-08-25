@@ -134,7 +134,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat((Boolean) Models.get(SiteModel.class).findById(redirectId).get(SiteModel.ENABLED))
             .isEqualTo(true);
 
-        response = postForm("/admin/sites/" + redirectId + "/action/clone_site", "");
+        response = postForm("/admin/sites/" + redirectId + "/action/clone_site", confirmed(""));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row clone = site("Old Domain (copy)");
@@ -148,11 +148,16 @@ class SiteLifecycleTest extends HohenheimTestBase {
         // section 7) -- no upstream kind carries api_keys any more.
 
         Integer gitId = gitRow.get(SiteModel.ID);
-        response = postForm("/admin/sites/" + gitId + "/delete", "");
+        response = postForm("/admin/sites/" + gitId + "/delete", confirmed(""));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
         Row after = Models.get(SiteModel.class).findById(gitId);
         assertThat((Object) after.get(SiteModel.DELETED_AT)).isNotNull();
+
+        // The success toast rides the SESSION the browser shares, so pop it (proving the
+        // outcome was reported) before asserting on the next render's content.
+        assertThat(popFlash()).as("the delete reports itself as a toast").isNotNull()
+            .extracting(flash -> flash.message().key()).isEqualTo("deleted");
 
         // One list render proves both the live site is listed and the soft-deleted one is hidden.
         navigateToApp("/admin/sites");

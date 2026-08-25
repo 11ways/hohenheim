@@ -689,7 +689,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
         // 5. The admin lifts it through the real invoke route, and the row is gone.
         HttpResponse<String> lifted = adminPost("/admin/released-claims/"
-            + quarantine.get(ReleasedRouteClaimModel.ID) + "/action/lift_quarantine", "");
+            + quarantine.get(ReleasedRouteClaimModel.ID) + "/action/lift_quarantine",
+            confirmed("", hostname));
         assertThat(lifted.statusCode()).as("step 5: the admin lift is accepted")
             .isIn(200, 302, 303);
         assertThat(quarantineOn(hostname)).as("step 5: the quarantine row is gone").isNull();
