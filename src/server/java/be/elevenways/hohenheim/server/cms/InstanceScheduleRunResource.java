@@ -74,6 +74,22 @@ public class InstanceScheduleRunResource extends RowResource {
     @Override public @NonNull Icon icon() { return Icon.of("clock-rotate-left"); }
     @Override public boolean showInNav() { return false; }
 
+    /**
+     * A run has nothing but its outcome and when it happened, so it is titled by the
+     * outcome plus the run's own number -- two runs of one schedule differ by nothing
+     * else a heading can carry.
+     */
+    @Override
+    public @NonNull String recordTitle(@NonNull Row record) {
+        String status = CmsSupport.enumLabel(RecordScheduleRunModel.STATUS,
+            record.get(RecordScheduleRunModel.STATUS));
+        String title = status == null ? null : CmsSupport.resolvedText(
+            Microcopy.of("run_title").withFilter("scope", "instance_schedule")
+                .withArg("id", String.valueOf(record.get(RecordScheduleRunModel.ID)))
+                .withArg("status", status));
+        return title != null && !title.isBlank() ? title : super.recordTitle(record);
+    }
+
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
         return ctx -> AccessDecision.allow(QueryPredicate.of(

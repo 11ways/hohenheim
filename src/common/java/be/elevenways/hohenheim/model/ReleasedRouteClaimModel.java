@@ -82,6 +82,11 @@ public class ReleasedRouteClaimModel extends Model {
             .label(HohenheimFormCopy.label("released_at"))
             .build());
 
+    static {
+        // The hostname is what the claim reserves and what an operator searches for.
+        SCHEMA.setDisplayFields(HOSTNAME);
+    }
+
     @Override
     public Identifier getModelId() { return MODEL_ID; }
 

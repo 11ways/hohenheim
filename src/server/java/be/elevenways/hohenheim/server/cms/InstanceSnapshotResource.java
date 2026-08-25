@@ -89,6 +89,25 @@ public class InstanceSnapshotResource extends RowResource {
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("camera"); }
 
+    /**
+     * The operator's note, else the runtime's own name for the snapshot.
+     *
+     * AIDEV-NOTE: the note is the schema's display field (it is searchable, and finding a
+     * snapshot by what someone wrote about it is a real question). The native name is the
+     * fallback HERE rather than a second display field, because it is
+     * {@code filterable(false)} and a display field doubles as the derived record
+     * source's search field.
+     */
+    @Override
+    public @NonNull String recordTitle(@NonNull Row record) {
+        String note = record.get(InstanceSnapshotModel.NOTE);
+        if (note != null && !note.isBlank()) {
+            return note;
+        }
+        String native0 = record.get(InstanceSnapshotModel.NATIVE_NAME);
+        return native0 != null && !native0.isBlank() ? native0 : super.recordTitle(record);
+    }
+
     /** Snapshots are born from the instance action, never from a form. */
     @Override
     public boolean creatable() { return false; }

@@ -73,6 +73,13 @@ public class InstanceSnapshotModel extends Model {
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
+    static {
+        // The operator's own note. NATIVE_NAME is deliberately not a second display field:
+        // it is filterable(false), and a display field IS the derived record source's
+        // search field -- the note-less fallback lives on the resource instead.
+        SCHEMA.setDisplayFields(NOTE);
+    }
+
     @Override public Identifier getModelId() { return MODEL_ID; }
     @Override public Field<?, ?> getPrimaryKeyField() { return ID; }
     @Override public String getModelName() { return "InstanceSnapshot"; }

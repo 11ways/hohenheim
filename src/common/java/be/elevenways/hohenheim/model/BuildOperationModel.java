@@ -203,6 +203,12 @@ public class BuildOperationModel extends Model {
             .first();
     }
 
+    static {
+        // What the build PRODUCED names it best; a build that never got that far is
+        // still traceable by the commit it started from.
+        SCHEMA.setDisplayFields(TAG, IMAGE_ID, SOURCE_REF);
+    }
+
     @Override
     public Identifier getModelId() { return MODEL_ID; }
     @Override

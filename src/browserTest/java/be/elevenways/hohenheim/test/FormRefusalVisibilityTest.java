@@ -51,7 +51,7 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
             .isEqualTo(before);
         assertThat(noSibling.body())
             .as("the field error is resolved copy, not a raw key")
-            .contains("could not be saved because no upstream_kind")
+            .contains("Upstream must be chosen before its settings can be saved")
             .doesNotContain("data-unresolved>zenit.coercion");
 
         // Step 3: a nonsense scalar for a boolean setting is refused with the

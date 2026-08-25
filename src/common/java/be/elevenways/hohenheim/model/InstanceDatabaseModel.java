@@ -64,6 +64,12 @@ public class InstanceDatabaseModel extends Model {
         return find().where(DATABASE_ID.eq(databaseId)).all();
     }
 
+    static {
+        // The env prefix names the variable family this link injects, which is the only
+        // thing distinguishing two databases attached to one instance.
+        SCHEMA.setDisplayFields(ENV_PREFIX);
+    }
+
     @Override
     public Identifier getModelId() { return MODEL_ID; }
 

@@ -159,6 +159,12 @@ public class ReleaseOperationModel extends Model {
             .all();
     }
 
+    static {
+        // The image being released is the only human-readable thing an operation carries;
+        // its kind and status render as badges beside it.
+        SCHEMA.setDisplayFields(IMAGE_ID);
+    }
+
     @Override
     public Identifier getModelId() { return MODEL_ID; }
     @Override

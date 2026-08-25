@@ -68,4 +68,21 @@ public enum NotificationEvents {
     public static boolean isKnown(@Nullable String event) {
         return ALL.contains(event);
     }
+
+    /**
+     * The declared member behind a STORED token, so a surface that reads subscriptions
+     * back out of the database can reach the member's own label instead of printing the
+     * token. Fails closed: a token this build does not declare has no member and its
+     * reader must degrade rather than invent a label.
+     *
+     * @return the member, or null when the token is not part of this vocabulary
+     */
+    public static @Nullable NotificationEvents byToken(@Nullable String token) {
+        for (NotificationEvents event : values()) {
+            if (event.token.equals(token)) {
+                return event;
+            }
+        }
+        return null;
+    }
 }

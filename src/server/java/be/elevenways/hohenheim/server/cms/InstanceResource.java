@@ -149,9 +149,10 @@ public class InstanceResource extends RowResource {
                     InstanceKinds.runtimesByKind(),
                     InstanceKinds.kindsWhere(InstanceKindHandler::supportsVolumes)), "kind")
                 .build())
-            // The runtime image ("yolk") only resolves for kinds that run inside one;
-            // for every other kind the picker stays disabled -- its deploy never reads
-            // the column, and a choice the deploy ignores is worse than no choice.
+            // The runtime image ("yolk") only offers images to kinds that run inside one;
+            // for every other kind the narrowing resolves to nothing and SAYS SO (the
+            // resolver's EmptyNarrowingReason), because that kind's deploy never reads
+            // the column and a choice the deploy ignores is worse than no choice.
             // clearable stays TRUE because most kinds have no image to name; what makes
             // it REQUIRED for the kinds that do is InstanceDeclarations, on the write, so
             // the refusal lands on this form instead of on a deploy hours later.

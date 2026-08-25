@@ -52,6 +52,11 @@ public class StackFileModel extends Model {
             .orderBy(ID, be.elevenways.zenit.common.orm.query.SortOrder.ASC).all();
     }
 
+    static {
+        // The path inside the container, exactly as the sibling file models declare it.
+        SCHEMA.setDisplayFields(CONTAINER_PATH);
+    }
+
     @Override
     public Identifier getModelId() { return MODEL_ID; }
 

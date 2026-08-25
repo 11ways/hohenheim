@@ -1,13 +1,18 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.routing.RouteLocales;
+import be.elevenways.zenit.common.routing.RouteScope;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -107,6 +112,59 @@ public final class CmsSupport {
     public static @Nullable Integer intOf(@NonNull Map<String, Object> coerced,
                                           @Nullable Row existing, @NonNull Field<?, ?> field) {
         return valueOf(coerced, existing, field) instanceof Integer value ? value : null;
+    }
+
+    /**
+     * THE resolution of a microcopy outside a template, in the CURRENT request's locale
+     * chain -- the spelling every {@code recordTitle} and rendered cell in this package
+     * shares, because those hooks take no conduit and reading the request scope is the
+     * framework's own answer to that.
+     *
+     * @return the resolved text, or null when no request is in scope (a task thread, a
+     *         test calling the hook directly), which every caller renders as "no title"
+     *         rather than as a raw key
+     */
+    public static @Nullable String resolvedText(@NonNull Microcopy copy) {
+        Conduit conduit = RouteScope.currentConduit();
+        return conduit == null ? null : copy.resolve(conduit.getLocales(), conduit.getMessageResolver());
+    }
+
+    /**
+     * {@link #resolvedText} that always answers, falling back to the SERVER default locale
+     * when no request is in scope -- for a value computed on a hook (a form-value snapshot,
+     * a derived cell) that a task thread or a direct test call also reaches.
+     *
+     * @return the resolved text, or the raw key when no runtime is booted at all
+     */
+    public static @NonNull String resolvedTextOrDefault(@NonNull Microcopy copy) {
+        String resolved = resolvedText(copy);
+        if (resolved != null) {
+            return resolved;
+        }
+        try {
+            return copy.resolve(LocaleChain.of(RouteLocales.get().getDefaultLocale()),
+                Zenit.getMessageResolver());
+        } catch (RuntimeException unbooted) {
+            return copy.key();
+        }
+    }
+
+    /**
+     * The human label of ONE enum value, read off the value's own declaration -- never a
+     * second switch over the token, and never the raw token where a label is declared.
+     *
+     * @return the resolved label, or the raw token when the value declares none, is not
+     *         part of the vocabulary, or no request is in scope
+     */
+    public static @Nullable String enumLabel(@NonNull EnumField field, @Nullable Object token) {
+        if (token == null) {
+            return null;
+        }
+        String value = String.valueOf(token);
+        EnumField.EnumValue declared = field.getValues().get(value);
+        Microcopy label = declared == null ? null : declared.getLabel();
+        String resolved = label == null ? null : resolvedText(label);
+        return resolved != null ? resolved : value;
     }
 
     /** A violation-scoped microcopy message (catalog entries carry {@code scope=violations}). */

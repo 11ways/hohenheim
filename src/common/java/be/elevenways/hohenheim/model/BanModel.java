@@ -61,6 +61,11 @@ public class BanModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("updated_at").build());
 
+    static {
+        // A ban is an address; the reason is the subtext everywhere it renders.
+        SCHEMA.setDisplayFields(IP);
+    }
+
     @Override
     public Identifier getModelId() { return MODEL_ID; }
 
