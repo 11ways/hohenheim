@@ -44,8 +44,7 @@ public final class DnsZoneFiles {
     public static @NonNull String export(@NonNull Row zone) {
         StringBuilder text = new StringBuilder();
         String origin = zone.get(DnsZoneModel.ORIGIN);
-        Integer defaultTtl = zone.get(DnsZoneModel.DEFAULT_TTL);
-        int zoneTtl = defaultTtl != null ? defaultTtl : 3600;
+        int zoneTtl = DnsZoneModel.defaultTtlOf(zone);
 
         text.append("$ORIGIN ").append(origin).append(".\n");
         text.append("$TTL ").append(zoneTtl).append("\n");
@@ -84,8 +83,7 @@ public final class DnsZoneFiles {
     /** Replaces every operator-managed record with the parsed file contents. */
     public static @NonNull ImportResult importText(@NonNull Row zone, @NonNull String text) throws IOException {
         String origin = zone.get(DnsZoneModel.ORIGIN);
-        Integer defaultTtl = zone.get(DnsZoneModel.DEFAULT_TTL);
-        long zoneTtl = defaultTtl != null ? defaultTtl : 3600;
+        long zoneTtl = DnsZoneModel.defaultTtlOf(zone);
         int zoneId = zone.get(DnsZoneModel.ID);
 
         Name originName;

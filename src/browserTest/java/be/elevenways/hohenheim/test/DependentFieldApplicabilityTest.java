@@ -82,6 +82,56 @@ class DependentFieldApplicabilityTest extends HohenheimTestBase {
     }
 
     /**
+     * Step 1-4: the SITE form's instance narrowing tells the same three states apart the
+     * runtime-image one does -- nothing chosen, a chosen upstream that serves no
+     * instance, and the instance upstream itself.
+     */
+    @Test
+    void theInstancePickerSaysWhyItOffersNothing() {
+        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        // Built exactly as SiteResource declares it, off the kind handlers' own facts.
+        HohenheimPickRules.UpstreamInstanceRules rules = new HohenheimPickRules.UpstreamInstanceRules(
+            "upstream_kind",
+            "hohenheim:instance",
+            InstanceKinds.kindsWhere(InstanceKindHandler::supportsSiteUpstream));
+
+        // 1. Nothing chosen yet: unresolved, so the "choose the upstream first"
+        //    placeholder is a true sentence.
+        assertThat(rules.resolve(Map.of()))
+            .as("step 1: an unchosen upstream narrows to nothing resolvable").isNull();
+        assertThat(rules.reasonNothingQualifies(Map.of()))
+            .as("step 1: and declares no reason").isNull();
+
+        // 2. A chosen upstream that serves FILES still RESOLVES and says the true
+        //    precondition, instead of a disabled picker blaming an unchosen sibling.
+        Map<String, Object> statics = Map.of("upstream_kind", "hohenheim:static");
+        assertThat(rules.resolve(statics))
+            .as("step 2: a chosen non-instance upstream still RESOLVES").isNotNull();
+        Microcopy notApplicable = rules.reasonNothingQualifies(statics);
+        assertThat(notApplicable).as("step 2: and says why").isNotNull();
+        assertThat(notApplicable.key())
+            .as("step 2: naming the real precondition")
+            .isEqualTo("instance_upstream_not_applicable");
+
+        // 3. The instance upstream keeps the pre-existing sentence about exposable kinds.
+        Map<String, Object> instance = Map.of("upstream_kind", "hohenheim:instance");
+        assertThat(rules.resolve(instance))
+            .as("step 3: the instance upstream narrows to the exposable kinds").isNotNull();
+        assertThat(rules.reasonNothingQualifies(instance).key())
+            .as("step 3: its empty state is about exposable instances")
+            .isEqualTo("no_exposable_instance");
+
+        // 4. Both sentences are copy, in both locales.
+        for (Microcopy reason : List.of(notApplicable, rules.reasonNothingQualifies(instance))) {
+            for (String tag : List.of("en", "nl")) {
+                assertThat(reason.resolve(LocaleChain.ofTags(tag), catalogs))
+                    .as("step 4: " + tag + " copy for " + reason.key())
+                    .isNotEqualTo(reason.key());
+            }
+        }
+    }
+
+    /**
      * Step 1-2: the instance pick is absent from a site whose upstream resolves to no
      * instance, and still offered where a kind has yet to be chosen.
      */

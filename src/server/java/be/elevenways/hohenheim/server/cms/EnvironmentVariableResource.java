@@ -10,10 +10,12 @@ import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
+import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
@@ -26,6 +28,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +48,13 @@ public final class EnvironmentVariableResource extends RowResource {
             InstanceVariableModel.PLAIN_VALUE.getName())
         .presets(InstanceVariableModel.ENVIRONMENT_ID.getName());
 
+    /**
+     * Both carriers are declared, but {@link #fieldBindings()} leaves exactly ONE of them
+     * visible per kind -- see the note there. They are separate entries because they are
+     * separate columns: the dynamic (schemaFrom) sub-form, which would switch them
+     * reactively, cannot hold {@code secret_value} at all, since zenit refuses
+     * {@code .encrypted()} anywhere under a JSON sub-schema.
+     */
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(InstanceVariableModel.ENVIRONMENT_ID, EnvironmentModel.MODEL_ID)
             .build())
@@ -156,5 +166,81 @@ public final class EnvironmentVariableResource extends RowResource {
     @Override
     public @NonNull List<Field<?, ?>> inlineEditableFields() {
         return List.of(InstanceVariableModel.PLAIN_VALUE);
+    }
+
+    /**
+     * ONE value field per kind: the carrier the row's kind does NOT use is HIDDEN, which
+     * removes it from the rendered form AND strips it from the submission, so the column
+     * that gets written is never in doubt.
+     *
+     * AIDEV-NOTE: the record-aware decision is what makes this honest on both sides --
+     * the form renderer and {@code enforceFieldAccess} ask the SAME resolver about the
+     * SAME row, so a hand-crafted submission cannot write the carrier the form withheld.
+     * CREATE has no record and therefore no stored kind, so it offers the plain carrier
+     * (the field's own {@code defaultValue}); a secret is typed on the edit form, after
+     * the kind is stored. Never widen this to "both on create": the create submit URL
+     * carries no kind, so a secret rendered there would be silently stripped on save.
+     *
+     * AIDEV-NOTE: this is a SERVER-side decision, so flipping the kind select does not
+     * swap the field live -- the new carrier appears after the save. Making it reactive
+     * needs a conditional-visibility mechanism zenit-forms does not have (only
+     * SchemaField.schemaFrom switches client-side, and that lane cannot carry an
+     * encrypted column).
+     */
+    @Override
+    public @NonNull List<ResourceFieldBinding> fieldBindings() {
+        return List.of(
+            ResourceFieldBinding.of(InstanceVariableModel.PLAIN_VALUE.getName(),
+                FieldAccess.customRecordAware((ctx, record) ->
+                    carrierAccess(record, InstanceVariableModel.KIND_PLAIN))),
+            ResourceFieldBinding.of(InstanceVariableModel.SECRET_VALUE.getName(),
+                FieldAccess.customRecordAware((ctx, record) ->
+                    carrierAccess(record, InstanceVariableModel.KIND_SECRET))));
+    }
+
+    /**
+     * Switching the kind RETIRES the previous carrier's value.
+     *
+     * AIDEV-NOTE: without this the switch is impossible, not merely lossy -- the model's
+     * one-carrier-per-kind hook refuses a secret row still holding plain_value, and the
+     * retired column is hidden, so the operator has no field to blank it in. Discarding
+     * the old value on a discriminator switch is the same semantic the dynamic sub-form
+     * already documents. Guarded by containsKey because the inline-cell lane hands this
+     * method a map holding exactly ONE entry.
+     */
+    @Override
+    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
+                          @NonNull AccessContext accessContext) {
+
+        String kindName = InstanceVariableModel.KIND.getName();
+        Object submitted = coerced.containsKey(kindName) ? coerced.get(kindName) : null;
+        String requestedKind = submitted == null ? "" : String.valueOf(submitted).trim();
+
+        if (requestedKind.isEmpty() || requestedKind.equals(storedKind(existing))) {
+            super.updateRow(existing, coerced, accessContext);
+            return;
+        }
+
+        Map<String, Object> withRetiredCarrierCleared = new LinkedHashMap<>(coerced);
+        withRetiredCarrierCleared.put(
+            InstanceVariableModel.KIND_SECRET.equals(requestedKind)
+                ? InstanceVariableModel.PLAIN_VALUE.getName()
+                : InstanceVariableModel.SECRET_VALUE.getName(),
+            null);
+        super.updateRow(existing, Collections.unmodifiableMap(withRetiredCarrierCleared), accessContext);
+    }
+
+    /** EDITABLE only for the carrier the record's kind actually stores. */
+    private static FieldAccess.@NonNull Decision carrierAccess(@Nullable Object record,
+                                                               @NonNull String carrierKind) {
+        return carrierKind.equals(record instanceof Row row ? storedKind(row) : InstanceVariableModel.KIND_PLAIN)
+            ? FieldAccess.Decision.EDITABLE
+            : FieldAccess.Decision.HIDDEN;
+    }
+
+    /** The row's kind, falling back to the field's default for a row that carries none. */
+    private static @NonNull String storedKind(@NonNull Row row) {
+        String stored = row.get(InstanceVariableModel.KIND);
+        return stored == null || stored.isEmpty() ? InstanceVariableModel.KIND_PLAIN : stored;
     }
 }

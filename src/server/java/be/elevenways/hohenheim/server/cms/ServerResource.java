@@ -528,6 +528,9 @@ public final class ServerResource extends RowResource {
             .label(serverCopy(lane.copy().scan()))
             .description(serverCopy(lane.copy().scan() + "_hint"))
             .icon(Icon.of("fingerprint"))
+            // Routine diagnostics live in the row menu: the ONE inline slot the list
+            // budget leaves beside Edit belongs to the admission verb (admit/uncordon).
+            .inlineInRow(false)
             .visibleFor((row, ctx) -> lane.applies().test(row))
             .handler((row, ctx) -> {
                 ensureLaneIdentity(row, lane);
@@ -560,6 +563,7 @@ public final class ServerResource extends RowResource {
             .label(serverCopy(lane.copy().confirm()))
             .description(serverCopy(lane.copy().confirm() + "_hint"))
             .icon(Icon.of("shield-halved"))
+            .inlineInRow(false)
             .visibleFor((row, ctx) -> lane.applies().test(row) && lane.slot().isPinned(row)
                 && !Boolean.TRUE.equals(row.get(lane.slot().verified())))
             .confirmation(ConfirmationSpec.builder()
@@ -666,6 +670,7 @@ public final class ServerResource extends RowResource {
             .label(serverCopy("probe_now"))
             .description(serverCopy("probe_now_hint"))
             .icon(Icon.of("heart-pulse"))
+            .inlineInRow(false)
             .handler((row, ctx) -> {
                 String name = row.get(ServerModel.NAME);
                 String label = ServerModel.isIncus(row) ? "Incus" : "Docker";
@@ -688,6 +693,7 @@ public final class ServerResource extends RowResource {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "preflight_server"))
             .label(Microcopy.of("preflight").withFilter("scope", "server"))
             .icon(Icon.of("stethoscope"))
+            .inlineInRow(false)
             .handler((row, ctx) -> {
                 String name = row.get(ServerModel.NAME);
                 HostPreflight.Report[] report = new HostPreflight.Report[1];

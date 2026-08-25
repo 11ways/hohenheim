@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -269,6 +270,180 @@ class DnsListEditingTest extends HohenheimTestBase {
         assertThat(record(zoneId, "sneaky")).as("step 5: and nothing was written").isNull();
     }
 
+    /**
+     * The dyndns credential lifecycle THROUGH the admin UI, not just through the service.
+     *
+     * The zone's Records tab is a BESPOKE page rendering the framework's shared row partial,
+     * whose overflow items are portalled out of the table and reach their form by {@code form=}
+     * association. A page that does not carry that form turns every invoke row action into an
+     * inert button: the menu closes and nothing is sent. So this walks the affordance, its
+     * association, the invoke, and the one-time disclosure the toast is.
+     */
+    @Test
+    void dyndnsTokenMintsFromTheZoneRecordsTabAndDisclosesTheTokenOnce() throws Exception {
+        int zoneId = createZone("dyndns-tab.example");
+        int recordId = createRecord(zoneId, "home", DnsRecordModel.TYPE_A, "192.0.2.50");
+
+        String tab = "/admin/dns-zones/" + zoneId + "/page/records";
+        String body = adminGet(tab).body();
+
+        // 1. The action is offered on the row (address record + the dyndns capability).
+        String item = buttonCarrying(body, "dyndns_token");
+        assertThat(item).as("step 1: the tab offers the dyndns token action").isNotNull();
+
+        // 2. It submits through a form that EXISTS on this page. A form= naming nothing is
+        //    the whole bug: the button is then associated with no form and clicking it is
+        //    a no-op the browser reports nowhere.
+        String formId = attributeOf(item, "form");
+        assertThat(formId).as("step 2: the menu item is form-associated").isNotEmpty();
+        assertThat(body).as("step 2: and the page renders that form")
+            .contains("id=\"" + formId + "\"");
+        assertThat(body).as("step 2: carrying the CSRF field its POST needs")
+            .contains("name=\"csrf_token\"");
+
+        // 3. Invoking the rendered target mints the credential.
+        String target = attributeOf(item, "formaction");
+        assertThat(DynamicDnsService.credentialFor(recordId))
+            .as("step 3: the record is not dynamic yet").isNull();
+        HttpResponse<String> invoked = httpPostForm(target, "", sessionToken, csrfToken);
+        String back = invoked.headers().firstValue("Location").orElse(null);
+        assertThat(back).as("step 3: the invoke answered with a redirect back").isNotNull();
+        assertThat(DynamicDnsService.credentialFor(recordId))
+            .as("step 3: and the record is now dynamic").isNotNull();
+
+        // 4. The plaintext is disclosed EXACTLY once: only the digest is at rest, so the
+        //    toast is the only copy the operator will ever see.
+        assertThat(adminGet(path(back)).body())
+            .as("step 4: the minted token is shown once").contains("hdyn_");
+        assertThat(adminGet(path(back)).body())
+            .as("step 4: and a reload never shows it again").doesNotContain("hdyn_");
+    }
+
+    /**
+     * Importing a zone file REPLACES every operator-managed record, so it confirms -- but an
+     * EMPTY paste is not a destructive act to be confirmed, it is an incomplete form to be
+     * refused. Validation must therefore precede confirmation on both halves of the lane.
+     */
+    @Test
+    void zoneFileImportValidatesBeforeItConfirms() throws Exception {
+        int zoneId = createZone("import-empty.example");
+        createRecord(zoneId, "keep", DnsRecordModel.TYPE_A, "192.0.2.60");
+
+        String tab = "/admin/dns-zones/" + zoneId + "/page/zonefile";
+        String body = adminGet(tab).body();
+
+        // 1. The paste control is REQUIRED, which is what stops the submit event -- and with
+        //    it the confirm directive bound to that event -- from ever firing on an empty form.
+        String textarea = tagCarrying(body, "<textarea", "zone_text");
+        assertThat(textarea).as("step 1: the zone-file textarea renders").isNotNull();
+        assertThat(textarea).as("step 1: and declares the constraint that gates the submit")
+            .contains("required");
+
+        // 2. The refusal is our own copy, in the field, not only a browser bubble.
+        assertThat(body).as("step 2: the field carries an error slot").contains("<pl-field-error");
+
+        // 3. The server half refuses the same thing, so a client that bypasses the form
+        //    still cannot wipe the zone with an empty paste.
+        HttpResponse<String> imported = httpPostForm(
+            "/admin/dns-zones/" + zoneId + "/zonefile", "zone_text=", sessionToken, csrfToken);
+        assertThat(imported.headers().firstValue("Location"))
+            .as("step 3: the empty import went back to the tab").isPresent();
+        assertThat(record(zoneId, "keep"))
+            .as("step 3: and replaced nothing").isNotNull();
+    }
+
+    /**
+     * A record with no explicit TTL is not a record without a TTL: it serves the ZONE's
+     * default. The list used to say "None", which reads as "this record has no TTL" -- the
+     * one thing a DNS operator must never be told wrongly.
+     */
+    @Test
+    void ttlCellNamesTheInheritedZoneDefaultInsteadOfNone() throws Exception {
+        int zoneId = createZone("ttl.example");
+        Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
+        assertThat(DnsZoneModel.defaultTtlOf(zone))
+            .as("step 0: the fixture zone serves the declared zone default").isEqualTo(3600);
+
+        int inheriting = createRecordWithoutTtl(zoneId, "bare", DnsRecordModel.TYPE_A, "192.0.2.70");
+        createRecord(zoneId, "explicit", DnsRecordModel.TYPE_A, "192.0.2.71");
+
+        // 1. The zone's Records tab names the effective value, derived from the field's own
+        //    declared default (3600) rather than a literal spelled in the cell.
+        String tab = adminGet("/admin/dns-zones/" + zoneId + "/page/records").body();
+        assertThat(tab).as("step 1: the inherited TTL is named, with its number")
+            .contains("Zone default (3600)");
+
+        // 2. The generated list is the same surface answer: the resource decides, not the page.
+        assertThat(adminGet("/admin/dns-records?filter.name=bare").body())
+            .as("step 2: the generated list agrees").contains("Zone default (3600)");
+
+        // 3. FALSIFICATION: the number is the ZONE's, not a constant. Retune the zone and the
+        //    cell follows; a hardcoded 3600 would keep lying here.
+        zone.set(DnsZoneModel.DEFAULT_TTL, 120);
+        Models.get(DnsZoneModel.class).save(zone);
+        String retuned = adminGet("/admin/dns-zones/" + zoneId + "/page/records").body();
+        assertThat(retuned).as("step 3: the cell follows the zone").contains("Zone default (120)");
+        assertThat(retuned).as("step 3: and no longer claims the declared default")
+            .doesNotContain("Zone default (3600)");
+
+        // 4. Giving the record its own TTL takes it out of the inherited branch entirely.
+        Row record = Models.get(DnsRecordModel.class).findById(inheriting);
+        record.set(DnsRecordModel.TTL, 60);
+        Models.get(DnsRecordModel.class).save(record);
+        assertThat(adminGet("/admin/dns-zones/" + zoneId + "/page/records").body())
+            .as("step 4: an explicit TTL is never described as inherited")
+            .doesNotContain("Zone default");
+    }
+
+    // --- html probes ------------------------------------------------------------------
+
+    /** @return the opening {@code <button>} tag carrying the marker, or null */
+    private static String buttonCarrying(String html, String marker) {
+        return tagCarrying(html, "<button", marker);
+    }
+
+    /** @return the first opening tag of the given name that carries the marker, or null */
+    private static String tagCarrying(String html, String open, String marker) {
+        int from = 0;
+        while (true) {
+            int start = html.indexOf(open, from);
+            if (start < 0) {
+                return null;
+            }
+            int end = html.indexOf('>', start);
+            if (end < 0) {
+                return null;
+            }
+            String tag = html.substring(start, end + 1);
+            if (tag.contains(marker)) {
+                return tag;
+            }
+            from = end + 1;
+        }
+    }
+
+    /** @return the attribute's value with entities decoded, or "" when the tag has none */
+    private static String attributeOf(String tag, String name) {
+        String needle = " " + name + "=\"";
+        int at = tag.indexOf(needle);
+        if (at < 0) {
+            return "";
+        }
+        int start = at + needle.length();
+        int end = tag.indexOf('"', start);
+        return end < 0 ? "" : tag.substring(start, end).replace("&amp;", "&");
+    }
+
+    /** @return a Location header reduced to the path (+query) the test helpers take */
+    private static String path(String location) {
+        int scheme = location.indexOf("://");
+        if (scheme < 0) {
+            return location;
+        }
+        int slash = location.indexOf('/', scheme + 3);
+        return slash < 0 ? "/" : location.substring(slash);
+    }
+
     // --- transport --------------------------------------------------------------------
 
     private void adminForm(String path, String body) throws Exception {
@@ -317,6 +492,19 @@ class DnsListEditingTest extends HohenheimTestBase {
         zone.set(DnsZoneModel.ENABLED, true);
         zones.save(zone);
         return zone.get(DnsZoneModel.ID);
+    }
+
+    /** A record that inherits the zone's default TTL: the shape the TTL cell must describe. */
+    private static int createRecordWithoutTtl(int zoneId, String name, String type, String value) {
+        DnsRecordModel records = Models.get(DnsRecordModel.class);
+        Row record = records.createEmptyRow();
+        record.set(DnsRecordModel.ZONE_ID, zoneId);
+        record.set(DnsRecordModel.NAME, name);
+        record.set(DnsRecordModel.TYPE, type);
+        record.set(DnsRecordModel.VALUE, value);
+        record.set(DnsRecordModel.ENABLED, true);
+        records.save(record);
+        return record.get(DnsRecordModel.ID);
     }
 
     private static int createRecord(int zoneId, String name, String type, String value) {

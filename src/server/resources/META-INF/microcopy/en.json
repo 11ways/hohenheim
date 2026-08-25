@@ -2199,6 +2199,10 @@
     {
       "text": "Provider test failed: {$reason}",
       "scope": "git_provider"
+    },
+    {
+      "text": "Spamservice did not answer: {$reason}",
+      "scope": "spamservice"
     }
   ],
   "test_subject": {
@@ -2345,6 +2349,10 @@
     {
       "text": "Enabled",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Enabled",
+      "scope": "spamservice"
     }
   ],
   "settings": {
@@ -3417,6 +3425,10 @@
     "text": "Dynamic DNS token revoked",
     "scope": "dns_record"
   },
+  "ttl_zone_default": {
+    "text": "Zone default ({$ttl})",
+    "scope": "dns_record"
+  },
   "jar_path": [
     {
       "text": "Jar file",
@@ -3787,6 +3799,18 @@
   },
   "not_ready": {
     "text": "Not ready",
+    "scope": "spamservice"
+  },
+  "not_configured": {
+    "text": "The Spamservice installation is not configured yet.",
+    "scope": "spamservice"
+  },
+  "not_enabled": {
+    "text": "Spamservice is disabled. Enable it in this form and save first.",
+    "scope": "spamservice"
+  },
+  "not_connected": {
+    "text": "Spamservice is running but its management API is not connected yet.",
     "scope": "spamservice"
   },
   "no_checks": {
@@ -4859,6 +4883,10 @@
     "text": "Instance #{$id} does not exist (or was deleted)",
     "scope": "violations"
   },
+  "instance_upstream_not_applicable": {
+    "text": "This upstream does not serve an instance; leave this empty.",
+    "scope": "site"
+  },
   "instance_kind_unknown": {
     "text": "No runtime handles instance kind {$kind}",
     "scope": "violations"
@@ -5856,6 +5884,10 @@
     "text": "Value",
     "scope": "field"
   },
+  "variable_secret_value": {
+    "text": "Secret value",
+    "scope": "field"
+  },
   "template_description": {
     "text": "Shown to whoever picks this template as an instance source",
     "scope": "help"
@@ -6140,6 +6172,10 @@
     {
       "text": "Not running",
       "scope": "instance_shell"
+    },
+    {
+      "text": "Spamservice is not running, so there is nothing to stop.",
+      "scope": "spamservice"
     }
   ],
   "not_running_description": [

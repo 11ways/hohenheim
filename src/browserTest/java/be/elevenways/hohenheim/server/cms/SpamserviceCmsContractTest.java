@@ -8,7 +8,10 @@ import be.elevenways.spamservice.client.SecurityEventEntry;
 import be.elevenways.spamservice.client.SpamserviceApiException;
 import be.elevenways.spamservice.client.SpamWordEntry;
 import be.elevenways.spamservice.client.SpamserviceClient;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.ActionContext;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.HeaderAction;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.TableView;
@@ -320,6 +323,42 @@ class SpamserviceCmsContractTest {
         ((RowAction.Invoke<SampleSummary>) samples.rowActions().get(0))
             .invoke(sample, ActionContext.of(AccessContext.anonymous()));
         assertThat(lastPath.get()).isEqualTo("/v1/manage/samples/" + sampleId + "/mark-spam");
+    }
+
+    /**
+     * BEHAVIOUR journey: on a control plane where Spamservice was never configured, every
+     * lifecycle action must SAY so -- rendered dead with the reason and refused with it --
+     * instead of offering a live Stop button whose only possible answer is a generic failure.
+     */
+    @Test
+    void installationLifecycleActionsNameTheStateThatBlocksThem() {
+        SpamserviceInstallationResource installation = new SpamserviceInstallationResource();
+        AccessContext context = AccessContext.anonymous();
+
+        // 1. All four lifecycle verbs are header invokes, in the order an operator meets them.
+        List<HeaderAction> actions = installation.headerActions();
+        assertThat(actions).hasSize(4).allSatisfy(action ->
+            assertThat(action).isInstanceOf(HeaderAction.Invoke.class));
+        assertThat(actions.stream().map(action -> action.id().getPath()).toList())
+            .containsExactly("spamservice_start", "spamservice_stop", "spamservice_restart",
+                "spamservice_test");
+
+        // 2. Nothing is configured in this JVM, so every one of them declares the SAME
+        //    root state rather than a per-action guess.
+        for (HeaderAction action : actions) {
+            Microcopy reason = ((HeaderAction.Invoke) action).unavailableReason(context);
+            assertThat(reason).as("%s declares a reason", action.id()).isNotNull();
+            assertThat(reason.key()).as("%s names the unconfigured state", action.id())
+                .isEqualTo("not_configured");
+        }
+
+        // 3. Test connection REFUSES with that reason as an error toast -- never the
+        //    generic cms.action.failed the operator cannot act on.
+        HeaderAction.Invoke test = (HeaderAction.Invoke) actions.get(3);
+        CmsActionResult result = test.invoke(ActionContext.of(context));
+        assertThat(result).isInstanceOf(CmsActionResult.Toast.class);
+        CmsActionResult.Toast toast = (CmsActionResult.Toast) result;
+        assertThat(toast.message().key()).isEqualTo("not_configured");
     }
 
     private SpamserviceClient client(Function<HttpExchange, String> responder) throws IOException {

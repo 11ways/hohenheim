@@ -47,6 +47,11 @@ public class GitProviderModel extends Model {
     public static final EnumField KIND = SCHEMA.addField(
         RegistryEnumField.builder("kind")
             .registry(GitProviderKindRegistry.REGISTRY)
+            // Required on the FIELD, not on one form: the kind selects the auth scheme and
+            // the base-url policy, so every writer (admin form, /manage projection, API)
+            // must refuse a provider without one -- a UI-only rule would let the other
+            // writers store a row no client can ever be built for.
+            .required()
             .label(HohenheimFormCopy.label("provider_kind"))
             .help(HohenheimFormCopy.help("provider_kind"))
             .build());

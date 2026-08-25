@@ -118,10 +118,18 @@ class UpstreamKindTest extends HohenheimTestBase {
         navigateToApp("/admin/sites/new");
         waitForHydration();
 
-        // 1. Under a kind that serves no instance, the pick is DISABLED, not hidden
-        //    behind a surprise: the narrowing has nothing to resolve.
+        // 1. Under a kind that serves no instance, the pick stays ENABLED and its
+        //    empty popup names the declared reason (the narrowing resolves to a
+        //    match-none rule with reasonNothingQualifies, not to a disabled control).
         selectUpstreamKind("hohenheim:static");
-        waitForSelector("pl-select[name='instance_id'][disabled]");
+        page.waitForCondition(() ->
+            page.locator("pl-select[name='instance_id'][disabled]").count() == 0);
+        openPlSelect("pl-select[name='instance_id']");
+        page.waitForSelector(OPEN_SELECT_POPUP);
+        assertThat(page.locator(OPEN_SELECT_POPUP).textContent())
+            .contains("does not serve an instance");
+        page.keyboard().press("Escape");
+        page.waitForCondition(() -> page.locator(OPEN_SELECT_POPUP).count() == 0);
 
         // 2. The instance card wakes it, still with no round trip.
         selectUpstreamKind("hohenheim:instance");

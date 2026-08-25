@@ -2199,6 +2199,10 @@
     {
       "text": "Providertest mislukt: {$reason}",
       "scope": "git_provider"
+    },
+    {
+      "text": "Spamservice antwoordde niet: {$reason}",
+      "scope": "spamservice"
     }
   ],
   "test_subject": {
@@ -2345,6 +2349,10 @@
     {
       "text": "Actief",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Ingeschakeld",
+      "scope": "spamservice"
     }
   ],
   "settings": {
@@ -3417,6 +3425,10 @@
     "text": "Dynamische-DNS-token ingetrokken",
     "scope": "dns_record"
   },
+  "ttl_zone_default": {
+    "text": "Zonestandaard ({$ttl})",
+    "scope": "dns_record"
+  },
   "jar_path": [
     {
       "text": "Jar-bestand",
@@ -3787,6 +3799,18 @@
   },
   "not_ready": {
     "text": "Niet gereed",
+    "scope": "spamservice"
+  },
+  "not_configured": {
+    "text": "De Spamservice-installatie is nog niet geconfigureerd.",
+    "scope": "spamservice"
+  },
+  "not_enabled": {
+    "text": "Spamservice is uitgeschakeld. Schakel het in dit formulier in en bewaar eerst.",
+    "scope": "spamservice"
+  },
+  "not_connected": {
+    "text": "Spamservice draait, maar de beheer-API is nog niet verbonden.",
     "scope": "spamservice"
   },
   "no_checks": {
@@ -4859,6 +4883,10 @@
     "text": "Instantie #{$id} bestaat niet (of is verwijderd)",
     "scope": "violations"
   },
+  "instance_upstream_not_applicable": {
+    "text": "Deze upstream bedient geen instantie; laat dit leeg.",
+    "scope": "site"
+  },
   "instance_kind_unknown": {
     "text": "Geen runtime kan instantiesoort {$kind} uitvoeren",
     "scope": "violations"
@@ -5856,6 +5884,10 @@
     "text": "Waarde",
     "scope": "field"
   },
+  "variable_secret_value": {
+    "text": "Geheime waarde",
+    "scope": "field"
+  },
   "template_description": {
     "text": "Getoond aan wie dit sjabloon als instantiebron kiest",
     "scope": "help"
@@ -6140,6 +6172,10 @@
     {
       "text": "Draait niet",
       "scope": "instance_shell"
+    },
+    {
+      "text": "Spamservice draait niet, dus er valt niets te stoppen.",
+      "scope": "spamservice"
     }
   ],
   "not_running_description": [

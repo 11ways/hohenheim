@@ -121,6 +121,23 @@ public class DnsZoneModel extends Model {
         return ROLE_SECONDARY.equals(role) ? ROLE_SECONDARY : ROLE_PRIMARY;
     }
 
+    /**
+     * THE zone-default TTL every record without an explicit one inherits, so the number is
+     * spelled once instead of once per caller.
+     *
+     * AIDEV-NOTE: the fallback DERIVES from {@link #DEFAULT_TTL}'s declared default rather
+     * than repeating 3600, so raising the declared default cannot leave a stale literal
+     * serving a different TTL than the form promises.
+     */
+    public static int defaultTtlOf(Row zone) {
+        Integer stored = zone != null ? zone.get(DEFAULT_TTL) : null;
+        if (stored != null) {
+            return stored;
+        }
+        Integer declared = DEFAULT_TTL.getDefaultValue();
+        return declared != null ? declared : 3600;
+    }
+
     /** Enabled secondary zones only: a disabled secondary is neither replicated nor served. */
     public List<Row> findSecondaries() {
         return find().where(ROLE.eq(ROLE_SECONDARY)).and(ENABLED.eq(true)).all();

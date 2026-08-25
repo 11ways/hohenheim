@@ -184,6 +184,35 @@ public class DnsRecordResource extends RowResource {
             DnsRecordModel.TTL, DnsRecordModel.ENABLED);
     }
 
+    /**
+     * The TTL cell says what the resolver will actually answer.
+     *
+     * A record with no explicit TTL is NOT a record without a TTL: it inherits the zone's
+     * default, and the framework's absence marker rendered that as "None" -- the one reading
+     * an operator must never take away from a DNS list. The number is derived from the zone
+     * ({@link DnsZoneModel#defaultTtlOf}), never a literal, so it stays true when an operator
+     * retunes the zone.
+     *
+     * AIDEV-NOTE: a per-row zone read, deliberately: it happens only for rows that HAVE no
+     * TTL, it is a primary-key hit, and a listing is capped at the schema page size. The
+     * alternative -- caching the zone on the resource -- would serve a stale default after a
+     * zone edit, which is exactly the lie this override exists to remove.
+     */
+    @Override
+    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        Object value = super.cellValue(row, column);
+        if (value != null || column.source() == null
+                || !DnsRecordModel.TTL.getName().equals(column.source().getName())) {
+            return value;
+        }
+        Integer zoneId = row.get(DnsRecordModel.ZONE_ID);
+        Row zone = zoneId != null ? Models.get(DnsZoneModel.class).findById(zoneId) : null;
+        // The seconds go in as TEXT: a TTL is an identifier of a cache window, not a
+        // quantity, so it must never pick up locale digit grouping ("3,600" is not a TTL).
+        return Microcopy.of("ttl_zone_default").withFilter("scope", "dns_record")
+            .withArg("ttl", String.valueOf(DnsZoneModel.defaultTtlOf(zone)));
+    }
+
     /** @return the zone a request is scoped to through its {@code ?zone_id=} prefill, or null */
     private static @Nullable Integer prefilledZoneId(@NonNull Conduit conduit) {
         // Malformed prefill: no preselection, never a broken form.

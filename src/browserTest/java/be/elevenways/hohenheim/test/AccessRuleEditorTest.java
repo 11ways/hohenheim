@@ -273,6 +273,41 @@ class AccessRuleEditorTest extends HohenheimTestBase {
     }
 
     /**
+     * The add form survives a SOFT navigation onto the tab: reaching the Rules tab by
+     * clicking it re-renders the page client-side, where the POST target is a DRY-revived
+     * one, and a form that loses its method attribute there submits GET and earns a 405.
+     */
+    @Test
+    void keepsThePostMethodWhenTheTabIsReachedBySoftNavigation() {
+        // 1. A list, reached the way an operator reaches it: the record's own edit page.
+        Row list = Models.get(AccessListModel.class).createEmptyRow();
+        list.set(AccessListModel.NAME, "Soft nav list");
+        list.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ANY);
+        Models.get(AccessListModel.class).save(list);
+        int listId = list.get(AccessListModel.ID);
+
+        navigateToApp("/admin/access-lists/" + listId);
+        waitForHydration();
+
+        // 2. Click the Rules tab instead of typing its URL: an anchor inside the shell is a
+        //    soft navigation, so the tab's template renders in the BROWSER.
+        page.click(".cms-record-tabs a[href$='/page/rules']");
+        page.waitForSelector("#add-rule-form");
+        waitForHydration();
+
+        // 3. The add form still declares POST. A missing attribute reads back as "get",
+        //    which is exactly the 405 this covers.
+        assertThat(page.locator("#add-rule-form").evaluate("form => form.method"))
+            .as("step 3: the client-rendered add form still posts").isEqualTo("post");
+
+        // 4. And it actually posts: the click creates the group rather than 405-ing.
+        page.click("#add-rule-submit");
+        page.waitForSelector(".hh-rule-row");
+        assertThat(Models.get(AccessRuleModel.class).findForAccessList(listId))
+            .as("step 4: the add lane created the rule").hasSize(1);
+    }
+
+    /**
      * Open a pl-select by its field and pick one option (the chevron is pointer-inert), then
      * wait for the overlay to close: the popup is portalled and a click that lands while it
      * is still open never reaches the button underneath.

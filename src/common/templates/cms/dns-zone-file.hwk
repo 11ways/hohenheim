@@ -45,7 +45,15 @@
     </pl-card>
 
     {#- The import REPLACES every operator-managed record of the zone, so it is a
-        destructive submit and confirms like one. -#}
+        destructive submit and confirms like one.
+
+        AIDEV-NOTE: VALIDATION PRECEDES CONFIRMATION. The confirm directive is bound to
+        the form's SUBMIT event, and a form whose constraints fail never fires one -- so
+        marking the textarea required is what keeps an empty paste from opening a
+        destructive dialog that would then be refused server-side anyway. The reactive
+        pl-field error carries our own copy (the same key the server refusal uses) once
+        the operator has interacted with the control. -#}
+    {% let zoneTextValue = "" %}
     <form use:Zenit.form={% importTarget %}
           use:CmsConfirm.destructive={% t("import_confirm", scope: "dns_zone") %}>
         <pl-card>
@@ -54,10 +62,18 @@
                 <pl-card-description>{{ t("import_description", scope: "dns_zone") }}</pl-card-description>
             </pl-card-header>
             <pl-card-content>
-                <pl-field>
+                <pl-field required
+                          attr:invalid={% String.trim(zoneTextValue{:}) == "" %}
+                          showErrors="interacted">
                     <pl-label target="zone_text">{{ t("zone_file_text", scope: "dns_zone") }}</pl-label>
-                    <pl-textarea inputId="zone_text" name="zone_text" rows={% 12 %}></pl-textarea>
+                    <pl-textarea inputId="zone_text" name="zone_text" rows={% 12 %}
+                                 bind:value={% zoneTextValue %}></pl-textarea>
                     <pl-field-description>{{ t("import_replaces", scope: "dns_zone") }}</pl-field-description>
+                    {#- Empty content rather than a reactive {% if %}: pl-field-error hides
+                        itself when it holds nothing, and a branch here would re-create its
+                        siblings inside the field. -#}
+                    <pl-field-error>{{ String.trim(zoneTextValue{:}) == ""
+                        ? t("import_empty", scope: "dns_zone") : "" }}</pl-field-error>
                 </pl-field>
             </pl-card-content>
         </pl-card>

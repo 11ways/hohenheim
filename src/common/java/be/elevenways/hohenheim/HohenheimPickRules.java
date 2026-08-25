@@ -237,24 +237,40 @@ public final class HohenheimPickRules {
         @NonNull List<String> exposableKinds
     ) implements SiblingRulesResolver, EmptyNarrowingReason {
 
+        /**
+         * AIDEV-NOTE: a chosen NON-instance upstream resolves to {@code NOTHING_QUALIFIES}
+         * rather than null -- the RuntimeImageRules stance. Null renders the disabled picker
+         * under "choose the upstream first", a sentence that is FALSE once an upstream IS
+         * chosen (the QA "Choose upstream_kind first on a static site" finding); resolving
+         * lets the declared reason below say the true precondition instead.
+         */
         @Override
         public @Nullable RuleGroup resolve(@NonNull Map<String, Object> siblingValues) {
             String kind = chosen(siblingValues, this.kindSibling);
-            if (kind == null || !this.instanceKindValue.equals(kind)) {
+            if (kind == null) {
                 return null;
+            }
+            if (!this.instanceKindValue.equals(kind)) {
+                return NOTHING_QUALIFIES;
             }
             return RuleGroup.and(
                 Rule.list("kind", RuleOperator.IN, List.copyOf(this.exposableKinds)));
         }
 
-        /** One rule, so one sentence: nothing this installation runs publishes a port. */
+        /**
+         * Two branches, one per way the resolve above narrows: the chosen upstream does not
+         * serve an instance at all, else nothing this installation runs publishes a port.
+         */
         @Override
         public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
             String kind = chosen(siblingValues, this.kindSibling);
-            if (kind == null || !this.instanceKindValue.equals(kind)) {
+            if (kind == null) {
                 return null;
             }
-            return Microcopy.of("no_exposable_instance").withFilter("scope", "site");
+            String key = this.instanceKindValue.equals(kind)
+                ? "no_exposable_instance"
+                : "instance_upstream_not_applicable";
+            return Microcopy.of(key).withFilter("scope", "site");
         }
     }
 }
