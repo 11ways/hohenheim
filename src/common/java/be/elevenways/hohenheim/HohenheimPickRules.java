@@ -56,15 +56,13 @@ public final class HohenheimPickRules {
      * A RESOLVED narrowing no record can satisfy, for a dependency that is settled and
      * legitimately admits nothing.
      *
-     * AIDEV-NOTE: spelled as a contradiction on one boolean column because {@code RuleGroup}
-     * has no match-none literal ({@code RuleCompiler} says so in as many words: an empty
-     * group is match-ALL and is dropped). Both halves are ordinary rules, so it compiles
-     * and answers identically on all eight backends. A first-class match-none belongs in
-     * zenit's rule vocabulary; until it exists this is the portable spelling.
+     * AIDEV-NOTE: the declared match-none node, never a contradiction on a column. A
+     * contradiction has to NAME a variable, and a variable the target record source does
+     * not project is outside that source's vocabulary -- so the old {@code enabled} hack
+     * 400'd the very pickers it was meant to empty (the manage-panel InstanceModel source
+     * projects name and kind only). This node names nothing and validates everywhere.
      */
-    private static final RuleGroup NOTHING_QUALIFIES = RuleGroup.and(
-        Rule.of("enabled", RuleOperator.IS_TRUE),
-        Rule.of("enabled", RuleOperator.IS_FALSE));
+    private static final RuleGroup NOTHING_QUALIFIES = RuleGroup.matchNone();
 
     /** @return the sibling's raw value as trimmed text, or null when nothing is chosen */
     private static @Nullable String chosen(@NonNull Map<String, Object> siblings,
