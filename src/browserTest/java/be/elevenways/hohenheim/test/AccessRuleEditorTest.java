@@ -4,16 +4,21 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
 
+import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Authors a NESTED rule tree through the admin UI end to end: add a group, add a rule
  * inside that group, fill it in, switch it on, reorder, and reload to prove the tree that
- * comes back is the one that was built.
+ * comes back is the one that was built; and separately walks one rule through refusal,
+ * draft, enable and both switch states.
  */
 class AccessRuleEditorTest extends HohenheimTestBase {
 
@@ -99,8 +104,11 @@ class AccessRuleEditorTest extends HohenheimTestBase {
         assertThat(page.content())
             .as("step 5: the rule's own summary reads as what it decides")
             .contains("10.0.0.0/8");
-        assertThat(page.locator(".hh-rule-row [data-rule-disabled]").count())
+        assertThat(page.locator(".hh-rule-row .hh-rule-state[data-rule-state='off']").count())
             .as("step 5: nothing is left switched off").isZero();
+        assertThat(page.locator(".hh-rule-row .hh-rule-state[data-rule-state='on']").count())
+            .as("step 5: and both nodes SAY they are on, rather than showing nothing")
+            .isEqualTo(2);
 
         // 6. A second leaf inside the same group, and REORDERING within that group.
         chooseOption("parent_id", groupId(listId));
@@ -140,6 +148,128 @@ class AccessRuleEditorTest extends HohenheimTestBase {
             .as("step 7: and the second is 1.2").isEqualTo("1.2");
         assertThat(page.locator(".hh-rule-row").nth(2).getAttribute("data-rule-id"))
             .as("step 7: which is the rule that was moved down").isEqualTo(String.valueOf(first));
+    }
+
+    /**
+     * The two halves of the rule's data check, and what each state SAYS: nonsense is
+     * refused the moment it is saved, an empty draft is not, and the row states on/off in
+     * words on the tab, on the list and on the button that flips it.
+     */
+    @Test
+    void refusesNonsenseSettingsOnSaveAndStatesTheOnOffState() throws Exception {
+        Row list = Models.get(AccessListModel.class).createEmptyRow();
+        list.set(AccessListModel.NAME, "Rule validation list");
+        list.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ANY);
+        Models.get(AccessListModel.class).save(list);
+        int listId = list.get(AccessListModel.ID);
+        String rulesUrl = "/admin/access-lists/" + listId + "/page/rules";
+        AccessRuleModel model = Models.get(AccessRuleModel.class);
+
+        // 0. The check itself, at its own home: the SAME call refuses nonsense whichever
+        //    way the switch stands, and lets an empty draft through while it is off.
+        Row nonsense = model.createEmptyRow();
+        nonsense.set(AccessRuleModel.ACCESS_LIST_ID, listId);
+        nonsense.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_ALLOW);
+        nonsense.set(AccessRuleModel.DATA, Map.of("network", "not-an-ip-address"));
+        nonsense.set(AccessRuleModel.ENABLED, false);
+        assertThatThrownBy(() -> model.save(nonsense))
+            .as("step 0: a nonsense network is refused even for a rule that is OFF")
+            .isInstanceOf(Violations.class);
+
+        Row emptyDraft = model.createEmptyRow();
+        emptyDraft.set(AccessRuleModel.ACCESS_LIST_ID, listId);
+        emptyDraft.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_ALLOW);
+        emptyDraft.set(AccessRuleModel.ENABLED, false);
+        model.save(emptyDraft);
+        assertThat((Integer) emptyDraft.get(AccessRuleModel.ID))
+            .as("step 0: while an EMPTY rule that is off is a legitimate draft").isNotNull();
+        emptyDraft.set(AccessRuleModel.ENABLED, true);
+        assertThatThrownBy(() -> model.save(emptyDraft))
+            .as("step 0: which the enable gate then refuses, through that same home")
+            .isInstanceOf(Violations.class);
+        model.delete(model.findById(emptyDraft.get(AccessRuleModel.ID)));
+
+        // 1. A leaf of the tree, born the way the tab's add form makes one: switched off
+        //    and empty. Created directly here because what follows is about SAVING it,
+        //    not about the add form the journey above already walks.
+        Row leaf = model.createEmptyRow();
+        leaf.set(AccessRuleModel.ACCESS_LIST_ID, listId);
+        leaf.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_ALLOW);
+        leaf.set(AccessRuleModel.ENABLED, false);
+        model.save(leaf);
+        int ruleId = leaf.get(AccessRuleModel.ID);
+        String saveUrl = "/admin/access-rules/" + ruleId;
+
+        // 2. Garbage in the kind's own field is refused AT SAVE, in the sentence that says
+        //    what belongs there -- not accepted now and complained about at the enable gate.
+        HttpResponse<String> nonsenseSave = httpPostForm(saveUrl,
+            "type=ip_allow&data.network=not-an-ip-address", sessionToken, csrfToken);
+        assertThat(nonsenseSave.statusCode())
+            .as("step 2: a refused save rerenders the form instead of redirecting")
+            .isEqualTo(200);
+        assertThat(nonsenseSave.body())
+            .as("step 2: and names what a network looks like")
+            .contains("Enter one IP address or CIDR network");
+        assertThat(AccessRuleModel.dataOf(model.findById(ruleId)).get("network"))
+            .as("step 2: nothing nonsensical reached the row").isNull();
+
+        // 3. EMPTY while switched off stays allowed: a new rule is a draft by design, and
+        //    the add form promises exactly that.
+        HttpResponse<String> draftSave = httpPostForm(saveUrl,
+            "type=ip_allow&data.network=", sessionToken, csrfToken);
+        assertThat(draftSave.statusCode())
+            .as("step 3: the empty draft saves").isEqualTo(302);
+        assertThat((Boolean) model.findById(ruleId).get(AccessRuleModel.ENABLED))
+            .as("step 3: still switched off").isFalse();
+
+        // 4. Switching it ON with nothing filled in is refused by the SAME check, with the
+        //    same sentence.
+        HttpResponse<String> enableEmpty = httpPostForm(saveUrl,
+            "type=ip_allow&data.network=&enabled=true", sessionToken, csrfToken);
+        assertThat(enableEmpty.statusCode())
+            .as("step 4: enabling an empty rule is refused").isEqualTo(200);
+        assertThat(enableEmpty.body())
+            .as("step 4: with the same message the save refusal used")
+            .contains("Enter one IP address or CIDR network");
+        assertThat((Boolean) model.findById(ruleId).get(AccessRuleModel.ENABLED))
+            .as("step 4: and the rule is still off").isFalse();
+
+        // 5. Filled in and switched on, it saves -- and the tab SAYS it is on, instead of
+        //    saying nothing at all.
+        HttpResponse<String> goodSave = httpPostForm(saveUrl,
+            "type=ip_allow&data.network=10.1.0.0%2F16&enabled=true", sessionToken, csrfToken);
+        assertThat(goodSave.statusCode()).as("step 5: a usable rule saves").isEqualTo(302);
+        assertThat((Boolean) model.findById(ruleId).get(AccessRuleModel.ENABLED))
+            .as("step 5: the rule is on").isTrue();
+
+        navigateToApp(rulesUrl);
+        waitForHydration();
+        String row = ".hh-rule-row[data-rule-id='" + ruleId + "'] ";
+        assertThat(page.locator(row + ".hh-rule-state[data-rule-state='on']").textContent().trim())
+            .as("step 5: the state pill says ON in words").isEqualTo("On");
+        assertThat(page.locator(row + "pl-button[data-action-id*='toggle']").textContent().trim())
+            .as("step 5: and the button says what the click will DO").isEqualTo("Switch off");
+
+        // 6. Flipping it says the opposite, both times: two states, both stated.
+        page.click(row + "pl-button[data-action-id*='toggle']");
+        page.waitForSelector("pl-toast, .pl-toast");
+        waitForHydration();
+        navigateToApp(rulesUrl);
+        waitForHydration();
+        assertThat(page.locator(row + ".hh-rule-state[data-rule-state='off']").textContent().trim())
+            .as("step 6: the switched-off rule says OFF").isEqualTo("Off");
+        assertThat(page.locator(row + "pl-button[data-action-id*='toggle']").textContent().trim())
+            .as("step 6: and the button now offers the other direction").isEqualTo("Switch on");
+
+        // 7. The rule LIST tells the same story in the same words as the tab. Searched by
+        //    network, because the list is shared with every other rule this run created.
+        navigateToApp("/admin/access-rules?q=10.1.0.0");
+        page.waitForSelector("pl-table-row[data-row-key='" + ruleId + "']");
+        waitForHydration();
+        assertThat(page.locator("pl-table-row[data-row-key='" + ruleId + "'] "
+                + "pl-table-cell[data-column='enabled']").textContent().trim())
+            .as("step 7: the list states the switch as On/Off, not as a colour")
+            .isEqualTo("Off");
     }
 
     /**

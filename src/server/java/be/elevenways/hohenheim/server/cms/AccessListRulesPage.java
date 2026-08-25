@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.access.AccessRuleOption;
 import be.elevenways.hohenheim.access.AccessRuleView;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -117,9 +116,8 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
                 declared != null ? declared.getLabel() : ruleText("unknown_type"),
                 declared != null && declared.getIcon() != null
                     ? declared.getIcon().name() : "circle-exclamation",
-                declared != null && declared.getColor() != null ? declared.getColor() : "gray",
-                summaryOf(rule, type),
-                Boolean.TRUE.equals(rule.get(AccessRuleModel.ENABLED)),
+                AccessRuleSummaries.summaryOf(rule, type),
+                AccessRuleSummaries.enabledBadge(rule),
                 isGroup,
                 CmsRoutes.detail(panel, this.resource.slug(), id),
                 invokesFor(rule, accessContext, panel, id, pageUrl)));
@@ -131,43 +129,6 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
                     depth + 1, path, views, parents, accessContext, panel, pageUrl);
             }
         }
-    }
-
-    /** What the node decides, in one localized line. */
-    private static @NonNull Microcopy summaryOf(@NonNull Row rule, @Nullable String type) {
-        Map<String, Object> data = AccessRuleModel.dataOf(rule);
-        return switch (type == null ? "" : type) {
-            case AccessRuleModel.TYPE_GROUP -> ruleText(
-                AccessListModel.SATISFY_ALL.equals(
-                    AccessRuleModel.text(data.get(AccessRuleModel.GROUP_SATISFY.getName())))
-                    ? "summary_group_all" : "summary_group_any");
-            case AccessRuleModel.TYPE_IP_ALLOW, AccessRuleModel.TYPE_IP_DENY -> ruleText("summary_network")
-                .withArg("network", blank(data.get(AccessRuleModel.NETWORK.getName())));
-            case AccessRuleModel.TYPE_BASIC_AUTH -> ruleText("summary_basic_auth")
-                .withArg("username", blank(data.get(AccessRuleModel.BASIC_AUTH_USERNAME.getName())));
-            case AccessRuleModel.TYPE_AUTH_PROVIDER -> {
-                String permission = AccessRuleModel.text(
-                    data.get(AccessRuleModel.PROVIDER_REQUIRED_PERMISSION.getName()));
-                Microcopy summary = ruleText(permission == null
-                    ? "summary_auth_provider" : "summary_auth_provider_permission")
-                    .withArg("provider", providerName(data.get(AccessRuleModel.PROVIDER_ID.getName())));
-                yield permission == null ? summary : summary.withArg("permission", permission);
-            }
-            default -> ruleText("summary_unknown");
-        };
-    }
-
-    private static @NonNull String providerName(@Nullable Object providerId) {
-        if (!(providerId instanceof Number number)) {
-            return "";
-        }
-        Row provider = Models.get(SiteAuthProviderModel.class).find()
-            .where(SiteAuthProviderModel.ID.eq(number.intValue())).first();
-        return provider != null ? blank(provider.get(SiteAuthProviderModel.NAME)) : "";
-    }
-
-    private static @NonNull String blank(@Nullable Object value) {
-        return value == null ? "" : String.valueOf(value);
     }
 
     /** The rule resource's own actions for THIS row and viewer, targeting its invoke route. */
@@ -197,6 +158,6 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
     }
 
     private static @NonNull Microcopy ruleText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "access_rule");
+        return AccessRuleSummaries.ruleText(key);
     }
 }

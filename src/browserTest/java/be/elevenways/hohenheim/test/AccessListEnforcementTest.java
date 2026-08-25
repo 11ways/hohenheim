@@ -236,9 +236,14 @@ class AccessListEnforcementTest {
             .isInstanceOf(Violations.class);
 
         halfTyped.set(AccessRuleModel.ENABLED, false);
+        assertThatThrownBy(() -> ruleModel.save(halfTyped))
+            .as("step 12: a PRESENT but unusable network is refused whichever way the switch stands")
+            .isInstanceOf(Violations.class);
+
+        halfTyped.set(AccessRuleModel.DATA, Map.of("network", ""));
         ruleModel.save(halfTyped);
         assertThat(halfTyped.get(AccessRuleModel.ID))
-            .as("step 12: the same rule saves fine as a switched-off draft")
+            .as("step 12: an EMPTY draft saves fine while switched off")
             .isNotNull();
     }
 

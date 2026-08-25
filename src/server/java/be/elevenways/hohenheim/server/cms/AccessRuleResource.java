@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.Nested;
@@ -48,21 +49,57 @@ public final class AccessRuleResource extends RowResource {
         .add(AccessRuleModel.ENABLED)
         .build();
 
+    /** The virtual column holding the rule's localized one-line summary. */
+    private static final String RULE_COLUMN = "rule";
+
     // AIDEV-NOTE: this list answers "which access list holds 10.0.0.5", which the flat
     // shape answered with a column on the LIST. The address lives in per-type JSON now,
-    // so the searchable half is the derived search_text column.
+    // so the searchable half is the derived search_text column -- which is DATA (it
+    // starts with the raw type token) and was rendering as this list's name cell. The
+    // name cell is the summary instead, and search_text keeps its job as a search field
+    // that is never shown.
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        .column(ColumnSpec.fromField(AccessRuleModel.SEARCH_TEXT).build())
+        .column(ColumnSpec.virtual(RULE_COLUMN,
+            Microcopy.of("rule").withFilter("scope", "access_rule")).build())
         .column(ColumnSpec.fromField(AccessRuleModel.TYPE).filterable().build())
         .column(ColumnSpec.fromField(AccessRuleModel.ACCESS_LIST_ID)
             .relation(RelationPick.of(AccessRuleModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
             .build())
-        .column(ColumnSpec.fromField(AccessRuleModel.ENABLED).build())
+        // The switch renders as the SAME on/off pill the rules tab shows, through the
+        // shared enum-badge cell: a boolean cell would say Yes/No, which is not the word
+        // the toggle action or the tab uses for the same fact.
+        .column(ColumnSpec.fromField(AccessRuleModel.ENABLED)
+            .renderer(TableStateTranslator.ENUM_BADGE_RENDERER).build())
         .build();
 
     @Override
     public @NonNull List<be.elevenways.zenit.common.orm.field.Field<?, ?>> searchFields() {
         return List.of(AccessRuleModel.SEARCH_TEXT);
+    }
+
+    /**
+     * The rule's own line: its declared type label and what it decides, both localized
+     * through the shared {@link AccessRuleSummaries} home the Rules tab renders from.
+     */
+    @Override
+    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        if (RULE_COLUMN.equals(column.name())) {
+            return AccessRuleSummaries.titleOf(row);
+        }
+        if (AccessRuleModel.ENABLED.getName().equals(column.name())) {
+            return AccessRuleSummaries.enabledBadge(row);
+        }
+        return super.cellValue(row, column);
+    }
+
+    /**
+     * A rule has no name: it is what it decides. The heading and every breadcrumb say
+     * that instead of "AccessRule #7".
+     */
+    @Override
+    public @NonNull String recordTitle(@NonNull Row record) {
+        String title = AccessRuleSummaries.titleOf(record);
+        return title != null && !title.isBlank() ? title : super.recordTitle(record);
     }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "access_rule"); }
@@ -148,6 +185,12 @@ public final class AccessRuleResource extends RowResource {
         actions.add(moveAction("access_rule_move_down", "move_down", "arrow-down", 1));
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "access_rule_toggle"))
             .label(Microcopy.of("toggle").withFilter("scope", "access_rule"))
+            // The button says what the CLICK does, not what the field is called: a single
+            // "On or off" label left the operator to guess which way this row would move.
+            .dynamicLabel(row -> Microcopy
+                .of(Boolean.TRUE.equals(row.get(AccessRuleModel.ENABLED))
+                    ? "switch_off" : "switch_on")
+                .withFilter("scope", "access_rule"))
             .icon(Icon.of("power-off"))
             .description(Microcopy.of("toggle_hint").withFilter("scope", "access_rule"))
             .handler((row, ctx) -> {

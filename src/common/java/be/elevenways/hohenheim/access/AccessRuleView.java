@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.access;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
+import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -19,6 +20,8 @@ import java.util.List;
  *                 select names a group
  * @param summary  what this node decides, already localized (the network, the username,
  *                 the provider's name, the group's mode)
+ * @param enabledBadge  the on/off pill, so the switched-ON state is stated rather than
+ *                      shown by the absence of a chip
  * @param invokes  the rule resource's OWN row actions for this row and viewer, so move,
  *                 toggle and the confirmed delete arrive with their gates attached
  */
@@ -31,9 +34,8 @@ public record AccessRuleView(
     @NonNull String type,
     @NonNull Microcopy typeLabel,
     @NonNull String iconName,
-    @NonNull String color,
     @NonNull Microcopy summary,
-    boolean enabled,
+    @NonNull EnumBadgeState enabledBadge,
     boolean isGroup,
     @Nullable RouteTarget editTarget,
     @NonNull List<InvokeActionState> invokes

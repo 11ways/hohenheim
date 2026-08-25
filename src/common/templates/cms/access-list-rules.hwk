@@ -38,11 +38,14 @@
                 {% each rules as rule %}
                 <li class="hh-rule-row" style={% rule.indentStyle %} data-rule-id={% rule.id %} data-rule-type={% rule.type %}>
                     <span class="hh-rule-path">{{ rule.path }}</span>
-                    <pl-badge color-set={% rule.color %}><pl-icon name={% rule.iconName %} size="sm"></pl-icon> {{ rule.typeLabel }}</pl-badge>
+                    {#- The kind badge is neutral on purpose: a green "Allowed network" pill
+                        read as "this rule is on", which is the one thing it never said. The
+                        state is the pill beside it, which names BOTH states. -#}
+                    <pl-badge variant="outline"><pl-icon name={% rule.iconName %} size="sm"></pl-icon> {{ rule.typeLabel }}</pl-badge>
                     <span class="hh-rule-summary">{{ rule.summary }}</span>
-                    {% if !rule.enabled %}
-                    <pl-badge variant="outline" data-rule-disabled="1">{{ t("disabled", scope: "access_rule") }}</pl-badge>
-                    {% /if %}
+                    <span class="hh-rule-state" data-rule-state={% rule.enabledBadge.key %}>
+                        {% render "zenitcms:cell/enum-badge" var:value=rule.enabledBadge %}
+                    </span>
                     <span class="hh-rule-actions">
                         <pl-button size="sm" variant="ghost" use:Zenit.route={% rule.editTarget %} data-rule-edit={% rule.id %}>{{ t("edit", scope: "access_rule") }}</pl-button>
                         {% each rule.invokes as invoke %}
