@@ -251,7 +251,7 @@
       "scope": "field"
     },
     {
-      "text": "E\u00e9n Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.",
+      "text": "Eén Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden als bewerkbare tekst opgeslagen en getoond.",
       "scope": "help"
     },
     {
@@ -345,7 +345,7 @@
       "scope": "field"
     },
     {
-      "text": "Shellcommando na checkout en v\u00f3\u00f3r de deployment actief wordt.",
+      "text": "Shellcommando na checkout en vóór de deployment actief wordt.",
       "scope": "help"
     }
   ],
@@ -425,7 +425,7 @@
       "scope": "field"
     },
     {
-      "text": "Kunstmatige vertraging in milliseconden v\u00f3\u00f3r elke aanvraag.",
+      "text": "Kunstmatige vertraging in milliseconden vóór elke aanvraag.",
       "scope": "help"
     }
   ],
@@ -633,7 +633,7 @@
       "scope": "field"
     },
     {
-      "text": "Commandoregelargument v\u00f3\u00f3r het toegewezen poortnummer.",
+      "text": "Commandoregelargument vóór het toegewezen poortnummer.",
       "scope": "help"
     }
   ],
@@ -992,15 +992,15 @@
     "scope": "database_tab"
   },
   "copy_password": {
-    "text": "Wachtwoord kopi\u00ebren",
+    "text": "Wachtwoord kopiëren",
     "scope": "database_tab"
   },
   "copy_webhook_secret": {
-    "text": "Webhookgeheim kopi\u00ebren",
+    "text": "Webhookgeheim kopiëren",
     "scope": "deployments"
   },
   "copy_webhook_url": {
-    "text": "Webhook-URL kopi\u00ebren",
+    "text": "Webhook-URL kopiëren",
     "scope": "deployments"
   },
   "cpu": {
@@ -1595,7 +1595,7 @@
   },
   "variables": [
     {
-      "text": "Ge\u00efnjecteerde variabelen",
+      "text": "Geïnjecteerde variabelen",
       "scope": "site_databases"
     },
     {
@@ -1724,11 +1724,11 @@
     }
   ],
   "copy_record_name": {
-    "text": "Naam van TXT-record kopi\u00ebren",
+    "text": "Naam van TXT-record kopiëren",
     "scope": "certificate_request"
   },
   "copy_record_value": {
-    "text": "Waarde van TXT-record kopi\u00ebren",
+    "text": "Waarde van TXT-record kopiëren",
     "scope": "certificate_request"
   },
   "verify_dns": {
@@ -1842,7 +1842,7 @@
     "scope": "certificate_request"
   },
   "any": {
-    "text": "E\u00e9n regel volstaat",
+    "text": "Eén regel volstaat",
     "scope": "access_satisfy"
   },
   "all": {
@@ -1878,7 +1878,7 @@
     "scope": "certificate_request_error"
   },
   "domain_required": {
-    "text": "Er is minstens \u00e9\u00e9n domein vereist",
+    "text": "Er is minstens één domein vereist",
     "scope": "certificate_request_error"
   },
   "unknown_validation": {
@@ -2231,10 +2231,16 @@
     "text": "Host",
     "scope": "server"
   },
-  "host_unreachable": {
-    "text": "onbereikbaar",
-    "scope": "server"
-  },
+  "host_unreachable": [
+    {
+      "text": "onbereikbaar",
+      "scope": "server"
+    },
+    {
+      "text": "Host onbereikbaar",
+      "scope": "notification_event"
+    }
+  ],
   "host_unknown_platform": {
     "text": "onbekend platform",
     "scope": "server"
@@ -2287,7 +2293,7 @@
       "scope": "site"
     },
     {
-      "text": "Aan of uit",
+      "text": "Aan- of uitzetten",
       "scope": "access_rule"
     }
   ],
@@ -3345,6 +3351,18 @@
     {
       "text": "Dit verwijdert de workload van zijn host maar bewaart de data. Gebruik \"Verwijderen met data\" als de data ook weg moet.",
       "scope": "instance"
+    },
+    {
+      "text": "Deze zone verwijderen? Elk record erin verdwijnt mee en deze server antwoordt niet langer voor de naam.",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "Deze site verwijderen? De hostnamen antwoorden niet langer en de preview-deployments worden vernietigd; de applicatie erachter blijft draaien.",
+      "scope": "site"
+    },
+    {
+      "text": "Dit certificaat verwijderen? De private sleutel wordt vernietigd en de namen die het dekt serveren geen HTTPS meer tot een ander certificaat ze dekt.",
+      "scope": "certificate"
     }
   ],
   "priority": {
@@ -3565,6 +3583,10 @@
     {
       "text": "Bewerken",
       "scope": "access_rule"
+    },
+    {
+      "text": "Bewerken",
+      "scope": "site_domains"
     }
   ],
   "dyndns": {
@@ -4535,10 +4557,6 @@
     {
       "text": "Uitgeschakeld",
       "scope": "instance_schedule"
-    },
-    {
-      "text": "Uit",
-      "scope": "access_rule"
     }
   ],
   "deploy_log": {
@@ -4897,10 +4915,20 @@
     "text": "Instantie {$name} wordt nu beheerd door een andere controller op host {$server}; deze bewerking is afgebroken zonder opruiming",
     "scope": "violations"
   },
-  "host_not_admitted": {
-    "text": "Host {$name} is niet toegelaten voor plaatsing; voer eerst preflight uit en laat hem toe",
-    "scope": "violations"
-  },
+  "host_not_admitted": [
+    {
+      "text": "Host {$name} is niet toegelaten voor plaatsing; voer eerst preflight uit en laat hem toe",
+      "scope": "violations"
+    },
+    {
+      "text": "Host {$name} is niet toegelaten voor plaatsing",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Voer de preflight uit en laat de host toe, anders kan er niets op uitgerold worden.",
+      "scope": "attention_detail"
+    }
+  ],
   "instance_placement_blocked": {
     "text": "Deze instantie kan nu niet gestart worden. De host neemt geen nieuwe workloads aan; je beheerder moet dit oplossen.",
     "scope": "violations"
@@ -5162,7 +5190,7 @@
     "scope": "violations"
   },
   "host_kernel_lane_missing": {
-    "text": "Host '{$name}' aanvaardt tenant-workloads maar heeft geen kanaal om zijn eigen kernel te lezen, dus workload-isolatie valt er niet te verifi\u00ebren; geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet zijn houding op trusted-only",
+    "text": "Host '{$name}' aanvaardt tenant-workloads maar heeft geen kanaal om zijn eigen kernel te lezen, dus workload-isolatie valt er niet te verifiëren; geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet zijn houding op trusted-only",
     "scope": "violations"
   },
   "host_kernel_lane_unproven": {
@@ -5340,7 +5368,7 @@
     }
   ],
   "snapshot_confirm": {
-    "text": "Snapshot nemen? Drivers die volumes kopi\u00ebren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
+    "text": "Snapshot nemen? Drivers die volumes kopiëren stoppen een draaiende instantie kort en starten ze daarna weer; drivers met eigen snapshots leggen ze live vast.",
     "scope": "instance"
   },
   "snapshot_taken": {
@@ -8898,7 +8926,7 @@
       "scope": "role"
     },
     {
-      "text": "De regelboom achter \u00e9\u00e9n toegangslijst.",
+      "text": "De regelboom achter één toegangslijst.",
       "scope": "access_rule"
     },
     {
@@ -8981,7 +9009,7 @@
     "scope": "access_rule"
   },
   "root_any": {
-    "text": "Een verzoek wordt toegelaten zodra \u00c9\u00c9N van deze regels slaagt.",
+    "text": "Een verzoek wordt toegelaten zodra ÉÉN van deze regels slaagt.",
     "scope": "access_rule"
   },
   "root_all": {
@@ -9029,7 +9057,7 @@
     "scope": "access_rule"
   },
   "move_up_hint": {
-    "text": "Verplaats deze regel \u00e9\u00e9n plaats omhoog binnen haar eigen groep.",
+    "text": "Verplaats deze regel één plaats omhoog binnen haar eigen groep.",
     "scope": "access_rule"
   },
   "move_down": {
@@ -9037,7 +9065,7 @@
     "scope": "access_rule"
   },
   "move_down_hint": {
-    "text": "Verplaats deze regel \u00e9\u00e9n plaats omlaag binnen haar eigen groep.",
+    "text": "Verplaats deze regel één plaats omlaag binnen haar eigen groep.",
     "scope": "access_rule"
   },
   "moved": {
@@ -9065,7 +9093,7 @@
     "scope": "access_rule"
   },
   "summary_group_any": {
-    "text": "\u00c9\u00e9n van de regels hierin moet slagen",
+    "text": "Één van de regels hierin moet slagen",
     "scope": "access_rule"
   },
   "summary_group_all": {
@@ -9138,7 +9166,7 @@
       "scope": "field"
     },
     {
-      "text": "E\u00e9n IP-adres of CIDR-netwerk, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
+      "text": "Eén IP-adres of CIDR-netwerk, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
       "scope": "help"
     }
   ],
@@ -9157,7 +9185,7 @@
     "scope": "field"
   },
   "rule_satisfy": {
-    "text": "Of \u00e9\u00e9n regel in deze groep volstaat, of ze allemaal nodig zijn.",
+    "text": "Of één regel in deze groep volstaat, of ze allemaal nodig zijn.",
     "scope": "help"
   },
   "access_rule_type_invalid": {
@@ -9165,7 +9193,7 @@
     "scope": "violations"
   },
   "access_rule_network_invalid": {
-    "text": "Geef \u00e9\u00e9n IP-adres of CIDR-netwerk op, bijvoorbeeld 10.0.0.0/8",
+    "text": "Geef één IP-adres of CIDR-netwerk op, bijvoorbeeld 10.0.0.0/8",
     "scope": "violations"
   },
   "access_rule_credential_incomplete": {
@@ -9973,7 +10001,147 @@
     "scope": "instance"
   },
   "delete_with_data_confirm_stranding": {
-    "text": "Dit verwijdert de container van '{$name}' \u00c9N elk volume dat hij bezit. De bestanden zijn definitief weg. Deze sites stellen hem beschikbaar en worden UITGESCHAKELD: {$sites}. Typ de naam om te bevestigen.",
+    "text": "Dit verwijdert de container van '{$name}' ÉN elk volume dat hij bezit. De bestanden zijn definitief weg. Deze sites stellen hem beschikbaar en worden UITGESCHAKELD: {$sites}. Typ de naam om te bevestigen.",
     "scope": "instance"
+  },
+  "state_on": {
+    "text": "Aan",
+    "scope": "access_rule"
+  },
+  "state_off": {
+    "text": "Uit",
+    "scope": "access_rule"
+  },
+  "switch_on": {
+    "text": "Aanzetten",
+    "scope": "access_rule"
+  },
+  "switch_off": {
+    "text": "Uitzetten",
+    "scope": "access_rule"
+  },
+  "access_rule_satisfy_invalid": {
+    "text": "Kies of één regel of elke regel in deze groep moet slagen",
+    "scope": "violations"
+  },
+  "access_rule_username_invalid": {
+    "text": "Een gebruikersnaam mag geen dubbele punt bevatten",
+    "scope": "violations"
+  },
+  "access_rule_provider_invalid": {
+    "text": "Dat is geen aanmeldbron die deze regel kan gebruiken",
+    "scope": "violations"
+  },
+  "coverage": {
+    "text": "Dekking",
+    "scope": "certificate"
+  },
+  "coverage_none": {
+    "text": "Geen - dit certificaat vermeldt geen hostnamen",
+    "scope": "certificate"
+  },
+  "expiry_none": {
+    "text": "Geen - nog niet uitgegeven",
+    "scope": "certificate"
+  },
+  "next_attempt_none": {
+    "text": "Niet gepland",
+    "scope": "certificate"
+  },
+  "value_none": {
+    "text": "Geen",
+    "scope": "certificate"
+  },
+  "cert_expires_on": {
+    "text": "Verloopt op",
+    "scope": "field"
+  },
+  "managed_by_project": {
+    "text": "Beheerd door project {$name}; wordt met het project verwijderd",
+    "scope": "role"
+  },
+  "role_owned_by_project": {
+    "text": "Deze rol hoort bij project {$name} en wordt verwijderd zodra dat project verdwijnt",
+    "scope": "violations"
+  },
+  "remove": {
+    "text": "Verwijderen",
+    "scope": "site_domains"
+  },
+  "remove_confirm": {
+    "text": "{$hostname} van deze site verwijderen? Het verkeer stopt hier meteen.",
+    "scope": "site_domains"
+  },
+  "delete_confirm_named": {
+    "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam.",
+    "scope": "dns_zone"
+  },
+  "delete_confirm_dependents": {
+    "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.",
+    "scope": "dns_zone"
+  },
+  "delete_confirm_admin": {
+    "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.",
+    "scope": "dns_zone"
+  },
+  "delete_confirm_admin_dependents": {
+    "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}. Deze zone antwoordt voor {$host}, de hostnaam waarop je dit beheerpaneel bereikt: verwijderen kan je buitensluiten.",
+    "scope": "dns_zone"
+  },
+  "import_confirm": {
+    "text": "Importeren vervangt elk record van deze zone behalve de ACME-beheerde. De records die nu opgeslagen zijn, zijn weg zodra de import loopt.",
+    "scope": "dns_zone"
+  },
+  "delete_confirm_hostnames": {
+    "text": "De site {$name} verwijderen? Deze hostnamen antwoorden niet langer: {$hostnames}. De preview-deployments worden vernietigd; de applicatie erachter blijft draaien en kan door een andere site aangewezen worden.",
+    "scope": "site"
+  },
+  "delete_confirm_domains": {
+    "text": "Het certificaat {$name} verwijderen? De private sleutel wordt vernietigd en deze namen serveren geen HTTPS meer tot een ander certificaat ze dekt: {$domains}.",
+    "scope": "certificate"
+  },
+  "instance_crash_loop": {
+    "text": "Instantie in crashlus",
+    "scope": "notification_event"
+  },
+  "stack_health": {
+    "text": "Stackgezondheid gewijzigd",
+    "scope": "notification_event"
+  },
+  "proxy_listener_down": {
+    "text": "Proxy-listener uitgevallen",
+    "scope": "notification_event"
+  },
+  "workload_isolation": {
+    "text": "Workload-isolatie",
+    "scope": "notification_event"
+  },
+  "login_succeeded": {
+    "text": "Geslaagde aanmelding",
+    "scope": "security_event_type"
+  },
+  "runtime_image_not_applicable": {
+    "text": "Dit soort instantie draait niet in een runtime-image; laat dit leeg.",
+    "scope": "instance"
+  },
+  "notification_events": {
+    "text": "Laat leeg om elke gebeurtenis te ontvangen.",
+    "scope": "help"
+  },
+  "rule_search_text": {
+    "text": "Regel",
+    "scope": "field"
+  },
+  "rule": {
+    "text": "Regel",
+    "scope": "access_rule"
+  },
+  "summary_line": {
+    "text": "{$kind}: {$summary}",
+    "scope": "access_rule"
+  },
+  "run_title": {
+    "text": "Run #{$id} ({$status})",
+    "scope": "instance_schedule"
   }
 }

@@ -2231,10 +2231,16 @@
     "text": "Host",
     "scope": "server"
   },
-  "host_unreachable": {
-    "text": "unreachable",
-    "scope": "server"
-  },
+  "host_unreachable": [
+    {
+      "text": "unreachable",
+      "scope": "server"
+    },
+    {
+      "text": "Host unreachable",
+      "scope": "notification_event"
+    }
+  ],
   "host_unknown_platform": {
     "text": "unknown platform",
     "scope": "server"
@@ -2287,7 +2293,7 @@
       "scope": "site"
     },
     {
-      "text": "On or off",
+      "text": "Switch on or off",
       "scope": "access_rule"
     }
   ],
@@ -3345,6 +3351,18 @@
     {
       "text": "This removes the workload from its host but keeps its data. Use \"Delete with data\" when the data must go too.",
       "scope": "instance"
+    },
+    {
+      "text": "Delete this zone? Every record it holds goes with it and this server stops answering for the name.",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "Delete this site? Its hostnames stop answering and its preview deployments are destroyed; the application it exposes keeps running.",
+      "scope": "site"
+    },
+    {
+      "text": "Delete this certificate? Its private key is destroyed and the names it covers stop serving HTTPS until another certificate covers them.",
+      "scope": "certificate"
     }
   ],
   "priority": {
@@ -3565,6 +3583,10 @@
     {
       "text": "Edit",
       "scope": "access_rule"
+    },
+    {
+      "text": "Edit",
+      "scope": "site_domains"
     }
   ],
   "dyndns": {
@@ -4535,10 +4557,6 @@
     {
       "text": "Disabled",
       "scope": "instance_schedule"
-    },
-    {
-      "text": "Off",
-      "scope": "access_rule"
     }
   ],
   "deploy_log": {
@@ -4897,10 +4915,20 @@
     "text": "Instance {$name} is now controlled by another controller on host {$server}; this operation was aborted without cleanup",
     "scope": "violations"
   },
-  "host_not_admitted": {
-    "text": "Host {$name} is not admitted for placement; run preflight and admit it first",
-    "scope": "violations"
-  },
+  "host_not_admitted": [
+    {
+      "text": "Host {$name} is not admitted for placement; run preflight and admit it first",
+      "scope": "violations"
+    },
+    {
+      "text": "Host {$name} is not admitted for placement",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Run its preflight and admit it, or nothing can be deployed there.",
+      "scope": "attention_detail"
+    }
+  ],
   "instance_placement_blocked": {
     "text": "This instance cannot be started right now. Its host is not accepting new workloads; your operator has to clear this.",
     "scope": "violations"
@@ -9975,5 +10003,145 @@
   "delete_with_data_confirm_stranding": {
     "text": "This removes the container of '{$name}' AND every volume it owns. The files are gone for good. These sites expose it and will be DISABLED: {$sites}. Type the name to confirm.",
     "scope": "instance"
+  },
+  "state_on": {
+    "text": "On",
+    "scope": "access_rule"
+  },
+  "state_off": {
+    "text": "Off",
+    "scope": "access_rule"
+  },
+  "switch_on": {
+    "text": "Switch on",
+    "scope": "access_rule"
+  },
+  "switch_off": {
+    "text": "Switch off",
+    "scope": "access_rule"
+  },
+  "access_rule_satisfy_invalid": {
+    "text": "Choose whether one rule or every rule inside this group must pass",
+    "scope": "violations"
+  },
+  "access_rule_username_invalid": {
+    "text": "A username cannot contain a colon",
+    "scope": "violations"
+  },
+  "access_rule_provider_invalid": {
+    "text": "That is not an auth provider this rule can use",
+    "scope": "violations"
+  },
+  "coverage": {
+    "text": "Coverage",
+    "scope": "certificate"
+  },
+  "coverage_none": {
+    "text": "None - this certificate declares no host names",
+    "scope": "certificate"
+  },
+  "expiry_none": {
+    "text": "None - not issued yet",
+    "scope": "certificate"
+  },
+  "next_attempt_none": {
+    "text": "Not scheduled",
+    "scope": "certificate"
+  },
+  "value_none": {
+    "text": "None",
+    "scope": "certificate"
+  },
+  "cert_expires_on": {
+    "text": "Expires on",
+    "scope": "field"
+  },
+  "managed_by_project": {
+    "text": "Managed by project {$name}; deleted with the project",
+    "scope": "role"
+  },
+  "role_owned_by_project": {
+    "text": "This role belongs to project {$name} and is removed when that project is deleted",
+    "scope": "violations"
+  },
+  "remove": {
+    "text": "Remove",
+    "scope": "site_domains"
+  },
+  "remove_confirm": {
+    "text": "Remove {$hostname} from this site? It stops routing here immediately.",
+    "scope": "site_domains"
+  },
+  "delete_confirm_named": {
+    "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name.",
+    "scope": "dns_zone"
+  },
+  "delete_confirm_dependents": {
+    "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.",
+    "scope": "dns_zone"
+  },
+  "delete_confirm_admin": {
+    "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.",
+    "scope": "dns_zone"
+  },
+  "delete_confirm_admin_dependents": {
+    "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}. This zone answers for {$host}, the hostname you are reaching this admin panel at: deleting it can lock you out.",
+    "scope": "dns_zone"
+  },
+  "import_confirm": {
+    "text": "Import replaces every record of this zone except ACME-managed entries. The records stored now are gone once the import runs.",
+    "scope": "dns_zone"
+  },
+  "delete_confirm_hostnames": {
+    "text": "Delete the site {$name}? These hostnames stop answering: {$hostnames}. Its preview deployments are destroyed; the application it exposes keeps running and can be pointed at by another site.",
+    "scope": "site"
+  },
+  "delete_confirm_domains": {
+    "text": "Delete the certificate {$name}? Its private key is destroyed and these names stop serving HTTPS until another certificate covers them: {$domains}.",
+    "scope": "certificate"
+  },
+  "instance_crash_loop": {
+    "text": "Instance crash loop",
+    "scope": "notification_event"
+  },
+  "stack_health": {
+    "text": "Stack health changed",
+    "scope": "notification_event"
+  },
+  "proxy_listener_down": {
+    "text": "Proxy listener down",
+    "scope": "notification_event"
+  },
+  "workload_isolation": {
+    "text": "Workload isolation",
+    "scope": "notification_event"
+  },
+  "login_succeeded": {
+    "text": "Successful login",
+    "scope": "security_event_type"
+  },
+  "runtime_image_not_applicable": {
+    "text": "This kind of instance does not run inside a runtime image; leave this empty.",
+    "scope": "instance"
+  },
+  "notification_events": {
+    "text": "Leave empty to receive every event.",
+    "scope": "help"
+  },
+  "rule_search_text": {
+    "text": "Rule",
+    "scope": "field"
+  },
+  "rule": {
+    "text": "Rule",
+    "scope": "access_rule"
+  },
+  "summary_line": {
+    "text": "{$kind}: {$summary}",
+    "scope": "access_rule"
+  },
+  "run_title": {
+    "text": "Run #{$id} ({$status})",
+    "scope": "instance_schedule"
   }
 }
