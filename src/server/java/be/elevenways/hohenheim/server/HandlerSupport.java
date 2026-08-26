@@ -28,6 +28,9 @@ final class HandlerSupport {
      */
     static final String ADMIN = "admin";
 
+    /** The delegated panel's slug, for the handlers that serve both lanes. */
+    static final String MANAGE = "manage";
+
     private HandlerSupport() {
     }
 

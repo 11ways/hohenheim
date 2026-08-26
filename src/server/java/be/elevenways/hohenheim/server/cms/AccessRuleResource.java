@@ -41,7 +41,7 @@ import java.util.Map;
  * tab's add form chooses the parent and the move actions choose the order, so no operator
  * types a parent id into a text box.
  */
-public final class AccessRuleResource extends RowResource {
+public class AccessRuleResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(AccessRuleModel.TYPE))

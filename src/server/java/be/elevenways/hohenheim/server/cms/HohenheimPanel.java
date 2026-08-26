@@ -139,6 +139,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new CertificateResource(), Role.PROXY);
         addIf(peers, new AccessListResource(), Role.PROXY);
         addIf(peers, new AccessRuleResource(), Role.PROXY);
+        addIf(peers, new ProtectedPathResource(), Role.PROXY);
         addIf(peers, new AuthProviderResource(), Role.PROXY);
         addIf(peers, new DatabaseResource(), Role.DATABASES);
         // Needs BOTH tiers to exist: it joins an instance to a managed database.

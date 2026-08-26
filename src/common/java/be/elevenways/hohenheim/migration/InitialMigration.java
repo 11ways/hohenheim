@@ -158,7 +158,24 @@ public class InitialMigration extends HohenheimMigration {
                 column -> column.nullable(true).maxLength(255));
             table.addColumn("satisfy", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(10).defaultValue("any"));
+            table.addColumn("shared", ColumnType.BOOLEAN,
+                column -> column.nullable(true).defaultValue(false));
             table.timestamps();
+        });
+
+        // A guarded path prefix inside one site: authorization only, never a route
+        // (see ProtectedPathModel). One row per (site, canonical path).
+        schema.createTable("protected_paths", table -> {
+            table.id();
+            table.addColumn("site_id", ColumnType.INTEGER,
+                column -> column.nullable(false).references("sites", "id"));
+            table.addColumn("path", ColumnType.STRING,
+                column -> column.nullable(false).maxLength(500));
+            table.addColumn("access_list_id", ColumnType.INTEGER,
+                column -> column.nullable(false).references("access_lists", "id"));
+            table.timestamps();
+            table.addIndex("protected_paths_site_id_index", List.of("site_id"));
+            table.unique("protected_paths_site_path_unique", List.of("site_id", "path"));
         });
 
         // The rule TREE behind an access list. parent_id is the nesting edge (null = a
@@ -1413,6 +1430,7 @@ public class InitialMigration extends HohenheimMigration {
         schema.dropTable("servers");
         schema.dropTable("system_users");
         schema.dropTable("access_rules");
+        schema.dropTable("protected_paths");
         schema.dropTable("access_lists");
         schema.dropTable("certificates");
         schema.dropTable("site_domains");

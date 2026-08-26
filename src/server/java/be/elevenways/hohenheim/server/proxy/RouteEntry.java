@@ -40,8 +40,21 @@ final class RouteEntry {
     // Access list enforcement: the compiled rule tree, or null when the site has no list.
     final @Nullable AccessRuleTree accessTree;
 
+    // Protected-path guards, longest path first; every guard covering a request's path
+    // must ALSO pass (additive on top of the site's own list). Never routes: see
+    // ProtectedPathModel.
+    final List<PathGuard> pathGuards;
+
+    /** One guarded prefix and the tree it enforces. */
+    record PathGuard(String path, AccessRuleTree tree) {
+
+        boolean covers(String requestPath) {
+            return pathCovers(this.path, requestPath);
+        }
+    }
+
     RouteEntry(SiteRequestHandler handler, String siteName, Row domain,
-               @Nullable AccessRuleTree accessTree,
+               @Nullable AccessRuleTree accessTree, List<PathGuard> pathGuards,
                Map<String, Object> siteSettings, @Nullable SiteAuthGate authGate,
                @Nullable String authProviderName) {
         this.handler = handler;
@@ -69,21 +82,35 @@ final class RouteEntry {
         // switched off ALL of the control. The ROW is the operator's statement that
         // this site is guarded; the compile folds an absent satisfy to the default.
         this.accessTree = accessTree;
+        this.pathGuards = pathGuards;
     }
 
     boolean hasAccessList() {
         return this.accessTree != null;
     }
 
-    /** Whether evaluating this route's access list must run off the I/O thread. */
+    /** Whether evaluating this route's access control must run off the I/O thread. */
     boolean accessListBlocks() {
-        return this.accessTree != null && this.accessTree.needsBlockingEvaluation();
+        if (this.accessTree != null && this.accessTree.needsBlockingEvaluation()) {
+            return true;
+        }
+        for (PathGuard guard : this.pathGuards) {
+            if (guard.tree().needsBlockingEvaluation()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
      * Prefix match with segment boundaries: /api matches /api and /api/x, never /apix.
      */
     boolean matchesPath(String requestPath) {
+        return pathCovers(this.path, requestPath);
+    }
+
+    /** THE segment-boundary prefix rule, shared with the protected-path guards. */
+    static boolean pathCovers(@Nullable String path, String requestPath) {
         if (path == null) return true;
         return requestPath.equals(path) || requestPath.startsWith(path + "/");
     }

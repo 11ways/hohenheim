@@ -40,6 +40,17 @@ public class AccessListModel extends Model {
         .defaultValue(SATISFY_ANY)
         .label(HohenheimFormCopy.label("satisfy"))
         .build());
+    /**
+     * Offered to every principal's pickers, not only to the subjects holding a manage
+     * grant on the row -- the operator's declaration that this policy is for general use
+     * (the {@link GitProviderModel#SHARED} shape). Default false, so a list a tenant
+     * creates in /manage is private to its owners until an admin says otherwise.
+     */
+    public static final BooleanField SHARED = SCHEMA.addField(BooleanField.builder("shared")
+        .defaultValue(false)
+        .label(HohenheimFormCopy.label("access_list_shared"))
+        .help(HohenheimFormCopy.help("access_list_shared"))
+        .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

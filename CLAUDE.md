@@ -84,7 +84,8 @@ silently aborts used to make a run of nothing look green.
   editing `settings/hohenheim.dry`, plus zenit's `ServerSettings` editing
   `settings/local.dry`; DIFF-based save, secrets masked, restartRequired
   metadata drives the restart toast), and `RecordScopedPage` tabs on sites
-  (Domains, Deployments on a site whose instance carries a git source, Dev sessions)
+  (Domains, Protected paths on every non-passthrough site, Deployments on a site whose
+  instance carries a git source, Dev sessions)
   and databases (Restore). `HohenheimSettings` roots at its OWN `hohenheim`
   group (the standard consumer shape); its file keys stay flat
   (`proxy.http_port`) because the context root maps the file root. Tests

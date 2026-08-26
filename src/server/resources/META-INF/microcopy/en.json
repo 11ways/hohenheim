@@ -1151,6 +1151,10 @@
     {
       "text": "No volumes",
       "scope": "instance_volume"
+    },
+    {
+      "text": "No protected paths",
+      "scope": "site_protected_paths"
     }
   ],
   "empty_description": [
@@ -1193,6 +1197,10 @@
     {
       "text": "This instance declares no data directories yet.",
       "scope": "instance_volume"
+    },
+    {
+      "text": "Add a path prefix and an access list; requests under it must pass that list on top of anything the site already requires.",
+      "scope": "site_protected_paths"
     }
   ],
   "engine": [
@@ -2121,6 +2129,10 @@
     {
       "text": "Runtime images",
       "scope": "runtime_image"
+    },
+    {
+      "text": "Protected paths",
+      "scope": "protected_path"
     }
   ],
   "dashboard": [
@@ -2371,6 +2383,10 @@
     {
       "text": "Optional rule tree (addresses, passwords, sign-in) applied before requests reach the site.",
       "scope": "help"
+    },
+    {
+      "text": "Access list",
+      "scope": "site_protected_paths"
     }
   ],
   "auth_provider": [
@@ -3599,6 +3615,10 @@
     {
       "text": "Edit",
       "scope": "site_domains"
+    },
+    {
+      "text": "Edit",
+      "scope": "site_protected_paths"
     }
   ],
   "dyndns": {
@@ -6000,10 +6020,16 @@
     "text": "Yes",
     "scope": "template_contents"
   },
-  "path": {
-    "text": "Path",
-    "scope": "template_contents"
-  },
+  "path": [
+    {
+      "text": "Path",
+      "scope": "template_contents"
+    },
+    {
+      "text": "Path",
+      "scope": "site_protected_paths"
+    }
+  ],
   "mode": [
     {
       "text": "Mode",
@@ -7850,6 +7876,10 @@
     {
       "text": "stack service",
       "scope": "stack_service"
+    },
+    {
+      "text": "protected path",
+      "scope": "protected_path"
     }
   ],
   "member": {
@@ -8078,6 +8108,10 @@
     {
       "text": "{$name} - Deployments",
       "scope": "instance_deployments"
+    },
+    {
+      "text": "{$name} - Protected paths",
+      "scope": "site_protected_paths"
     }
   ],
   "not_found_title": {
@@ -10108,14 +10142,26 @@
     "text": "This role belongs to project {$name} and is removed when that project is deleted",
     "scope": "violations"
   },
-  "remove": {
-    "text": "Remove",
-    "scope": "site_domains"
-  },
-  "remove_confirm": {
-    "text": "Remove {$hostname} from this site? It stops routing here immediately.",
-    "scope": "site_domains"
-  },
+  "remove": [
+    {
+      "text": "Remove",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Remove",
+      "scope": "site_protected_paths"
+    }
+  ],
+  "remove_confirm": [
+    {
+      "text": "Remove {$hostname} from this site? It stops routing here immediately.",
+      "scope": "site_domains"
+    },
+    {
+      "text": "Remove protection from {$path}? The folder becomes reachable by anyone who can reach the site.",
+      "scope": "site_protected_paths"
+    }
+  ],
   "delete_confirm_named": {
     "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name.",
     "scope": "dns_zone"
@@ -10187,5 +10233,51 @@
   "run_title": {
     "text": "Run #{$id} ({$status})",
     "scope": "instance_schedule"
+  },
+  "protected_paths": {
+    "text": "Protected paths",
+    "scope": "site"
+  },
+  "add_protected_path": {
+    "text": "Protect a path",
+    "scope": "site_protected_paths"
+  },
+  "protected_path_prefix": {
+    "text": "Requests whose path starts with this prefix must pass the access list, in addition to any site-wide list.",
+    "scope": "help"
+  },
+  "protected_path_access_list": {
+    "text": "The rule tree these requests must additionally satisfy.",
+    "scope": "help"
+  },
+  "access_list_shared": [
+    {
+      "text": "Shared",
+      "scope": "field"
+    },
+    {
+      "text": "Offer this list to every picker; only its owners and admins can still edit it.",
+      "scope": "help"
+    }
+  ],
+  "protected_path_required": {
+    "text": "A path prefix such as /private is required; use the site access list to guard everything.",
+    "scope": "violations"
+  },
+  "access_list_required": {
+    "text": "Pick the access list this path must satisfy",
+    "scope": "violations"
+  },
+  "protected_path_taken": {
+    "text": "This path is already protected on this site",
+    "scope": "violations"
+  },
+  "tenant_access_list_not_managed": {
+    "text": "You do not manage this access list",
+    "scope": "violations"
+  },
+  "tenant_access_list_not_usable": {
+    "text": "Pick a shared access list or one you manage",
+    "scope": "violations"
   }
 }

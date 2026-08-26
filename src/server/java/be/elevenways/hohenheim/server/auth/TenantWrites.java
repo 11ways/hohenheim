@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -7,6 +9,7 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
@@ -321,6 +324,141 @@ public final class TenantWrites {
                 checkCredentialWrite(doomed.get(DnsDyndnsCredentialModel.RECORD_ID));
             }
         });
+        AccessListModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && isTenantOriginated()) {
+                checkAccessListWrite(row);
+            }
+        });
+        AccessListModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (!isTenantOriginated()) {
+                return;
+            }
+            for (Row doomed : doomedRows(context)) {
+                requireAccessListAuthority(doomed.get(AccessListModel.ID));
+            }
+        });
+        AccessRuleModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && isTenantOriginated()) {
+                checkAccessRuleWrite(row);
+            }
+        });
+        AccessRuleModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (!isTenantOriginated()) {
+                return;
+            }
+            for (Row doomed : doomedRows(context)) {
+                requireAccessListAuthority(doomed.get(AccessRuleModel.ACCESS_LIST_ID));
+            }
+        });
+        ProtectedPathModel.SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && isTenantOriginated()) {
+                checkProtectedPathWrite(row);
+            }
+        });
+        ProtectedPathModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (!isTenantOriginated()) {
+                return;
+            }
+            for (Row doomed : doomedRows(context)) {
+                requireManagedSite(doomed.get(ProtectedPathModel.SITE_ID));
+            }
+        });
+    }
+
+    // --- Access lists and their rule trees ---------------------------------------------
+
+    /**
+     * A tenant may CREATE a list (the /manage resource grants it {@code manage} right
+     * after), and may edit only a list the walk confirms {@code manage} on. SHARED stays
+     * frozen: publishing a policy installation-wide is the operator's declaration, exactly
+     * like {@code GitProviderModel.SHARED}.
+     *
+     * @throws Violations anchored on the offending field
+     */
+    private static void checkAccessListWrite(@NonNull Row row) {
+        Row stored = row.has(AccessListModel.ID.getName())
+            && row.get(AccessListModel.ID) != null
+            ? Models.get(AccessListModel.class).findById(row.get(AccessListModel.ID)) : null;
+        if (stored != null) {
+            requireAccessListAuthority(stored.get(AccessListModel.ID));
+        }
+        Object baseline = stored != null ? stored.get(AccessListModel.SHARED)
+            : AccessListModel.SHARED.getDefaultValue();
+        if (row.has(AccessListModel.SHARED.getName())
+                && !Objects.equals(row.get(AccessListModel.SHARED), baseline)) {
+            throw Violations.ofField(AccessListModel.SHARED.getName(),
+                row.get(AccessListModel.SHARED),
+                CmsSupport.violationText("tenant_field_frozen"));
+        }
+    }
+
+    /**
+     * A rule row answers to its parent LIST, like a domain row answers to its site: the
+     * writer needs {@code manage} on the list the rule ends up in, and on the list it
+     * leaves when a write re-homes it.
+     *
+     * @throws Violations anchored on the list field
+     */
+    private static void checkAccessRuleWrite(@NonNull Row row) {
+        Row stored = row.has(AccessRuleModel.ID.getName())
+            && row.get(AccessRuleModel.ID) != null
+            ? Models.get(AccessRuleModel.class).findById(row.get(AccessRuleModel.ID)) : null;
+        requireAccessListAuthority(effective(row, stored, AccessRuleModel.ACCESS_LIST_ID));
+        if (stored != null && row.has(AccessRuleModel.ACCESS_LIST_ID.getName())
+                && !Objects.equals(row.get(AccessRuleModel.ACCESS_LIST_ID),
+                    stored.get(AccessRuleModel.ACCESS_LIST_ID))) {
+            requireAccessListAuthority(stored.get(AccessRuleModel.ACCESS_LIST_ID));
+        }
+    }
+
+    /**
+     * A protected path answers to its SITE for authority and to its LIST for usability:
+     * managing the site is what lets a tenant guard a folder of it, and the picked list
+     * must be shared or one the tenant manages -- attaching a stranger's private policy
+     * is refused even though it would leak nothing.
+     *
+     * @throws Violations anchored on the offending field
+     */
+    private static void checkProtectedPathWrite(@NonNull Row row) {
+        Row stored = row.has(ProtectedPathModel.ID.getName())
+            && row.get(ProtectedPathModel.ID) != null
+            ? Models.get(ProtectedPathModel.class).findById(row.get(ProtectedPathModel.ID)) : null;
+        requireManagedSite(effective(row, stored, ProtectedPathModel.SITE_ID));
+        if (stored != null && row.has(ProtectedPathModel.SITE_ID.getName())
+                && !Objects.equals(row.get(ProtectedPathModel.SITE_ID),
+                    stored.get(ProtectedPathModel.SITE_ID))) {
+            requireManagedSite(stored.get(ProtectedPathModel.SITE_ID));
+        }
+        AccessContext ctx = acting();
+        Object listId = effective(row, stored, ProtectedPathModel.ACCESS_LIST_ID);
+        if (ctx == null || !HohenheimAccess.canUseAccessList(ctx, listId)) {
+            throw Violations.ofField(ProtectedPathModel.ACCESS_LIST_ID.getName(), listId,
+                CmsSupport.violationText("tenant_access_list_not_usable"));
+        }
+    }
+
+    /** @throws Violations when the acting tenant holds no {@code manage} on the list */
+    private static void requireAccessListAuthority(@Nullable Object listId) {
+        AccessContext ctx = acting();
+        boolean authorized = ctx != null && !ctx.isAnonymous() && listId != null
+            && ctx.hasCapability(AccessListModel.MODEL_ID, listId, HohenheimAccess.MANAGE);
+        if (!authorized) {
+            throw Violations.ofField(AccessRuleModel.ACCESS_LIST_ID.getName(), listId,
+                CmsSupport.violationText("tenant_access_list_not_managed"));
+        }
+    }
+
+    /** @throws Violations when the acting tenant holds no {@code manage} on the site */
+    private static void requireManagedSite(@Nullable Object siteId) {
+        AccessContext ctx = acting();
+        if (!(siteId instanceof Integer id) || ctx == null
+                || !HohenheimAccess.canManageSite(ctx, id)) {
+            throw Violations.ofField(ProtectedPathModel.SITE_ID.getName(), siteId,
+                CmsSupport.violationText("tenant_site_not_managed"));
+        }
     }
 
     // --- Site domains ----------------------------------------------------------------

@@ -82,7 +82,12 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
         vars.put("rules", views);
         vars.put("parentOptions", parents);
         vars.put("typeOptions", typeOptions());
-        vars.put("addTarget", HohenheimEndpoints.ACCESS_RULES_ADD
+        // The add form posts to the lane of the panel it renders under: the admin lane is
+        // admin-gated, the /manage lane is manage-gated plus the handler's per-list check.
+        // The panel slug literal is the SiteDomainsPage precedent.
+        vars.put("addTarget", ("admin".equals(panel)
+            ? HohenheimEndpoints.ACCESS_RULES_ADD
+            : HohenheimEndpoints.MANAGE_ACCESS_RULES_ADD)
             .with(HohenheimEndpoints.ACCESS_LIST_ID, listId));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/access-list-rules"), vars);

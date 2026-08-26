@@ -762,7 +762,8 @@ public class SiteResource extends RowResource {
         // APPLICATION instance (InstanceDeploymentsPage) when the engine was re-keyed;
         // a second copy here would be two UIs over one operation history.
         List<RecordScopedPage<Row>> pages = new ArrayList<>(
-            List.of(new SiteDomainsPage(), new SiteDevSessionsPage()));
+            List.of(new SiteDomainsPage(), new SiteProtectedPathsPage(),
+                new SiteDevSessionsPage()));
         pages.addAll(this.frameworkSubpages());
         return pages;
     }
