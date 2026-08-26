@@ -54,6 +54,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // stamps the live-route claim its unique index arbitrates (form, clone, seeder,
         // API writeback, direct model save).
         SiteDomainResource.installRouteInvariant();
+        // A protected path stores the canonical prefix the dispatcher guards, names a
+        // list, and claims its (site, path) pair once (form, delegated form, restore).
+        be.elevenways.hohenheim.server.cms.ProtectedPathResource.installProtectionInvariant();
         // A DNS record a system authored carries derived attribution, and no caller can
         // hand-write that attribution onto a row of its own.
         GeneratedDnsRecords.install();

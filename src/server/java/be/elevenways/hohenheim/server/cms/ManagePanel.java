@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -12,6 +13,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -54,7 +56,8 @@ import java.util.Set;
  */
 public final class ManagePanel extends Panel {
 
-    public static final Permission ACCESS = Permission.of("hohenheim.manage.access");
+    /** Aliased from the common constant so the two faces can never spell it differently. */
+    public static final Permission ACCESS = HohenheimSources.MANAGE_ACCESS;
 
     /**
      * This panel's URL slug, so a page that must PROJECT differently here compares
@@ -178,7 +181,9 @@ public final class ManagePanel extends Panel {
             // The tenant's OWN forge installations: register one, test it, use it on the
             // tenant's own sites. Shared operator providers are usable but never listed
             // here -- see ManageGitProviderResource.
-            new ManageGitProviderResource());
+            new ManageGitProviderResource(),
+            new ManageAccessListResource(), new ManageAccessRuleResource(),
+            new ManageProtectedPathResource());
     }
 
     /**
@@ -247,6 +252,21 @@ public final class ManagePanel extends Panel {
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteDomainModel.class)
             .search(SiteDomainModel.HOSTNAME)
             .accessCriteria(ManagePanel::domainScope)
+            .build());
+
+        // Access lists: the pickers (a site's list, a protected path's list) offer shared
+        // rows plus the principal's managed ones -- the git-provider policy verbatim, and
+        // an explicit override for the same two-panel shadowing reason as site_domain
+        // (AccessListResource and ManageAccessListResource both expose the model).
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(AccessListModel.class)
+            .search(AccessListModel.NAME)
+            .accessCriteria(HohenheimAccess::accessListScope)
+            .build());
+
+        // Protected paths: child rows scoped by their parent SITE, like domains.
+        RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProtectedPathModel.class)
+            .search(ProtectedPathModel.PATH)
+            .accessCriteria(ManagePanel::protectedPathScope)
             .build());
 
         // DNS records: this one scopes child rows by their parent zone, so a tenant reaches
@@ -543,6 +563,14 @@ public final class ManagePanel extends Panel {
     static @Nullable Criteria domainScope(@NonNull AccessContext ctx) {
         return HohenheimAccess.managedSiteScope(ctx, Models.get(SiteDomainModel.class),
             SiteDomainModel.SITE_ID::in);
+    }
+
+    /**
+     * @return null for admins, else the protected paths of the principal's managed sites
+     */
+    static @Nullable Criteria protectedPathScope(@NonNull AccessContext ctx) {
+        return HohenheimAccess.managedSiteScope(ctx, Models.get(ProtectedPathModel.class),
+            ProtectedPathModel.SITE_ID::in);
     }
 
     /**

@@ -40,6 +40,14 @@ public final class HohenheimSources implements ZenitModule {
     public static final Permission ADMIN_ACCESS = Permission.of("hohenheim.admin.access");
 
     /**
+     * The delegated /manage eligibility gate, kept as a common constant for the same
+     * reason as {@link #ADMIN_ACCESS}: common-declared endpoints (the manage-panel POST
+     * lanes) must name it without a server import. The server-side ManagePanel.ACCESS
+     * aliases this so the two faces can never spell it differently.
+     */
+    public static final Permission MANAGE_ACCESS = Permission.of("hohenheim.manage.access");
+
+    /**
      * Managing a host's install media: publishing ISOs onto its storage and removing
      * them again.
      *

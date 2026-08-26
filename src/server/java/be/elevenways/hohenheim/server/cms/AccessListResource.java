@@ -28,7 +28,7 @@ import java.util.List;
  * Named access policies attachable to sites: this record is the tree's implicit ROOT
  * group (its satisfy column is that group's mode) and the Rules tab holds the tree.
  */
-public final class AccessListResource extends RowResource {
+public class AccessListResource extends RowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(AccessListModel.NAME)
@@ -36,6 +36,9 @@ public final class AccessListResource extends RowResource {
         // declaring home (the old hand-built list here spelled "all" as a literal).
         // This IS the root group's mode; everything else lives in the Rules tab.
         .add(AccessListModel.SATISFY)
+        // The operator's switch alone: ManageAccessListResource narrows it away, and
+        // TenantWrites freezes it on every writer -- the GitProviderResource shape.
+        .add(AccessListModel.SHARED)
         .build();
 
     // AIDEV-NOTE: an explicit spec. The rules themselves live in their own table now, so
@@ -43,6 +46,7 @@ public final class AccessListResource extends RowResource {
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(AccessListModel.NAME).filterable().build())
         .column(ColumnSpec.fromField(AccessListModel.SATISFY).filterable().build())
+        .column(ColumnSpec.fromField(AccessListModel.SHARED).filterable().build())
         .column(ColumnSpec.fromField(AccessListModel.CREATED_AT).build())
         .filter(FilterSpec.forField(AccessListModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(AccessListModel.NAME)).build())

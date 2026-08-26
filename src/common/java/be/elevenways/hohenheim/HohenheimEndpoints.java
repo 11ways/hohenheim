@@ -302,6 +302,19 @@ public class HohenheimEndpoints {
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
 
+    /**
+     * The delegated twin of {@link #ACCESS_RULES_ADD}: the /manage Rules tab posts here.
+     * The permission is only the panel-eligibility gate; the handler additionally demands
+     * {@code manage} on the LIST, and the model write pipeline (TenantWrites) re-asks it.
+     */
+    public static final Endpoint<Object> MANAGE_ACCESS_RULES_ADD = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "manage_access_rules_add"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("manage").addDelimiter().addStatic("access-lists").addDelimiter()
+            .addParameter(ACCESS_LIST_ID).addDelimiter().addStatic("rules").build())
+        .requiresPermission(HohenheimSources.MANAGE_ACCESS)
+        .build();
+
     // --- DNS zone-file import (POST for the CMS zone-file tab) ---
     public static final Endpoint<Object> DNS_ZONE_IMPORT = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "dns_zone_import"))

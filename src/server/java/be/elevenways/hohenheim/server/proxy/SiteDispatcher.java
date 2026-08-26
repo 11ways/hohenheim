@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.net.Hostnames;
@@ -224,6 +225,16 @@ public class SiteDispatcher implements HttpHandler {
         for (Row provider : authProviderModel.find().all()) {
             authProviders.put(provider.get(SiteAuthProviderModel.ID), provider);
         }
+        // Protected paths bucketed per site, same one-query discipline as the rules above.
+        Map<Integer, List<Row>> protectedPathsBySite = new HashMap<>();
+        for (Row guarded : Models.get(ProtectedPathModel.class).find()
+                .orderBy(ProtectedPathModel.PATH, SortOrder.ASC).all()) {
+            Integer guardedSiteId = guarded.get(ProtectedPathModel.SITE_ID);
+            if (guardedSiteId != null) {
+                protectedPathsBySite.computeIfAbsent(guardedSiteId, ignored -> new ArrayList<>())
+                    .add(guarded);
+            }
+        }
 
         for (Row site : sites) {
             String siteTypeStr = site.get(SiteModel.UPSTREAM_KIND);
@@ -287,7 +298,54 @@ public class SiteDispatcher implements HttpHandler {
                 accessList.get(AccessListModel.SATISFY),
                 rulesByList.getOrDefault(accessListId, List.of()),
                 new SiteLeafContext(siteName, siteId, proxySessionStore, authProviders));
-            List<SiteAuthGate> treeGates = accessTree != null ? accessTree.gates() : List.of();
+            List<SiteAuthGate> treeGates = new ArrayList<>(
+                accessTree != null ? accessTree.gates() : List.of());
+
+            // Protected-path guards: one compiled tree per DISTINCT list this site guards
+            // with, longest prefix first so the tab and the enforcement agree on order.
+            // A dangling list id fails CLOSED -- a folder the operator believes guarded
+            // must refuse, never silently open.
+            List<RouteEntry.PathGuard> pathGuards = List.of();
+            List<Row> guardedRows = protectedPathsBySite.get(siteId);
+            if (guardedRows != null) {
+                List<RouteEntry.PathGuard> compiledGuards = new ArrayList<>();
+                Map<Integer, AccessRuleTree> guardTreesByList = new HashMap<>();
+                for (Row guarded : guardedRows) {
+                    String guardPath = normalizeRoutePath(guarded.get(ProtectedPathModel.PATH));
+                    if (guardPath == null) {
+                        // "/" folds to null (= everything); that policy belongs on the
+                        // site's own access list, and validation refuses storing it.
+                        Blast.log("SiteDispatcher: protected path without a usable prefix on site",
+                            siteName, "- skipped");
+                        continue;
+                    }
+                    Integer guardListId = guarded.get(ProtectedPathModel.ACCESS_LIST_ID);
+                    AccessRuleTree guardTree = guardListId == null ? null
+                        : guardTreesByList.get(guardListId);
+                    if (guardTree == null) {
+                        Row guardList = guardListId != null ? accessLists.get(guardListId) : null;
+                        if (guardList == null) {
+                            Blast.log("SiteDispatcher: protected path", guardPath, "on site",
+                                siteName, "names a missing access list - failing closed");
+                            guardTree = AccessRuleTree.denyAll();
+                        } else {
+                            guardTree = AccessRuleTree.compile(
+                                guardList.get(AccessListModel.SATISFY),
+                                rulesByList.getOrDefault(guardListId, List.of()),
+                                new SiteLeafContext(siteName, siteId, proxySessionStore,
+                                    authProviders));
+                            treeGates.addAll(guardTree.gates());
+                        }
+                        if (guardListId != null) {
+                            guardTreesByList.put(guardListId, guardTree);
+                        }
+                    }
+                    compiledGuards.add(new RouteEntry.PathGuard(guardPath, guardTree));
+                }
+                compiledGuards.sort(Comparator.comparingInt(
+                    (RouteEntry.PathGuard guard) -> guard.path().length()).reversed());
+                pathGuards = List.copyOf(compiledGuards);
+            }
             ownedGates.addAll(treeGates);
 
             // Isolate per-site handler creation so one misconfigured site is skipped with
@@ -327,7 +385,7 @@ public class SiteDispatcher implements HttpHandler {
                 }
 
                 RouteEntry entry = new RouteEntry(domainHandler, siteName, domain, accessTree,
-                    settings, authGate, authProviderName);
+                    pathGuards, settings, authGate, authProviderName);
 
                 // HostnamePatterns.effectiveKind is THE tier decision, shared with the
                 // write-time overlap scan: a hostname carrying glob characters routes as a
@@ -666,6 +724,19 @@ public class SiteDispatcher implements HttpHandler {
         // --- Access list enforcement ---
         if (entry.hasAccessList() && !AccessListGate.allows(exchange, entry, clientIp)) {
             return;
+        }
+
+        // --- Protected-path enforcement: ADDITIVE, so every guard whose prefix covers the
+        //     request must also pass. Runs before strip_path on purpose -- guards are
+        //     declared against the path the browser sees, exactly like route paths. ---
+        if (!entry.pathGuards.isEmpty()) {
+            String guardedPath = exchange.getRelativePath();
+            for (RouteEntry.PathGuard guard : entry.pathGuards) {
+                if (guard.covers(guardedPath)
+                        && !AccessListGate.allows(exchange, guard.tree(), clientIp)) {
+                    return;
+                }
+            }
         }
 
         // --- Path matching (selection already guaranteed a match; kept as a safety net) ---

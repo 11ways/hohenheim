@@ -137,7 +137,7 @@ public final class AccessRuleTree {
     }
 
     /** A tree that refuses every request; the fail-closed answer to an unusable list. */
-    private static @NonNull AccessRuleTree denyAll() {
+    static @NonNull AccessRuleTree denyAll() {
         return new AccessRuleTree(new UnknownNode("(unusable rule set)"), List.of(), false);
     }
 

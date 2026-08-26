@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import io.undertow.server.HttpServerExchange;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Enforces a route's access list by evaluating its {@link AccessRuleTree}.
@@ -20,7 +21,15 @@ final class AccessListGate {
      * When blocked, the response (401, 403 or a provider redirect) is already sent.
      */
     static boolean allows(HttpServerExchange exchange, RouteEntry entry, String clientIp) {
-        AccessRuleTree tree = entry.accessTree;
+        return allows(exchange, entry.accessTree, clientIp);
+    }
+
+    /**
+     * The same gate over ONE compiled tree: the site-level list and every protected-path
+     * guard answer through this single evaluation, so a guarded folder can never behave
+     * differently from a guarded site.
+     */
+    static boolean allows(HttpServerExchange exchange, @Nullable AccessRuleTree tree, String clientIp) {
         if (tree == null) {
             return true;
         }

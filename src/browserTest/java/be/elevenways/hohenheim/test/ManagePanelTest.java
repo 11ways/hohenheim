@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -477,9 +478,10 @@ class ManagePanelTest extends HohenheimTestBase {
         // hohenheim.certificate, hohenheim.dns_record and hohenheim.database deliberately
         // LEFT OUT: they carry a capability vocabulary now, so they are grant-scoped like
         // the site source rather than admin-gated. They are asserted below, as EMPTY
-        // rather than as 404.
+        // rather than as 404. hohenheim.access_list moved out with the protected-paths
+        // work: it is scoped like git providers (shared rows plus manage holders) and is
+        // asserted below as hiding every private row.
         List<String> adminOnly = List.of(
-            "hohenheim.access_list",
             "hohenheim.site_auth_provider", "hohenheim.system_user",
             "hohenheim.spamservice_system_users", "hohenheim.dns_zone",
             "hohenheim.ban", "zenit.activity");
@@ -523,6 +525,24 @@ class ManagePanelTest extends HohenheimTestBase {
             assertThat(get("/zn/records/" + token + "/item/1", outsiderSession).statusCode())
                 .as("item on %s", token).isEqualTo(404);
         }
+
+        // The access-list source is scoped like git providers: SHARED rows are offered
+        // to every authenticated principal by declaration, so the source answers -- but
+        // a private list stays invisible and its id reads as missing.
+        Row hiddenList = Models.get(AccessListModel.class)
+            .createEmptyRow();
+        hiddenList.set(AccessListModel.NAME, "Outsider Hidden List");
+        Models.get(AccessListModel.class).save(hiddenList);
+        HttpResponse<String> lists = dryPost("/zn/records/hohenheim.access_list/query",
+            query, outsiderSession, csrf);
+        assertThat(lists.statusCode()).as("query on hohenheim.access_list").isEqualTo(200);
+        assertThat(lists.body())
+            .as("a private list is invisible to a principal with no grants")
+            .doesNotContain("Outsider Hidden List");
+        assertThat(get("/zn/records/hohenheim.access_list/item/"
+                + hiddenList.get(AccessListModel.ID),
+                outsiderSession).statusCode())
+            .as("item on hohenheim.access_list").isEqualTo(404);
     }
 
     /**
@@ -582,10 +602,15 @@ class ManagePanelTest extends HohenheimTestBase {
             // it pays that set's first fetch. It is still ONE enumeration per distinct set
             // per request; the un-memoized shape this pins against is per CALLER and an
             // order of magnitude outside this range.
+            // AIDEV-NOTE: the cap moved 14 -> 15 with the protected-paths work: access
+            // lists carry a manage grant surface now, so a render enumerates a SEVENTH
+            // distinct set (access_list#manage) for the /manage access-list peer. Still
+            // ONE enumeration per distinct set per request; the un-memoized shape this
+            // pins against is per CALLER and an order of magnitude outside this range.
             assertThat(perRequest)
                 .as("record-grant finds during one /manage/sites request "
-                    + "(6 distinct capability sets + walk confirmations)")
-                .isBetween(1, 14);
+                    + "(7 distinct capability sets + walk confirmations)")
+                .isBetween(1, 15);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteAId,
                 HohenheimAccess.MANAGE);

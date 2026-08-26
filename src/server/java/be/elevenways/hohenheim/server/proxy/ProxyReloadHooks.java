@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.proxy;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -50,6 +51,7 @@ public final class ProxyReloadHooks {
         SiteDomainModel.MODEL_ID,
         CertificateModel.MODEL_ID,
         AccessListModel.MODEL_ID,
+        ProtectedPathModel.MODEL_ID,
         SiteAuthProviderModel.MODEL_ID,
         DatabaseModel.MODEL_ID);
 

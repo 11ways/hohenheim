@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -494,6 +495,23 @@ public final class HohenheimAccess {
                 .gate(ManagePanel.ACCESS)
                 .admin(HohenheimPanel.ACCESS));
 
+        // Access lists: MANAGE is the whole vocabulary, the git-provider decision one row
+        // up applied verbatim -- either a subject owns the policy (edit its rules, delete
+        // it) or it merely ATTACHES it, and attaching is not a grant question: a list is
+        // offered when it is SHARED or when the principal manages it (accessListScope).
+        // The rule ROWS deliberately have no grant surface of their own; they answer to
+        // their parent list, exactly like site domains answer to their site.
+        RecordGrants.declareGrantable(GrantableModel.of(AccessListModel.MODEL_ID));
+        KnownCapabilities.register(AccessListModel.MODEL_ID,
+            KnownCapability.of(MANAGE)
+                .label(Microcopy.of("manage").withFilter("scope", "capability"))
+                .elevated()
+                .asDelegable());
+        RecordGrantCapabilityChecker.declareRules(AccessListModel.MODEL_ID,
+            RecordCapabilityRules.create()
+                .gate(ManagePanel.ACCESS)
+                .admin(HohenheimPanel.ACCESS));
+
         RecordGrants.declareGrantable(GrantableModel.of(CertificateModel.MODEL_ID));
         // AIDEV-NOTE: VIEW is the WHOLE certificate vocabulary, and that is a decision.
         // Key EXPORT and certificate UPLOAD are not capabilities at all -- hohenheim
@@ -862,6 +880,51 @@ public final class HohenheimAccess {
         }
         return new CompositeCriteria(CompositeOperator.OR, shared,
             GitProviderModel.ID.in(managed));
+    }
+
+    /**
+     * THE access-list visibility policy, the {@link #gitProviderScope} shape verbatim:
+     * shared lists are offered to every authenticated principal, everything else only to
+     * the subjects the walk confirms {@code manage} for. Anonymous reaches nothing.
+     *
+     * @return null for an unconstrained scope, else a criteria that never widens past
+     *         shared rows plus the confirmed ids
+     */
+    public static @Nullable Criteria accessListScope(@NonNull AccessContext ctx) {
+        Model model = Models.get(AccessListModel.class);
+        if (ctx.isAnonymous()) {
+            return model.matchNone();
+        }
+        RecordCapabilityScope scope = capabilityScope(ctx, AccessListModel.MODEL_ID, MANAGE);
+        if (scope.isAll()) {
+            return null;
+        }
+        Criteria shared = AccessListModel.SHARED.eq(true);
+        if (scope.isNone()) {
+            return shared;
+        }
+        Set<Integer> managed = intIds(scope.recordIds());
+        if (managed.isEmpty()) {
+            return shared;
+        }
+        return new CompositeCriteria(CompositeOperator.OR, shared,
+            AccessListModel.ID.in(managed));
+    }
+
+    /**
+     * Whether the context may ATTACH this list (to a site or a protected path): the list
+     * is shared, or the walk confirms {@code manage} on it. The scope criteria above and
+     * this per-row answer are one policy asked two ways.
+     */
+    public static boolean canUseAccessList(@NonNull AccessContext ctx, @Nullable Object listId) {
+        if (!(listId instanceof Integer id)) {
+            return false;
+        }
+        if (reachesRecord(ctx, AccessListModel.MODEL_ID, id, MANAGE)) {
+            return true;
+        }
+        Row list = Models.get(AccessListModel.class).findById(id);
+        return list != null && Boolean.TRUE.equals(list.get(AccessListModel.SHARED));
     }
 
     /**

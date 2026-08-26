@@ -806,10 +806,14 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         // it pays that set's first fetch. It is still ONE enumeration per distinct set
         // per request; the un-memoized shape this pins against is per CALLER and an
         // order of magnitude outside this range.
+        // AIDEV-NOTE: the cap moved 14 -> 15 with the protected-paths work: access lists
+        // carry a manage grant surface now, so a render enumerates a SEVENTH distinct
+        // set (access_list#manage) for the /manage access-list peer. Still ONE
+        // enumeration per distinct set per request.
         assertThat(finds.get())
             .as("record-grant finds during one scoped /manage/domains render "
-                + "(6 distinct capability sets + walk confirmations)")
-            .isBetween(1, 14);
+                + "(7 distinct capability sets + walk confirmations)")
+            .isBetween(1, 15);
     }
 
     /**
