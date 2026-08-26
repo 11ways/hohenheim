@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -20,13 +21,20 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TestAccessContexts;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.zenit.auth.model.GrantModel;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
@@ -810,5 +818,117 @@ class InstancePlacementTest {
             HostAdmission.requireInstancePlacement(dedicated, containerKind.isolation(), BUCKET);
             HostAdmission.requireInstancePlacement(dedicated, vmKind.isolation(), BUCKET);
         });
+    }
+
+    /**
+     * AN ACTOR WHO NAMES NO HOST GETS THE CHOOSER -- the OPERATOR included, which is the
+     * lane that used to skip it.
+     *
+     * AIDEV-NOTE: the create form narrows its host pick to hosts that accept the workload,
+     * so on a fresh installation (local enrolled but {@code blocked}) it offers nothing at
+     * all. Until 2026-08-26 the submit behind that empty pick still landed on the blocked
+     * local daemon, because {@code forActor} returned it unconditionally for an admin
+     * whenever the workload could run on Docker -- no admission, no posture, no capacity.
+     * The visible form and the authoritative write disagreed. Step 6 pins the seam the
+     * fix deliberately left alone: a NULL context is in-process work with no form and no
+     * picker, and it still gets the local daemon (the deploy gate is what stops it there).
+     */
+    @Test
+    void anAdminCreateThatNamesNoHostWalksTheSameEligibilityGate() {
+        Db.run(datasource, () -> {
+            AccessContext admin = adminContext();
+            assertThat(HohenheimAccess.isAdmin(admin))
+                .as("fixture: the seeded operator really holds the panel permission")
+                .isTrue();
+
+            // The implicit local daemon, as a fresh installation carries it: enrolled,
+            // never preflighted, admission `blocked`. Registered for teardown because this
+            // journey ADMITS it and every other test in this class walks EVERY host row.
+            int local = ServerModel.localServerId();
+            this.hosts.add(local);
+            assertThat((String) Models.get(ServerModel.class).findById(local)
+                    .get(ServerModel.ADMISSION))
+                .as("fixture: the seeded local host is blocked until an operator admits it")
+                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
+
+            // 1. Nothing is eligible: the operator's create is REFUSED BY NAME. This is
+            //    the step that fails under the old behaviour, which handed the blocked
+            //    host back without walking a single gate.
+            assertThat(keyOf(catchThrowable(() ->
+                    InstancePlacement.forActor(admin, null, workload(512)))))
+                .as("step 1: with nothing admitted, an admin create naming no host is"
+                    + " refused -- never silently placed on the blocked local daemon")
+                .isEqualTo("no_placement_available");
+
+            // 2. The operator admits and preflights the local daemon. The SAME call now
+            //    lands on it: eligibility is what changed, not the caller.
+            HostFixtures.admitLocal();
+            storeReport(ServerModel.MODE_LOCAL, 4096L, null);
+            assertThat(InstancePlacement.forActor(admin, null, workload(512)))
+                .as("step 2: admitted and measured, local is what the chooser picks")
+                .isEqualTo(local);
+
+            // 3. And the score applies to this lane as well: a bigger empty host outranks
+            //    the local daemon, which the implicit default could never express.
+            int roomier = host("no-host-roomier", ServerModel.ADMISSION_ADMITTED,
+                ServerModel.POSTURE_SHARED_CONTAINER, 16384L);
+            assertThat(InstancePlacement.forActor(admin, null, workload(512)))
+                .as("step 3: the operator lane is scored like every other placement")
+                .isEqualTo(roomier);
+
+            // 4. NAMING a host is still the operator authority it always was, and it is
+            //    now the ONLY way past the chooser: cordoned, local is out of the eligible
+            //    set, and an operator who names it anyway still gets it (the deploy gate
+            //    is what refuses to run there -- see the dedicated-host journey).
+            Row localRow = Models.get(ServerModel.class).findById(local);
+            localRow.set(ServerModel.ADMISSION, ServerModel.ADMISSION_CORDONED);
+            Models.get(ServerModel.class).save(localRow);
+            assertThat(InstancePlacement.forActor(admin, local, workload(512)))
+                .as("step 4: an operator naming a host still gets the host they named")
+                .isEqualTo(local);
+
+            // 5. THE TENANT PATH IS UNCHANGED: a submitted host is ignored outright and
+            //    the chooser answers, so the cordoned daemon is not reachable by asking.
+            AccessContext tenant = TestAccessContexts.contextFor(
+                new UserPrincipal(987654L, "Placement Tenant"));
+            assertThat(HohenheimAccess.isAdmin(tenant))
+                .as("fixture: the tenant holds no operator permission")
+                .isFalse();
+            assertThat(InstancePlacement.forActor(tenant, local, workload(512)))
+                .as("step 5: a tenant-submitted host is ignored and the chooser decides")
+                .isEqualTo(roomier);
+
+            // 6. THE SEAM: no actor at all is in-process work -- no form, no picker, no
+            //    refusal to show anyone -- and it still gets the local daemon even now
+            //    that local is cordoned. Deliberate, and pinned so that changing it is a
+            //    decision rather than an accident.
+            assertThat(InstancePlacement.forActor(null, null, workload(512)))
+                .as("step 6: the actor-less lane keeps the implicit local daemon")
+                .isEqualTo(local);
+        });
+    }
+
+    /**
+     * An operator context over THIS test's own database: an enabled user holding the
+     * wildcard grant, which is the shape {@code HohenheimTestBase.seedAuthenticatedAdmin}
+     * gives the harness admin -- spelled here because this class runs on a fresh
+     * datasource the harness never seeded.
+     */
+    private static @NonNull AccessContext adminContext() {
+        Row user = AuthModels.users().createEmptyRow();
+        user.set(UserModel.EMAIL, "placement-operator@hohenheim.local");
+        user.set(UserModel.DISPLAY_NAME, "Placement Operator");
+        user.set(UserModel.ENABLED, true);
+        user.set(UserModel.CREATED_AT, Instant.now());
+        user.set(UserModel.UPDATED_AT, Instant.now());
+        AuthModels.users().save(user);
+        Row grant = AuthModels.grants().createEmptyRow();
+        grant.set(GrantModel.SUBJECT_TYPE, GrantSubjectType.USER.key());
+        grant.set(GrantModel.SUBJECT_ID, user.get(UserModel.ID));
+        grant.set(GrantModel.PERMISSION, "*");
+        grant.set(GrantModel.VALUE, true);
+        AuthModels.grants().save(grant);
+        return TestAccessContexts.contextFor(new UserPrincipal(
+            ((Integer) user.get(UserModel.ID)).longValue(), "Placement Operator"));
     }
 }

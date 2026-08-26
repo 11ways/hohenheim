@@ -24,6 +24,20 @@ public class GitRepository {
     private static final Pattern URI_AUTHORITY = Pattern.compile(
         "(?i)^([a-z][a-z0-9+.-]*)://([^/?#]*)");
 
+    /** The transports {@code git clone} speaks over an authority: scheme://[user-info@]host[/path]. */
+    private static final Pattern CLONE_URL_SCHEME = Pattern.compile(
+        "(?i)^(?:https?|ssh|git\\+ssh|git|ftps?)://[^\\s/?#]+(?:/\\S*)?$");
+
+    /** The explicit spelling of a local clone: {@code file:///srv/repo.git}. */
+    private static final Pattern CLONE_URL_FILE = Pattern.compile(
+        "(?i)^file://(?:localhost)?/\\S*$");
+
+    private static final Pattern CLONE_URL_WHITESPACE = Pattern.compile("\\s");
+
+    /** scp-style {@code [user@]host:path}, the spelling every ssh remote is pasted as. */
+    private static final Pattern CLONE_URL_SCP = Pattern.compile(
+        "^(?<user>[^\\s/:@]+@)?(?<host>[^\\s/:@]+):(?!//)\\S+$");
+
     private final String repositoryUrl;
     private final String branch;
     private final boolean shallow;
@@ -247,6 +261,51 @@ public class GitRepository {
             && !userInfo.contains(":")
             && !userInfo.toLowerCase(Locale.ROOT).contains("%3a");
         return sshUsername ? null : userInfo;
+    }
+
+    /**
+     * THE git-clone-URL grammar, with one home: exactly the forms {@link #clone} can hand
+     * to git and nothing more.
+     *
+     * AIDEV-NOTE: NOT {@code UrlPolicy}, for the same reasons {@link #embeddedCredential}
+     * spells out -- a clone URL is routinely {@code ssh://}, {@code git://} or the
+     * scp-style {@code git@host:org/repo.git}, none of which an http(s) URL validator
+     * accepts. A RELATIVE path is refused deliberately: git would resolve it against the
+     * checkout's parent directory, an internal path nobody typing a repository URL knows
+     * about, so {@code not-a-url} can only be a typo -- while an ABSOLUTE path is a
+     * genuine local clone source and stays accepted. An scp-style target must carry a
+     * {@code user@} or a dotted host, which is what tells {@code git@host:org/repo.git}
+     * apart from a mistyped {@code http:/x} -- git reads THAT as the host "http" too, and
+     * then spends the deploy resolving it.
+     *
+     * @return whether git could clone this, on grammar alone (it says nothing about the
+     *         host existing, nor about {@link #embeddedCredential})
+     */
+    public static boolean isSupportedCloneUrl(@Nullable String repositoryUrl) {
+
+        if (repositoryUrl == null) {
+            return false;
+        }
+
+        String url = repositoryUrl.trim();
+
+        // Whitespace INSIDE the value is refused whatever the form: git takes the URL as
+        // one argv entry, so a space is never a separator, only a typo.
+        if (url.isEmpty() || CLONE_URL_WHITESPACE.matcher(url).find()) {
+            return false;
+        }
+
+        if (CLONE_URL_SCHEME.matcher(url).matches() || CLONE_URL_FILE.matcher(url).matches()) {
+            return true;
+        }
+
+        var scp = CLONE_URL_SCP.matcher(url);
+
+        if (scp.matches()) {
+            return scp.group("user") != null || scp.group("host").contains(".");
+        }
+
+        return url.startsWith("/");
     }
 
     private static void rejectEmbeddedCredentials(String repositoryUrl) {

@@ -9,6 +9,11 @@ import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.AdminActivityResource;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -804,6 +809,66 @@ class AdminPagesTest extends HohenheimTestBase {
         } finally {
             local.set(ServerModel.ADMISSION, admission);
             serverModel.save(local);
+        }
+    }
+
+    /**
+     * The dashboard's recent-activity band says WHY it is empty while recording is off.
+     *
+     * AIDEV-NOTE: it used to show the generic "no records found", which an operator reads
+     * as "the fleet was quiet" -- the one reading that is never true when nothing is being
+     * written down. The sentence is the activity browser's OWN
+     * ({@code AdminActivityResource.recordingNotice()}), so the two surfaces cannot drift.
+     */
+    @Test
+    @Order(25)
+    void theDashboardActivityBandSaysWhenRecordingIsSwitchedOff() throws Exception {
+
+        Boolean before = Zenit.SETTINGS_VALUES.getValue(ActivityLog.ENABLED);
+
+        try {
+            // 1. Recording off: the notice exists at all, and it is the framework
+            //    resource's own -- hohenheim never reads activity.enabled a second time.
+            Zenit.SETTINGS_VALUES.setValue(ActivityLog.ENABLED, false);
+            Microcopy notice = AdminActivityResource.recordingNotice();
+            assertThat(notice)
+                .as("step 1: the activity resource declares a recording-off notice")
+                .isNotNull();
+            String sentence = notice.resolve(LocaleChain.ofTags("en"), new DefaultCatalogLoader());
+
+            // 2. The dashboard band carries it, above the list it explains.
+            navigateToApp("/admin/dashboard");
+            waitForHydration();
+            var alert = page.locator(".hh-dashboard-band .widget-alert");
+            assertThat(alert.count())
+                .as("step 2: the recent-activity band renders the notice")
+                .isEqualTo(1);
+            assertThat(alert.first().innerText())
+                .as("step 2: in the activity browser's own words")
+                .contains(sentence);
+            assertThat(page.locator(".hh-dashboard-band .widget-records").count())
+                .as("step 2: the list itself stays -- rows written before the switch still count")
+                .isEqualTo(1);
+
+            // 3. And it is the SAME sentence /admin/activity shows, which is what makes
+            //    this one declaring home rather than two settings reads that agree today.
+            assertThat(get("/admin/activity").body())
+                .as("step 3: both surfaces say the same thing")
+                .contains(sentence);
+
+            // 4. FALSIFIED: with recording on the band is just the list -- an always-on
+            //    notice would train operators to ignore the one that matters.
+            Zenit.SETTINGS_VALUES.setValue(ActivityLog.ENABLED, true);
+            assertThat(AdminActivityResource.recordingNotice())
+                .as("step 4: nothing to say while recording is on")
+                .isNull();
+            navigateToApp("/admin/dashboard");
+            waitForHydration();
+            assertThat(page.locator(".hh-dashboard-band .widget-alert").count())
+                .as("step 4: and the dashboard shows no notice")
+                .isZero();
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(ActivityLog.ENABLED, before);
         }
     }
 }

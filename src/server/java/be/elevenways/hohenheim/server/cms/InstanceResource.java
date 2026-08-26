@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.instance.InstanceExposure;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateCapture;
@@ -68,6 +69,8 @@ import be.elevenways.zenit.common.orm.query.rules.SchemaVocabulary;
 import be.elevenways.zenit.common.orm.query.rules.VariableDefinition;
 import be.elevenways.zenit.common.orm.query.rules.Vocabulary;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violation;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -228,6 +231,66 @@ public class InstanceResource extends RowResource {
     // the chosen kind, and a narrowing CHANGE clears the selection (the dependent-pick
     // contract), so a prefilled local daemon was wiped by the first card click anyway --
     // a default that survives only when you never choose anything is noise, not help.
+
+    /**
+     * CREATE-time placement: an empty host pick is the CHOOSER's answer, never the local
+     * daemon by default.
+     *
+     * AIDEV-NOTE: this surface used to write whatever the picker posted, and an empty pick
+     * wrote NULL -- which every reader downstream spells "the local daemon". The pick
+     * narrows to hosts that ACCEPT the workload, so on a fresh installation it offers
+     * nothing at all and the submit still landed on the blocked local machine: the visible
+     * form and the authoritative write disagreed. {@link InstancePlacement#forActor} is THE
+     * placement funnel every other create walks, and now this one does too -- it is not a
+     * second policy here, only the call that was missing.
+     *
+     * The UPDATE lane deliberately does not run this: a create DERIVES a host, an edit
+     * carries whatever the operator submitted, and re-deriving on save would move a
+     * running workload nobody asked to move (moving one is the migrate action, which
+     * rebooks the memory it takes).
+     */
+    @Override
+    public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
+                                      @NonNull AccessContext accessContext) {
+        Map<String, Object> values = CmsSupport.mutable(coerced);
+        values.put(InstanceModel.SERVER_ID.getName(), placedHostFor(values, accessContext));
+        return super.persistRow(values, accessContext);
+    }
+
+    /**
+     * The host this submission lands on, priced and gated exactly like every other create.
+     *
+     * @throws Violations the placement refusal, RE-PATHED onto the host entry -- the same
+     *         message ({@code no_placement_available} and friends), never a parallel one:
+     *         a sentence about the host belongs on the field the operator can see, not in
+     *         the form's generic error box
+     */
+    private static int placedHostFor(@NonNull Map<String, Object> values,
+                                     @NonNull AccessContext accessContext) {
+        Integer requested = values.get(InstanceModel.SERVER_ID.getName()) instanceof Number number
+            ? number.intValue() : null;
+        InstanceKindHandler handler = InstanceKinds.getHandler(
+            values.get(InstanceModel.KIND.getName()) == null ? null
+                : String.valueOf(values.get(InstanceModel.KIND.getName())));
+        try {
+            return InstancePlacement.forActor(accessContext, requested,
+                InstancePlacement.Workload.of(handler, submittedSettings(values)));
+        } catch (Violations refused) {
+            Violations onTheHostEntry = new Violations();
+            for (Violation refusal : refused.all()) {
+                onTheHostEntry.addAll(Violations.ofField(
+                    InstanceModel.SERVER_ID.getName(), requested, refusal.message()));
+            }
+            throw onTheHostEntry.isEmpty() ? refused : onTheHostEntry;
+        }
+    }
+
+    /** The submitted per-kind settings, which price the workload; a SchemaField answers Object. */
+    @SuppressWarnings("unchecked")
+    private static @NonNull Map<String, Object> submittedSettings(@NonNull Map<String, Object> values) {
+        return values.get(InstanceModel.SETTINGS.getName()) instanceof Map<?, ?> settings
+            ? (Map<String, Object>) settings : Map.of();
+    }
 
     /**
      * Soft-deleted rows are invisible; everything else is LISTED, generated rows

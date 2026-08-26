@@ -53,7 +53,7 @@ public final class InstanceDeclarations {
                 return;
             }
             requireRuntimeImage(row, stored);
-            requireCredentialFreeRepository(row);
+            requireUsableRepository(row);
         });
     }
 
@@ -81,17 +81,20 @@ public final class InstanceDeclarations {
     }
 
     /**
-     * A raw repository URL may not carry a credential.
+     * A raw repository URL must be something git can clone, and may not carry a credential.
      *
      * AIDEV-NOTE: the provider lane hands its token to git through the exec ENVIRONMENT
      * and nothing else, so nothing is written down; a hand-typed
      * {@code https://user:token@host/repo.git} is the one spelling that ends up in
      * {@code .git/config} inside the workspace volume and STAYS there. What counts as a
-     * credential is {@link GitRepository#embeddedCredential}, which is also what the
-     * control-plane git runner asks -- one home, including its deliberate carve-out for a
-     * bare {@code ssh://user@host} username.
+     * credential is {@link GitRepository#embeddedCredential}, and what counts as a clone
+     * URL is {@link GitRepository#isSupportedCloneUrl} -- both live beside the runner that
+     * actually spawns git, including the credential rule's deliberate carve-out for a bare
+     * {@code ssh://user@host} username. The credential half is asked FIRST: a credentialed
+     * URL is perfectly well-formed, and the operator must read the refusal that is about
+     * the secret rather than one about the shape.
      */
-    private static void requireCredentialFreeRepository(@NonNull Row row) {
+    private static void requireUsableRepository(@NonNull Row row) {
 
         if (!row.has(InstanceModel.SETTINGS.getName())) {
             return;
@@ -100,13 +103,20 @@ public final class InstanceDeclarations {
         Object declared = settingsOf(row).get(GitSourceSchema.REPOSITORY_URL);
         String url = declared == null ? "" : declared.toString().trim();
 
-        if (url.isEmpty() || GitRepository.embeddedCredential(url) == null) {
+        if (url.isEmpty()) {
             return;
         }
 
-        // The value is never echoed back: it is the secret this refusal is about.
-        throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, null,
-            violation("repository_url_credential"));
+        // The value is never echoed back: it is the secret these refusals are about.
+        if (GitRepository.embeddedCredential(url) != null) {
+            throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, null,
+                violation("repository_url_credential"));
+        }
+
+        if (!GitRepository.isSupportedCloneUrl(url)) {
+            throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, null,
+                violation("repository_url_invalid"));
+        }
     }
 
     private static @Nullable String effectiveKind(@NonNull Row row, @Nullable Row stored) {

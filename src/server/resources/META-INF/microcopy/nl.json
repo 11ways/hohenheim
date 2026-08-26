@@ -3402,7 +3402,7 @@
     "scope": "dns_record"
   },
   "dyndns_token_hint": {
-    "text": "Maak een nieuw updatetoken voor dit record aan (maakt een eerder token ongeldig). Richt een dyndns2-client (router, ddclient) op <host>/nic/update en stuur het token als HTTP Basic-wachtwoord",
+    "text": "Maak een nieuw updatetoken voor dit record aan (maakt een eerder token ongeldig). Richt een dyndns2-client (router, ddclient) op {$url} en stuur het token als HTTP Basic-wachtwoord",
     "scope": "dns_record"
   },
   "dyndns_minted": {
@@ -4283,6 +4283,10 @@
     {
       "text": "Poortpublicatie",
       "scope": "form_section"
+    },
+    {
+      "text": "Poorten",
+      "scope": "stack_services"
     }
   ],
   "depends_on": {
@@ -9962,6 +9966,10 @@
   },
   "repository_url_credential": {
     "text": "Haal de inloggegevens uit de repository-URL: die zouden in de .git/config van de checkout terechtkomen en daar blijven staan. Gebruik een git-provider; die geeft zijn token per operatie aan git door en schrijft het nooit weg.",
+    "scope": "violations"
+  },
+  "repository_url_invalid": {
+    "text": "Dit is geen git-clone-URL. Gebruik https://host/eigenaar/repo.git, ssh://git@host/eigenaar/repo.git, git@host:eigenaar/repo.git, git://host/repo.git of een absoluut pad op deze machine.",
     "scope": "violations"
   },
   "runs_as_root": {

@@ -2,10 +2,15 @@ package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
+import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
 import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Test-side operator decisions over the host record: the admission gate refuses
@@ -20,6 +25,27 @@ public final class HostFixtures {
         new Accountability("user:1", "Test operator", null, null, "test");
 
     private HostFixtures() {
+    }
+
+    /**
+     * Make the implicit local host PLACEABLE: admitted, acknowledged AND measured.
+     *
+     * AIDEV-NOTE: admission alone is not placement. The chooser needs a memory budget to
+     * ration against and answers {@code host_capacity_unproven} for a host nobody ever
+     * measured, so a fixture that only admits leaves every create refused for a reason
+     * that has nothing to do with what it is testing. Idempotent, like {@link #admitLocal},
+     * and the report goes through {@link HostPreflight#store} rather than hand-writing the
+     * capabilities shape.
+     *
+     * @param memoryMb the measured total the budget is derived from
+     */
+    public static void makeLocalPlaceable(long memoryMb) {
+        admitLocal();
+        HostPreflight.store(ServerModel.MODE_LOCAL, new HostPreflight.Report(
+            List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true,
+                "fixture: reachable")),
+            Map.of(HostPreflight.MEM_TOTAL_FACT, memoryMb * 1024L * 1024L),
+            true, Instant.now(), null));
     }
 
     /** Admit the implicit local host for tenant placement (posture shared_container). */

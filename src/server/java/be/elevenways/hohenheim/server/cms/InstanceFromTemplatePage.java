@@ -126,9 +126,13 @@ public final class InstanceFromTemplatePage extends PanelPage {
         vars.put("approved", template.get(InstanceTemplateModel.APPROVED_AT) != null);
         vars.put("hasInstall", InstanceTemplates.hasInstallStep(template));
         vars.put("instanceName", nullSafe(rawValues.get("name")));
+        // AIDEV-NOTE: no local-daemon prefill, ON PURPOSE (2026-08-26) -- the same call
+        // InstanceResource made and reversed. A prefilled host is a CHOICE the operator
+        // never made, and on a fresh installation it names a host placement would refuse;
+        // an empty pick means "you decide", which is InstancePlacement's job. What the
+        // operator DID submit is echoed back, so a refused create keeps their pick.
         vars.put("serverId", rawValues.get("server_id") != null
-            ? String.valueOf(rawValues.get("server_id"))
-            : String.valueOf(ServerModel.localServerId()));
+            ? String.valueOf(rawValues.get("server_id")) : "");
         vars.put("servers", servers);
         vars.put("formError", violations != null ? formLevelText(conduit, violations) : "");
         vars.put("variableForm", new FormStateTranslator().translate(

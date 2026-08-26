@@ -109,16 +109,38 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
     private @NonNull ActionResult<?> renderLocal(@NonNull Conduit conduit,
                                                  @NonNull AccessContext accessContext,
                                                  @NonNull Row zone) {
-        Integer zoneId = zone.get(DnsZoneModel.ID);
-        String origin = zone.get(DnsZoneModel.ORIGIN);
-
-        Panel panel = PanelRegistry.getBySlug(PANEL);
-        DnsRecordResource resource = panel != null
-            && panel.peerBySlug(RECORD_SLUG) instanceof DnsRecordResource peer ? peer : null;
+        DnsRecordResource resource = recordResource();
         if (resource == null) {
             // The DNS role is off, so the record resource is not on the panel at all.
             return new RenderTemplateResult(TEMPLATE, unavailableVars(conduit, zone));
         }
+        return renderLocal(conduit, accessContext, zone, resource);
+    }
+
+    /**
+     * The record resource this tab renders through, the sibling of
+     * {@code SiteDomainsPage.domainResource}.
+     *
+     * @return null when the DNS role is off, so the resource is not on the panel at all
+     */
+    private static @Nullable DnsRecordResource recordResource() {
+        Panel panel = PanelRegistry.getBySlug(PANEL);
+        return panel != null && panel.peerBySlug(RECORD_SLUG) instanceof DnsRecordResource peer
+            ? peer : null;
+    }
+
+    /**
+     * The same render against a GIVEN record resource, so the per-record declarations this
+     * page forwards (delete confirmation, delete refusal reason, inline-editable cells) can
+     * be exercised against a resource that declares them; the shipped one declares none
+     * today, which would leave the forwarding itself unproven.
+     */
+    @NonNull ActionResult<?> renderLocal(@NonNull Conduit conduit,
+                                         @NonNull AccessContext accessContext,
+                                         @NonNull Row zone,
+                                         @NonNull DnsRecordResource resource) {
+        Integer zoneId = zone.get(DnsZoneModel.ID);
+        String origin = zone.get(DnsZoneModel.ORIGIN);
 
         String search = trimmedSearch(conduit);
         List<Row> records = zoneRecords(zoneId, search, resource.searchFields());
@@ -158,6 +180,10 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
                     returnTo).toUrl()
                 : null,
             row -> resource.deleteConfirmationFor(row),
+            // Per ROW: a delete the principal may perform in general yet the write will
+            // refuse for THIS record stays on the menu, dead, with its reason (see
+            // Resource.deleteUnavailableReason); DELETE_SUBMIT refuses with the same text.
+            row -> resource.deleteUnavailableReason(row, accessContext),
             // Promoted seam: the framework's own affordance answer, which the generated
             // list page uses too -- this page used to carry a copy of it.
             row -> InlineEditStates.editableCellsFor(resource, applied, row, accessContext),

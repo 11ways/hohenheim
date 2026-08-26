@@ -4,12 +4,14 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
@@ -41,6 +43,16 @@ class InstanceQuotaTest extends HohenheimTestBase {
 
     private final List<Integer> createdIds = new ArrayList<>();
     private Integer previousLimit;
+
+    /**
+     * The create submit places the record, so the fleet must hold one host that accepts
+     * it -- otherwise every create here is refused for a placement reason and the quota
+     * this class is about is never reached.
+     */
+    @BeforeAll
+    static void makeSomewhereToPlace() {
+        HostFixtures.makeLocalPlaceable(65536);
+    }
 
     @AfterEach
     void cleanUp() {

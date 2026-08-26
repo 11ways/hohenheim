@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -31,6 +32,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.setting.ServerSettings;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -266,7 +268,8 @@ public class DnsRecordResource extends RowResource {
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "dyndns_token"))
             .label(Microcopy.of("dyndns_token").withFilter("scope", "dns_record"))
             .icon(Icon.of("rotate"))
-            .description(Microcopy.of("dyndns_token_hint").withFilter("scope", "dns_record"))
+            .description(Microcopy.of("dyndns_token_hint").withFilter("scope", "dns_record")
+                .withArg("url", dyndnsUpdateUrl()))
             // Dynamic DNS is a capability of ADDRESS records: the action does not exist
             // on any other type (visibleFor is re-checked on invoke, so a direct POST
             // 404s). The token is a bearer credential that survives grant revocation,
@@ -296,6 +299,35 @@ public class DnsRecordResource extends RowResource {
             .inlineInRow(false)
             .build());
         return actions;
+    }
+
+    /**
+     * The dyndns2 update URL an operator pastes into a router, absolute where this
+     * installation knows its own public URL.
+     *
+     * AIDEV-NOTE: {@code network.main_url} is THE declared home of "the public URL of this
+     * installation" (zenit's sitemap origin and proteus' OAuth callbacks read the same
+     * setting); the Host header is deliberately NOT consulted, because a description
+     * rendered from an attacker-supplied header would hand an operator someone else's
+     * host to send a DNS-write credential to. Unset leaves the PATH, which is still true
+     * and is what the endpoint itself declares -- never a hand-typed literal.
+     */
+    private static @NonNull String dyndnsUpdateUrl() {
+
+        String path = HohenheimEndpoints.DYNDNS_UPDATE.toUrl();
+        String base = ServerSettings.VALUES.getValue(ServerSettings.Network.MAIN_URL);
+
+        if (base == null || base.isBlank()) {
+            return path;
+        }
+
+        String origin = base.strip();
+
+        while (origin.endsWith("/")) {
+            origin = origin.substring(0, origin.length() - 1);
+        }
+
+        return origin + path;
     }
 
     /** Arms (or re-keys) the record's dyndns credential; the plaintext is disclosed ONCE in the toast. */
