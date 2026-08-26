@@ -238,6 +238,44 @@ service that actually runs lives under
 `/opt/hohenheim/data/managed-services/spamservice/`. Nothing reads
 `/opt/spamservice/` any more; it is ~660 MB of stale jars.
 
+## Deploy 2026-08-26: the QA-pass batch + protected paths (the 08-23 lane, second run)
+
+Shipped `0cde277c` (QA-pass fixes across hawkeye/zenit/zenit-cms/plumage/
+zenit-microcopy/zenit-auth plus the protected-paths feature). The feature edits
+`InitialMigration` in place (new table `protected_paths`, new column
+`access_lists.shared`), so this was the 08-23 lane again, unchanged in shape:
+`/root/hh-rehearse-20260826/` (fresh `--run-migrations`, `import.py` over the
+preflight copy, an inert boot, then a proxy+dns boot on 18080/18443/15353 with
+the `aa` SOA, NS, admin A, out-of-zone REFUSED, both 301s and HTTPS 200 under
+the real Let's Encrypt certificate -- the keyring pairing proven on a copy) and
+`/root/hh-cutover-20260826/cutover.sh` (fresh database staged BEFORE the stop,
+at-swap backup + integrity check, import, count gates against at-swap, swap,
+start). Window 12:22:51Z to 12:23:21Z. Rollback lives in
+`/root/hohenheim-preflight-20260826-115540/` (`hohenheim-server.jar.rollback`,
+`hohenheim.db` pre-deploy, `at-swap.db`, `hohenheim.db.pre-cutover`, settings,
+keyring). Verified after both restarts: 0 exceptions, listeners 53 udp+tcp / 80 /
+443 / 3000, `aa` SOA + NS + REFUSED on the public IP, all three names
+`ssl_verify_result=0` (200 / 200 / 200, HTTP 301), RSS 316 MB, `/opt/hohenheim/
+public/` holding only `apex`, `/cms.js` served at the jar's 4856538 bytes, and
+`zenit-dev deployed starfleet` answering `current` for all 13 repos.
+
+Two things this deploy fixed in the LANE itself:
+
+- A stale rehearsal JVM (`hh-inert-*`, user `hohenheim`, 31 hours old, 323 MB
+  RSS) from the 08-25 deploy was still holding port 13998, so the first inert
+  boot failed with `BindException`. Kill every rehearsal boot before leaving a
+  deploy; check `ss -lntp | grep 13998` before starting one.
+- The first jar built from a committed worktree still stamped every framework
+  module with its PRE-commit sha and `dirty=true`: zenit-dev's publish freshness
+  was content-only, so a commit that changed no bytes never re-ran the stamp
+  task, and zenit-dev rewrote the tracked `gradle.properties` inside the deploy
+  worktree with a directory-derived `ErrorFile` name, which made the worktree
+  itself dirty. Both fixed in zenit `a73554a5` (provenance is now a second
+  fingerprint facet; managed settings are keyed by the repo identity of the main
+  checkout). Read the stamp out of the jar (`unzip -p <jar>
+  META-INF/blast/build-info.tsv`) BEFORE uploading; a `true` in the dirty column
+  means the runbook rule was violated, whatever `git status` says.
+
 ## Deploy 2026-08-23: the Phase 0 schema cutover (a repeatable lane)
 
 hohenheim ships ONE migration edited in place, so a Phase 0-sized schema change
