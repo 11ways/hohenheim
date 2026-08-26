@@ -3402,7 +3402,7 @@
     "scope": "dns_record"
   },
   "dyndns_token_hint": {
-    "text": "Mint a new update token for this record (invalidates any previous one). Point a dyndns2 client (router, ddclient) at <host>/nic/update and send the token as the HTTP Basic password",
+    "text": "Mint a new update token for this record (invalidates any previous one). Point a dyndns2 client (router, ddclient) at {$url} and send the token as the HTTP Basic password",
     "scope": "dns_record"
   },
   "dyndns_minted": {
@@ -4283,6 +4283,10 @@
     {
       "text": "Port publishing",
       "scope": "form_section"
+    },
+    {
+      "text": "Ports",
+      "scope": "stack_services"
     }
   ],
   "depends_on": {
@@ -9962,6 +9966,10 @@
   },
   "repository_url_credential": {
     "text": "Remove the credential from the repository URL: it would be written into the checkout's .git/config and stay there. Use a git provider instead, which hands its token to git per operation and never writes it down.",
+    "scope": "violations"
+  },
+  "repository_url_invalid": {
+    "text": "This is not a git clone URL. Use https://host/owner/repo.git, ssh://git@host/owner/repo.git, git@host:owner/repo.git, git://host/repo.git or an absolute path on this machine.",
     "scope": "violations"
   },
   "runs_as_root": {

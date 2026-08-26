@@ -140,26 +140,42 @@ public final class InstancePlacement {
     /**
      * The host a create by {@code ctx} lands on.
      *
+     * AN ACTOR WHO NAMES NO HOST GETS THE CHOOSER (corrected 2026-08-26). An admin used
+     * to get the local daemon back UNCONDITIONALLY for a Docker-capable workload with no
+     * host named -- no admission, no posture, no capacity, none of the gates every other
+     * placement walks. A fresh installation's local row is {@code blocked} until an
+     * operator admits it, so the create form that narrows its host pick to ELIGIBLE hosts
+     * (and therefore offers nothing at all) still landed the submit on the blocked
+     * machine: the visible form and the authoritative write disagreed, which is the one
+     * thing a placement decision may never do. An admin who chooses nothing now either
+     * lands on a host that ACCEPTS the workload or is refused by name.
+     *
+     * THE SEAM IS "IS THERE AN ACTOR", and it is the signature's own fact rather than a
+     * guess: a null {@code ctx} is in-process work (there is no HTTP caller today that
+     * passes one -- every create surface hands over the requesting context), so it has no
+     * form, no picker and nobody to show a refusal to, and it keeps the implicit local
+     * daemon. What it does NOT keep is a pass at deploy: {@link HostAdmission} runs there
+     * either way, so a system create aimed at a blocked local daemon refuses to RUN
+     * rather than running unadmitted. AIDEV-NOTE: the remaining hole is that this lane
+     * still bypasses the eligible set; closing it means every fixture that creates
+     * without an actor must first admit AND measure a host.
+     *
      * @param requested the caller-supplied host; honoured for admins, IGNORED otherwise
      * @throws Violations one of three, each naming what to DO: {@code no_placement_capacity}
      *         (eligible hosts, all out of memory), {@code host_capacity_unproven} (eligible
      *         hosts, none measured -- run preflight on the named one) or
      *         {@code no_placement_available} (nothing accepts this owner's workload at all).
-     *         Never a silent fall back to the local daemon
+     *         Never a silent fall back to the local daemon on an ACTOR's create
      */
     public static int forActor(@Nullable AccessContext ctx, @Nullable Integer requested,
                                @NonNull Workload workload) {
-        if (ctx == null || HohenheimAccess.isAdmin(ctx)) {
-            if (requested != null) {
-                return requested;
-            }
+        if (requested != null && (ctx == null || HohenheimAccess.isAdmin(ctx))) {
+            return requested;
+        }
+        if (ctx == null && workload.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
             // The implicit local daemon is a DOCKER host; a kind that CANNOT run on Docker
-            // has no implicit default and walks the same chooser a tenant create does. A
-            // kind that supports both (workspace) legitimately lands here: Docker is one of
-            // the runtimes it declared, so the local daemon is a host it accepts.
-            if (workload.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
-                return ServerModel.localServerId();
-            }
+            // has no implicit default and walks the chooser even here.
+            return ServerModel.localServerId();
         }
         return chooseForOwner(HohenheimAccess.packSubjects(
             HohenheimAccess.creationOwnerSubjects(ctx)), workload);

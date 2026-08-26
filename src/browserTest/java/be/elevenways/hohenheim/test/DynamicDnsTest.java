@@ -6,8 +6,14 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService.Status;
+import be.elevenways.hohenheim.server.cms.DnsRecordResource;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
+import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
@@ -198,6 +204,61 @@ class DynamicDnsTest extends HohenheimTestBase {
         assertThat(recordValue("dyn-http.example", "home"))
             .as("and the query-token attempt changed nothing")
             .isEqualTo("203.0.113.55");
+    }
+
+    /**
+     * The mint action's hint names THIS installation's update URL, in every locale.
+     *
+     * AIDEV-NOTE: it used to read "point a dyndns2 client at &lt;host&gt;/nic/update", a
+     * literal placeholder the operator was expected to translate into their own hostname.
+     * The URL is now an argument resolved from {@code network.main_url} -- the declared
+     * home of this installation's public URL -- and the path from the endpoint itself.
+     */
+    @Test
+    void theDyndnsHintNamesThisInstallationsUpdateUrl() {
+
+        String before = ServerSettings.VALUES.getValue(ServerSettings.Network.MAIN_URL);
+
+        try {
+            // 1. Configured: the description carries the absolute URL a router is pointed at.
+            ServerSettings.VALUES.setValue(ServerSettings.Network.MAIN_URL,
+                "https://panel.example.test/");
+            assertThat(dyndnsHint("en"))
+                .as("step 1: the operator reads the URL of the machine they are looking at")
+                .contains("https://panel.example.test/nic/update");
+
+            // 2. And the placeholder nobody could act on is gone, in BOTH locales.
+            assertThat(dyndnsHint("en"))
+                .as("step 2: no literal placeholder survives in English")
+                .doesNotContain("<host>");
+            assertThat(dyndnsHint("nl"))
+                .as("step 2: nor in Dutch, which carries the same argument")
+                .contains("https://panel.example.test/nic/update")
+                .doesNotContain("<host>");
+
+            // 3. FALSIFIED: with no main_url the hint degrades to the endpoint's own path
+            //    rather than fabricating a host out of whatever header arrived.
+            ServerSettings.VALUES.setValue(ServerSettings.Network.MAIN_URL, null);
+            assertThat(dyndnsHint("en"))
+                .as("step 3: the path alone is still true; a guessed host would not be")
+                .contains("/nic/update")
+                .doesNotContain("<host>", "https://panel.example.test");
+        } finally {
+            ServerSettings.VALUES.setValue(ServerSettings.Network.MAIN_URL, before);
+        }
+    }
+
+    /** The dyndns token row action's description, resolved in one locale. */
+    private static String dyndnsHint(String tag) {
+
+        Microcopy description = new DnsRecordResource().rowActions().stream()
+            .filter(action -> action.id().equals(Identifier.of("hohenheim", "dyndns_token")))
+            .findFirst()
+            .orElseThrow()
+            .description();
+
+        assertThat(description).as("the mint action declares a description").isNotNull();
+        return description.resolve(LocaleChain.ofTags(tag), new DefaultCatalogLoader());
     }
 
     // ------------------------------------------------------------------

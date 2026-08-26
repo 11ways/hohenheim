@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.instance.RuntimeImages;
 import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.hohenheim.server.instance.WorkspaceUids;
+import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.ExecSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
@@ -521,6 +522,82 @@ class WorkspaceKindTest {
             int ssh = workspace("ws-ssh-url", imageId, ServerModel.localServerId(),
                 Map.of("repository_url", "ssh://git@git.example.test/a.git"));
             assertThat(ssh).as("step 4: an ssh username is not a credential").isPositive();
+        });
+    }
+
+    /**
+     * A repository URL git could never clone is refused AT THE WRITE, on the field.
+     *
+     * AIDEV-NOTE: the grammar lives in {@link GitRepository#isSupportedCloneUrl} beside the
+     * runner that spawns git, so this asks the same question the clone does. Before it, an
+     * application could be created with {@code not-a-url} and the typo only surfaced hours
+     * later on a deploy nobody was watching.
+     */
+    @Test
+    void aRepositoryUrlGitCannotCloneIsRefusedOnTheForm() {
+        Db.run(datasource, () -> {
+            int imageId = runtimeImage("node-22g", "hohenheim/node-22:1",
+                "hohenheim/node-22", "npm start", 3000, null);
+
+            // 1. Every form the clone lane actually supports is stored, unchanged: an https
+            //    URL, an ssh URL, the scp-style spelling every provider pastes, a git://
+            //    remote and an absolute local path (which the preview/webhook lanes clone).
+            List<String> accepted = List.of(
+                "https://git.example.test/team/app.git",
+                "ssh://git@git.example.test/team/app.git",
+                "git@git.example.test:team/app.git",
+                "git://git.example.test/app.git",
+                "file:///srv/repos/app.git",
+                "/srv/repos/app.git");
+            int index = 0;
+            for (String url : accepted) {
+                int id = workspace("ws-clone-ok-" + index++, imageId, ServerModel.localServerId(),
+                    Map.of("repository_url", url));
+                assertThat(storedSettings(id).get("repository_url"))
+                    .as("step 1: " + url + " is a clone URL and is stored verbatim")
+                    .isEqualTo(url);
+            }
+
+            // 2. A bare word is not a URL at all: git would read it as a path relative to an
+            //    internal checkout directory, so it can only ever be a typo.
+            assertThat(catchThrowable(() -> workspace("ws-clone-word", imageId,
+                    ServerModel.localServerId(), Map.of("repository_url", "not-a-url"))))
+                .as("step 2: 'not-a-url' is refused by name")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("repository_url_invalid");
+
+            // 3. A scheme with one slash is refused too -- git reads it as the host "http".
+            assertThat(catchThrowable(() -> workspace("ws-clone-half", imageId,
+                    ServerModel.localServerId(), Map.of("repository_url", "http:/x"))))
+                .as("step 3: a mistyped scheme never becomes an ssh host")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("repository_url_invalid");
+
+            // 4. And whitespace, which git takes as part of the single argv entry.
+            assertThat(catchThrowable(() -> workspace("ws-clone-space", imageId,
+                    ServerModel.localServerId(),
+                    Map.of("repository_url", "https://git.example.test/team/my app.git"))))
+                .as("step 4: a space in the URL is refused")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("repository_url_invalid");
+
+            // 5. The refusal lands ON THE FIELD, which is what puts it under the input the
+            //    operator typed into rather than at the top of the form.
+            Violations violations = (Violations) catchThrowable(() -> workspace("ws-clone-field",
+                imageId, ServerModel.localServerId(), Map.of("repository_url", "not-a-url")));
+            assertThat(violations.all())
+                .as("step 5: the violation names repository_url")
+                .anyMatch(violation -> "repository_url".equals(violation.fieldName()));
+
+            // 6. FALSIFIED: the credential refusal still wins over the shape one -- a
+            //    credentialed URL is well-formed, and the operator must read the sentence
+            //    that is about the secret.
+            assertThat(catchThrowable(() -> workspace("ws-clone-cred", imageId,
+                    ServerModel.localServerId(),
+                    Map.of("repository_url", "https://someone:ghp_secrettoken@git.example.test/a.git"))))
+                .as("step 6: a credential is still refused as a credential")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("repository_url_credential");
         });
     }
 

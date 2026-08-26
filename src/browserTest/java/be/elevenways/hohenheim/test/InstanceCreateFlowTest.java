@@ -4,8 +4,16 @@ import com.microsoft.playwright.Locator;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.cms.InstanceResource;
+import be.elevenways.hohenheim.server.instance.InstancePlacement;
+import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -18,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * The instance CREATE journey the admin-UI wave promises: choice cards decide the kind,
@@ -457,6 +466,101 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
                 servers.save(row);
             }
         }
+    }
+
+    /**
+     * WHAT THE PICKER SHOWS AND WHAT THE SUBMIT WRITES ARE ONE ANSWER.
+     *
+     * The host pick narrows to hosts that ACCEPT the workload, so on a fresh installation
+     * it offers nothing -- and this create surface used to write NULL for an empty pick,
+     * which every reader downstream spells "the local daemon". The record was created
+     * against a machine the form had just refused to offer. The create now routes through
+     * {@link InstancePlacement#forActor} like every other create funnel: an empty pick is
+     * the CHOOSER's decision, and when nothing is eligible it is a refusal ON THE HOST
+     * FIELD rather than a row.
+     */
+    @Test
+    @Order(6)
+    void anEmptyHostPickIsPlacedByTheChooserOrRefusedOnTheHostField() throws Exception {
+        var servers = Models.get(ServerModel.class);
+        int local = ServerModel.localServerId();
+        Row before = servers.findById(local);
+        String priorAdmission = before.get(ServerModel.ADMISSION);
+        Object priorCapabilities = before.get(ServerModel.CAPABILITIES);
+        try {
+            // 1. The state a fresh installation is in: the local daemon is enrolled and
+            //    BLOCKED, and this class's seeded hosts were never admitted either -- so
+            //    nothing is eligible. The submit is refused and writes NOTHING; it used to
+            //    create the record against the blocked local host.
+            assertThat((String) before.get(ServerModel.ADMISSION))
+                .as("fixture: the local daemon is blocked until an operator admits it")
+                .isEqualTo(ServerModel.ADMISSION_BLOCKED);
+            HttpResponse<String> nowhere = httpPostForm("/admin/instances/new",
+                "name=cf-nowhere&kind=hohenheim%3Adocker_container&server_id=",
+                sessionToken, csrfToken);
+            assertThat(nowhere.statusCode())
+                .as("step 1: an unplaceable create re-renders, never redirects")
+                .isNotIn(302, 303);
+            assertThat(findInstance("cf-nowhere"))
+                .as("step 1: and NOTHING was persisted -- not even against the local daemon")
+                .isNull();
+            assertThat(nowhere.body())
+                .as("step 1: the operator is told why, in the placement vocabulary")
+                .contains("No admitted host currently accepts this workload");
+
+            // 2. And the refusal is PATHED ONTO THE HOST ENTRY, which is what puts the
+            //    sentence beside the empty pick instead of in the form's generic error box.
+            Throwable refused = catchThrowable(() -> new InstanceResource().persistRow(
+                Map.of("name", "cf-nowhere-direct", "kind", "hohenheim:docker_container"),
+                adminAccessContext()));
+            assertThat(refused).as("step 2: the persist lane refuses").isInstanceOf(Violations.class);
+            assertThat(((Violations) refused).all())
+                .as("step 2: on the host field, with the same message")
+                .anyMatch(violation -> violation.fieldName().equals("server_id")
+                    && violation.message().key().equals("no_placement_available"));
+            assertThat(findInstance("cf-nowhere-direct"))
+                .as("step 2: still nothing persisted").isNull();
+
+            // 3. The operator admits and preflights the local daemon. The SAME submit --
+            //    still an empty pick -- now lands, and it lands on the host the chooser
+            //    picked rather than on a default nobody chose.
+            HostFixtures.makeLocalPlaceable(8192);
+            HttpResponse<String> placed = httpPostForm("/admin/instances/new",
+                "name=cf-chosen&kind=hohenheim%3Adocker_container&server_id=",
+                sessionToken, csrfToken);
+            assertThat(placed.statusCode()).as("step 3: the create redirects").isIn(302, 303);
+            Row chosen = findInstance("cf-chosen");
+            assertThat(chosen).as("step 3: the record exists").isNotNull();
+            assertThat((Object) chosen.get(InstanceModel.SERVER_ID))
+                .as("step 3: on the one eligible host, written EXPLICITLY (never a null"
+                    + " that only reads as local)")
+                .isEqualTo(local);
+
+            // 4. Naming a host is still the operator's own authority, and it is honoured
+            //    even where the chooser would not have gone: the picker is not the gate,
+            //    and an operator who names a host gets the host they named.
+            HttpResponse<String> named = httpPostForm("/admin/instances/new",
+                "name=cf-named&kind=hohenheim%3Adocker_container&server_id=" + dockerHostId,
+                sessionToken, csrfToken);
+            assertThat(named.statusCode()).as("step 4: the create redirects").isIn(302, 303);
+            assertThat((Object) findInstance("cf-named").get(InstanceModel.SERVER_ID))
+                .as("step 4: the named host is what persisted")
+                .isEqualTo(dockerHostId);
+        } finally {
+            Row after = servers.findById(local);
+            after.set(ServerModel.ADMISSION, priorAdmission);
+            after.set(ServerModel.CAPABILITIES, priorCapabilities);
+            servers.save(after);
+        }
+    }
+
+    /** The seeded admin as a production-shaped context (see {@link TestAccessContexts}). */
+    private static AccessContext adminAccessContext() {
+        Row user = AuthModels.users().find()
+            .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        assertThat(user).as("the harness seeded its admin").isNotNull();
+        return TestAccessContexts.contextFor(new UserPrincipal(
+            ((Integer) user.get(UserModel.ID)).longValue(), user.get(UserModel.DISPLAY_NAME)));
     }
 
     /** The kind settings sub-form: the one fieldset whose path is the settings field. */

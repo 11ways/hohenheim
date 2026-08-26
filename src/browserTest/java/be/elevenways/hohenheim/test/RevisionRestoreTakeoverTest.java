@@ -184,7 +184,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             //    disabled and the hostname keeps its single owner (B).
             HttpResponse<String> manageRestore = post(
                 "/manage/sites/" + aId + "/revision/" + enabledRevA + "/restore",
-                "", operatorSession.token().secret(), operatorCsrf);
+                confirmed(""), operatorSession.token().secret(), operatorCsrf);
             // 404, not a redirect: ManageSiteResource.subpages() deliberately omits the
             // revision history, and the revision ROUTES are now bound to that
             // declaration (they used to consult the model's behaviour alone and served
@@ -204,7 +204,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             // 6. /admin reaches the same generic endpoint; it is refused identically.
             HttpResponse<String> adminRestore = post(
                 "/admin/sites/" + aId + "/revision/" + enabledRevA + "/restore",
-                "", sessionToken, csrfToken);
+                confirmed(""), sessionToken, csrfToken);
             assertThat(adminRestore.statusCode())
                 .as("the /admin restore is refused, never a server error")
                 .isIn(200, 302, 303);
@@ -242,7 +242,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             //     still proves what it claims.
             HttpResponse<String> quarantinedRestore = post(
                 "/admin/sites/" + aId + "/revision/" + enabledRevA + "/restore",
-                "", sessionToken, csrfToken);
+                confirmed(""), sessionToken, csrfToken);
             assertThat(quarantinedRestore.statusCode())
                 .as("the quarantined restore is refused, never a server error")
                 .isIn(200, 302, 303);
@@ -252,7 +252,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
 
             HttpResponse<String> cleanRestore = post(
                 "/admin/sites/" + aId + "/revision/" + enabledRevA + "/restore",
-                "", sessionToken, csrfToken);
+                confirmed(""), sessionToken, csrfToken);
             assertThat(cleanRestore.statusCode())
                 .as("with the conflict gone the restore goes through")
                 .isIn(200, 302, 303);
@@ -376,7 +376,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             // 4. THE ATTACK: an ordinary manage grant replays the pre-gate revision.
             HttpResponse<String> attack = post(
                 "/manage/sites/" + siteId + "/revision/" + ungatedRevision + "/restore",
-                "", tenantSession.token().secret(), tenantCsrf);
+                confirmed(""), tenantSession.token().secret(), tenantCsrf);
 
             // 5. The SERVED effect first, because that is what the attack is FOR: the
             //    hostname must still be challenged. A refusal that left the site
@@ -405,7 +405,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             //    refused for the declared reason, not because restore stopped working.
             HttpResponse<String> adminRestore = post(
                 "/admin/sites/" + siteId + "/revision/" + ungatedRevision + "/restore",
-                "", sessionToken, csrfToken);
+                confirmed(""), sessionToken, csrfToken);
             assertThat(adminRestore.statusCode())
                 .as("step 7: the admin restore goes through")
                 .isIn(200, 302, 303);

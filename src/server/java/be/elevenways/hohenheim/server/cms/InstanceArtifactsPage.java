@@ -149,9 +149,9 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
                     CmsRoutes.invokeRow(panel, this.resource.slug(), artifactId, actionId),
                     pageUrl).toUrl()),
                 accessContext);
-        List<InvokeActionState> invokes = new ArrayList<>(presentation.inlineInvokes());
-        invokes.addAll(presentation.overflowInvokes());
-        return invokes;
+        // Every band, the destructive tail included: restore IS destructive, and summing
+        // the inline and overflow buckets by hand silently dropped it.
+        return presentation.allInvokes();
     }
 
     static @Nullable String isoOf(@Nullable Object value) {

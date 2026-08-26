@@ -15,10 +15,14 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.rules.Rule;
 import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
 import be.elevenways.zenit.common.orm.query.rules.RuleOperator;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.data.NoticeData;
+import be.elevenways.zenit.widget.common.builtin.AlertVariant;
+import be.elevenways.zenit.widget.common.builtin.AlertWidget;
 import be.elevenways.zenit.widget.common.builtin.ChartWidget;
 import be.elevenways.zenit.widget.common.builtin.ColumnsWidget;
 import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
@@ -105,13 +109,42 @@ public final class AdminDashboard extends DashboardPanelPeer {
             // stays, as a tile. If the trend is wanted, it belongs on the firewall operator's
             // own overview page, which they open on purpose.
         }
-        widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
-                "title", HohenheimWidgetCopy.localized("recent_activity", "dashboard"),
-                "source", CmsSupport.ACTIVITY_SOURCE,
-                "sort", "created_at",
-                "descending", true,
-                "limit", 10))));
+        widgets.add(section(new WidgetTree(recentActivity(accessContext))));
         return new WidgetTree(widgets);
+    }
+
+    /**
+     * The recent-activity band: the ten latest log rows, under the SAME notice
+     * {@code /admin/activity} renders while recording is switched off.
+     *
+     * AIDEV-NOTE: without it this band shows the generic "no records found" -- which reads
+     * as "the fleet was quiet", when the truth is that nothing is being written down. The
+     * fact and the sentence come from {@link AdminActivityResource#recordingNotice()}
+     * (the framework resource's own), never from a second read of {@code activity.enabled}.
+     * The notice is resolved here because {@code NoticeData} is display-ready strings; with
+     * no conduit there is no locale chain and no viewer either, so the band is just the list.
+     */
+    private static @NonNull List<WidgetInstance> recentActivity(@NonNull AccessContext accessContext) {
+
+        List<WidgetInstance> band = new ArrayList<>(2);
+        Microcopy notice = AdminActivityResource.recordingNotice();
+        Conduit conduit = accessContext.conduit();
+
+        if (notice != null && conduit != null) {
+            band.add(new WidgetInstance(AlertWidget.ID,
+                    Map.of("variant", AlertVariant.WARNING.token()))
+                .withData(NoticeData.of(
+                    notice.resolve(conduit.getLocales(), conduit.getMessageResolver()), null)));
+        }
+
+        band.add(new WidgetInstance(RecordsWidget.ID, Map.of(
+            "title", HohenheimWidgetCopy.localized("recent_activity", "dashboard"),
+            "source", CmsSupport.ACTIVITY_SOURCE,
+            "sort", "created_at",
+            "descending", true,
+            "limit", 10)));
+
+        return band;
     }
 
     /** The tile label resolves the model's "plural" microcopy per content locale. */
@@ -125,8 +158,12 @@ public final class AdminDashboard extends DashboardPanelPeer {
     }
 
     private static @NonNull WidgetInstance section(@NonNull WidgetInstance child) {
+        return section(new WidgetTree(List.of(child)));
+    }
+
+    private static @NonNull WidgetInstance section(@NonNull WidgetTree children) {
         return new WidgetInstance(SectionWidget.ID, Map.of("css_class", "hh-dashboard-band"),
-            new WidgetTree(List.of(child)));
+            children);
     }
 
 }

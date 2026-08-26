@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -11,6 +12,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
@@ -39,10 +41,13 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * are wrong under a lost race whether or not the threads actually interleaved. Raise the
  * racer count if this ever needs to be more aggressive; do not weaken the state assertions.
  *
- * AIDEV-NOTE: hermetic on purpose -- no daemon anywhere. The instances carry no host, so
- * InstanceCapacity's per-HOST booking is a no-op here and the numbers asserted are the
- * OWNER budget's alone. That separation is the point: the two ledgers book the same amount
- * and must not be read through each other.
+ * AIDEV-NOTE: hermetic on purpose -- no daemon anywhere, though the instances DO carry a
+ * host since the create surface started placing them (2026-08-26): the fixture admits and
+ * measures the local daemon at a budget far larger than any cap asserted here, so the
+ * per-HOST ledger never refuses and every number asserted is still the OWNER budget's
+ * alone. That separation is the point: the two ledgers book the same amount and must not
+ * be read through each other -- which is exactly why the host budget is kept out of range
+ * rather than the host kept absent.
  */
 class InstanceMemoryQuotaTest extends HohenheimTestBase {
 
@@ -56,6 +61,16 @@ class InstanceMemoryQuotaTest extends HohenheimTestBase {
 
     private Integer previousMemoryCap;
     private Integer previousCountCap;
+
+    /**
+     * The create submit PLACES the record, so the fleet must hold a host that accepts it:
+     * the budget is deliberately enormous, so the host ledger never speaks and the caps
+     * under test are the only thing that can refuse.
+     */
+    @BeforeAll
+    static void makeSomewhereToPlace() {
+        HostFixtures.makeLocalPlaceable(65536);
+    }
 
     @AfterEach
     void cleanUp() {
