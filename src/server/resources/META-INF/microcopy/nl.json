@@ -437,6 +437,10 @@
     {
       "text": "Pad naar de Dockerfile, relatief aan de repository.",
       "scope": "help"
+    },
+    {
+      "text": "Dockerfile",
+      "scope": "builder_kind"
     }
   ],
   "builder": [
@@ -919,6 +923,14 @@
     {
       "text": "Actief",
       "scope": "database_status"
+    },
+    {
+      "text": "Actief",
+      "scope": "cert_status"
+    },
+    {
+      "text": "Actief",
+      "scope": "site_status"
     }
   ],
   "add_domain": {
@@ -1267,6 +1279,18 @@
     {
       "text": "Mislukt",
       "scope": "dns_transfer"
+    },
+    {
+      "text": "Mislukt",
+      "scope": "build_status"
+    },
+    {
+      "text": "Mislukt",
+      "scope": "preview_status"
+    },
+    {
+      "text": "Mislukt",
+      "scope": "release_status"
     }
   ],
   "forced": [
@@ -1471,6 +1495,10 @@
     {
       "text": "Terugdraaien",
       "scope": "instance"
+    },
+    {
+      "text": "Terugrollen",
+      "scope": "release_kind"
     }
   ],
   "rollback_confirm": [
@@ -1513,10 +1541,16 @@
     "text": "SSL",
     "scope": "site_domains"
   },
-  "start": {
-    "text": "Starten",
-    "scope": "spamservice"
-  },
+  "start": [
+    {
+      "text": "Starten",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Starten",
+      "scope": "power_operation"
+    }
+  ],
   "started": [
     {
       "text": "Gestart",
@@ -1529,6 +1563,10 @@
     {
       "text": "Gestart",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Gestart",
+      "scope": "depends_condition"
     }
   ],
   "starting": [
@@ -2830,7 +2868,7 @@
     }
   ],
   "import_done": {
-    "text": "{$count} records geimporteerd.",
+    "text": "{$count} records geïmporteerd.",
     "scope": "dns_zone"
   },
   "import_empty": {
@@ -3054,7 +3092,7 @@
     "scope": "violations"
   },
   "tenant_proxy_upstream_private": {
-    "text": "Een gedelegeerde proxysite kan niet doorsturen naar een loopback- of prive-adres",
+    "text": "Een gedelegeerde proxysite kan niet doorsturen naar een loopback- of privé-adres",
     "scope": "violations"
   },
   "proxy_upstream_invalid": {
@@ -3287,14 +3325,26 @@
       "scope": "help"
     }
   ],
-  "role_primary": {
-    "text": "Primair (hier beheerd)",
-    "scope": "dns_role"
-  },
-  "role_secondary": {
-    "text": "Secundair (gerepliceerd)",
-    "scope": "dns_role"
-  },
+  "role_primary": [
+    {
+      "text": "Primair",
+      "scope": "dns_role"
+    },
+    {
+      "text": "Hier beheerd en bewerkt.",
+      "scope": "help"
+    }
+  ],
+  "role_secondary": [
+    {
+      "text": "Secundair",
+      "scope": "dns_role"
+    },
+    {
+      "text": "Gerepliceerd vanaf de eigenaar-peer via zonetransfer.",
+      "scope": "help"
+    }
+  ],
   "peer_none": {
     "text": "Geen",
     "scope": "dns_peer"
@@ -3507,11 +3557,11 @@
   ],
   "cert_private_key_pem": [
     {
-      "text": "Prive-sleutel (PEM)",
+      "text": "Privé-sleutel (PEM)",
       "scope": "field"
     },
     {
-      "text": "De PEM-gecodeerde prive-sleutel die bij het certificaat hoort. Opgeslagen als geheim: laat leeg om de huidige sleutel te behouden.",
+      "text": "De PEM-gecodeerde privé-sleutel die bij het certificaat hoort. Opgeslagen als geheim: laat leeg om de huidige sleutel te behouden.",
       "scope": "help"
     }
   ],
@@ -3877,6 +3927,10 @@
     {
       "text": "Stoppen",
       "scope": "instance"
+    },
+    {
+      "text": "Stoppen",
+      "scope": "power_operation"
     }
   ],
   "stop_hint": [
@@ -3915,6 +3969,10 @@
     {
       "text": "Herstarten",
       "scope": "instance"
+    },
+    {
+      "text": "Herstarten",
+      "scope": "power_operation"
     }
   ],
   "restart_hint": {
@@ -4279,7 +4337,7 @@
       "scope": "field"
     },
     {
-      "text": "Registry-host voor prive-images, bv. ghcr.io. Laat leeg voor Docker Hub.",
+      "text": "Registry-host voor privé-images, bv. ghcr.io. Laat leeg voor Docker Hub.",
       "scope": "help"
     }
   ],
@@ -4671,10 +4729,16 @@
     "text": "Er wordt een volume over dit pad gekoppeld, dus het bestand is verborgen zodra de container start",
     "scope": "violations"
   },
-  "healthy": {
-    "text": "Gezond",
-    "scope": "stack_state"
-  },
+  "healthy": [
+    {
+      "text": "Gezond",
+      "scope": "stack_state"
+    },
+    {
+      "text": "Gezond",
+      "scope": "depends_condition"
+    }
+  ],
   "running": [
     {
       "text": "Actief",
@@ -4691,6 +4755,14 @@
     {
       "text": "Bezig",
       "scope": "schedule_run_status"
+    },
+    {
+      "text": "Bezig",
+      "scope": "build_status"
+    },
+    {
+      "text": "Actief",
+      "scope": "preview_status"
     }
   ],
   "unhealthy": {
@@ -4715,10 +4787,16 @@
     "text": "Ontbreekt",
     "scope": "stack_state"
   },
-  "orphaned": {
-    "text": "Verweesd",
-    "scope": "stack_state"
-  },
+  "orphaned": [
+    {
+      "text": "Verweesd",
+      "scope": "stack_state"
+    },
+    {
+      "text": "Verweesd",
+      "scope": "reconcile_bucket"
+    }
+  ],
   "unknown": {
     "text": "Onbekend",
     "scope": "stack_state"
@@ -4727,10 +4805,20 @@
     "text": "Inactief",
     "scope": "stack_status"
   },
-  "deploying": {
-    "text": "Bezig met uitrollen",
-    "scope": "stack_status"
-  },
+  "deploying": [
+    {
+      "text": "Bezig met uitrollen",
+      "scope": "stack_status"
+    },
+    {
+      "text": "Bezig met uitrollen",
+      "scope": "preview_status"
+    },
+    {
+      "text": "Bezig met uitrollen",
+      "scope": "release_status"
+    }
+  ],
   "success": {
     "text": "Geslaagd",
     "scope": "stack_deploy_status"
@@ -4893,6 +4981,10 @@
     {
       "text": "Fout",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Fout",
+      "scope": "cert_status"
     }
   ],
   "deployed": {
@@ -5436,7 +5528,7 @@
     "scope": "instance"
   },
   "backup_done": {
-    "text": "Back-up van {$name} geexporteerd en geverifieerd",
+    "text": "Back-up van {$name} geëxporteerd en geverifieerd",
     "scope": "instance"
   },
   "capturing": {
@@ -5517,6 +5609,10 @@
     {
       "text": "Een map op een andere host via ssh; een ander storingsdomein als die host dat werkelijk is",
       "scope": "backup_target_kind_description"
+    },
+    {
+      "text": "SSH",
+      "scope": "host_mode"
     }
   ],
   "snapshots": {
@@ -5690,7 +5786,7 @@
     "scope": "violations"
   },
   "document_required": {
-    "text": "Plak eerst een geexporteerd sjabloondocument",
+    "text": "Plak eerst een geëxporteerd sjabloondocument",
     "scope": "violations"
   },
   "variable_key_format": {
@@ -5802,7 +5898,7 @@
       "scope": "field"
     },
     {
-      "text": "Consolecommando voor een nette stop; gebruikt door de console-matchergolf, nu al opgeslagen en geexporteerd",
+      "text": "Consolecommando voor een nette stop; gebruikt door de console-matchergolf, nu al opgeslagen en geëxporteerd",
       "scope": "help"
     }
   ],
@@ -5932,16 +6028,26 @@
     "text": "Gegevens wissen",
     "scope": "reinstall_policy"
   },
-  "pending": {
-    "text": "Installatie wacht",
-    "scope": "install_state"
-  },
+  "pending": [
+    {
+      "text": "Installatie wacht",
+      "scope": "install_state"
+    },
+    {
+      "text": "In behandeling",
+      "scope": "cert_status"
+    },
+    {
+      "text": "In wachtrij",
+      "scope": "release_status"
+    }
+  ],
   "installing": {
     "text": "Installeren",
     "scope": "install_state"
   },
   "installed": {
-    "text": "Geinstalleerd",
+    "text": "Geïnstalleerd",
     "scope": "install_state"
   },
   "plain": [
@@ -6109,7 +6215,7 @@
     }
   ],
   "approval_note": {
-    "text": "Een geimporteerd sjabloon is altijd niet-goedgekeurd: een operator moet het goedkeuren voordat het selecteerbaar wordt.",
+    "text": "Een geïmporteerd sjabloon is altijd niet-goedgekeurd: een operator moet het goedkeuren voordat het selecteerbaar wordt.",
     "scope": "template_import"
   },
   "source_placeholder": {
@@ -6125,7 +6231,7 @@
     "scope": "template_import"
   },
   "document_help": {
-    "text": "Plak de inhoud van het geexporteerde .template.json; de ingebedde checksum wordt gecontroleerd",
+    "text": "Plak de inhoud van het geëxporteerde .template.json; de ingebedde checksum wordt gecontroleerd",
     "scope": "template_import"
   },
   "image_any": {
@@ -6298,10 +6404,16 @@
     "text": "Wachttijd",
     "scope": "schedule_step"
   },
-  "on_failure": {
-    "text": "Bij falen",
-    "scope": "schedule_step"
-  },
+  "on_failure": [
+    {
+      "text": "Bij falen",
+      "scope": "schedule_step"
+    },
+    {
+      "text": "Bij fout",
+      "scope": "restart_policy"
+    }
+  ],
   "console_command": {
     "text": "Consolecommando sturen",
     "scope": "schedule_action"
@@ -6644,10 +6756,16 @@
     "text": "Werkgeheugen in MiB, live",
     "scope": "instance_stats"
   },
-  "network": {
-    "text": "Netwerk",
-    "scope": "instance_stats"
-  },
+  "network": [
+    {
+      "text": "Netwerk",
+      "scope": "instance_stats"
+    },
+    {
+      "text": "Netwerk",
+      "scope": "reconcile_kind"
+    }
+  ],
   "network_description": {
     "text": "Cumulatieve KiB sinds de start van de workload",
     "scope": "instance_stats"
@@ -6716,6 +6834,10 @@
     {
       "text": "Een uitrol van een applicatie (beheerd door die applicatie)",
       "scope": "instance_kind_description"
+    },
+    {
+      "text": "Release",
+      "scope": "release_kind"
     }
   ],
   "stack_service": [
@@ -6881,7 +7003,7 @@
     "scope": "violations"
   },
   "variable_one_owner": {
-    "text": "Een variabele hoort bij precies een instantie of een omgeving",
+    "text": "Een variabele hoort bij precies één instantie of één omgeving",
     "scope": "violations"
   },
   "git_provider_unknown": {
@@ -6972,7 +7094,7 @@
       "scope": "field"
     },
     {
-      "text": "GitHub App-id. Met installatie-id en privesleutel worden kortlevende installatietokens per operatie gemunt.",
+      "text": "GitHub App-id. Met installatie-id en privésleutel worden kortlevende installatietokens per operatie gemunt.",
       "scope": "help"
     }
   ],
@@ -6988,11 +7110,11 @@
   ],
   "provider_app_private_key": [
     {
-      "text": "App-privesleutel",
+      "text": "App-privésleutel",
       "scope": "field"
     },
     {
-      "text": "De RSA-privesleutel van de App (PEM). Versleuteld opgeslagen.",
+      "text": "De RSA-privésleutel van de App (PEM). Versleuteld opgeslagen.",
       "scope": "help"
     }
   ],
@@ -7088,10 +7210,16 @@
     "text": "Nu verwijderen",
     "scope": "preview_deployment"
   },
-  "destroyed": {
-    "text": "Preview {$hostname} verwijderd",
-    "scope": "preview_deployment"
-  },
+  "destroyed": [
+    {
+      "text": "Preview {$hostname} verwijderd",
+      "scope": "preview_deployment"
+    },
+    {
+      "text": "Verwijderd",
+      "scope": "preview_status"
+    }
+  ],
   "destroy_failed": [
     {
       "text": "Preview-afbraak mislukt: {$reason}",
@@ -7569,7 +7697,7 @@
     "scope": "server_media"
   },
   "media_uploaded": {
-    "text": "Media '{$name}' is naar deze host geupload",
+    "text": "Media '{$name}' is naar deze host geüpload",
     "scope": "server_media"
   },
   "upload_title": {
@@ -8517,7 +8645,7 @@
     "scope": "instance"
   },
   "cold_note": {
-    "text": "Een koude verplaatsing: de workload wordt gestopt, volledig geexporteerd, op de bestemming geimporteerd en opnieuw gestart als hij draaide.",
+    "text": "Een koude verplaatsing: de workload wordt gestopt, volledig geëxporteerd, op de bestemming geïmporteerd en opnieuw gestart als hij draaide.",
     "scope": "instance_migrate"
   },
   "current_host": {
@@ -8755,7 +8883,7 @@
     "scope": "server"
   },
   "acknowledge_body": {
-    "text": "Gedeelde containers op {$name} betekent dat vijandige tenants op EEN kernel draaien: een containerontsnapping bereikt elke andere workload op de machine en de host zelf. Enkel VM-isolatie is bestand tegen een vijandige root-tenant. Typ de hostnaam om dit risico te aanvaarden; het wordt op jouw naam vastgelegd en moet opnieuw aanvaard worden als de houding of deze waarschuwing verandert.",
+    "text": "Gedeelde containers op {$name} betekent dat vijandige tenants op ÉÉN kernel draaien: een containerontsnapping bereikt elke andere workload op de machine en de host zelf. Enkel VM-isolatie is bestand tegen een vijandige root-tenant. Typ de hostnaam om dit risico te aanvaarden; het wordt op jouw naam vastgelegd en moet opnieuw aanvaard worden als de houding of deze waarschuwing verandert.",
     "scope": "server"
   },
   "posture_acknowledged": {
@@ -8779,7 +8907,7 @@
     "scope": "server_overview"
   },
   "import_partial": {
-    "text": "{$count} records geimporteerd; overgeslagen: {$skipped}",
+    "text": "{$count} records geïmporteerd; overgeslagen: {$skipped}",
     "scope": "dns_zone"
   },
   "import_failed": {
@@ -8802,10 +8930,16 @@
     "text": "Herstel van '{$name}' is mislukt; bekijk het serverlog voor details.",
     "scope": "database_tab"
   },
-  "refused": {
-    "text": "De aanvraag werd geweigerd.",
-    "scope": "violations"
-  },
+  "refused": [
+    {
+      "text": "De aanvraag werd geweigerd.",
+      "scope": "violations"
+    },
+    {
+      "text": "Geweigerd",
+      "scope": "build_status"
+    }
+  ],
   "deleted_database": {
     "text": "(verwijderd)",
     "scope": "site_databases"
@@ -8864,7 +8998,7 @@
       "scope": "site"
     },
     {
-      "text": "TLS-certificaten: geuploade PEM-bestanden en die van Let's Encrypt.",
+      "text": "TLS-certificaten: geüploade PEM-bestanden en die van Let's Encrypt.",
       "scope": "certificate"
     },
     {
@@ -9074,10 +9208,16 @@
     "text": "Overgedragen",
     "scope": "dns_transfer"
   },
-  "expired": {
-    "text": "Verlopen",
-    "scope": "dns_transfer"
-  },
+  "expired": [
+    {
+      "text": "Verlopen",
+      "scope": "dns_transfer"
+    },
+    {
+      "text": "Verlopen",
+      "scope": "preview_status"
+    }
+  ],
   "root_group": {
     "text": "De lijst zelf (bovenste niveau)",
     "scope": "access_rule"
@@ -9372,6 +9512,10 @@
     {
       "text": "Een blijvende ontwikkelbak: je bestanden blijven, de rest is wegwerpbaar",
       "scope": "instance_kind_description"
+    },
+    {
+      "text": "Werkplek",
+      "scope": "builder_kind"
     }
   ],
   "application": [
@@ -9396,10 +9540,20 @@
     "text": "XFS-projectquota",
     "scope": "volume_backend"
   },
-  "http": {
-    "text": "HTTP-pad",
-    "scope": "readiness_kind"
-  },
+  "http": [
+    {
+      "text": "HTTP-pad",
+      "scope": "readiness_kind"
+    },
+    {
+      "text": "HTTP-01",
+      "scope": "cert_challenge"
+    },
+    {
+      "text": "HTTP",
+      "scope": "upstream_scheme"
+    }
+  ],
   "signal": {
     "text": "Signaal",
     "scope": "stop_kind"
@@ -9457,7 +9611,7 @@
     "scope": "violations"
   },
   "volume_container_path_conflict": {
-    "text": "Volumes '{$first}' en '{$second}' koppelen allebei op '{$path}', dus de workload zou twee mappen op een pad krijgen. Geef er een een ander containerpad.",
+    "text": "Volumes '{$first}' en '{$second}' koppelen allebei op '{$path}', dus de workload zou twee mappen op een pad krijgen. Geef er één een ander containerpad.",
     "scope": "violations"
   },
   "application_not_found": {
@@ -9516,7 +9670,7 @@
       "scope": "field"
     },
     {
-      "text": "Ingebouwde images horen bij de code: aanpassingen en verwijderingen worden bij de volgende start hersteld. Kopieer er een om te varieren.",
+      "text": "Ingebouwde images horen bij de code: aanpassingen en verwijderingen worden bij de volgende start hersteld. Kopieer er een om te variëren.",
       "scope": "help"
     }
   ],
@@ -9781,7 +9935,7 @@
     "scope": "violations"
   },
   "runtime_image_import_failed": {
-    "text": "Runtime-image '{$name}' kon niet in de Incus-imagestore geimporteerd worden: {$reason}",
+    "text": "Runtime-image '{$name}' kon niet in de Incus-imagestore geïmporteerd worden: {$reason}",
     "scope": "violations"
   },
   "runtime_image_context_missing": {
@@ -9827,7 +9981,7 @@
     "scope": "violations"
   },
   "runtime_image_no_builder": {
-    "text": "Runtime-image '{$name}' kan niet voorbereid worden op host '{$host}': een Incus-host met workspaces heeft ook Docker nodig, want dat bouwt de rootfs waaruit de image geimporteerd wordt.",
+    "text": "Runtime-image '{$name}' kan niet voorbereid worden op host '{$host}': een Incus-host met workspaces heeft ook Docker nodig, want dat bouwt de rootfs waaruit de image geïmporteerd wordt.",
     "scope": "violations"
   },
   "expose": {
@@ -10162,10 +10316,16 @@
       "scope": "site_protected_paths"
     }
   ],
-  "delete_confirm_named": {
-    "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam.",
-    "scope": "dns_zone"
-  },
+  "delete_confirm_named": [
+    {
+      "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam.",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "{$name} {$type} {$value} verwijderen uit zone {$origin}? Autoritatieve antwoorden veranderen onmiddellijk. Dit kan niet ongedaan worden gemaakt.",
+      "scope": "dns_record"
+    }
+  ],
   "delete_confirm_dependents": {
     "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.",
     "scope": "dns_zone"
@@ -10279,5 +10439,197 @@
   "tenant_access_list_not_usable": {
     "text": "Kies een gedeelde toegangslijst of een die je beheert",
     "scope": "violations"
+  },
+  "nixpacks": {
+    "text": "Nixpacks",
+    "scope": "builder_kind"
+  },
+  "succeeded": [
+    {
+      "text": "Geslaagd",
+      "scope": "build_status"
+    },
+    {
+      "text": "Geslaagd",
+      "scope": "release_status"
+    }
+  ],
+  "timed_out": {
+    "text": "Time-out",
+    "scope": "build_status"
+  },
+  "quota_exceeded": {
+    "text": "Quota overschreden",
+    "scope": "build_status"
+  },
+  "letsencrypt": {
+    "text": "Let's Encrypt",
+    "scope": "cert_provider"
+  },
+  "custom": {
+    "text": "Eigen",
+    "scope": "cert_provider"
+  },
+  "acme_account": {
+    "text": "ACME-account",
+    "scope": "cert_provider"
+  },
+  "dns": {
+    "text": "DNS-01",
+    "scope": "cert_challenge"
+  },
+  "postgres": {
+    "text": "PostgreSQL",
+    "scope": "db_engine"
+  },
+  "mysql": {
+    "text": "MySQL",
+    "scope": "db_engine"
+  },
+  "redis": {
+    "text": "Redis",
+    "scope": "db_engine"
+  },
+  "mongo": {
+    "text": "MongoDB",
+    "scope": "db_engine"
+  },
+  "a": {
+    "text": "A",
+    "scope": "dns_record_type"
+  },
+  "aaaa": {
+    "text": "AAAA",
+    "scope": "dns_record_type"
+  },
+  "cname": {
+    "text": "CNAME",
+    "scope": "dns_record_type"
+  },
+  "ns": {
+    "text": "NS",
+    "scope": "dns_record_type"
+  },
+  "mx": {
+    "text": "MX",
+    "scope": "dns_record_type"
+  },
+  "txt": {
+    "text": "TXT",
+    "scope": "dns_record_type"
+  },
+  "caa": {
+    "text": "CAA",
+    "scope": "dns_record_type"
+  },
+  "srv": {
+    "text": "SRV",
+    "scope": "dns_record_type"
+  },
+  "slack": {
+    "text": "Slack",
+    "scope": "notification_format"
+  },
+  "discord": {
+    "text": "Discord",
+    "scope": "notification_format"
+  },
+  "generic": {
+    "text": "Generieke JSON",
+    "scope": "notification_format"
+  },
+  "container": {
+    "text": "Container",
+    "scope": "reconcile_kind"
+  },
+  "volume": [
+    {
+      "text": "Volume",
+      "scope": "reconcile_kind"
+    },
+    {
+      "text": "Volume",
+      "scope": "stack_mount_type"
+    }
+  ],
+  "owned": {
+    "text": "In beheer",
+    "scope": "reconcile_bucket"
+  },
+  "foreign_known": {
+    "text": "Extern (bekend)",
+    "scope": "reconcile_bucket"
+  },
+  "foreign_colliding": {
+    "text": "Extern (conflict)",
+    "scope": "reconcile_bucket"
+  },
+  "foreign_unrelated": {
+    "text": "Extern (niet gerelateerd)",
+    "scope": "reconcile_bucket"
+  },
+  "probing": {
+    "text": "Wordt gecontroleerd",
+    "scope": "release_status"
+  },
+  "switching": {
+    "text": "Wordt omgeschakeld",
+    "scope": "release_status"
+  },
+  "draining": {
+    "text": "Wordt afgebouwd",
+    "scope": "release_status"
+  },
+  "interrupted": {
+    "text": "Onderbroken",
+    "scope": "release_status"
+  },
+  "local": {
+    "text": "Lokaal",
+    "scope": "host_mode"
+  },
+  "tmpfs": {
+    "text": "Tmpfs",
+    "scope": "stack_mount_type"
+  },
+  "unless_stopped": {
+    "text": "Tenzij gestopt",
+    "scope": "restart_policy"
+  },
+  "always": {
+    "text": "Altijd",
+    "scope": "restart_policy"
+  },
+  "never": {
+    "text": "Nooit",
+    "scope": "restart_policy"
+  },
+  "https": {
+    "text": "HTTPS",
+    "scope": "upstream_scheme"
+  },
+  "http1": {
+    "text": "HTTP/1.1",
+    "scope": "upstream_protocol"
+  },
+  "h2": {
+    "text": "HTTP/2 (gRPC)",
+    "scope": "upstream_protocol"
+  },
+  "301": {
+    "text": "301 Permanent",
+    "scope": "redirect_status"
+  },
+  "302": {
+    "text": "302 Gevonden",
+    "scope": "redirect_status"
+  },
+  "307": {
+    "text": "307 Tijdelijke redirect",
+    "scope": "redirect_status"
+  },
+  "308": {
+    "text": "308 Permanente redirect",
+    "scope": "redirect_status"
   }
 }

@@ -437,6 +437,10 @@
     {
       "text": "Path to the Dockerfile, relative to the repository root.",
       "scope": "help"
+    },
+    {
+      "text": "Dockerfile",
+      "scope": "builder_kind"
     }
   ],
   "builder": [
@@ -919,6 +923,14 @@
     {
       "text": "Active",
       "scope": "database_status"
+    },
+    {
+      "text": "Active",
+      "scope": "cert_status"
+    },
+    {
+      "text": "Active",
+      "scope": "site_status"
     }
   ],
   "add_domain": {
@@ -1267,6 +1279,18 @@
     {
       "text": "Failed",
       "scope": "dns_transfer"
+    },
+    {
+      "text": "Failed",
+      "scope": "build_status"
+    },
+    {
+      "text": "Failed",
+      "scope": "preview_status"
+    },
+    {
+      "text": "Failed",
+      "scope": "release_status"
     }
   ],
   "forced": [
@@ -1471,6 +1495,10 @@
     {
       "text": "Roll back",
       "scope": "instance"
+    },
+    {
+      "text": "Rollback",
+      "scope": "release_kind"
     }
   ],
   "rollback_confirm": [
@@ -1513,10 +1541,16 @@
     "text": "SSL",
     "scope": "site_domains"
   },
-  "start": {
-    "text": "Start",
-    "scope": "spamservice"
-  },
+  "start": [
+    {
+      "text": "Start",
+      "scope": "spamservice"
+    },
+    {
+      "text": "Start",
+      "scope": "power_operation"
+    }
+  ],
   "started": [
     {
       "text": "Started",
@@ -1529,6 +1563,10 @@
     {
       "text": "Started",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Started",
+      "scope": "depends_condition"
     }
   ],
   "starting": [
@@ -3287,14 +3325,26 @@
       "scope": "help"
     }
   ],
-  "role_primary": {
-    "text": "Primary (owned here)",
-    "scope": "dns_role"
-  },
-  "role_secondary": {
-    "text": "Secondary (replicated)",
-    "scope": "dns_role"
-  },
+  "role_primary": [
+    {
+      "text": "Primary",
+      "scope": "dns_role"
+    },
+    {
+      "text": "Owned and edited on this instance.",
+      "scope": "help"
+    }
+  ],
+  "role_secondary": [
+    {
+      "text": "Secondary",
+      "scope": "dns_role"
+    },
+    {
+      "text": "Replicated from its owning peer by zone transfer.",
+      "scope": "help"
+    }
+  ],
   "peer_none": {
     "text": "None",
     "scope": "dns_peer"
@@ -3877,6 +3927,10 @@
     {
       "text": "Stop",
       "scope": "instance"
+    },
+    {
+      "text": "Stop",
+      "scope": "power_operation"
     }
   ],
   "stop_hint": [
@@ -3915,6 +3969,10 @@
     {
       "text": "Restart",
       "scope": "instance"
+    },
+    {
+      "text": "Restart",
+      "scope": "power_operation"
     }
   ],
   "restart_hint": {
@@ -4671,10 +4729,16 @@
     "text": "A volume mounts over this path, so the file would be hidden once the container starts",
     "scope": "violations"
   },
-  "healthy": {
-    "text": "Healthy",
-    "scope": "stack_state"
-  },
+  "healthy": [
+    {
+      "text": "Healthy",
+      "scope": "stack_state"
+    },
+    {
+      "text": "Healthy",
+      "scope": "depends_condition"
+    }
+  ],
   "running": [
     {
       "text": "Running",
@@ -4691,6 +4755,14 @@
     {
       "text": "Running",
       "scope": "schedule_run_status"
+    },
+    {
+      "text": "Running",
+      "scope": "build_status"
+    },
+    {
+      "text": "Running",
+      "scope": "preview_status"
     }
   ],
   "unhealthy": {
@@ -4715,10 +4787,16 @@
     "text": "Missing",
     "scope": "stack_state"
   },
-  "orphaned": {
-    "text": "Orphaned",
-    "scope": "stack_state"
-  },
+  "orphaned": [
+    {
+      "text": "Orphaned",
+      "scope": "stack_state"
+    },
+    {
+      "text": "Orphaned",
+      "scope": "reconcile_bucket"
+    }
+  ],
   "unknown": {
     "text": "Unknown",
     "scope": "stack_state"
@@ -4727,10 +4805,20 @@
     "text": "Inactive",
     "scope": "stack_status"
   },
-  "deploying": {
-    "text": "Deploying",
-    "scope": "stack_status"
-  },
+  "deploying": [
+    {
+      "text": "Deploying",
+      "scope": "stack_status"
+    },
+    {
+      "text": "Deploying",
+      "scope": "preview_status"
+    },
+    {
+      "text": "Deploying",
+      "scope": "release_status"
+    }
+  ],
   "success": {
     "text": "Success",
     "scope": "stack_deploy_status"
@@ -4893,6 +4981,10 @@
     {
       "text": "Error",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Error",
+      "scope": "cert_status"
     }
   ],
   "deployed": {
@@ -5517,6 +5609,10 @@
     {
       "text": "A directory on another host over ssh; a different failure domain when the host actually is one",
       "scope": "backup_target_kind_description"
+    },
+    {
+      "text": "SSH",
+      "scope": "host_mode"
     }
   ],
   "snapshots": {
@@ -5932,10 +6028,20 @@
     "text": "Clear data",
     "scope": "reinstall_policy"
   },
-  "pending": {
-    "text": "Install pending",
-    "scope": "install_state"
-  },
+  "pending": [
+    {
+      "text": "Install pending",
+      "scope": "install_state"
+    },
+    {
+      "text": "Pending",
+      "scope": "cert_status"
+    },
+    {
+      "text": "Pending",
+      "scope": "release_status"
+    }
+  ],
   "installing": {
     "text": "Installing",
     "scope": "install_state"
@@ -6298,10 +6404,16 @@
     "text": "Offset",
     "scope": "schedule_step"
   },
-  "on_failure": {
-    "text": "On failure",
-    "scope": "schedule_step"
-  },
+  "on_failure": [
+    {
+      "text": "On failure",
+      "scope": "schedule_step"
+    },
+    {
+      "text": "On failure",
+      "scope": "restart_policy"
+    }
+  ],
   "console_command": {
     "text": "Send console command",
     "scope": "schedule_action"
@@ -6644,10 +6756,16 @@
     "text": "Working set in MiB, live",
     "scope": "instance_stats"
   },
-  "network": {
-    "text": "Network",
-    "scope": "instance_stats"
-  },
+  "network": [
+    {
+      "text": "Network",
+      "scope": "instance_stats"
+    },
+    {
+      "text": "Network",
+      "scope": "reconcile_kind"
+    }
+  ],
   "network_description": {
     "text": "Cumulative KiB since the workload started",
     "scope": "instance_stats"
@@ -6716,6 +6834,10 @@
     {
       "text": "One deploy of an application (managed by that application)",
       "scope": "instance_kind_description"
+    },
+    {
+      "text": "Release",
+      "scope": "release_kind"
     }
   ],
   "database_container": [
@@ -7088,10 +7210,16 @@
     "text": "Destroy now",
     "scope": "preview_deployment"
   },
-  "destroyed": {
-    "text": "Preview {$hostname} destroyed",
-    "scope": "preview_deployment"
-  },
+  "destroyed": [
+    {
+      "text": "Preview {$hostname} destroyed",
+      "scope": "preview_deployment"
+    },
+    {
+      "text": "Destroyed",
+      "scope": "preview_status"
+    }
+  ],
   "destroy_failed": [
     {
       "text": "Preview teardown failed: {$reason}",
@@ -8802,10 +8930,16 @@
     "text": "Restore of '{$name}' failed; see the server log for details.",
     "scope": "database_tab"
   },
-  "refused": {
-    "text": "The request was refused.",
-    "scope": "violations"
-  },
+  "refused": [
+    {
+      "text": "The request was refused.",
+      "scope": "violations"
+    },
+    {
+      "text": "Refused",
+      "scope": "build_status"
+    }
+  ],
   "deleted_database": {
     "text": "(deleted)",
     "scope": "site_databases"
@@ -9074,10 +9208,16 @@
     "text": "Transferred",
     "scope": "dns_transfer"
   },
-  "expired": {
-    "text": "Expired",
-    "scope": "dns_transfer"
-  },
+  "expired": [
+    {
+      "text": "Expired",
+      "scope": "dns_transfer"
+    },
+    {
+      "text": "Expired",
+      "scope": "preview_status"
+    }
+  ],
   "root_group": {
     "text": "The list itself (top level)",
     "scope": "access_rule"
@@ -9372,6 +9512,10 @@
     {
       "text": "A persistent dev box: your files survive, the rest is disposable",
       "scope": "instance_kind_description"
+    },
+    {
+      "text": "Workspace",
+      "scope": "builder_kind"
     }
   ],
   "application": [
@@ -9396,10 +9540,20 @@
     "text": "XFS project quota",
     "scope": "volume_backend"
   },
-  "http": {
-    "text": "HTTP path",
-    "scope": "readiness_kind"
-  },
+  "http": [
+    {
+      "text": "HTTP path",
+      "scope": "readiness_kind"
+    },
+    {
+      "text": "HTTP-01",
+      "scope": "cert_challenge"
+    },
+    {
+      "text": "HTTP",
+      "scope": "upstream_scheme"
+    }
+  ],
   "signal": {
     "text": "Signal",
     "scope": "stop_kind"
@@ -10162,10 +10316,16 @@
       "scope": "site_protected_paths"
     }
   ],
-  "delete_confirm_named": {
-    "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name.",
-    "scope": "dns_zone"
-  },
+  "delete_confirm_named": [
+    {
+      "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name.",
+      "scope": "dns_zone"
+    },
+    {
+      "text": "Delete {$name} {$type} {$value} from zone {$origin}? Authoritative answers change immediately. This cannot be undone.",
+      "scope": "dns_record"
+    }
+  ],
   "delete_confirm_dependents": {
     "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.",
     "scope": "dns_zone"
@@ -10279,5 +10439,197 @@
   "tenant_access_list_not_usable": {
     "text": "Pick a shared access list or one you manage",
     "scope": "violations"
+  },
+  "nixpacks": {
+    "text": "Nixpacks",
+    "scope": "builder_kind"
+  },
+  "succeeded": [
+    {
+      "text": "Succeeded",
+      "scope": "build_status"
+    },
+    {
+      "text": "Succeeded",
+      "scope": "release_status"
+    }
+  ],
+  "timed_out": {
+    "text": "Timed out",
+    "scope": "build_status"
+  },
+  "quota_exceeded": {
+    "text": "Quota exceeded",
+    "scope": "build_status"
+  },
+  "letsencrypt": {
+    "text": "Let's Encrypt",
+    "scope": "cert_provider"
+  },
+  "custom": {
+    "text": "Custom",
+    "scope": "cert_provider"
+  },
+  "acme_account": {
+    "text": "ACME account",
+    "scope": "cert_provider"
+  },
+  "dns": {
+    "text": "DNS-01",
+    "scope": "cert_challenge"
+  },
+  "postgres": {
+    "text": "PostgreSQL",
+    "scope": "db_engine"
+  },
+  "mysql": {
+    "text": "MySQL",
+    "scope": "db_engine"
+  },
+  "redis": {
+    "text": "Redis",
+    "scope": "db_engine"
+  },
+  "mongo": {
+    "text": "MongoDB",
+    "scope": "db_engine"
+  },
+  "a": {
+    "text": "A",
+    "scope": "dns_record_type"
+  },
+  "aaaa": {
+    "text": "AAAA",
+    "scope": "dns_record_type"
+  },
+  "cname": {
+    "text": "CNAME",
+    "scope": "dns_record_type"
+  },
+  "ns": {
+    "text": "NS",
+    "scope": "dns_record_type"
+  },
+  "mx": {
+    "text": "MX",
+    "scope": "dns_record_type"
+  },
+  "txt": {
+    "text": "TXT",
+    "scope": "dns_record_type"
+  },
+  "caa": {
+    "text": "CAA",
+    "scope": "dns_record_type"
+  },
+  "srv": {
+    "text": "SRV",
+    "scope": "dns_record_type"
+  },
+  "slack": {
+    "text": "Slack",
+    "scope": "notification_format"
+  },
+  "discord": {
+    "text": "Discord",
+    "scope": "notification_format"
+  },
+  "generic": {
+    "text": "Generic JSON",
+    "scope": "notification_format"
+  },
+  "container": {
+    "text": "Container",
+    "scope": "reconcile_kind"
+  },
+  "volume": [
+    {
+      "text": "Volume",
+      "scope": "reconcile_kind"
+    },
+    {
+      "text": "Volume",
+      "scope": "stack_mount_type"
+    }
+  ],
+  "owned": {
+    "text": "Owned",
+    "scope": "reconcile_bucket"
+  },
+  "foreign_known": {
+    "text": "Foreign (known)",
+    "scope": "reconcile_bucket"
+  },
+  "foreign_colliding": {
+    "text": "Foreign (colliding)",
+    "scope": "reconcile_bucket"
+  },
+  "foreign_unrelated": {
+    "text": "Foreign (unrelated)",
+    "scope": "reconcile_bucket"
+  },
+  "probing": {
+    "text": "Probing",
+    "scope": "release_status"
+  },
+  "switching": {
+    "text": "Switching",
+    "scope": "release_status"
+  },
+  "draining": {
+    "text": "Draining",
+    "scope": "release_status"
+  },
+  "interrupted": {
+    "text": "Interrupted",
+    "scope": "release_status"
+  },
+  "local": {
+    "text": "Local",
+    "scope": "host_mode"
+  },
+  "tmpfs": {
+    "text": "Tmpfs",
+    "scope": "stack_mount_type"
+  },
+  "unless_stopped": {
+    "text": "Unless stopped",
+    "scope": "restart_policy"
+  },
+  "always": {
+    "text": "Always",
+    "scope": "restart_policy"
+  },
+  "never": {
+    "text": "Never",
+    "scope": "restart_policy"
+  },
+  "https": {
+    "text": "HTTPS",
+    "scope": "upstream_scheme"
+  },
+  "http1": {
+    "text": "HTTP/1.1",
+    "scope": "upstream_protocol"
+  },
+  "h2": {
+    "text": "HTTP/2 (gRPC)",
+    "scope": "upstream_protocol"
+  },
+  "301": {
+    "text": "301 Permanent",
+    "scope": "redirect_status"
+  },
+  "302": {
+    "text": "302 Found",
+    "scope": "redirect_status"
+  },
+  "307": {
+    "text": "307 Temporary Redirect",
+    "scope": "redirect_status"
+  },
+  "308": {
+    "text": "308 Permanent Redirect",
+    "scope": "redirect_status"
   }
 }

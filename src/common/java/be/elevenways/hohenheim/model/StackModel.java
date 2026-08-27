@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -78,14 +79,25 @@ public class StackModel extends Model {
         .build());
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_INACTIVE, v -> v.displayName("Inactive").icon("circle-pause").color("secondary"))
-        .value(STATUS_DEPLOYING, v -> v.displayName("Deploying").icon("rotate").color("warning"))
-        .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
-        .value(STATUS_DEGRADED, v -> v.displayName("Degraded").icon("triangle-exclamation").color("warning"))
-        .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-xmark").color("destructive"))
-        .value(STATUS_STOPPED, v -> v.displayName("Stopped").icon("circle-stop").color("secondary"))
+        .value(STATUS_INACTIVE, v -> v.displayName("Inactive")
+            .label(statusLabel(STATUS_INACTIVE)).icon("circle-pause").color("secondary"))
+        .value(STATUS_DEPLOYING, v -> v.displayName("Deploying")
+            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color("warning"))
+        .value(STATUS_ACTIVE, v -> v.displayName("Active")
+            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color("success"))
+        .value(STATUS_DEGRADED, v -> v.displayName("Degraded")
+            .label(statusLabel(STATUS_DEGRADED)).icon("triangle-exclamation").color("warning"))
+        .value(STATUS_FAILED, v -> v.displayName("Failed")
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+        .value(STATUS_STOPPED, v -> v.displayName("Stopped")
+            .label(statusLabel(STATUS_STOPPED)).icon("circle-stop").color("secondary"))
         .defaultValue(STATUS_INACTIVE)
         .build());
+
+    /** The translation token for a stack status; the key IS the stored value. */
+    private static Microcopy statusLabel(String status) {
+        return Microcopy.of(status).withFilter("scope", "stack_status");
+    }
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

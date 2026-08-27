@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -63,10 +64,16 @@ public class ReleaseOperationModel extends Model {
         IntegerField.builder().name("id").build());
 
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
-        .value(KIND_RELEASE, v -> v.displayName("Release").icon("rocket").color("info"))
-        .value(KIND_ROLLBACK,
-            v -> v.displayName("Rollback").icon("clock-rotate-left").color("warning"))
+        .value(KIND_RELEASE, v -> v.displayName("Release")
+            .label(kindLabel(KIND_RELEASE)).icon("rocket").color("info"))
+        .value(KIND_ROLLBACK, v -> v.displayName("Rollback")
+            .label(kindLabel(KIND_ROLLBACK)).icon("clock-rotate-left").color("warning"))
         .build());
+
+    /** The translation token for a release kind; the key IS the stored value. */
+    private static Microcopy kindLabel(String kind) {
+        return Microcopy.of(kind).withFilter("scope", "release_kind");
+    }
 
     public static final StringField FOR_MODEL = SCHEMA.addField(
         StringField.builder().name("for_model").build());
@@ -75,20 +82,28 @@ public class ReleaseOperationModel extends Model {
         IntegerField.builder().name("for_id").build());
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_PENDING, v -> v.displayName("Pending").icon("clock").color("secondary"))
-        .value(STATUS_DEPLOYING, v -> v.displayName("Deploying").icon("rotate").color("info"))
-        .value(STATUS_PROBING,
-            v -> v.displayName("Probing").icon("stethoscope").color("info"))
-        .value(STATUS_SWITCHING,
-            v -> v.displayName("Switching").icon("shuffle").color("info"))
-        .value(STATUS_DRAINING,
-            v -> v.displayName("Draining").icon("hourglass-half").color("info"))
-        .value(STATUS_SUCCEEDED, v -> v.displayName("Succeeded").icon("check").color("success"))
-        .value(STATUS_FAILED,
-            v -> v.displayName("Failed").icon("circle-xmark").color("destructive"))
-        .value(STATUS_INTERRUPTED,
-            v -> v.displayName("Interrupted").icon("power-off").color("warning"))
+        .value(STATUS_PENDING, v -> v.displayName("Pending")
+            .label(statusLabel(STATUS_PENDING)).icon("clock").color("secondary"))
+        .value(STATUS_DEPLOYING, v -> v.displayName("Deploying")
+            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color("info"))
+        .value(STATUS_PROBING, v -> v.displayName("Probing")
+            .label(statusLabel(STATUS_PROBING)).icon("stethoscope").color("info"))
+        .value(STATUS_SWITCHING, v -> v.displayName("Switching")
+            .label(statusLabel(STATUS_SWITCHING)).icon("shuffle").color("info"))
+        .value(STATUS_DRAINING, v -> v.displayName("Draining")
+            .label(statusLabel(STATUS_DRAINING)).icon("hourglass-half").color("info"))
+        .value(STATUS_SUCCEEDED, v -> v.displayName("Succeeded")
+            .label(statusLabel(STATUS_SUCCEEDED)).icon("check").color("success"))
+        .value(STATUS_FAILED, v -> v.displayName("Failed")
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+        .value(STATUS_INTERRUPTED, v -> v.displayName("Interrupted")
+            .label(statusLabel(STATUS_INTERRUPTED)).icon("power-off").color("warning"))
         .build());
+
+    /** The translation token for a release status; the key IS the stored value. */
+    private static Microcopy statusLabel(String status) {
+        return Microcopy.of(status).withFilter("scope", "release_status");
+    }
 
     /** The content-addressed image the candidate ran; THE pinned artifact identity. */
     public static final StringField IMAGE_ID = SCHEMA.addField(

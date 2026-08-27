@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -27,10 +28,18 @@ public class StackDeploymentModel extends Model {
     public static final IntegerField STACK_ID = SCHEMA.addField(IntegerField.builder().name("stack_id").build());
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_RUNNING, v -> v.displayName("Running").icon("rotate").color("warning"))
-        .value(STATUS_SUCCESS, v -> v.displayName("Success").icon("circle-check").color("success"))
-        .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-xmark").color("destructive"))
+        .value(STATUS_RUNNING, v -> v.displayName("Running")
+            .label(statusLabel(STATUS_RUNNING)).icon("rotate").color("warning"))
+        .value(STATUS_SUCCESS, v -> v.displayName("Success")
+            .label(statusLabel(STATUS_SUCCESS)).icon("circle-check").color("success"))
+        .value(STATUS_FAILED, v -> v.displayName("Failed")
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
         .build());
+
+    /** The translation token for a stack deployment status; the key IS the stored value. */
+    private static Microcopy statusLabel(String status) {
+        return Microcopy.of(status).withFilter("scope", "stack_deploy_status");
+    }
 
     public static final StringField REASON = SCHEMA.addField(StringField.builder().name("reason").build());
     public static final TextField ERROR = SCHEMA.addField(TextField.builder().name("error").build());

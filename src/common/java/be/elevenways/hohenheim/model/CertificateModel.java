@@ -62,10 +62,18 @@ public class CertificateModel extends Model {
         .label(HohenheimFormCopy.label("cert_nice_name"))
         .help(HohenheimFormCopy.help("cert_nice_name")).build());
     public static final EnumField PROVIDER = SCHEMA.addField(EnumField.builder("provider")
-        .value(PROVIDER_LETSENCRYPT, v -> v.displayName("Let's Encrypt").icon("lock").color("green"))
-        .value(PROVIDER_CUSTOM, v -> v.displayName("Custom").icon("file-import").color("blue"))
-        .value(PROVIDER_ACME_ACCOUNT, v -> v.displayName("ACME account").color("gray"))
+        .value(PROVIDER_LETSENCRYPT, v -> v.displayName("Let's Encrypt")
+            .label(providerLabel(PROVIDER_LETSENCRYPT)).icon("lock").color("green"))
+        .value(PROVIDER_CUSTOM, v -> v.displayName("Custom")
+            .label(providerLabel(PROVIDER_CUSTOM)).icon("file-import").color("blue"))
+        .value(PROVIDER_ACME_ACCOUNT, v -> v.displayName("ACME account")
+            .label(providerLabel(PROVIDER_ACME_ACCOUNT)).color("gray"))
         .build());
+
+    /** The translation token for a certificate provider; the key IS the stored value. */
+    private static Microcopy providerLabel(String provider) {
+        return Microcopy.of(provider).withFilter("scope", "cert_provider");
+    }
     public static final TextField CERTIFICATE_PEM = SCHEMA.addField(TextField.builder("certificate_pem")
         .label(HohenheimFormCopy.label("cert_certificate_pem"))
         .help(HohenheimFormCopy.help("cert_certificate_pem")).build());
@@ -79,10 +87,18 @@ public class CertificateModel extends Model {
         .label(HohenheimFormCopy.label("cert_auto_renew"))
         .help(HohenheimFormCopy.help("cert_auto_renew")).build());
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
-        .value(STATUS_PENDING, v -> v.displayName("Pending").icon("clock").color("warning"))
-        .value(STATUS_ERROR, v -> v.displayName("Error").icon("triangle-exclamation").color("destructive"))
+        .value(STATUS_ACTIVE, v -> v.displayName("Active")
+            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color("success"))
+        .value(STATUS_PENDING, v -> v.displayName("Pending")
+            .label(statusLabel(STATUS_PENDING)).icon("clock").color("warning"))
+        .value(STATUS_ERROR, v -> v.displayName("Error")
+            .label(statusLabel(STATUS_ERROR)).icon("triangle-exclamation").color("destructive"))
         .build());
+
+    /** The translation token for a certificate status; the key IS the stored value. */
+    private static Microcopy statusLabel(String status) {
+        return Microcopy.of(status).withFilter("scope", "cert_status");
+    }
     public static final DateTimeField ISSUED_ON = SCHEMA.addField(DateTimeField.builder().name("issued_on").build());
     public static final StringField RENEWAL_ERROR = SCHEMA.addField(StringField.builder().name("renewal_error")
         .visibleIn(EditView.EDIT)
@@ -102,12 +118,20 @@ public class CertificateModel extends Model {
     /** Per-cert ACME account email override; null means the global account. */
     public static final StringField LETSENCRYPT_EMAIL = SCHEMA.addField(StringField.builder().name("letsencrypt_email").build());
     public static final EnumField CHALLENGE_TYPE = SCHEMA.addField(EnumField.builder("challenge_type")
-        .value(CHALLENGE_HTTP, value -> value.displayName("HTTP-01").icon("globe").color("blue"))
-        .value(CHALLENGE_DNS, value -> value.displayName("DNS-01").icon("at").color("violet"))
+        .value(CHALLENGE_HTTP, value -> value.displayName("HTTP-01")
+            .label(challengeLabel(CHALLENGE_HTTP)).icon("globe").color("blue"))
+        .value(CHALLENGE_DNS, value -> value.displayName("DNS-01")
+            .label(challengeLabel(CHALLENGE_DNS)).icon("at").color("violet"))
         .label(HohenheimFormCopy.label("cert_challenge_type"))
         .help(HohenheimFormCopy.help("cert_challenge_type"))
         .visibleIn(EditView.EDIT)
         .build());
+
+    /** The translation token for an ACME challenge type; the key IS the stored value. */
+    private static Microcopy challengeLabel(String challenge) {
+        return Microcopy.of(challenge).withFilter("scope", "cert_challenge");
+    }
+
     public static final EnumField DNS_PUBLISHER = SCHEMA.addField(
         EnumField.builder("dns_publisher")
             .value(DNS_PUBLISHER_MANUAL, v -> v.displayName("Manual")

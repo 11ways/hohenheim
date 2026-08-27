@@ -16,7 +16,10 @@ import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.common.orm.field.EnumField;
+import be.elevenways.zenit.common.orm.field.RegistryEnumField;
+import be.elevenways.zenit.microcopy.server.DefaultCatalogLoader;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
 import be.elevenways.zenit.common.task.record.RunStatus;
 import org.junit.jupiter.api.DisplayName;
@@ -266,6 +269,205 @@ class StatusPresentationDriftTest {
             .isNotEmpty()
             .allMatch(CertificateModel.DNS_PUBLISHER::isValidValue,
                 "declared in CertificateModel.DNS_PUBLISHER");
+    }
+
+    @Test
+    @DisplayName("the dns zone role badge shows the role word and explains itself elsewhere")
+    void dnsZoneRoleLabelsAreShortAndDescribed() {
+        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+
+        for (EnumField.EnumValue value : DnsZoneModel.ROLE.getValues().values()) {
+            for (String tag : List.of("en", "nl")) {
+                LocaleChain chain = LocaleChain.ofTags(tag);
+                String label = value.getLabel().resolve(chain, catalogs);
+
+                // 1. The badge text is the role WORD: one word, no parenthetical. The list
+                //    column used to carry 180px of nowrap text because the explanation was
+                //    smuggled into the label.
+                assertThat(label)
+                    .as("step 1: %s / %s resolves to real copy", tag, value.getKey())
+                    .isNotEqualTo(value.getLabel().key());
+                assertThat(label)
+                    .as("step 1: %s / %s is the bare role word", tag, value.getKey())
+                    .doesNotContain("(").doesNotContain(")").doesNotContain(" ");
+
+                // 2. The explanation is not lost: it is DECLARED as the value's description
+                //    facet, in the same locales, and says something the label does not.
+                assertThat(value.getDescription())
+                    .as("step 2: %s declares a description", value.getKey())
+                    .isNotNull();
+                String description = value.getDescription().resolve(chain, catalogs);
+                assertThat(description)
+                    .as("step 2: %s / %s description resolves to real copy", tag, value.getKey())
+                    .isNotEqualTo(value.getDescription().key())
+                    .isNotBlank()
+                    .isNotEqualTo(label);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("every enum value an admin surface renders carries localizable copy")
+    void everyEnumValueIsLocalizable() throws Exception {
+        DefaultCatalogLoader catalogs = new DefaultCatalogLoader();
+        List<String> unlocalizable = new ArrayList<>();
+        List<String> unresolved = new ArrayList<>();
+
+        // 1. The classes to inspect are DISCOVERED, never listed: every source file that
+        //    builds an EnumField is one, so a new model joins this test by existing.
+        List<Class<?>> declaring = classesDeclaringEnumFields();
+        assertThat(declaring)
+            .as("step 1: the source scan found the enum-declaring classes")
+            .hasSizeGreaterThan(30);
+
+        // 2. Every value of every static EnumField declares its own translation token.
+        //    Without one, EnumValue.getLabel() falls back to Microcopy.of(displayName) and
+        //    the English display name becomes a catalog key that no locale can ever answer.
+        for (Class<?> type : declaring) {
+            for (Field field : type.getDeclaredFields()) {
+                if (!Modifier.isStatic(field.getModifiers())
+                        || field.getType() != EnumField.class) {
+                    continue;
+                }
+                field.setAccessible(true);
+                EnumField enumField = (EnumField) field.get(null);
+                // A registry enum has no declared values at all: it enumerates the
+                // registered TypeDefinitions at call time (which needs a datasource) and
+                // takes its labels from them, so there is no displayName here to audit.
+                if (enumField == null || enumField instanceof RegistryEnumField) {
+                    continue;
+                }
+                for (EnumField.EnumValue value : enumField.getValues().values()) {
+                    String where = type.getSimpleName() + "." + field.getName()
+                        + " / " + value.getKey();
+                    if (value.getMicrocopy() == null) {
+                        unlocalizable.add(where + " (\"" + value.getDisplayName() + "\")");
+                        continue;
+                    }
+                    // 3. A token nothing translates is the same English-only outcome with
+                    //    an extra step, so both shipped catalogs must answer it.
+                    for (String tag : List.of("en", "nl")) {
+                        String resolved = value.getLabel()
+                            .resolve(LocaleChain.ofTags(tag), catalogs);
+                        if (resolved == null || resolved.isBlank()
+                                || resolved.equals(value.getLabel().key())) {
+                            unresolved.add(tag + " " + where);
+                        }
+                    }
+                }
+            }
+        }
+        assertThat(unlocalizable)
+            .as("step 2: add .label(Microcopy.of(<short key>).withFilter(\"scope\", ...))")
+            .isEmpty();
+        assertThat(unresolved)
+            .as("step 3: add the entry to BOTH en.json and nl.json")
+            .isEmpty();
+
+        // 4. Reflection only sees STATIC fields, so an EnumField built inside a method
+        //    (a row action's option list) escapes step 2 entirely. The source lane closes
+        //    that hole: a literal displayName in a .value(...) chain needs a .label(...)
+        //    beside it, wherever the field is built.
+        assertThat(valueChainsWithoutALabel())
+            .as("step 4: a literal displayName without a label is an English-only value")
+            .isEmpty();
+    }
+
+    /** Every source file under src/ that builds an {@link EnumField}, loaded. */
+    private static List<Class<?>> classesDeclaringEnumFields() throws Exception {
+        List<Class<?>> types = new ArrayList<>();
+        for (Path file : javaSourcesContaining("EnumField.builder(")) {
+            String name = binaryNameOf(file);
+            try {
+                types.add(Class.forName(name));
+            } catch (Throwable unloadable) {
+                throw new IllegalStateException("cannot load " + name, unloadable);
+            }
+        }
+        return types;
+    }
+
+    /**
+     * {@code Class.getName()} for a source file, from its {@code package} declaration --
+     * the directory layout is not trusted because the source sets nest differently.
+     */
+    private static String binaryNameOf(Path file) throws Exception {
+        String source = Files.readString(file);
+        Matcher matcher = Pattern.compile("^package\\s+([\\w.]+)\\s*;", Pattern.MULTILINE)
+            .matcher(source);
+        assertThat(matcher.find()).as("%s declares a package", file).isTrue();
+        String simple = file.getFileName().toString().replace(".java", "");
+        return matcher.group(1) + "." + simple;
+    }
+
+    /** Java sources under {@code src/} whose text contains the needle. */
+    private static List<Path> javaSourcesContaining(String needle) throws Exception {
+        List<Path> hits = new ArrayList<>();
+        try (var walk = Files.walk(Path.of("src"))) {
+            for (Path file : walk.filter(Files::isRegularFile).toList()) {
+                if (!file.getFileName().toString().endsWith(".java")) {
+                    continue;
+                }
+                if (Files.readString(file).contains(needle)) {
+                    hits.add(file);
+                }
+            }
+        }
+        return hits;
+    }
+
+    /**
+     * Every {@code .value(...)} chain carrying a LITERAL display name but no label, as
+     * {@code file:line} strings; a computed display name (an operator-defined option) has
+     * no catalog key by construction and is not matched.
+     */
+    private static List<String> valueChainsWithoutALabel() throws Exception {
+        List<String> offenders = new ArrayList<>();
+        for (Path file : javaSourcesContaining(".displayName(\"")) {
+            String source = Files.readString(file);
+            Matcher matcher = Pattern.compile("\\.value\\(").matcher(source);
+            while (matcher.find()) {
+                int open = matcher.end() - 1;
+                int close = matchingParen(source, open);
+                if (close < 0) {
+                    continue;
+                }
+                String chain = source.substring(open, close + 1);
+                if (chain.contains(".displayName(\"") && !chain.contains(".label(")) {
+                    long line = source.substring(0, open).chars().filter(c -> c == '\n').count() + 1;
+                    offenders.add(file + ":" + line);
+                }
+            }
+        }
+        return offenders;
+    }
+
+    /**
+     * Index of the {@code )} closing the {@code (} at {@code open}, or -1; parentheses
+     * inside a string literal do not count ({@code "Foreign (known)"} is one display name).
+     */
+    private static int matchingParen(String source, int open) {
+        int depth = 0;
+        boolean inString = false;
+        for (int i = open; i < source.length(); i++) {
+            char c = source.charAt(i);
+            if (inString) {
+                if (c == '\\') {
+                    i++;
+                } else if (c == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '"') {
+                inString = true;
+            } else if (c == '(') {
+                depth++;
+            } else if (c == ')' && --depth == 0) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** The {@code dns_mode} select's literal option values, read out of the request template. */

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -59,15 +60,25 @@ public class PreviewDeploymentModel extends Model {
         StringField.builder().name("hostname").visibleIn(EditView.EDIT, EditView.DETAIL).build());
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_DEPLOYING, v -> v.displayName("Deploying").icon("rotate").color("info"))
-        .value(STATUS_RUNNING, v -> v.displayName("Running").icon("circle-play").color("success"))
-        .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-xmark").color("destructive"))
-        .value(STATUS_EXPIRED, v -> v.displayName("Expired").icon("hourglass-end").color("secondary"))
-        .value(STATUS_DESTROYED, v -> v.displayName("Destroyed").icon("trash").color("secondary"))
+        .value(STATUS_DEPLOYING, v -> v.displayName("Deploying")
+            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color("info"))
+        .value(STATUS_RUNNING, v -> v.displayName("Running")
+            .label(statusLabel(STATUS_RUNNING)).icon("circle-play").color("success"))
+        .value(STATUS_FAILED, v -> v.displayName("Failed")
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+        .value(STATUS_EXPIRED, v -> v.displayName("Expired")
+            .label(statusLabel(STATUS_EXPIRED)).icon("hourglass-end").color("secondary"))
+        .value(STATUS_DESTROYED, v -> v.displayName("Destroyed")
+            .label(statusLabel(STATUS_DESTROYED)).icon("trash").color("secondary"))
         .defaultValue(STATUS_DEPLOYING)
         .label(HohenheimFormCopy.label("status"))
         .visibleIn(EditView.EDIT, EditView.DETAIL)
         .build());
+
+    /** The translation token for a preview status; the key IS the stored value. */
+    private static Microcopy statusLabel(String status) {
+        return Microcopy.of(status).withFilter("scope", "preview_status");
+    }
 
     /** Hard end of life; enforcement is the expiry sweep, never advisory. */
     public static final DateTimeField EXPIRES_AT = SCHEMA.addField(

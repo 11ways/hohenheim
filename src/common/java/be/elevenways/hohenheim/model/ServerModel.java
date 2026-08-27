@@ -64,8 +64,12 @@ public class ServerModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
     public static final EnumField MODE = SCHEMA.addField(EnumField.builder("mode")
-        .value(MODE_LOCAL, v -> v.displayName("Local").icon("house").color("teal"))
-        .value(MODE_SSH, v -> v.displayName("SSH").icon("terminal").color("indigo"))
+        .value(MODE_LOCAL, v -> v.displayName("Local")
+            .label(Microcopy.of(MODE_LOCAL).withFilter("scope", "host_mode"))
+            .icon("house").color("teal"))
+        .value(MODE_SSH, v -> v.displayName("SSH")
+            .label(Microcopy.of(MODE_SSH).withFilter("scope", "host_mode"))
+            .icon("terminal").color("indigo"))
         .build());
     public static final StringField SSH_TARGET = SCHEMA.addField(StringField.builder().name("ssh_target").build());
 

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -35,8 +36,10 @@ public class StackServiceModel extends Model {
 
     public static final Schema MOUNT_SCHEMA = new Schema();
     public static final EnumField MOUNT_TYPE = MOUNT_SCHEMA.addField(EnumField.builder("type")
-        .value(MOUNT_VOLUME, v -> v.displayName("Volume").icon("hard-drive"))
-        .value(MOUNT_TMPFS, v -> v.displayName("Tmpfs").icon("memory"))
+        .value(MOUNT_VOLUME, v -> v.displayName("Volume")
+            .label(Microcopy.of(MOUNT_VOLUME).withFilter("scope", "stack_mount_type")).icon("hard-drive"))
+        .value(MOUNT_TMPFS, v -> v.displayName("Tmpfs")
+            .label(Microcopy.of(MOUNT_TMPFS).withFilter("scope", "stack_mount_type")).icon("memory"))
         .defaultValue(MOUNT_VOLUME)
         .build());
     public static final StringField MOUNT_NAME = MOUNT_SCHEMA.addField(StringField.builder().name("name")
@@ -59,8 +62,10 @@ public class StackServiceModel extends Model {
         .label(HohenheimFormCopy.label("host_port"))
         .build());
     public static final EnumField PORT_PROTOCOL = PORT_SCHEMA.addField(EnumField.builder("protocol")
-        .value("tcp", v -> v.displayName("TCP"))
-        .value("udp", v -> v.displayName("UDP"))
+        .value("tcp", v -> v.displayName("TCP")
+            .label(Microcopy.of("tcp").withFilter("scope", "port_protocol")))
+        .value("udp", v -> v.displayName("UDP")
+            .label(Microcopy.of("udp").withFilter("scope", "port_protocol")))
         .defaultValue("tcp")
         .build());
     public static final StringField PORT_HOST_IP = PORT_SCHEMA.addField(StringField.builder().name("host_ip")
@@ -74,8 +79,10 @@ public class StackServiceModel extends Model {
         .label(HohenheimFormCopy.label("depends_service"))
         .build());
     public static final EnumField DEPENDS_CONDITION = DEPENDS_SCHEMA.addField(EnumField.builder("condition")
-        .value(CONDITION_STARTED, v -> v.displayName("Started"))
-        .value(CONDITION_HEALTHY, v -> v.displayName("Healthy"))
+        .value(CONDITION_STARTED, v -> v.displayName("Started")
+            .label(Microcopy.of(CONDITION_STARTED).withFilter("scope", "depends_condition")))
+        .value(CONDITION_HEALTHY, v -> v.displayName("Healthy")
+            .label(Microcopy.of(CONDITION_HEALTHY).withFilter("scope", "depends_condition")))
         .defaultValue(CONDITION_STARTED)
         .build());
 
@@ -183,13 +190,22 @@ public class StackServiceModel extends Model {
             .build());
 
     public static final EnumField RESTART_POLICY = SCHEMA.addField(EnumField.builder("restart_policy")
-        .value("unless-stopped", v -> v.displayName("Unless stopped"))
-        .value("always", v -> v.displayName("Always"))
-        .value("on-failure", v -> v.displayName("On failure"))
-        .value("no", v -> v.displayName("Never"))
+        .value("unless-stopped", v -> v.displayName("Unless stopped")
+            .label(restartLabel("unless_stopped")))
+        .value("always", v -> v.displayName("Always").label(restartLabel("always")))
+        .value("on-failure", v -> v.displayName("On failure").label(restartLabel("on_failure")))
+        .value("no", v -> v.displayName("Never").label(restartLabel("never")))
         .defaultValue("unless-stopped")
         .label(HohenheimFormCopy.label("restart_policy"))
         .build());
+
+    /**
+     * The translation token for a restart policy; the key is the stored Docker token with
+     * its hyphen folded to an underscore, and {@code no} spelled out as {@code never}.
+     */
+    private static Microcopy restartLabel(String policy) {
+        return Microcopy.of(policy).withFilter("scope", "restart_policy");
+    }
 
     public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(IntegerField.builder().name("memory_limit_mb")
         .label(HohenheimFormCopy.label("memory_limit"))

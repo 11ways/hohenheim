@@ -79,7 +79,10 @@ class HostPostureAcknowledgementTest {
      */
     private static final Map<String, String> WARNING_DIGESTS = Map.of(
         "en", "b7bfede449daaeb17174de074be2216c1c146a55bb53e2ebdd54fc8d3742ebe4",
-        "nl", "6bdf5bcbae9fded0d70e5d898d903e16e6b728954b2849c7e3ae81da6ce25db2");
+        // Re-pinned 2026-08-27, SPELLING ONLY: the shouted numeral in the nl warning
+        // gained the acute accents Dutch spells it with. The meaning is unchanged, so
+        // POSTURE_WARNING_VERSION deliberately stays where it is.
+        "nl", "4e3ad200060fa7ac8e1530af935e6ec086369f084b7ca08a90c3bfe2da46906a");
 
     private static SqlDatasource datasource;
 

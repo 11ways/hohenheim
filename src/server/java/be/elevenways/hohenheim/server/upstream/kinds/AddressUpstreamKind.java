@@ -39,8 +39,8 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
 
     public static final EnumField FORWARD_SCHEME = SETTINGS_SCHEMA.addField(
         EnumField.builder("forward_scheme")
-            .value("http", "HTTP")
-            .value("https", "HTTPS")
+            .value("http", "HTTP", UpstreamCopy.scheme("http"))
+            .value("https", "HTTPS", UpstreamCopy.scheme("https"))
             .label(HohenheimFormCopy.label("forward_scheme"))
             .help(HohenheimFormCopy.help("forward_scheme"))
             .build());
@@ -55,8 +55,8 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
 
     public static final EnumField UPSTREAM_PROTOCOL = SETTINGS_SCHEMA.addField(
         EnumField.builder("upstream_protocol")
-            .value("http1", "HTTP/1.1")
-            .value("h2", "HTTP/2 (gRPC)")
+            .value("http1", "HTTP/1.1", UpstreamCopy.protocol("http1"))
+            .value("h2", "HTTP/2 (gRPC)", UpstreamCopy.protocol("h2"))
             .label(HohenheimFormCopy.label("upstream_protocol"))
             .help(HohenheimFormCopy.help("upstream_protocol"))
             .build());

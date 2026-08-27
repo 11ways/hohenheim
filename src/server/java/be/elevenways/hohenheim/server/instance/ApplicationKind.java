@@ -63,8 +63,10 @@ public final class ApplicationKind implements InstanceKindHandler {
     /** Which builder a checkout is built with; Nixpacks emits a Dockerfile, then one lane. */
     public static final EnumField BUILDER = SETTINGS_SCHEMA.addField(
         EnumField.builder("builder")
-            .value(BuildOperationModel.KIND_DOCKERFILE, "Dockerfile")
-            .value(BuildOperationModel.KIND_NIXPACKS, "Nixpacks (buildpack)")
+            .value(BuildOperationModel.KIND_DOCKERFILE, "Dockerfile",
+                BuildOperationModel.kindLabel(BuildOperationModel.KIND_DOCKERFILE))
+            .value(BuildOperationModel.KIND_NIXPACKS, "Nixpacks (buildpack)",
+                BuildOperationModel.kindLabel(BuildOperationModel.KIND_NIXPACKS))
             .defaultValue(BuildOperationModel.KIND_DOCKERFILE)
             .label(HohenheimFormCopy.label("builder"))
             .help(HohenheimFormCopy.help("builder"))
