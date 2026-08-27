@@ -45,6 +45,13 @@
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
     {% if available %}
+    {#- The SAME card the generated list renders its table in, and for the same reason
+        beyond the chrome: `.cms-list-card` is the size CONTAINER the framework's
+        row-action register queries (app.scss). Without it this tab's rows sit in no
+        container at all, so the register never fires and a narrow tab keeps the opaque
+        split lane pinned over the columns scrolling under it. The card is the whole
+        participation contract -- the row markup is already the shared partial. -#}
+    <div class="cms-list-card" data-cms-list-card>
     {#- The bar adds INTO this zone: the zone rides along as a preset, so nothing
         asks the operator which zone they are looking at. -#}
     {% if quickAddEnabled %}
@@ -68,15 +75,24 @@
         to the partial, which requires it. -#}
     <form id="dns-records-list-form" method="post" action={% listUrl %}>
         {% csrf() %}
-    <div class="cms-table-scroll">
-    <pl-table class="cms-resource-list-table">
+    {#- The SAME scrollport the generated list renders (resource-list.hwk): plumage's
+        pl-scroll-area, never a bare div. The component owns the overflow box AND
+        publishes data-overflow-inline-start/-end on itself, which is what draws the
+        edge fades and what tells the pinned actions column to cast its shadow over
+        the column scrolling under it. The `.cms-table-scroll` class is the framework's
+        (cms.css bounds the block axis through the component's own knob, so the sticky
+        header has a scrollport to stick to) -- hohenheim writes no CSS for any of it. -#}
+    <pl-scroll-area class="cms-table-scroll">
+    <pl-table class="cms-resource-list-table" sticky={% true %}>
         <pl-table-header>
             <pl-table-row>
                 {% each table.columns as column %}
                 <pl-table-head data-column={% column.name %} data-alignment={% column.alignment %}>{{ column.label }}</pl-table-head>
                 {% /each %}
                 {% if hasRowActions %}
-                <pl-table-head class="cms-chrome-head">{{ t("actions", scope: "cms") }}</pl-table-head>
+                {#- data-sticky="end" is plumage's pinned-column contract, matched by the
+                    row partial's own action cell. -#}
+                <pl-table-head class="cms-chrome-head" data-sticky="end">{{ t("actions", scope: "cms") }}</pl-table-head>
                 {% /if %}
             </pl-table-row>
         </pl-table-header>
@@ -89,7 +105,7 @@
             {% /each %}
         </pl-table-body>
     </pl-table>
-    </div>
+    </pl-scroll-area>
     </form>
     {% elseif searchActive %}
     <pl-empty-state icon="list-ul" data-cms-empty-state="filtered">
@@ -105,6 +121,7 @@
         <pl-empty-state-description>{{ t("records_empty_description", scope: "dns_zone") }}</pl-empty-state-description>
     </pl-empty-state>
     {% /if %}
+    </div>
     {% else %}
     {#- The DNS role is off on this node, so there is no record resource to read the
         zone's records through. Saying so is the honest empty state. -#}
