@@ -59,6 +59,11 @@ class PublicTcpListenerRecoveryTest {
 
         // failNext > 0 makes the NEXT accept() calls throw the incident's exception.
         AtomicInteger failNext = new AtomicInteger();
+        // Re-armed per accept: incremented right BEFORE delegating to super.accept() and
+        // again when that call leaves, so an ODD value means the accept loop is parked
+        // inside accept() having ALREADY passed the failNext check. Arming failNext while
+        // it is parked therefore cannot affect that in-flight accept.
+        AtomicInteger acceptState = new AtomicInteger();
         AtomicReference<IOException> escalated = new AtomicReference<>();
         listener = new PublicTcpListener("127.0.0.1", 0, 5_000,
             new InternalListenerRouter(() -> (InetSocketAddress) backend.getLocalSocketAddress()),
@@ -70,7 +75,12 @@ class PublicTcpListenerRecoveryTest {
                 if (failNext.getAndUpdate(n -> n > 0 ? n - 1 : 0) > 0) {
                     throw new IOException("Too many open files in system");
                 }
-                return super.accept();
+                acceptState.incrementAndGet();
+                try {
+                    return super.accept();
+                } finally {
+                    acceptState.incrementAndGet();
+                }
             }
         });
         listener.start();
@@ -83,7 +93,13 @@ class PublicTcpListenerRecoveryTest {
 
         // Step 2: THE INCIDENT -- a transient burst of accept failures. The accept call
         // already blocked when failNext is set has passed the check, so this exchange
-        // succeeds and ARMS the burst; the loop then eats 3 consecutive failures.
+        // succeeds and ARMS the burst; the loop then eats 3 consecutive failures. Wait for
+        // that parked accept to be OBSERVED rather than assumed: under CPU starvation the
+        // loop can still be between iterations, in which case arming would fail the very
+        // next accept instead of the one after it.
+        assertThat(awaitParkedInAccept(acceptState))
+            .as("step 2: the accept loop is parked inside accept() before the burst is armed")
+            .isTrue();
         failNext.set(3);
         assertThat(exchange(port))
             .as("step 2: the pre-armed accept still serves while the burst arms")
@@ -109,7 +125,11 @@ class PublicTcpListenerRecoveryTest {
 
         // Step 4: SUSTAINED failure (5 consecutive, the test policy threshold) escalates
         // to the failure handler and closes the listener -- recovery is then the
-        // ProxyServer supervisor's job, not this loop's.
+        // ProxyServer supervisor's job, not this loop's. Same observed-state rule as step 2:
+        // the "one last exchange" below is only true of an accept that is ALREADY parked.
+        assertThat(awaitParkedInAccept(acceptState))
+            .as("step 4: the accept loop is parked inside accept() before sustained failure is armed")
+            .isTrue();
         failNext.set(1_000);
         assertThat(exchange(port))
             .as("step 4: the pre-armed accept serves one last time while sustained failure arms")
@@ -132,6 +152,19 @@ class PublicTcpListenerRecoveryTest {
         assertThat(refused)
             .as("step 4: after escalation the server socket is closed, so connects are refused")
             .isTrue();
+    }
+
+    /**
+     * Waits for the accept loop to signal it is parked inside {@code accept()} (an odd
+     * state), which is stable until a client connects because the test is the only client.
+     *
+     * @return false when the loop never parked within the wait budget
+     */
+    private static boolean awaitParkedInAccept(AtomicInteger acceptState) throws InterruptedException {
+        for (int i = 0; i < 200 && acceptState.get() % 2 == 0; i++) {
+            Thread.sleep(25);
+        }
+        return acceptState.get() % 2 != 0;
     }
 
     private static String exchange(int port) throws IOException {
