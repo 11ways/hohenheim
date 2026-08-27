@@ -59,10 +59,14 @@ public final class GitSourceSchema {
      */
     public static @NonNull Schema addTo(@NonNull Schema schema) {
 
-        // secret(): a private-repo clone URL routinely embeds https://user:TOKEN@host.
-        // Inside a JSON SchemaField it CANNOT be .encrypted() (Schema.refuseEncryptedJsonSubFields);
-        // the eventual fix is a separate credential field so the URL itself stays plain.
-        schema.addField(StringField.builder().name(REPOSITORY_URL).secret()
+        // Deliberately NOT secret(): a credentialed https://user:TOKEN@host URL is REFUSED at
+        // the write (InstanceDeclarations, GitRepository.embeddedCredential), and provider
+        // tokens travel in the exec environment, so a stored value is credential-free by
+        // invariant. It never was encrypted at rest (inside a JSON SchemaField it cannot be,
+        // Schema.refuseEncryptedJsonSubFields), so the only thing secret() did was hide the
+        // value from the form: a stored URL rendered as a mask, and a refused submit threw
+        // the just-typed URL away instead of showing it beside its violation.
+        schema.addField(StringField.builder().name(REPOSITORY_URL)
             .label(HohenheimFormCopy.label("repository_url"))
             .help(HohenheimFormCopy.help("repository_url")).build());
 

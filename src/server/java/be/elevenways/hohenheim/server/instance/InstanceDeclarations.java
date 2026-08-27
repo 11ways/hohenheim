@@ -52,9 +52,38 @@ public final class InstanceDeclarations {
             if (effectiveDeletedAt(row, stored) != null) {
                 return;
             }
-            requireRuntimeImage(row, stored);
-            requireUsableRepository(row);
+            Violations refused = judge(row, stored);
+            if (!refused.isEmpty()) {
+                throw refused;
+            }
         });
+    }
+
+    /**
+     * Every declaration refusal the row would meet at the write, COLLECTED rather than
+     * thrown at the first one, so a form shows all of them in one pass.
+     *
+     * AIDEV-NOTE: this is the one judgment; the write hook throws it and the CMS create
+     * lane ({@code InstanceResource.persistRow}) merges it with the placement refusal
+     * BEFORE the save, because the hook can only run inside the save and a refusal thrown
+     * ahead of it (placement) used to hide every refusal behind it. The save re-judges an
+     * already-passing row, which is cheap and keeps the hook the authority.
+     *
+     * @param stored the row as it is on disk, or null on a create
+     */
+    public static @NonNull Violations judge(@NonNull Row row, @Nullable Row stored) {
+        Violations refused = new Violations();
+        collect(refused, () -> requireRuntimeImage(row, stored));
+        collect(refused, () -> requireUsableRepository(row));
+        return refused;
+    }
+
+    private static void collect(@NonNull Violations into, @NonNull Runnable rule) {
+        try {
+            rule.run();
+        } catch (Violations refused) {
+            into.addAll(refused);
+        }
     }
 
     /**
@@ -107,14 +136,15 @@ public final class InstanceDeclarations {
             return;
         }
 
-        // The value is never echoed back: it is the secret these refusals are about.
+        // A credentialed value is never echoed back: it is the secret this refusal is about.
         if (GitRepository.embeddedCredential(url) != null) {
             throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, null,
                 violation("repository_url_credential"));
         }
 
+        // A malformed one is only a typo, and the operator corrects it in place.
         if (!GitRepository.isSupportedCloneUrl(url)) {
-            throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, null,
+            throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, url,
                 violation("repository_url_invalid"));
         }
     }

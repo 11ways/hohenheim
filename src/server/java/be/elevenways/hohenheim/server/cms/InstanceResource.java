@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceExposure;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
+import be.elevenways.hohenheim.server.instance.InstanceDeclarations;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
@@ -253,20 +254,32 @@ public class InstanceResource extends RowResource {
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
-        values.put(InstanceModel.SERVER_ID.getName(), placedHostFor(values, accessContext));
+        // ONE pass: the placement answer and the model's own declaration refusals are
+        // collected together, so an operator who left the host empty AND mistyped the
+        // repository URL reads both sentences on one render instead of one per submit.
+        // The write hook re-judges the declarations inside the save (InstanceDeclarations).
+        Violations refused = new Violations();
+        Integer placed = placedHostFor(values, accessContext, refused);
+        refused.addAll(InstanceDeclarations.judge(valuesToRow(values), null));
+        if (!refused.isEmpty()) {
+            throw refused;
+        }
+        values.put(InstanceModel.SERVER_ID.getName(), placed);
         return super.persistRow(values, accessContext);
     }
 
     /**
      * The host this submission lands on, priced and gated exactly like every other create.
      *
-     * @throws Violations the placement refusal, RE-PATHED onto the host entry -- the same
-     *         message ({@code no_placement_available} and friends), never a parallel one:
-     *         a sentence about the host belongs on the field the operator can see, not in
-     *         the form's generic error box
+     * @param refused where a placement refusal lands, RE-PATHED onto the host entry -- the
+     *        same message ({@code no_placement_available} and friends), never a parallel
+     *        one: a sentence about the host belongs on the field the operator can see, not
+     *        in the form's generic error box
+     * @return the host, or null when the placement was refused
      */
-    private static int placedHostFor(@NonNull Map<String, Object> values,
-                                     @NonNull AccessContext accessContext) {
+    private static @Nullable Integer placedHostFor(@NonNull Map<String, Object> values,
+                                                   @NonNull AccessContext accessContext,
+                                                   @NonNull Violations refused) {
         Integer requested = values.get(InstanceModel.SERVER_ID.getName()) instanceof Number number
             ? number.intValue() : null;
         InstanceKindHandler handler = InstanceKinds.getHandler(
@@ -275,13 +288,17 @@ public class InstanceResource extends RowResource {
         try {
             return InstancePlacement.forActor(accessContext, requested,
                 InstancePlacement.Workload.of(handler, submittedSettings(values)));
-        } catch (Violations refused) {
-            Violations onTheHostEntry = new Violations();
-            for (Violation refusal : refused.all()) {
-                onTheHostEntry.addAll(Violations.ofField(
+        } catch (Violations placement) {
+            for (Violation refusal : placement.all()) {
+                refused.addAll(Violations.ofField(
                     InstanceModel.SERVER_ID.getName(), requested, refusal.message()));
             }
-            throw onTheHostEntry.isEmpty() ? refused : onTheHostEntry;
+            if (placement.isEmpty()) {
+                // A refusal that names no reason is a placement bug, never a host to write:
+                // an empty set would refuse nothing and land the instance on a null host.
+                throw new IllegalStateException("Placement refused without naming a reason");
+            }
+            return null;
         }
     }
 
