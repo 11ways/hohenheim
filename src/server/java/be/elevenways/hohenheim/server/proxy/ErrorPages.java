@@ -38,7 +38,7 @@ public final class ErrorPages {
 
     static void send404(HttpServerExchange exchange, String hostname) {
         LocaleChain locales = localesOf(exchange);
-        String html = render("404", text(locales, "not_found_title"),
+        String html = render(locales, "404", text(locales, "not_found_title"),
             override(HohenheimSettings.Proxy.NOT_FOUND_MESSAGE, locales, "not_found_message"),
             hostname);
 
@@ -50,7 +50,7 @@ public final class ErrorPages {
     /** 503 for a dev-namespace subdomain with no live registration. */
     public static void sendDevOffline(HttpServerExchange exchange, String name) {
         LocaleChain locales = localesOf(exchange);
-        String html = render("503", text(locales, "dev_offline_title"),
+        String html = render(locales, "503", text(locales, "dev_offline_title"),
             Microcopy.of("dev_offline_message").withFilter("scope", SCOPE)
                 .withArg("name", name)
                 .resolve(locales, Zenit.getMessageResolver()),
@@ -65,7 +65,7 @@ public final class ErrorPages {
     /** 503 for a force-SSL route while HTTPS termination is down: refuse, never serve cleartext. */
     static void sendHttpsRequired(HttpServerExchange exchange, String hostname) {
         LocaleChain locales = localesOf(exchange);
-        String html = render("503", text(locales, "https_required_title"),
+        String html = render(locales, "503", text(locales, "https_required_title"),
             text(locales, "https_required_message"), hostname);
 
         exchange.setStatusCode(503);
@@ -76,7 +76,7 @@ public final class ErrorPages {
 
     static void send502(HttpServerExchange exchange, String message) {
         LocaleChain locales = localesOf(exchange);
-        String html = render("502", text(locales, "bad_gateway_title"),
+        String html = render(locales, "502", text(locales, "bad_gateway_title"),
             override(HohenheimSettings.Proxy.UNREACHABLE_MESSAGE, locales,
                 "unreachable_message"),
             null);
@@ -86,11 +86,13 @@ public final class ErrorPages {
         exchange.getResponseSender().send(html);
     }
 
-    /** The visitor's negotiated locale chain; a header-less client gets the site default. */
+    /**
+     * The visitor's negotiated locale chain, terminated by the site default exactly as
+     * Conduit.setLocales terminates every framework request chain (this path has no Conduit).
+     */
     private static LocaleChain localesOf(HttpServerExchange exchange) {
-        LocaleChain chain = AcceptLanguageMiddleware.parse(
-            exchange.getRequestHeaders().getFirst(Headers.ACCEPT_LANGUAGE));
-        return chain.isEmpty() ? LocaleChain.of(ContentLocales.getDefault()) : chain;
+        return ContentLocales.endingWithDefault(AcceptLanguageMiddleware.parse(
+            exchange.getRequestHeaders().getFirst(Headers.ACCEPT_LANGUAGE)));
     }
 
     /** An argument-less proxy-error string. */
@@ -106,8 +108,8 @@ public final class ErrorPages {
         return configured != null && !configured.isBlank() ? configured : text(locales, key);
     }
 
-    private static String render(String statusCode, String title, String message,
-                                 String hostname) {
+    private static String render(LocaleChain locales, String statusCode, String title,
+                                 String message, String hostname) {
         try {
             Hawkeye hawkeye = Zenit.getHawkeye();
             var engine = hawkeye.createRenderEngine();
@@ -118,7 +120,13 @@ public final class ErrorPages {
             vars.put("message", message != null ? message : "");
             vars.put("hostname", hostname != null ? hostname : "");
 
-            RenderBlock block = engine.render(ERROR_TEMPLATE, vars);
+            // AIDEV-NOTE: this is an alternate server-side render path (no Conduit), so it
+            // must stamp what RenderTemplateResult.performRender stamps -- the template's
+            // {% Locales.current() %} in <html lang> reads the chain off this context.
+            RenderBlock block = engine.render(ERROR_TEMPLATE, vars, ctx -> {
+                ctx.setLocales(locales);
+                ctx.setMessageResolver(Zenit.getMessageResolver());
+            });
             if (block != null) {
                 return block.getAsHtml();
             }
@@ -126,11 +134,15 @@ public final class ErrorPages {
             // Fall through to hardcoded fallback
         }
 
-        return fallback(statusCode, title, message);
+        return fallback(locales, statusCode, title, message);
     }
 
-    private static String fallback(String statusCode, String title, String message) {
-        return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
+    private static String fallback(LocaleChain locales, String statusCode, String title,
+                                   String message) {
+        // The same narrowing the template's {% Locales.current() %} applies: never the raw
+        // first preference, which would declare "de" over copy the site does not ship in.
+        return "<!DOCTYPE html><html lang=\"" + escapeHtml(ContentLocales.resolve(locales, Zenit.getMessageResolver()).tag())
+            + "\"><head><meta charset=\"UTF-8\">"
             + "<title>" + escapeHtml(statusCode) + " - " + escapeHtml(title) + "</title></head>"
             + "<body style=\"font-family:sans-serif;text-align:center;padding:4rem\">"
             + "<h1>" + escapeHtml(statusCode) + "</h1>"
