@@ -320,6 +320,115 @@ class DnsListEditingTest extends HohenheimTestBase {
     }
 
     /**
+     * The tab joins the framework's COMPACT row-action register: below the 48rem floor the
+     * split lane and the ordinary menu leave the layout and one compact menu carries the
+     * whole action set -- still submitting through this page's own carrier form.
+     *
+     * AIDEV-NOTE: the register is a {@code @container} query off {@code .cms-list-card}'s
+     * inline size, so a bespoke page participates by SITTING IN THAT CARD and nothing else;
+     * the row markup is already the shared partial. Driven in the browser because the
+     * served HTML is identical either way -- only the resolved CSS differs.
+     */
+    @Test
+    void narrowRecordsTabCollapsesItsRowActionsIntoTheCompactMenu() {
+        int zoneId = createZone("compact-tab.example");
+        int recordId = createRecord(zoneId, "home", DnsRecordModel.TYPE_A, "192.0.2.80");
+        String tab = "/admin/dns-zones/" + zoneId + "/page/records";
+        String row = "pl-table-row[data-row-key='" + recordId + "'] ";
+
+        // 1. A narrow window leaves the card under its floor: the lane's Edit and the
+        //    ordinary menu trigger are out of the layout, the compact trigger is in.
+        page.setViewportSize(760, 844);
+        navigateToApp(tab);
+        waitForHydration();
+        assertIsNotVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenitcms:edit']");
+        assertIsNotVisible(row + ".cms-row-action-more pl-button");
+        assertIsVisible(row + ".cms-row-action-compact pl-button");
+
+        // 2. That one menu carries BOTH halves: the lane's Edit as a menu link and the
+        //    overflow's dyndns mint as a submitter associated with THIS page's form.
+        String popup = "he-bottom .pl-dropdown-menu-content__popup:visible ";
+        String compactEdit = popup + "a.cms-menu-action[data-cms-lane='compact']"
+            + "[data-action-id='zenitcms:edit']";
+        String compactMint = popup + "button.cms-menu-action[data-cms-lane='compact']"
+            + "[formaction='/admin/dns-records/" + recordId + "/action/dyndns_token']";
+        page.locator(row + ".cms-row-action-compact pl-dropdown-menu-trigger")
+            .first().evaluate("el => el.click()");
+        page.waitForSelector(compactEdit);
+        assertIsVisible(compactMint);
+        assertThat(getAttribute(compactMint, "form"))
+            .as("step 2: the compact copy submits through the tab's own carrier form")
+            .isEqualTo("dns-records-list-form");
+
+        // 3. And it INVOKES: a register that only looked right would leave the operator
+        //    with the sole reachable copy of every action dead.
+        assertThat(DynamicDnsService.credentialFor(recordId))
+            .as("step 3: the record is not dynamic yet").isNull();
+        click(compactMint);
+        page.waitForCondition(() -> DynamicDnsService.credentialFor(recordId) != null);
+
+        // 4. FALSIFICATION: on a wide window the very same page shows the lane again and
+        //    the compact trigger is gone -- so step 1 measured the register, not a
+        //    permanently hidden lane.
+        page.setViewportSize(1400, 900);
+        navigateToApp(tab);
+        waitForHydration();
+        assertIsVisible(row + ".cms-row-action-lane pl-button[data-action-id='zenitcms:edit']");
+        assertIsNotVisible(row + ".cms-row-action-compact pl-button");
+    }
+
+    /**
+     * The tab's table sits in a REAL scrollport, and it is the framework's own
+     * (plumage's pl-scroll-area, the element the generated list renders): a bare div with
+     * the same class scrolls nothing since the hand-written overflow CSS was retired, and
+     * says nothing either -- the pinned actions column reads the scroll area's published
+     * data-overflow-inline-end to know whether a column is passing under it.
+     */
+    @Test
+    void recordsTabScrollsItsWideTableInsideTheFrameworkScrollArea() {
+        int zoneId = createZone("scroll-tab.example");
+        // Values wide enough to push the table past a narrow card at any font size.
+        int recordId = createRecord(zoneId, "a-deliberately-long-record-name", DnsRecordModel.TYPE_TXT,
+            "v=spf1 include:_spf.example include:_spf.other include:_spf.third -all");
+        createRecord(zoneId, "another-deliberately-long-name", DnsRecordModel.TYPE_TXT,
+            "v=DMARC1; p=reject; rua=mailto:dmarc@scroll-tab.example; pct=100; adkim=s");
+
+        String scroller = "pl-scroll-area.cms-table-scroll";
+        String viewport = scroller + " > .viewport";
+
+        // 1. The scroll container IS the component, and there is no bare div left claiming
+        //    the class the framework's stylesheet only bounds through the component's knob.
+        page.setViewportSize(760, 844);
+        navigateToApp("/admin/dns-zones/" + zoneId + "/page/records");
+        waitForHydration();
+        assertCount(scroller, 1);
+        assertCount("div.cms-table-scroll", 0);
+
+        // 2. It really is a scrollport: the table is wider than the box that holds it, and
+        //    the box scrolls rather than clips.
+        assertThat((Boolean) page.locator(viewport)
+                .evaluate("el => el.scrollWidth > el.clientWidth + 1"))
+            .as("step 2: the table overflows the scrollport it now has").isTrue();
+
+        // 3. So the component publishes the overflow-end marker -- the half of plumage's
+        //    pinned-column rule that lives on the scroll area. The other half is the cell's
+        //    own opt-in, and the shadow only renders when BOTH hold.
+        waitForAttribute(scroller, "data-overflow-inline-end", "");
+        assertThat(getAttribute("pl-table-row[data-row-key='" + recordId + "']"
+                + " pl-table-cell.cms-resource-list-row-actions", "data-sticky"))
+            .as("step 3: and the actions column opts into being pinned").isEqualTo("end");
+
+        // 4. FALSIFICATION: the marker is live state, not a stamp. Scrolling to the trailing
+        //    edge retires it and raises its leading-edge twin -- an always-on attribute (or a
+        //    box that never scrolled) would keep step 3 green while showing the shadow over
+        //    nothing.
+        page.locator(viewport).evaluate("el => el.scrollLeft = el.scrollWidth");
+        waitForAttribute(scroller, "data-overflow-inline-start", "");
+        page.waitForCondition(() ->
+            page.locator(scroller).getAttribute("data-overflow-inline-end") == null);
+    }
+
+    /**
      * Importing a zone file REPLACES every operator-managed record, so it confirms -- but an
      * EMPTY paste is not a destructive act to be confirmed, it is an incomplete form to be
      * refused. Validation must therefore precede confirmation on both halves of the lane.
