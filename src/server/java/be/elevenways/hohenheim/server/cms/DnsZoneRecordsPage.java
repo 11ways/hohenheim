@@ -158,11 +158,13 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         // the kept select picks are appended to it per add, and echoing would stack them.
         String refreshUrl = search != null
             ? listTarget.with(SEARCH_PARAM, search).toUrl() : listUrl;
-        // Outgoing record links carry a return target only when this listing carries state
-        // worth coming back TO (a search): the bare tab URL is already the record form's
-        // recomputed fallback, so a stateless page keeps clean links. Same rule the
-        // generated list applies.
-        String returnTo = search != null ? ReturnTarget.capture(conduit) : null;
+        // Every outgoing link (record form, row invoke, delete) carries THIS tab as its
+        // return target, search included. The generated list binds one only when it has
+        // query state, because its bare URL is already the framework's recomputed
+        // fallback -- but the fallback for a dns-record write is the GLOBAL record list,
+        // not this zone's tab, so here the bare tab URL is state worth coming back to:
+        // without it a delete confirmed from this tab landed on /admin/dns-records.
+        String returnTo = ReturnTarget.capture(conduit);
         TableState table = new TableStateTranslator().translate(
             applied,
             records,

@@ -160,12 +160,13 @@ class DnsAdminTest extends HohenheimTestBase {
         // action beside it (the shape every generated list has). The compact row menu
         // carries a COPY of that action for narrow cards (marked data-cms-lane="compact",
         // revealed by a @container rule while the split lane is hidden); it is a register
-        // switch, not a third way to reach the record.
-        assertThat(page.locator("a[href='/admin/dns-records/" + recordId
-            + "']:not([data-cms-lane])").count())
+        // switch, not a third way to reach the record. Every link carries this tab as its
+        // return target (a write's fallback is the GLOBAL record list), hence the prefix match.
+        assertThat(page.locator("a[href^='/admin/dns-records/" + recordId
+            + "?']:not([data-cms-lane])").count())
             .as("the title link plus the synthesized edit action").isEqualTo(2);
-        assertThat(page.locator("a[href='/admin/dns-records/" + recordId
-            + "'][data-cms-lane='compact']").count())
+        assertThat(page.locator("a[href^='/admin/dns-records/" + recordId
+            + "?'][data-cms-lane='compact']").count())
             .as("and the compact register carries its one copy").isEqualTo(1);
         assertThat(page.locator("cms-inline-cell").count())
             .as("and its editable cells are offered in place").isGreaterThan(0);
