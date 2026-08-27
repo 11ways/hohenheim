@@ -15,9 +15,9 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -50,7 +50,7 @@ public final class SpamserviceReputationPage extends PanelPage {
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull Conduit conduit, @NonNull AccessContext context) {
-        String ip = trimmed(conduit.getQueryParam("ip"));
+        String ip = Texts.trimmedOrNull(conduit.getQueryParam("ip"));
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("title", Microcopy.of("reputation").withFilter("scope", "spamservice")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
@@ -144,10 +144,6 @@ public final class SpamserviceReputationPage extends PanelPage {
     private static List<Map<String, Object>> entries(Map<String, Object> values) {
         return values.entrySet().stream().map(entry -> Map.<String, Object>of(
             "name", entry.getKey(), "value", String.valueOf(entry.getValue()))).toList();
-    }
-
-    private static @Nullable String trimmed(@Nullable String value) {
-        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private static String resolve(Conduit conduit, String key) {

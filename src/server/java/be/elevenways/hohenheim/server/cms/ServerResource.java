@@ -48,6 +48,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -881,9 +882,7 @@ public final class ServerResource extends RowResource {
 
     /** Pull the one-shot trust token OUT of the values so it is never persisted. */
     private static @Nullable String takeTrustToken(@NonNull Map<String, Object> values) {
-        Object token = values.remove("incus_trust_token");
-        String text = token != null ? String.valueOf(token).trim() : "";
-        return text.isEmpty() ? null : text;
+        return Texts.trimmedOrNull(values.remove("incus_trust_token"));
     }
 
     /** Mint the client credential of every lane this record declares and lacks. */

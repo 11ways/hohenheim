@@ -38,6 +38,7 @@ import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -142,7 +143,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         Integer zoneId = zone.get(DnsZoneModel.ID);
         String origin = zone.get(DnsZoneModel.ORIGIN);
 
-        String search = trimmedSearch(conduit);
+        String search = Texts.trimmedOrNull(conduit.getQueryParam(SEARCH));
         List<Row> records = zoneRecords(zoneId, search, resource.searchFields());
         TableView.Applied<Row> applied = TableView
             .forPrincipal(accessContext.principal().id(), resource.id())
@@ -255,16 +256,6 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
                     : Criteria.or(candidates.toArray(new Criteria[0])));
         }
         return query.orderBy(DnsRecordModel.NAME, SortOrder.ASC).all();
-    }
-
-    /** @return the submitted search term, or null when the box is empty */
-    private static @Nullable String trimmedSearch(@NonNull Conduit conduit) {
-        String raw = conduit.getQueryParam(SEARCH);
-        if (raw == null) {
-            return null;
-        }
-        String term = raw.trim();
-        return term.isEmpty() ? null : term;
     }
 
     private static @NonNull String recordUrl(@NonNull DnsRecordResource resource, @NonNull Row row,
