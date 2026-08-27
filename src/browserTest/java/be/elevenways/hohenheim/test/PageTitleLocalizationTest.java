@@ -41,7 +41,8 @@ class PageTitleLocalizationTest {
     private static final Pattern TITLE = Pattern.compile("vars\\.put\\(\"title\",\\s*(.*)$");
 
     /** A proxy error page's title argument, which sits beside the status-code literal. */
-    private static final Pattern PROXY_TITLE = Pattern.compile("render\\(\"\\d{3}\",\\s*(\".*)$");
+    private static final Pattern PROXY_TITLE =
+        Pattern.compile("render\\(\\w+,\\s*\"\\d{3}\",\\s*(\".*)$");
 
     /** The only spellings a title may start with; everything else must carry no literal. */
     private static final List<String> RESOLVED = List.of("CmsSupport.pageTitle(", "Microcopy.of(");

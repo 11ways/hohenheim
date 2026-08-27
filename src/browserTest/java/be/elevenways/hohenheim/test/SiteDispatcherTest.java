@@ -420,4 +420,47 @@ class SiteDispatcherTest {
         // ? is exactly one character: a two-character suffix must miss.
         assertThat(rawRequest(httpPort(proxy), "eu12.wild.test", "/")).contains("404");
     }
+
+    /**
+     * The public 404 page declares the language its copy actually resolved in: the text
+     * follows the visitor's Accept-Language chain, so a hardcoded (or absent) lang makes
+     * assistive technology pronounce Dutch copy with an English voice.
+     */
+    @Test
+    void theProxyErrorPageDeclaresTheLanguageItsCopyResolvedIn() throws Exception {
+        resetDatabase();
+        proxy = startProxy();
+
+        // 1. A Dutch visitor to an unrouted host gets the localized 404...
+        String dutch = rawRequest(httpPort(proxy), "nobody.test", "/", "Accept-Language: nl");
+        assertThat(dutch)
+            .as("step 1: an unrouted hostname is answered by the public error page")
+            .contains("404");
+        assertThat(dutch)
+            .as("step 1: and the document declares the locale it resolved in")
+            .contains("lang=\"nl\"");
+
+        // 2. ...and an English visitor gets a DIFFERENT document over the same route,
+        //    which is what makes the declaration in step 1 load-bearing rather than
+        //    cosmetic: the copy really did change with the chain.
+        String english = rawRequest(httpPort(proxy), "nobody.test", "/", "Accept-Language: en");
+        assertThat(english)
+            .as("step 2: the English visitor's page declares en")
+            .contains("lang=\"en\"");
+        assertThat(bodyOf(english))
+            .as("step 2: the two locales render different copy")
+            .isNotEqualTo(bodyOf(dutch));
+
+        // 3. A header-less client is never left undeclared: the chain terminates in the
+        //    site's default content locale, and lang says so.
+        assertThat(rawRequest(httpPort(proxy), "nobody.test", "/"))
+            .as("step 3: no Accept-Language still declares a concrete language")
+            .containsPattern("<html lang=\"[a-z]{2}");
+    }
+
+    /** The response body, so header differences never decide a copy comparison. */
+    private static String bodyOf(String response) {
+        int split = response.indexOf("\r\n\r\n");
+        return split < 0 ? response : response.substring(split + 4);
+    }
 }
