@@ -508,6 +508,30 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
                 .as("step 1: the operator is told why, in the placement vocabulary")
                 .contains("No admitted host currently accepts this workload");
 
+            // 1b. Every refusal the operator can fix on the form arrives in ONE pass: an
+            //     empty host AND a mistyped repository URL are both reported on the same
+            //     render, and the typed URL is still in its input. It used to take two
+            //     submits (the placement refusal hid the declaration one) and the URL came
+            //     back blank (the field was declared secret, so a refused submit's value
+            //     was thrown away with the stored-secret mask).
+            HttpResponse<String> twice = httpPostForm("/admin/instances/new",
+                "name=cf-two-refusals&kind=hohenheim%3Aapplication&server_id="
+                    + "&settings.repository_url=not-a-url",
+                sessionToken, csrfToken);
+            assertThat(twice.statusCode())
+                .as("step 1b: refused, re-rendered").isNotIn(302, 303);
+            assertThat(twice.body())
+                .as("step 1b: the host refusal is on the page")
+                .contains("No admitted host currently accepts this workload");
+            assertThat(twice.body())
+                .as("step 1b: and so is the repository URL refusal, on the SAME render")
+                .contains("This is not a git clone URL");
+            assertThat(twice.body())
+                .as("step 1b: the typed URL survives the refused submit")
+                .contains("not-a-url");
+            assertThat(findInstance("cf-two-refusals"))
+                .as("step 1b: nothing persisted").isNull();
+
             // 2. And the refusal is PATHED ONTO THE HOST ENTRY, which is what puts the
             //    sentence beside the empty pick instead of in the form's generic error box.
             Throwable refused = catchThrowable(() -> new InstanceResource().persistRow(

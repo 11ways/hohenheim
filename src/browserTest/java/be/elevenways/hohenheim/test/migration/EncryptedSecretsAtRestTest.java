@@ -223,9 +223,14 @@ class EncryptedSecretsAtRestTest {
             .as("step 6: stack service environment is secret").isTrue();
         assertThat(StackServiceModel.ENVIRONMENT.isEncrypted())
             .as("step 6: stack service environment is encrypted").isTrue();
+        // The clone URL is NOT a secret: a credentialed one is refused at the write
+        // (InstanceDeclarations), so a stored value is credential-free by invariant, and it
+        // was never encrypted (a JSON sub-field cannot be). Declaring it secret only hid it
+        // from the form -- and threw a refused submit's value away.
         assertThat(ApplicationKind.SETTINGS_SCHEMA.getField(GitSourceSchema.REPOSITORY_URL)
                 .isSecret())
-            .as("step 6: git repository url (may embed user:TOKEN@) is secret").isTrue();
+            .as("step 6: git repository url is plain, credentials are refused at the write")
+            .isFalse();
     }
 
     // -- helpers --------------------------------------------------------------
