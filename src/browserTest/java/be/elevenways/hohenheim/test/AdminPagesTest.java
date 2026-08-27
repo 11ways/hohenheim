@@ -88,9 +88,15 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(content).contains("SSL / TLS");
         assertThat(content).contains("Storage");
         assertThat(content).contains("Proteus SSO");
-        // Secret settings never render their value; the input is a masked password field.
+        // Secret settings never render their value: a STORED secret renders plumage's
+        // masked "secret" register, never the password control (which would opt the whole
+        // settings form into the browser's password manager).
         assertThat(page.locator(
-            "[data-path='app.auth_proteus.access_key'] input[type='password']").count()).isEqualTo(1);
+            "[data-path='app.auth_proteus.access_key'] pl-input[type='secret']").count())
+            .as("a stored secret renders the masked register").isEqualTo(1);
+        assertThat(page.locator(
+            "[data-path='app.auth_proteus.access_key'] input[type='password']").count())
+            .as("and never the credential control").isEqualTo(0);
         assertThat(page.locator(
             "[data-path='app.ssl.dns_propagation_seconds'] pl-input-group-addon").innerText().trim())
             .isEqualTo("s");
