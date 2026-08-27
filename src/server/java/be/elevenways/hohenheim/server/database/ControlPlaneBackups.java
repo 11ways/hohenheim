@@ -10,6 +10,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.server.orm.backup.RecoveryArchive;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
@@ -311,9 +312,8 @@ public final class ControlPlaneBackups {
 
     /** @return whether a destination is configured at all (the dashboard's question) */
     public static @Nullable String configuredDestinationName() {
-        String name = HohenheimSettings.VALUES.getValue(
-            HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
-        return name == null || name.isBlank() ? null : name;
+        return Texts.trimmedOrNull(HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET));
     }
 
     private static @NonNull String sha256OfFile(@NonNull Path file) throws IOException {

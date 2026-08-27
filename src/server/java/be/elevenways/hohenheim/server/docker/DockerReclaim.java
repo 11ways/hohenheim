@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.text.Texts;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -115,7 +116,7 @@ public final class DockerReclaim {
         long bytes = 0;
 
         for (Map<String, Object> image : images) {
-            String id = stringOf(image.get("Id"));
+            String id = Texts.trimmedOrNull(image.get("Id"));
             if (id == null || inUse.contains(id)) {
                 continue;
             }
@@ -231,7 +232,7 @@ public final class DockerReclaim {
 
         Set<String> declared = new HashSet<>();
         for (Map<String, Object> image : images) {
-            String id = stringOf(image.get("Id"));
+            String id = Texts.trimmedOrNull(image.get("Id"));
             if (id == null) {
                 continue;
             }
@@ -280,7 +281,7 @@ public final class DockerReclaim {
             if (!(entry instanceof Map<?, ?> summary)) {
                 continue;
             }
-            String imageId = stringOf(summary.get("ImageID"));
+            String imageId = Texts.trimmedOrNull(summary.get("ImageID"));
             if (imageId != null) {
                 inUse.add(imageId);
             }
@@ -336,21 +337,13 @@ public final class DockerReclaim {
             return;
         }
         for (Object entry : entries) {
-            String reference = stringOf(entry);
+            String reference = Texts.trimmedOrNull(entry);
             // The daemon reports an untagged image's list as ["<none>:<none>"] on
             // some versions and as null/[] on others.
             if (reference != null && !reference.startsWith("<none>")) {
                 into.add(reference);
             }
         }
-    }
-
-    private static @Nullable String stringOf(@Nullable Object value) {
-        if (value == null) {
-            return null;
-        }
-        String text = String.valueOf(value);
-        return text.isBlank() ? null : text;
     }
 
     private static long longOf(@Nullable Object value) {
