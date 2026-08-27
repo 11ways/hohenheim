@@ -81,11 +81,17 @@ class SecurityAdminTest extends HohenheimTestBase {
         waitForHydration();
         String content = page.locator("body").textContent();
         assertThat(content).contains("203.0.113.77");
-        assertThat(content).contains("manual");
         assertThat(content).contains("Lift ban");
 
         Row ban = Models.get(BanModel.class).find()
             .where(BanModel.IP.eq("203.0.113.77")).first();
+
+        // The source column renders the enum's DECLARED label ("manual" scope ban_source
+        // resolves to "Manual"), never the stored value; the stored value itself is
+        // asserted off the row above.
+        String rowText = page.locator("pl-table-row[data-row-key='" + ban.get(BanModel.ID) + "']")
+            .textContent();
+        assertThat(rowText).contains("Manual");
         var lift = postForm("/admin/bans/" + ban.get(BanModel.ID) + "/action/lift_ban", confirmed(""));
         assertThat(lift.statusCode()).isIn(200, 302, 303);
 

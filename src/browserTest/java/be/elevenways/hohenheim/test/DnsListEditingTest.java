@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.forms.common.choose.InlineCreateResult;
 import be.elevenways.zenit.server.http.ReturnTarget;
+import com.microsoft.playwright.options.ViewportSize;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLEncoder;
@@ -353,6 +354,53 @@ class DnsListEditingTest extends HohenheimTestBase {
         assertThat(path(back))
             .as("step 2: and the operator is back on the zone's Records tab")
             .isEqualTo(tab);
+
+        // 3. The same journey IN THE BROWSER, at the 1024px window a live check used: the
+        //    card sits under the compact floor, so the delete is the compact lane's
+        //    PORTALLED copy; the operator arrives by SOFT navigation carrying the
+        //    quick-add's sticky pick, the way someone who just quick-added a record does;
+        //    and the table they then LOOK AT no longer carries the row. A soft POST never
+        //    moves the URL, so the table itself is the completion signal, never the URL.
+        int second = createRecord(zoneId, "gone-too", DnsRecordModel.TYPE_A, "192.0.2.52");
+        String row = "pl-table-row[data-row-key='" + second + "']";
+        // The narrow window is this step's own; restore it so no later test in the class
+        // inherits a 1024px viewport it never asked for.
+        ViewportSize previousViewport = page.viewportSize();
+        page.setViewportSize(1024, 768);
+        try {
+            navigateToApp("/admin/dns-zones/" + zoneId);
+            waitForHydration();
+            page.evaluate("t => { const a = document.createElement('a'); a.id = 'to-records-tab';"
+                + " a.href = t + '?qa.type=A'; a.textContent = 'records'; document.body.appendChild(a); }",
+                tab);
+            click("#to-records-tab");
+            page.waitForCondition(() -> page.url().contains("qa.type=A"));
+            page.waitForSelector(row);
+            page.locator(row + " .cms-row-action-compact pl-dropdown-menu-trigger")
+                .first().evaluate("el => el.click()");
+            String popup = "he-bottom .pl-dropdown-menu-content__popup:visible ";
+            String deleteItem = popup + "button.cms-menu-action[data-cms-lane='compact']"
+                + "[formaction^='/admin/dns-records/" + second + "/delete?']";
+            page.waitForSelector(deleteItem);
+            click(deleteItem);
+            assertIsVisible(".pl-alertdialog-modal[data-open]");
+            click("[data-cms-confirm-ok]");
+            page.waitForCondition(() -> Models.get(DnsRecordModel.class).findById(second) == null);
+            page.waitForCondition(() -> page.locator(row).count() == 0);
+            assertThat(page.url())
+                .as("step 3: the browser stayed on the zone's Records tab, sticky pick included")
+                .contains(tab + "?qa.type=A");
+            assertThat(page.locator(row).count())
+                .as("step 3: the table the operator looks at no longer carries the deleted row")
+                .isZero();
+            assertThat(page.locator("pl-table-row[data-row-key='" + recordId + "']").count())
+                .as("step 3: and the redirect's render is the tab, not the global list")
+                .isZero();
+        } finally {
+            if (previousViewport != null) {
+                page.setViewportSize(previousViewport.width, previousViewport.height);
+            }
+        }
     }
 
     /**
