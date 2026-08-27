@@ -17,9 +17,12 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.forms.common.choose.InlineCreateResult;
+import be.elevenways.zenit.server.http.ReturnTarget;
 import org.junit.jupiter.api.Test;
 
+import java.net.URLEncoder;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
 
@@ -320,6 +323,39 @@ class DnsListEditingTest extends HohenheimTestBase {
     }
 
     /**
+     * A delete confirmed from the zone's Records tab lands back on THAT tab. The
+     * framework's own fallback after a dns-record write is the global record list, so the
+     * tab must bind itself as the return target on every outgoing link, search or not.
+     */
+    @Test
+    void deletingFromTheZoneRecordsTabReturnsToTheTab() throws Exception {
+        int zoneId = createZone("delete-return.example");
+        int recordId = createRecord(zoneId, "gone", DnsRecordModel.TYPE_A, "192.0.2.51");
+
+        String tab = "/admin/dns-zones/" + zoneId + "/page/records";
+        String body = adminGet(tab).body();
+
+        // 1. The row's delete carrier names the tab as where to come back to.
+        String item = buttonCarrying(body, "/admin/dns-records/" + recordId + "/delete");
+        assertThat(item).as("step 1: the tab offers the delete").isNotNull();
+        String target = attributeOf(item, "formaction");
+        assertThat(target)
+            .as("step 1: the delete carries this tab as its return target")
+            .contains(ReturnTarget.PARAM + "=")
+            .contains(URLEncoder.encode(tab, StandardCharsets.UTF_8));
+
+        // 2. Confirming it deletes the record and answers with the tab, not the global list.
+        HttpResponse<String> deleted = httpPostForm(target, confirmed(""), sessionToken, csrfToken);
+        assertThat(deleted.statusCode()).as("step 2: the delete redirects").isIn(302, 303);
+        assertThat(Models.get(DnsRecordModel.class).findById(recordId))
+            .as("step 2: the record is gone").isNull();
+        String back = deleted.headers().firstValue("Location").orElse("");
+        assertThat(path(back))
+            .as("step 2: and the operator is back on the zone's Records tab")
+            .isEqualTo(tab);
+    }
+
+    /**
      * The tab joins the framework's COMPACT row-action register: below the 48rem floor the
      * split lane and the ordinary menu leave the layout and one compact menu carries the
      * whole action set -- still submitting through this page's own carrier form.
@@ -351,7 +387,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         String compactEdit = popup + "a.cms-menu-action[data-cms-lane='compact']"
             + "[data-action-id='zenitcms:edit']";
         String compactMint = popup + "button.cms-menu-action[data-cms-lane='compact']"
-            + "[formaction='/admin/dns-records/" + recordId + "/action/dyndns_token']";
+            + "[formaction^='/admin/dns-records/" + recordId + "/action/dyndns_token?']";
         page.locator(row + ".cms-row-action-compact pl-dropdown-menu-trigger")
             .first().evaluate("el => el.click()");
         page.waitForSelector(compactEdit);
