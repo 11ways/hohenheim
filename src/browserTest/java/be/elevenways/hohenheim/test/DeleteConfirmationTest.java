@@ -6,7 +6,9 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.CertificateResource;
+import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.DnsZoneResource;
+import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
 import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -23,8 +25,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * A delete dialog must name what deleting THIS record takes with it: the zone's origin,
  * its record count, what resolves inside it and whether it answers for the very hostname
- * the admin panel is being reached at -- and the same per-record naming for sites and
- * certificates.
+ * the admin panel is being reached at -- and the same per-record naming for sites,
+ * certificates and individual DNS records.
  *
  * AIDEV-NOTE: asserted on the resources rather than through the rendered page, because
  * the confirmation is the ONLY half of a delete that a non-UI caller legitimately does
@@ -146,6 +148,57 @@ class DeleteConfirmationTest {
             assertThat(certificates.deleteConfirmationFor(nameless).body().key())
                 .as("step 9: a nameless certificate keeps the generic wording")
                 .isEqualTo("delete_confirm");
+
+            // 10. A DNS record's dialog names the record, its TYPE, its VALUE and the ZONE
+            //     it answers in -- the generic dialog names only the owner label, which
+            //     tells an operator nothing about what stops resolving.
+            DnsRecordResource records = new DnsRecordResource();
+            Row visualQa = Models.get(DnsRecordModel.class)
+                .findById(record(zoneId, "visual-qa"));
+
+            ConfirmationSpec recordConfirm = records.deleteConfirmationFor(visualQa);
+            assertThat(recordConfirm.body().key())
+                .as("step 10: a complete record gets the named wording")
+                .isEqualTo("delete_confirm_named");
+            assertThat(recordConfirm.body().filters().get("scope"))
+                .as("step 10: scoped to the record catalog, not the zone's same-named entry")
+                .isEqualTo("dns_record");
+            assertThat(recordConfirm.body().args().get("name"))
+                .as("step 10: the name is ABSOLUTE -- an owner label alone is ambiguous"
+                    + " across zones")
+                .isEqualTo("visual-qa." + ORIGIN);
+            assertThat(recordConfirm.body().args().get("type"))
+                .as("step 10: and names the record type").isEqualTo("A");
+            assertThat(recordConfirm.body().args().get("value"))
+                .as("step 10: and the value that stops being answered")
+                .isEqualTo("203.0.113.10");
+            assertThat(recordConfirm.body().args().get("origin"))
+                .as("step 10: and the zone it is removed from").isEqualTo(ORIGIN);
+
+            // 11. The apex record names the zone itself rather than "@.zone".
+            Row apex = Models.get(DnsRecordModel.class).findById(record(zoneId, "@"));
+            assertThat(records.deleteConfirmationFor(apex).body().args().get("name"))
+                .as("step 11: the apex owner resolves to the origin, never '@.origin'")
+                .isEqualTo(ORIGIN);
+
+            // 12. The tenant-facing subclass inherits the SAME composing method -- there is
+            //     one home for this wording, and the zone's Records tab renders its rows
+            //     through this very hook too.
+            assertThat(new ManageDnsRecordResource().deleteConfirmationFor(visualQa).body())
+                .as("step 12: /manage speaks the same sentence as the admin panel")
+                .isEqualTo(recordConfirm.body());
+
+            // 13. A record whose zone reference dangles cannot name a zone, so it keeps the
+            //     framework's record-named body instead of a sentence with a hole in it.
+            Row orphan = Models.get(DnsRecordModel.class).findById(record(zoneId, "orphan"));
+            orphan.set(DnsRecordModel.ZONE_ID, null);
+            ConfirmationSpec orphanConfirm = records.deleteConfirmationFor(orphan);
+            assertThat(orphanConfirm.body().key())
+                .as("step 13: an unresolvable zone falls back to the framework's body"
+                    + " rather than a sentence with a hole in it")
+                .isEqualTo("delete_confirm");
+            assertThat(orphanConfirm.body().args().get("origin"))
+                .as("step 13: and names no zone at all").isNull();
         });
     }
 
@@ -164,7 +217,7 @@ class DeleteConfirmationTest {
         return row.get(DnsZoneModel.ID);
     }
 
-    private static void record(int zoneId, String name) {
+    private static int record(int zoneId, String name) {
         Row row = Models.get(DnsRecordModel.class).createEmptyRow();
         row.set(DnsRecordModel.ZONE_ID, zoneId);
         row.set(DnsRecordModel.NAME, name);
@@ -173,6 +226,7 @@ class DeleteConfirmationTest {
         row.set(DnsRecordModel.TTL, 300);
         row.set(DnsRecordModel.ENABLED, true);
         Models.get(DnsRecordModel.class).save(row);
+        return row.get(DnsRecordModel.ID);
     }
 
     private static int site(String slug, String hostname) {

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -260,6 +261,37 @@ public class DnsRecordResource extends RowResource {
     private static int validate(@NonNull Map<String, Object> coerced, @Nullable Row existing,
                                 @NonNull Model model) {
         return DnsRecordEdits.validate(coerced, existing, model);
+    }
+
+    /**
+     * Names the record, its TYPE, its VALUE and the ZONE it answers in -- the generic dialog
+     * names only the owner label, which says nothing about what stops resolving -- and states
+     * that an authoritative answer changes the moment the row is gone.
+     *
+     * AIDEV-NOTE: the fallback is a whole other body rather than an optional clause, because
+     * microcopy args echo VERBATIM: an absent zone or value would render a dangling
+     * preposition in every locale. THE single composing home for this wording -- the zone's
+     * bespoke Records tab ({@link DnsZoneRecordsPage}) renders its rows through this same
+     * hook, and {@link ManageDnsRecordResource} inherits it.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
+        String origin = DeleteImpact.originOfZone(record.get(DnsRecordModel.ZONE_ID));
+        String owner = record.get(DnsRecordModel.NAME);
+        String type = record.get(DnsRecordModel.TYPE);
+        String value = record.get(DnsRecordModel.VALUE);
+
+        if (origin == null || origin.isBlank() || owner == null || owner.isBlank()
+                || type == null || type.isBlank() || value == null || value.isBlank()) {
+            return super.deleteConfirmationFor(record);
+        }
+
+        return deleteConfirmation(Microcopy.of("delete_confirm_named")
+            .withFilter("scope", "dns_record")
+            .withArg("name", DnsNames.absolute(origin, owner))
+            .withArg("type", type)
+            .withArg("value", value)
+            .withArg("origin", origin));
     }
 
     @Override
