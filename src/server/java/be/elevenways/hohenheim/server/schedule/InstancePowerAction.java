@@ -28,12 +28,17 @@ public class InstancePowerAction extends InstanceScheduleAction {
     static final Schema PAYLOAD = new Schema();
     static final EnumField OPERATION = PAYLOAD.addField(
             EnumField.builder("operation")
-                    .value(OP_START, "Start")
-                    .value(OP_STOP, "Stop")
-                    .value(OP_RESTART, "Restart")
+                    .value(OP_START, "Start", operationLabel(OP_START))
+                    .value(OP_STOP, "Stop", operationLabel(OP_STOP))
+                    .value(OP_RESTART, "Restart", operationLabel(OP_RESTART))
                     .defaultValue(OP_RESTART)
                     .label(HohenheimFormCopy.label("power_operation"))
                     .build());
+
+    /** The translation token for a power operation; the key IS the stored value. */
+    private static Microcopy operationLabel(String operation) {
+        return Microcopy.of(operation).withFilter("scope", "power_operation");
+    }
 
     @Override public @NonNull Identifier typeId() { return ID; }
     @Override public @NonNull String getDisplayName() { return "Power action"; }

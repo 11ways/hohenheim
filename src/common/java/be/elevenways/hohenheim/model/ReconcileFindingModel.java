@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -39,19 +40,37 @@ public class ReconcileFindingModel extends Model {
     public static final StringField SERVER_NAME = SCHEMA.addField(
         StringField.builder().name("server_name").build());
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
-        .value("container", v -> v.displayName("Container").icon("cube").color("blue"))
-        .value("volume", v -> v.displayName("Volume").icon("database").color("purple"))
-        .value("network", v -> v.displayName("Network").icon("diagram-project").color("teal"))
+        .value("container", v -> v.displayName("Container")
+            .label(kindLabel("container")).icon("cube").color("blue"))
+        .value("volume", v -> v.displayName("Volume")
+            .label(kindLabel("volume")).icon("database").color("purple"))
+        .value("network", v -> v.displayName("Network")
+            .label(kindLabel("network")).icon("diagram-project").color("teal"))
         .build());
+
+    /** The translation token for a found resource kind; the key IS the stored value. */
+    private static Microcopy kindLabel(String kind) {
+        return Microcopy.of(kind).withFilter("scope", "reconcile_kind");
+    }
     public static final StringField RESOURCE_NAME = SCHEMA.addField(
         StringField.builder().name("resource_name").build());
     public static final EnumField BUCKET = SCHEMA.addField(EnumField.builder("bucket")
-        .value(BUCKET_OWNED, v -> v.displayName("Owned").icon("circle-check").color("green"))
-        .value(BUCKET_ORPHANED, v -> v.displayName("Orphaned").icon("circle-exclamation").color("red"))
-        .value(BUCKET_FOREIGN_KNOWN, v -> v.displayName("Foreign (known)").icon("circle-info").color("gray"))
-        .value(BUCKET_FOREIGN_COLLIDING, v -> v.displayName("Foreign (colliding)").icon("triangle-exclamation").color("orange"))
-        .value(BUCKET_FOREIGN_UNRELATED, v -> v.displayName("Foreign (unrelated)").icon("circle").color("gray"))
+        .value(BUCKET_OWNED, v -> v.displayName("Owned")
+            .label(bucketLabel(BUCKET_OWNED)).icon("circle-check").color("green"))
+        .value(BUCKET_ORPHANED, v -> v.displayName("Orphaned")
+            .label(bucketLabel(BUCKET_ORPHANED)).icon("circle-exclamation").color("red"))
+        .value(BUCKET_FOREIGN_KNOWN, v -> v.displayName("Foreign (known)")
+            .label(bucketLabel(BUCKET_FOREIGN_KNOWN)).icon("circle-info").color("gray"))
+        .value(BUCKET_FOREIGN_COLLIDING, v -> v.displayName("Foreign (colliding)")
+            .label(bucketLabel(BUCKET_FOREIGN_COLLIDING)).icon("triangle-exclamation").color("orange"))
+        .value(BUCKET_FOREIGN_UNRELATED, v -> v.displayName("Foreign (unrelated)")
+            .label(bucketLabel(BUCKET_FOREIGN_UNRELATED)).icon("circle").color("gray"))
         .build());
+
+    /** The translation token for an ownership bucket; the key IS the stored value. */
+    private static Microcopy bucketLabel(String bucket) {
+        return Microcopy.of(bucket).withFilter("scope", "reconcile_bucket");
+    }
     /** How the attribution was made: owner_label, stack_label, name, foreign_label or none. */
     public static final StringField EVIDENCE = SCHEMA.addField(
         StringField.builder().name("evidence").build());

@@ -84,8 +84,8 @@ final class AccessRuleSummaries {
      */
     static @NonNull EnumBadgeState enabledBadge(boolean enabled) {
         return enabled
-            ? new EnumBadgeState("on", ruleText("state_on"), "check", "success", null, true)
-            : new EnumBadgeState("off", ruleText("state_off"), "xmark", "secondary", null, true);
+            ? new EnumBadgeState("on", ruleText("state_on"), null, "check", "success", null, true)
+            : new EnumBadgeState("off", ruleText("state_off"), null, "xmark", "secondary", null, true);
     }
 
     /** The on/off cue of one stored rule row. */

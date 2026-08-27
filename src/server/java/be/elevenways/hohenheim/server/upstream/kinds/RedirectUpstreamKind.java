@@ -28,10 +28,10 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
 
     public static final EnumField HTTP_STATUS = SETTINGS_SCHEMA.addField(
         EnumField.builder("http_status")
-            .value("301", "301 Permanent")
-            .value("302", "302 Found")
-            .value("307", "307 Temporary Redirect")
-            .value("308", "308 Permanent Redirect")
+            .value("301", "301 Permanent", UpstreamCopy.redirectStatus("301"))
+            .value("302", "302 Found", UpstreamCopy.redirectStatus("302"))
+            .value("307", "307 Temporary Redirect", UpstreamCopy.redirectStatus("307"))
+            .value("308", "308 Permanent Redirect", UpstreamCopy.redirectStatus("308"))
             .label(HohenheimFormCopy.label("redirect_status"))
             .help(HohenheimFormCopy.help("redirect_status"))
             .build());

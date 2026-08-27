@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -30,10 +31,18 @@ public class NotificationChannelModel extends Model {
     public static final StringField KIND = SCHEMA.addField(StringField.builder().name("kind").build());
     public static final EnumField FORMAT = SCHEMA.addField(EnumField.builder("format")
         .required()
-        .value(FORMAT_SLACK, v -> v.displayName("Slack").icon("message").color("purple"))
-        .value(FORMAT_DISCORD, v -> v.displayName("Discord").icon("comments").color("indigo"))
-        .value(FORMAT_GENERIC, v -> v.displayName("Generic JSON").icon("code").color("gray"))
+        .value(FORMAT_SLACK, v -> v.displayName("Slack")
+            .label(formatLabel(FORMAT_SLACK)).icon("message").color("purple"))
+        .value(FORMAT_DISCORD, v -> v.displayName("Discord")
+            .label(formatLabel(FORMAT_DISCORD)).icon("comments").color("indigo"))
+        .value(FORMAT_GENERIC, v -> v.displayName("Generic JSON")
+            .label(formatLabel(FORMAT_GENERIC)).icon("code").color("gray"))
         .build());
+
+    /** The translation token for a webhook payload format; the key IS the stored value. */
+    private static Microcopy formatLabel(String format) {
+        return Microcopy.of(format).withFilter("scope", "notification_format");
+    }
     // The webhook URL is a bearer capability (Slack/Discord embed the token in the path).
     public static final StringField URL = SCHEMA.addField(
         StringField.builder().name("url").secret().encrypted().required().build());

@@ -46,12 +46,18 @@ public class DnsZoneModel extends Model {
     /** {@link #ROLE} value for a zone replicated from a peer via AXFR. */
     public static final String ROLE_SECONDARY = "secondary";
 
+    // AIDEV-NOTE: the label is the ROLE WORD only -- the parenthetical it used to carry
+    // ("Primary (owned here)") made the list column 180px of nowrap text. The explanation
+    // lives on the DECLARED description facet instead, so it can be drawn as help text or a
+    // tooltip without every surface widening for it.
     public static final EnumField ROLE = SCHEMA.addField(EnumField.builder("role")
         .value(ROLE_PRIMARY, v -> v.displayName("Primary")
             .label(Microcopy.of("role_primary").withFilter("scope", "dns_role"))
+            .describe(HohenheimFormCopy.help("role_primary"))
             .icon("star").color("blue"))
         .value(ROLE_SECONDARY, v -> v.displayName("Secondary")
             .label(Microcopy.of("role_secondary").withFilter("scope", "dns_role"))
+            .describe(HohenheimFormCopy.help("role_secondary"))
             .icon("copy").color("gray"))
         .label(HohenheimFormCopy.label("zone_role")).help(HohenheimFormCopy.help("zone_role")).build());
     public static final IntegerField PRIMARY_PEER_ID = SCHEMA.addField(

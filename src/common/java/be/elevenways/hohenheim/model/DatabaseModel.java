@@ -59,13 +59,23 @@ public class DatabaseModel extends Model {
     public static final String ENGINE_MONGO = "mongo";
 
     public static final EnumField ENGINE = SCHEMA.addField(EnumField.builder("engine")
-        .value(ENGINE_POSTGRES, v -> v.displayName("PostgreSQL").icon("database").color("blue"))
-        .value(ENGINE_MYSQL, v -> v.displayName("MySQL").icon("database").color("orange"))
-        .value(ENGINE_REDIS, v -> v.displayName("Redis").icon("bolt").color("red"))
-        .value(ENGINE_MONGO, v -> v.displayName("MongoDB").icon("leaf").color("green"))
+        .value(ENGINE_POSTGRES, v -> v.displayName("PostgreSQL")
+            .label(engineLabel(ENGINE_POSTGRES)).icon("database").color("blue"))
+        .value(ENGINE_MYSQL, v -> v.displayName("MySQL")
+            .label(engineLabel(ENGINE_MYSQL)).icon("database").color("orange"))
+        .value(ENGINE_REDIS, v -> v.displayName("Redis")
+            .label(engineLabel(ENGINE_REDIS)).icon("bolt").color("red"))
+        .value(ENGINE_MONGO, v -> v.displayName("MongoDB")
+            .label(engineLabel(ENGINE_MONGO)).icon("leaf").color("green"))
         .label(HohenheimFormCopy.label("engine"))
         .help(HohenheimFormCopy.help("engine"))
         .build());
+
+    /** The translation token for a database engine; the key IS the stored value. */
+    private static Microcopy engineLabel(String engine) {
+        return Microcopy.of(engine).withFilter("scope", "db_engine");
+    }
+
     public static final StringField IMAGE = SCHEMA.addField(StringField.builder().name("image")
         .label(HohenheimFormCopy.label("image"))
         .help(HohenheimFormCopy.help("image"))

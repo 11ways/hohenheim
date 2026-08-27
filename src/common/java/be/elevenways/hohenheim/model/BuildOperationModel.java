@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -83,10 +84,18 @@ public class BuildOperationModel extends Model {
         IntegerField.builder().name("id").build());
 
     public static final EnumField BUILDER_KIND = SCHEMA.addField(EnumField.builder("builder_kind")
-        .value(KIND_DOCKERFILE, v -> v.displayName("Dockerfile").icon("file-code").color("info"))
-        .value(KIND_NIXPACKS, v -> v.displayName("Nixpacks").icon("box").color("secondary"))
-        .value(KIND_WORKSPACE, v -> v.displayName("Workspace").icon("code").color("violet"))
+        .value(KIND_DOCKERFILE, v -> v.displayName("Dockerfile")
+            .label(kindLabel(KIND_DOCKERFILE)).icon("file-code").color("info"))
+        .value(KIND_NIXPACKS, v -> v.displayName("Nixpacks")
+            .label(kindLabel(KIND_NIXPACKS)).icon("box").color("secondary"))
+        .value(KIND_WORKSPACE, v -> v.displayName("Workspace")
+            .label(kindLabel(KIND_WORKSPACE)).icon("code").color("violet"))
         .build());
+
+    /** The translation token for a builder kind; the key IS the stored value. */
+    public static Microcopy kindLabel(String kind) {
+        return Microcopy.of(kind).withFilter("scope", "builder_kind");
+    }
 
     public static final StringField FOR_MODEL = SCHEMA.addField(
         StringField.builder().name("for_model").build());
@@ -95,14 +104,24 @@ public class BuildOperationModel extends Model {
         IntegerField.builder().name("for_id").build());
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_RUNNING, v -> v.displayName("Running").icon("rotate").color("info"))
-        .value(STATUS_SUCCEEDED, v -> v.displayName("Succeeded").icon("check").color("success"))
-        .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-xmark").color("destructive"))
-        .value(STATUS_TIMED_OUT, v -> v.displayName("Timed out").icon("clock").color("warning"))
-        .value(STATUS_QUOTA_EXCEEDED,
-            v -> v.displayName("Quota exceeded").icon("gauge-high").color("warning"))
-        .value(STATUS_REFUSED, v -> v.displayName("Refused").icon("ban").color("destructive"))
+        .value(STATUS_RUNNING, v -> v.displayName("Running")
+            .label(statusLabel(STATUS_RUNNING)).icon("rotate").color("info"))
+        .value(STATUS_SUCCEEDED, v -> v.displayName("Succeeded")
+            .label(statusLabel(STATUS_SUCCEEDED)).icon("check").color("success"))
+        .value(STATUS_FAILED, v -> v.displayName("Failed")
+            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+        .value(STATUS_TIMED_OUT, v -> v.displayName("Timed out")
+            .label(statusLabel(STATUS_TIMED_OUT)).icon("clock").color("warning"))
+        .value(STATUS_QUOTA_EXCEEDED, v -> v.displayName("Quota exceeded")
+            .label(statusLabel(STATUS_QUOTA_EXCEEDED)).icon("gauge-high").color("warning"))
+        .value(STATUS_REFUSED, v -> v.displayName("Refused")
+            .label(statusLabel(STATUS_REFUSED)).icon("ban").color("destructive"))
         .build());
+
+    /** The translation token for a build status; the key IS the stored value. */
+    private static Microcopy statusLabel(String status) {
+        return Microcopy.of(status).withFilter("scope", "build_status");
+    }
 
     /** Commit sha (git-sourced) or another caller-supplied source identity. */
     public static final StringField SOURCE_REF = SCHEMA.addField(

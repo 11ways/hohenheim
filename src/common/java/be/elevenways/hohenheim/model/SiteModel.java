@@ -78,7 +78,9 @@ public class SiteModel extends Model {
         .label(HohenheimFormCopy.label("description"))
         .build());
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_ACTIVE, v -> v.displayName("Active").icon("circle-check").color("success"))
+        .value(STATUS_ACTIVE, v -> v.displayName("Active")
+            .label(Microcopy.of(STATUS_ACTIVE).withFilter("scope", "site_status"))
+            .icon("circle-check").color("success"))
         .build());
     public static final IntegerField ACCESS_LIST_ID = SCHEMA.addField(IntegerField.builder().name("access_list_id")
         .label(HohenheimFormCopy.label("access_list"))
