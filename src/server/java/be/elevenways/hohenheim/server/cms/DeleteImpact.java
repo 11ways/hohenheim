@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
@@ -40,7 +41,29 @@ final class DeleteImpact {
     private static final IdentifierKey<List<Row>> CERTIFICATES =
         IdentifierKey.of("hohenheim", "delete_impact_certificates");
 
+    /** Request-scoped snapshot of every zone, so a records listing resolves origins once. */
+    private static final IdentifierKey<List<Row>> ZONES =
+        IdentifierKey.of("hohenheim", "delete_impact_zones");
+
     private DeleteImpact() {}
+
+    /**
+     * The origin of the zone a record answers in.
+     *
+     * @param zoneId the record's stored zone reference
+     * @return the origin, or null when the reference is absent or dangling
+     */
+    static @Nullable String originOfZone(@Nullable Integer zoneId) {
+        if (zoneId == null) {
+            return null;
+        }
+        for (Row zone : zones()) {
+            if (zoneId.equals(zone.get(DnsZoneModel.ID))) {
+                return zone.get(DnsZoneModel.ORIGIN);
+            }
+        }
+        return null;
+    }
 
     /** @return the hostnames bound to one site, in table order */
     static @NonNull List<String> hostnamesOfSite(@Nullable Integer siteId) {
@@ -127,6 +150,10 @@ final class DeleteImpact {
 
     private static @NonNull List<Row> certificates() {
         return snapshot(CERTIFICATES, () -> Models.get(CertificateModel.class).find().all());
+    }
+
+    private static @NonNull List<Row> zones() {
+        return snapshot(ZONES, () -> Models.get(DnsZoneModel.class).find().all());
     }
 
     /** Read a snapshot from the request scope, loading it once when it is not there yet. */
