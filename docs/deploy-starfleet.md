@@ -238,6 +238,57 @@ service that actually runs lives under
 `/opt/hohenheim/data/managed-services/spamservice/`. Nothing reads
 `/opt/spamservice/` any more; it is ~660 MB of stale jars.
 
+## Deploy 2026-08-27: two rounds of live-check fixes (plain jar-swap lane, twice)
+
+Shipped `419b9274` at 01:49Z and `3472cafa` at 06:05Z. Both were the plain
+jar-swap lane: the migration diff was EMPTY each time, so step 4 (rehearse
+against a byte copy) was skipped by the lane's own rule -- a deploy that adds
+no migrations cannot damage the database, and the inert boot exists to prove
+the migration lane, not the jar. Everything else ran unchanged: preflight
+backup (`/root/hohenheim-preflight-20260827-014800/` and
+`/root/hohenheim-preflight-20260827-060430/`: database via `sqlite3 .backup`
+plus integrity check, `settings/`, keyring sha256-compared, the running jar
+copied aside as `hohenheim-server.jar.rollback`), install + swap, restart,
+verify from outside, restart AGAIN and verify again. Both deploys came up
+clean on both restarts: 0 exceptions, listeners 53 udp+tcp / 80 / 443 / 3000,
+`aa` SOA + NS + REFUSED on the public IP, all three names `ssl_verify_result=0`
+(200 / 200 / 302, HTTP 301), RSS 314-340 MB, `/opt/hohenheim/public/` holding
+only `apex`, `/cms.js` served at the jar's byte count (4891544, then 4896463),
+and `zenit-dev deployed starfleet` answering `current` for all 13 repos.
+
+The first deploy carried the 08-26 QA batch's second half (microcopy audit:
+plumage's parallel `PlumageText` face deleted, relative-time keys, enum labels
+across every repo, `<html lang>` naming a served locale, HttpRefusal copy). A
+live browser check of THAT deploy found five defects the suites could not see:
+a row menu clipped 15px behind the scrollbar (hawkeye measured the viewport
+with `innerWidth`), an unavailable-action reason printed over its own label,
+a disabled dependent picker flashing the raw key `relation_unresolved` on the
+first post-hydration paint, an instance create form reporting one refusal per
+submit and dropping the typed URL, and a delete from a zone's Records tab
+landing on the global record list. Fixing the picker flash exposed a latent
+hawkeye compiler defect (a tag member body's `let` landed in the SHARED render
+context and read the enclosing `{% each %}` loop variable). All fixed across
+hawkeye, plumage, zenit-cms and hohenheim, each with a browser test that is red
+before the fix; the second deploy shipped them.
+
+Lane notes:
+
+- The 08-26 `gradle.properties` fix held: the jar's `META-INF/blast/
+  build-info.tsv` read clean (every module at its committed sha, no
+  `dirty=true`) on the FIRST build from the isolated worktree, both times.
+- No stale rehearsal JVM held 13998/13999 (none was started; the 08-26 rule
+  is now habit).
+- The migration gate `git diff <deployed>..HEAD --stat -- '*igration*'`
+  false-positives on `src/browserTest/.../test/migration/*Test.java`. Read the
+  hit: only `src/common/java/.../migration/*.java` and
+  `src/server/java/.../instance/InstanceMigrations.java` decide the lane. A
+  test under the `migration` package is not a schema change.
+- A green suite is not a live check. Three of the five defects were geometry
+  or first-paint timing that only a real browser at a real viewport, with a
+  real scrollbar (Playwright's default `--hide-scrollbars` hid the clamp defect
+  outright) and a warm catalog, can show. Run the visual pass after every
+  deploy that touches plumage/zenit-cms chrome.
+
 ## Deploy 2026-08-26: the QA-pass batch + protected paths (the 08-23 lane, second run)
 
 Shipped `0cde277c` (QA-pass fixes across hawkeye/zenit/zenit-cms/plumage/
