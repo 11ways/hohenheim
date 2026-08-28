@@ -444,3 +444,36 @@ Verified after both restarts: 0 exceptions, listeners on 53 udp+tcp / 80 / 443 /
 all three public names `ssl_verify_result=0` from outside (302 / 200 / 200, HTTP
 301), RSS 324 MB, `/opt/hohenheim/public/` holding only `apex`, and `/cms.js`
 served at exactly the jar's byte count (4655418) -- the Aug 15 shadowing check.
+
+## Deploy 2026-08-29: the second remediation wave
+
+Shipped hohenheim `5a030dcb` at 23:57 CEST. Same clean-secondary-workspace lane as
+2026-08-28, and for the same reason: zenit-comms carried another session's unfinished
+inbox work, so the main checkouts could not build a release jar. Every OTHER chain repo
+happened to be clean this time -- the lane was still the right call, because the jar must
+carry only committed state and one dirty repo is enough to spoil it.
+
+Preconditions checked before touching the host: no migration diff between the deployed
+`b6b2077f` and HEAD (`git diff --stat b6b2077f..HEAD -- '*igration*'` empty), and every
+chain repo's HEAD recorded. Build: 802s, `checkBundleSize` green (hohenheim's budget was
+re-baselined on 2026-08-28 and this wave did not move it; zenit-auth's own TEST bundle
+budget did move, for reasons recorded in that repo).
+
+The jar was stamped 13/13 `clean` before it left the workstation, and `upload_file`
+enforced that remotely as well -- `unzip -p {} META-INF/blast/build-info.tsv | sort -u |
+grep -c false | grep -qx 13` as the verify_command, so a jar with any dirty stamp could not
+have been moved into place.
+
+Rehearsal against a byte copy of the live database (never the live one): `--build-info`
+listed all modules clean, and `--run-migrations` reported `Migrations complete 0 applied`,
+which also verifies every stored checksum.
+
+Two restarts. Boot takes ~20s, so the first health probe at 12s legitimately refuses --
+poll for 200 rather than sleeping a fixed interval. Verified after the second restart:
+`/api/health` 200, the panel 200 over public HTTPS, `aa` on the SOA from 104.223.42.142,
+listeners on 53/80/443/3000, no `[ERR]` lines that were not Undertow's INFO-on-stderr, and
+`zd_deployed starfleet` = `current` for all 13 repos with no restart pending.
+
+Rollback, if it is ever needed: `/root/hohenheim-preflight-20260828-234105/` holds the
+previous jar as `hohenheim-server.jar.rollback`, a `.backup`ed database that passed
+`PRAGMA integrity_check`, the settings directory and a sha256-matched keyring copy.
