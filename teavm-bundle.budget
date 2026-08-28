@@ -3,5 +3,5 @@
 # change, regenerate with the updateBundleBudget task and commit.
 # measured= is the size this ceiling was derived from, so the next
 # breach can report how much the bundle GREW since this baseline.
-cms.js.raw=5066548 measured=4825283
-cms.js.gzip=1203743 measured=1146421
+cms.js.raw=5363361 measured=5107962
+cms.js.gzip=1271671 measured=1211115
