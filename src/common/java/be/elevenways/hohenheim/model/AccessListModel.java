@@ -29,7 +29,12 @@ public class AccessListModel extends Model {
     public static final String SATISFY_ALL = "all";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
+    /**
+     * Required: the name is the only thing that tells two policies apart, and a list saved
+     * without one titles itself after the model and its id on every surface that names it.
+     */
+    public static final StringField NAME = SCHEMA.addField(
+        StringField.builder().name("name").required().build());
     public static final EnumField SATISFY = SCHEMA.addField(EnumField.builder("satisfy")
         .value(SATISFY_ANY, v -> v.displayName("Any")
             .label(Microcopy.of("any").withFilter("scope", "access_satisfy"))

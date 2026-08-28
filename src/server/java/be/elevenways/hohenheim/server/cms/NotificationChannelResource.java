@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -148,6 +149,16 @@ public final class NotificationChannelResource extends RowResource {
     }
     @Override public @NonNull Icon icon() { return Icon.of("bell"); }
 
+    /**
+     * A channel is the only thing that carries its events anywhere, so its delete has
+     * exactly one consequence and it is silent: those events stop being delivered, with
+     * nothing left to notice the gap.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(
+            Microcopy.of("delete_confirm").withFilter("scope", "notification_channel"));
+    }
 
     /** kind is staged by persist/update but is not a form entry; stamp it here. */
     @Override
