@@ -136,7 +136,64 @@ is in the diff rather than in a test log: the old path browser's failed arm was 
 held; and the old card frame declared no `he-block` at all, so "the frame anchors a named
 block" could not have held either. Both are now asserted.
 
-## 7. Deliberately not changed
+## 7. Second pass: the two structural problems this wave uncovered
+
+**zenit-auth's browser lane builds from clean again.** The cause was ONE line added
+2026-08-27 (`7301196`): `auth/cms/user-credentials.hwk:60` carries
+`use:CmsConfirm.destructive`, which bakes a zenit-cms class reference into the generated
+template. The `zenitauth` namespace registers every template it owns with the client loader
+unconditionally (a template with addressable content gets `*=` in the boot index, per
+`ProjectCompiler.getTemplateBootIndexLines`), so the bundle cannot LINK without zenit-cms.
+
+The bundle this repo builds is its OWN browser-test bundle, and `blastTeavmJar` feeds it
+from `clientRuntimeClasspath` -- which is why declaring the dependency on
+`browserTestCommonImplementation` (the obvious guess, and what zenit-cms appears to do)
+changes nothing. It is now a `clientRuntimeOnly` entry: `publishModule('client', ...)`
+declares zenit-auth-client's POM dependencies by hand and zenit-cms is deliberately not
+among them, so this never becomes a published edge. Verified: `OidcLoginBrowserTest` 2/2
+green (run 24), where before the lane could not produce a bundle at all.
+
+Cost, and it is not small: the test bundle went 4.7 MB -> 16.5 MB, because zenit-cms brings
+the widget/forms/media client stack. Re-baselined with the reason in `teavm-bundle.budget`.
+For scale, zenit-cms's own test bundle is 22 MB, so this is now what a CMS host measures.
+
+THE BETTER FIX, deliberately not taken tonight: hawkeye should emit a GUARD rather than `*=`
+for a template whose generated code references a class from an optional module -- the
+conditional-registration index already supports `guardClass=holder`, and a template that
+cannot link without zenit-cms is exactly what it is for. That is a compiler change in a repo
+another session was actively committing to all evening, and it changes registration for every
+consumer's bundle, so it wants its own wave. Note also that the template's directive is a
+DUPLICATE declaration: `AuthUsersResource:507` already declares
+`ConfirmationSpec.destructive(mc("set_password_confirm"))` on the same action, with the same
+microcopy key.
+
+**`PageFrames.render` has no production caller** and `CmsPageFrameProvider` therefore answers
+nobody (zenit-auth `bff5174`/U-07 stopped negotiating). Both are now documented as dormant at
+the class level, so a registered provider is not mistaken for a rendered effect.
+
+## 8. Dangling-reference survey of the remaining tiers
+
+Method: every foreign-key column against the models that carry a remove hook. Result -- one
+new gap, and it is NOT the runtime tier:
+
+- **Deleting a certificate leaves `site_domain.certificate_id` dangling.** `CertificateModel`
+  carries no remove hook at all, and `CertificateStore.loadFromDatabase` selects domains by
+  `CERTIFICATE_ID.isNotNull()`, so such a row is loaded and silently maps to nothing. The
+  shipped confirmation already promises the right semantics ("the names it covers stop
+  serving HTTPS until another certificate covers them") -- so the fix is to CLEAR the
+  reference, never to refuse the delete. Not landed here: it needs either a new
+  `BelongsTo` on `SiteDomainModel` or a fifth copy of the private `doomedRows(context)`
+  idiom this repo already wants unified, and it is the TLS tier of a box that is live
+  authoritative DNS and proxy. It is testable (both models exist in the browser-test
+  datasource), so it wants a red-then-green test, not a late-night patch.
+- **Deleting a stack orphans `stack_deployments` and `stack_services`** (no hook on
+  `StackModel`, and no soft delete). Not exercisable here -- no admitted host.
+- Everything else is covered: instances (6 hooks), site domains (3), instance databases (3),
+  databases (3), sites (2), projects (2), preview deployments (2), instance devices (2), DNS
+  records (2), access rules and lists (2 each, this wave), protected paths, permission
+  groups, instance variables, environments, dyndns credentials.
+
+## 9. Deliberately not changed
 
 The generated list at `/admin/access-rules` heads its empty state "No Rules yet" while the
 record tab says "No rules yet". The generated one composes the resource's plural label into
