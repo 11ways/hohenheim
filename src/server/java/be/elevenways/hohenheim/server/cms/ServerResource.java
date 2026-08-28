@@ -4,8 +4,11 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.HostStatusCell;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
@@ -942,6 +945,55 @@ public final class ServerResource extends RowResource {
         }
         super.deleteRow(existing, accessContext);
         ServerOptions.refresh();
+    }
+
+    /**
+     * Why this host's delete is offered but dead: the local host is the machine Hohenheim
+     * itself runs on, and a host still carrying workloads would leave every instance,
+     * stack and database row naming a host that no longer exists.
+     *
+     * AIDEV-NOTE: the local refusal was already enforced in {@link #deleteRow}, so the
+     * button was offered on every surface and always failed; declaring it here is what
+     * renders it dead WITH the reason, and the same resolver refuses the direct POST. The
+     * workload refusal is new and is the {@code ProjectGuards} policy applied one tier
+     * down: a project cannot be deleted while it owns records either.
+     */
+    @Override
+    public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
+                                                       @NonNull AccessContext accessContext) {
+        if (ServerService.LOCAL.equals(record.get(ServerModel.NAME))) {
+            return Microcopy.of("delete_local").withFilter("scope", "server");
+        }
+        long workloads = workloadsOn(record.get(ServerModel.ID));
+        if (workloads > 0) {
+            return Microcopy.of("delete_in_use").withFilter("scope", "server")
+                .withArg("workloads", workloads);
+        }
+        return super.deleteUnavailableReason(record, accessContext);
+    }
+
+    /**
+     * The dialog says what the record actually is -- an inventory entry -- because
+     * removing it does not touch the machine or anything running on it.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(Microcopy.of("delete_confirm").withFilter("scope", "server"));
+    }
+
+    /** @return how many stored workloads still name this host */
+    private static long workloadsOn(@Nullable Integer serverId) {
+        if (serverId == null) {
+            return 0;
+        }
+        return Models.get(InstanceModel.class).find()
+                .where(InstanceModel.SERVER_ID.eq(serverId))
+                .where(InstanceModel.DELETED_AT.isNull())
+                .count()
+            + Models.get(StackModel.class).find()
+                .where(StackModel.SERVER_ID.eq(serverId)).count()
+            + Models.get(DatabaseModel.class).find()
+                .where(DatabaseModel.SERVER_ID.eq(serverId)).count();
     }
 
     /**

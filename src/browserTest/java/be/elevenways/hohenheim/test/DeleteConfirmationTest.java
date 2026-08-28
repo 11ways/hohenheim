@@ -1,20 +1,32 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.cms.AccessListResource;
 import be.elevenways.hohenheim.server.cms.CertificateResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.DnsZoneResource;
+import be.elevenways.hohenheim.server.cms.EnvironmentResource;
 import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
+import be.elevenways.hohenheim.server.cms.NotificationChannelResource;
+import be.elevenways.hohenheim.server.cms.ServerResource;
 import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -202,7 +214,134 @@ class DeleteConfirmationTest {
         });
     }
 
+    /**
+     * The four dialogs the 2026-08-27 pass found saying only "this cannot be undone": an
+     * access list (whose rules cascade and whose gate silently OPENS), a host, an
+     * environment and a notification channel.
+     */
+    @Test
+    void thePreviouslyGenericDialogsNameTheirOwnConsequences() {
+        Db.run(datasource, () -> {
+            AccessListResource lists = new AccessListResource();
+
+            // 1. A list nothing uses: the dialog names it and how many rules go with it,
+            //    and says in so many words that nothing is gated by it.
+            int listId = accessList("Office");
+            rule(listId);
+            rule(listId);
+            Row list = Models.get(AccessListModel.class).findById(listId);
+
+            ConfirmationSpec unused = lists.deleteConfirmationFor(list);
+            assertThat(unused.body().key())
+                .as("step 1: an unused list gets the named wording")
+                .isEqualTo("delete_confirm_named");
+            assertThat(unused.body().filters().get("scope"))
+                .as("step 1: from the access-list catalog").isEqualTo("access_list");
+            assertThat(unused.body().args().get("name"))
+                .as("step 1: naming the list").isEqualTo("Office");
+            assertThat(unused.body().args().get("rules"))
+                .as("step 1: and the rules that go with it").isEqualTo(2L);
+
+            // 2. Once a site and a protected path name the list, the dialog names THEM --
+            //    this is the dangerous direction: their gate does not break, it opens.
+            int siteId = site("guarded", null);
+            Row guarded = Models.get(SiteModel.class).findById(siteId);
+            guarded.set(SiteModel.ACCESS_LIST_ID, listId);
+            Models.get(SiteModel.class).save(guarded);
+            protectedPath(siteId, listId, "/admin");
+
+            ConfirmationSpec gating = lists.deleteConfirmationFor(list);
+            assertThat(gating.body().key())
+                .as("step 2: a list in use switches to the gating wording")
+                .isEqualTo("delete_confirm_gating");
+            assertThat(String.valueOf(gating.body().args().get("gated")))
+                .as("step 2: naming the site and the protected path that stop being gated")
+                .contains("guarded")
+                .contains("/admin");
+
+            // 3. The record-LESS dialog can only speak about the type, and does.
+            assertThat(lists.deleteConfirmation().body().filters().get("scope"))
+                .as("step 3: the type-level dialog is the access-list one, not the generic")
+                .isEqualTo("access_list");
+
+            // 4. A host carrying stored workloads: the delete is OFFERED and dead, with the
+            //    count on screen, rather than orphaning every row that names the host.
+            ServerResource servers = new ServerResource();
+            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            int hostId = server("delete-confirm-host");
+            Row host = Models.get(ServerModel.class).findById(hostId);
+            assertThat(servers.deleteUnavailableReason(host, operator))
+                .as("step 4: an empty host is deletable").isNull();
+
+            stack("payments", hostId);
+            Microcopy inUse = servers.deleteUnavailableReason(host, operator);
+            assertThat(inUse).as("step 4: a host with workloads is not").isNotNull();
+            assertThat(inUse.key()).isEqualTo("delete_in_use");
+            assertThat(inUse.args().get("workloads"))
+                .as("step 4: naming how many still point at it").isEqualTo(1L);
+
+            // 5. The local host is the machine Hohenheim runs on: its delete was enforced
+            //    only at submit, so the button was offered and always failed. The row is
+            //    the boot's own -- the name is unique and this test never creates it.
+            Row local = Models.get(ServerModel.class).find()
+                .where(ServerModel.NAME.eq(ServerService.LOCAL)).first();
+            assertThat(local).as("step 5: the boot registered the local host").isNotNull();
+            assertThat(servers.deleteUnavailableReason(local, operator))
+                .as("step 5: the local host explains itself instead of failing on click")
+                .isNotNull()
+                .extracting(Microcopy::key).isEqualTo("delete_local");
+
+            // 6. The remaining two speak for themselves rather than through the framework's
+            //    "this cannot be undone".
+            assertThat(new EnvironmentResource().deleteConfirmation().body().filters().get("scope"))
+                .as("step 6: the environment dialog states the refusal policy it enforces")
+                .isEqualTo("environment");
+            assertThat(new NotificationChannelResource().deleteConfirmation()
+                    .body().filters().get("scope"))
+                .as("step 6: and the channel dialog names the deliveries that stop")
+                .isEqualTo("notification_channel");
+        });
+    }
+
     // -- fixtures ---------------------------------------------------------------
+
+    private static int accessList(String name) {
+        Row row = Models.get(AccessListModel.class).createEmptyRow();
+        row.set(AccessListModel.NAME, name);
+        Models.get(AccessListModel.class).save(row);
+        return row.get(AccessListModel.ID);
+    }
+
+    private static void rule(int listId) {
+        Row row = Models.get(AccessRuleModel.class).createEmptyRow();
+        row.set(AccessRuleModel.ACCESS_LIST_ID, listId);
+        row.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_IP_ALLOW);
+        row.set(AccessRuleModel.ENABLED, true);
+        row.set(AccessRuleModel.DATA, Map.of(AccessRuleModel.NETWORK.getName(), "10.0.0.0/8"));
+        Models.get(AccessRuleModel.class).save(row);
+    }
+
+    private static void protectedPath(int siteId, int listId, String path) {
+        Row row = Models.get(ProtectedPathModel.class).createEmptyRow();
+        row.set(ProtectedPathModel.SITE_ID, siteId);
+        row.set(ProtectedPathModel.ACCESS_LIST_ID, listId);
+        row.set(ProtectedPathModel.PATH, path);
+        Models.get(ProtectedPathModel.class).save(row);
+    }
+
+    private static int server(String name) {
+        Row row = Models.get(ServerModel.class).createEmptyRow();
+        row.set(ServerModel.NAME, name);
+        Models.get(ServerModel.class).save(row);
+        return row.get(ServerModel.ID);
+    }
+
+    private static void stack(String name, int serverId) {
+        Row row = Models.get(StackModel.class).createEmptyRow();
+        row.set(StackModel.NAME, name);
+        row.set(StackModel.SERVER_ID, serverId);
+        Models.get(StackModel.class).save(row);
+    }
 
     private static int zone(String origin) {
         Row row = Models.get(DnsZoneModel.class).createEmptyRow();

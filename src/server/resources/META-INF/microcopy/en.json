@@ -3429,6 +3429,22 @@
       "scope": "dns_remote"
     },
     {
+      "text": "Delete this access list? Its rules go with it, and every site and protected path it gates is let through unchecked from that moment on.",
+      "scope": "access_list"
+    },
+    {
+      "text": "Delete this environment? An environment that still holds variables or workloads is refused, so move or remove those first.",
+      "scope": "environment"
+    },
+    {
+      "text": "Delete this channel? The events it delivers stop being sent, with nothing left to report the gap.",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Delete this host? Only its entry here is removed: the machine and everything running on it are untouched, and Hohenheim simply stops managing them.",
+      "scope": "server"
+    },
+    {
       "text": "Delete this stack? Its containers and network are destroyed; volumes are kept.",
       "scope": "stack"
     },
@@ -10352,6 +10368,10 @@
   ],
   "delete_confirm_named": [
     {
+      "text": "Delete the access list {$name}? Its {$rules} rules go with it. Nothing is gated by it right now.",
+      "scope": "access_list"
+    },
+    {
       "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name.",
       "scope": "dns_zone"
     },
@@ -10360,6 +10380,18 @@
       "scope": "dns_record"
     }
   ],
+  "delete_confirm_gating": {
+    "text": "Delete the access list {$name}? Its {$rules} rules go with it, and these stop being gated -- their traffic is let through unchecked from that moment on: {$gated}.",
+    "scope": "access_list"
+  },
+  "delete_local": {
+    "text": "This is the machine Hohenheim itself runs on; removing its entry would leave the installation without a host.",
+    "scope": "server"
+  },
+  "delete_in_use": {
+    "text": "{$workloads} stored workloads still name this host. Remove or migrate them first, or their records would name a host that no longer exists.",
+    "scope": "server"
+  },
   "delete_confirm_dependents": {
     "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.",
     "scope": "dns_zone"

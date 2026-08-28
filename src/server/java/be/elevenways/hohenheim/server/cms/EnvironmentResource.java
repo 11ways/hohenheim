@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
@@ -83,6 +84,17 @@ public final class EnvironmentResource extends RowResource {
 
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("layer-group"); }
+
+    /**
+     * The dialog states the policy the write funnel actually enforces: an environment
+     * still holding variables or workloads is REFUSED, so the operator learns the order
+     * of operations from the warning rather than from a violation after the fact.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(
+            Microcopy.of("delete_confirm").withFilter("scope", "environment"));
+    }
 
     /** Related-record prefill: /new?project_id=N arrives preselected. */
     @Override

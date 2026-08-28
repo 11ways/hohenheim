@@ -1,8 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
@@ -46,7 +49,63 @@ final class DeleteImpact {
     private static final IdentifierKey<List<Row>> ZONES =
         IdentifierKey.of("hohenheim", "delete_impact_zones");
 
+    /** Request-scoped snapshot of every site, so an access-list listing names its users once. */
+    private static final IdentifierKey<List<Row>> SITES =
+        IdentifierKey.of("hohenheim", "delete_impact_sites");
+
+    /** Request-scoped snapshot of every protected path, for the same reason. */
+    private static final IdentifierKey<List<Row>> PATHS =
+        IdentifierKey.of("hohenheim", "delete_impact_paths");
+
+    /** Request-scoped snapshot of every access rule, so a rule count costs no query per row. */
+    private static final IdentifierKey<List<Row>> RULES =
+        IdentifierKey.of("hohenheim", "delete_impact_rules");
+
     private DeleteImpact() {}
+
+    /**
+     * Everything that is gated by one access list and stops being gated when it goes:
+     * the sites naming it, then the protected paths naming it.
+     *
+     * AIDEV-NOTE: this is the whole point of the access-list delete dialog. A route entry
+     * whose list is gone compiles to a null tree, and {@code AccessListGate} treats a null
+     * tree as ALLOW -- so the delete does not break the gate, it silently opens it.
+     */
+    static @NonNull List<String> gatedByAccessList(@Nullable Integer accessListId) {
+        List<String> gated = new ArrayList<>();
+        if (accessListId == null) {
+            return gated;
+        }
+        for (Row site : sites()) {
+            if (accessListId.equals(site.get(SiteModel.ACCESS_LIST_ID))) {
+                String name = site.get(SiteModel.NAME);
+                gated.add(name == null || name.isBlank() ? String.valueOf((Object) site.get(SiteModel.ID)) : name);
+            }
+        }
+        for (Row path : paths()) {
+            if (accessListId.equals(path.get(ProtectedPathModel.ACCESS_LIST_ID))) {
+                String pattern = path.get(ProtectedPathModel.PATH);
+                if (pattern != null && !pattern.isBlank()) {
+                    gated.add(pattern);
+                }
+            }
+        }
+        return gated;
+    }
+
+    /** @return how many rules die with one access list, at any depth */
+    static long rulesOfAccessList(@Nullable Integer accessListId) {
+        if (accessListId == null) {
+            return 0;
+        }
+        long rules = 0;
+        for (Row rule : rules()) {
+            if (accessListId.equals(rule.get(AccessRuleModel.ACCESS_LIST_ID))) {
+                rules++;
+            }
+        }
+        return rules;
+    }
 
     /**
      * The origin of the zone a record answers in.
@@ -197,6 +256,18 @@ final class DeleteImpact {
 
     private static @NonNull List<Row> zones() {
         return snapshot(ZONES, () -> Models.get(DnsZoneModel.class).find().all());
+    }
+
+    private static @NonNull List<Row> sites() {
+        return snapshot(SITES, () -> Models.get(SiteModel.class).find().all());
+    }
+
+    private static @NonNull List<Row> paths() {
+        return snapshot(PATHS, () -> Models.get(ProtectedPathModel.class).find().all());
+    }
+
+    private static @NonNull List<Row> rules() {
+        return snapshot(RULES, () -> Models.get(AccessRuleModel.class).find().all());
     }
 
     /** Read a snapshot from the request scope, loading it once when it is not there yet. */

@@ -3429,6 +3429,22 @@
       "scope": "dns_remote"
     },
     {
+      "text": "Deze toegangslijst verwijderen? De regels verdwijnen mee, en elke site en beveiligd pad die ze bewaakt wordt vanaf dat moment ongecontroleerd doorgelaten.",
+      "scope": "access_list"
+    },
+    {
+      "text": "Deze omgeving verwijderen? Een omgeving die nog variabelen of workloads bevat wordt geweigerd, verplaats of verwijder die dus eerst.",
+      "scope": "environment"
+    },
+    {
+      "text": "Dit kanaal verwijderen? De gebeurtenissen die het aflevert worden niet meer verstuurd, en niets meldt nog dat ze ontbreken.",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Deze host verwijderen? Alleen zijn vermelding hier verdwijnt: de machine en alles wat erop draait blijven ongemoeid, Hohenheim beheert ze enkel niet langer.",
+      "scope": "server"
+    },
+    {
       "text": "Deze stack verwijderen? De containers en het netwerk worden vernietigd; volumes blijven behouden.",
       "scope": "stack"
     },
@@ -10352,6 +10368,10 @@
   ],
   "delete_confirm_named": [
     {
+      "text": "De toegangslijst {$name} verwijderen? De {$rules} regels verdwijnen mee. Er wordt op dit moment niets door bewaakt.",
+      "scope": "access_list"
+    },
+    {
       "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam.",
       "scope": "dns_zone"
     },
@@ -10360,6 +10380,18 @@
       "scope": "dns_record"
     }
   ],
+  "delete_confirm_gating": {
+    "text": "De toegangslijst {$name} verwijderen? De {$rules} regels verdwijnen mee, en deze worden niet langer bewaakt -- hun verkeer wordt vanaf dat moment ongecontroleerd doorgelaten: {$gated}.",
+    "scope": "access_list"
+  },
+  "delete_local": {
+    "text": "Dit is de machine waarop Hohenheim zelf draait; zijn vermelding verwijderen zou de installatie zonder host achterlaten.",
+    "scope": "server"
+  },
+  "delete_in_use": {
+    "text": "{$workloads} opgeslagen workloads verwijzen nog naar deze host. Verwijder of migreer ze eerst, anders verwijzen hun records naar een host die niet meer bestaat.",
+    "scope": "server"
+  },
   "delete_confirm_dependents": {
     "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.",
     "scope": "dns_zone"

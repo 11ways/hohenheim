@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
@@ -114,4 +115,38 @@ public class AccessListResource extends RowResource {
         return List.of(AccessListModel.NAME);
     }
 
+    /**
+     * The record-LESS dialog can only speak about the type, so it names the two
+     * consequences that hold for every list: the rules go, and whatever it gated stops
+     * being gated.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(Microcopy.of("delete_confirm").withFilter("scope", "access_list"));
+    }
+
+    /**
+     * Names the list, how many rules go with it, and everything that stops being gated.
+     *
+     * AIDEV-NOTE: "this cannot be undone" was the whole dialog here, which said nothing
+     * about either consequence -- and the second one is the dangerous direction: a site
+     * whose access list is gone compiles to a null rule tree, and a null tree ALLOWS, so
+     * the delete silently opens the site rather than breaking it. The two bodies are a
+     * deliberate pair (gated yes/no) rather than one sentence with an optional clause,
+     * because microcopy args echo verbatim and an empty list renders a dangling colon.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
+        Integer id = record.get(AccessListModel.ID);
+        String gated = DeleteImpact.join(DeleteImpact.gatedByAccessList(id));
+        Microcopy body = Microcopy
+            .of(gated.isEmpty() ? "delete_confirm_named" : "delete_confirm_gating")
+            .withFilter("scope", "access_list")
+            .withArg("name", String.valueOf((Object) record.get(AccessListModel.NAME)))
+            .withArg("rules", DeleteImpact.rulesOfAccessList(id));
+        if (!gated.isEmpty()) {
+            body = body.withArg("gated", gated);
+        }
+        return deleteConfirmation(body);
+    }
 }
