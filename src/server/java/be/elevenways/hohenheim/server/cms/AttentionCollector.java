@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
+import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -95,6 +96,7 @@ public final class AttentionCollector {
             // Stored reconciler findings only -- the sweep itself is a scheduled
             // task, never a per-render daemon probe.
             items.addAll(DockerReconciler.attentionItems());
+            dockerForeignResources(items);
         }
         if (HohenheimRoles.anyEnabled(Role.PROXY, Role.DATABASES, Role.STACKS)) {
             stuckReleasingPorts(items, Instant.now().minus(RELEASING_STUCK_AFTER));
@@ -117,6 +119,28 @@ public final class AttentionCollector {
             instancesLowOnDisk(items);
         }
         return items;
+    }
+
+    /**
+     * Resources on a host that nobody here created, as ONE informational row per host.
+     *
+     * AIDEV-NOTE: the orphan and collision buckets are warnings and stay the
+     * reconciler's; this row exists because a host carrying twenty foreign volumes
+     * showed "All clear" while the Reconcile findings list said otherwise. It is
+     * information, never a warning: the reconciler leaves foreign resources alone.
+     */
+    public static void dockerForeignResources(List<AttentionItem> items) {
+        Map<String, Integer> countByServer = new LinkedHashMap<>();
+        for (Row row : Models.get(ReconcileFindingModel.class).find()
+                .where(ReconcileFindingModel.BUCKET.in(
+                    ReconcileFindingModel.BUCKET_FOREIGN_KNOWN, ReconcileFindingModel.BUCKET_FOREIGN_UNRELATED))
+                .all()) {
+            countByServer.merge(row.get(ReconcileFindingModel.SERVER_NAME), 1, Integer::sum);
+        }
+        countByServer.forEach((server, count) -> items.add(item("info", "cubes",
+            copy("docker_foreign", "attention_title", "server", server),
+            copy("docker_foreign", "attention_detail", "count", count),
+            CmsRoutes.list(ADMIN, "reconcile-findings"))));
     }
 
     /**

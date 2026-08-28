@@ -76,6 +76,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // A dyndns credential dies with its record, on every delete lane -- AFTER
         // TenantWrites so an unauthorized record delete refuses first.
         DynamicDnsService.installCredentialCascade();
+        // An access rule dies with the list that holds it and with the group that encloses
+        // it, on every delete lane. AFTER TenantWrites for the same reason as above.
+        be.elevenways.hohenheim.server.proxy.AccessRuleCascades.install();
         // The pl-terminal page gets the wasm concessions; no other admin page does.
         SiteTerminalCsp.install();
         // A tenant-originated instance write may only run an APPROVED template's image;

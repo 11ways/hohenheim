@@ -199,6 +199,36 @@ public final class EnvironmentVariableResource extends RowResource {
     }
 
     /**
+     * A variable CREATED as a secret stores the value it was created with.
+     *
+     * AIDEV-NOTE: the create form has no record and therefore no kind, so it can only
+     * offer one value field and offers the plain one (see {@link #fieldBindings()}). An
+     * operator who picks Kind = Secret there types the secret into that field and used to
+     * be refused in the model's column language ("must carry its value in the matching
+     * column only") with no way to comply -- the secret carrier appears only after the row
+     * exists. The submitted KIND is the operator's declaration of what this value IS, so
+     * the value moves to the column that kind declares, once, at creation.
+     *
+     * This is deliberately NOT the same answer as the kind switch below: there, the plain
+     * value is the OLD value of a row that is becoming a secret and is retired; here it is
+     * the only value the row has ever had.
+     */
+    @Override
+    public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
+                                      @NonNull AccessContext accessContext) {
+        String plainName = InstanceVariableModel.PLAIN_VALUE.getName();
+        if (!InstanceVariableModel.KIND_SECRET.equals(
+                String.valueOf(coerced.get(InstanceVariableModel.KIND.getName())))
+                || !coerced.containsKey(plainName)) {
+            return super.persistRow(coerced, accessContext);
+        }
+        Map<String, Object> moved = new LinkedHashMap<>(coerced);
+        moved.put(InstanceVariableModel.SECRET_VALUE.getName(), coerced.get(plainName));
+        moved.put(plainName, null);
+        return super.persistRow(Collections.unmodifiableMap(moved), accessContext);
+    }
+
+    /**
      * Switching the kind RETIRES the previous carrier's value.
      *
      * AIDEV-NOTE: without this the switch is impossible, not merely lossy -- the model's

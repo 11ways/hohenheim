@@ -39,14 +39,18 @@ public final class ManageDomainResource extends SiteDomainResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "manage_site_domain"); }
     @Override public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
 
-    /** Admins see everything; everyone else only domains of their granted sites. */
+    /**
+     * Admins see every domain of a live site; everyone else only those of their granted
+     * sites -- the soft-deleted-site scope is the base resource's and is never dropped by
+     * narrowing it further.
+     */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
         return ctx -> {
             Criteria scope = ManagePanel.domainScope(ctx);
-            return scope == null
-                ? AccessDecision.allowAll()
-                : AccessDecision.allow(QueryPredicate.of(scope));
+            return AccessDecision.allow(QueryPredicate.of(scope == null
+                ? liveSiteScope()
+                : Criteria.and(liveSiteScope(), scope)));
         };
     }
 

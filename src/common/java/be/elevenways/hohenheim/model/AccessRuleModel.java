@@ -176,6 +176,17 @@ public class AccessRuleModel extends Model {
             .build());
 
     /**
+     * The enclosing group as a RELATION, so a query can name "the children of these rules"
+     * without materializing ids -- what the delete cascade asks.
+     */
+    public static final BelongsTo<AccessRuleModel> PARENT = SCHEMA.addRelation(
+        BelongsTo.to(AccessRuleModel.class)
+            .name("parent")
+            .localKey(PARENT_ID)
+            .remoteKey(ID)
+            .build());
+
+    /**
      * THE rule-type vocabulary, DERIVED from {@link #TYPE}'s declared values rather than
      * re-listed beside them: adding a type is ONE {@code .value(...)} edit.
      */

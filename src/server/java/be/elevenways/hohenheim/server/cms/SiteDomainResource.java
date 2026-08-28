@@ -15,6 +15,9 @@ import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.access.AccessDecision;
+import be.elevenways.zenit.cms.common.access.AccessFunction;
+import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
@@ -36,6 +39,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.ui.Icon;
@@ -139,6 +143,27 @@ public class SiteDomainResource extends RowResource {
     @Override public int navOrder() { return 20; }
     @Override public @NonNull Icon icon() { return Icon.of("at"); }
     @Override public boolean showInNav() { return false; }
+
+    /**
+     * A soft-deleted site is invisible everywhere ({@code SiteResource.accessFunction}), and
+     * so are its hostnames: the cross-site catalog used to keep listing them, with a Site
+     * column resolving to a bare id nothing could open.
+     *
+     * AIDEV-NOTE: the rows are deliberately NOT deleted with the site -- they are what a
+     * site restore brings its hostnames back from, and {@code DnsClaimReleases} already
+     * quarantined the names, so nothing routes meanwhile. This is a VISIBILITY answer, and
+     * it belongs here rather than in a list filter because the same predicate must 404 the
+     * detail route of an orphaned row.
+     */
+    @Override
+    public @NonNull AccessFunction<Row> accessFunction() {
+        return ctx -> AccessDecision.allow(QueryPredicate.of(liveSiteScope()));
+    }
+
+    /** @return the criteria matching only rows whose owning site is not soft-deleted */
+    protected static @NonNull Criteria liveSiteScope() {
+        return Criteria.related(SiteDomainModel.SITE, SiteModel.DELETED_AT.isNull());
+    }
 
     @Override
     public @org.checkerframework.checker.nullness.qual.Nullable ResourceParent<Row> parent() {

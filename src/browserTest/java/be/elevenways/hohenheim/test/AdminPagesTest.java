@@ -97,8 +97,10 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator(
             "[data-path='app.auth_proteus.access_key'] input[type='password']").count())
             .as("and never the credential control").isEqualTo(0);
+        // A numeric setting edits through plumage's typed number control; its unit rides
+        // the control's suffix slot rather than an input-group addon.
         assertThat(page.locator(
-            "[data-path='app.ssl.dns_propagation_seconds'] pl-input-group-addon").innerText().trim())
+            "[data-path='app.ssl.dns_propagation_seconds'] pl-number-input [slot='suffix']").innerText().trim())
             .isEqualTo("s");
         assertThat(page.locator(
             "[data-path='app.storage.data_path'] zf-path-input [data-zf-path-browse]").count()).isEqualTo(1);
@@ -109,7 +111,7 @@ class AdminPagesTest extends HohenheimTestBase {
             "framework.network.request_body_inflight_limit",
             "framework.compression.min_size_bytes"
         }) {
-            assertThat(page.locator("[data-path='" + path + "'] pl-input-group-addon").innerText().trim())
+            assertThat(page.locator("[data-path='" + path + "'] pl-number-input [slot='suffix']").innerText().trim())
                 .isEqualTo("B");
         }
         assertThat(page.locator(
@@ -214,6 +216,10 @@ class AdminPagesTest extends HohenheimTestBase {
         var dialog = page.locator("he-bottom .pl-dialog-modal[data-open]");
         dialog.waitFor();
         page.waitForCondition(() -> "/".equals(currentDirectory(dialog)));
+        // The FILTER owns focus once the listing is in: the modal focused its close
+        // button at open time (the only focusable thing while loading), so typed text
+        // went nowhere until the field was clicked.
+        page.waitForCondition(() -> filterHasFocus());
         assertThat(currentDirectory(dialog))
             .as("a single-root browser opens inside its declared root")
             .isEqualTo("/");
@@ -228,6 +234,8 @@ class AdminPagesTest extends HohenheimTestBase {
         String entryPath = "/" + entryName;
         firstEntry.locator("div[role='option']").click();
         page.waitForCondition(() -> entryPath.equals(currentDirectory(dialog)));
+        // Descending re-renders the list and used to drop focus on the body.
+        page.waitForCondition(() -> filterHasFocus());
         dialog.locator("[data-zf-path-choose-directory]").click();
         assertThat(pathField.locator("input").inputValue())
             .as("the chosen path is the directory the browser was standing in")
@@ -247,6 +255,13 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(raw).doesNotContain("not-a-port");
         assertThat(HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT))
             .isEqualTo(before);
+    }
+
+    /** Whether the path browser's filter input is the document's active element. */
+    private boolean filterHasFocus() {
+        return Boolean.TRUE.equals(page.evaluate(
+            "() => !!document.activeElement && !!document.activeElement.closest('[data-zf-path-browser]')"
+                + " && document.activeElement.tagName === 'INPUT'"));
     }
 
     /** The directory the open path browser is standing in, or null before it has loaded. */
@@ -456,8 +471,11 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(readonlyEntry("expiry_display"))
                 .as("an unissued certificate says so where its expiry goes")
                 .isEqualTo("None - not issued yet");
+            // "Not scheduled" beside an enabled auto-renew read like a fault: the absence
+            // sentence now says what the schedule will do for THIS certificate.
             assertThat(readonlyEntry("next_attempt_display"))
-                .as("no scheduled retry reads as such").isEqualTo("Not scheduled");
+                .as("no scheduled retry on an auto-renewing certificate says renewal is automatic")
+                .isEqualTo("None due yet; renewal is scheduled automatically before expiry");
             assertThat(readonlyEntry("dns_publisher_display"))
                 .as("the DNS publisher label is no longer an orphan").isEqualTo("None");
             assertThat(readonlyEntry("covered_names_display"))
@@ -491,8 +509,8 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(readonlyEntry("next_attempt_display"))
                 .as("a scheduled retry replaces the absence sentence")
                 .matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2} \\(.+ from now\\)");
-            assertThat(dated).as("the next attempt is no longer 'Not scheduled'")
-                .doesNotContain("Not scheduled");
+            assertThat(dated).as("the next attempt is no longer the absence sentence")
+                .doesNotContain("None due yet");
             assertThat(readonlyEntry("dns_publisher_display"))
                 .as("the DNS publisher reads as its declared label").isEqualTo("Internal DNS");
 
@@ -621,20 +639,27 @@ class AdminPagesTest extends HohenheimTestBase {
             waitForHydration();
 
             var field = page.locator("pl-field[data-path='settings.delay']");
-            assertThat(field.locator("pl-input-group input[type='number']").count()).isEqualTo(1);
-            assertThat(field.locator("pl-input-group pl-input-group-addon").innerText().trim())
+            // Never a native number input (its decimal separator follows the browser's UI
+            // locale): the typed control on a text substrate, with the unit in its suffix slot.
+            assertThat(field.locator("input[type='number']").count()).isZero();
+            assertThat(field.locator("pl-number-input input").count()).isEqualTo(1);
+            assertThat(field.locator("pl-number-input [slot='suffix']").innerText().trim())
                 .isEqualTo("ms");
             assertThat(page.locator(
                 "pl-field[data-path='settings.root_path'] zf-path-input [data-zf-path-browse]").count()).isEqualTo(1);
 
-            // Enabled record: the toolbar action reads "Disable", never "Enable/disable".
+            // Enabled record: the action reads "Disable", never "Enable/disable". Disabling
+            // carries a DESTRUCTIVE confirmation (hostnames stop answering), and the record
+            // band never renders such an action inline: it sits in the band's overflow tail.
             Object toggleId = toggleSite.get(SiteModel.ID);
             navigateToApp("/admin/sites/" + toggleId);
             waitForHydration();
-            var toggleButton = page.locator(
-                ".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']");
-            assertThat(toggleButton.count()).isEqualTo(1);
-            assertThat(toggleButton.innerText().trim()).isEqualTo("Disable");
+            var toggleAction = page.locator("[data-action-id='hohenheim:toggle_site']");
+            assertThat(toggleAction.count()).isEqualTo(1);
+            assertThat(toggleAction.first().locator("[data-cms-action-label]").textContent().trim())
+                .isEqualTo("Disable");
+            assertThat(page.locator(".cms-record-toolbar pl-button[data-action-id='hohenheim:toggle_site']").count())
+                .as("a destructive-confirmed action is never an inline record button").isZero();
 
             toggleSite.set(SiteModel.ENABLED, false);
             siteModel.save(toggleSite);
@@ -697,7 +722,8 @@ class AdminPagesTest extends HohenheimTestBase {
 
             // The add-domain link preselects this site on the CREATE form.
             assertThat(page.locator("#add-domain-link").getAttribute("href"))
-                .isEqualTo("/admin/domains/new?site_id=" + siteId);
+                .startsWith("/admin/domains/new?site_id=" + siteId)
+                .contains("_return=");
             navigateToApp("/admin/domains/new?site_id=" + siteId);
             waitForHydration();
             // The pick's value is a Java-side property; the SSR-resolved display

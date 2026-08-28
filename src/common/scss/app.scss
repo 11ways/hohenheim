@@ -11,6 +11,7 @@
 // `@layer overrides` -- patterns sits below plumage's components layer
 // and loses silently regardless of specificity.
 @use 'sass:meta';
+@use 'plumage/responsive' as bp;
 
 @layer components {
     @include meta.load-css('hawkeye');
@@ -127,6 +128,19 @@
         padding: var(--pl-space-sm) var(--pl-space-md);
         border: 1px solid var(--pl-color-border-muted);
         border-radius: var(--pl-radius-md);
+
+        // On a phone the row WRAPS: the nowrap "Open" link pushed left by
+        // `margin-left: auto` was painted over the title once the body had
+        // shrunk to nothing, so the link drops to its own line under the text
+        // instead. Desktop keeps the one-row shape.
+        @include bp.until(sm) {
+            flex-wrap: wrap;
+
+            .hh-onboarding-action {
+                flex-basis: 100%;
+                margin-left: calc(1em + var(--pl-space-sm));
+            }
+        }
     }
 
     .hh-onboarding-step[data-state="done"] {
@@ -225,6 +239,12 @@
         &[data-severity="warning"] {
             border-left-color: var(--pl-color-warning, var(--pl-color-primary));
             .hh-attention-icon { color: var(--pl-color-warning, var(--pl-color-primary)); }
+        }
+
+        // Information, not a fault: the muted chip stays, only the edge says "note".
+        &[data-severity="info"] {
+            border-left-color: var(--pl-color-info, var(--pl-color-primary));
+            .hh-attention-icon { color: var(--pl-color-info, var(--pl-color-primary)); }
         }
     }
 

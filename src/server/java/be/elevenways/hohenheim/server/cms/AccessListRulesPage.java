@@ -124,7 +124,9 @@ public final class AccessListRulesPage implements RecordScopedPage<Row> {
                 AccessRuleSummaries.summaryOf(rule, type),
                 AccessRuleSummaries.enabledBadge(rule),
                 isGroup,
-                CmsRoutes.detail(panel, this.resource.slug(), id),
+                // The edit link carries the tab as its return target, like the invokes:
+                // a rule's Cancel/Delete then come back here, not to the global rule list.
+                ReturnTarget.bind(CmsRoutes.detail(panel, this.resource.slug(), id), pageUrl),
                 invokesFor(rule, accessContext, panel, id, pageUrl)));
 
             if (isGroup) {

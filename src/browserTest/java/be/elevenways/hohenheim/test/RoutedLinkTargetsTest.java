@@ -120,7 +120,10 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
         //    produced URL must be byte-identical to what it produced then.
         assertThat(hrefOf(html, "add-domain-link"))
             .as("step 3: the create link keeps its panel, resource and site_id prefill")
-            .isEqualTo("/admin/domains/new?site_id=" + siteId);
+            .startsWith("/admin/domains/new?site_id=" + siteId);
+        assertThat(hrefOf(html, "add-domain-link"))
+            .as("step 3: and is bound back to the tab it was offered on")
+            .contains("_return=");
         assertThat(hrefOf(html, "request-cert-link"))
             .as("step 3: the certificate request link keeps its ?site= parameter")
             .isEqualTo("/admin/certificates-request?site=" + siteId);
@@ -128,8 +131,8 @@ class RoutedLinkTargetsTest extends HohenheimTestBase {
         // 4. And the per-row edit anchor, which came from a map entry rather than a
         //    declared variable -- the shape most likely to render blank if mis-wired.
         assertThat(html)
-            .as("step 4: the row links at the domain's own record page")
-            .contains("href=\"/admin/domains/" + domainId + "\"");
+            .as("step 4: the row links at the domain's own record page, bound back to this tab")
+            .contains("href=\"/admin/domains/" + domainId + "?_return=");
     }
 
     /**

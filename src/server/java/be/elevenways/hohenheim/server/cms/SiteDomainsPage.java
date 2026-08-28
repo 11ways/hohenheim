@@ -74,8 +74,10 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
                 && resource.updatableBy(domain, accessContext);
             entry.put("canEdit", canEditRow);
             if (canEditRow) {
-                entry.put("editTarget", CmsRoutes.detail(panel, "domains",
-                    domain.get(SiteDomainModel.ID)));
+                // Bound back to THIS tab, like the remove below: the record page's Cancel and
+                // Delete then land on the site's hostnames, not on the nav-hidden domains list.
+                entry.put("editTarget", ReturnTarget.bind(CmsRoutes.detail(panel, "domains",
+                    domain.get(SiteDomainModel.ID)), conduit));
             }
             // AIDEV-NOTE: the row's own remove, bound back to THIS tab. Detaching a hostname
             // used to be reachable only from the nav-hidden domains list or a hand-typed
@@ -107,10 +109,10 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
         // AIDEV-NOTE: a CMS route PLUS a query parameter cannot be built from CmsRoutes --
         // its builders return the RouteTarget interface, which has no with(...). Composing
         // off CmsEndpoints keeps it fully typed; the alternative is a concatenated URL.
-        vars.put("addDomainTarget", canAddDomain ? CmsEndpoints.CREATE_FORM
+        vars.put("addDomainTarget", canAddDomain ? ReturnTarget.bind(CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, "domains")
-            .with(HohenheimParams.SITE_ID_PREFILL, siteId) : null);
+            .with(HohenheimParams.SITE_ID_PREFILL, siteId), conduit) : null);
         // AIDEV-NOTE: gated on the SAME boolean the template's {% if %} uses, not merely
         // provided and left for the template to hide. A declared template variable is
         // serialized into the hydration payload whether or not any element renders it, so

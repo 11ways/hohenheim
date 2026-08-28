@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import java.util.List;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -136,6 +137,19 @@ public class SiteDomainModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
+
+    /**
+     * The owning site, declared so a query can ask about it (a correlated EXISTS) rather
+     * than materializing site ids -- the admin surfaces scope on the site's soft-delete
+     * state through it.
+     */
+    public static final BelongsTo<SiteModel> SITE = SCHEMA.addRelation(
+        BelongsTo.to(SiteModel.class)
+            .name("site")
+            .localKey(SITE_ID)
+            .remoteKey(SiteModel.ID)
+            .build());
+
     public static final StringField HOSTNAME = SCHEMA.addField(StringField.builder().name("hostname")
         .label(HohenheimFormCopy.label("hostname"))
         .help(HohenheimFormCopy.help("hostname"))

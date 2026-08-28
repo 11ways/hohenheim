@@ -611,6 +611,73 @@ public class SiteResource extends RowResource {
     }
 
     /**
+     * Deleting the site that serves this panel is the same outage as disabling it, minus
+     * the second click that would undo it.
+     */
+    @Override
+    public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
+                                                       @NonNull AccessContext accessContext) {
+        Microcopy lockout = panelLockoutReason("delete_self_lockout", record, accessContext);
+        return lockout != null ? lockout : super.deleteUnavailableReason(record, accessContext);
+    }
+
+    /**
+     * Why this site's enable/disable is offered but dead: switching OFF the site that
+     * proxies this panel removes the only route back to the surface that could switch it
+     * on again.
+     *
+     * The ENABLE direction is never refused -- a site that is off cannot be the one
+     * carrying this request -- and neither is a request that reached the backend directly
+     * (an ssh forward to its port arrives at a hostname no site domain covers), which is
+     * exactly the recovery path this refusal must not close.
+     */
+    private static @Nullable Microcopy panelLockoutReason(@NonNull Row site,
+                                                          @NonNull AccessContext accessContext) {
+        if (!Boolean.TRUE.equals(site.get(SiteModel.ENABLED))) {
+            return null;
+        }
+        return panelLockoutReason("toggle_self_lockout", site, accessContext);
+    }
+
+    /** @return the named refusal when this site serves the hostname this request arrived on */
+    private static @Nullable Microcopy panelLockoutReason(@NonNull String key,
+                                                          @NonNull Row site,
+                                                          @NonNull AccessContext accessContext) {
+        String host = DeleteImpact.adminHostnameOfSite(
+            site.get(SiteModel.ID), accessContext.conduit());
+        if (host == null) {
+            return null;
+        }
+        return Microcopy.of(key).withFilter("scope", "site").withArg("host", host);
+    }
+
+    /**
+     * The toggle dialog NAMES the hostnames whose answering state changes, which is the
+     * whole consequence of the action and only exists per record.
+     */
+    private static @NonNull ConfirmationSpec toggleConfirmationFor(@NonNull Row site) {
+        boolean enabled = Boolean.TRUE.equals(site.get(SiteModel.ENABLED));
+        String hostnames = DeleteImpact.join(
+            DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID)));
+        // The four bodies are a deliberate 2x2 (direction x hostnames yes/no): microcopy
+        // args echo verbatim, so an empty hostname list would render a dangling colon.
+        String key = (enabled ? "disable_confirm" : "enable_confirm")
+            + (hostnames.isEmpty() ? "_no_hostnames" : "");
+        Microcopy body = Microcopy.of(key).withFilter("scope", "site")
+            .withArg("name", String.valueOf((Object) site.get(SiteModel.NAME)));
+        if (!hostnames.isEmpty()) {
+            body = body.withArg("hostnames", hostnames);
+        }
+        Microcopy verb = Microcopy.of(enabled ? "disable" : "enable").withFilter("scope", "site");
+        return ConfirmationSpec.builder()
+            .title(verb)
+            .body(body)
+            .confirmLabel(verb)
+            .style(enabled ? ActionStyle.DESTRUCTIVE : ActionStyle.DEFAULT)
+            .build();
+    }
+
+    /**
      * The application a site exposes.
      *
      * @throws Violations when it exposes none -- the row action is hidden in that case, so
@@ -664,6 +731,16 @@ public class SiteResource extends RowResource {
      * Enable/disable rides the OVERFLOW: rows keep exactly Edit and Delete inline, the
      * calm strip the admin-UI wave promises, and the Enabled column already answers
      * the question the inline button used to.
+     *
+     * AIDEV-NOTE: this action is CONFIRMED and, for the site serving this very panel,
+     * REFUSED. Disabling takes every hostname of a site out of the route table with no
+     * undo but a second click, and one click on the row menu of the site that proxies
+     * the panel is a self-inflicted outage of the only surface that can put it back
+     * (measured 2026-08-27: four minutes of "404 - No site configured" on a live host).
+     * The dialog therefore NAMES the hostnames that change state, and the disable is
+     * offered-but-dead on the panel's own site with the reason on screen -- the
+     * unavailableWhen shape, because "point the panel somewhere else first" is a fact
+     * of THIS record the operator can act on, not a permission.
      */
     protected final @NonNull RowAction<Row> toggleAction() {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "toggle_site"))
@@ -672,6 +749,14 @@ public class SiteResource extends RowResource {
                 ? "disable" : "enable").withFilter("scope", "site"))
             .icon(Icon.of("power-off"))
             .inlineInRow(false)
+            // The record-less fallback: a surface translated without a row still confirms.
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("toggle").withFilter("scope", "site"))
+                .body(Microcopy.of("toggle_confirm").withFilter("scope", "site"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
+            .dynamicConfirmation(SiteResource::toggleConfirmationFor)
+            .unavailableWhen(SiteResource::panelLockoutReason)
             .handler((row, ctx) -> {
                 boolean current = Boolean.TRUE.equals(row.get(SiteModel.ENABLED));
                 // No pre-check: the write-pipeline enable invariant (installEnableInvariant)

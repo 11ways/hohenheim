@@ -126,11 +126,13 @@ class SiteLifecycleTest extends HohenheimTestBase {
 
         assertThat((Boolean) site("Old Domain").get(SiteModel.ENABLED)).isNotEqualTo(Boolean.FALSE);
 
-        postForm("/admin/sites/" + redirectId + "/action/toggle_site", "");
+        // Switching a site off is a confirmed action (it takes its hostnames out of the
+        // route table), so the POST carries the confirmation proof like every other one.
+        postForm("/admin/sites/" + redirectId + "/action/toggle_site", confirmed(""));
         assertThat((Boolean) Models.get(SiteModel.class).findById(redirectId).get(SiteModel.ENABLED))
             .isEqualTo(false);
 
-        postForm("/admin/sites/" + redirectId + "/action/toggle_site", "");
+        postForm("/admin/sites/" + redirectId + "/action/toggle_site", confirmed(""));
         assertThat((Boolean) Models.get(SiteModel.class).findById(redirectId).get(SiteModel.ENABLED))
             .isEqualTo(true);
 

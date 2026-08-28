@@ -132,15 +132,17 @@ class NotificationAdminTest extends HohenheimTestBase {
         //    shape rule stays quiet about a box nobody filled in.
         var empty = postForm("/admin/notifications/new", "name=&format=&url=");
         assertThat(empty.statusCode()).as("step 1: the form rerenders").isEqualTo(200);
-        assertThat(empty.body()).as("step 1: name is required").contains("name is required");
-        assertThat(empty.body()).as("step 1: format is required").contains("format is required");
-        assertThat(empty.body()).as("step 1: url is required").contains("url is required");
+        // The refusal speaks the field's LABEL, never its key.
+        assertThat(empty.body()).as("step 1: name is required").contains("Name is required");
+        assertThat(empty.body()).as("step 1: the raw key never prints").doesNotContain("name is required");
+        assertThat(empty.body()).as("step 1: format is required").containsIgnoringCase("format is required");
+        assertThat(empty.body()).as("step 1: url is required").containsIgnoringCase("url is required");
         assertThat(empty.body()).as("step 1: no format rule for an empty url")
             .doesNotContain("must start with http");
 
         // 2. Only the url left blank: still a required refusal, never the shape rule.
         var blankUrl = postForm("/admin/notifications/new", "name=half-filled&format=slack&url=");
-        assertThat(blankUrl.body()).as("step 2: url is required").contains("url is required");
+        assertThat(blankUrl.body()).as("step 2: url is required").containsIgnoringCase("url is required");
         assertThat(blankUrl.body()).as("step 2: no shape rule for a blank url")
             .doesNotContain("must start with http");
         assertThat(channelNamed("half-filled")).as("step 2: nothing persisted").isNull();

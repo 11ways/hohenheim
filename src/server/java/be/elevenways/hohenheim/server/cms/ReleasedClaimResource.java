@@ -40,6 +40,9 @@ import java.util.List;
  */
 public class ReleasedClaimResource extends RowResource {
 
+    /** Virtual column: the former site's stored NAME, which outlives its visibility. */
+    static final String FORMER_SITE_COLUMN = "former_site";
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(ReleasedRouteClaimModel.HOSTNAME)
         .add(RelationPick.of(ReleasedRouteClaimModel.FORMER_SITE_ID, SiteModel.MODEL_ID).build())
@@ -53,9 +56,11 @@ public class ReleasedClaimResource extends RowResource {
         // A released hostname is unreadable without its kind: "^(shop|www)\.x\.test$" is a
         // pattern, not a host, and the quarantine judges the two differently.
         .column(ColumnSpec.fromField(ReleasedRouteClaimModel.MATCH_TYPE).build())
-        .column(ColumnSpec.fromField(ReleasedRouteClaimModel.FORMER_SITE_ID)
-            .relation(RelationPick.of(ReleasedRouteClaimModel.FORMER_SITE_ID,
-                SiteModel.MODEL_ID).build()).build())
+        // NOT a relation column: the site a claim names is soft-deleted by the time the row
+        // matters, so the relation resolved through the site resource's own "live sites
+        // only" scope and rendered the bare id. The name is read off the stored row here.
+        .column(ColumnSpec.virtual(FORMER_SITE_COLUMN,
+            FieldLabels.labelFor(ReleasedRouteClaimModel.FORMER_SITE_ID)).build())
         .column(ColumnSpec.fromField(ReleasedRouteClaimModel.FORMER_SUBJECTS).build())
         .column(ColumnSpec.fromField(ReleasedRouteClaimModel.RELEASED_AT).build())
         .filter(FilterSpec.forField(ReleasedRouteClaimModel.HOSTNAME, FilterSpec.Kind.TEXT)
@@ -71,6 +76,24 @@ public class ReleasedClaimResource extends RowResource {
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
+
+    /**
+     * The former site's name, read off the stored row so a soft-deleted site still reads as
+     * itself; empty when the row was hard-deleted, which says more than its id would.
+     */
+    @Override
+    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        if (!FORMER_SITE_COLUMN.equals(column.name())) {
+            return super.cellValue(row, column);
+        }
+        Integer siteId = row.get(ReleasedRouteClaimModel.FORMER_SITE_ID);
+        if (siteId == null) {
+            return null;
+        }
+        Model sites = Models.get(SiteModel.class);
+        Row site = sites.findById(siteId);
+        return site != null ? sites.getDisplayTitle(site) : null;
+    }
 
     /** A quarantined name is looked up by the hostname, or by who used to hold it. */
     @Override

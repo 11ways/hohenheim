@@ -2210,7 +2210,7 @@
     "scope": "certificate"
   },
   "request_le": {
-    "text": "Aanvragen via Let's Encrypt",
+    "text": "Let's Encrypt-certificaat aanvragen",
     "scope": "certificate"
   },
   "backup": [
@@ -2237,6 +2237,28 @@
       "scope": "spamservice"
     }
   ],
+  "test_failed_unknown": {
+    "text": "het transport gaf geen reden",
+    "scope": "notification_channel"
+  },
+  "docker_foreign": [
+    {
+      "text": "Onbeheerde Docker-bronnen op {$server}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "{$count} container(s), volume(s) of netwerk(en) op deze host zijn niet door Hohenheim aangemaakt. Ze blijven ongemoeid; bekijk ze onder Afstemmingsbevindingen.",
+      "scope": "attention_detail"
+    }
+  ],
+  "next_attempt_auto": {
+    "text": "Nog niets gepland; de vernieuwing wordt automatisch ingepland voor de vervaldatum",
+    "scope": "certificate"
+  },
+  "next_attempt_manual": {
+    "text": "Nooit; automatische vernieuwing staat uit voor dit certificaat",
+    "scope": "certificate"
+  },
   "test_failed": [
     {
       "text": "Testbezorging mislukt: {$reason}",
@@ -3561,7 +3583,7 @@
       "scope": "field"
     },
     {
-      "text": "De PEM-gecodeerde privé-sleutel die bij het certificaat hoort. Opgeslagen als geheim: laat leeg om de huidige sleutel te behouden.",
+      "text": "De PEM-gecodeerde privé-sleutel die bij het certificaat hoort. Opgeslagen als geheim; laat bij het bewerken van een bestaand certificaat leeg om de opgeslagen sleutel te behouden.",
       "scope": "help"
     }
   ],
@@ -5107,6 +5129,10 @@
   },
   "drain": {
     "text": "Leegmaken",
+    "scope": "server"
+  },
+  "cordon_confirm": {
+    "text": "Geen nieuwe werklasten meer op deze host plaatsen? Instanties die er al draaien blijven draaien en blijven bedienen; gebruik Leegmaken om ze te verplaatsen.",
     "scope": "server"
   },
   "drain_confirm": {
@@ -9255,7 +9281,15 @@
     "scope": "access_rule"
   },
   "add_disabled_note": {
-    "text": "Een nieuwe regel staat eerst uit, zodat het verkeer blijft doorgaan tot je ze hebt ingevuld en aangezet.",
+    "text": "Een nieuwe regel staat eerst uit, zodat het verkeer blijft doorgaan tot je ze hebt ingevuld en aangezet. Een nieuwe groep staat wel aan, want een lege groep houdt niets tegen.",
+    "scope": "access_rule"
+  },
+  "already_first": {
+    "text": "Deze regel staat al vooraan in haar groep.",
+    "scope": "access_rule"
+  },
+  "already_last": {
+    "text": "Deze regel staat al achteraan in haar groep.",
     "scope": "access_rule"
   },
   "added_group": {
@@ -10344,6 +10378,34 @@
   },
   "delete_confirm_hostnames": {
     "text": "De site {$name} verwijderen? Deze hostnamen antwoorden niet langer: {$hostnames}. De preview-deployments worden vernietigd; de applicatie erachter blijft draaien en kan door een andere site aangewezen worden.",
+    "scope": "site"
+  },
+  "toggle_confirm": {
+    "text": "Wijzigen of deze site verkeer bedient?",
+    "scope": "site"
+  },
+  "disable_confirm": {
+    "text": "{$name} uitschakelen? Deze hostnamen antwoorden meteen niet meer: {$hostnames}. Er wordt niets verwijderd -- de applicatie erachter blijft draaien en opnieuw inschakelen herstelt de routering.",
+    "scope": "site"
+  },
+  "disable_confirm_no_hostnames": {
+    "text": "{$name} uitschakelen? De site heeft geen hostnamen, dus er stopt niets met antwoorden. Ze blijft uit tot ze opnieuw ingeschakeld wordt.",
+    "scope": "site"
+  },
+  "enable_confirm": {
+    "text": "{$name} inschakelen? Deze hostnamen beginnen hier te antwoorden: {$hostnames}.",
+    "scope": "site"
+  },
+  "enable_confirm_no_hostnames": {
+    "text": "{$name} inschakelen? De site heeft nog geen hostnaam, dus ze antwoordt nog niets tot er een toegevoegd wordt.",
+    "scope": "site"
+  },
+  "toggle_self_lockout": {
+    "text": "Deze site bedient {$host}, het adres waarop dit paneel openstaat. Uitschakelen zou dit paneel offline halen. Verhuis het paneel eerst naar een andere hostnaam.",
+    "scope": "site"
+  },
+  "delete_self_lockout": {
+    "text": "Deze site bedient {$host}, het adres waarop dit paneel openstaat. Verwijderen zou dit paneel offline halen. Verhuis het paneel eerst naar een andere hostnaam.",
     "scope": "site"
   },
   "delete_confirm_domains": {

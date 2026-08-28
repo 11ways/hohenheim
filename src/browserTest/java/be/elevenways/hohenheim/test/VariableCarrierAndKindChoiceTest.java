@@ -135,6 +135,58 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             .isNull();
     }
 
+    /**
+     * Creating a variable as a SECRET stores the value it was created with, in the
+     * encrypted carrier -- the create form has only one value field to type it into.
+     */
+    @Test
+    void aVariableCreatedAsASecretKeepsTheValueItWasCreatedWith() throws Exception {
+
+        // 1. An environment to own it.
+        Row project = Models.get(ProjectModel.class).createEmptyRow();
+        project.set(ProjectModel.NAME, "Secret Create Probe");
+        Models.get(ProjectModel.class).save(project);
+        Row environment = Models.get(EnvironmentModel.class).createEmptyRow();
+        environment.set(EnvironmentModel.PROJECT_ID, project.get(ProjectModel.ID));
+        environment.set(EnvironmentModel.NAME, "secret-create-probe");
+        Models.get(EnvironmentModel.class).save(environment);
+        Integer environmentId = environment.get(EnvironmentModel.ID);
+
+        // 2. The operator picks Kind = Secret on the create form and types the value into
+        //    the one value field it offers. This used to be refused, in column language,
+        //    with no field on the page that could have satisfied it.
+        HttpResponse<String> created = httpPostForm("/admin/environment-variables/new",
+            "environment_id=" + environmentId + "&key=SECRET_AT_BIRTH&kind=secret"
+                + "&plain_value=hunter2-at-birth", sessionToken, csrfToken);
+        assertThat(created.statusCode()).as("the create is accepted").isEqualTo(302);
+
+        // 3. And it landed in the column its kind declares, not the one it was typed in.
+        Row stored = Models.get(InstanceVariableModel.class).find()
+            .where(InstanceVariableModel.KEY.eq("SECRET_AT_BIRTH")).first();
+        assertThat(stored).as("the row exists").isNotNull();
+        assertThat(stored.get(InstanceVariableModel.KIND))
+            .as("stored as the kind that was chosen")
+            .isEqualTo(InstanceVariableModel.KIND_SECRET);
+        assertThat(stored.get(InstanceVariableModel.SECRET_VALUE))
+            .as("the typed value is in the encrypted carrier")
+            .isEqualTo("hunter2-at-birth");
+        assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE))
+            .as("and nowhere else -- a secret in the plain column is the leak")
+            .isNull();
+
+        // 4. A PLAIN create is untouched by that move.
+        HttpResponse<String> plain = httpPostForm("/admin/environment-variables/new",
+            "environment_id=" + environmentId + "&key=PLAIN_AT_BIRTH&kind=plain"
+                + "&plain_value=visible-at-birth", sessionToken, csrfToken);
+        assertThat(plain.statusCode()).isEqualTo(302);
+        Row plainRow = Models.get(InstanceVariableModel.class).find()
+            .where(InstanceVariableModel.KEY.eq("PLAIN_AT_BIRTH")).first();
+        assertThat(plainRow.get(InstanceVariableModel.PLAIN_VALUE))
+            .as("a plain variable still stores its plain carrier")
+            .isEqualTo("visible-at-birth");
+        assertThat(plainRow.get(InstanceVariableModel.SECRET_VALUE)).isNull();
+    }
+
     @Test
     void anEmptyGitProviderCreateNamesEveryMissingRequirement() throws Exception {
 
