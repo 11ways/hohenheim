@@ -37,13 +37,17 @@ committed; every repo below holds the work in its worktree.
   `AccessRuleCascadeTest`, `SiteLifecycleTest`, `VariableCarrierAndKindChoiceTest`)
   proven at run 78. Every run built with `--skip-deps` against the published chain
   because another session's plumage worktree did not compile.
-- The browser lane's `:checkBundleSize` task FAILS: `cms.js` is 5108666 bytes raw
-  (budget 5066548, baseline 4825283 from 2026-08-25) and 1210148 gzip (budget
-  1203743). The growth is the week's framework changes (typed number/money inputs,
-  form sections, keyboard activation, focus restoration, login reasons), not one
-  anchor; the currency table is NOT in the bundle. Re-baselining
-  (`updateBundleBudget`, commit `teavm-bundle.budget`) is a deliberate decision and
-  was not taken here.
+- The browser lane's `:checkBundleSize` task failed at the time of writing and
+  was RESOLVED the same evening during the deploy: cms.js measured 5107962 bytes
+  raw (+282679 since the 2026-08-25 baseline) and 1211115 gzip (+64694) in an
+  honest build from committed state, spamservice measured +284546 from the same
+  upstream, so the growth is the framework-wide change this wave landed (typed
+  number/money inputs, the form-section state carrier, the keyboard activation
+  lane, focus restoration) rather than a new reachability anchor. Both budgets
+  were re-baselined to `ceil(measured * 1.05)` and committed (hohenheim
+  `b6b2077f`, spamservice `23f1f187`). NOTE: an earlier measurement of 5108666
+  taken from the MAIN worktree was inflated by another session's uncommitted
+  plumage components and should not be used.
 - Framework repos: plumage run 116 (`AppShellTest`, `AccessibilityAuditTest`,
   `SelectProviderTest`), zenit run 108, zenit-forms run 110, zenit-comms run 107,
   zenit-auth runs 123/125, zenit-cms runs 139-148, hawkeye runs 128/130. All

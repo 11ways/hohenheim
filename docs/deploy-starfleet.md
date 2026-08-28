@@ -238,6 +238,72 @@ service that actually runs lives under
 `/opt/hohenheim/data/managed-services/spamservice/`. Nothing reads
 `/opt/spamservice/` any more; it is ~660 MB of stale jars.
 
+## Deploy 2026-08-28: the QA remediation batch, built from a CLEAN parallel workspace
+
+Shipped hohenheim `b6b2077f` at 19:10Z. This is the first deploy built from a
+SECONDARY WORKSPACE rather than a hohenheim-only worktree, and that is the
+lesson worth keeping: three framework repos (plumage, hawkeye, zenit) carried
+another session's uncommitted work, so the ordinary lane -- a hohenheim
+worktree resolving its chain from the main checkouts -- would have baked that
+in-progress code into a production jar and stamped those repos `dirty`. The
+`.zenit-dev.json` workspace-config mechanism exists for exactly this: a
+directory holding `git worktree add --detach` checkouts of the WHOLE chain at
+their committed HEADs plus
+
+    {"workspaceRoot": ".", "mavenRepoLocal": "./.m2",
+     "externalRepos": {"hohenheim": "./hohenheim"}}
+
+is its own workspace, with its own maven-local and its own journal, and
+`zenit-dev build` there resolves nothing from the live checkouts. Cost: one
+cold chain build (~11 min warm, ~25 cold). It is now the lane to use whenever
+`zd_deployed` reports upstream repos dirty.
+
+Two things it exposed that the ordinary lane hides:
+
+- `gradle.properties` is TRACKED and zenit-dev rewrites its managed
+  `org.gradle.daemon.idletimeout` on every build, so eight repos were
+  permanently dirty and every stamp built from them said `dirty=true`
+  (undiffable by construction). Eight of them still carried the reverted
+  20-minute experiment's `1200000` while the rest carried the shipped
+  `120000`; aligning them (one commit per repo) is what made a 13-of-13
+  `dirty=false` jar possible at all. Do not "fix" this with a workspace
+  `daemonIdleTimeoutMs` override -- that only moves which half is dirty.
+- spamservice's own `:checkBundleSize` was RED at its committed sha, which
+  blocks the whole chain because hohenheim depends on it. Both it and
+  hohenheim needed a bundle re-baseline: cms.js grew +282679 bytes raw
+  (+64694 gzip) and spamservice's +284546, the same framework-wide growth
+  (typed number/money inputs, the form-section state carrier, the keyboard
+  activation lane, focus restoration). `updateBundleBudget` writes
+  `ceil(measured * 1.05)`; the same numbers can be written by hand into
+  `teavm-bundle.budget` when running that task is inconvenient.
+
+Migration diff: EMPTY across every upgraded repo (only zenit's
+`TableBuilder.money` refactor, which emits identical columns), so the lane
+could have skipped step 4 -- but the live `zenit_migrations` table has no
+`version_stream` column, so the rehearsal ran anyway to prove the new jar does
+not rewrite it. It does not: `--run-migrations` against a byte copy reported
+"Migrations complete 0 applied" with integrity enforcement at its default
+`fail`, i.e. all 41 recorded checksums still verify. The inert boot of the same
+scratch directory (every role false, DNS/LE/nftables off, ports 13999/18080/
+18443) answered `/api/health` 200, `/login` 200 and `/admin` 302 in 26s.
+
+Preflight backup `/root/hohenheim-preflight-20260828-190811/`: database via
+`sqlite3 .backup` (integrity ok, 41 migrations / 3 sites / 3 domains / 9 DNS
+records / 3 certificates, the extra rows being soft-deleted QA leftovers), an
+at-swap second copy, `settings/` and the keyring sha256-compared, and the
+running jar copied aside as `hohenheim-server.jar.rollback`. The new jar was
+uploaded with `upload_file`, which verifies the remote SHA-256 and runs a
+pre-move check -- here `unzip -p {} META-INF/blast/build-info.tsv | grep -c
+false` had to equal 13, so a jar carrying a dirty stamp could not have been
+moved into place at all.
+
+Both restarts came up clean: 0 journal errors, listeners 53/80/443/3000, `aa`
+SOA on the public IP, admin + apex 200 over HTTPS, HTTP 301, RSS well inside
+the 768 MB cap, and `zenit-dev deployed starfleet` answering `current` for all
+13 repos with no RESTART PENDING. The one blip -- a single `000` on the first
+`/login` probe -- was the probe racing the HTTPS listener, which the log times
+at 19:11:22, three seconds later.
+
 ## Deploy 2026-08-27: two rounds of live-check fixes (plain jar-swap lane, twice)
 
 Shipped `419b9274` at 01:49Z and `3472cafa` at 06:05Z. Both were the plain
