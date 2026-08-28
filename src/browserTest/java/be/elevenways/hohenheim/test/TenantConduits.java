@@ -53,6 +53,11 @@ public final class TenantConduits {
         return stub(principal, null);
     }
 
+    /** The same carrier, answering as a request that ARRIVED at {@code origin}. */
+    public static Conduit stubFor(@Nullable Principal principal, @Nullable String origin) {
+        return stub(principal, origin);
+    }
+
     private static Conduit stub(@Nullable Principal principal, @Nullable String origin) {
         Map<IdentifierKey<?>, Object> attributes = new HashMap<>();
         if (principal != null) {

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
+import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -15,6 +16,7 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.Nested;
@@ -24,6 +26,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -159,23 +162,15 @@ public class AccessRuleResource extends RowResource {
      * Deleting a group takes its whole subtree with it: an orphaned rule is a policy the
      * proxy cannot reconstruct, and {@code AccessRuleTree} refuses (denies) a list that
      * carries one.
+     *
+     * AIDEV-NOTE: the subtree walk itself moved to {@code AccessRuleCascades}, on the model
+     * funnel, so a rule deleted by anything but this form (a list delete, a direct save, the
+     * peer API) takes its children too. What is left here is the proxy reload.
      */
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
-        deleteSubtree(existing);
+        super.deleteRow(existing, accessContext);
         CmsSupport.reloadProxy();
-    }
-
-    private static void deleteSubtree(@NonNull Row rule) {
-        AccessRuleModel model = Models.get(AccessRuleModel.class);
-        Integer listId = rule.get(AccessRuleModel.ACCESS_LIST_ID);
-        Integer id = rule.get(AccessRuleModel.ID);
-        if (listId != null && id != null) {
-            for (Row child : model.findChildren(listId, id)) {
-                deleteSubtree(child);
-            }
-        }
-        model.delete(rule);
     }
 
     @Override
@@ -210,21 +205,41 @@ public class AccessRuleResource extends RowResource {
             .description(Microcopy.of("delete_hint").withFilter("scope", "access_rule"))
             .confirmation(ConfirmationSpec.destructive(
                 Microcopy.of("delete_confirm").withFilter("scope", "access_rule")))
+            // AIDEV-NOTE: a delete cannot REFRESH the surface it was invoked from when that
+            // surface is the record's own page -- the record is gone and the refresh lands
+            // on a 404. The captured return target (the rules tab, which is where the
+            // action is reached from) is followed when the page carries one; a tab-scoped
+            // invoke carries its own tab, so nothing moves there.
             .handler((row, ctx) -> {
                 deleteRow(row, ctx.access());
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("deleted").withFilter("scope", "access_rule"));
+                Microcopy toast = Microcopy.of("deleted").withFilter("scope", "access_rule");
+                Conduit conduit = ctx.access().conduit();
+                String returnTo = conduit == null ? null : ReturnTarget.read(conduit);
+                if (returnTo == null || returnTo.isEmpty()) {
+                    return CmsActionResult.refreshWithToast(toast);
+                }
+                HohenheimFlash.success(conduit, toast);
+                return CmsActionResult.redirect(new Uri(returnTo));
             })
             .build());
         return actions;
     }
 
+    /**
+     * @param direction -1 for up, 1 for down; a rule at that edge of its own sibling run is
+     *                  offered the action DEAD, saying why -- the click used to be accepted
+     *                  and change nothing, which reads as a broken button
+     */
     private @NonNull RowAction<Row> moveAction(@NonNull String actionId, @NonNull String copyKey,
                                                @NonNull String icon, int direction) {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", actionId))
             .label(Microcopy.of(copyKey).withFilter("scope", "access_rule"))
             .icon(Icon.of(icon))
             .description(Microcopy.of(copyKey + "_hint").withFilter("scope", "access_rule"))
+            .unavailableWhen((row, ctx) -> atEdge(row, direction)
+                ? Microcopy.of(direction < 0 ? "already_first" : "already_last")
+                    .withFilter("scope", "access_rule")
+                : null)
             .handler((row, ctx) -> {
                 move(row, direction);
                 CmsSupport.reloadProxy();
@@ -232,6 +247,33 @@ public class AccessRuleResource extends RowResource {
                     Microcopy.of("moved").withFilter("scope", "access_rule"));
             })
             .build();
+    }
+
+    /**
+     * Whether this rule has no neighbour in {@code direction} among its OWN siblings --
+     * the same run {@link #move} reorders, so the refusal and the move can never disagree
+     * about what "first" means (a lone rule is at both edges at once).
+     */
+    private static boolean atEdge(@NonNull Row rule, int direction) {
+        Integer listId = rule.get(AccessRuleModel.ACCESS_LIST_ID);
+        if (listId == null) {
+            return true;
+        }
+        List<Row> siblings = Models.get(AccessRuleModel.class)
+            .findChildren(listId, rule.get(AccessRuleModel.PARENT_ID));
+        int index = indexOf(siblings, rule);
+        int target = index + direction;
+        return index < 0 || target < 0 || target >= siblings.size();
+    }
+
+    /** @return the rule's position among {@code siblings}, or -1 when it is not among them */
+    private static int indexOf(@NonNull List<Row> siblings, @NonNull Row rule) {
+        for (int i = 0; i < siblings.size(); i++) {
+            if (siblings.get(i).get(AccessRuleModel.ID).equals(rule.get(AccessRuleModel.ID))) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -245,13 +287,7 @@ public class AccessRuleResource extends RowResource {
             return;
         }
         List<Row> siblings = model.findChildren(listId, rule.get(AccessRuleModel.PARENT_ID));
-        int index = -1;
-        for (int i = 0; i < siblings.size(); i++) {
-            if (siblings.get(i).get(AccessRuleModel.ID).equals(rule.get(AccessRuleModel.ID))) {
-                index = i;
-                break;
-            }
-        }
+        int index = indexOf(siblings, rule);
         int target = index + direction;
         if (index < 0 || target < 0 || target >= siblings.size()) {
             return;

@@ -405,6 +405,17 @@ class DockerReconcilerTest {
             assertThat(items.stream().map(i -> i.title().key()))
                 .containsExactlyInAnyOrder("docker_orphans", "docker_orphans", "docker_colliding");
 
+            // 2b. The foreign rows are not alarms, but they are not invisible either: the
+            //     dashboard carries ONE informational row per host that has them, counting
+            //     them and linking to the findings list, so a host full of unmanaged
+            //     resources never sits under an "All clear".
+            List<AttentionItem> foreign = new ArrayList<>();
+            AttentionCollector.dockerForeignResources(foreign);
+            assertThat(foreign).as("one informational row per host with foreign resources").hasSize(1);
+            assertThat(foreign.get(0).severity()).as("foreign resources inform, never warn").isEqualTo("info");
+            assertThat(foreign.get(0).title().key()).isEqualTo("docker_foreign");
+            assertThat(foreign.get(0).target()).as("the row leads to the findings list").isNotNull();
+
             // 3. Re-sweeping local REPLACES its findings and clears its attention,
             //    while edge-1's stored truth is untouched.
             DockerReconciler.store("local", List.of(

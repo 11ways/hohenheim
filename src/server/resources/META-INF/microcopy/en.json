@@ -2210,7 +2210,7 @@
     "scope": "certificate"
   },
   "request_le": {
-    "text": "Request via Let's Encrypt",
+    "text": "Request Let's Encrypt certificate",
     "scope": "certificate"
   },
   "backup": [
@@ -2237,6 +2237,28 @@
       "scope": "spamservice"
     }
   ],
+  "test_failed_unknown": {
+    "text": "the transport gave no reason",
+    "scope": "notification_channel"
+  },
+  "docker_foreign": [
+    {
+      "text": "Unmanaged Docker resources on {$server}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "{$count} container(s), volume(s) or network(s) on this host were not created by Hohenheim. They are left alone; review them under Reconcile findings.",
+      "scope": "attention_detail"
+    }
+  ],
+  "next_attempt_auto": {
+    "text": "None due yet; renewal is scheduled automatically before expiry",
+    "scope": "certificate"
+  },
+  "next_attempt_manual": {
+    "text": "Never; automatic renewal is switched off for this certificate",
+    "scope": "certificate"
+  },
   "test_failed": [
     {
       "text": "Test delivery failed: {$reason}",
@@ -3561,7 +3583,7 @@
       "scope": "field"
     },
     {
-      "text": "The PEM-encoded private key matching the certificate. Stored as a secret: leave blank to keep the current key.",
+      "text": "The PEM-encoded private key matching the certificate. Stored as a secret; when editing an existing certificate, leave it blank to keep the stored key.",
       "scope": "help"
     }
   ],
@@ -5107,6 +5129,10 @@
   },
   "drain": {
     "text": "Drain",
+    "scope": "server"
+  },
+  "cordon_confirm": {
+    "text": "Stop scheduling new workloads onto this host? Instances already running on it keep running and keep serving; use Drain to move them off.",
     "scope": "server"
   },
   "drain_confirm": {
@@ -9255,7 +9281,15 @@
     "scope": "access_rule"
   },
   "add_disabled_note": {
-    "text": "A new rule starts switched off, so traffic keeps flowing until you have filled it in and switched it on.",
+    "text": "A new rule starts switched off, so traffic keeps flowing until you have filled it in and switched it on. A new group starts on, because an empty group gates nothing.",
+    "scope": "access_rule"
+  },
+  "already_first": {
+    "text": "This rule is already first inside its group.",
+    "scope": "access_rule"
+  },
+  "already_last": {
+    "text": "This rule is already last inside its group.",
     "scope": "access_rule"
   },
   "added_group": {
@@ -10344,6 +10378,34 @@
   },
   "delete_confirm_hostnames": {
     "text": "Delete the site {$name}? These hostnames stop answering: {$hostnames}. Its preview deployments are destroyed; the application it exposes keeps running and can be pointed at by another site.",
+    "scope": "site"
+  },
+  "toggle_confirm": {
+    "text": "Change whether this site serves traffic?",
+    "scope": "site"
+  },
+  "disable_confirm": {
+    "text": "Stop serving {$name}? These hostnames stop answering immediately: {$hostnames}. Nothing is deleted -- the application behind it keeps running, and enabling the site again restores routing.",
+    "scope": "site"
+  },
+  "disable_confirm_no_hostnames": {
+    "text": "Stop serving {$name}? It has no hostnames, so nothing stops answering. It stays off until it is enabled again.",
+    "scope": "site"
+  },
+  "enable_confirm": {
+    "text": "Start serving {$name}? These hostnames begin answering here: {$hostnames}.",
+    "scope": "site"
+  },
+  "enable_confirm_no_hostnames": {
+    "text": "Start serving {$name}? It has no hostname yet, so it still answers nothing until one is added.",
+    "scope": "site"
+  },
+  "toggle_self_lockout": {
+    "text": "This site serves {$host}, the address this panel is open at. Disabling it would take this panel offline. Move the panel to another hostname first.",
+    "scope": "site"
+  },
+  "delete_self_lockout": {
+    "text": "This site serves {$host}, the address this panel is open at. Deleting it would take this panel offline. Move the panel to another hostname first.",
     "scope": "site"
   },
   "delete_confirm_domains": {

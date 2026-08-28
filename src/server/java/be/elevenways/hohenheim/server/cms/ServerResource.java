@@ -725,12 +725,24 @@ public final class ServerResource extends RowResource {
             .build();
     }
 
-    /** Refuse NEW placement while existing workloads keep running. */
+    /**
+     * Refuse NEW placement while existing workloads keep running.
+     *
+     * AIDEV-NOTE: confirmed because it is a fleet-wide scheduling change made from a row
+     * menu, and the label alone does not say that running workloads are untouched --
+     * admit and uncordon deliberately stay unconfirmed, being the reversals of this one.
+     */
     private @NonNull RowAction<Row> cordonAction() {
         return RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "cordon_server"))
             .label(Microcopy.of("cordon").withFilter("scope", "server"))
             .icon(Icon.of("circle-pause"))
             .style(ActionStyle.DESTRUCTIVE)
+            .confirmation(ConfirmationSpec.builder()
+                .title(Microcopy.of("cordon").withFilter("scope", "server"))
+                .body(Microcopy.of("cordon_confirm").withFilter("scope", "server"))
+                .confirmLabel(Microcopy.of("cordon").withFilter("scope", "server"))
+                .style(ActionStyle.DESTRUCTIVE)
+                .build())
             .visibleFor((row, ctx) ->
                 ServerModel.ADMISSION_ADMITTED.equals(row.get(ServerModel.ADMISSION)))
             .handler((row, ctx) -> {

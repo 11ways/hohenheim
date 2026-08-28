@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -119,7 +120,49 @@ final class DeleteImpact {
         if (origin == null || origin.isEmpty()) {
             return null;
         }
-        Conduit conduit = RouteScope.currentConduit();
+        String hostname = arrivalHostname(RouteScope.currentConduit());
+        if (hostname == null) {
+            return null;
+        }
+        return DnsNames.zoneContains(origin, hostname) ? hostname : null;
+    }
+
+    /**
+     * The hostname this very request reached the admin panel at, when THIS SITE is the one
+     * serving it -- the disable and the delete that take the surface the operator is
+     * clicking in offline.
+     *
+     * AIDEV-NOTE: coverage is asked of {@link HostnamePatterns#covers}, the same matcher the
+     * certificate walk uses, so a wildcard row serving the panel answers too. It fails
+     * CLOSED on a REGEX row, which for that matcher is the safe direction and for this one
+     * is not: a panel routed by a regex row gets the confirmation but not the refusal. The
+     * recovery path stays open by construction either way -- reaching the backend directly
+     * (an ssh forward to its port) arrives at a hostname no site domain covers, so nothing
+     * is ever refused there.
+     *
+     * @param conduit the request to read the arrival hostname off; null when there is none
+     * @return the hostname, or null when this site does not serve it or it is unknowable
+     */
+    static @Nullable String adminHostnameOfSite(@Nullable Integer siteId,
+                                                @Nullable Conduit conduit) {
+        String hostname = arrivalHostname(conduit);
+        if (siteId == null || hostname == null) {
+            return null;
+        }
+        for (Row domain : domains()) {
+            if (!siteId.equals(domain.get(SiteDomainModel.SITE_ID))) {
+                continue;
+            }
+            if (HostnamePatterns.covers(domain.get(SiteDomainModel.HOSTNAME),
+                    domain.get(SiteDomainModel.MATCH_TYPE), hostname)) {
+                return hostname;
+            }
+        }
+        return null;
+    }
+
+    /** @return the lowercased hostname this request arrived on, or null when unknowable */
+    private static @Nullable String arrivalHostname(@Nullable Conduit conduit) {
         String requestOrigin = conduit == null ? null : conduit.getRequestOrigin();
         if (requestOrigin == null || requestOrigin.isEmpty()) {
             return null;
@@ -128,7 +171,7 @@ final class DeleteImpact {
         if (hostname == null || hostname.isEmpty()) {
             return null;
         }
-        return DnsNames.zoneContains(origin, hostname) ? BlastString.lower(hostname) : null;
+        return BlastString.lower(hostname);
     }
 
     /** @return the names joined for a dialog sentence, empty when there are none */

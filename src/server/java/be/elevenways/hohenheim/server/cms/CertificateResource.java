@@ -246,8 +246,10 @@ public class CertificateResource extends RowResource {
         values.put(RENEWAL_ERROR_DISPLAY.getName(), orNone(row.get(CertificateModel.RENEWAL_ERROR)));
         Integer errors = row.get(CertificateModel.ERROR_COUNT);
         values.put(CertificateModel.ERROR_COUNT.getName(), errors != null ? errors : 0);
+        // "Not scheduled" beside an enabled auto-renew read like a fault; the absence
+        // sentence says what the schedule will DO, which depends on the switch.
         values.put(NEXT_ATTEMPT_DISPLAY.getName(), instantText(row.get(CertificateModel.NEXT_ATTEMPT_AT),
-            copy("next_attempt_none")));
+            copy(Boolean.TRUE.equals(row.get(CertificateModel.AUTO_RENEW)) ? "next_attempt_auto" : "next_attempt_manual")));
         return values;
     }
 

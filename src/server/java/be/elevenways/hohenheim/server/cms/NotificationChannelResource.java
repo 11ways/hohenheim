@@ -252,7 +252,8 @@ public final class NotificationChannelResource extends RowResource {
                 return outcome.sent()
                     ? CmsActionResult.refreshWithToast(Microcopy.of("test_ok").withFilter("scope", "notification_channel"))
                     : CmsActionResult.errorToast(Microcopy.of("test_failed").withFilter("scope", "notification_channel")
-                        .withArg("reason", outcome.reasonOr("unknown error")));
+                        .withArg("reason", outcome.reasonOr(
+                            Microcopy.of("test_failed_unknown").withFilter("scope", "notification_channel"))));
             })
             .build());
         return actions;

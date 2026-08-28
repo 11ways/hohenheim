@@ -100,12 +100,14 @@ class DomainEditTest extends HohenheimTestBase {
         assertThat(page.locator("body").textContent()).contains("edit-test.example.com");
         // The hostname itself opens the form; the actions cell offers the same edit
         // explicitly plus the remove this tab used to have no way to reach.
-        assertThat(page.locator("a[href='/admin/domains/" + domainId + "']").count())
+        assertThat(page.locator("a[href^='/admin/domains/" + domainId + "?']").count())
             .isGreaterThanOrEqualTo(1);
         var actions = page.locator(".hh-domain-row-actions");
         assertThat(actions.count()).as("the row carries an actions cell").isEqualTo(1);
-        assertThat(actions.locator("a.hh-domain-edit[href='/admin/domains/" + domainId + "']").count())
-            .as("with an explicit edit link").isEqualTo(1);
+        assertThat(actions.locator("a.hh-domain-edit[href^='/admin/domains/" + domainId + "?']").count())
+            .as("with an explicit edit link, bound back to this tab").isEqualTo(1);
+        assertThat(actions.locator("a.hh-domain-edit").first().getAttribute("href"))
+            .as("the edit link carries the tab as its return target").contains("_return=");
         assertThat(actions.locator("form[action*='/admin/domains/" + domainId + "/delete']").count())
             .as("and a remove form posting to the delete route").isEqualTo(1);
         assertThat(actions.locator("form pl-button[type='submit']").count())
