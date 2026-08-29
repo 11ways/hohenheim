@@ -7,6 +7,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -69,6 +70,13 @@ public class DnsRecordModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField ZONE_ID = SCHEMA.addField(IntegerField.builder().name("zone_id")
         .label(HohenheimFormCopy.label("record_zone")).help(HohenheimFormCopy.help("record_zone")).build());
+    /** The owning zone; a record dies with its zone (the delete cascade asks through this). */
+    public static final BelongsTo<DnsZoneModel> ZONE = SCHEMA.addRelation(
+        BelongsTo.to(DnsZoneModel.class)
+            .name("zone")
+            .localKey(ZONE_ID)
+            .remoteKey(DnsZoneModel.ID)
+            .build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimFormCopy.label("record_name")).help(HohenheimFormCopy.help("record_name")).build());
     public static final EnumField TYPE = SCHEMA.addField(EnumField.builder("type")

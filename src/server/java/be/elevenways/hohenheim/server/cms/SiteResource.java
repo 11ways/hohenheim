@@ -508,11 +508,16 @@ public class SiteResource extends RowResource {
      * driver error -- the whole point of the constraint is that the loser is TOLD.
      */
     private static @NonNull Violations refusalFor(@NonNull ClaimConflict conflict) {
-        String holder = RouteClaims.holderNameOf(conflict.getKey());
+        Row holder = RouteClaims.holderSiteOf(conflict.getKey());
+        Integer holderId = holder != null ? holder.get(SiteModel.ID) : null;
+        String hostname = RouteClaims.hostnameOf(conflict.getKey());
         return Violations.ofField("enabled", true,
-            CmsSupport.violationText("enable_route_conflict")
-                .withArg("hostname", RouteClaims.hostnameOf(conflict.getKey()))
-                .withArg("site", holder != null ? holder : "?"));
+            ClaimRefusals.heldBy(holderId, holder,
+                site -> CmsSupport.violationText("enable_route_conflict")
+                    .withArg("hostname", hostname)
+                    .withArg("site", holder != null ? site : "?"),
+                CmsSupport.violationText(ClaimRefusals.ENABLE_HOSTNAME_UNAVAILABLE)
+                    .withArg("hostname", hostname)));
     }
 
     /**

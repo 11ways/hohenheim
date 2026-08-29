@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionWidget;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -54,18 +56,28 @@ public final class ManageDashboard extends DashboardPanelPeer {
     public @Nullable Microcopy description() {
         return CmsSupport.navHint("manage_dashboard");
     }
+    /**
+     * AIDEV-NOTE: the instance band rides the SAME role predicate the instance peers do
+     * ({@code Role.INSTANCES}, via {@link HohenheimRoles}): on a node without the instance
+     * tier the widget's source still answered an empty list, so the landing page offered
+     * "Your instances / No records found" for a tier the panel had no route for.
+     */
     @Override
     public @NonNull WidgetTree widgets(@NonNull AccessContext accessContext) {
         List<WidgetInstance> widgets = new ArrayList<>();
+        boolean instances = HohenheimRoles.enabled(Role.INSTANCES);
+        List<AttentionItem> attention = instances ? tenantAttention(accessContext) : List.of();
         widgets.add(section(new WidgetInstance(AttentionWidget.ID, Map.of())
-            .withData(tenantAttention(accessContext))));
-        widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
-            "title", HohenheimWidgetCopy.localized("your_instances", "manage_dashboard"),
-            // The instance DEFAULT source carries the per-principal VIEW scope
-            // (ManagePanel overrides it), so this list is tenant-correct with
-            // nothing declared here.
-            "source", "hohenheim.instance",
-            "limit", 10))));
+            .withData(attention)));
+        if (instances) {
+            widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
+                "title", HohenheimWidgetCopy.localized("your_instances", "manage_dashboard"),
+                // The instance DEFAULT source carries the per-principal VIEW scope
+                // (ManagePanel overrides it), so this list is tenant-correct with
+                // nothing declared here.
+                "source", "hohenheim.instance",
+                "limit", 10))));
+        }
         return new WidgetTree(widgets);
     }
 

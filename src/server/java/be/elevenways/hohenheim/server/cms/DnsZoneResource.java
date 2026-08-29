@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
-import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -337,18 +336,12 @@ public final class DnsZoneResource extends RowResource {
     }
 
     /**
-     * Deleting a zone takes its records (including generated ones) with it.
-     *
-     * AIDEV-NOTE: the sweeping scope is REQUIRED here, not decoration. A generated row is
-     * un-deletable through every tenant path (GeneratedDnsRecords' remove guard), and a
-     * cascade from the declaring container is the one legitimate exception: the record the
-     * challenge was published into is going away, which is exactly the reclaim condition.
+     * Deleting a zone takes its records and its peer links with it -- on the model funnel
+     * ({@code DnsZoneCascades}), so every delete lane cascades; this override only swaps
+     * the served snapshot once the delete has landed.
      */
     @Override
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
-        GeneratedDnsRecords.sweeping(() -> Models.get(DnsRecordModel.class).find()
-            .where(DnsRecordModel.ZONE_ID.eq(existing.get(DnsZoneModel.ID)))
-            .delete());
         super.deleteRow(existing, accessContext);
         DnsZoneStore.INSTANCE.reload();
     }

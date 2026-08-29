@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.dns.DnsPeerCascades;
+import be.elevenways.hohenheim.server.dns.DnsZoneCascades;
 import be.elevenways.hohenheim.server.cms.SiteTerminalCsp;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -98,6 +99,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // A DNS peer a secondary zone replicates from refuses to go; a peer that may go
         // clears the stale pointer a primary zone kept and takes its zone links with it.
         DnsPeerCascades.install();
+        // A hosted zone takes its records (generated ones swept, not authored) and its
+        // zone-peer links with it, on every delete lane.
+        DnsZoneCascades.install();
         // A site auth provider still gating a live site or named by an access rule refuses
         // to go: a dangling reference fails the whole site closed at the next route load.
         SiteAuthProviderGuards.install();

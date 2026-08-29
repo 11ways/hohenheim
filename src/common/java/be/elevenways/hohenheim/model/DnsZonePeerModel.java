@@ -24,6 +24,14 @@ public class DnsZonePeerModel extends Model {
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
+    /** The linked zone; a link dies with its zone (the delete cascade asks through this). */
+    public static final BelongsTo<DnsZoneModel> ZONE = SCHEMA.addRelation(
+        BelongsTo.to(DnsZoneModel.class)
+            .name("zone")
+            .localKey(ZONE_ID)
+            .remoteKey(DnsZoneModel.ID)
+            .build());
+
     /** The linked peer; a link dies with its peer (the delete cascade asks through this). */
     public static final BelongsTo<DnsPeerModel> PEER = SCHEMA.addRelation(
         BelongsTo.to(DnsPeerModel.class)

@@ -52,15 +52,22 @@
                     <pl-badge variant={% "secondary" %}>{{ t("off", scope: "site_domains") }}</pl-badge>
                     {% /if %}
                 </pl-table-cell>
+                {#- The certificate's NAME (and its link) render only for a reader who may
+                    OPEN it (domain.canOpenCert, the walk's view answer); everyone else
+                    reads the coverage state and the expiry, never the operator's
+                    certificate name. -#}
                 <pl-table-cell data-cert-status={% domain.get("certStatus") %}>
                     {% if domain.get("certStatus") == "active" %}
-                    {% if canRequestCert %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
+                    {% if domain.get("canOpenCert") == true %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "success" %}>{{ t("covered", scope: "site_domains") }}</pl-badge>{% /if %}
                     {% elseif domain.get("certStatus") == "error" %}
-                    {% if canRequestCert %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
+                    {% if domain.get("canOpenCert") == true %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "destructive" %}>{{ t("not_covered", scope: "site_domains") }}</pl-badge>{% /if %}
                     {% elseif domain.get("certStatus") == "pending" %}
-                    {% if canRequestCert %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge>{% /if %}
+                    {% if domain.get("canOpenCert") == true %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "warning" %}>{{ t("coverage_pending", scope: "site_domains") }}</pl-badge>{% /if %}
                     {% elseif domain.get("certStatus") == "none" %}
                     <pl-badge variant={% "outline" %}>{{ t("none", scope: "site_domains") }}</pl-badge>
+                    {% /if %}
+                    {% if domain.get("certHasExpiry") == true %}
+                    <span class="hh-cert-expiry">{{ t("expires", scope: "site_domains") }} <pl-relative-time datetime={% domain.get("certExpiresIso") %} title={% domain.get("certExpiresIso") %}></pl-relative-time></span>
                     {% /if %}
                 </pl-table-cell>
                 {#- Row actions: the hostname link opens the form, but a row an operator
