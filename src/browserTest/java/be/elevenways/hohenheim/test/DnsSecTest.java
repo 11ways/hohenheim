@@ -36,6 +36,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 
+import static be.elevenways.hohenheim.test.DnsFixtures.createSignedZone;
 import static be.elevenways.hohenheim.test.DnsFixtures.record;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -56,7 +57,7 @@ class DnsSecTest {
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
 
-        int zoneId = createZone("signed.example");
+        int zoneId = createSignedZone("signed.example");
         record(zoneId, "@", DnsRecordModel.TYPE_NS, "ns1.signed.example");
         record(zoneId, "ns1", DnsRecordModel.TYPE_A, "192.0.2.1");
         record(zoneId, "www", DnsRecordModel.TYPE_A, "192.0.2.10");
@@ -341,18 +342,6 @@ class DnsSecTest {
             System.arraycopy(response.getData(), 0, data, 0, response.getLength());
             return new Message(data);
         }
-    }
-
-    private static int createZone(String origin) {
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, origin);
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + origin);
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@" + origin);
-        zone.set(DnsZoneModel.ENABLED, true);
-        zone.set(DnsZoneModel.DNSSEC_ENABLED, true);
-        zones.save(zone);
-        return zone.get(DnsZoneModel.ID);
     }
 
 }

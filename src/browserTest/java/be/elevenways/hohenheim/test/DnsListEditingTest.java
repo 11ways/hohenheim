@@ -675,16 +675,9 @@ class DnsListEditingTest extends HohenheimTestBase {
 
     // --- fixtures ---------------------------------------------------------------------
 
+    /** A primary zone with no peer: what every list-editing journey here edits. */
     private static int createZone(String origin) {
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, origin);
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + origin);
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@" + origin);
-        zone.set(DnsZoneModel.ROLE, DnsZoneModel.ROLE_PRIMARY);
-        zone.set(DnsZoneModel.ENABLED, true);
-        zones.save(zone);
-        return zone.get(DnsZoneModel.ID);
+        return DnsFixtures.createZone(origin, DnsZoneModel.ROLE_PRIMARY, null);
     }
 
     /** A record that inherits the zone's default TTL: the shape the TTL cell must describe. */

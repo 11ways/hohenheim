@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -197,7 +196,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
             assertThat(record.ttl()).isEqualTo(300);
         });
 
-        var recordsTab = get("/admin/dns-zones/" + zoneId + "/page/records");
+        var recordsTab = adminGet("/admin/dns-zones/" + zoneId + "/page/records");
         assertThat(recordsTab.statusCode()).isEqualTo(200);
         assertThat(recordsTab.body()).contains("198.51.100.9");
         assertThat(recordsTab.body()).contains("central-peer"); // the forwarded-edits banner names the owner
@@ -207,7 +206,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(listCall.path()).isEqualTo("/api/dns/zones/central.example/records");
         assertThat(listCall.authorization()).isEqualTo("Bearer test-peer-key");
 
-        var editPage = get("/admin/dns-zones/" + zoneId + "/page/records?record=5");
+        var editPage = adminGet("/admin/dns-zones/" + zoneId + "/page/records?record=5");
         assertThat(editPage.statusCode()).isEqualTo(200);
         assertThat(editPage.body()).contains("name=\"record_id\" value=\"5\"")
             .contains("198.51.100.9");
@@ -305,7 +304,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
 
         // An unreachable owner degrades the tab to the read-only replica view.
         stub.close();
-        var fallback = get("/admin/dns-zones/" + zoneId + "/page/records");
+        var fallback = adminGet("/admin/dns-zones/" + zoneId + "/page/records");
         assertThat(fallback.statusCode()).isEqualTo(200);
         assertThat(fallback.body()).doesNotContain("add-remote-record-link");
     }
@@ -514,22 +513,8 @@ class DnsCentralEditTest extends HohenheimTestBase {
             .build(), HttpResponse.BodyHandlers.ofString());
     }
 
-    private HttpResponse<String> get(String path) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .build(), HttpResponse.BodyHandlers.ofString());
-    }
-
+    /** The admin session's form POST, which every session-authenticated call here uses. */
     private HttpResponse<String> postForm(String path, String body) throws Exception {
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
-        return client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + sessionToken)
-            .header("X-Csrf-Token", csrfToken)
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build(), HttpResponse.BodyHandlers.ofString());
+        return httpPostForm(path, body, sessionToken, csrfToken);
     }
 }

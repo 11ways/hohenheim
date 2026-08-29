@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -31,17 +30,11 @@ class DnsRecordTypeSurfaceTest extends HohenheimTestBase {
     @Test
     void dyndnsActionFollowsTheRecordType() throws Exception {
         // 1. Seed one zone carrying a TXT record and an A record.
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, "type-surface.example");
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1.type-surface.example");
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@type-surface.example");
-        zone.set(DnsZoneModel.ENABLED, true);
-        zones.save(zone);
+        int zoneId = DnsFixtures.createZone("type-surface.example");
 
         DnsRecordModel records = Models.get(DnsRecordModel.class);
         Row txt = records.createEmptyRow();
-        txt.set(DnsRecordModel.ZONE_ID, zone.get(DnsZoneModel.ID));
+        txt.set(DnsRecordModel.ZONE_ID, zoneId);
         txt.set(DnsRecordModel.NAME, "canary");
         txt.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_TXT);
         txt.set(DnsRecordModel.VALUE, "not-an-address");
@@ -49,7 +42,7 @@ class DnsRecordTypeSurfaceTest extends HohenheimTestBase {
         records.save(txt);
 
         Row a = records.createEmptyRow();
-        a.set(DnsRecordModel.ZONE_ID, zone.get(DnsZoneModel.ID));
+        a.set(DnsRecordModel.ZONE_ID, zoneId);
         a.set(DnsRecordModel.NAME, "home");
         a.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_A);
         a.set(DnsRecordModel.VALUE, "192.0.2.40");

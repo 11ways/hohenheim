@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.DnsDyndnsCredentialModel;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -148,17 +147,11 @@ class SecretFieldFormTest extends HohenheimTestBase {
     }
 
     private int seedRecord() {
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, "secret-form.example");
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1.secret-form.example");
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@secret-form.example");
-        zone.set(DnsZoneModel.ENABLED, true);
-        zones.save(zone);
+        int zoneId = DnsFixtures.createZone("secret-form.example");
 
         DnsRecordModel records = Models.get(DnsRecordModel.class);
         Row record = records.createEmptyRow();
-        record.set(DnsRecordModel.ZONE_ID, zone.get(DnsZoneModel.ID));
+        record.set(DnsRecordModel.ZONE_ID, zoneId);
         record.set(DnsRecordModel.NAME, "home");
         record.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_A);
         record.set(DnsRecordModel.VALUE, "192.0.2.10");
