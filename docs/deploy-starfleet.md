@@ -693,3 +693,19 @@ install:
 
 Still pending: the smtp DSN on herald (Settings -> Communication), then click
 the button once more and open the mailed link to confirm the admin address.
+
+## Deploy 2026-08-29 (fourth): the /manage isolation fixes and the auth picker
+
+Shipped hohenheim `5d07a5f8` (previous `a7cb2514`) from a clean secondary
+workspace, 13/13 clean stamp, migration diff empty, rehearsal `0 applied`,
+two restarts (8 s / 21 s to health). Upstreams: zenit `3a0461e5`, zenit-cms
+`e078ba32`, zenit-auth `baafb285`, plumage `0064f897` (the exact-match subject
+lookup + unified 403 card), hawkeye `9552aee0`, protoblast `c202f6a9`.
+Preflight `/root/hohenheim-preflight-20260829-final/`. Before the swap a STRAY
+rehearsal JVM from the previous lane (root, cwd `/root/hohenheim-rehearsal
+(deleted)`, `*:13999`, 318 MB) was still running and was killed; check
+`ps -eo pid,user,args | grep java` for anything that is not the service user's
+absolute-path jar before every rehearsal. The comms coupling (settings/comms.dry)
+survived the restart. Live pass and cleanup ledger: `visual-qa-20260829-final.md`;
+one high finding (F1: a tenant cannot save its own exact domain row under the
+operator's wildcard) is open there.
