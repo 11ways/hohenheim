@@ -938,3 +938,54 @@ digest added to `migration-pins.txt`.
 
 ROLLBACK IS DB + JAR: `/root/hohenheim-preflight-20260830-eleventh/hohenheim.db.at-swap`
 plus `hohenheim-server.jar.rollback`.
+
+## Deploy 2026-08-30 (twelfth): the first three-controller wave, no migration
+
+Shipped hohenheim `17fa6993` (previous `b486427f`) to starfleet, then kuifje
+(`deploy-kuifje.md`, third jar swap) and, for the first time, robbedoes
+(`deploy-robbedoes.md`, first jar swap). Isolated worktree
+`build-worktrees/deploy-20260830-17fa6993` (chain clean at the pushed shas,
+95 s warm build, removed afterwards), stamp 13/13 clean, sha256
+`efbf9b35d7ab7f57fc2cedaff128d5670720ec249f95a243918a8e3c1b9d971a`,
+267,604,365 bytes, `scp` + a remote `grep -c false | grep -qx 13` gate on
+each host. Commits carried (7): `ab922504` (node-16 + node-12 runtime image seeds),
+`e938ade9` + `d2f60c20` (the robbedoes runbook and its federation entry),
+`f1e0c019` (loopback panel default in the installer), `c666a877` (pin mark
+007), `5778cc65` (the names kuifje and robbedoes), `17fa6993` (TSIG
+negotiation announces the transfer endpoint). Migration diff `b486427f..17fa6993`: NONE (only
+`MigrationIntegrityTest` + `migration-pins.txt`), so no pin change is owed.
+
+Rehearsed anyway, on every host, as the service user from
+`/opt/hohenheim-rehearsal-20260830-twelfth` on a byte copy of the preflight
+`.pre` with a hand-written JSON settings pair (all roles off, listener
+127.0.0.1:13999): `Migrations complete 0 applied`, 46 rows, inert boot healthy
+after 30 s (`-Xmx384m`, starfleet), `/login` 200, 0 exceptions, killed by
+port, dirs removed. Preflight `/root/hohenheim-preflight-20260830-twelfth/`
+(`.pre`, `.at-swap` integrity ok, `settings/`, keyring sha256 equal,
+`hohenheim-server.jar.rollback`) on all three.
+
+Live lane on starfleet: at-swap `.backup`, `install` beside, stop, `mv`,
+`--run-migrations` as `hohenheim` (0 applied, 46 rows), start; 30 s to health
+(45 s downtime). Second restart 28 s. 0 journal errors, `roles_captured
+[databases, dns, firewall, instances, proxy]`, listeners 53/80/443/3000, both
+instance containers kept running, panel 302, apex 200, wildcard 200,
+`comms.starfleet.life` 200, `skeleton.starfleet.life` 200 (202 once during the
+supervisor re-attach, as before) and its Console tab renders the terminal
+(canvas 890x384 + input textarea). `zenit-dev deployed starfleet` = `current`.
+
+THE FEDERATION WITH TWO SECONDARIES: a disposable `visual-qa-20260830-wave3
+TXT "wave3"` added through the Records tab at 22:58:31.6Z moved the serial
+42 -> 43; the primary journaled `dns.notify_sent` for `kuifje` AND `robbedoes`
+(both `noerror`) and `dns.axfr_served` for both keys; kuifje transferred 43 at
+22:58:33.1 and robbedoes at 22:58:33.2 (~1.6 s), all three served the TXT. The
+delete (confirm at 22:59:07.0Z) moved it to 44: same four trace lines, both
+secondaries at 44 by 22:59:08.5, the TXT NODATA everywhere,
+`dns_zone_peers.last_notify_serial` = 44 for both links, `dns_records` holds 0
+`visual-qa-%` rows. (`served_serial` still read 42 right after: the 5-minute
+probe had not run yet, which is the cadence, not a defect.)
+
+Leftover noticed, not touched: `/opt/hohenheim-rehearsal-20260829-tenth` on
+this box was never removed by the tenth deploy; reclaim it with the next lane.
+
+ROLLBACK IS JAR ONLY this time (no schema change), but the at-swap copy is
+there regardless: `/root/hohenheim-preflight-20260830-twelfth/`.

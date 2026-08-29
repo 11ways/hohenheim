@@ -379,3 +379,39 @@ within seconds, starfleet journaled `dns.notify_sent` naming `kuifje` AND
 `robbedoes` (`noerror`), **Check health** reported `Delegation: matches. 2
 secondaries probed, 0 behind.`, and the Secondaries tab showed both peers
 `Current`. No service was restarted.
+
+## Deploy 2026-08-30 (first jar swap): `17fa6993`, no migration
+
+Shipped hohenheim `17fa6993` (previous `b486427f`, the jar copied from
+starfleet at install time) as the third stop of the twelfth starfleet deploy
+(`deploy-starfleet.md`): same worktree, stamp 13/13 clean, sha256
+`efbf9b35d7ab7f57fc2cedaff128d5670720ec249f95a243918a8e3c1b9d971a`,
+267,604,365 bytes, `scp` + the `grep -c false | grep -qx 13` gate. Migration
+diff: none. This is the first swap on this box, so the ordinary runbook now
+applies here too.
+
+Whole lane `sudo -n`: preflight `/root/hohenheim-preflight-20260830-twelfth/`
+(`.pre`, `.at-swap`, `settings/`, `hohenheim-server.jar.rollback`, keyring
+sha256 equal); rehearsal as the service user from
+`/opt/hohenheim-rehearsal-20260830-twelfth` on a byte copy with hand-written
+JSON settings: `Migrations complete 0 applied`, 46 rows, inert boot healthy
+after 6 s (`-Xmx1024m`), `/login` 200, 0 exceptions, dir removed. Live: at-swap
+`.backup` (ok), `install` beside, stop, `mv`, `--run-migrations` as `hohenheim`
+(0 applied, 46 rows), start; 7 s to health (10 s downtime). Second restart 6 s.
+0 journal errors, `roles_captured [databases, dns, firewall, instances,
+proxy]`, listeners `*:53`, `*:80`, `127.0.0.1:3000`, staged jar removed from
+`/home/debian`. `zenit-dev deployed robbedoes` = `current`.
+
+What this jar brings here: the `node-16` and `node-12` runtime image seeds
+(`ab922504`); `/admin/runtime-images` over a loopback panel session now lists
+`node-22`, `node-16` ("Node.js 16 on Debian, for a legacy app that cannot run
+on a current release") and `node-12` ("Node.js 12 on Debian buster, the
+oldest runtime still offered"), all enabled, matching the three
+`hohenheim/*:1` images already loaded on the daemon.
+
+Federation after the deploy: starfleet's disposable TXT add + delete moved the
+serial 42 -> 43 -> 44; this box transferred 43 at 22:58:33.2Z and 44 at
+22:59:08.5Z and answers SOA 44 byte-identical to the primary.
+
+ROLLBACK IS JAR ONLY (no schema change); the at-swap copy sits in the
+preflight dir regardless.

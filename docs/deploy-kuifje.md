@@ -386,3 +386,33 @@ starfleet journaled `dns.notify_sent` naming `kuifje` AND `robbedoes`
 `xfer-sites-starfleet` (`ok`), the zone's **Check health** answered
 `Delegation: matches. 2 secondaries probed, 0 behind.`, and its Secondaries tab
 listed both peers `Current` at the new serial. No service was restarted.
+
+## Deploy 2026-08-30 (third jar swap): `17fa6993`, no migration
+
+Shipped hohenheim `17fa6993` (previous `b486427f`) right after starfleet
+(`deploy-starfleet.md`, twelfth deploy): same worktree, stamp 13/13 clean,
+sha256 `efbf9b35d7ab7f57fc2cedaff128d5670720ec249f95a243918a8e3c1b9d971a`,
+267,604,365 bytes, `scp` + the `grep -c false | grep -qx 13` gate. Migration
+diff: none.
+
+Whole lane `sudo -n`: preflight `/root/hohenheim-preflight-20260830-twelfth/`
+(`.pre`, `.at-swap`, `settings/`, `hohenheim-server.jar.rollback`, keyring
+sha256 equal); rehearsal as the service user from
+`/opt/hohenheim-rehearsal-20260830-twelfth` on a byte copy with hand-written
+JSON settings: `Migrations complete 0 applied`, 46 rows, inert boot healthy
+after 10 s (`-Xmx512m`), `/login` 200, 0 exceptions, dir removed. Live: at-swap
+`.backup` (ok), `install` beside, stop, `mv`, `--run-migrations` as `hohenheim`
+(0 applied, 46 rows), start; 10 s to health (15 s downtime). Second restart
+13 s. 0 journal errors, `roles_captured [dns, firewall, proxy]`, listeners
+`*:53`, `*:80`, `127.0.0.1:3000` (the loopback bind survived the swap),
+`restored persisted replica of starfleet.life serial 42` on both boots,
+`hoh-dns-diff compare` IDENTICAL against the primary, staged jar removed from
+`/home/debian`. `zenit-dev deployed kuifje` = `current`.
+
+Federation after the deploy: starfleet's disposable TXT add + delete moved the
+serial 42 -> 43 -> 44; this box transferred 43 at 22:58:33.1Z and 44 at
+22:59:08.3Z, each within 2 s of the edit, and answers SOA 44 byte-identical to
+the primary.
+
+ROLLBACK IS JAR ONLY (no schema change); the at-swap copy sits in the
+preflight dir regardless.
