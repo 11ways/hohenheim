@@ -1,5 +1,8 @@
 # Optional Authoritative DNS
 
+Moving an existing zone onto these nameservers is its own procedure with its own
+gate: see `dns-migration.md` and `tools/hoh-dns-diff`.
+
 STATUS (2026-08-12): **phase 4 is implemented EXCEPT its secondary-health half,
 and the 2026-07-17 line below overstates it.** What shipped and is real: AXFR +
 TSIG + NOTIFY in both directions, the secondary-zone subsystem with SOA
