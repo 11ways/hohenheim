@@ -70,7 +70,7 @@ What each step does, in order:
    the panel's settings editor persists into these same files. That idempotence
    cuts both ways -- a host installed BEFORE a seeded default changed keeps the
    old value, and the only fix is editing its settings file by hand (which is
-   what the sites box and the OVH primary each needed for `bind_address`).
+   what robbedoes and kuifje each needed for `bind_address`).
    `network.bind_address` is seeded `127.0.0.1`: the panel is published through
    the proxy as a site whose upstream is `127.0.0.1:3000`, so the admin listener
    never needs to answer the internet, and the proxy's own `0.0.0.0:80`/`:443`
@@ -121,7 +121,7 @@ to create the first one; hand-writing `auth_users` is never the answer.
 
 ## New server checklist
 
-The OVH box and every server after it follow this list:
+kuifje and every server after it follow this list:
 
 1. Buy the machine; pick Debian 13 (or 12) as the image.
 2. Set the reverse DNS (PTR) for its IPv4 and IPv6 at the provider.
@@ -139,8 +139,18 @@ The OVH box and every server after it follow this list:
 9. Record the deploy target in `~/.config/zenit-dev/config.json` so
    `zenit-dev deployed <name>` can read its build stamp.
 
-The first host installed this way is the OVH DNS primary; its facts, transcript
-and rollback note live in `docs/deploy-ovh.md`.
+The first host installed this way is kuifje, the DNS primary; its facts,
+transcript and rollback note live in `docs/deploy-kuifje.md`.
+
+### Naming
+
+Servers are named after Franco-Belgian comic heroes, in Dutch: `kuifje` (the
+DNS primary, `docs/deploy-kuifje.md`) and `robbedoes` (the sites host,
+`docs/deploy-robbedoes.md`). `starfleet` predates the convention and keeps its
+name. RESERVED, do not reuse for anything else: `bobbie` for the next DNS
+secondary and `kwabbernoot` for the second sites host. The name a box announces
+to the DNS federation (`dns.federation_name`) is the same name, and so is its
+`zenit-dev deployed <name>` target.
 
 ### Proven on a disposable VM (2026-08-29)
 

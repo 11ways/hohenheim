@@ -112,7 +112,7 @@ The Secondaries tab shows a freshness pill (not probed / current / behind /
 stale), the served serial and the probe time per link.
 
 The primary also traces what IT did for each peer (`DnsFederationTrace`; the
-first real starfleet-to-OVH run showed a primary journaling nothing for a
+first real starfleet-to-kuifje run showed a primary journaling nothing for a
 transfer it had just streamed): one `dns.axfr_served` / `dns.axfr_refused`
 structured log line per AXFR request (zone, serial, TSIG key name, ok or the
 refusal reason) and one `dns.notify_sent` per NOTIFY (zone, serial, peer, the

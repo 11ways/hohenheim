@@ -826,10 +826,10 @@ workspace running; the runtime image `hohenheim/node-22:1` was loaded from a
 workstation build (`docker save | docker load`) rather than built by kaniko on
 this 1-vCPU box.
 
-## Deploy 2026-08-29 (tenth): the rollout mechanisms, M004 + M006, and OVH's first swap
+## Deploy 2026-08-29 (tenth): the rollout mechanisms, M004 + M006, and kuifje's first swap
 
 Shipped hohenheim `1c8a8a8b` (previous `d17494d2`) to starfleet AND, for the
-first time, to the OVH DNS primary (`deploy-ovh.md`). Isolated worktree
+first time, to kuifje, the DNS primary (`deploy-kuifje.md`). Isolated worktree
 `build-worktrees/deploy-20260829-1c8a8a8b` (every chain repo clean at its
 pushed sha, zenit-cms `b59c63df` republished; 98 s warm build, removed
 afterwards), stamp 13/13 clean, sha256
@@ -867,12 +867,12 @@ running; `zenit-dev deployed starfleet` = `current` 13/13.
 THE DNS HEALTH TIER ON THE REAL FEDERATION: zone row action "Check health"
 (it lands on the record page; the header button runs it) wrote
 `delegation_status = matches` (the declared `dns.nameservers` set is empty on
-this box, and an empty set is deliberately no finding) and probed the `ovh`
-link at served serial 34; the Secondaries tab showed Freshness "Current",
-served 34, probed "just now". A disposable `visual-qa-20260829-deploy TXT
+this box, and an empty set is deliberately no finding) and probed the `kuifje`
+link (then still named `ovh`) at served serial 34; the Secondaries tab showed
+Freshness "Current", served 34, probed "just now". A disposable `visual-qa-20260829-deploy TXT
 "deploy"` added then deleted through the Records tab moved the serial to 35
-then 36; the primary journaled `dns.notify_sent` (peer ovh, noerror) and
-`dns.axfr_served` (key `xfer-ovh-starfleet`, ok) for each, OVH transferred
+then 36; the primary journaled `dns.notify_sent` (peer kuifje, noerror) and
+`dns.axfr_served` (key `xfer-ovh-starfleet`, ok) for each, kuifje transferred
 each serial within 3 s, `hoh-dns-diff compare` was IDENTICAL for the TXT and
 the SOA, and the Secondaries tab filled "Last AXFR served 36 just now" and
 "Last NOTIFY noerror just now". Both records are gone. One oddity to keep an
@@ -888,8 +888,8 @@ plus `hohenheim-server.jar.rollback`, exactly as for the fifth deploy.
 
 ## Deploy 2026-08-29 (eleventh): the DNS trace fixes and the delete gate, M007
 
-Shipped hohenheim `b486427f` (previous `1c8a8a8b`) to starfleet and then OVH
-(`deploy-ovh.md`, second jar swap). Isolated worktree
+Shipped hohenheim `b486427f` (previous `1c8a8a8b`) to starfleet and then kuifje
+(`deploy-kuifje.md`, second jar swap). Isolated worktree
 `build-worktrees/deploy-20260829-b486427f` (chain clean at the deployed shas,
 so the main checkouts resolved it; 96 s warm build, removed afterwards), stamp
 13/13 clean, sha256
@@ -929,7 +929,7 @@ tab moved the serial 36 -> 37 -> 38. Each time the primary journaled
 the pre-bump serial), `dns.axfr_served` for the same serial, and
 `dns_zone_peers.last_notify_serial` read 37 then 38 (the column M007 added; it
 used to be lost entirely because the stamp write raced the open mutation
-transaction). OVH journaled `transferred secondary zone starfleet.life serial
+transaction). kuifje journaled `transferred secondary zone starfleet.life serial
 37` and `38` within 3 s of each edit, served the TXT and then no longer did,
 and both boxes answered SOA 38. `dns_records` holds 0 `visual-qa-%` rows.
 

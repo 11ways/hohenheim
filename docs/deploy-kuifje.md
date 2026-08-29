@@ -1,4 +1,4 @@
-# The OVH VPS: the DNS primary
+# kuifje: the DNS primary
 
 The second public Hohenheim install, and the machine that finally gives
 `authoritative-dns.md` its two-nameserver threshold a second name server to
@@ -13,7 +13,7 @@ the first administrator, which the product itself creates.
 
     ssh              debian@137.74.171.228   (key auth, passwordless sudo -n)
     IPv6             2001:41d0:305:2100::1:4afe
-    hostname         vps-0ffe31ed
+    hostname         kuifje   (was vps-0ffe31ed; renamed 2026-08-30)
     os               Debian GNU/Linux 13 (trixie)
     ram / disk       3826 MB / 40 GB (4.3 GB used after the install)
     java             Debian's own openjdk 25.0.4.1 (/usr/bin/java)
@@ -147,36 +147,38 @@ place as the desired end state; every `visual-qa-*` record created for it was
 removed.
 
 Reachability first: `dig @137.74.171.228 SOA example.com` answers REFUSED, so
-OVH's provider firewall already passes udp/tcp 53 inbound and the
+kuifje's provider firewall already passes udp/tcp 53 inbound and the
 authoritative-only refusal is correct. starfleet answered its own zone at
 serial 30.
 
 Peers (`/admin/dns-peers`), one row per side, both id 1:
 
-    starfleet   "ovh"        NAMESERVER, transfer 137.74.171.228:53
-    ovh         "starfleet"  HOHENHEIM,  transfer 104.223.42.142:53,
+    starfleet   "kuifje"     NAMESERVER, transfer 137.74.171.228:53
+    kuifje      "starfleet"  HOHENHEIM,  transfer 104.223.42.142:53,
                              base_url https://admin.starfleet.life + a znit_ key
                              scoped hohenheim.admin.access
 
 TRAP, and the reason the two rows have different peer types: the peer form
 REFUSES a HOHENHEIM peer without an admin base URL
-(`dns_peer_base_url_required`). ovh's panel listens on 127.0.0.1:3000 only and
+(`dns_peer_base_url_required`). kuifje's panel listens on 127.0.0.1:3000 only and
 its `network.main_url` is still `https://panel.invalid`, so starfleet has no
 admin URL to store for it. That is not a blocker in this topology: the admin
 channel only ever runs secondary -> primary, so the peer row on the PRIMARY
 only needs the transfer channel and is correctly a plain NAMESERVER peer.
 
 Key negotiation therefore has a direction: it must be started on the side that
-can REACH the other's admin API, i.e. from ovh. Set `dns.federation_name` to
-`ovh` first (blank falls back to the hostname `vps-0ffe31ed`, and the announced
+can REACH the other's admin API, i.e. from kuifje. Set `dns.federation_name` to
+`kuifje` first (blank falls back to the system hostname, and the announced
 name is what the receiving side matches its peer row by, so the wrong name
 silently creates a SECOND peer row on starfleet). Then the "Negotiate transfer
-key" row action on ovh's `starfleet` peer wrote `xfer-ovh-starfleet` /
+key" row action on kuifje's `starfleet` peer wrote `xfer-ovh-starfleet` /
 hmac-sha256 on BOTH sides in one click; no secret was ever copied by hand.
-starfleet logged `DNS: transfer key xfer-ovh-starfleet installed for peer ovh`.
+starfleet logged `DNS: transfer key xfer-ovh-starfleet installed for peer ovh`
+(the peer was still named `ovh` then; the TSIG key name never changes with a
+rename, so `xfer-ovh-starfleet` is still the key on the wire).
 
-Zone: `starfleet.life` attached to peer `ovh` on the primary's Secondaries tab
-(`dns_zone_peers` id 1), then created on ovh as role=secondary with owning peer
+Zone: `starfleet.life` attached to peer `kuifje` on the primary's Secondaries
+tab (`dns_zone_peers` id 1), then created on kuifje as role=secondary with peer
 `starfleet` (zone id 1). Verified identical answers on both servers, all with
 aa=1: SOA, apex NS (nssl/nssl2.mooo.com), `admin`, `skeleton`, `www`, `ns1`,
 `ns2`, a random label answered by the `*` wildcard, and NODATA-with-SOA for an
@@ -191,9 +193,9 @@ Timings (UTC, from zone creation and from each edit):
     TXT delete via forward   1 s   serial 34
 
 Everything after the first pull is NOTIFY-driven, far below the 30 s refresh
-poll. ovh journals one `dns.secondary_transfer` per serial.
+poll. kuifje journals one `dns.secondary_transfer` per serial.
 
-The admin channel works despite the placeholder `main_url`: ovh's Records tab
+The admin channel works despite the placeholder `main_url`: kuifje's Records tab
 on the secondary zone says "This zone is owned by peer "starfleet": the records
 below are read live from it and edits are forwarded there", lists starfleet's
 live rows, and its "Save on peer" / "Delete this record on the owning peer?"
@@ -216,8 +218,10 @@ Two observations, neither a blocker:
 
 ## Still to do on this box
 
-- Choose its public name, then set `network.main_url`,
-  `auth.external_base_url`, and give it a site + certificate for the panel.
+- The box is NAMED (`kuifje`, 2026-08-30: OS hostname, `dns.federation_name`,
+  the zenit-dev deploy target and the peer rows on the other two boxes). Still
+  open: set `network.main_url` and `auth.external_base_url` to its public name,
+  and give it a site + certificate for the panel.
 - Delegate at the registrar with matching glue -- the peering and the
   `starfleet.life` replica are done (see above), the delegation is not.
 - Open the provider firewall for 80 and 443; keep 3000 closed. 53 udp+tcp is
@@ -226,7 +230,7 @@ Two observations, neither a blocker:
   still to do.
 - Add it to `~/.config/zenit-dev/config.json` under `deployments` so
   `zenit-dev deployed <name>` can read its build stamp over ssh. DONE
-  2026-08-29 as target `ovh` (`debian@137.74.171.228`; `unzip -p` and
+  2026-08-29, renamed to target `kuifje` on 2026-08-30 (`debian@137.74.171.228`; `unzip -p` and
   `systemctl show` both work unprivileged, so no sudo is needed for the read).
 
 ## Deploy 2026-08-29 (first jar swap): `1c8a8a8b`, migrations M004 + M006
@@ -258,7 +262,7 @@ on the first boot, `dig @127.0.0.1 starfleet.life SOA` = the primary's serial,
 google REFUSED, login page 200 over loopback, panel over the forward: dashboard
 attention is only the pre-existing "No off-host backup destination", peer
 `starfleet` listed, zone `starfleet.life` Secondary / Transferred.
-`zenit-dev deployed ovh` = `current` 13/13.
+`zenit-dev deployed kuifje` = `current` 13/13.
 
 Federation after the deploy (the first run of the health tier on a real WAN):
 a TXT added then deleted on starfleet moved the serial 34 -> 35 -> 36; this box
@@ -297,7 +301,7 @@ first boot, `dig @127.0.0.1 starfleet.life SOA` = the primary's serial, google
 REFUSED, login page 200 over loopback; over a loopback curl session the
 dashboard still carries only the pre-existing "No off-host backup destination"
 attention item and `/admin/dns-zones` shows `starfleet.life Secondary
-Transferred`. `zenit-dev deployed ovh` = `current` 13/13. The staged jar in
+Transferred`. `zenit-dev deployed kuifje` = `current` 13/13. The staged jar in
 `/home/debian` was removed.
 
 Federation after the deploy: starfleet's disposable TXT add + delete moved the
@@ -313,7 +317,7 @@ plus `hohenheim-server.jar.rollback`, as for the first swap.
 `http://137.74.171.228:3000/` answered its login page FROM THE INTERNET. This
 provider passes every port by default and the installer bound zenit's HTTP
 listener to `0.0.0.0`, so an admin login page sat on a raw public port. Closed
-exactly as the sites box was (`deploy-sites.md`, "Panel exposure"), in the
+exactly as robbedoes was (`deploy-robbedoes.md`, "Panel exposure"), in the
 product rather than at a firewall this box cannot reach.
 
 The live `settings/local.dry` here is still the installer's plain JSON (unlike
@@ -342,11 +346,43 @@ Verified after the restart:
   from the primary (104.223.42.142), identical; and a raw UDP AND TCP SOA query
   from the workstation to `137.74.171.228:53` answers `rcode=0 aa=1` with the
   same serial as the primary's, so nothing about the DNS role moved.
-- `zenit-dev deployed ovh` reads the same as before the restart: 12/13 repos
+- `zenit-dev deployed kuifje` reads the same as before the restart: 12/13 repos
   `current`, `hohenheim local-ahead` (the pre-existing 2 undeployed commits),
   same jar mtime.
 
 Since 2026-08-30 `tools/install-host.sh` seeds `network.bind_address` =
 `127.0.0.1` (`--panel-bind` to override), so a NEW host arrives closed. That
-does not help this box or the sites box: the installer never rewrites an
+does not help this box or robbedoes: the installer never rewrites an
 existing settings file, which is why both needed the hand edit above.
+
+## Named `kuifje`, 2026-08-30
+
+The provisional `ovh` is gone. Servers are named after Franco-Belgian comic
+heroes in Dutch (`docs/deploy-native.md`, "Naming"). Renamed in one wave, in
+this order, because the announced federation name is what a receiver matches
+its peer row by:
+
+1. `dns.federation_name` = `kuifje` on this box (was `ovh`), settings editor.
+2. The peer rows naming this box, on the same day: starfleet peer id 1
+   `ovh` -> `kuifje`, robbedoes peer id 1 `ovh` -> `kuifje`. This box's own
+   `sites` row (peer id 2) became `robbedoes`.
+3. OS hostname and the zenit-dev deploy target, both already `kuifje`.
+
+Nothing else on any row moved: transfer host/port, TSIG key name, algorithm,
+base URL and API key are untouched, and a pure rename does NOT clear the stored
+TSIG secret (the form's secret field stays blank-means-keep; only the "Clear
+stored value" checkbox clears it -- the known clearing trap is the peer TYPE
+change, not the name). The TSIG key names deliberately keep their old spelling
+(`xfer-ovh-starfleet`, `xfer-sites-ovh`): a key name is wire identity, and
+renaming one would need both sides rekeyed for no gain.
+
+Proven end to end right after: a disposable
+`visual-qa-20260830-rename.starfleet.life TXT` added and then deleted on
+starfleet moved the serial 40 -> 41 -> 42, and all three boxes answered each
+serial within seconds (`dig +norecurse` against 104.223.42.142, 137.74.171.228
+and 51.255.43.81 agreed at every step, the TXT served then NXDOMAIN-free gone).
+starfleet journaled `dns.notify_sent` naming `kuifje` AND `robbedoes`
+(`noerror`) for both serials, `dns.axfr_served` for `xfer-ovh-starfleet` and
+`xfer-sites-starfleet` (`ok`), the zone's **Check health** answered
+`Delegation: matches. 2 secondaries probed, 0 behind.`, and its Secondaries tab
+listed both peers `Current` at the new serial. No service was restarted.

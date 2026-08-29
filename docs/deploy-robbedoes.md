@@ -1,9 +1,9 @@
-# The sites VPS: the Phoenix successor
+# robbedoes: the sites host, the Phoenix successor
 
 The third public Hohenheim install and the first COMPUTE node: it carries the
 proxy, dns, firewall, instances and databases roles, so it can host sites,
 workspaces, applications and managed databases. It is also the intended DNS
-SECONDARY beside the OVH primary (`deploy-ovh.md`), but no peering was done
+SECONDARY beside kuifje, the DNS primary (`deploy-kuifje.md`), but no peering was done
 here -- a separate lane owns that.
 
 Installed 2026-08-30 by `tools/install-host.sh`, which IS the procedure
@@ -16,14 +16,14 @@ administrator's host admission through the panel, and one settings line
 
     ssh              debian@51.255.43.81   (key auth, passwordless sudo -n)
     IPv6             2001:41d0:305:2100::1:4b26
-    hostname         vps-801b1e2a
+    hostname         robbedoes   (was vps-801b1e2a; renamed 2026-08-30)
     os               Debian GNU/Linux 13 (trixie)
     cpu / ram / disk 6 vCPU / 11683 MB / 99 GB NVMe (5.0 GB used after the install)
     java             Temurin 25.0.4.1 JRE from Adoptium (/usr/lib/jvm/temurin-25-jre-amd64)
     swap             2 GB swapfile at /swapfile, vm.swappiness=10 (created by the installer)
 
 The box shipped with NO java at all, so the installer's Adoptium lane ran here
-for the first time on a real host (the OVH box already had Debian's own
+for the first time on a real host (kuifje already had Debian's own
 openjdk 25 and skipped it). No second JDK is installed.
 
 ## What is installed
@@ -45,8 +45,8 @@ openjdk 25 and skipped it). No second JDK is installed.
 Docker CE 29.7.2 from Docker's own apt repo, cgroup v2, systemd driver.
 
 `network.main_url` is EMPTY and `auth.dry` was never seeded (the installer skips
-it without `--main-url`) because the naming decision for this box is still open.
-Set `network.main_url` and `auth.external_base_url` when the name is chosen.
+it without `--main-url`). The box is NAMED `robbedoes` since 2026-08-30, but
+`network.main_url` and `auth.external_base_url` still need its PUBLIC name.
 
 `network.trusted_proxies` was left at the installer's `loopback`, untouched.
 
@@ -124,9 +124,9 @@ published later the same way starfleet publishes it -- a site whose upstream is
 `127.0.0.1:3000`, which loopback binding does not affect. Undo by removing the
 line and restarting.
 
-Note for whoever owns the provider firewalls: the OVH DNS primary
-(`137.74.171.228:3000`) had the same exposure and was closed the same way on
-2026-08-30 (`deploy-ovh.md`). starfleet's was never exposed. Since 2026-08-30
+Note for whoever owns the provider firewalls: kuifje, the DNS primary
+(`137.74.171.228:3000`), had the same exposure and was closed the same way on
+2026-08-30 (`deploy-kuifje.md`). starfleet's was never exposed. Since 2026-08-30
 the installer seeds `network.bind_address` = `127.0.0.1`, so a NEW host arrives
 closed; both of these boxes predate that and needed the hand edit.
 
@@ -204,15 +204,17 @@ site, zone, certificate or peer.
 
 ## Deploy target
 
-Registered in `~/.config/zenit-dev/config.json` under `deployments` as `sites`:
+Registered in `~/.config/zenit-dev/config.json` under `deployments` as
+`robbedoes` (registered 2026-08-30 as the provisional `sites`, renamed the same
+day):
 
-    "sites": {
+    "robbedoes": {
         "ssh": "debian@51.255.43.81",
         "jar": "/opt/hohenheim/hohenheim-server.jar",
         "service": "hohenheim"
     }
 
-`zenit-dev deployed sites` answers with the stamp: jar 267,596,947 bytes,
+`zenit-dev deployed robbedoes` answers with the stamp: jar 267,596,947 bytes,
 service active and running the configured jar, `stamped: true`, 12 of 13 repos
 `current`. The 13th is hohenheim itself, reported `local-ahead` because the local
 checkout has one commit past `b486427f` -- correct, and the same answer
@@ -255,16 +257,17 @@ a byte copy whenever the migration diff is non-empty.
 - Open the provider firewall for 53 udp+tcp, 80 and 443, and CLOSE everything
   else. Right now the provider passes every port; 3000 is only safe because the
   listener itself is on loopback.
-- Enrol it as a DNS peer of the OVH primary and give it the secondary zones it
-  should carry. DONE 2026-08-30 (see "DNS federation, 2026-08-30"): peered with
-  both OVH and starfleet, and carrying `starfleet.life` as a secondary.
+- Enrol it as a DNS peer of kuifje, the DNS primary, and give it the secondary
+  zones it should carry. DONE 2026-08-30 (see "DNS federation, 2026-08-30"):
+  peered with both kuifje and starfleet, and carrying `starfleet.life` as a
+  secondary.
 - Load the node-16 and node-12 runtime images once the lane building them is
   done. DONE 2026-08-30 (see "Runtime image").
 - Migrate the Phoenix sites onto it (`docs/legacy-import.md`, `hoh-import-legacy`).
 
 ## DNS federation, 2026-08-30
 
-This box joined the federation as a second SECONDARY beside OVH. Both boxes ran
+This box joined the federation as a second SECONDARY beside kuifje. Both boxes ran
 `b486427f`, the build that carries the health tier (M004/M007), so this is the
 first run with three controllers in one federation. Every `visual-qa-*` record
 created for it was removed; the peers and the secondary zone are left in place.
@@ -274,56 +277,59 @@ here): `51.255.43.81` answers `REFUSED aa=0` for an out-of-zone name over UDP
 and TCP, so the provider passes udp/tcp 53 and the authoritative-only refusal is
 correct.
 
-`dns.federation_name` was set to `sites` in the settings editor BEFORE any
-peering (blank falls back to the hostname; the announced name is what the
-receiving side matches its peer row by). It is provisional -- rename it together
-with the box's public name.
+`dns.federation_name` was set in the settings editor BEFORE any peering (blank
+falls back to the hostname; the announced name is what the receiving side
+matches its peer row by). It read `sites` on the day; it is `robbedoes` since
+2026-08-30, renamed together with every peer row naming this box.
 
 Peers (`/admin/dns-peers`):
 
-    sites       "ovh"        NAMESERVER, transfer 137.74.171.228:53   (peer id 1)
-    sites       "starfleet"  HOHENHEIM,  transfer 104.223.42.142:53,  (peer id 2)
+    robbedoes   "kuifje"     NAMESERVER, transfer 137.74.171.228:53   (peer id 1)
+    robbedoes   "starfleet"  HOHENHEIM,  transfer 104.223.42.142:53,  (peer id 2)
                              base_url https://admin.starfleet.life + a znit_ key
-                             labelled "sites dns federation", scoped
-                             hohenheim.admin.access
-    ovh         "sites"      NAMESERVER, transfer 51.255.43.81:53     (peer id 2)
-    starfleet   "sites"      NAMESERVER, transfer 51.255.43.81:53     (peer id 2)
+                             labelled "sites dns federation" (the API key label
+                             is not editable in the panel, so it keeps the
+                             provisional word), scoped hohenheim.admin.access
+    kuifje      "robbedoes"  NAMESERVER, transfer 51.255.43.81:53     (peer id 2)
+    starfleet   "robbedoes"  NAMESERVER, transfer 51.255.43.81:53     (peer id 2)
 
-The `ovh` row here is a NAMESERVER peer for the same reason starfleet's is: the
-form refuses a Hohenheim peer without an admin base URL
-(`A Hohenheim peer needs an admin base URL`, reproduced deliberately), and OVH's
-panel is `127.0.0.1:3000` with no public hostname. Trap: switching the peer type
+The `kuifje` row here is a NAMESERVER peer for the same reason starfleet's is:
+the form refuses a Hohenheim peer without an admin base URL
+(`A Hohenheim peer needs an admin base URL`, reproduced deliberately), and
+kuifje's panel is `127.0.0.1:3000` with no public hostname. Trap: switching the peer type
 back to Nameserver after that refusal CLEARS the TSIG secret field -- retype it
 before saving.
 
 KEY NEGOTIATION HAS A DIRECTION and it decided both pairings:
 
-- sites <-> starfleet: negotiated with one click from the SITES side ("Negotiate
+- robbedoes <-> starfleet: negotiated with one click from THIS side ("Negotiate
   transfer key" on its `starfleet` peer), because starfleet is the only box with
   a reachable admin API. It wrote `xfer-sites-starfleet` / hmac-sha256 on both
   sides; starfleet logged `DNS: transfer key xfer-sites-starfleet installed for
-  peer sites` and created its own `sites` peer row. The announcement carries the
-  NAME only, so the transfer host on starfleet's new row was blank and had to be
-  filled in by hand (`51.255.43.81`).
-- sites <-> ovh: NOT negotiable in either direction -- both panels are
+  peer sites` and created its own peer row (named `sites` then, `robbedoes`
+  since 2026-08-30; a TSIG key name never changes with a rename, which is why
+  the key on the wire is still `xfer-sites-starfleet`). The announcement carries
+  the NAME only, so the transfer host on starfleet's new row was blank and had
+  to be filled in by hand (`51.255.43.81`).
+- robbedoes <-> kuifje: NOT negotiable in either direction -- both panels are
   loopback-only, so neither side can reach the other's admin API. The key
   (`xfer-sites-ovh` / hmac-sha256, one secret generated on the workstation) was
   installed BY HAND through both peer forms. It becomes negotiable the moment
   either box gets a public panel hostname; re-negotiating then rotates it.
 
-DEFERRED, deliberately: the admin (edit-forwarding) channel between sites and
-ovh, for the same missing-base-URL reason. Nothing needs it -- neither box owns
+DEFERRED, deliberately: the admin (edit-forwarding) channel between robbedoes
+and kuifje, for the same missing-base-URL reason. Nothing needs it -- neither box owns
 a zone the other edits.
 
-Zone: `starfleet.life` linked to peer `sites` on starfleet's Secondaries tab
+Zone: `starfleet.life` linked to peer `robbedoes` on starfleet's Secondaries tab
 (`dns_zone_peers` id 2), then created here as role=secondary with owning peer
 `starfleet` (zone id 1 on this box).
 
 Verification, all three boxes:
 
     initial pull       2 s   zone saved 22:21:58Z, transferred 22:22:00Z serial 38
-    TXT add            3 s   22:23:35Z click; ovh 22:23:37.8, sites 22:23:38.0, serial 39
-    TXT delete         4 s   22:25:19Z click; ovh 22:25:24.6, sites 22:25:24.8, serial 40
+    TXT add            3 s   22:23:35Z click; kuifje 22:23:37.8, robbedoes 22:23:38.0, serial 39
+    TXT delete         4 s   22:25:19Z click; kuifje 22:25:24.6, robbedoes 22:25:24.8, serial 40
 
 `hoh-dns-diff compare starfleet.life --old 104.223.42.142 --new 51.255.43.81
 --names admin,skeleton,www,ns1,ns2,comms` = IDENTICAL (9 rows: SOA, apex NS,
@@ -332,7 +338,7 @@ and the six A records), both sides authoritative. The disposable
 the delete, is NODATA-with-SOA at serial 40 on all three.
 
 The primary now traces both peers, which the 2026-08-29 run could not:
-`dns.notify_sent` to `ovh` AND `sites` and `dns.axfr_served` for
+`dns.notify_sent` to both peers and `dns.axfr_served` for
 `xfer-ovh-starfleet` AND `xfer-sites-starfleet`, outcome `noerror`/`ok`, one per
 serial. The zone row action "Check health" reports `Delegation: matches. 2
 secondaries probed, 0 behind.` and the Secondaries tab shows both peers
@@ -341,3 +347,35 @@ stamps filled in.
 
 Note this box is NOT delegated for `starfleet.life`: the registrar still points
 at nssl/nssl2.mooo.com. It is a warm replica, not yet a public answer.
+
+## Named `robbedoes`, 2026-08-30
+
+The provisional `sites` is gone. Servers are named after Franco-Belgian comic
+heroes in Dutch (`docs/deploy-native.md`, "Naming"). Renamed in one wave, in
+this order, because the announced federation name is what a receiver matches
+its peer row by:
+
+1. `dns.federation_name` = `robbedoes` on this box (was `sites`), settings
+   editor.
+2. The peer rows naming this box, on the same day: starfleet peer id 2
+   `sites` -> `robbedoes`, kuifje peer id 2 `sites` -> `robbedoes`. This box's
+   own `ovh` row (peer id 1) became `kuifje`.
+3. OS hostname and the zenit-dev deploy target, both already `robbedoes`.
+
+Nothing else on any row moved: transfer host/port, TSIG key name, algorithm,
+base URL and API key are untouched, and a pure rename does NOT clear the stored
+TSIG secret (blank means keep; only "Clear stored value" clears it -- the known
+clearing trap is the peer TYPE change, not the name). The TSIG key names keep
+their old spelling (`xfer-sites-starfleet`, `xfer-sites-ovh`) on purpose: a key
+name is wire identity and renaming one would need both sides rekeyed for no
+gain. The starfleet API key labelled `sites dns federation` also keeps its
+label -- the API keys page offers only Revoke, never an edit, and the key must
+not be re-minted for a cosmetic label.
+
+Proven end to end right after: a disposable
+`visual-qa-20260830-rename.starfleet.life TXT` added and then deleted on
+starfleet moved the serial 40 -> 41 -> 42; all three boxes answered each serial
+within seconds, starfleet journaled `dns.notify_sent` naming `kuifje` AND
+`robbedoes` (`noerror`), **Check health** reported `Delegation: matches. 2
+secondaries probed, 0 behind.`, and the Secondaries tab showed both peers
+`Current`. No service was restarted.
