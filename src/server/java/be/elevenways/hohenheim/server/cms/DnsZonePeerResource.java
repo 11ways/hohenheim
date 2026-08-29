@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.server.dns.DnsNotifier;
+import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -142,9 +143,10 @@ public final class DnsZonePeerResource extends RowResource {
                                       @NonNull AccessContext accessContext) {
         validate(coerced);
         Object id = super.persistRow(coerced, accessContext);
-        // Prompt the freshly linked secondary to pull immediately.
+        // Prompt the freshly linked secondary to pull immediately, announcing the serial
+        // the serving view already publishes (no bump happened here).
         if (coerced.get("zone_id") instanceof Integer zoneId) {
-            DnsNotifier.INSTANCE.notifyZonePeers(zoneId);
+            DnsNotifier.INSTANCE.notifyZonePeers(zoneId, DnsZoneStore.INSTANCE.publishedSerial(zoneId));
         }
         return id;
     }

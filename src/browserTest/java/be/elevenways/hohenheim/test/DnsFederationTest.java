@@ -153,7 +153,8 @@ class DnsFederationTest {
             int peerId = transferPeer("notify-peer", "127.0.0.1", notifyPort, KEY_NAME, KEY_SECRET);
             linkZonePeer(zoneId, peerId);
 
-            new DnsNotifier().notifyZonePeersBlocking(zoneId);
+            new DnsNotifier().notifyZonePeersBlocking(zoneId,
+                DnsZoneStore.INSTANCE.publishedSerial(zoneId));
 
             byte[] buffer = new byte[512];
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);

@@ -41,14 +41,18 @@ import org.xbill.DNS.SOARecord;
 import org.xbill.DNS.TSIG;
 import org.xbill.DNS.ZoneTransferIn;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static be.elevenways.hohenheim.test.DnsFixtures.createZone;
 import static be.elevenways.hohenheim.test.DnsFixtures.linkZonePeer;
@@ -202,9 +206,11 @@ class DnsFederationHealthTest {
 
             // 7. And a NOTIFY it sends: the acked peer records the ack's rcode, the dead
             //    one records the timeout, each on its own link.
-            new DnsNotifier().notifyZonePeersBlocking(zoneId);
+            new DnsNotifier().notifyZonePeersBlocking(zoneId, bumped);
             link = link(linkId);
             assertThat(link.get(DnsZonePeerModel.LAST_NOTIFY_AT)).as("step 7: NOTIFY stamped").isNotNull();
+            assertThat(link.get(DnsZonePeerModel.LAST_NOTIFY_SERIAL))
+                .as("step 7: with the serial it announced").isEqualTo((int) bumped);
             assertThat(link.get(DnsZonePeerModel.LAST_NOTIFY_OUTCOME))
                 .as("step 7: the fake secondary acks").isEqualTo("noerror");
             assertThat(link(deadLinkId).get(DnsZonePeerModel.LAST_NOTIFY_OUTCOME))
@@ -216,6 +222,80 @@ class DnsFederationHealthTest {
                 NotificationChannelModel.ID.eq(channel.get(NotificationChannelModel.ID))).delete();
             Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ZONE_ID.eq(zoneId)).delete();
         }
+    }
+
+    /**
+     * A CMS-shaped edit: the serial a NOTIFY announces is the one the serving view just
+     * published, never a re-read the announcing thread cannot see committed yet.
+     */
+    @Test
+    void notifyAnnouncesTheSerialThatWasJustPublished() throws Exception {
+        FakeNameserver secondary = FakeNameserver.serving(ORIGIN,
+            DnsZoneStore.INSTANCE.getZone(ORIGIN).getSerial());
+        int peerId = transferPeer("notify-serial-peer", "127.0.0.1", secondary.port());
+        int linkId = linkZonePeer(zoneId, peerId);
+        AtomicLong announced = new AtomicLong(-1);
+        try {
+            // 1. The production wiring: the store hands the listener the published serial
+            //    after the commit, and the NOTIFY leaves on ANOTHER thread, which holds
+            //    none of the writer's transaction (JobRunner.fireAndForget in ServerMain).
+            DnsZoneStore.INSTANCE.setOnZoneChanged((id, serial) -> {
+                announced.set(serial);
+                Thread sender = new Thread(() -> new DnsNotifier().notifyZonePeersBlocking(id, serial));
+                sender.start();
+                try {
+                    sender.join();
+                }
+                catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+
+            // 2. The record write and the serial bump run inside ONE thread-bound
+            //    transaction, exactly like a zenit-cms resource mutation.
+            String journal = capturedStdout(() ->
+                Models.get(DnsZoneModel.class).getResolvedDatasource().withTransaction(tx -> {
+                    record(zoneId, "notify-serial", DnsRecordModel.TYPE_TXT, "hello");
+                    DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
+                }));
+
+            // 3. Announced, journalled and stamped: all three are the serial now served,
+            //    which is the one the secondary will AXFR.
+            long published = DnsZoneStore.INSTANCE.getZone(ORIGIN).getSerial();
+            assertThat(announced.get())
+                .as("step 3: the listener is told the serial that was just published")
+                .isEqualTo(published);
+            assertThat(journal)
+                .as("step 3: the journal event carries the published serial")
+                .contains("dns.notify_sent")
+                .contains("\"serial\":" + published);
+            assertThat(link(linkId).get(DnsZonePeerModel.LAST_NOTIFY_SERIAL))
+                .as("step 3: and so does the link stamp")
+                .isEqualTo((int) published);
+        }
+        finally {
+            DnsZoneStore.INSTANCE.setOnZoneChanged(null);
+            secondary.stop();
+            Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ZONE_ID.eq(zoneId)).delete();
+            Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ZONE_ID.eq(zoneId))
+                .and(DnsRecordModel.NAME.eq("notify-serial")).delete();
+            DnsZoneStore.INSTANCE.reload();
+        }
+    }
+
+    /** @return everything the block printed to stdout, which is where slog events land */
+    private static String capturedStdout(Runnable block) {
+        PrintStream original = System.out;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        try {
+            block.run();
+        }
+        finally {
+            System.out.flush();
+            System.setOut(original);
+        }
+        return captured.toString(StandardCharsets.UTF_8);
     }
 
     /**
