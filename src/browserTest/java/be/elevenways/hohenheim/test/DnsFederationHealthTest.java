@@ -50,6 +50,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.test.DnsFixtures.createZone;
+import static be.elevenways.hohenheim.test.DnsFixtures.linkZonePeer;
+import static be.elevenways.hohenheim.test.DnsFixtures.record;
+import static be.elevenways.hohenheim.test.DnsFixtures.transferPeer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -117,7 +121,7 @@ class DnsFederationHealthTest {
         Row channel = subscribe("stale-watch", NotificationEvents.DNS_SECONDARY_STALE);
         Models.get(CommsDeliveryModel.class).find().delete();
         try {
-            int peerId = createPeer("fresh-peer", "127.0.0.1", secondary.port());
+            int peerId = transferPeer("fresh-peer", "127.0.0.1", secondary.port());
             int linkId = linkZonePeer(zoneId, peerId);
             Row zone = zone();
 
@@ -170,7 +174,7 @@ class DnsFederationHealthTest {
             assertThat(staleItems()).as("step 4: no item").isEmpty();
 
             // 5. A peer that answers nothing at all records the error and starts a lag.
-            int deadPeerId = createPeer("dead-peer", "127.0.0.1", 1);
+            int deadPeerId = transferPeer("dead-peer", "127.0.0.1", 1);
             int deadLinkId = linkZonePeer(zoneId, deadPeerId);
             DnsSecondaryFreshness.probeZone(zone());
             Row dead = link(deadLinkId);
@@ -452,47 +456,4 @@ class DnsFederationHealthTest {
         return row;
     }
 
-    private static int createZone(String origin, String role, Integer primaryPeerId) {
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, origin);
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + origin);
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@" + origin);
-        zone.set(DnsZoneModel.ROLE, role);
-        zone.set(DnsZoneModel.PRIMARY_PEER_ID, primaryPeerId);
-        zone.set(DnsZoneModel.ENABLED, true);
-        zones.save(zone);
-        return zone.get(DnsZoneModel.ID);
-    }
-
-    private static void record(int zone, String name, String type, String value) {
-        DnsRecordModel records = Models.get(DnsRecordModel.class);
-        Row row = records.createEmptyRow();
-        row.set(DnsRecordModel.ZONE_ID, zone);
-        row.set(DnsRecordModel.NAME, name);
-        row.set(DnsRecordModel.TYPE, type);
-        row.set(DnsRecordModel.VALUE, value);
-        row.set(DnsRecordModel.ENABLED, true);
-        records.save(row);
-    }
-
-    private static int createPeer(String name, String host, int port) {
-        DnsPeerModel peers = Models.get(DnsPeerModel.class);
-        Row peer = peers.createEmptyRow();
-        peer.set(DnsPeerModel.NAME, name);
-        peer.set(DnsPeerModel.TRANSFER_HOST, host);
-        peer.set(DnsPeerModel.TRANSFER_PORT, port);
-        peer.set(DnsPeerModel.ENABLED, true);
-        peers.save(peer);
-        return peer.get(DnsPeerModel.ID);
-    }
-
-    private static int linkZonePeer(int zone, int peer) {
-        DnsZonePeerModel links = Models.get(DnsZonePeerModel.class);
-        Row link = links.createEmptyRow();
-        link.set(DnsZonePeerModel.ZONE_ID, zone);
-        link.set(DnsZonePeerModel.PEER_ID, peer);
-        links.save(link);
-        return link.get(DnsZonePeerModel.ID);
-    }
 }

@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -26,6 +25,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.test.DnsFixtures.createZone;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -48,7 +48,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
     @Test
     void aSoftDeletedSitesDyndnsRecordStopsBeingServedAndItsTokenStopsWorking() {
         String origin = "release-dyn.example";
-        int zoneId = zone(origin);
+        int zoneId = createZone(origin);
         int siteId = site("release-owner", "home." + origin);
         Row record = dynamicRecord(zoneId, "home", "10.0.0.1");
         int recordId = record.get(DnsRecordModel.ID);
@@ -91,7 +91,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
     @Test
     void onlyTheReleasedNameIsDisabledAndAStillCoveredNameSurvives() {
         String origin = "release-scope.example";
-        int zoneId = zone(origin);
+        int zoneId = createZone(origin);
         int siteId = site("release-scope-owner", "a." + origin);
         // A second domain row on the SAME live site covers "shared"; releasing the "a" row
         // must not disable "shared" because that row still covers it.
@@ -121,7 +121,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
     @Test
     void renamingADomainRowReleasesTheDepartingName() {
         String origin = "release-rename.example";
-        int zoneId = zone(origin);
+        int zoneId = createZone(origin);
         int siteId = site("release-rename-owner", "old." + origin);
         Row oldRecord = enabledRecord(zoneId, "old", "10.0.0.1");
         Row keepRecord = enabledRecord(zoneId, "keep", "10.0.0.9");
@@ -147,7 +147,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
     @Test
     void releasingANameRevokesItsRecordGrants() {
         String origin = "release-grant.example";
-        int zoneId = zone(origin);
+        int zoneId = createZone(origin);
         int siteId = site("release-grant-owner", "g." + origin);
         Row record = enabledRecord(zoneId, "g", "10.0.0.1");
         int recordId = record.get(DnsRecordModel.ID);
@@ -179,7 +179,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
     @Test
     void hostnameAuthorityAloneCannotArmADyndnsToken() {
         String origin = "release-arm.example";
-        int zoneId = zone(origin);
+        int zoneId = createZone(origin);
         int siteId = site("release-arm-owner", "arm." + origin);
         Row record = enabledRecord(zoneId, "arm", "10.0.0.1");
         int recordId = record.get(DnsRecordModel.ID);
@@ -229,17 +229,6 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
     }
 
     // --- helpers ----------------------------------------------------------------------
-
-    private static int zone(String origin) {
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, origin);
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + origin);
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@" + origin);
-        zone.set(DnsZoneModel.ENABLED, true);
-        zones.save(zone);
-        return zone.get(DnsZoneModel.ID);
-    }
 
     private static int site(String slug, String hostname) {
         Model siteModel = Models.get(SiteModel.class);

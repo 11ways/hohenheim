@@ -35,6 +35,8 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.util.List;
 
+import static be.elevenways.hohenheim.test.DnsFixtures.createZone;
+import static be.elevenways.hohenheim.test.DnsFixtures.record;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -87,30 +89,6 @@ class DnsServerTest {
         if (server != null) {
             server.stop();
         }
-    }
-
-    private static int createZone(String origin) {
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, origin);
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + origin);
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@" + origin);
-        zone.set(DnsZoneModel.ENABLED, true);
-        zones.save(zone);
-        return zone.get(DnsZoneModel.ID);
-    }
-
-    private static void record(int zone, String name, String type, String value,
-                               Integer priority, Integer weight, Integer port) {
-        DnsRecordModel records = Models.get(DnsRecordModel.class);
-        Row row = records.createEmptyRow();
-        row.set(DnsRecordModel.ZONE_ID, zone);
-        row.set(DnsRecordModel.NAME, name);
-        row.set(DnsRecordModel.TYPE, type);
-        row.set(DnsRecordModel.VALUE, value);
-        row.set(DnsRecordModel.DATA, DnsRecordModel.dataFor(type, priority, weight, port));
-        row.set(DnsRecordModel.ENABLED, true);
-        records.save(row);
     }
 
     private static Message query(String name, int type) throws Exception {

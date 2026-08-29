@@ -35,6 +35,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import static be.elevenways.hohenheim.test.DnsFixtures.apiPeer;
+import static be.elevenways.hohenheim.test.DnsFixtures.createZone;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -161,7 +163,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(Models.get(DnsRecordModel.class).findById(recordId)).isNull();
 
         // Secondary zones are not writable through the API, unknown zones 404.
-        int peerId = createPeer("api-refusal-peer", null);
+        int peerId = apiPeer("api-refusal-peer", null);
         createZone("replica.example", DnsZoneModel.ROLE_SECONDARY, peerId);
 
         var refused = apiPost("/api/dns/zones/replica.example/records", "name=www&type=A&value=192.0.2.1");
@@ -181,7 +183,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
     @Order(2)
     void centralEditThroughTheOwningPeerJourney() throws Exception {
         stub = new PeerStub();
-        int centralPeerId = createPeer("central-peer", stub.baseUrl());
+        int centralPeerId = apiPeer("central-peer", stub.baseUrl());
         int zoneId = createZone("central.example", DnsZoneModel.ROLE_SECONDARY, centralPeerId);
 
         stub.body = "{\"zone\":\"central.example\",\"serial\":9,\"records\":["
@@ -320,7 +322,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
     @Order(3)
     void remoteRecordDeleteConfirmsThroughTheShellDialog() throws Exception {
         stub = new PeerStub();
-        int peerId = createPeer("confirm-peer", stub.baseUrl());
+        int peerId = apiPeer("confirm-peer", stub.baseUrl());
         int zoneId = createZone("confirm.example", DnsZoneModel.ROLE_SECONDARY, peerId);
 
         stub.body = "{\"zone\":\"confirm.example\",\"serial\":3,\"records\":["
@@ -364,7 +366,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
             stub.close();
         }
         stub = new PeerStub();
-        int peerId = createPeer("negotiate-peer", stub.baseUrl());
+        int peerId = apiPeer("negotiate-peer", stub.baseUrl());
         DnsPeerModel peers = Models.get(DnsPeerModel.class);
 
         // 1. The key name is derived from both instance names, so the peer can be told
@@ -465,34 +467,6 @@ class DnsCentralEditTest extends HohenheimTestBase {
             }
         }
         throw new IllegalStateException("no " + field + " in the negotiation body");
-    }
-
-    private static int createZone(String origin, String role, Integer primaryPeerId) {
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, origin);
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + origin);
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@" + origin);
-        zone.set(DnsZoneModel.ROLE, role);
-        zone.set(DnsZoneModel.PRIMARY_PEER_ID, primaryPeerId);
-        zone.set(DnsZoneModel.ENABLED, true);
-        zones.save(zone);
-        return zone.get(DnsZoneModel.ID);
-    }
-
-    private static int createPeer(String name, String baseUrl) {
-        DnsPeerModel peers = Models.get(DnsPeerModel.class);
-        Row peer = peers.createEmptyRow();
-        peer.set(DnsPeerModel.NAME, name);
-        // A peer with admin credentials IS a Hohenheim peer; the type is what
-        // DnsPeerApi.forPeer keys on, so a credentialed peer must declare it.
-        peer.set(DnsPeerModel.PEER_TYPE, baseUrl != null
-            ? DnsPeerModel.TYPE_HOHENHEIM : DnsPeerModel.TYPE_NAMESERVER);
-        peer.set(DnsPeerModel.BASE_URL, baseUrl);
-        peer.set(DnsPeerModel.API_KEY, baseUrl != null ? "test-peer-key" : null);
-        peer.set(DnsPeerModel.ENABLED, true);
-        peers.save(peer);
-        return peer.get(DnsPeerModel.ID);
     }
 
     private static long zoneSerial(int zoneId) {

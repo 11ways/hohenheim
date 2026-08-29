@@ -22,13 +22,13 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URLEncoder;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import static be.elevenways.hohenheim.test.ApiSupport.codeOf;
+import static be.elevenways.hohenheim.test.ApiSupport.form;
+import static be.elevenways.hohenheim.test.ApiSupport.idOf;
+import static be.elevenways.hohenheim.test.DnsFixtures.acmeRow;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -76,30 +76,6 @@ class DnsZoneApiTest extends HohenheimTestBase {
 
     // -- fixtures --------------------------------------------------------------
 
-    private static String form(String... pairs) {
-        StringBuilder body = new StringBuilder();
-        for (int i = 0; i < pairs.length; i += 2) {
-            if (body.length() > 0) {
-                body.append('&');
-            }
-            body.append(URLEncoder.encode(pairs[i], StandardCharsets.UTF_8)).append('=')
-                .append(URLEncoder.encode(pairs[i + 1], StandardCharsets.UTF_8));
-        }
-        return body.toString();
-    }
-
-    private static int idOf(String json) {
-        Matcher matcher = Pattern.compile("\"id\"\\s*:\\s*(\\d+)").matcher(json);
-        assertThat(matcher.find()).as("the response carries an id: " + json).isTrue();
-        return Integer.parseInt(matcher.group(1));
-    }
-
-    private static String codeOf(String json) {
-        Matcher matcher = Pattern.compile("\"code\"\\s*:\\s*\"([^\"]+)\"").matcher(json);
-        assertThat(matcher.find()).as("the refusal carries a code: " + json).isTrue();
-        return matcher.group(1);
-    }
-
     private static List<String> apexNs(int zone) {
         return Models.get(DnsRecordModel.class).find()
             .where(DnsRecordModel.ZONE_ID.eq(zone))
@@ -122,19 +98,6 @@ class DnsZoneApiTest extends HohenheimTestBase {
 
     private static Row zone(int zone) {
         return Models.get(DnsZoneModel.class).findById(zone);
-    }
-
-    private static int acmeRow(int zone) {
-        DnsRecordModel records = Models.get(DnsRecordModel.class);
-        Row row = records.createEmptyRow();
-        row.set(DnsRecordModel.ZONE_ID, zone);
-        row.set(DnsRecordModel.NAME, "_acme-challenge");
-        row.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_TXT);
-        row.set(DnsRecordModel.VALUE, "acme-token");
-        row.set(DnsRecordModel.ENABLED, true);
-        row.set(DnsRecordModel.MANAGED_BY, DnsRecordModel.MANAGED_BY_ACME);
-        records.save(row);
-        return row.get(DnsRecordModel.ID);
     }
 
     /** A provider export the way afraid.org hands it out: its own SOA and NS set. */
