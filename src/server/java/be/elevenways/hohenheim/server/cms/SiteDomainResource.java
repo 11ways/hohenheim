@@ -433,19 +433,24 @@ public class SiteDomainResource extends RowResource {
                     || HohenheimAccess.sameOwner(siteId, candidateSiteId)) {
                     continue;
                 }
-                String siteName = candidateSite != null
-                    ? String.valueOf(candidateSite.get(SiteModel.NAME)) : "#" + candidateSiteId;
+                // AIDEV-NOTE: the holder's pattern and name reach only a reader who may
+                // manage the holder (ClaimRefusals); a tenant sees the neutral sentence,
+                // identical to the identical-route case below, so probing this form can
+                // never enumerate the installation's hostnames or site names.
                 throw Violations.ofField("hostname", hostname,
-                    CmsSupport.violationText("route_overlaps_other_site")
-                        .withArg("hostname", String.valueOf(candidateHostname))
-                        .withArg("site", siteName));
+                    ClaimRefusals.heldBy(candidateSiteId, candidateSite,
+                        holder -> CmsSupport.violationText("route_overlaps_other_site")
+                            .withArg("hostname", String.valueOf(candidateHostname))
+                            .withArg("site", holder),
+                        CmsSupport.violationText(ClaimRefusals.HOSTNAME_UNAVAILABLE)));
             }
             if (!sameSite) {
-                String siteName = candidateSite != null
-                    ? String.valueOf(candidateSite.get(SiteModel.NAME)) : "#" + candidateSiteId;
                 throw Violations.ofField(path == null ? "hostname" : "path",
                     path == null ? hostname : path,
-                    CmsSupport.violationText("route_taken_other_site").withArg("site", siteName));
+                    ClaimRefusals.heldBy(candidateSiteId, candidateSite,
+                        holder -> CmsSupport.violationText("route_taken_other_site")
+                            .withArg("site", holder),
+                        CmsSupport.violationText(ClaimRefusals.HOSTNAME_UNAVAILABLE)));
             }
             if (path == null) {
                 throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_taken"));
@@ -542,12 +547,16 @@ public class SiteDomainResource extends RowResource {
                     || HohenheimAccess.sameOwner(siteId, candidateSiteId))) {
                     continue;
                 }
+                String ownName = String.valueOf(own.get(SiteDomainModel.HOSTNAME));
                 throw Violations.ofField("enabled", true,
-                    CmsSupport.violationText(
-                            identical ? "enable_route_conflict" : "enable_route_overlap")
-                        .withArg("hostname", String.valueOf(own.get(SiteDomainModel.HOSTNAME)))
-                        .withArg("pattern", String.valueOf(candidateHostname))
-                        .withArg("site", String.valueOf(candidateSite.get(SiteModel.NAME))));
+                    ClaimRefusals.heldBy(candidateSiteId, candidateSite,
+                        site -> CmsSupport.violationText(
+                                identical ? "enable_route_conflict" : "enable_route_overlap")
+                            .withArg("hostname", ownName)
+                            .withArg("pattern", String.valueOf(candidateHostname))
+                            .withArg("site", site),
+                        CmsSupport.violationText(ClaimRefusals.ENABLE_HOSTNAME_UNAVAILABLE)
+                            .withArg("hostname", ownName)));
             }
 
             // The quarantine tier of the ENABLE seam. Omitting it here would leave the

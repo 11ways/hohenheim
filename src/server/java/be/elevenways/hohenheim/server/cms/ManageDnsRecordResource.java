@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -19,6 +20,7 @@ import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -44,8 +46,26 @@ import java.util.Map;
  */
 public final class ManageDnsRecordResource extends DnsRecordResource {
 
+    /**
+     * The delegated form's name entry: the SAME column ({@code name}) with the help this
+     * surface actually implements.
+     *
+     * AIDEV-NOTE: help text lives on the Field (FieldAttributes.HELP), so the model's
+     * {@code record_name} help -- "relative to the zone: @, www" -- is the admin form's
+     * truth and a lie here, where the zone is RESOLVED from an absolute name and a relative
+     * one is refused ("No hosted zone contains that name"). A form-only field variant is
+     * the shape InstanceVolumeResource.QUOTA_MB and ServerResource.INCUS_TRUST_TOKEN already
+     * use; it shares the column name, so coercion, valuesFromRow and the inline cell lane
+     * are unchanged.
+     */
+    private static final StringField ABSOLUTE_NAME = StringField.builder()
+        .name(DnsRecordModel.NAME.getName())
+        .label(HohenheimFormCopy.label("record_name"))
+        .help(HohenheimFormCopy.help("manage_record_name"))
+        .build();
+
     private final FormSpec manageFormSpec = FormSpec.builder()
-        .add(DnsRecordModel.NAME)
+        .add(ABSOLUTE_NAME)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(DnsRecordModel.TYPE))
         .add(DnsRecordModel.VALUE)
         .add(Nested.of(DnsRecordModel.DATA).schemaFrom("type").build())

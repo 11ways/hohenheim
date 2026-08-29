@@ -24,8 +24,18 @@ import java.util.Map;
  * AIDEV-NOTE: extracted from {@code CertificateAuthority.authorize}, which still owns the
  * certificate-specific half (Let's Encrypt exclusion, TLS passthrough). The walk itself --
  * live covering domain rows, then MANAGE on every one of their sites -- is the same question
- * a tenant DNS write asks, and two copies of it would be two answers. The "all of them, not
- * one" rule is deliberate: a name two sites both claim is a name two owners both answer for.
+ * a tenant DNS write asks, and two copies of it would be two answers.
+ *
+ * AIDEV-NOTE: authority MIRRORS ROUTING. Only the MOST SPECIFIC covering rows decide a name
+ * (exact beats wildcard, a wildcard beats a broader wildcard -- {@link Snapshot#deciding}),
+ * exactly the order {@code SiteDispatcher}/{@code RouteResolver} consults them in. Until
+ * 2026-08-29 EVERY covering row had to be managed, and the moment an operator added a
+ * {@code *.example.com} catch-all site no tenant could author DNS or order a certificate for
+ * its OWN exact hostname any more ("a name two owners answer for"), while the proxy was
+ * routing that name to the tenant's site all along. Within one tier the rule is still "all
+ * of them": two rows of equal specificity are one contested name, and a name only a FOREIGN
+ * wildcard covers is the wildcard owner's namespace, so a tenant adding a new hostname there
+ * is refused (the same-tier check) rather than handed the name.
  *
  * @author Jelle De Loecker
  */
@@ -119,12 +129,56 @@ public final class HostnameAuthority {
             }
             return covering;
         }
+
+        /**
+         * The covering rows that DECIDE the name: the most specific tier among
+         * {@link #covering}, which is the tier the dispatcher would route the name to.
+         *
+         * AIDEV-NOTE: specificity is the routing order and nothing finer -- an exact row
+         * beats every wildcard, and among wildcards the one spelling MORE labels wins
+         * ({@code *.a.example.com} over {@code *.example.com}). Two wildcards with the same
+         * label count (an in-label glob beside a leading one) tie and decide TOGETHER, which
+         * fails closed for a tenant. Regex rows never cover (HostnamePatterns.covers), so
+         * they never decide either.
+         *
+         * @return the deciding rows, empty when nothing covers the name
+         */
+        public @NonNull List<Row> deciding(@Nullable String hostname) {
+            List<Row> deciding = new ArrayList<>();
+            int best = Integer.MIN_VALUE;
+            for (Row domain : this.covering(hostname)) {
+                int specificity = specificityOf(domain);
+                if (specificity > best) {
+                    deciding.clear();
+                    best = specificity;
+                }
+                if (specificity == best) {
+                    deciding.add(domain);
+                }
+            }
+            return deciding;
+        }
+
+        /** An exact row outranks every wildcard; a wildcard ranks by the labels it spells. */
+        private static int specificityOf(@NonNull Row domain) {
+            String matchType = domain.get(SiteDomainModel.MATCH_TYPE);
+            String pattern = SiteDomainModel.canonicalHostname(
+                domain.get(SiteDomainModel.HOSTNAME), matchType);
+            if (pattern == null) {
+                return Integer.MIN_VALUE;
+            }
+            if (SiteDomainModel.MATCH_EXACT.equals(HostnamePatterns.effectiveKind(pattern, matchType))) {
+                return Integer.MAX_VALUE;
+            }
+            return pattern.split("\\.", -1).length;
+        }
     }
 
     /**
      * Whether the context answers for a hostname: at least one live domain row must cover it
      * (this installation has to serve the name at all) and the context must hold
-     * {@link HohenheimAccess#MANAGE} on EVERY covering row's site.
+     * {@link HohenheimAccess#MANAGE} on the site of EVERY row that {@link Snapshot#deciding
+     * decides} it -- the most specific covering tier, as routing resolves it.
      *
      * @return false for an unserved name, so it fails closed on absence
      */
@@ -138,11 +192,11 @@ public final class HostnameAuthority {
         if (HohenheimAccess.isAdmin(ctx)) {
             return true;
         }
-        List<Row> covering = snapshot.covering(hostname);
-        if (covering.isEmpty()) {
+        List<Row> deciding = snapshot.deciding(hostname);
+        if (deciding.isEmpty()) {
             return false;
         }
-        for (Row domain : covering) {
+        for (Row domain : deciding) {
             Integer siteId = domain.get(SiteDomainModel.SITE_ID);
             if (siteId == null || !HohenheimAccess.canManageSite(ctx, siteId)) {
                 return false;

@@ -25,6 +25,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -93,7 +94,7 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             }
             anyRowActions |= canEditRow || canRemoveRow;
             if (tlsPassthrough) entry.put("certStatus", "");
-            else putCertCoverage(entry, domain);
+            else putCertCoverage(entry, domain, panel, accessContext);
             domains.add(entry);
         }
 
@@ -144,8 +145,16 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
      * TLS coverage for exact-match hostnames: which certificate (if any)
      * covers the domain, and in what state. Wildcard/regex match entries have
      * no single hostname to check, so they get no coverage verdict.
+     *
+     * AIDEV-NOTE: the certificate's NAME and link are put only for a reader the walk lets
+     * OPEN the certificate ({@code view}, the same question the certificate resource's
+     * scope asks). Everyone else sees the coverage state and the expiry: the covering
+     * certificate is usually the operator's wildcard, named after the operator's site,
+     * and this column used to print that name to a tenant for whom /manage/certificates
+     * is empty and the certificate's own page a 404.
      */
-    private static void putCertCoverage(Map<String, Object> entry, Row domain) {
+    private static void putCertCoverage(Map<String, Object> entry, Row domain,
+                                        String panel, AccessContext accessContext) {
         if (!SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))) {
             entry.put("certStatus", "");
             return;
@@ -156,10 +165,18 @@ public final class SiteDomainsPage implements RecordScopedPage<Row> {
             return;
         }
         entry.put("certStatus", String.valueOf(cert.get(CertificateModel.STATUS)));
-        entry.put("certName", String.valueOf(cert.get(CertificateModel.NICE_NAME)));
-        // The certificate resource lives only on the admin panel: the literal slug is the
-        // truth here, not an unconverted hardcode.
-        entry.put("certTarget", CmsRoutes.detail("admin", "certificates",
-            cert.get(CertificateModel.ID)));
+        Instant expiresOn = cert.get(CertificateModel.EXPIRES_ON);
+        entry.put("certHasExpiry", expiresOn != null);
+        entry.put("certExpiresIso", expiresOn != null ? expiresOn.toString() : "");
+        Integer certId = cert.get(CertificateModel.ID);
+        boolean canOpen = HohenheimAccess.reachesRecord(accessContext, CertificateModel.MODEL_ID,
+            certId, HohenheimAccess.VIEW);
+        entry.put("canOpenCert", canOpen);
+        if (canOpen) {
+            entry.put("certName", String.valueOf(cert.get(CertificateModel.NICE_NAME)));
+            // The panel this tab renders under carries a certificates peer on both faces
+            // (CertificateResource and its /manage projection share the slug).
+            entry.put("certTarget", CmsRoutes.detail(panel, "certificates", certId));
+        }
     }
 }

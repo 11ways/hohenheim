@@ -16,6 +16,8 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.dns.DnsNames;
@@ -151,39 +153,70 @@ public final class ManagePanel extends Panel {
         }
     }
 
+    /**
+     * AIDEV-NOTE: every tier's projection is gated on the SAME role its admin surface is
+     * gated on ({@link HohenheimPanel#addIf}, one home). Until 2026-08-29 this list carried
+     * no role predicate at all, so a proxy-only node answered /manage/instances and
+     * /manage/databases with empty lists and the overview offered "Your instances" -- pages
+     * the admin panel had (correctly) dropped since 767be086. A peer this method omits has
+     * no ROUTE either (peersBySlug), exactly like the admin panel.
+     */
     @Override
     public @NonNull List<PanelPeer> buildPeers() {
+        return declarePeers();
+    }
+
+    /**
+     * The peer declaration behind {@link #buildPeers}, callable without a panel instance:
+     * a Panel self-registers in its constructor, so a test that wants to see what THIS role
+     * set declares asks here rather than constructing a second /manage panel.
+     */
+    public static @NonNull List<PanelPeer> declarePeers() {
+        List<PanelPeer> peers = new ArrayList<>();
         // The dashboard FIRST: the panel-index rule redirects /manage to the first
         // accessible DashboardPanelPeer, so the landing is a real page (what needs
         // attention, then the principal's instances), never a contentless card grid.
-        return List.of(new ManageDashboard(),
-            new ManageSiteResource(), new ManageDomainResource(),
-            new ManageDnsRecordResource(), new ManageCertificateResource(),
-            // The instance tier's tenant projection. Every one of these is scoped by a
-            // walk-confirmed record capability, and the two schedule peers plus the
-            // from-template page are nav-hidden: they are reached THROUGH an instance
-            // (or a template) whose own scope already decided the principal may be here.
-            new ManageInstanceResource(), new ManageInstanceScheduleResource(),
-            new ManageInstanceScheduleStepResource(), new ManageInstanceDeviceResource(),
-            new ManageInstanceSnapshotResource(),
-            new ManageInstanceBackupResource(), new ManageInstanceTemplateResource(),
-            new InstanceFromTemplatePage(),
-            // The managed-database tier's tenant projection: allocate, read credentials
-            // (its own capability, its own tab), back up and destroy your OWN databases.
-            new ManageDatabaseResource(), new ManageInstanceDatabaseResource(),
-            // The project tier's tenant projection: which projects the principal is a
-            // MEMBER of, and who else is in them. Both read-only -- see
-            // ManageProjectResource for why a membership editor here could only refuse.
-            new ManageProjectResource(), new ManageProjectMemberResource(),
-            // Preview deployments of granted sites: view, create for a chosen ref,
-            // destroy. Scoped by the site's manage grant like domains are.
-            new ManagePreviewDeploymentResource(),
-            // The tenant's OWN forge installations: register one, test it, use it on the
-            // tenant's own sites. Shared operator providers are usable but never listed
-            // here -- see ManageGitProviderResource.
-            new ManageGitProviderResource(),
-            new ManageAccessListResource(), new ManageAccessRuleResource(),
-            new ManageProtectedPathResource());
+        peers.add(new ManageDashboard());
+        HohenheimPanel.addIf(peers, new ManageSiteResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, new ManageDomainResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, new ManageDnsRecordResource(), Role.DNS);
+        HohenheimPanel.addIf(peers, new ManageCertificateResource(), Role.PROXY);
+        // The instance tier's tenant projection. Every one of these is scoped by a
+        // walk-confirmed record capability, and the two schedule peers plus the
+        // from-template page are nav-hidden: they are reached THROUGH an instance
+        // (or a template) whose own scope already decided the principal may be here.
+        HohenheimPanel.addIf(peers, new ManageInstanceResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, new ManageInstanceScheduleResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, new ManageInstanceScheduleStepResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, new ManageInstanceDeviceResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, new ManageInstanceSnapshotResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, new ManageInstanceBackupResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, new ManageInstanceTemplateResource(), Role.INSTANCES);
+        HohenheimPanel.addIf(peers, new InstanceFromTemplatePage(), Role.INSTANCES);
+        // The managed-database tier's tenant projection: allocate, read credentials
+        // (its own capability, its own tab), back up and destroy your OWN databases.
+        HohenheimPanel.addIf(peers, new ManageDatabaseResource(), Role.DATABASES);
+        // Needs BOTH tiers to exist: it joins an instance to a managed database.
+        if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
+            peers.add(new ManageInstanceDatabaseResource());
+        }
+        // The project tier's tenant projection: which projects the principal is a
+        // MEMBER of, and who else is in them. Both read-only -- see
+        // ManageProjectResource for why a membership editor here could only refuse.
+        // Projects span every product tier, so they are not gated on any single role.
+        peers.add(new ManageProjectResource());
+        peers.add(new ManageProjectMemberResource());
+        // Preview deployments of granted sites: view, create for a chosen ref,
+        // destroy. Scoped by the site's manage grant like domains are.
+        HohenheimPanel.addIf(peers, new ManagePreviewDeploymentResource(), Role.PROXY);
+        // The tenant's OWN forge installations: register one, test it, use it on the
+        // tenant's own sites. Shared operator providers are usable but never listed
+        // here -- see ManageGitProviderResource.
+        HohenheimPanel.addIf(peers, new ManageGitProviderResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, new ManageAccessListResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, new ManageAccessRuleResource(), Role.PROXY);
+        HohenheimPanel.addIf(peers, new ManageProtectedPathResource(), Role.PROXY);
+        return peers;
     }
 
     /**
@@ -488,8 +521,10 @@ public final class ManagePanel extends Panel {
                     || !SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))) {
                 continue;
             }
-            // The SAME predicate the write side uses: a name a second, unmanaged site also
-            // covers is a name two owners answer for, and neither of them alone owns it.
+            // The SAME predicate the write side uses: the most specific covering rows
+            // decide the name, so an exact row of a managed site lists its names even
+            // under an operator's catch-all wildcard, while a name an equally specific
+            // foreign row also covers is a name two owners answer for and lists nothing.
             if (HostnameAuthority.canManage(snapshot, ctx, hostname)) {
                 hostnames.add(BlastString.lower(hostname.trim()));
             }

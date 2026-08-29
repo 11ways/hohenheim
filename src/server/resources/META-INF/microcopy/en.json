@@ -11283,5 +11283,33 @@
   "308": {
     "text": "308 Permanent Redirect",
     "scope": "redirect_status"
+  },
+  "hostname_unavailable": {
+    "text": "This hostname is not available on this installation",
+    "scope": "violations"
+  },
+  "enable_hostname_unavailable": {
+    "text": "Cannot enable this site: {$hostname} is not available on this installation",
+    "scope": "violations"
+  },
+  "covered": {
+    "text": "Covered",
+    "scope": "site_domains"
+  },
+  "not_covered": {
+    "text": "Not covered",
+    "scope": "site_domains"
+  },
+  "coverage_pending": {
+    "text": "Certificate pending",
+    "scope": "site_domains"
+  },
+  "expires": {
+    "text": "expires",
+    "scope": "site_domains"
+  },
+  "manage_record_name": {
+    "text": "The full name, for example www.example.com; it must sit under a hostname of a site you manage",
+    "scope": "help"
   }
 }

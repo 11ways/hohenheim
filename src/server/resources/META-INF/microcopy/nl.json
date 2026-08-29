@@ -11283,5 +11283,33 @@
   "308": {
     "text": "308 Permanente redirect",
     "scope": "redirect_status"
+  },
+  "hostname_unavailable": {
+    "text": "Deze hostnaam is niet beschikbaar op deze installatie",
+    "scope": "violations"
+  },
+  "enable_hostname_unavailable": {
+    "text": "Kan deze site niet inschakelen: {$hostname} is niet beschikbaar op deze installatie",
+    "scope": "violations"
+  },
+  "covered": {
+    "text": "Gedekt",
+    "scope": "site_domains"
+  },
+  "not_covered": {
+    "text": "Niet gedekt",
+    "scope": "site_domains"
+  },
+  "coverage_pending": {
+    "text": "Certificaat in behandeling",
+    "scope": "site_domains"
+  },
+  "expires": {
+    "text": "verloopt",
+    "scope": "site_domains"
+  },
+  "manage_record_name": {
+    "text": "De volledige naam, bijvoorbeeld www.example.com; ze moet onder een hostnaam van een site vallen die je beheert",
+    "scope": "help"
   }
 }

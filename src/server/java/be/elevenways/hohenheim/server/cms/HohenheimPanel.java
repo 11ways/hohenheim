@@ -220,8 +220,12 @@ public final class HohenheimPanel extends Panel {
         return peers;
     }
 
-    /** Adds the peer only when at least one of its owning roles is enabled. */
-    private static void addIf(List<PanelPeer> peers, PanelPeer peer, Role... roles) {
+    /**
+     * Adds the peer only when at least one of its owning roles is enabled -- THE role gate
+     * for a panel peer, shared with {@link ManagePanel} so the delegated projection of a
+     * tier can never outlive the tier's own admin surface.
+     */
+    static void addIf(List<PanelPeer> peers, PanelPeer peer, Role... roles) {
         if (HohenheimRoles.anyEnabled(roles)) {
             peers.add(peer);
         }

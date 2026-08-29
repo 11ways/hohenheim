@@ -33,9 +33,12 @@ import java.util.Map;
  * delete). This half binds EVERYONE, admins included; there is no legitimate reason to hold
  * a certificate for a name this installation cannot serve.
  *
- * AUTHORITY -- the caller must hold {@link HohenheimAccess#MANAGE} on the site of EVERY
- * covering row, with the installation-wide admin permission as the bypass. All of them, not
- * one: a name two sites both claim is a name two owners both answer for.
+ * AUTHORITY -- the caller must hold {@link HohenheimAccess#MANAGE} on the site of every
+ * row that DECIDES the name ({@link HostnameAuthority.Snapshot#deciding}: the most specific
+ * covering tier, exactly as routing resolves it, so an operator's catch-all wildcard never
+ * outvotes a tenant's own exact row), with the installation-wide admin permission as the
+ * bypass. Within that tier it is all of them, not one: a name two rows of equal specificity
+ * claim is a name two owners both answer for.
  *
  * Coverage is {@link HostnamePatterns#covers}, never string equality and never
  * {@code intersect}: a tenant serving {@code a.example.com} asking for
@@ -189,8 +192,11 @@ public final class CertificateAuthority {
             if (covering.isEmpty()) {
                 throw new Refused(Refusal.NOT_SERVED, hostname);
             }
+            // The AUTHORITY half asks the deciding tier only -- the SAME rows a tenant DNS
+            // write is judged on, so the two lanes can never disagree about a name.
+            List<Row> deciding = snapshot.deciding(hostname);
             if (!admin) {
-                for (Row domain : covering) {
+                for (Row domain : deciding) {
                     Integer siteId = domain.get(SiteDomainModel.SITE_ID);
                     if (siteId == null || !requester.canManageSite(siteId)) {
                         throw new Refused(Refusal.NOT_MANAGED, hostname);
@@ -199,9 +205,10 @@ public final class CertificateAuthority {
             }
             // ANY covering row opting out is enough: the flag is a declaration that this
             // hostname must not appear on a Let's Encrypt certificate, and a wildcard row
-            // covering it cannot overrule the exact row that said so. A TLS-passthrough
-            // site is checked beside the flag rather than through it: the model hook forces
-            // the flag on WRITE, so only rows written since then carry it.
+            // covering it cannot overrule the exact row that said so -- which is why this
+            // half deliberately walks EVERY covering row, not just the deciding tier. A
+            // TLS-passthrough site is checked beside the flag rather than through it: the
+            // model hook forces the flag on WRITE, so only rows written since then carry it.
             for (Row domain : covering) {
                 Row site = snapshot.siteOf(domain);
                 if (Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT))
@@ -210,7 +217,9 @@ public final class CertificateAuthority {
                     throw new Refused(Refusal.EXCLUDED, hostname);
                 }
             }
-            declaring.put(hostname, covering.get(0).get(SiteDomainModel.ID));
+            // Attributed to the row that ROUTES the name, never to a broader wildcard that
+            // happens to be listed first.
+            declaring.put(hostname, deciding.get(0).get(SiteDomainModel.ID));
         }
 
         return declaring;

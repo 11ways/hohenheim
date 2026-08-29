@@ -205,19 +205,19 @@ public final class RouteClaims {
     }
 
     /**
-     * The site NAME currently holding a claim key, for the refusal message.
+     * The SITE currently holding a claim key, for the refusal message (which decides for
+     * itself whether the reader may learn its name).
      *
-     * @return the owning site's name, or null when the winner vanished between the
-     *         refusal and this lookup
+     * @return the owning site, or null when the winner vanished between the refusal and
+     *         this lookup
      */
-    public static @Nullable String holderNameOf(@NonNull String key) {
+    public static @Nullable Row holderSiteOf(@NonNull String key) {
         Row domain = Models.get(SiteDomainModel.class).find()
             .where(SiteDomainModel.LIVE_ROUTE_KEY.eq(key)).first();
         if (domain == null) {
             return null;
         }
-        Row site = Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID));
-        return site != null ? String.valueOf(site.get(SiteModel.NAME)) : null;
+        return Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID));
     }
 
     /** The hostname a claim key was built from, for the refusal message. */
