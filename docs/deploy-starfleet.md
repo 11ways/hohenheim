@@ -885,3 +885,56 @@ exercised here).
 
 ROLLBACK IS DB + JAR: `/root/hohenheim-preflight-20260829-tenth/hohenheim.db.at-swap`
 plus `hohenheim-server.jar.rollback`, exactly as for the fifth deploy.
+
+## Deploy 2026-08-29 (eleventh): the DNS trace fixes and the delete gate, M007
+
+Shipped hohenheim `b486427f` (previous `1c8a8a8b`) to starfleet and then OVH
+(`deploy-ovh.md`, second jar swap). Isolated worktree
+`build-worktrees/deploy-20260829-b486427f` (chain clean at the deployed shas,
+so the main checkouts resolved it; 96 s warm build, removed afterwards), stamp
+13/13 clean, sha256
+`f9d9b2d0412438f0537494b14029be6f5d79baee119dd1b019cf8f113c188c07`,
+267,596,947 bytes, `upload_file` gated on `grep -c false | grep -qx 13`.
+Commits carried (5): `c30eac16` (one resolver for the instance destroy gate),
+`525dbcbe` (DNS test fixtures), `742251b1` (pins for M004/M006), `fe15825f`
+(NOTIFY announces the serial it just published; `last_notify_serial` column =
+**M007**), `b486427f` (the served zone view is published on commit, not on
+write -- a rolled-back CMS edit used to keep being served).
+
+Migration diff `1c8a8a8b..b486427f`: `M007_DnsNotifySerial` only (one nullable
+INTEGER column on `dns_zone_peers`). Rehearsed as the service user from
+`/opt/hohenheim-rehearsal-20260830-eleventh` on a byte copy of the preflight
+`.pre`: `Migrations complete 1 applied`, 46 rows, `last_notify_serial` present,
+inert boot on 13999 healthy after 22 s with `-Xmx384m`, `/login` 200, 0
+exceptions, `roles_captured enabled=[]`, killed by port, dir removed. Live lane:
+at-swap `.backup` (integrity ok), `install` beside, stop, `mv`,
+`--run-migrations` as `hohenheim` (`Running migration 007 DNS NOTIFY serial
+trace`, 1 applied, 46 rows), start; 31 s to health. Second restart 30 s.
+Preflight `/root/hohenheim-preflight-20260830-eleventh/` (`.pre`, `.at-swap`,
+`settings/`, keyring sha256 equal, `hohenheim-server.jar.rollback`).
+
+Verified after both restarts: panel 302, apex 200, wildcard 200,
+`comms.starfleet.life` 200, `skeleton.starfleet.life` 200 (202 once during the
+supervisor re-attach, as on the tenth deploy) and its Console tab renders the
+terminal (canvas 890x384 + input textarea); listeners 53/80/443/3000; 0
+journal errors at priority err (`journalctl -q`: the `-- No entries --` header
+is NOT an error line, count with `-q`); `roles_captured [databases, dns,
+firewall, instances, proxy]`; both instance containers kept running;
+`zenit-dev deployed starfleet` = `current` 13/13.
+
+THE SERIAL TRACE FIX ON THE REAL FEDERATION: a disposable
+`visual-qa-20260829-wave2 TXT "wave2"` added then deleted through the Records
+tab moved the serial 36 -> 37 -> 38. Each time the primary journaled
+`dns.notify_sent` with the NEW serial (37, then 38; the tenth deploy had logged
+the pre-bump serial), `dns.axfr_served` for the same serial, and
+`dns_zone_peers.last_notify_serial` read 37 then 38 (the column M007 added; it
+used to be lost entirely because the stamp write raced the open mutation
+transaction). OVH journaled `transferred secondary zone starfleet.life serial
+37` and `38` within 3 s of each edit, served the TXT and then no longer did,
+and both boxes answered SOA 38. `dns_records` holds 0 `visual-qa-%` rows.
+
+Pins: `MigrationIntegrityTest.DEPLOYED_THROUGH` raised to `007` and the M007
+digest added to `migration-pins.txt`.
+
+ROLLBACK IS DB + JAR: `/root/hohenheim-preflight-20260830-eleventh/hohenheim.db.at-swap`
+plus `hohenheim-server.jar.rollback`.
