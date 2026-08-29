@@ -415,3 +415,96 @@ serial 42 -> 43 -> 44; this box transferred 43 at 22:58:33.2Z and 44 at
 
 ROLLBACK IS JAR ONLY (no schema change); the at-swap copy sits in the
 preflight dir regardless.
+
+## Earl staged, 2026-08-30
+
+The FIRST Phoenix site staged on this box. Staged only: no DNS record was
+touched anywhere, no certificate was requested, no service was restarted. The
+name still resolves to Phoenix, so nothing a visitor sees has moved.
+
+Earl is one static page. On Phoenix it was an Apache proxy with a `Host:
+earl.phoenix` rewrite (`hoh site create Earl hohenheim:address ...
+settings.rewrite_location=false` in the converter's dry run); here that whole
+shape collapses to a `hohenheim:static` site, so the Host header row and the
+`rewrite_location=false` it needed are gone.
+
+### The document root
+
+    /opt/hohenheim/public/earl/index.html   hohenheim:hohenheim 644, 1024 bytes
+    /opt/hohenheim/public/earl              hohenheim:hohenheim 755
+    /opt/hohenheim/public                   hohenheim:hohenheim 750 (unchanged)
+
+Uploaded with a staged temp file + remote sha256 verify + atomic move; the
+served bytes hash `c994a6d8a87dd266724d84f209c90cd6a7295b1044ae189a8f3b7abc017c70c5`,
+equal to the capture taken from Phoenix's Apache. Same modes as starfleet's
+`public/catch-all` (750/755/644, service user throughout), which is the layout
+this directory follows.
+
+### The API key for `tools/hoh`
+
+Minted through the product's own `/account/api-keys` form over the loopback
+panel (curl with the page's `csrf_token`), never by writing the database.
+Label `hoh CLI (robbedoes automation)`, scopes
+`hohenheim.admin.access cap:hohenheim:site#manage`, no expiry -- admin because
+site create/delete is admin-only, the capability scope because domain rows are
+a `manage` affordance. The plaintext is rendered exactly once and lives in TWO
+places only:
+
+    /root/hohenheim-hoh-key.txt          on the box, 0600 root:root
+    ~/.config/hoh/config.json            on the workstation, 0600, context "robbedoes"
+
+The workstation context's host is `http://127.0.0.1:3000`, so every `hoh` call
+needs the panel forward up first (`ssh -L 3000:127.0.0.1:3000
+debian@51.255.43.81`); `network.bind_address` is 127.0.0.1 here and there is no
+panel site yet. Rotate the key by revoking it in `/account/api-keys` and
+re-running `hoh login`.
+
+### The site
+
+    site 1     Earl / earl, hohenheim:static, enabled, status active
+               settings {"root_path":"/opt/hohenheim/public/earl",
+                         "autoindex":false,"fallback_file":"index.html"}
+    domain 1   earl.wcag.be, exact, force_ssl true, certificate_id null,
+               exclude_from_letsencrypt false, live true, generated false
+
+Created with `hoh site create Earl hohenheim:static
+settings.root_path=/opt/hohenheim/public/earl settings.fallback_file=index.html
+settings.autoindex=false` then `hoh site domain add 1 earl.wcag.be`.
+
+### Evidence
+
+`curl -H 'Host: earl.wcag.be' http://51.255.43.81/` answers **503 "HTTPS
+required"** (2636 bytes, `Retry-After: 30`), NOT a 301. That is Hohenheim's own
+answer for a `force_ssl` row with no certificate, and it is the proof the route
+is claimed: an unknown Host on the same port answers 404 "No site configured".
+Port 443 is `Connection refused` from outside -- no certificate exists, so the
+TLS listener is still not up, exactly as after the install.
+
+Use `--noproxy '*'` when curling this box from the workstation. The shell there
+exports `HTTP_PROXY`/`HTTPS_PROXY` to mitmproxy, which makes `--resolve` a lie:
+a first `--resolve earl.wcag.be:443:51.255.43.81` came back
+`server: Apache/2.4.18 (Ubuntu)` -- that was LIVE PHOENIX answering through the
+proxy, not this host.
+
+The static root itself was proven to serve, without touching the real row: a
+temporary second domain row `earl-staging.robbedoes.invalid` (`force_ssl=false`,
+`exclude_from_letsencrypt=true`, unresolvable `.invalid` name) answered
+**200, Content-Length 1024**, byte-identical to the captured file, and was then
+removed. `SiteDispatcher` logged the whole arc -- `0 -> 1 -> 2 -> 1 exact
+routes` -- and the journal carries no error or exception.
+
+Panel over the forward: `/admin/sites` lists one row, `Earl / earl`, hostname
+`earl.wcag.be`, Serves `Static /opt/hohenheim/public/earl`, TLS `HTTPS`,
+`1-1 of 1`.
+
+### Cutover steps remaining
+
+1. Delegate `wcag.be` (or at least `earl.wcag.be`) so this box can be validated.
+2. Request the certificate for `earl.wcag.be` from `/admin/certificates-request?site=1`.
+   `CertificateAuthority.authorize` refuses a SAN no live site-domain row covers,
+   and domain 1 is that row, so this order is mandatory.
+3. Flip A/AAAA for `earl.wcag.be` to `51.255.43.81` /
+   `2001:41d0:305:2100::1:4b26` in the `wcag.be` zone on kuifje.
+4. Re-run the curl above: the 503 becomes a 301 to HTTPS, and HTTPS serves the
+   page.
+5. Retire the Phoenix vhost only after that.
