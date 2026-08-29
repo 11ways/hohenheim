@@ -914,6 +914,10 @@
     },
     {
       "text": "Actief",
+      "scope": "ban_state"
+    },
+    {
+      "text": "Actief",
       "scope": "spamservice_key"
     },
     {
@@ -4004,10 +4008,16 @@
       "scope": "released_claim"
     }
   ],
-  "lifted": {
-    "text": "Verbanning opgeheven",
-    "scope": "ban"
-  },
+  "lifted": [
+    {
+      "text": "Verbanning opgeheven",
+      "scope": "ban"
+    },
+    {
+      "text": "Opgeheven",
+      "scope": "ban_state"
+    }
+  ],
   "duration_1h": {
     "text": "1 uur",
     "scope": "ban"
@@ -4865,6 +4875,10 @@
     "scope": "stack_services"
   },
   "state": [
+    {
+      "text": "Toestand",
+      "scope": "ban"
+    },
     {
       "text": "Toestand",
       "scope": "stack_services"
@@ -7305,10 +7319,27 @@
     "text": "Die omgeving hoort bij een project dat dit record niet bezit",
     "scope": "violations"
   },
-  "environment_in_use": {
-    "text": "Deze omgeving wordt nog gebruikt door instanties of variabelen",
-    "scope": "violations"
-  },
+  "environment_in_use": [
+    {
+      "text": "Deze omgeving wordt nog gebruikt door instanties of variabelen",
+      "scope": "violations"
+    },
+    {
+      "text": "Deze omgeving wordt nog gebruikt door de instanties {$instances}; verplaats of verwijder ze eerst",
+      "scope": "violations",
+      "holders": "instances"
+    },
+    {
+      "text": "Deze omgeving bevat nog de variabelen {$variables}; verwijder ze eerst",
+      "scope": "violations",
+      "holders": "variables"
+    },
+    {
+      "text": "Deze omgeving wordt nog gebruikt door de instanties {$instances} en bevat nog de variabelen {$variables}; verplaats of verwijder ze eerst",
+      "scope": "violations",
+      "holders": "both"
+    }
+  ],
   "dns_peer_in_use": {
     "text": "Peer {$name} is nog de primaire van {$count} secundaire zone(s) zoals {$zone}; wijs ze eerst om of verwijder ze",
     "scope": "violations"
@@ -8144,6 +8175,15 @@
     "scope": "server"
   },
   "singular": [
+    {
+      "text": "Planning",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "planning",
+      "scope": "instance_schedule",
+      "case": "sentence"
+    },
     {
       "text": "project",
       "scope": "project"
@@ -9773,6 +9813,10 @@
   "expired": [
     {
       "text": "Verlopen",
+      "scope": "ban_state"
+    },
+    {
+      "text": "Verlopen",
       "scope": "dns_transfer"
     },
     {
@@ -11311,5 +11355,37 @@
   "manage_record_name": {
     "text": "De volledige naam, bijvoorbeeld www.example.com; ze moet onder een hostnaam van een site vallen die je beheert",
     "scope": "help"
+  },
+  "next_run": {
+    "text": "Volgende uitvoering",
+    "scope": "instance_schedule"
+  },
+  "next_run_disabled": {
+    "text": "Niet gepland zolang uitgeschakeld",
+    "scope": "instance_schedule"
+  },
+  "next_run_sweep": {
+    "text": "Bij de volgende controle (binnen een minuut)",
+    "scope": "instance_schedule"
+  },
+  "last_failure": {
+    "text": "Laatste fout",
+    "scope": "stack"
+  },
+  "last_deploy_failed": {
+    "text": "De laatste uitrol is mislukt",
+    "scope": "stack_services"
+  },
+  "view_deployments": {
+    "text": "Open het uitrollogboek",
+    "scope": "stack_services"
+  },
+  "lifted_at": {
+    "text": "Opgeheven",
+    "scope": "field"
+  },
+  "lifted_by": {
+    "text": "Opgeheven door",
+    "scope": "field"
   }
 }

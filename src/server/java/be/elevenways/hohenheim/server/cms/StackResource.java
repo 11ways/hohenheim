@@ -57,6 +57,9 @@ public class StackResource extends RowResource {
     /** Stack names become network/container/volume name segments. */
     static final Pattern NAME_PATTERN = Pattern.compile("[a-z0-9][a-z0-9-]{0,62}");
 
+    /** The virtual column carrying a failed stack's reason (the status badge's subtext). */
+    static final String LAST_FAILURE_COLUMN = "last_failure";
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(StackModel.NAME)
         .add(StackModel.ENABLED)
@@ -76,7 +79,12 @@ public class StackResource extends RowResource {
         .column(ColumnSpec.fromField(StackModel.DESCRIPTION).hidden().build())
         .column(ColumnSpec.fromField(StackModel.SERVER_ID)
             .relation(RelationPick.of(StackModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
-        .column(ColumnSpec.fromField(StackModel.STATUS).filterable().build())
+        // A FAILED stack names WHY under its badge: the newest deployment's error, so the
+        // operator never has to open the Deployments tab to learn what to fix.
+        .column(ColumnSpec.fromField(StackModel.STATUS).filterable()
+            .subtext(LAST_FAILURE_COLUMN).build())
+        .column(ColumnSpec.virtual(LAST_FAILURE_COLUMN,
+            Microcopy.of("last_failure").withFilter("scope", "stack")).hidden().build())
         .column(ColumnSpec.fromField(StackModel.ENABLED).filterable().build())
         .filter(FilterSpec.forField(StackModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(StackModel.NAME)).build())
@@ -94,6 +102,15 @@ public class StackResource extends RowResource {
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
     @Override public @NonNull ListChrome listChrome() { return ListChrome.MINIMAL; }
+
+    /** The failure subtext reads the newest deployment's error; everything else is the row's. */
+    @Override
+    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        if (LAST_FAILURE_COLUMN.equals(column.name())) {
+            return StackFailures.reasonOf(row);
+        }
+        return super.cellValue(row, column);
+    }
 
     /** Name and description are all a stack carries. */
     @Override

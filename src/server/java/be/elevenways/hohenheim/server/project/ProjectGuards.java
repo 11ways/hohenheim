@@ -121,20 +121,25 @@ public final class ProjectGuards {
             if (storedProject == null || storedProject.equals(row.get(EnvironmentModel.PROJECT_ID))) {
                 return;
             }
-            if (environmentInUse((Integer) id)) {
+            EnvironmentUsage usage = usageOf((Integer) id);
+            if (!usage.isEmpty()) {
                 throw Violations.ofField(EnvironmentModel.PROJECT_ID.getName(),
-                    row.get(EnvironmentModel.PROJECT_ID),
-                    violation("environment_in_use"));
+                    row.get(EnvironmentModel.PROJECT_ID), usage.refusal());
             }
         });
 
         // Deleting an environment that is still referenced would orphan the grouping
-        // and silently drop its variables out of every future deploy.
+        // and silently drop its variables out of every future deploy. The refusal NAMES
+        // the holders: "instances or variables" left the operator guessing which.
         EnvironmentModel.SCHEMA.addBeforeRemoveHook(context -> {
             for (Row doomed : doomedRows(context)) {
                 Integer id = doomed.get(EnvironmentModel.ID);
-                if (id != null && environmentInUse(id)) {
-                    throw Violations.ofForm(violation("environment_in_use"));
+                if (id == null) {
+                    continue;
+                }
+                EnvironmentUsage usage = usageOf(id);
+                if (!usage.isEmpty()) {
+                    throw Violations.ofForm(usage.refusal());
                 }
             }
         });
@@ -188,16 +193,61 @@ public final class ProjectGuards {
             TenantWrites.isTenantOriginated() ? TenantWrites.acting() : null);
     }
 
-    private static boolean environmentInUse(int environmentId) {
-        if (Models.get(InstanceModel.class).find()
+    /**
+     * What still references one environment, BY NAME: the live instances grouped in it
+     * and the variables it holds. Fresh queries, because this feeds the write gate.
+     */
+    public static @NonNull EnvironmentUsage usageOf(int environmentId) {
+        List<String> instances = new ArrayList<>();
+        for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.ENVIRONMENT_ID.eq(environmentId))
                 .where(InstanceModel.DELETED_AT.isNull())
-                .count() > 0) {
-            return true;
+                .all()) {
+            instances.add(EnvironmentUsage.nameOf(instance.get(InstanceModel.NAME),
+                instance.get(InstanceModel.ID)));
         }
-        return Models.get(InstanceVariableModel.class).find()
-            .where(InstanceVariableModel.ENVIRONMENT_ID.eq(environmentId))
-            .count() > 0;
+        List<String> variables = new ArrayList<>();
+        for (Row variable : Models.get(InstanceVariableModel.class).find()
+                .where(InstanceVariableModel.ENVIRONMENT_ID.eq(environmentId))
+                .all()) {
+            variables.add(EnvironmentUsage.nameOf(variable.get(InstanceVariableModel.KEY),
+                variable.get(InstanceVariableModel.ID)));
+        }
+        return new EnvironmentUsage(instances, variables);
+    }
+
+    /**
+     * The holders of an environment and THE wording of the refusal they cause -- one
+     * home for the write gate (fresh queries) and the dead delete affordance (request
+     * snapshot), so the two can never name different things.
+     *
+     * @param instances live instance names grouped in the environment
+     * @param variables the keys of the variables it holds
+     */
+    public record EnvironmentUsage(@NonNull List<String> instances, @NonNull List<String> variables) {
+
+        public boolean isEmpty() {
+            return this.instances.isEmpty() && this.variables.isEmpty();
+        }
+
+        /**
+         * The refusal, naming every holder; the {@code holders} filter picks the sentence
+         * shape (instances only, variables only, or both) so no locale has to render an
+         * empty list.
+         */
+        public @NonNull Microcopy refusal() {
+            String holders = this.instances.isEmpty() ? "variables"
+                : this.variables.isEmpty() ? "instances" : "both";
+            return violation("environment_in_use")
+                .withFilter("holders", holders)
+                .withArg("instances", String.join(", ", this.instances))
+                .withArg("variables", String.join(", ", this.variables));
+        }
+
+        /** A record's name, or its id when it has none (a name a dialog can act on). */
+        public static @NonNull String nameOf(@Nullable String name, @Nullable Integer id) {
+            return name == null || name.isBlank() ? "#" + id : name;
+        }
     }
 
     /** A permission group a live project still points at cannot be deleted on its own. */

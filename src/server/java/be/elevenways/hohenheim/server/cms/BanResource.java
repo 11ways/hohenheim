@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.BanModel;
+import be.elevenways.hohenheim.security.BanStateCell;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -10,11 +11,13 @@ import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
+import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -31,6 +34,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -81,7 +86,41 @@ public final class BanResource extends RowResource {
         // subset entirely, so the quick-add bar could not offer it at all -- and every
         // ban created there would have silently taken the 24h default.
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(DURATION))
+        // The STORED facts a ban detail shows instead of the create-time choice: the
+        // duration entry backs no column, so the detail page rendered "Duration: None"
+        // for an enforced 24h ban, and nothing on it said whether the ban was lifted.
+        .add(BanModel.EXPIRES_AT)
+        .add(BanModel.ACTIVE)
+        .add(BanModel.LIFTED_AT)
+        .add(BanModel.LIFTED_BY)
         .build();
+
+    /** The entries a RECORD shows (read-only) and the create form does not. */
+    private static final List<String> STORED_STATE = List.of(
+        BanModel.EXPIRES_AT.getName(), BanModel.ACTIVE.getName(),
+        BanModel.LIFTED_AT.getName(), BanModel.LIFTED_BY.getName());
+
+    /**
+     * Create asks for a duration; a record shows its expiry and lift state. The stored
+     * facts are HIDDEN on the create form (they are outcomes, not inputs) and the duration
+     * choice is hidden on the record (its answer is the expiry beside it).
+     */
+    @Override
+    public @NonNull List<ResourceFieldBinding> fieldBindings() {
+        List<ResourceFieldBinding> bindings = new ArrayList<>();
+        bindings.add(ResourceFieldBinding.of(DURATION_NAME,
+            FieldAccess.customRecordAware((ctx, record) -> record == null
+                ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.HIDDEN)));
+        for (String stored : STORED_STATE) {
+            bindings.add(ResourceFieldBinding.of(stored,
+                FieldAccess.customRecordAware((ctx, record) -> record == null
+                    ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.READONLY)));
+        }
+        return bindings;
+    }
+
+    /** The list's state column: enforced, lifted or expired, derived from the stored facts. */
+    static final String STATE_COLUMN = "state";
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "ban"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "ban"); }
@@ -114,7 +153,12 @@ public final class BanResource extends RowResource {
         .column(ColumnSpec.fromField(BanModel.IP).filterable().subtext("reason").copyable().build())
         .column(ColumnSpec.fromField(BanModel.REASON).hidden().build())
         .column(ColumnSpec.fromField(BanModel.SOURCE).filterable().build())
-        .column(ColumnSpec.fromField(BanModel.ACTIVE).filterable().build())
+        // ONE state badge (active / lifted / expired) instead of a yes-no on `active`,
+        // which read "No" for a lifted ban and an expired one alike. The `active` filter
+        // below keeps answering "still enforced?" from the filter bar.
+        .column(ColumnSpec.virtual(STATE_COLUMN, Microcopy.of("state").withFilter("scope", "ban"))
+            .renderer("hohenheim:cms/cell/ban-state").build())
+        .column(ColumnSpec.fromField(BanModel.ACTIVE).hidden().build())
         .column(ColumnSpec.fromField(BanModel.EVENT_TYPE).filterable().build())
         .column(ColumnSpec.fromField(BanModel.EXPIRES_AT).build())
         .column(ColumnSpec.fromField(BanModel.CREATED_AT).build())
@@ -143,6 +187,10 @@ public final class BanResource extends RowResource {
      */
     @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        if (STATE_COLUMN.equals(column.name())) {
+            return BanStateCell.of(Boolean.TRUE.equals(row.get(BanModel.ACTIVE)),
+                row.get(BanModel.LIFTED_AT), row.get(BanModel.EXPIRES_AT), Instant.now());
+        }
         if (!BanModel.EVENT_TYPE.getName().equals(column.name())) {
             return super.cellValue(row, column);
         }

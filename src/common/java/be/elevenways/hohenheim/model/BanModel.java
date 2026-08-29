@@ -53,9 +53,13 @@ public class BanModel extends Model {
         .label(HohenheimFormCopy.label("active"))
         .build());
     public static final DateTimeField LIFTED_AT = SCHEMA.addField(
-        DateTimeField.builder().name("lifted_at").build());
+        DateTimeField.builder().name("lifted_at")
+            .label(HohenheimFormCopy.label("lifted_at"))
+            .build());
     public static final StringField LIFTED_BY = SCHEMA.addField(
-        StringField.builder().name("lifted_by").build());
+        StringField.builder().name("lifted_by")
+            .label(HohenheimFormCopy.label("lifted_by"))
+            .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(
