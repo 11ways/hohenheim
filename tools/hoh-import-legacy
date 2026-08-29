@@ -1,0 +1,714 @@
+#!/usr/bin/env node
+'use strict';
+// hoh-import-legacy - converts an OLD (Node/Mongo) Hohenheim `sites` collection
+// into the calls of the new PaaS write lane, driving `tools/hoh` and nothing
+// else: every site becomes one `hoh site create` plus one `hoh site domain add`
+// per hostname, so this converter can never author a shape the documented API
+// would not accept from a human.
+//
+// It is deliberately a TRANSLATOR and a REPORT, never a guesser. Anything the
+// new system cannot express (an upstream path, a basic-auth list with no access
+// list, an alchemy/node workload with no instance) is FAIL CLOSED: the site is
+// not converted, and the manifest names the site, the field and the reason. An
+// unknown site_type or an unknown settings key does the same, so a legacy shape
+// nobody anticipated is loud rather than silently dropped.
+//
+// Single-file node (>= 20) script, stdlib only, same conventions as `hoh`.
+//
+// Usage:
+//   hoh-import-legacy <sites.json> [--map map.json] [--only a,b|@file] [--skip a,b|@file]
+//                     [--dry-run|--apply] [--manifest <base-path>] [--include-secrets]
+//
+// The map file carries what the converter cannot create for itself:
+//   { "instances":   { "<legacy site name>": 12 },
+//     "accessLists": { "<legacy site name>": 3 },
+//     "listenOn":    "10.0.0.5" }
+
+const fs = require('node:fs');
+const path = require('node:path');
+const cp = require('node:child_process');
+
+function die(message) {
+    process.stderr.write(message + '\n');
+    process.exit(1);
+}
+
+// -- the legacy vocabulary ----------------------------------------------------
+//
+// KNOWN_SETTINGS is the whole set of legacy settings keys this converter
+// understands; RELEVANT names, per site_type, the subset that type actually
+// consumed. A known key outside its type's subset is LEFTOVER (the old panel
+// kept a site's earlier settings when its type was switched) and is reported as
+// dropped; a key in neither list is unknown and makes the site unmappable.
+
+const KNOWN_SETTINGS = new Set(['url', 'delay', 'target_url', 'is_permanent', 'path',
+    'fallback_file', 'node', 'script', 'user', 'environment_variables', 'api_keys',
+    'minimum_processes', 'maximum_processes', 'wait_for_ready', 'basic_auth',
+    'letsencrypt_force', 'letsencrypt_email']);
+
+const COMMON_SETTINGS = ['basic_auth', 'letsencrypt_force', 'letsencrypt_email'];
+
+const RELEVANT = {
+    proxy: ['url', 'delay', ...COMMON_SETTINGS],
+    proxy_site: ['url', 'delay', ...COMMON_SETTINGS],
+    redirect: ['target_url', 'is_permanent', 'delay', ...COMMON_SETTINGS],
+    static: ['path', 'fallback_file', 'delay', ...COMMON_SETTINGS],
+    alchemy: ['node', 'script', 'user', 'environment_variables', 'api_keys',
+        'minimum_processes', 'maximum_processes', 'wait_for_ready', ...COMMON_SETTINGS],
+    node: ['node', 'script', 'user', 'environment_variables', 'api_keys',
+        'minimum_processes', 'maximum_processes', 'wait_for_ready', ...COMMON_SETTINGS],
+};
+
+const KNOWN_SITE_KEYS = new Set(['_id', 'created', 'updated', 'name', 'site_type',
+    'settings', 'domain']);
+const KNOWN_DOMAIN_KEYS = new Set(['hostname', 'listen_on', 'headers']);
+
+const INSTANCE_TYPES = new Set(['alchemy', 'node']);
+
+// -- small helpers ------------------------------------------------------------
+
+/** Legacy list fields carry null/"" placeholders for "none"; drop them. */
+function realEntries(value) {
+    if (!Array.isArray(value)) return [];
+    return value.filter(entry => {
+        if (entry === null || entry === undefined) return false;
+        if (typeof entry === 'string') return entry.trim() !== '';
+        if (typeof entry === 'object') return Object.keys(entry).length > 0;
+        return true;
+    });
+}
+
+function textOrNull(value) {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    return text === '' ? null : text;
+}
+
+function shellQuote(arg) {
+    return /^[A-Za-z0-9_@%+=:,.\/-]+$/.test(arg)
+        ? arg : "'" + String(arg).replace(/'/g, "'\\''") + "'";
+}
+
+/** A hostname's match type by SHAPE, mirroring the API's own three kinds. */
+function matchTypeOf(hostname) {
+    if (/[\^$()\[\]+?\\|]/.test(hostname)) return 'regex';
+    if (hostname.includes('*')) return 'wildcard';
+    return 'exact';
+}
+
+// -- one site's conversion ----------------------------------------------------
+
+class Conversion {
+
+    constructor(site) {
+        this.name = typeof site.name === 'string' ? site.name : '(unnamed)';
+        this.type = typeof site.site_type === 'string' ? site.site_type : '(none)';
+        this.verdict = 'converted';
+        this.reasons = [];
+        this.notes = [];
+        this.dropped = [];
+        this.commands = [];
+        this.instance_blueprint = null;
+    }
+
+    refuse(verdict, reason) {
+        // The FIRST refusal decides the verdict; further reasons still accumulate,
+        // because an operator fixing one blocker wants to see the rest too.
+        if (this.verdict === 'converted') this.verdict = verdict;
+        this.reasons.push(reason);
+    }
+
+    drop(field, reason) {
+        this.dropped.push({ field, reason });
+    }
+
+    note(text) {
+        this.notes.push(text);
+    }
+}
+
+function convertSite(site, map, options) {
+    const out = new Conversion(site);
+
+    for (const key of Object.keys(site)) {
+        if (!KNOWN_SITE_KEYS.has(key)) {
+            out.refuse('unmappable', `unknown legacy site field "${key}"`);
+        }
+    }
+
+    const relevant = RELEVANT[out.type];
+    if (!relevant) {
+        out.refuse('unmappable', `unknown site_type "${out.type}"`);
+        return out;
+    }
+
+    const settings = site.settings && typeof site.settings === 'object' ? site.settings : {};
+    for (const key of Object.keys(settings)) {
+        if (!KNOWN_SETTINGS.has(key)) {
+            out.refuse('unmappable', `unknown legacy settings key "${key}"`);
+        } else if (!relevant.includes(key)) {
+            out.drop(`settings.${key}`,
+                `not used by ${out.type} sites (leftover of an earlier site_type)`);
+        }
+    }
+
+    const form = {};
+
+    // -- certificates and mail: nothing to map, both are explicit now ---------
+    if ('letsencrypt_force' in settings) {
+        out.drop('settings.letsencrypt_force',
+            'certificates are explicit records in the new system; nothing to map'
+            + (settings.letsencrypt_force === false
+                ? ' (this site had it OFF: it wanted no certificate at all)' : ''));
+    }
+    if (textOrNull(settings.letsencrypt_email)) {
+        out.drop('settings.letsencrypt_email',
+            `certificate contact "${settings.letsencrypt_email}" is account-level now`);
+    }
+
+    // -- basic auth becomes an access list, or the site does not convert ------
+    const credentials = realEntries(settings.basic_auth);
+    if (credentials.length) {
+        const users = credentials.map(entry => String(entry).split(':')[0]);
+        const listId = map.accessLists[out.name];
+        if (listId === undefined) {
+            out.refuse('needs-access-list',
+                `basic_auth for ${credentials.length} user(s) [${users.join(', ')}]:`
+                + ` create an access list and map accessLists["${out.name}"]`);
+        } else {
+            form.access_list_id = String(listId);
+            out.note(`basic_auth for [${users.join(', ')}] -> access list ${listId}`
+                + ' (the passwords are NOT carried over; set them on the list)');
+        }
+    }
+
+    // -- delay is a per-kind setting on every kind that keeps one ------------
+    const delay = textOrNull(settings.delay);
+    if (delay !== null && relevant.includes('delay')) {
+        if (INSTANCE_TYPES.has(out.type)) {
+            out.drop('settings.delay', 'the instance upstream kind declares no delay');
+        } else {
+            form['settings.delay'] = delay;
+        }
+    }
+
+    convertUpstream(site, settings, out, form, map);
+
+    if (out.verdict !== 'converted') {
+        // Still collect the blueprint: a needs-instance site's whole point is the
+        // blueprint the operator builds from.
+        return out;
+    }
+
+    out.commands.push({
+        argv: ['site', 'create', out.name, form.upstream_kind,
+            ...Object.entries(form).filter(([k]) => k !== 'upstream_kind')
+                .map(([k, v]) => `${k}=${v}`)],
+        needs_site_id: false,
+    });
+
+    convertDomains(site, out, map);
+    return out;
+}
+
+function convertUpstream(site, settings, out, form, map) {
+    switch (out.type) {
+
+        case 'proxy':
+        case 'proxy_site': {
+            form.upstream_kind = 'hohenheim:address';
+            const url = textOrNull(settings.url);
+            if (url === null) {
+                out.refuse('unmappable', 'a proxy site with no settings.url');
+                return;
+            }
+            if (url.startsWith('/')) {
+                form['settings.socket'] = url;
+                out.note(`unix socket upstream ${url}`);
+                return;
+            }
+            let parsed;
+            try {
+                parsed = new URL(url);
+            } catch {
+                out.refuse('unmappable', `settings.url "${url}" is not a URL`);
+                return;
+            }
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                out.refuse('unmappable', `settings.url scheme "${parsed.protocol}" is not http(s)`);
+                return;
+            }
+            if ((parsed.pathname && parsed.pathname !== '/') || parsed.search || parsed.hash) {
+                out.refuse('unmappable',
+                    `settings.url "${url}" has a path component the address kind cannot`
+                    + ' express (the new upstream is host+port only): re-point the upstream,'
+                    + ' or serve the prefix on the upstream itself');
+                return;
+            }
+            form['settings.forward_scheme'] = parsed.protocol.slice(0, -1);
+            form['settings.forward_host'] = parsed.hostname;
+            form['settings.forward_port'] = parsed.port
+                || (parsed.protocol === 'https:' ? '443' : '80');
+            if (!parsed.port) {
+                out.note(`settings.url named no port; the scheme default`
+                    + ` ${form['settings.forward_port']} is assumed`);
+            }
+            return;
+        }
+
+        case 'redirect': {
+            form.upstream_kind = 'hohenheim:redirect';
+            const target = textOrNull(settings.target_url);
+            if (target === null) {
+                out.refuse('unmappable', 'a redirect site with no settings.target_url');
+                return;
+            }
+            form['settings.target_url'] = target;
+            form['settings.http_status'] = settings.is_permanent === true ? '301' : '302';
+            form['settings.preserve_path'] = 'false';
+            out.note('preserve_path=false assumed: the old redirect sent every request'
+                + ' to the target as it stood, with no path appended');
+            return;
+        }
+
+        case 'static': {
+            form.upstream_kind = 'hohenheim:static';
+            const root = textOrNull(settings.path);
+            if (root === null) {
+                out.refuse('unmappable', 'a static site with no settings.path');
+                return;
+            }
+            form['settings.root_path'] = root;
+            const fallback = textOrNull(settings.fallback_file);
+            if (fallback !== null) {
+                const rooted = root.endsWith('/') ? root : root + '/';
+                if (!fallback.startsWith(rooted)) {
+                    out.refuse('unmappable',
+                        `settings.fallback_file "${fallback}" lies outside settings.path`
+                        + ` "${root}"; the new fallback_file is relative to the root`);
+                    return;
+                }
+                form['settings.fallback_file'] = fallback.slice(rooted.length);
+                out.note(`fallback_file made relative to root_path:`
+                    + ` ${fallback} -> ${form['settings.fallback_file']}`);
+            }
+            return;
+        }
+
+        case 'alchemy':
+        case 'node': {
+            out.instance_blueprint = blueprintOf(settings, out.name);
+            const instanceId = map.instances[out.name];
+            if (instanceId === undefined) {
+                out.refuse('needs-instance',
+                    `${out.type} workload: create the instance from the blueprint below`
+                    + ` and map instances["${out.name}"]`);
+                return;
+            }
+            form.upstream_kind = 'hohenheim:instance';
+            form.instance_id = String(instanceId);
+            out.note(`workload -> instance ${instanceId} (its runtime, script, user and`
+                + ' variables live on the instance, not on the site)');
+            return;
+        }
+
+        default:
+            out.refuse('unmappable', `unknown site_type "${out.type}"`);
+    }
+}
+
+/** Everything an alchemy/node site knew that the operator must recreate by hand. */
+function blueprintOf(settings, name) {
+    const variables = realEntries(settings.environment_variables)
+        .map(entry => ({ name: entry.name ?? null, value: entry.value ?? null }));
+    return {
+        site: name,
+        node_version: textOrNull(settings.node),
+        script: textOrNull(settings.script),
+        run_as_uid: textOrNull(settings.user),
+        minimum_processes: settings.minimum_processes ?? null,
+        maximum_processes: settings.maximum_processes ?? null,
+        wait_for_ready: settings.wait_for_ready ?? null,
+        environment_variables: variables,
+        api_key_count: realEntries(settings.api_keys).length,
+        api_keys: realEntries(settings.api_keys),
+    };
+}
+
+function convertDomains(site, out, map) {
+    const domains = Array.isArray(site.domain) ? site.domain : [];
+    if (!domains.length) out.note('this site had no hostnames at all');
+
+    for (const domain of domains) {
+        for (const key of Object.keys(domain || {})) {
+            if (!KNOWN_DOMAIN_KEYS.has(key)) {
+                out.refuse('unmappable', `unknown legacy domain field "${key}"`);
+            }
+        }
+        // The old panel let one header be listed twice; a repeated key is one row
+        // here, because two rows for one header name is a shape nobody meant.
+        const headers = [];
+        for (const header of Array.isArray(domain.headers) ? domain.headers : []) {
+            if (!header || !textOrNull(header.name)) continue;
+            const seen = headers.find(kept =>
+                kept.name.toLowerCase() === String(header.name).toLowerCase());
+            if (seen) {
+                out.drop(`domain.headers.${header.name}`,
+                    'the header was listed more than once; the first row is kept');
+                continue;
+            }
+            headers.push({ name: String(header.name), value: header.value });
+        }
+        const listeners = realEntries(domain.listen_on);
+        if (listeners.length) {
+            out.drop('domain.listen_on',
+                `the old server's addresses [${listeners.join(', ')}] never carry over;`
+                + ' the new listener comes from the map\'s "listenOn"');
+        }
+        const hasHostRewrite = headers.some(h => String(h.name).toLowerCase() === 'host');
+
+        for (const raw of realEntries(domain.hostname)) {
+            const hostname = String(raw).trim();
+            const fields = [];
+            const matchType = matchTypeOf(hostname);
+            if (matchType !== 'exact') fields.push(`match_type=${matchType}`);
+            if (matchType === 'regex') {
+                out.note(`hostname "${hostname}" is stored as a regex row: verify it`
+                    + ' against the new matcher before trusting it');
+            }
+            if (map.listenOn) fields.push(`listen_on=${map.listenOn}`);
+            headers.forEach((header, index) => {
+                fields.push(`custom_headers.${index}.key=${header.name}`);
+                fields.push(`custom_headers.${index}.value=${header.value ?? ''}`);
+            });
+            out.commands.push({
+                argv: ['site', 'domain', 'add', '{{site_id}}', hostname, ...fields],
+                needs_site_id: true,
+            });
+        }
+
+        if (hasHostRewrite) {
+            // Documented trap: with a rewritten Host, the default rewrite_location=true
+            // rewrites the upstream's Location headers with the INTERNAL name.
+            const create = out.commands[0];
+            if (create && !create.argv.includes('settings.rewrite_location=false')) {
+                create.argv.push('settings.rewrite_location=false');
+                out.note('a Host header rewrite is present -> settings.rewrite_location=false'
+                    + ' (the default TRUE would rewrite upstream Location headers with the'
+                    + ' rewritten internal Host and leak it to the browser)');
+            }
+        }
+    }
+}
+
+// -- selection ----------------------------------------------------------------
+
+/** A --only/--skip value: comma-separated names, or @file (one name per line). */
+function nameList(value) {
+    let text = value;
+    if (value.startsWith('@')) {
+        const file = value.slice(1);
+        try {
+            text = fs.readFileSync(file, 'utf8').split('\n')
+                .map(line => line.replace(/#.*$/, '')).join(',');
+        } catch (e) {
+            die(`Cannot read selection file ${file}: ${e.message}`);
+        }
+    }
+    return text.split(/[,\n]/).map(name => name.trim()).filter(Boolean);
+}
+
+function selectSites(sites, only, skip) {
+    const key = (name) => String(name || '').trim().toLowerCase();
+    const present = new Map(sites.map(site => [key(site.name), site]));
+    const unresolved = [];
+    const resolve = (names) => {
+        const set = new Set();
+        for (const name of names) {
+            if (present.has(key(name))) set.add(key(name));
+            else unresolved.push(name);
+        }
+        return set;
+    };
+    const onlySet = only.length ? resolve(only) : null;
+    const skipSet = resolve(skip);
+    const selected = sites.filter(site => {
+        const k = key(site.name);
+        if (onlySet && !onlySet.has(k)) return false;
+        return !skipSet.has(k);
+    });
+    return { selected, unresolved };
+}
+
+// -- manifest -----------------------------------------------------------------
+
+function redactBlueprint(blueprint, includeSecrets) {
+    if (!blueprint) return null;
+    if (includeSecrets) return blueprint;
+    return {
+        ...blueprint,
+        environment_variables: blueprint.environment_variables
+            .map(entry => ({ name: entry.name, value: '(redacted)' })),
+        api_keys: undefined,
+    };
+}
+
+function manifestOf(conversions, meta, includeSecrets) {
+    return {
+        source: meta.source,
+        generated_at: new Date().toISOString(),
+        mode: meta.mode,
+        totals: meta.totals,
+        skipped_by_selection: meta.skipped,
+        unresolved_selectors: meta.unresolved,
+        sites: conversions.map(c => ({
+            name: c.name,
+            legacy_type: c.type,
+            verdict: c.verdict,
+            reasons: c.reasons,
+            notes: c.notes,
+            dropped: c.dropped,
+            commands: c.commands.map(command => command.argv),
+            instance_blueprint: redactBlueprint(c.instance_blueprint, includeSecrets),
+            applied: c.applied || null,
+        })),
+    };
+}
+
+function manifestText(manifest) {
+    const lines = [];
+    const t = manifest.totals;
+    lines.push(`Legacy import manifest -- ${manifest.source}`);
+    lines.push(`Generated ${manifest.generated_at}   mode: ${manifest.mode}`);
+    lines.push(`${t.read} sites read, ${t.skipped} skipped by selection,`
+        + ` ${t.converted} converted, ${t.needs_instance} need an instance,`
+        + ` ${t.needs_access_list} need an access list, ${t.unmappable} unmappable`);
+    if (manifest.unresolved_selectors.length) {
+        lines.push('');
+        lines.push('UNRESOLVED SELECTORS (no site carries this name):');
+        for (const name of manifest.unresolved_selectors) lines.push(`  - ${name}`);
+    }
+    if (manifest.skipped_by_selection.length) {
+        lines.push('');
+        lines.push(`SKIPPED BY SELECTION (${manifest.skipped_by_selection.length}):`);
+        lines.push('  ' + manifest.skipped_by_selection.join(', '));
+    }
+
+    const groups = [['converted', 'CONVERTED'], ['needs-instance', 'NEEDS INSTANCE'],
+        ['needs-access-list', 'NEEDS ACCESS LIST'], ['unmappable', 'UNMAPPABLE']];
+    for (const [verdict, title] of groups) {
+        const rows = manifest.sites.filter(site => site.verdict === verdict);
+        if (!rows.length) continue;
+        lines.push('');
+        lines.push(`== ${title} (${rows.length}) ==`);
+        for (const site of rows) {
+            const kind = (site.commands[0] || [])[3];
+            lines.push('');
+            lines.push(`${site.name} [${site.legacy_type}]${kind ? ' -> ' + kind : ''}`);
+            for (const reason of site.reasons) lines.push(`  ! ${reason}`);
+            for (const note of site.notes) lines.push(`  * ${note}`);
+            for (const drop of site.dropped) lines.push(`  - dropped ${drop.field}: ${drop.reason}`);
+            const bp = site.instance_blueprint;
+            if (bp) {
+                lines.push(`  instance blueprint: node ${bp.node_version || '(unset)'},`
+                    + ` script ${bp.script || '(unset)'}, uid ${bp.run_as_uid || '(unset)'},`
+                    + ` processes ${bp.minimum_processes ?? '-'}..${bp.maximum_processes ?? '-'},`
+                    + ` wait_for_ready ${bp.wait_for_ready ?? '-'},`
+                    + ` api keys ${bp.api_key_count}`);
+                const names = bp.environment_variables.map(v => v.name).filter(Boolean);
+                lines.push(`    environment variables: ${names.length ? names.join(', ') : '(none)'}`);
+            }
+            if (site.applied) lines.push(`  applied: ${JSON.stringify(site.applied)}`);
+        }
+    }
+    return lines.join('\n') + '\n';
+}
+
+// -- apply --------------------------------------------------------------------
+
+function runHoh(hohPath, argv) {
+    const result = cp.spawnSync(process.execPath, [hohPath, ...argv],
+        { encoding: 'utf8' });
+    if (result.error) die(`Cannot run ${hohPath}: ${result.error.message}`);
+    return { status: result.status, stdout: result.stdout || '', stderr: result.stderr || '' };
+}
+
+function existingSiteNames(hohPath) {
+    const result = runHoh(hohPath, ['sites', '--json']);
+    if (result.status !== 0) {
+        die(`Cannot read the existing sites through hoh:\n${result.stderr.trim()}`);
+    }
+    let data;
+    try {
+        data = JSON.parse(result.stdout);
+    } catch {
+        die('hoh sites --json did not answer JSON; refusing to import blind.');
+    }
+    return new Set((data.sites || []).map(site => String(site.name || '').trim().toLowerCase()));
+}
+
+function applyConversions(conversions, hohPath) {
+    const existing = existingSiteNames(hohPath);
+    for (const conversion of conversions) {
+        if (conversion.verdict !== 'converted') continue;
+        if (existing.has(conversion.name.trim().toLowerCase())) {
+            conversion.applied = { status: 'skipped', reason: 'a site with this name exists' };
+            console.log(`skip  ${conversion.name} (already present)`);
+            continue;
+        }
+        let siteId = null;
+        const domains = [];
+        for (const command of conversion.commands) {
+            const argv = command.argv.map(arg =>
+                arg === '{{site_id}}' ? String(siteId) : arg);
+            const result = runHoh(hohPath, [...argv, '--json']);
+            if (result.status !== 0) {
+                conversion.applied = { status: 'failed', refusal: result.stderr.trim(),
+                    command: argv };
+                console.error(`FAILED ${conversion.name}: hoh ${argv.map(shellQuote).join(' ')}`);
+                console.error(result.stderr.trim());
+                return { stopped: conversion.name };
+            }
+            let answer = null;
+            try {
+                answer = JSON.parse(result.stdout);
+            } catch {
+                // A verb that answers no JSON is still a success; nothing to read.
+            }
+            if (!command.needs_site_id && answer && answer.id !== undefined) {
+                siteId = answer.id;
+            } else if (command.needs_site_id && answer) {
+                domains.push(answer.id);
+            }
+        }
+        conversion.applied = { status: 'created', site_id: siteId, domain_ids: domains };
+        console.log(`ok    ${conversion.name} -> site ${siteId}`
+            + ` (${domains.length} hostname(s))`);
+    }
+    return { stopped: null };
+}
+
+// -- entry --------------------------------------------------------------------
+
+function parseArgs(argv) {
+    const options = { only: [], skip: [], map: null, apply: false,
+        manifest: 'hoh-import-manifest', includeSecrets: false,
+        hoh: path.join(__dirname, 'hoh'), source: null };
+    for (let i = 0; i < argv.length; i++) {
+        const arg = argv[i];
+        const value = () => {
+            const next = argv[++i];
+            if (next === undefined) die(`${arg} needs a value.`);
+            return next;
+        };
+        if (arg === '--only') options.only.push(...nameList(value()));
+        else if (arg === '--skip') options.skip.push(...nameList(value()));
+        else if (arg === '--map') options.map = value();
+        else if (arg === '--manifest') options.manifest = value();
+        else if (arg === '--hoh') options.hoh = value();
+        else if (arg === '--apply') options.apply = true;
+        else if (arg === '--dry-run') options.apply = false;
+        else if (arg === '--include-secrets') options.includeSecrets = true;
+        else if (arg === '--help' || arg === '-h') options.help = true;
+        else if (arg.startsWith('-')) die(`Unknown option "${arg}".`);
+        else if (options.source === null) options.source = arg;
+        else die(`Unexpected argument "${arg}".`);
+    }
+    return options;
+}
+
+const HELP = `hoh-import-legacy - convert an old Hohenheim Mongo "sites" export into hoh calls
+
+Usage: hoh-import-legacy <sites.json> [options]
+
+  --map <map.json>       instances / accessLists / listenOn the converter cannot create
+  --only <a,b|@file>     convert only these legacy site names
+  --skip <a,b|@file>     never convert these legacy site names
+  --dry-run              print the hoh invocations (DEFAULT; nothing is executed)
+  --apply                execute them through tools/hoh, stopping at the first refusal
+  --manifest <base>      manifest base path (default hoh-import-manifest[.json|.txt])
+  --include-secrets      keep environment-variable and api-key VALUES in the manifest
+                         (basic-auth passwords are never written, with or without it)
+  --hoh <path>           the hoh executable to drive (default: beside this script)
+
+Names are matched case-insensitively against the legacy "name" field; a selector
+that matches no site is reported, never silently ignored.`;
+
+function main() {
+    const options = parseArgs(process.argv.slice(2));
+    if (options.help || !options.source) {
+        console.log(HELP);
+        process.exit(options.help ? 0 : 1);
+    }
+
+    let sites;
+    try {
+        sites = JSON.parse(fs.readFileSync(options.source, 'utf8'));
+    } catch (e) {
+        die(`Cannot read ${options.source}: ${e.message}`);
+    }
+    if (!Array.isArray(sites)) die('The export must be a JSON array (mongoexport --jsonArray).');
+
+    const map = { instances: {}, accessLists: {}, listenOn: '' };
+    if (options.map) {
+        let raw;
+        try {
+            raw = JSON.parse(fs.readFileSync(options.map, 'utf8'));
+        } catch (e) {
+            die(`Cannot read ${options.map}: ${e.message}`);
+        }
+        for (const key of Object.keys(raw)) {
+            if (!(key in map)) die(`Unknown key "${key}" in the map file.`);
+        }
+        Object.assign(map, raw);
+    }
+
+    const { selected, unresolved } = selectSites(sites, options.only, options.skip);
+    const skipped = sites.filter(site => !selected.includes(site)).map(site => site.name);
+    const conversions = selected.map(site => convertSite(site, map, options));
+
+    const totals = {
+        read: sites.length,
+        skipped: skipped.length,
+        converted: conversions.filter(c => c.verdict === 'converted').length,
+        needs_instance: conversions.filter(c => c.verdict === 'needs-instance').length,
+        needs_access_list: conversions.filter(c => c.verdict === 'needs-access-list').length,
+        unmappable: conversions.filter(c => c.verdict === 'unmappable').length,
+    };
+
+    if (unresolved.length) {
+        process.stderr.write('Unresolved selector(s), no site carries these names: '
+            + unresolved.join(', ') + '\n');
+    }
+
+    let stopped = null;
+    if (options.apply) {
+        stopped = applyConversions(conversions, options.hoh).stopped;
+    } else {
+        for (const conversion of conversions) {
+            if (conversion.verdict !== 'converted') continue;
+            console.log(`# ${conversion.name} [${conversion.type}]`);
+            for (const command of conversion.commands) {
+                console.log('hoh ' + command.argv
+                    .map(arg => arg === '{{site_id}}' ? '<site-id>' : shellQuote(arg))
+                    .join(' '));
+            }
+        }
+    }
+
+    const manifest = manifestOf(conversions,
+        { source: path.resolve(options.source), mode: options.apply ? 'apply' : 'dry-run',
+            totals, skipped, unresolved },
+        options.includeSecrets);
+    const base = options.manifest;
+    fs.mkdirSync(path.dirname(path.resolve(base)), { recursive: true });
+    fs.writeFileSync(base + '.json', JSON.stringify(manifest, null, 2) + '\n');
+    fs.writeFileSync(base + '.txt', manifestText(manifest));
+    process.stderr.write(`Manifest written to ${base}.json and ${base}.txt\n`);
+    process.stderr.write(`${totals.converted} converted, ${totals.needs_instance} need an`
+        + ` instance, ${totals.needs_access_list} need an access list,`
+        + ` ${totals.unmappable} unmappable, ${totals.skipped} skipped\n`);
+    if (stopped) process.exit(1);
+}
+
+main();

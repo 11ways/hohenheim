@@ -300,3 +300,11 @@ hoh vars env 5 set KEY value          # environment (deploy baseline) values, AD
 (stub server; proves paths, the key header, the rollback and delete interlocks,
 the verbatim field pass-through of the site verbs and secret masking), driven in the verification lane by `HohCliTest`. Server-side coverage:
 `PaasApiTest` and `SiteApiTest` (browserTest).
+
+## The `hoh-import-legacy` converter
+
+`tools/hoh-import-legacy` turns an OLD (Node/Mongo) Hohenheim `sites` collection
+into exactly the calls above, driving `hoh` and nothing else. Dry-run by default;
+everything the new system cannot express is fail-closed and named in a manifest.
+Procedure, mapping table and manifest shape: `docs/legacy-import.md`. Tests:
+`node --test "tools/*.test.js"`.
