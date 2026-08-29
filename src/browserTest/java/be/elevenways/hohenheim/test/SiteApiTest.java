@@ -10,8 +10,10 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
@@ -25,12 +27,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import static be.elevenways.hohenheim.test.ApiSupport.codeOf;
 import static be.elevenways.hohenheim.test.ApiSupport.form;
 import static be.elevenways.hohenheim.test.ApiSupport.idOf;
 import static be.elevenways.hohenheim.test.ApiSupport.user;
+import static org.assertj.core.api.Assertions.assertThat;
+
 /**
  * The site/domain write lane of the PaaS API is the admin form's own pipeline reached
  * without a browser: every site kind a migration needs lands with its route claimed, a
@@ -123,6 +125,16 @@ class SiteApiTest extends HohenheimTestBase {
         return Models.get(SiteDomainModel.class).findBySiteId(siteId);
     }
 
+    /** The newest activity entry the site lane wrote for one site and action. */
+    private static Row activityOf(int siteId, String action) {
+        return new ActivityModel(Models.get(SiteModel.class).getResolvedDatasource()).find()
+            .where(ActivityModel.MODEL.eq(SiteModel.MODEL_ID.toString()))
+            .where(ActivityModel.RECORD_ID.eq(String.valueOf(siteId)))
+            .where(ActivityModel.ACTION.eq(action))
+            .orderBy(ActivityModel.ID, SortOrder.DESC)
+            .first();
+    }
+
     // -- the journeys ----------------------------------------------------------
 
     /** Every migration-relevant site kind lands through the form pipeline with its route claimed. */
@@ -145,6 +157,16 @@ class SiteApiTest extends HohenheimTestBase {
         assertThat(String.valueOf(proxySite.get(SiteModel.SETTINGS)))
             .as("step 1: the settings were coerced against the address kind's schema")
             .contains("forward_port=8080").contains("rewrite_location=false");
+        // The accountability of an API write is TWO columns, never one: zenit-auth's
+        // resolver stamps the origin off the ApiKeyPrincipal, so the detail slot is free
+        // to name the site instead of repeating the origin token.
+        Row logged = activityOf(proxySiteId, "created");
+        assertThat(logged).as("step 1: the API create is recorded").isNotNull();
+        assertThat((Object) logged.get(ActivityModel.ORIGIN))
+            .as("step 1: an API key stamps the origin column").isEqualTo("api");
+        assertThat((Object) logged.get(ActivityModel.DETAIL))
+            .as("step 1: the detail names the site, never the origin again")
+            .isEqualTo(PREFIX + "proxy");
 
         HttpResponse<String> earl = keyPost(keyAdmin, "/api/v1/sites/" + proxySiteId + "/domains",
             form("hostname", "Earl." + ZONE + ".", "custom_headers.0.key", "Host",
