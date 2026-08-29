@@ -39,6 +39,7 @@ import org.xbill.DNS.Name;
 import org.xbill.DNS.Record;
 import org.xbill.DNS.SOARecord;
 import org.xbill.DNS.TSIG;
+import org.xbill.DNS.Type;
 import org.xbill.DNS.ZoneTransferIn;
 
 import java.io.ByteArrayOutputStream;
@@ -59,6 +60,7 @@ import static be.elevenways.hohenheim.test.DnsFixtures.linkZonePeer;
 import static be.elevenways.hohenheim.test.DnsFixtures.record;
 import static be.elevenways.hohenheim.test.DnsFixtures.transferPeer;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The primary's own view of its federation, over real sockets: which serial each linked
@@ -279,6 +281,72 @@ class DnsFederationHealthTest {
             Models.get(DnsZonePeerModel.class).find().where(DnsZonePeerModel.ZONE_ID.eq(zoneId)).delete();
             Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ZONE_ID.eq(zoneId))
                 .and(DnsRecordModel.NAME.eq("notify-serial")).delete();
+            DnsZoneStore.INSTANCE.reload();
+        }
+    }
+
+    /**
+     * The serving view follows the COMMIT, never the write: a mutation transaction that
+     * rolls back leaves the primary answering exactly what the database still holds.
+     */
+    @Test
+    void theServingViewIsPublishedOnlyOnceTheTransactionCommits() throws Exception {
+        DnsZoneSnapshot before = DnsZoneStore.INSTANCE.getZone(ORIGIN);
+        long baseSerial = before.getSerial();
+        Name rolledBack = Name.fromString("rolled-back." + ORIGIN + ".");
+        Name committed = Name.fromString("committed." + ORIGIN + ".");
+        var datasource = Models.get(DnsZoneModel.class).getResolvedDatasource();
+
+        try {
+            // 1. A transaction that writes a record, bumps the serial and THEN fails --
+            //    the shape zenit-cms produces when its scoped re-load check refuses.
+            assertThatThrownBy(() -> datasource.withTransaction(tx -> {
+                record(zoneId, "rolled-back", DnsRecordModel.TYPE_TXT, "phantom");
+                DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
+                throw new IllegalStateException("out of scope");
+            })).as("step 1: the mutation failure reaches the caller")
+                .hasMessageContaining("out of scope");
+
+            // 2. Nothing landed in the database, and nothing is being served either:
+            //    the rolled-back serial and the phantom record are both absent.
+            assertThat(Models.get(DnsRecordModel.class).find()
+                .where(DnsRecordModel.ZONE_ID.eq(zoneId))
+                .and(DnsRecordModel.NAME.eq("rolled-back")).first())
+                .as("step 2: the record write rolled back").isNull();
+            DnsZoneSnapshot afterRollback = DnsZoneStore.INSTANCE.getZone(ORIGIN);
+            assertThat(afterRollback.getSerial())
+                .as("step 2: the served serial never moved").isEqualTo(baseSerial);
+            assertThat(afterRollback.getRrset(rolledBack, Type.TXT))
+                .as("step 2: the phantom record is not served").isNull();
+
+            // 3. A committing transaction: the served view is still the old one WHILE the
+            //    transaction runs, and carries both the new serial and the new record after.
+            long[] duringSerial = new long[1];
+            datasource.withTransaction(tx -> {
+                record(zoneId, "committed", DnsRecordModel.TYPE_TXT, "real");
+                DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
+                duringSerial[0] = DnsZoneStore.INSTANCE.getZone(ORIGIN).getSerial();
+            });
+            assertThat(duringSerial[0])
+                .as("step 3: uncommitted rows are never published").isEqualTo(baseSerial);
+            DnsZoneSnapshot afterCommit = DnsZoneStore.INSTANCE.getZone(ORIGIN);
+            assertThat(afterCommit.getSerial())
+                .as("step 3: the commit published exactly one bump").isEqualTo(baseSerial + 1);
+            assertThat(afterCommit.getRrset(committed, Type.TXT))
+                .as("step 3: and the committed record with it").hasSize(1);
+
+            // 4. Several bumps in ONE transaction coalesce into one rebuild that still
+            //    publishes the final state: every increment, and the rows they describe.
+            datasource.withTransaction(tx -> {
+                DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
+                DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
+            });
+            assertThat(DnsZoneStore.INSTANCE.getZone(ORIGIN).getSerial())
+                .as("step 4: one rebuild, both increments").isEqualTo(baseSerial + 3);
+        }
+        finally {
+            Models.get(DnsRecordModel.class).find().where(DnsRecordModel.ZONE_ID.eq(zoneId))
+                .and(DnsRecordModel.NAME.eq("committed")).delete();
             DnsZoneStore.INSTANCE.reload();
         }
     }
