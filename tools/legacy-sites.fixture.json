@@ -1,0 +1,145 @@
+[
+  {
+    "_id": { "$oid": "5848773c7cf34f5d1f8b0001" },
+    "created": { "$date": "2016-12-07T20:55:34.949Z" },
+    "updated": { "$date": "2017-08-27T20:39:00.349Z" },
+    "name": "Example Proxy",
+    "site_type": "proxy",
+    "settings": {
+      "url": "http://localhost:8080/",
+      "letsencrypt_email": "ops@example.test",
+      "letsencrypt_force": true,
+      "basic_auth": [null],
+      "delay": "100"
+    },
+    "domain": [
+      {
+        "listen_on": ["203.0.113.10", "2001:db8::2"],
+        "hostname": ["example.test", "www.example.test"],
+        "headers": [{ "name": "Host", "value": "example.oldbox" }]
+      }
+    ]
+  },
+  {
+    "_id": { "$oid": "5848773c7cf34f5d1f8b0002" },
+    "created": { "$date": "2017-01-02T10:00:00.000Z" },
+    "updated": { "$date": "2017-01-02T10:00:00.000Z" },
+    "name": "Example Subpath",
+    "site_type": "proxy_site",
+    "settings": {
+      "url": "http://localhost:8080/tenant/subpath/",
+      "letsencrypt_email": "ops@example.test"
+    },
+    "domain": [
+      {
+        "listen_on": ["203.0.113.10"],
+        "hostname": ["subpath.example.test"],
+        "headers": [{}]
+      }
+    ]
+  },
+  {
+    "_id": { "$oid": "5848773c7cf34f5d1f8b0003" },
+    "created": { "$date": "2018-03-04T10:00:00.000Z" },
+    "updated": { "$date": "2018-03-04T10:00:00.000Z" },
+    "name": "Example Redirect",
+    "site_type": "redirect",
+    "settings": {
+      "basic_auth": [null],
+      "target_url": "https://www.example.test",
+      "is_permanent": true,
+      "script": "/home/legacy/old/server.js"
+    },
+    "domain": [
+      {
+        "listen_on": ["203.0.113.10"],
+        "hostname": ["old.example.test", "*.old.example.test"],
+        "headers": []
+      }
+    ]
+  },
+  {
+    "_id": { "$oid": "5848773c7cf34f5d1f8b0004" },
+    "created": { "$date": "2019-05-06T10:00:00.000Z" },
+    "updated": { "$date": "2019-05-06T10:00:00.000Z" },
+    "name": "Example Static",
+    "site_type": "static",
+    "settings": {
+      "path": "/srv/example-static/build/",
+      "fallback_file": "/srv/example-static/build/index.html",
+      "letsencrypt_force": true,
+      "basic_auth": ["reviewer:hunter2"]
+    },
+    "domain": [
+      {
+        "listen_on": ["203.0.113.10"],
+        "hostname": ["static.example.test"],
+        "headers": []
+      }
+    ]
+  },
+  {
+    "_id": { "$oid": "5848773c7cf34f5d1f8b0005" },
+    "created": { "$date": "2020-07-08T10:00:00.000Z" },
+    "updated": { "$date": "2020-07-08T10:00:00.000Z" },
+    "name": "Example Workload",
+    "site_type": "alchemy",
+    "settings": {
+      "letsencrypt_force": true,
+      "basic_auth": [null],
+      "script": "/home/example/app/server.js",
+      "user": "4001",
+      "node": "16.13.2",
+      "wait_for_ready": true,
+      "minimum_processes": 1,
+      "maximum_processes": 2,
+      "api_keys": ["key-one"],
+      "environment_variables": [{ "name": "LD_LIBRARY_PATH", "value": "/opt/example/lib" }]
+    },
+    "domain": [
+      {
+        "listen_on": ["203.0.113.10"],
+        "hostname": ["app.example.test"],
+        "headers": []
+      }
+    ]
+  },
+  {
+    "_id": { "$oid": "5848773c7cf34f5d1f8b0006" },
+    "created": { "$date": "2016-08-09T10:00:00.000Z" },
+    "updated": { "$date": "2016-08-09T10:00:00.000Z" },
+    "name": "Example Node",
+    "site_type": "node",
+    "settings": {
+      "basic_auth": [null],
+      "script": "/home/example/preview/server.js",
+      "delay": "50",
+      "node": "6.9.4"
+    },
+    "domain": [
+      {
+        "listen_on": ["203.0.113.10"],
+        "hostname": ["preview.example.test"],
+        "headers": []
+      }
+    ]
+  },
+  {
+    "_id": { "$oid": "5848773c7cf34f5d1f8b0007" },
+    "created": { "$date": "2021-09-10T10:00:00.000Z" },
+    "updated": { "$date": "2021-09-10T10:00:00.000Z" },
+    "name": "Example Stranger",
+    "site_type": "proxy",
+    "settings": {
+      "url": "http://127.0.0.1:9000",
+      "unheard_of_setting": true
+    },
+    "domain": [
+      {
+        "listen_on": ["203.0.113.10"],
+        "hostname": ["stranger.example.test"],
+        "headers": []
+      }
+    ]
+  }
+]
