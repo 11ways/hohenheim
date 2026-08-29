@@ -6,8 +6,9 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * Adds the federation health bookkeeping: per secondary link the serial the peer was seen
- * serving (with probe time, error, lag start and alert stamp), and per zone the verdict of
- * the last delegation check against the parent zone.
+ * serving (with probe time, error, lag start and alert stamp) plus what this primary last
+ * did for it (AXFR served, NOTIFY sent), and per zone the verdict of the last delegation
+ * check against the parent zone.
  *
  * AIDEV-NOTE: every column is nullable with no default, so an upgraded install reads
  * "never probed" and "never checked" until the tasks run, never a fabricated healthy state.
@@ -27,6 +28,11 @@ public class M004_DnsFederationHealth extends HohenheimMigration {
                 column -> column.nullable(true).maxLength(512));
             table.addColumn("behind_since", ColumnType.DATETIME, column -> column.nullable(true));
             table.addColumn("stale_alerted_at", ColumnType.DATETIME, column -> column.nullable(true));
+            table.addColumn("last_axfr_at", ColumnType.DATETIME, column -> column.nullable(true));
+            table.addColumn("last_axfr_serial", ColumnType.INTEGER, column -> column.nullable(true));
+            table.addColumn("last_notify_at", ColumnType.DATETIME, column -> column.nullable(true));
+            table.addColumn("last_notify_outcome", ColumnType.STRING,
+                column -> column.nullable(true).maxLength(255));
         });
         schema.alterTable("dns_zones", table -> {
             table.addColumn("delegation_status", ColumnType.STRING,
@@ -45,6 +51,10 @@ public class M004_DnsFederationHealth extends HohenheimMigration {
             table.dropColumn("delegation_status");
         });
         schema.alterTable("dns_zone_peers", table -> {
+            table.dropColumn("last_notify_outcome");
+            table.dropColumn("last_notify_at");
+            table.dropColumn("last_axfr_serial");
+            table.dropColumn("last_axfr_at");
             table.dropColumn("stale_alerted_at");
             table.dropColumn("behind_since");
             table.dropColumn("probe_error");

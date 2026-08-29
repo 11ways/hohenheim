@@ -111,6 +111,16 @@ peer and zone, linking to the zone's Secondaries tab, and ONE
 The Secondaries tab shows a freshness pill (not probed / current / behind /
 stale), the served serial and the probe time per link.
 
+The primary also traces what IT did for each peer (`DnsFederationTrace`; the
+first real starfleet-to-OVH run showed a primary journaling nothing for a
+transfer it had just streamed): one `dns.axfr_served` / `dns.axfr_refused`
+structured log line per AXFR request (zone, serial, TSIG key name, ok or the
+refusal reason) and one `dns.notify_sent` per NOTIFY (zone, serial, peer, the
+ack's rcode / `timeout` / the send error), with the last of each stamped on the
+link (`last_axfr_at`, `last_axfr_serial`, `last_notify_at`,
+`last_notify_outcome`) and shown on the Secondaries tab. A served AXFR is
+attributed to the peer by the TSIG key name the request carried.
+
 `CheckDnsDelegations` (hourly) judges each primary zone from the parent's side:
 `SystemDelegationLookup` finds the parent zone's nameservers through the
 system resolver, `DelegationCheck` asks one of them for the zone's NS with

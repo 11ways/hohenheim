@@ -72,18 +72,27 @@ public final class AxfrResponder {
         TSIGRecord queryTsig = query.getTSIG();
         if (queryTsig == null) {
             Blast.log("DNS: AXFR of", zone.getOriginString(), "refused (no TSIG)");
+            DnsFederationTrace.axfrRefused(zone, null, "no TSIG");
             return null;
         }
         // AIDEV-NOTE: RFC 8945 wants NOTAUTH+BADKEY/BADSIG here; we send a plain
         // REFUSED, which dnsjava and NSD/Knot secondaries handle as a failed
         // transfer just the same. Revisit only if a picky secondary appears.
         TSIG key = this.keyResolver.resolve(zone.getZoneId(), queryTsig.getName());
-        if (key == null || key.verify(query, rawQuery, null) != Rcode.NOERROR) {
+        if (key == null) {
             Blast.log("DNS: AXFR of", zone.getOriginString(), "refused (unauthorized)");
+            DnsFederationTrace.axfrRefused(zone, queryTsig.getName(), "unknown key");
+            return null;
+        }
+        if (key.verify(query, rawQuery, null) != Rcode.NOERROR) {
+            Blast.log("DNS: AXFR of", zone.getOriginString(), "refused (unauthorized)");
+            DnsFederationTrace.axfrRefused(zone, queryTsig.getName(), "bad signature");
             return null;
         }
 
-        return buildStream(query, zone, key, queryTsig);
+        List<byte[]> stream = buildStream(query, zone, key, queryTsig);
+        DnsFederationTrace.axfrServed(zone, queryTsig.getName());
+        return stream;
     }
 
     private static @NonNull List<byte[]> buildStream(@NonNull Message query,

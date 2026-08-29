@@ -68,6 +68,15 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
             entry.put("probeError", probeError != null ? probeError : "");
             Instant probedAt = link.get(DnsZonePeerModel.PROBED_AT);
             entry.put("probedAtIso", probedAt != null ? probedAt.toString() : "");
+            // And what THIS primary last did for the peer.
+            Integer axfrSerial = link.get(DnsZonePeerModel.LAST_AXFR_SERIAL);
+            Instant axfrAt = link.get(DnsZonePeerModel.LAST_AXFR_AT);
+            Instant notifyAt = link.get(DnsZonePeerModel.LAST_NOTIFY_AT);
+            String notifyOutcome = link.get(DnsZonePeerModel.LAST_NOTIFY_OUTCOME);
+            entry.put("axfrSerial", axfrSerial != null ? String.valueOf(axfrSerial) : "");
+            entry.put("axfrAtIso", axfrAt != null ? axfrAt.toString() : "");
+            entry.put("notifyAtIso", notifyAt != null ? notifyAt.toString() : "");
+            entry.put("notifyOutcome", notifyOutcome != null ? notifyOutcome : "");
             Freshness freshness = freshnessOf(link);
             entry.put("freshnessLabel", freshness.label());
             entry.put("freshnessVariant", freshness.variant());

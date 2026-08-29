@@ -13,6 +13,7 @@ import org.xbill.DNS.Flags;
 import org.xbill.DNS.Message;
 import org.xbill.DNS.Name;
 import org.xbill.DNS.Opcode;
+import org.xbill.DNS.Rcode;
 import org.xbill.DNS.Record;
 import org.xbill.DNS.TSIG;
 import org.xbill.DNS.Type;
@@ -63,12 +64,17 @@ public final class DnsNotifier {
                 continue;
             }
             Integer port = peer.get(DnsPeerModel.TRANSFER_PORT);
-            sendNotify(host.trim(), port != null ? port : 53, origin, DnsTsig.forPeer(peer));
+            String outcome = sendNotify(host.trim(), port != null ? port : 53, origin,
+                DnsTsig.forPeer(peer));
+            Integer serial = zone.get(DnsZoneModel.SERIAL);
+            DnsFederationTrace.notifySent(link, peer, originString,
+                serial != null ? serial : 0, outcome);
         }
     }
 
-    private static void sendNotify(@NonNull String host, int port, @NonNull Name origin,
-                                   TSIG tsig) {
+    /** @return what came back: the ack's rcode, {@code timeout}, or the send error */
+    private static @NonNull String sendNotify(@NonNull String host, int port, @NonNull Name origin,
+                                              TSIG tsig) {
         try {
             Message notify = Message.newQuery(Record.newRecord(origin, Type.SOA, DClass.IN));
             notify.getHeader().setOpcode(Opcode.NOTIFY);
@@ -84,15 +90,21 @@ public final class DnsNotifier {
                 // Read the NOTIFY ack if it comes; a missed ack is fine (refresh covers it).
                 try {
                     byte[] buffer = new byte[512];
-                    socket.receive(new DatagramPacket(buffer, buffer.length));
+                    DatagramPacket ack = new DatagramPacket(buffer, buffer.length);
+                    socket.receive(ack);
+                    byte[] data = new byte[ack.getLength()];
+                    System.arraycopy(ack.getData(), 0, data, 0, ack.getLength());
+                    return Rcode.string(new Message(data).getRcode()).toLowerCase(java.util.Locale.ROOT);
                 }
                 catch (java.net.SocketTimeoutException ignored) {
                     // Secondary may not ack promptly; the refresh poll is the backstop.
+                    return "timeout";
                 }
             }
         }
         catch (Exception e) {
             Blast.log("DNS: NOTIFY to", host + ":" + port, "for", origin.toString(true), "failed:", e.getMessage());
+            return "error: " + e.getMessage();
         }
     }
 }
