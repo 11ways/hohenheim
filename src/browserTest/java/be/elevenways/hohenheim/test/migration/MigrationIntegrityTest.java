@@ -52,7 +52,7 @@ class MigrationIntegrityTest {
     /**
      * The highest migration version every deployed install has applied; see the class note.
      */
-    private static final String DEPLOYED_THROUGH = "006";
+    private static final String DEPLOYED_THROUGH = "007";
 
     /** Classpath resource holding one {@code <class>&lt;TAB&gt;<digest>} line per pinned migration. */
     private static final String PIN_RESOURCE = "migration-pins.txt";
