@@ -95,15 +95,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         admin = new UserPrincipal(adminRow.get(UserModel.ID), "Test Admin");
 
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, ZONE);
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + ZONE);
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@" + ZONE);
-        zone.set(DnsZoneModel.ROLE, DnsZoneModel.ROLE_PRIMARY);
-        zone.set(DnsZoneModel.ENABLED, true);
-        zones.save(zone);
-        zoneId = zone.get(DnsZoneModel.ID);
+        zoneId = DnsFixtures.createZone(ZONE, DnsZoneModel.ROLE_PRIMARY, null);
     }
 
     @Test

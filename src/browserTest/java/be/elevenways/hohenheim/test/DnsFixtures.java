@@ -17,32 +17,52 @@ final class DnsFixtures {
 
     /** An enabled zone with the conventional SOA fields and no declared role. */
     static int createZone(String origin) {
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, origin);
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + origin);
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@" + origin);
-        zone.set(DnsZoneModel.ENABLED, true);
-        zones.save(zone);
-        return zone.get(DnsZoneModel.ID);
+        return zone(origin, null, null, false);
     }
 
     /** An enabled zone in the given role, secondaries naming the peer they pull from. */
     static int createZone(String origin, String role, @Nullable Integer primaryPeerId) {
+        return zone(origin, role, primaryPeerId, false);
+    }
+
+    /** An enabled DNSSEC-signed zone with the conventional SOA fields and no declared role. */
+    static int createSignedZone(String origin) {
+        return zone(origin, null, null, true);
+    }
+
+    /**
+     * The one zone writer.
+     *
+     * A null role leaves BOTH role columns unwritten rather than writing nulls, so the
+     * role-less zone keeps the column defaults it has always been stored with.
+     *
+     * @return the stored zone's id
+     */
+    private static int zone(String origin, @Nullable String role,
+                            @Nullable Integer primaryPeerId, boolean dnssec) {
         DnsZoneModel zones = Models.get(DnsZoneModel.class);
         Row zone = zones.createEmptyRow();
         zone.set(DnsZoneModel.ORIGIN, origin);
         zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + origin);
         zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@" + origin);
-        zone.set(DnsZoneModel.ROLE, role);
-        zone.set(DnsZoneModel.PRIMARY_PEER_ID, primaryPeerId);
+        if (role != null) {
+            zone.set(DnsZoneModel.ROLE, role);
+            zone.set(DnsZoneModel.PRIMARY_PEER_ID, primaryPeerId);
+        }
         zone.set(DnsZoneModel.ENABLED, true);
+        if (dnssec) {
+            zone.set(DnsZoneModel.DNSSEC_ENABLED, true);
+        }
         zones.save(zone);
         return zone.get(DnsZoneModel.ID);
     }
 
-    /** An enabled record row. */
-    static void record(int zone, String name, String type, String value) {
+    /**
+     * An enabled record row.
+     *
+     * @return the stored record's id
+     */
+    static int record(int zone, String name, String type, String value) {
         DnsRecordModel records = Models.get(DnsRecordModel.class);
         Row row = records.createEmptyRow();
         row.set(DnsRecordModel.ZONE_ID, zone);
@@ -51,11 +71,16 @@ final class DnsFixtures {
         row.set(DnsRecordModel.VALUE, value);
         row.set(DnsRecordModel.ENABLED, true);
         records.save(row);
+        return row.get(DnsRecordModel.ID);
     }
 
-    /** An enabled record row carrying the per-type DATA payload (MX priority, SRV weight and port). */
-    static void record(int zone, String name, String type, String value,
-                       @Nullable Integer priority, @Nullable Integer weight, @Nullable Integer port) {
+    /**
+     * An enabled record row carrying the per-type DATA payload (MX priority, SRV weight and port).
+     *
+     * @return the stored record's id
+     */
+    static int record(int zone, String name, String type, String value,
+                      @Nullable Integer priority, @Nullable Integer weight, @Nullable Integer port) {
         DnsRecordModel records = Models.get(DnsRecordModel.class);
         Row row = records.createEmptyRow();
         row.set(DnsRecordModel.ZONE_ID, zone);
@@ -65,6 +90,7 @@ final class DnsFixtures {
         row.set(DnsRecordModel.DATA, DnsRecordModel.dataFor(type, priority, weight, port));
         row.set(DnsRecordModel.ENABLED, true);
         records.save(row);
+        return row.get(DnsRecordModel.ID);
     }
 
     /** An ACME-managed challenge row, the one an import or a cleanup must reason about. */

@@ -554,18 +554,11 @@ class InlineCellIsolationTest extends HohenheimTestBase {
     }
 
     private static int dnsRecord() {
-        Model zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, "inliso.test");
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1.inliso.test");
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@inliso.test");
-        zone.set(DnsZoneModel.ROLE, DnsZoneModel.ROLE_PRIMARY);
-        zone.set(DnsZoneModel.ENABLED, true);
-        zones.save(zone);
+        int zoneId = DnsFixtures.createZone("inliso.test", DnsZoneModel.ROLE_PRIMARY, null);
 
         Model records = Models.get(DnsRecordModel.class);
         Row row = records.createEmptyRow();
-        row.set(DnsRecordModel.ZONE_ID, zone.get(DnsZoneModel.ID));
+        row.set(DnsRecordModel.ZONE_ID, zoneId);
         row.set(DnsRecordModel.NAME, "inliso");
         row.set(DnsRecordModel.TYPE, DnsRecordModel.TYPE_A);
         row.set(DnsRecordModel.VALUE, "192.0.2.77");

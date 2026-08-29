@@ -264,23 +264,9 @@ class DynamicDnsTest extends HohenheimTestBase {
     // ------------------------------------------------------------------
 
     private String seedDynamicRecord(String origin, String name, String type, String value) {
-        DnsZoneModel zones = Models.get(DnsZoneModel.class);
-        Row zone = zones.createEmptyRow();
-        zone.set(DnsZoneModel.ORIGIN, origin);
-        zone.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + origin);
-        zone.set(DnsZoneModel.SOA_CONTACT, "hostmaster@" + origin);
-        zone.set(DnsZoneModel.ENABLED, true);
-        zones.save(zone);
-
-        DnsRecordModel records = Models.get(DnsRecordModel.class);
-        Row record = records.createEmptyRow();
-        record.set(DnsRecordModel.ZONE_ID, zone.get(DnsZoneModel.ID));
-        record.set(DnsRecordModel.NAME, name);
-        record.set(DnsRecordModel.TYPE, type);
-        record.set(DnsRecordModel.VALUE, value);
-        record.set(DnsRecordModel.ENABLED, true);
-        records.save(record);
-        String token = DynamicDnsService.mintFor(record.get(DnsRecordModel.ID));
+        int zoneId = DnsFixtures.createZone(origin);
+        int recordId = DnsFixtures.record(zoneId, name, type, value);
+        String token = DynamicDnsService.mintFor(recordId);
         DnsZoneStore.INSTANCE.reload();
         return token;
     }
