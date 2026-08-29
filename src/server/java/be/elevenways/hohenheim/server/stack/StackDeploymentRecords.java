@@ -5,6 +5,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
@@ -69,6 +70,31 @@ final class StackDeploymentRecords {
         } catch (RuntimeException e) {
             Blast.log("STACK: could not record deployment outcome", recordId, "-", e.getMessage());
         }
+    }
+
+    /**
+     * Fail every row of one stack still claiming "running": the boot sweep's half of the
+     * "every deployment settles" rule, for a deploy the process died under.
+     *
+     * @return how many rows were finalized
+     */
+    static int failRunning(int stackId, @NonNull String error) {
+        int finalized = 0;
+        try {
+            StackDeploymentModel model = Models.get(StackDeploymentModel.class);
+            for (Row row : model.find()
+                    .where(StackDeploymentModel.STACK_ID.eq(stackId))
+                    .where(StackDeploymentModel.STATUS.eq(StackDeploymentModel.STATUS_RUNNING))
+                    .all()) {
+                String log = row.get(StackDeploymentModel.LOG);
+                finished(row.get(StackDeploymentModel.ID), false, error,
+                    (log != null ? log : "") + "FAILED: " + error + '\n', null);
+                finalized++;
+            }
+        } catch (RuntimeException e) {
+            Blast.log("STACK: could not finalize interrupted deployments of stack", stackId, "-", e.getMessage());
+        }
+        return finalized;
     }
 
     private static void prune(StackDeploymentModel model, Integer stackId) {

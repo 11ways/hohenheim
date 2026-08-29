@@ -7,6 +7,7 @@
 {% declare addScheduleTarget: RouteTarget = null %}
 {% declare canEdit: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
+{% declare timeWording: RelativeTimeWording %}
 {% declare flashMessage: Microcopy = null %}
 {% declare flashVariant: String = "default" %}
 {% declare flashDuration: Integer = 0 %}
@@ -29,6 +30,7 @@
             <pl-table-head>{{ t("cron", scope: "instance_schedule") }}</pl-table-head>
             <pl-table-head>{{ t("timezone", scope: "instance_schedule") }}</pl-table-head>
             <pl-table-head>{{ t("state", scope: "instance_schedule") }}</pl-table-head>
+            <pl-table-head>{{ t("next_run", scope: "instance_schedule") }}</pl-table-head>
             <pl-table-head>{{ t("steps", scope: "instance_schedule") }}</pl-table-head>
         </pl-table-row></pl-table-header>
         <pl-table-body>
@@ -43,6 +45,15 @@
                     {% else %}
                     <pl-badge variant={% "destructive" %}>{{ t("disabled", scope: "instance_schedule") }}</pl-badge>
                     {% if schedule.get("disabledReason") %} {{ schedule.get("disabledReason") }}{% /if %}
+                    {% /if %}
+                </pl-table-cell>
+                <pl-table-cell data-next-run>
+                    {% if schedule.get("enabled") != true %}
+                    <span class="hh-muted">{{ t("next_run_disabled", scope: "instance_schedule") }}</span>
+                    {% elseif schedule.get("nextFireAtIso") != "" %}
+                    <pl-relative-time datetime={% schedule.get("nextFireAtIso") %} wording={% timeWording %} title={% schedule.get("nextFireAtIso") %}></pl-relative-time>
+                    {% else %}
+                    {{ t("next_run_sweep", scope: "instance_schedule") }}
                     {% /if %}
                 </pl-table-cell>
                 <pl-table-cell><a use:Zenit.route={% schedule.get("stepsTarget") %}>{{ t("steps", scope: "instance_schedule") }}</a></pl-table-cell>

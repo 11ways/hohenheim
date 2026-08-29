@@ -914,6 +914,10 @@
     },
     {
       "text": "Active",
+      "scope": "ban_state"
+    },
+    {
+      "text": "Active",
       "scope": "spamservice_key"
     },
     {
@@ -4004,10 +4008,16 @@
       "scope": "released_claim"
     }
   ],
-  "lifted": {
-    "text": "Ban lifted",
-    "scope": "ban"
-  },
+  "lifted": [
+    {
+      "text": "Ban lifted",
+      "scope": "ban"
+    },
+    {
+      "text": "Lifted",
+      "scope": "ban_state"
+    }
+  ],
   "duration_1h": {
     "text": "1 hour",
     "scope": "ban"
@@ -4865,6 +4875,10 @@
     "scope": "stack_services"
   },
   "state": [
+    {
+      "text": "State",
+      "scope": "ban"
+    },
     {
       "text": "State",
       "scope": "stack_services"
@@ -7305,10 +7319,27 @@
     "text": "That environment belongs to a project that does not own this record",
     "scope": "violations"
   },
-  "environment_in_use": {
-    "text": "This environment is still referenced by instances or variables",
-    "scope": "violations"
-  },
+  "environment_in_use": [
+    {
+      "text": "This environment is still referenced by instances or variables",
+      "scope": "violations"
+    },
+    {
+      "text": "This environment is still used by the instances {$instances}; move or delete them first",
+      "scope": "violations",
+      "holders": "instances"
+    },
+    {
+      "text": "This environment still holds the variables {$variables}; delete them first",
+      "scope": "violations",
+      "holders": "variables"
+    },
+    {
+      "text": "This environment is still used by the instances {$instances} and holds the variables {$variables}; move or delete them first",
+      "scope": "violations",
+      "holders": "both"
+    }
+  ],
   "dns_peer_in_use": {
     "text": "Peer {$name} is still the primary of {$count} secondary zone(s) such as {$zone}; repoint or delete them first",
     "scope": "violations"
@@ -8144,6 +8175,15 @@
     "scope": "server"
   },
   "singular": [
+    {
+      "text": "Schedule",
+      "scope": "instance_schedule"
+    },
+    {
+      "text": "schedule",
+      "scope": "instance_schedule",
+      "case": "sentence"
+    },
     {
       "text": "project",
       "scope": "project"
@@ -9773,6 +9813,10 @@
   "expired": [
     {
       "text": "Expired",
+      "scope": "ban_state"
+    },
+    {
+      "text": "Expired",
       "scope": "dns_transfer"
     },
     {
@@ -11311,5 +11355,37 @@
   "manage_record_name": {
     "text": "The full name, for example www.example.com; it must sit under a hostname of a site you manage",
     "scope": "help"
+  },
+  "next_run": {
+    "text": "Next run",
+    "scope": "instance_schedule"
+  },
+  "next_run_disabled": {
+    "text": "Not scheduled while disabled",
+    "scope": "instance_schedule"
+  },
+  "next_run_sweep": {
+    "text": "At the next sweep (within a minute)",
+    "scope": "instance_schedule"
+  },
+  "last_failure": {
+    "text": "Last failure",
+    "scope": "stack"
+  },
+  "last_deploy_failed": {
+    "text": "The last deploy failed",
+    "scope": "stack_services"
+  },
+  "view_deployments": {
+    "text": "Open the deployment log",
+    "scope": "stack_services"
+  },
+  "lifted_at": {
+    "text": "Lifted",
+    "scope": "field"
+  },
+  "lifted_by": {
+    "text": "Lifted by",
+    "scope": "field"
   }
 }

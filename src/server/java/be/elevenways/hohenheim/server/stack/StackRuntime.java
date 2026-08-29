@@ -104,27 +104,44 @@ public class StackRuntime {
 
     // -- async admin operations ----------------------------------------------
 
-    /** Queue a deploy of the stack's CURRENT records. */
+    /**
+     * Queue a deploy of the stack's CURRENT records.
+     *
+     * AIDEV-NOTE: the deployment row is minted HERE, at queue time, and handed to the
+     * worker -- never first inside {@code runDeploy}. The QA pass of 2026-08-29 found a
+     * stack reading "Failed" with "No deployments yet": whatever killed that first attempt
+     * did so before the worker's own record existed, and the boot sweep then stamped the
+     * status without a row to carry the reason. A queued intent now always has a row, and
+     * every path that settles it ({@code runDeploy}, the worker guard in
+     * {@code submitAsync}, {@link #resetInterruptedDeploys}) finalizes that same row.
+     */
     public void deployAsync(int stackId, @NonNull String reason) {
+        Integer recordId = scoped(() -> StackDeploymentRecords.started(stackId, reason));
         setStatus(stackId, StackModel.STATUS_DEPLOYING);
-        submitAsync(stackId, () -> runDeploy(stackId, reason, null));
+        submitAsync(stackId, () -> runDeploy(stackId, reason, null, recordId), recordId);
     }
 
     /** Queue a re-deploy of the newest successful deployment's spec snapshot. */
     public void rollbackAsync(int stackId) {
+        Integer recordId = scoped(() -> StackDeploymentRecords.started(stackId, REASON_ROLLBACK));
         setStatus(stackId, StackModel.STATUS_DEPLOYING);
         submitAsync(stackId, () -> {
             StackSpec snapshot = scoped(() -> latestSnapshot(stackId));
             if (snapshot == null) {
+                String failure = "No successful deployment to roll back to";
                 Blast.log("STACK: no successful deployment to roll back to for stack", stackId);
+                scoped(() -> {
+                    StackDeploymentRecords.finished(recordId, false, failure, "FAILED: " + failure + '\n', null);
+                    return null;
+                });
                 // Nothing was touched, so "failed" would lie about possibly-healthy
                 // containers: release the deploying claim and recompute from live state.
                 setStatus(stackId, StackModel.STATUS_INACTIVE);
                 refreshStatus(stackId);
                 return;
             }
-            runDeploy(stackId, REASON_ROLLBACK, snapshot);
-        });
+            runDeploy(stackId, REASON_ROLLBACK, snapshot, recordId);
+        }, recordId);
     }
 
     /** Queue a stop of every stack container (reverse dependency order). */
@@ -146,7 +163,8 @@ public class StackRuntime {
 
     /** Deploy synchronously (tests, scripted use); throws on failure. */
     public void deploy(int stackId, @NonNull String reason) throws IOException {
-        IOException failure = onWorker(stackId, () -> runDeploy(stackId, reason, null));
+        Integer recordId = scoped(() -> StackDeploymentRecords.started(stackId, reason));
+        IOException failure = onWorker(stackId, () -> runDeploy(stackId, reason, null, recordId));
         if (failure != null) {
             throw failure;
         }
@@ -158,7 +176,9 @@ public class StackRuntime {
         if (snapshot == null) {
             throw new IOException("No successful deployment to roll back to");
         }
-        IOException failure = onWorker(stackId, () -> runDeploy(stackId, REASON_ROLLBACK, snapshot));
+        Integer recordId = scoped(() -> StackDeploymentRecords.started(stackId, REASON_ROLLBACK));
+        IOException failure = onWorker(stackId,
+            () -> runDeploy(stackId, REASON_ROLLBACK, snapshot, recordId));
         if (failure != null) {
             throw failure;
         }
@@ -228,10 +248,18 @@ public class StackRuntime {
             Integer stackId = stack.get(StackModel.ID);
             Blast.log("STACK: deploy of stack", stackId,
                 "was interrupted by a restart; recomputing status from live containers");
+            // The row the interrupted deploy left "running" settles as FAILED with the
+            // one reason a restart can give, so the Deployments tab explains the status
+            // the sweep is about to stamp instead of showing nothing.
+            scoped(() -> StackDeploymentRecords.failRunning(stackId, INTERRUPTED_BY_RESTART));
             setStatus(stackId, StackModel.STATUS_FAILED);
             refreshStatus(stackId);
         }
     }
+
+    /** The error a deployment row carries when the controller restarted under it. */
+    public static final String INTERRUPTED_BY_RESTART =
+        "Interrupted by a controller restart before it could finish";
 
     /** Run a stack operation on its worker and wait, unwrapping the checked failure.
      *  Re-entrant: a call from within the same stack's worker runs inline, so worker
@@ -518,13 +546,17 @@ public class StackRuntime {
      *
      * @return the failure, or null on success (async callers log it, sync rethrow)
      */
-    private @Nullable IOException runDeploy(int stackId, String reason, @Nullable StackSpec snapshot) {
+    private @Nullable IOException runDeploy(int stackId, String reason, @Nullable StackSpec snapshot,
+                                            @Nullable Integer queuedRecordId) {
         // Claim the status HERE, not only at queue time: a deploy queued behind another
         // one must re-claim it when it actually starts, or the monitor sees the first
         // deploy's "active" while containers are mid-replace and fires a false alert.
         setStatus(stackId, StackModel.STATUS_DEPLOYING);
         StringBuilder log = new StringBuilder();
-        Integer recordId = scoped(() -> StackDeploymentRecords.started(stackId, reason));
+        // The row was minted when the deploy was QUEUED; a queue-time persistence failure
+        // (null) gets one more try here, so a settled deploy is never row-less by accident.
+        Integer recordId = queuedRecordId != null
+            ? queuedRecordId : scoped(() -> StackDeploymentRecords.started(stackId, reason));
         try {
             StackSpec spec = snapshot != null ? snapshot : scoped(() -> currentSpec(stackId));
             if (spec == null) {
@@ -860,11 +892,37 @@ public class StackRuntime {
 
     /** Queue fire-and-forget work on the stack's lane, stamped for re-entrant onWorker calls. */
     private void submitAsync(int stackId, @NonNull Runnable body) {
+        submitAsync(stackId, body, null);
+    }
+
+    /**
+     * Queue fire-and-forget work that owns a deployment row.
+     *
+     * AIDEV-NOTE: nobody reads the executor's future, so a Throwable escaping {@code
+     * body} used to vanish with the stack left claiming "deploying" and the row (if any)
+     * "running" forever -- exactly the row-less "Failed" the boot sweep then produced.
+     * The guard is the LAST line of defence behind {@code runDeploy}'s own catch: it
+     * settles the row and the status, logs, and never rethrows into the void.
+     *
+     * @param recordId the deployment row this work must settle, null when it has none
+     */
+    private void submitAsync(int stackId, @NonNull Runnable body, @Nullable Integer recordId) {
         Accountability caller = Accountability.current();
         workerFor(stackId).submit(() -> {
             CURRENT_STACK.set(stackId);
             try {
                 Accountability.runAs(caller, body);
+            } catch (Throwable e) {
+                String failure = e.getMessage() != null ? e.getMessage() : e.toString();
+                Blast.log("STACK: queued work failed for stack", stackId, "-", failure);
+                if (recordId != null) {
+                    scoped(() -> {
+                        StackDeploymentRecords.finished(recordId, false, failure,
+                            "FAILED: " + failure + '\n', null);
+                        return null;
+                    });
+                    setStatus(stackId, StackModel.STATUS_FAILED);
+                }
             } finally {
                 CURRENT_STACK.remove();
             }

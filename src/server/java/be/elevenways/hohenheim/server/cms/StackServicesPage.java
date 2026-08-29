@@ -104,6 +104,12 @@ public final class StackServicesPage implements RecordScopedPage<Row> {
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, "stack-services")
             .with(HohenheimParams.STACK_ID_PREFILL, stackId));
+        // The front door of a FAILED stack states the reason and links the row that
+        // carries it: a status badge alone sent the operator hunting through tabs.
+        String failure = StackFailures.reasonOf(stack);
+        vars.put("failureReason", failure != null ? failure : "");
+        vars.put("deploymentsTarget", failure != null
+            ? CmsRoutes.subpage(panel, "stacks", stackId, "deployments") : null);
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/stack-services"), vars);
     }

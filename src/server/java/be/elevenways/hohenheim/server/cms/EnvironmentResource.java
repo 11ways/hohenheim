@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -94,6 +95,19 @@ public final class EnvironmentResource extends RowResource {
     public @NonNull ConfirmationSpec deleteConfirmation() {
         return deleteConfirmation(
             Microcopy.of("delete_confirm").withFilter("scope", "environment"));
+    }
+
+    /**
+     * An environment still holding instances or variables is OFFERED BUT DEAD, with the
+     * holders named on the button -- the same names the write funnel's refusal would
+     * give after the click (it stays the gate; this is the affordance half).
+     */
+    @Override
+    public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
+                                                       @NonNull AccessContext accessContext) {
+        ProjectGuards.EnvironmentUsage usage = DeleteImpact.environmentUsage(
+            record.get(EnvironmentModel.ID));
+        return usage.isEmpty() ? null : usage.refusal();
     }
 
     /** Related-record prefill: /new?project_id=N arrives preselected. */

@@ -51,6 +51,15 @@
     </pl-card>
 
     {% if running %}
+    {#- InstanceStats.series RETURNS A REF (returnsReference): it is the same shape as
+        `defer`/Async.run, so it lives in a variable and the chart subscribes to it with
+        {:}. Handing the call straight to `points` assigned the ref object itself to the
+        List property and every running instance's Stats tab was a ClassCastException
+        (MutableRef -> List) -- on Docker and Incus alike; nothing here is per runtime. -#}
+    {% let cpuSeries = InstanceStats.series(instanceId, "cpu", cpuSeed) %}
+    {% let memorySeries = InstanceStats.series(instanceId, "memory", memorySeed) %}
+    {% let rxSeries = InstanceStats.series(instanceId, "rx", rxSeed) %}
+    {% let txSeries = InstanceStats.series(instanceId, "tx", txSeed) %}
     <pl-card>
         <pl-card-header>
             <pl-card-title>{{ t("cpu", scope: "instance_stats") }}</pl-card-title>
@@ -59,7 +68,7 @@
         <pl-card-content>
             <pl-sparkline area={% true %}
                           label={% t("cpu", scope: "instance_stats") %}
-                          points={% InstanceStats.series(instanceId, "cpu", cpuSeed) %}></pl-sparkline>
+                          points={% cpuSeries{:} %}></pl-sparkline>
         </pl-card-content>
     </pl-card>
 
@@ -71,7 +80,7 @@
         <pl-card-content>
             <pl-sparkline area={% true %}
                           label={% t("memory", scope: "instance_stats") %}
-                          points={% InstanceStats.series(instanceId, "memory", memorySeed) %}></pl-sparkline>
+                          points={% memorySeries{:} %}></pl-sparkline>
         </pl-card-content>
     </pl-card>
 
@@ -82,9 +91,9 @@
         </pl-card-header>
         <pl-card-content>
             <pl-sparkline label={% t("received", scope: "instance_stats") %}
-                          points={% InstanceStats.series(instanceId, "rx", rxSeed) %}></pl-sparkline>
+                          points={% rxSeries{:} %}></pl-sparkline>
             <pl-sparkline label={% t("transmitted", scope: "instance_stats") %}
-                          points={% InstanceStats.series(instanceId, "tx", txSeed) %}></pl-sparkline>
+                          points={% txSeries{:} %}></pl-sparkline>
         </pl-card-content>
     </pl-card>
     {% else %}

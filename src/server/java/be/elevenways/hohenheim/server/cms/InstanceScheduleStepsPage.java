@@ -33,9 +33,12 @@ import java.util.Map;
  */
 public final class InstanceScheduleStepsPage implements RecordScopedPage<Row> {
 
+    /** The schedule's front door: a schedule without steps runs nothing, so creation lands here. */
+    public static final String SLUG = "steps";
+
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedule_steps"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "schedule_step"); }
-    @Override public @NonNull String slug() { return "steps"; }
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("list-ol"); }
 
     @Override

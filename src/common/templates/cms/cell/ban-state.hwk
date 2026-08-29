@@ -1,0 +1,5 @@
+{#- Ban-list state cell: enforced, lifted by an operator, or expired -- one badge. -#}
+{% declare value: BanStateCell %}
+{% if value != null %}
+<pl-badge variant={% value.variant %} attr:data-ban-state={% value.token %}>{{ value.label }}</pl-badge>
+{% /if %}

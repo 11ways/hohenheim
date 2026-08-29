@@ -5,11 +5,14 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
 import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.http.Uri;
@@ -71,6 +74,14 @@ final class DeleteImpact {
     /** Request-scoped snapshot of every environment, so a variable listing names its owner once. */
     private static final IdentifierKey<List<Row>> ENVIRONMENTS =
         IdentifierKey.of("hohenheim", "delete_impact_environments");
+
+    /** Request-scoped snapshot of every instance, so an environment listing names its holders once. */
+    private static final IdentifierKey<List<Row>> INSTANCES =
+        IdentifierKey.of("hohenheim", "delete_impact_instances");
+
+    /** Request-scoped snapshot of every variable, so an environment listing names its holders once. */
+    private static final IdentifierKey<List<Row>> VARIABLES =
+        IdentifierKey.of("hohenheim", "delete_impact_variables");
 
     private DeleteImpact() {}
 
@@ -136,6 +147,33 @@ final class DeleteImpact {
             }
         }
         return rules;
+    }
+
+    /**
+     * What still references one environment, answered from the request snapshots; the
+     * wording is {@link ProjectGuards.EnvironmentUsage}'s, so the dead delete affordance
+     * and the write gate's refusal name the same holders.
+     */
+    static ProjectGuards.@NonNull EnvironmentUsage environmentUsage(@Nullable Integer environmentId) {
+        List<String> instances = new ArrayList<>();
+        List<String> variables = new ArrayList<>();
+        if (environmentId == null) {
+            return new ProjectGuards.EnvironmentUsage(instances, variables);
+        }
+        for (Row instance : instances()) {
+            if (environmentId.equals(instance.get(InstanceModel.ENVIRONMENT_ID))
+                    && instance.get(InstanceModel.DELETED_AT) == null) {
+                instances.add(ProjectGuards.EnvironmentUsage.nameOf(
+                    instance.get(InstanceModel.NAME), instance.get(InstanceModel.ID)));
+            }
+        }
+        for (Row variable : variables()) {
+            if (environmentId.equals(variable.get(InstanceVariableModel.ENVIRONMENT_ID))) {
+                variables.add(ProjectGuards.EnvironmentUsage.nameOf(
+                    variable.get(InstanceVariableModel.KEY), variable.get(InstanceVariableModel.ID)));
+            }
+        }
+        return new ProjectGuards.EnvironmentUsage(instances, variables);
     }
 
     /** @return the environment's name, or null when the reference is absent or dangling */
@@ -371,6 +409,15 @@ final class DeleteImpact {
 
     private static @NonNull List<Row> environments() {
         return snapshot(ENVIRONMENTS, () -> Models.get(EnvironmentModel.class).find().all());
+    }
+
+    /** Soft-deleted instances included; environment usage filters them out itself. */
+    private static @NonNull List<Row> instances() {
+        return snapshot(INSTANCES, () -> Models.get(InstanceModel.class).find().withTrashed().all());
+    }
+
+    private static @NonNull List<Row> variables() {
+        return snapshot(VARIABLES, () -> Models.get(InstanceVariableModel.class).find().all());
     }
 
     /** Read a snapshot from the request scope, loading it once when it is not there yet. */

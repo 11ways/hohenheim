@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -19,6 +20,7 @@ import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -57,6 +59,10 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
             entry.put("timezone", schedule.get(RecordScheduleModel.TIMEZONE));
             entry.put("enabled", Boolean.TRUE.equals(schedule.get(RecordScheduleModel.ENABLED)));
             entry.put("disabledReason", schedule.get(RecordScheduleModel.DISABLED_REASON));
+            // "When does this run next" is the one thing a scheduling operator checks after
+            // saving; a null next fire is the framework's "at the next sweep".
+            Instant nextFireAt = schedule.get(RecordScheduleModel.NEXT_FIRE_AT);
+            entry.put("nextFireAtIso", nextFireAt != null ? nextFireAt.toString() : "");
             entry.put("editTarget", CmsRoutes.detail(panel, "instance-schedules",
                 schedule.get(RecordScheduleModel.ID)));
             entry.put("stepsTarget", CmsRoutes.subpage(panel, "instance-schedules",
@@ -85,6 +91,8 @@ public final class InstanceSchedulesPage implements RecordScopedPage<Row> {
             .with(CmsEndpoints.RESOURCE_PARAM, "instance-schedules")
             .with(HohenheimParams.RECORD_ID_PREFILL, instanceId) : null);
         vars.put("recordTabs", recordTabs(conduit));
+        vars.put("timeWording", RelativeTimeWording.resolve(
+            conduit.getLocales(), conduit.getMessageResolver()));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-schedules"), vars);
     }
 }

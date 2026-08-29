@@ -5,6 +5,8 @@
 {% declare stackName: String %}
 {% declare services: List %}
 {% declare addServiceTarget: RouteTarget %}
+{% declare failureReason: String = "" %}
+{% declare deploymentsTarget: RouteTarget = null %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% declare flashVariant: String = "default" %}
@@ -20,6 +22,16 @@
 
     {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
+
+    {% if failureReason != "" %}
+    <pl-alert variant="destructive" data-stack-failure>
+        <pl-alert-title>{{ t("last_deploy_failed", scope: "stack_services") }}</pl-alert-title>
+        <pl-alert-description>
+            {{ failureReason }}
+            <a use:Zenit.route={% deploymentsTarget %} data-stack-failure-log>{{ t("view_deployments", scope: "stack_services") }}</a>
+        </pl-alert-description>
+    </pl-alert>
+    {% /if %}
 
     {% if services %}
     <pl-table striped={% true %}>
