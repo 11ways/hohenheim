@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -12,6 +14,7 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -34,6 +37,7 @@ import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * Integration test for {@link DatabaseService}: create persists + provisions, backup resolves
@@ -152,6 +156,119 @@ class DatabaseServiceTest {
             assertThat(service.detail(name).running()).isTrue();
         } finally {
             service.destroy(name, true);
+        }
+    }
+
+    /**
+     * The CMS create shape: {@code createAsync} runs INSIDE the resource's mutation
+     * transaction, so the pool thread must not look for the record before the caller
+     * commits -- it used to read "No managed database named ..." 100 ms after a
+     * successful create and leave the record "provisioning" forever with no container and
+     * no error (F4, 2026-08-29). And a provision that genuinely fails is TERMINAL and
+     * visible: status failed, the reason on the record, an attention item naming it.
+     */
+    @Test
+    void createAsyncProvisionsAfterTheCallersCommitAndAFailureIsTerminalWithItsReason()
+            throws IOException {
+        LiveLane.require(LiveLane.Need.DOCKER_SOCKET, Files.exists(SOCKET),
+            "Docker socket not present");
+        DockerClient docker = new DockerClient();
+        LiveLane.requireImage(docker, PG_IMAGE);
+
+        SqliteDatasource datasource = freshDatasource();
+        DatabaseService service = new DatabaseService(datasource);
+        String name = "aftercommit" + System.nanoTime();
+        String doomed = "doomed" + System.nanoTime();
+        try {
+            // 1. Create INSIDE an open transaction and hold it: the record is visible to
+            //    this thread only, and the pool must not have started -- no container,
+            //    still provisioning -- however long the transaction stays open.
+            datasource.withTransaction(transaction -> Db.run(datasource, () -> {
+                Row created = service.createAsync(name, ManagedDatabase.Engine.POSTGRES,
+                    PG_IMAGE, "appuser", "secret123", "appdb", true);
+                assertThat((String) created.get(DatabaseModel.STATUS))
+                    .as("step 1: the record is born provisioning")
+                    .isEqualTo(DatabaseService.STATUS_PROVISIONING);
+                pause(2_000);
+                assertThat(service.detail(name).status())
+                    .as("step 1: nothing flipped the status while the create was"
+                        + " uncommitted (a pool thread that could not find the row"
+                        + " used to leave it here for ever)")
+                    .isEqualTo(DatabaseService.STATUS_PROVISIONING);
+                // No engine instance row and no container: the record owns nothing
+                // yet, so the live status is ABSENT (EngineHandles.of would refuse to
+                // even name a handle here).
+                DatabaseService.Detail pending = service.detail(name);
+                assertThat(pending.running())
+                    .as("step 1: nothing runs before the commit").isFalse();
+                assertThat(pending.containerState())
+                    .as("step 1: no container exists before the commit")
+                    .isEqualTo(ContainerState.ABSENT);
+            }));
+
+            // 2. After the commit the pool provisions: active, running, a real container.
+            assertThat(awaitStatus(service, name, DatabaseService.STATUS_ACTIVE, 120_000))
+                .as("step 2: the record turns active once the caller committed")
+                .isEqualTo(DatabaseService.STATUS_ACTIVE);
+            DatabaseService.Detail active = service.detail(name);
+            assertThat(active.running()).as("step 2: the engine runs").isTrue();
+            assertThat(active.failureReason()).as("step 2: a success carries no reason").isNull();
+            assertThat(docker.inspectContainer(EngineHandles.of(name)))
+                .as("step 2: the engine container exists at the daemon")
+                .isNotNull();
+
+            // 3. A provision that CANNOT succeed (an image nobody can pull) ends FAILED,
+            //    with the daemon's own words on the record -- never "provisioning".
+            service.createAsync(doomed, ManagedDatabase.Engine.POSTGRES,
+                "hohenheim-test/does-not-exist:never", "appuser", "secret123", "appdb", true);
+            assertThat(awaitStatus(service, doomed, DatabaseService.STATUS_FAILED, 120_000))
+                .as("step 3: an unpullable image is a terminal failure")
+                .isEqualTo(DatabaseService.STATUS_FAILED);
+            DatabaseService.Detail failed = service.detail(doomed);
+            assertThat(failed.failureReason())
+                .as("step 3: the record carries WHY")
+                .isNotBlank();
+
+            // 4. And the failure finds the operator: the attention list names the
+            //    database with that reason.
+            List<AttentionItem> items = Db.supply(datasource, AttentionCollector::collect);
+            assertThat(items)
+                .as("step 4: an attention item names the failed database with its reason")
+                .anySatisfy(item -> {
+                    assertThat(String.valueOf(item.title().args().get("name")))
+                        .isEqualTo(doomed);
+                    assertThat(item.detail()).isNotNull();
+                    assertThat(String.valueOf(item.detail().args().get("reason")))
+                        .isEqualTo(failed.failureReason());
+                });
+        } finally {
+            for (String each : List.of(name, doomed)) {
+                try {
+                    service.destroy(each, true);
+                } catch (IOException ignored) {
+                    // best effort
+                }
+            }
+        }
+    }
+
+    private static String awaitStatus(DatabaseService service, String name, String wanted,
+                                      long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        String status = service.detail(name).status();
+        while (!wanted.equals(status) && System.currentTimeMillis() < deadline) {
+            pause(500);
+            status = service.detail(name).status();
+        }
+        return status;
+    }
+
+    private static void pause(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("interrupted while waiting");
         }
     }
 

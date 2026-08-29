@@ -20,7 +20,7 @@
     "scope": "violations"
   },
   "database_in_use": {
-    "text": "Databank '{$name}' is gekoppeld aan {$workloads}; koppel ze daar eerst los",
+    "text": "Databank '{$name}' is gekoppeld aan {$workloads}; koppel ze eerst los op het tabblad Databanken van de instantie",
     "scope": "violations"
   },
   "database_missing": {
@@ -1169,6 +1169,10 @@
       "scope": "instance_volume"
     },
     {
+      "text": "Geen gekoppelde databanken",
+      "scope": "instance_database"
+    },
+    {
       "text": "Geen beschermde paden",
       "scope": "site_protected_paths"
     }
@@ -1213,6 +1217,10 @@
     {
       "text": "Deze instantie heeft nog geen datamappen.",
       "scope": "instance_volume"
+    },
+    {
+      "text": "Nog geen beheerde databank injecteert haar verbindingsgegevens in deze instantie.",
+      "scope": "instance_database"
     },
     {
       "text": "Voeg een padprefix en een toegangslijst toe; aanvragen eronder moeten die lijst passeren bovenop wat de site al vereist.",
@@ -1433,6 +1441,10 @@
     "text": "Aanmaken mislukt",
     "scope": "attention_detail"
   },
+  "provisioning_failed_reason": {
+    "text": "Aanmaken mislukt: {$reason}",
+    "scope": "attention_detail"
+  },
   "ready": {
     "text": "Gereed",
     "scope": "spamservice"
@@ -1587,6 +1599,10 @@
     {
       "text": "Status: {$status}",
       "scope": "database_tab"
+    },
+    {
+      "text": "Status",
+      "scope": "instance_database"
     },
     {
       "text": "Status",
@@ -2804,6 +2820,10 @@
   ],
   "database_name": {
     "text": "Unieke naam voor deze beheerde database; benoemt ook de container en het volume. Kleine letters, cijfers en streepjes.",
+    "scope": "help"
+  },
+  "database_failure_reason": {
+    "text": "Waarom het laatste aanmaken of verwijderen mislukte, zoals de host het meldde. Wordt gewist zodra een volgende poging slaagt.",
     "scope": "help"
   },
   "db_user": [
@@ -4058,6 +4078,10 @@
   ],
   "ban_reason": {
     "text": "Reden",
+    "scope": "field"
+  },
+  "failure_reason": {
+    "text": "Reden van mislukking",
     "scope": "field"
   },
   "ban_source": {
@@ -5330,6 +5354,10 @@
   },
   "instance_destroy_failed": {
     "text": "Vernietigen van {$name} is mislukt: {$reason}. Het record blijft bewaard; probeer opnieuw zodra de host bereikbaar is.",
+    "scope": "violations"
+  },
+  "instance_data_destroy_failed": {
+    "text": "De data van {$name} kon niet verwijderd worden: {$reason}. De volumes die de host nog vasthoudt meldt de reconciler; probeer opnieuw zodra hij bereikbaar is.",
     "scope": "violations"
   },
   "quota_reached": {
@@ -6677,6 +6705,10 @@
     {
       "text": "Volume toevoegen",
       "scope": "instance_volume"
+    },
+    {
+      "text": "Databank koppelen",
+      "scope": "instance_database"
     }
   ],
   "run_now": {
@@ -8832,6 +8864,10 @@
       "scope": "instance_volume"
     },
     {
+      "text": "{$name} - Databanken",
+      "scope": "instance_database"
+    },
+    {
       "text": "{$name} - Deployments",
       "scope": "instance_deployments"
     },
@@ -8986,6 +9022,10 @@
     {
       "text": "Dit verwijdert de map van dit volume op de host definitief, met alles erin.",
       "scope": "instance_volume"
+    },
+    {
+      "text": "'{$database}' loskoppelen van '{$instance}'? De workload kan de databank niet meer bereiken zodra je bevestigt, en verliest zijn {$prefix}_*-verbindingsvariabelen bij de volgende deploy.",
+      "scope": "instance_database"
     }
   ],
   "probe_now": {
@@ -10573,7 +10613,7 @@
     "scope": "instance"
   },
   "delete_with_data_confirm": {
-    "text": "Dit verwijdert de container van '{$name}' EN elk volume dat erbij hoort. De bestanden zijn definitief weg. Typ de naam om te bevestigen.",
+    "text": "Dit verwijdert de container van '{$name}', elk benoemd volume dat erbij hoort en elke hostmap die erin gemonteerd is. De bestanden zijn definitief weg. Typ de naam om te bevestigen.",
     "scope": "instance"
   },
   "deleted_with_data_toast": {
@@ -10606,9 +10646,19 @@
     "text": "Maak een site die deze instantie op een hostnaam beschikbaar maakt",
     "scope": "instance"
   },
-  "tab_hint": {
-    "text": "Elk volume is een map op de host, gemonteerd in de container op het pad dat je kiest. Wijzigingen gelden vanaf de volgende deploy.",
-    "scope": "instance_volume"
+  "tab_hint": [
+    {
+      "text": "Elk volume is een map op de host, gemonteerd in de container op het pad dat je kiest. Wijzigingen gelden vanaf de volgende deploy.",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "Elke gekoppelde databank injecteert haar verbindingsvariabelen in de workload bij de deploy. Loskoppelen trekt de bereikbaarheid meteen in; de variabelen verdwijnen bij de volgende deploy.",
+      "scope": "instance_database"
+    }
+  ],
+  "record_title": {
+    "text": "{$database} op {$instance}",
+    "scope": "instance_database"
   },
   "usage": {
     "text": "In gebruik",
@@ -10847,7 +10897,7 @@
     "scope": "instance"
   },
   "delete_with_data_confirm_stranding": {
-    "text": "Dit verwijdert de container van '{$name}' ÉN elk volume dat hij bezit. De bestanden zijn definitief weg. Deze sites stellen hem beschikbaar en worden UITGESCHAKELD: {$sites}. Typ de naam om te bevestigen.",
+    "text": "Dit verwijdert de container van '{$name}', elk benoemd volume dat erbij hoort en elke hostmap die erin gemonteerd is. De bestanden zijn definitief weg. Deze sites stellen hem beschikbaar en worden UITGESCHAKELD: {$sites}. Typ de naam om te bevestigen.",
     "scope": "instance"
   },
   "state_on": {
@@ -10972,6 +11022,10 @@
     {
       "text": "{$count} actieve instanties zijn van dit sjabloon gemaakt. Vernietig ze eerst, anders verwijzen hun records naar een sjabloon dat niet meer bestaat.",
       "scope": "instance_template"
+    },
+    {
+      "text": "Databank '{$name}' is gekoppeld aan {$workloads}. Koppel ze eerst los op het tabblad Databanken van elke instantie.",
+      "scope": "database"
     },
     {
       "text": "{$instances} actieve instanties en {$templates} sjablonen draaien nog in deze image. Wijs ze eerst een andere toe, anders mislukt hun volgende deploy op een image die niet meer bestaat.",

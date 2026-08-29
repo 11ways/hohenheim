@@ -337,6 +337,8 @@ public class InitialMigration extends HohenheimMigration {
             table.timestamps();
             table.addColumn("status", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(20).defaultValue("active"));
+            table.addColumn("failure_reason", ColumnType.TEXT,
+                column -> column.nullable(true));
             table.addColumn("memory_limit_mb", ColumnType.INTEGER,
                 column -> column.nullable(true));
             table.addColumn("cpu_limit", ColumnType.DOUBLE,

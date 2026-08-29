@@ -847,10 +847,51 @@ public final class InstanceService {
         if (row.get(InstanceModel.DELETED_AT) == null) {
             destroy(instanceId);
         }
-        List<String> removed = InstanceVolumes.destroyAll(instanceId, serverName);
+        List<String> removed = new ArrayList<>(removeNamedVolumes(row, serverName));
+        removed.addAll(InstanceVolumes.destroyAll(instanceId, serverName));
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, "deleted_data",
             String.join(", ", removed));
+        Blast.log("INSTANCE: deleted data of", row.get(InstanceModel.NAME), "-",
+            removed.isEmpty() ? "nothing to remove" : String.join(", ", removed));
         return removed;
+    }
+
+    /**
+     * Remove the NAMED daemon volumes an instance's deployment created, owner-verified
+     * per volume by the driver; the rootfs-stateful drivers own none.
+     *
+     * AIDEV-NOTE: this is the half "Delete with data" never delivered (F5, 2026-08-29):
+     * {@link InstanceVolumes#destroyAll} only knows the host-directory rows, while a
+     * docker container's {@code volumes} setting materializes {@code <handle>-vol-<name>}
+     * daemon volumes that survived every delete-with-data, dialog wording notwithstanding.
+     * The spec is derived from the STORED settings (never {@link #resolve}, which refuses
+     * a soft-deleted record, and this verb must work on one), and the driver refuses a
+     * same-named volume the daemon does not attribute to this record.
+     *
+     * @return the materialized volume names that were removed or observed absent
+     * @throws Violations {@code instance_data_destroy_failed} when the daemon refused
+     */
+    private static @NonNull List<String> removeNamedVolumes(@NonNull Row row,
+                                                            @NonNull String serverName) {
+        Map<String, String> logical = InstanceSnapshots.logicalVolumes(row);
+        InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
+        if (logical.isEmpty() || handler == null) {
+            return List.of();
+        }
+        InstanceRuntime runtime = handler.runtimeFor(serverName);
+        if (!(runtime instanceof VolumeSnapshotSupport volumes)) {
+            return List.of();
+        }
+        int instanceId = row.get(InstanceModel.ID);
+        Map<String, Object> settings = row.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
+            ? castSettings(map) : Map.of();
+        InstanceSpec spec = handler.specFor(instanceId, settings);
+        try {
+            volumes.removeVolumesForRestore(spec, logical, logical.keySet());
+        } catch (IOException e) {
+            throw refusal("instance_data_destroy_failed", row, e);
+        }
+        return new ArrayList<>(spec.volumes().keySet());
     }
 
     /**

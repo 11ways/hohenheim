@@ -50,6 +50,7 @@ import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
+import be.elevenways.zenit.cms.server.page.CmsActionResultTranslator;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
@@ -679,9 +680,19 @@ public class InstanceResource extends RowResource {
                 .build())
             .handler((row, ctx) -> {
                 this.instances.destroyWithData(row.get(InstanceModel.ID));
-                return CmsActionResult.refreshWithToast(
-                    Microcopy.of("deleted_with_data_toast").withFilter("scope", "instance")
-                        .withArg("name", row.get(InstanceModel.NAME)));
+                // The record is soft-deleted now, so a Refresh would soft-redirect back to
+                // a detail page that no longer resolves and the toast would never show
+                // (F5: "the page just sits there"). Stash the toast, land on the list.
+                Microcopy done = Microcopy.of("deleted_with_data_toast")
+                    .withFilter("scope", "instance")
+                    .withArg("name", row.get(InstanceModel.NAME));
+                Conduit conduit = ctx.access().conduit();
+                if (conduit == null) {
+                    return CmsActionResult.refreshWithToast(done);
+                }
+                CmsActionResultTranslator.stashSuccess(conduit, done);
+                return CmsActionResult.redirect(new Uri(
+                    CmsRoutes.list(CmsSupport.panelSlug(conduit), slug()).toUrl()));
             })
             .build();
     }
@@ -760,7 +771,7 @@ public class InstanceResource extends RowResource {
             new InstanceSnapshotsPage(new InstanceSnapshotResource()),
             new InstanceBackupsPage(new InstanceBackupResource()),
             new InstanceSchedulesPage(), new InstanceDevicesPage(),
-            new InstanceVolumesPage(),
+            new InstanceVolumesPage(), new InstanceDatabasesPage(),
             // Operator-only: the page hides AND 404s itself for a delegate, and the
             // /manage resource never lists it at all.
             new InstanceMigratePage()));

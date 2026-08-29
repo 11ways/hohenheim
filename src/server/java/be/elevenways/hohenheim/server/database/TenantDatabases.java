@@ -169,9 +169,7 @@ public final class TenantDatabases {
         }
 
         Models.get(DatabaseModel.class).getResolvedDatasource().afterCommit(
-            () -> service.provisionInBackground(storedName, engine, "app",
-                record.get(DatabaseModel.DB_PASSWORD), sqlIdentifier(label),
-                ResourceLimits.none()));
+            () -> service.provisionInBackground(recordId));
         return record;
     }
 

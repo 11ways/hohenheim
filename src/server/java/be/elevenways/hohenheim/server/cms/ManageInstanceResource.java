@@ -138,7 +138,7 @@ public final class ManageInstanceResource extends InstanceResource {
             new InstanceSnapshotsPage(new ManageInstanceSnapshotResource()),
             new InstanceBackupsPage(new ManageInstanceBackupResource()),
             new InstanceSchedulesPage(), new InstanceDevicesPage(),
-            new InstanceVolumesPage()));
+            new InstanceVolumesPage(), new InstanceDatabasesPage()));
         pages.addAll(RecordSubpageRegistry.INSTANCE.contributionsFor(this.model().getModelId()));
         return pages;
     }

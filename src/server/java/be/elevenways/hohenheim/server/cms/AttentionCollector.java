@@ -591,9 +591,12 @@ public final class AttentionCollector {
             .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_FAILED))
             .all();
         for (Row row : rows) {
+            String reason = row.get(DatabaseModel.FAILURE_REASON);
             items.add(item("error", "database",
                 copy("database", "attention_title", "name", row.get(DatabaseModel.NAME)),
-                copy("provisioning_failed", "attention_detail"),
+                reason == null || reason.isBlank()
+                    ? copy("provisioning_failed", "attention_detail")
+                    : copy("provisioning_failed_reason", "attention_detail", "reason", reason),
                 CmsRoutes.detail(ADMIN, "databases", row.get(DatabaseModel.ID))));
         }
     }

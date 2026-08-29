@@ -132,6 +132,17 @@ public class DatabaseModel extends Model {
     private static Microcopy statusLabel(String status) {
         return Microcopy.of(status).withFilter("scope", "database_status");
     }
+
+    /**
+     * WHY the last provision or destroy failed, verbatim from the daemon; set beside a
+     * {@code failed}/{@code destroy_failed} status and cleared by a successful outcome.
+     */
+    public static final TextField FAILURE_REASON = SCHEMA.addField(TextField.builder()
+        .name("failure_reason")
+        .label(HohenheimFormCopy.label("failure_reason"))
+        .help(HohenheimFormCopy.help("database_failure_reason"))
+        .filterable(false)
+        .build());
     /** The host this database's container runs on: a {@code servers.id} FK, never a name. */
     public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
         .label(HohenheimFormCopy.label("server"))
