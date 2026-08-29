@@ -703,9 +703,12 @@ class ManagePanelTest extends HohenheimTestBase {
             HohenheimAccess.MANAGE, true);
 
         try {
-            // 1. The toggle action refuses to seize the victim's hostname.
-            assertThat(operatorPost("/manage/sites/" + stagedId + "/action/toggle_site", "")
-                .statusCode()).isIn(302, 303);
+            // 1. The toggle action refuses to seize the victim's hostname. Toggling is a
+            //    CONFIRMED action, so every POST here carries the proof the client dialog
+            //    would stamp -- without it the server answers the confirmation
+            //    interstitial (200) and the refusal under test never runs.
+            assertThat(operatorPost("/manage/sites/" + stagedId + "/action/toggle_site",
+                confirmed("")).statusCode()).isIn(302, 303);
             assertThat(siteModel.findById(stagedId).get(SiteModel.ENABLED))
                 .as("toggle must not enable a route-conflicting site").isEqualTo(false);
 
@@ -718,15 +721,15 @@ class ManagePanelTest extends HohenheimTestBase {
                 .isEqualTo(false);
 
             // 3. A site with no conflict still toggles live.
-            assertThat(operatorPost("/manage/sites/" + innocentId + "/action/toggle_site", "")
-                .statusCode()).isIn(302, 303);
+            assertThat(operatorPost("/manage/sites/" + innocentId + "/action/toggle_site",
+                confirmed("")).statusCode()).isIn(302, 303);
             assertThat(siteModel.findById(innocentId).get(SiteModel.ENABLED))
                 .as("a non-conflicting site still enables").isEqualTo(true);
 
             // 4. Disabling is never blocked -- not even for the site that now owns a
             //    hostname somebody else also staged.
-            assertThat(operatorPost("/manage/sites/" + innocentId + "/action/toggle_site", "")
-                .statusCode()).isIn(302, 303);
+            assertThat(operatorPost("/manage/sites/" + innocentId + "/action/toggle_site",
+                confirmed("")).statusCode()).isIn(302, 303);
             assertThat(siteModel.findById(innocentId).get(SiteModel.ENABLED))
                 .as("disabling is never refused").isEqualTo(false);
 

@@ -293,10 +293,15 @@ class DeleteConfirmationTest {
 
             // 5. The local host is the machine Hohenheim runs on: its delete was enforced
             //    only at submit, so the button was offered and always failed. The row is
-            //    the boot's own -- the name is unique and this test never creates it.
-            Row local = Models.get(ServerModel.class).find()
-                .where(ServerModel.NAME.eq(ServerService.LOCAL)).first();
-            assertThat(local).as("step 5: the boot registered the local host").isNotNull();
+            //    reached through the SAME must-exist derivation the SEED stage runs
+            //    (LocalServerSeeder -> ServerModel.localServerId()), so the step does not
+            //    depend on whether this class's fresh datasource copy was taken before or
+            //    after another class's boot seeded it.
+            Row local = Models.get(ServerModel.class).findById(ServerModel.localServerId());
+            assertThat(local).as("step 5: the local host row exists").isNotNull();
+            assertThat(local.get(ServerModel.NAME))
+                .as("step 5: and it is the reserved local name")
+                .isEqualTo(ServerService.LOCAL);
             assertThat(servers.deleteUnavailableReason(local, operator))
                 .as("step 5: the local host explains itself instead of failing on click")
                 .isNotNull()
