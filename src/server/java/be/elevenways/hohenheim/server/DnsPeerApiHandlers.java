@@ -64,7 +64,7 @@ final class DnsPeerApiHandlers {
 
             Row peer = DnsFederationKeys.install(peerName, keyName, algorithm, secret);
             ActivityLog.record(Models.get(DnsPeerModel.class), peer.get(DnsPeerModel.ID),
-                "updated", "api");
+                "updated", keyName);
             Blast.log("DNS: transfer key", keyName, "installed for peer",
                 peer.get(DnsPeerModel.NAME));
             return new JsonResult<Object>(new DnsPeerKeyResponse("ok", keyName,

@@ -163,7 +163,7 @@ public final class InstanceApi {
                 return ApiConduits.refusal(conduit, refused);
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, "console_command",
-                ApiConduits.ORIGIN);
+                command);
             return ApiConduits.json(Map.of("id", instanceId, "status", "sent"));
         });
 
@@ -180,7 +180,7 @@ public final class InstanceApi {
             try {
                 int backupId = new InstanceBackups().backupNow(instanceId);
                 ActivityLog.record(Models.get(InstanceModel.class), instanceId, "backup",
-                    ApiConduits.ORIGIN);
+                    "backup #" + backupId);
                 return ApiConduits.json(Map.of("id", instanceId, "backup", backupId));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -201,7 +201,7 @@ public final class InstanceApi {
                 int snapshotId = new InstanceSnapshots().create(instanceId,
                     emptyToNull(ApiConduits.formValue(conduit, "note")));
                 ActivityLog.record(Models.get(InstanceModel.class), instanceId, "snapshot",
-                    ApiConduits.ORIGIN);
+                    "snapshot #" + snapshotId);
                 return ApiConduits.json(Map.of("id", instanceId, "snapshot", snapshotId));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
@@ -231,9 +231,10 @@ public final class InstanceApi {
                 int instanceId = new InstanceTemplates().createFromTemplate(template,
                     InstanceTemplates.submittedString(form, "name"),
                     InstanceTemplates.submittedInteger(form, "server_id"), form, ctx);
+                Row created = reload(instanceId);
                 ActivityLog.record(Models.get(InstanceModel.class), instanceId, "created",
-                    ApiConduits.ORIGIN);
-                return ApiConduits.json(projection(reload(instanceId)));
+                    created.get(InstanceModel.NAME));
+                return ApiConduits.json(projection(created));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
@@ -249,6 +250,7 @@ public final class InstanceApi {
                 return null;
             }
             int instanceId = row.get(InstanceModel.ID);
+            String name = row.get(InstanceModel.NAME);
             try {
                 // InstanceResource.deleteRow IS InstanceService.destroy: the workload is
                 // torn down for real and the row soft-deleted, and the service's own
@@ -262,8 +264,7 @@ public final class InstanceApi {
                 conduit.forbidden();
                 return null;
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "deleted",
-                ApiConduits.ORIGIN);
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "deleted", name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "deleted"));
         });
 
@@ -309,18 +310,16 @@ public final class InstanceApi {
                 return null;
             }
             int instanceId = row.get(InstanceModel.ID);
+            String key = ApiConduits.formValue(conduit, "key");
             try {
-                new InstanceVariables().setValue(instanceId, null,
-                    ApiConduits.formValue(conduit, "key"),
+                new InstanceVariables().setValue(instanceId, null, key,
                     kindOrDefault(ApiConduits.formValue(conduit, "kind")),
                     ApiConduits.formValue(conduit, "value"));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "variable_set",
-                ApiConduits.ORIGIN);
-            return ApiConduits.json(Map.of("id", instanceId, "status", "set",
-                "key", ApiConduits.formValue(conduit, "key")));
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "variable_set", key);
+            return ApiConduits.json(Map.of("id", instanceId, "status", "set", "key", key));
         });
 
         HohenheimEndpoints.API_INSTANCE_VARIABLE_DELETE.setHandler(conduit -> {
@@ -350,7 +349,7 @@ public final class InstanceApi {
                     ApiConduits.violationText("variable_not_found")));
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, "variable_deleted",
-                ApiConduits.ORIGIN);
+                key);
             return ApiConduits.json(Map.of("id", instanceId, "status", "deleted", "key", key));
         });
 
@@ -408,7 +407,7 @@ public final class InstanceApi {
                 return ApiConduits.refusal(conduit, refused);
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_attached",
-                ApiConduits.ORIGIN);
+                type + " " + name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "attached",
                 "device", name, "type", type));
         });
@@ -433,7 +432,7 @@ public final class InstanceApi {
                 return ApiConduits.refusal(conduit, refused);
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_resized",
-                ApiConduits.ORIGIN);
+                name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "resized",
                 "device", name, "size_gb", sizeGb != null ? sizeGb : 0));
         });
@@ -455,7 +454,7 @@ public final class InstanceApi {
                 return ApiConduits.refusal(conduit, refused);
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, "device_detached",
-                ApiConduits.ORIGIN);
+                name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "detached",
                 "device", name));
         });
@@ -498,9 +497,10 @@ public final class InstanceApi {
         }
         try {
             int instanceId = (Integer) ResourceWrites.create(INSTANCES, form, ctx);
+            Row created = reload(instanceId);
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, "created",
-                ApiConduits.ORIGIN);
-            return ApiConduits.json(projection(reload(instanceId)));
+                created.get(InstanceModel.NAME));
+            return ApiConduits.json(projection(created));
         } catch (Violations refused) {
             return ApiConduits.refusal(conduit, refused);
         } catch (AccessRefusedException refused) {

@@ -510,7 +510,7 @@ public final class PaasApi {
                 return ApiConduits.refusal(conduit, refused);
             }
             ActivityLog.record(Models.get(EnvironmentModel.class), environmentId,
-                "variable_set", ApiConduits.ORIGIN);
+                "variable_set", key);
             return ApiConduits.json(Map.of("id", environmentId, "status", "set", "key", key));
         });
 
@@ -526,7 +526,7 @@ public final class PaasApi {
                     ApiConduits.violationText("variable_not_found")));
             }
             ActivityLog.record(Models.get(EnvironmentModel.class), environmentId,
-                "variable_deleted", ApiConduits.ORIGIN);
+                "variable_deleted", key);
             return ApiConduits.json(Map.of("id", environmentId, "status", "deleted", "key", key));
         });
     }

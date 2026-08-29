@@ -53,9 +53,6 @@ public final class InstanceFileEndpoints {
     private InstanceFileEndpoints() {
     }
 
-    /** Accountability origin of everything the automation lane does. */
-    private static final String API_ORIGIN = "api";
-
     public static void init() {
         initHtmlLane();
         initApiLane();
@@ -166,7 +163,7 @@ public final class InstanceFileEndpoints {
             } catch (Violations refused) {
                 return refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "files_write", API_ORIGIN);
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "files_write", path);
             return json(Map.of("id", instanceId, "path", path, "status", "written"));
         });
 
@@ -185,7 +182,7 @@ public final class InstanceFileEndpoints {
                 return refusal(conduit, refused);
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-                "files_" + action, API_ORIGIN);
+                "files_" + action, path);
             return json(Map.of("id", instanceId, "path", path, "action", action));
         });
     }

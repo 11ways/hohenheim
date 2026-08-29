@@ -103,10 +103,11 @@ public final class AccessListApi {
             try {
                 int listId = (Integer) ResourceWrites.create(listResource(ctx),
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
+                Row created = Objects.requireNonNull(
+                    Models.get(AccessListModel.class).findById(listId));
                 ActivityLog.record(Models.get(AccessListModel.class), listId, "created",
-                    ApiConduits.ORIGIN);
-                return ApiConduits.json(listProjection(Objects.requireNonNull(
-                    Models.get(AccessListModel.class).findById(listId)), true));
+                    created.get(AccessListModel.NAME));
+                return ApiConduits.json(listProjection(created, true));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
