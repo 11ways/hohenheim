@@ -256,8 +256,88 @@ a byte copy whenever the migration diff is non-empty.
   else. Right now the provider passes every port; 3000 is only safe because the
   listener itself is on loopback.
 - Enrol it as a DNS peer of the OVH primary and give it the secondary zones it
-  should carry -- a separate lane owns peering, and nothing here was configured
-  for it.
+  should carry. DONE 2026-08-30 (see "DNS federation, 2026-08-30"): peered with
+  both OVH and starfleet, and carrying `starfleet.life` as a secondary.
 - Load the node-16 and node-12 runtime images once the lane building them is
   done. DONE 2026-08-30 (see "Runtime image").
 - Migrate the Phoenix sites onto it (`docs/legacy-import.md`, `hoh-import-legacy`).
+
+## DNS federation, 2026-08-30
+
+This box joined the federation as a second SECONDARY beside OVH. Both boxes ran
+`b486427f`, the build that carries the health tier (M004/M007), so this is the
+first run with three controllers in one federation. Every `visual-qa-*` record
+created for it was removed; the peers and the secondary zone are left in place.
+
+Reachability first, from the workstation with a raw python SOA query (no `dig`
+here): `51.255.43.81` answers `REFUSED aa=0` for an out-of-zone name over UDP
+and TCP, so the provider passes udp/tcp 53 and the authoritative-only refusal is
+correct.
+
+`dns.federation_name` was set to `sites` in the settings editor BEFORE any
+peering (blank falls back to the hostname; the announced name is what the
+receiving side matches its peer row by). It is provisional -- rename it together
+with the box's public name.
+
+Peers (`/admin/dns-peers`):
+
+    sites       "ovh"        NAMESERVER, transfer 137.74.171.228:53   (peer id 1)
+    sites       "starfleet"  HOHENHEIM,  transfer 104.223.42.142:53,  (peer id 2)
+                             base_url https://admin.starfleet.life + a znit_ key
+                             labelled "sites dns federation", scoped
+                             hohenheim.admin.access
+    ovh         "sites"      NAMESERVER, transfer 51.255.43.81:53     (peer id 2)
+    starfleet   "sites"      NAMESERVER, transfer 51.255.43.81:53     (peer id 2)
+
+The `ovh` row here is a NAMESERVER peer for the same reason starfleet's is: the
+form refuses a Hohenheim peer without an admin base URL
+(`A Hohenheim peer needs an admin base URL`, reproduced deliberately), and OVH's
+panel is `127.0.0.1:3000` with no public hostname. Trap: switching the peer type
+back to Nameserver after that refusal CLEARS the TSIG secret field -- retype it
+before saving.
+
+KEY NEGOTIATION HAS A DIRECTION and it decided both pairings:
+
+- sites <-> starfleet: negotiated with one click from the SITES side ("Negotiate
+  transfer key" on its `starfleet` peer), because starfleet is the only box with
+  a reachable admin API. It wrote `xfer-sites-starfleet` / hmac-sha256 on both
+  sides; starfleet logged `DNS: transfer key xfer-sites-starfleet installed for
+  peer sites` and created its own `sites` peer row. The announcement carries the
+  NAME only, so the transfer host on starfleet's new row was blank and had to be
+  filled in by hand (`51.255.43.81`).
+- sites <-> ovh: NOT negotiable in either direction -- both panels are
+  loopback-only, so neither side can reach the other's admin API. The key
+  (`xfer-sites-ovh` / hmac-sha256, one secret generated on the workstation) was
+  installed BY HAND through both peer forms. It becomes negotiable the moment
+  either box gets a public panel hostname; re-negotiating then rotates it.
+
+DEFERRED, deliberately: the admin (edit-forwarding) channel between sites and
+ovh, for the same missing-base-URL reason. Nothing needs it -- neither box owns
+a zone the other edits.
+
+Zone: `starfleet.life` linked to peer `sites` on starfleet's Secondaries tab
+(`dns_zone_peers` id 2), then created here as role=secondary with owning peer
+`starfleet` (zone id 1 on this box).
+
+Verification, all three boxes:
+
+    initial pull       2 s   zone saved 22:21:58Z, transferred 22:22:00Z serial 38
+    TXT add            3 s   22:23:35Z click; ovh 22:23:37.8, sites 22:23:38.0, serial 39
+    TXT delete         4 s   22:25:19Z click; ovh 22:25:24.6, sites 22:25:24.8, serial 40
+
+`hoh-dns-diff compare starfleet.life --old 104.223.42.142 --new 51.255.43.81
+--names admin,skeleton,www,ns1,ns2,comms` = IDENTICAL (9 rows: SOA, apex NS,
+and the six A records), both sides authoritative. The disposable
+`visual-qa-20260830-sites.starfleet.life TXT` was served by all three and, after
+the delete, is NODATA-with-SOA at serial 40 on all three.
+
+The primary now traces both peers, which the 2026-08-29 run could not:
+`dns.notify_sent` to `ovh` AND `sites` and `dns.axfr_served` for
+`xfer-ovh-starfleet` AND `xfer-sites-starfleet`, outcome `noerror`/`ok`, one per
+serial. The zone row action "Check health" reports `Delegation: matches. 2
+secondaries probed, 0 behind.` and the Secondaries tab shows both peers
+`Current` at served serial 40 with their probe, last-AXFR and last-NOTIFY
+stamps filled in.
+
+Note this box is NOT delegated for `starfleet.life`: the registrar still points
+at nssl/nssl2.mooo.com. It is a warm replica, not yet a public answer.
