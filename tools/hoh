@@ -7,10 +7,17 @@
 // text all live server-side, so this tool can never become a second policy.
 //
 // Single-file node (>= 20) script, stdlib only. Configuration:
-//   env HOH_HOST / HOH_TOKEN override everything;
-//   else ~/.config/hoh/config.json:
+//   ~/.config/hoh/config.json:
 //     { "current": "default",
 //       "contexts": { "default": { "host": "https://panel.example", "token": "znit_..." } } }
+//   `current` is the stored DEFAULT; --context <name> / HOH_CONTEXT pick another
+//   one for this invocation WITHOUT moving it (two lanes on two boxes never
+//   clobber each other), and env HOH_HOST / HOH_TOKEN bypass the file entirely.
+//
+// AIDEV-NOTE: precedence is explicit-beats-ambient. --context outranks
+// HOH_HOST/HOH_TOKEN, because a flag typed on THIS command line is a deliberate
+// selection while the env is whatever the surrounding shell happens to carry;
+// with no flag the env still wins over the file, as it always did.
 //
 // AIDEV-NOTE: rollback prompts for the site SLUG before acting (--yes skips).
 // The server demands no phrase -- the product's ConfirmationSpec is a client
@@ -32,17 +39,38 @@ function loadConfig() {
     }
 }
 
+function saveConfig(config) {
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+    fs.chmodSync(CONFIG_PATH, 0o600);
+}
+
+/** The context this invocation selects, which is NOT necessarily the stored default. */
+function contextName(config) {
+    return flags.context || process.env.HOH_CONTEXT || (config && config.current) || 'default';
+}
+
+function requestedContext() {
+    return flags.context || process.env.HOH_CONTEXT || '';
+}
+
 function activeContext() {
-    if (process.env.HOH_HOST) {
+    // A named context is a deliberate selection: it reads its OWN token, never the
+    // ambient HOH_TOKEN, so a shell pointed at one box cannot leak a key to another.
+    if (!flags.context && process.env.HOH_HOST) {
         return { host: process.env.HOH_HOST, token: process.env.HOH_TOKEN || '' };
     }
     const config = loadConfig();
-    const name = process.env.HOH_CONTEXT || config.current || 'default';
+    const name = contextName(config);
     const ctx = (config.contexts || {})[name];
     if (!ctx || !ctx.host) {
+        if (requestedContext()) {
+            die(`No context named "${name}" in ${CONFIG_PATH}. Run: hoh context list`);
+        }
         die(`No context configured. Run: hoh login <host>  (or set HOH_HOST/HOH_TOKEN)`);
     }
-    return { host: ctx.host, token: process.env.HOH_TOKEN || ctx.token || '' };
+    const token = flags.context ? ctx.token : (process.env.HOH_TOKEN || ctx.token);
+    return { host: ctx.host, token: token || '' };
 }
 
 function die(message) {
@@ -376,13 +404,62 @@ const commands = {
         delete process.env.HOH_TOKEN;
         const config = loadConfig();
         config.contexts = config.contexts || {};
-        const name = process.env.HOH_CONTEXT || 'default';
+        const name = requestedContext() || 'default';
         config.contexts[name] = { host, token };
         config.current = config.current || name;
-        fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-        fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
-        fs.chmodSync(CONFIG_PATH, 0o600);
+        saveConfig(config);
         console.log(`Context "${name}" saved to ${CONFIG_PATH}`);
+        if (config.current !== name) {
+            // Say so rather than let the next bare command silently use the other box.
+            console.log(`The default context is still "${config.current}".`
+                + ` Use it with: hoh --context ${name} <command>`
+                + `  (or make it the default: hoh context use ${name})`);
+        }
+    },
+
+    // Contexts are how one workstation drives several controllers. `use` moves the
+    // stored default; --context / HOH_CONTEXT select for ONE invocation and move
+    // nothing, so two concurrent lanes cannot clobber each other's default.
+    async context([verb, name]) {
+        const config = loadConfig();
+        const contexts = config.contexts || {};
+        const names = Object.keys(contexts);
+
+        if (!verb || verb === 'list') {
+            const selected = contextName(config);
+            const envHost = !flags.context && process.env.HOH_HOST ? process.env.HOH_HOST : '';
+            const rows = names.map(n => ({
+                name: n,
+                host: contexts[n].host || '',
+                key: contexts[n].token ? 'stored' : '(none)',
+                default: n === config.current ? 'yes' : '',
+                selected: !envHost && n === selected ? 'yes' : '',
+            }));
+            if (flags.json) {
+                return emit({ contexts: rows, current: config.current || null,
+                    selected: envHost ? null : selected, env_host: envHost || null });
+            }
+            table(rows, ['name', 'host', 'key', 'default', 'selected']);
+            if (envHost) {
+                console.log(`\nHOH_HOST=${envHost} is set and overrides every stored context.`);
+            } else if (requestedContext() && !contexts[selected]) {
+                console.log(`\nNo context named "${selected}" is stored.`);
+            }
+            return;
+        }
+
+        if (verb === 'use') {
+            if (!name) die('Usage: hoh context use <name>');
+            if (!contexts[name]) {
+                die(`No context named "${name}". Run: hoh context list`);
+            }
+            config.current = name;
+            saveConfig(config);
+            console.log(`Default context is now "${name}" (${contexts[name].host}).`);
+            return;
+        }
+
+        die('Usage: hoh context list | hoh context use <name>');
     },
 
     async projects([id]) {
@@ -552,12 +629,14 @@ const commands = {
         die(`Unknown vars verb "${verb}".`);
     },
 
-    help() {
+    async help() {
         console.log(`hoh - Hohenheim PaaS CLI (a thin client of /api/v1)
 
-Usage: hoh <command> [args] [--json] [--yes]
+Usage: hoh [--context <name>] <command> [args] [--json] [--yes]
 
   login <host>                       Store host + API key (verified first)
+  context list                       Stored contexts (host, key, default, selected)
+  context use <name>                 Make <name> the stored default context
   projects [<id>]                    Projects and environments you belong to
   sites | site <id>                  Sites you hold manage on
   site create <name> <kind> [f=v..]  Create a site (admin): fields are the form's, dotted
@@ -592,27 +671,53 @@ Usage: hoh <command> [args] [--json] [--yes]
   vars instance|env <id> ...         List / set / unset variables (--secret for secrets;
                                      secret values are WRITE-ONLY: reads never return them)
 
-Config: ~/.config/hoh/config.json, or HOH_HOST / HOH_TOKEN / HOH_CONTEXT.`);
+Config: ~/.config/hoh/config.json holds every context and the "current" default.
+  --context <name> (or HOH_CONTEXT) picks a context for ONE command and leaves the
+  stored default alone -- that is how two lanes on two boxes stay out of each
+  other's way; only "context use" moves the default. A named context always uses
+  its own stored key. HOH_HOST / HOH_TOKEN bypass the file entirely, but an
+  explicit --context outranks them.`);
     },
 };
 
 // -- entry --------------------------------------------------------------------
 
+// Two flag tables rather than an if-chain, so a flag that TAKES a value accepts
+// both spellings (--context staging and --context=staging) by construction.
+const BOOLEAN_FLAGS = {
+    '--json': 'json', '--yes': 'yes', '-y': 'yes', '--secret': 'secret',
+    '--keep-ns': 'keepNs', '--help': 'help', '-h': 'help',
+};
+const VALUE_FLAGS = { '-n': 'n', '--context': 'context' };
+
 const flags = {};
 const positional = [];
-for (const arg of process.argv.slice(2)) {
-    if (arg === '--json') flags.json = true;
-    else if (arg === '--yes' || arg === '-y') flags.yes = true;
-    else if (arg === '--secret') flags.secret = true;
-    else if (arg === '--keep-ns') flags.keepNs = true;
-    else if (arg.startsWith('-n=')) flags.n = arg.slice(3);
-    else if (arg === '-n') flags.n = 'NEXT';
-    else if (flags.n === 'NEXT') flags.n = arg;
-    else positional.push(arg);
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (BOOLEAN_FLAGS[arg]) {
+        flags[BOOLEAN_FLAGS[arg]] = true;
+        continue;
+    }
+    if (VALUE_FLAGS[arg]) {
+        const value = argv[++i];
+        if (value === undefined) die(`${arg} needs a value.`);
+        flags[VALUE_FLAGS[arg]] = value;
+        continue;
+    }
+    const equals = arg.indexOf('=');
+    const named = equals > 0 ? VALUE_FLAGS[arg.slice(0, equals)] : undefined;
+    if (named) {
+        flags[named] = arg.slice(equals + 1);
+        continue;
+    }
+    positional.push(arg);
 }
-if (flags.n === 'NEXT') delete flags.n;
 
-const command = positional.shift() || 'help';
+const command = flags.help ? 'help' : (positional.shift() || 'help');
 const handler = commands[command];
 if (!handler) die(`Unknown command "${command}". Run: hoh help`);
-handler(positional).catch(e => die(e.message || String(e)));
+// Promise.resolve: a command handler is allowed to be synchronous, and chaining
+// .catch on its undefined return is exactly how `hoh help` used to crash AFTER
+// printing. Every future sync handler is covered by construction.
+Promise.resolve().then(() => handler(positional)).catch(e => die(e.message || String(e)));
