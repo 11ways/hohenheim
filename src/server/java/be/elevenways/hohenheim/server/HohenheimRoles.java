@@ -98,6 +98,19 @@ public final class HohenheimRoles {
     }
 
     /**
+     * True when this node places workloads on enrolled hosts.
+     *
+     * AIDEV-NOTE: THE declaring home of that role triple. The host inventory, the
+     * reconciler findings, the readiness checklist and the host-tier attention items
+     * all answer the same question, and a second hand-written list of the three is how
+     * the dashboard ended up telling a proxy-only node to enrol a host it has no
+     * Servers list for.
+     */
+    public static boolean hostWorkloadsEnabled() {
+        return anyEnabled(Role.STACKS, Role.DATABASES, Role.INSTANCES);
+    }
+
+    /**
      * The shared schedule gate for role-owned tasks: the declarations when any of the
      * given roles is enabled, an explicit retraction (empty list) otherwise.
      */

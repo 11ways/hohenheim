@@ -92,13 +92,17 @@ public final class AttentionCollector {
         if (HohenheimRoles.enabled(Role.STACKS)) {
             dockerUnreachable(items);
         }
-        if (HohenheimRoles.anyEnabled(Role.PROXY, Role.DATABASES, Role.STACKS)) {
+        if (HohenheimRoles.hostWorkloadsEnabled()) {
             // Stored reconciler findings only -- the sweep itself is a scheduled
             // task, never a per-render daemon probe.
+            //
+            // AIDEV-NOTE: gated on the WORKLOAD tiers, never on PROXY. Findings and
+            // parked port claims are produced by what runs ON a host and they link to
+            // the Reconcile findings list, which HohenheimPanel puts behind the very
+            // same gate -- so a proxy-only node used to render Docker findings whose
+            // link 404s and which no enabled role could ever act on.
             items.addAll(DockerReconciler.attentionItems());
             dockerForeignResources(items);
-        }
-        if (HohenheimRoles.anyEnabled(Role.PROXY, Role.DATABASES, Role.STACKS)) {
             stuckReleasingPorts(items, Instant.now().minus(RELEASING_STUCK_AFTER));
         }
         failedTasks(items);
@@ -109,7 +113,7 @@ public final class AttentionCollector {
         if (HohenheimRoles.enabled(Role.FIREWALL)) {
             spamserviceIssue(items);
         }
-        if (HohenheimRoles.anyEnabled(Role.STACKS, Role.DATABASES, Role.INSTANCES)) {
+        if (HohenheimRoles.hostWorkloadsEnabled()) {
             hostsNotAdmitted(items);
         }
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
