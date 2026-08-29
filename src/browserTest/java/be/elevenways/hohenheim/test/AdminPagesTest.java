@@ -2,10 +2,15 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.InstanceQuotaModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.InstanceQuotaResource;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
+import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
@@ -902,5 +907,105 @@ class AdminPagesTest extends HohenheimTestBase {
         } finally {
             Zenit.SETTINGS_VALUES.setValue(ActivityLog.ENABLED, before);
         }
+    }
+
+    /**
+     * A quota override names the PEOPLE it caps, never the packed grant-subject key.
+     *
+     * AIDEV-NOTE: the assertion is against {@code HohenheimAccess.labelSubjects} rather
+     * than a literal display name, which is what makes it a binding to the one declaring
+     * home instead of a second copy of the same lookup written in a test.
+     */
+    @Test
+    @Order(26)
+    void theQuotaListNamesItsOwnerInsteadOfThePackedSubjectKey() throws Exception {
+
+        int ownerId = labelUser("quota-owner@label.test", "Quota Label Owner");
+        String packed = "user:" + ownerId;
+        Row quota = quotaFor(packed);
+        // A subject nobody can resolve, so step 3 can tell a real lookup from a surface
+        // that simply prints something friendlier than what it stored.
+        Row dangling = quotaFor("user:99000001");
+
+        try {
+            // 1. POSITIVE ANCHOR: the shared home resolves the packed key to a person.
+            assertThat(HohenheimAccess.labelSubjects(packed))
+                .as("step 1: the declaring home labels the packed subject")
+                .isEqualTo("Quota Label Owner");
+
+            // 2. And that is exactly what the list renders.
+            String body = get("/admin/instance-quotas").body();
+            assertThat(body).as("step 2: the quota list names the owner")
+                .contains("Quota Label Owner");
+
+            // 3. FALSIFIED: an unresolvable subject keeps its raw token -- the home's
+            //    deliberate answer for a deleted user, and proof this is a lookup.
+            assertThat(body).as("step 3: an unresolvable subject renders as itself")
+                .contains("user:99000001");
+
+            // 4. The record's own TITLE is the same name, so the delete confirmation asks
+            //    about a person rather than about a storage key.
+            assertThat(new InstanceQuotaResource().recordTitle(quota))
+                .as("step 4: the record title names the owner too")
+                .isEqualTo("Quota Label Owner");
+        } finally {
+            Models.get(InstanceQuotaModel.class).delete(quota.get(InstanceQuotaModel.ID));
+            Models.get(InstanceQuotaModel.class).delete(dangling.get(InstanceQuotaModel.ID));
+            AuthModels.users().delete(ownerId);
+        }
+    }
+
+    private static Row quotaFor(String packedSubjects) {
+        Row quota = Models.get(InstanceQuotaModel.class).createEmptyRow();
+        quota.set(InstanceQuotaModel.SUBJECTS, packedSubjects);
+        quota.set(InstanceQuotaModel.MAX_INSTANCES, 3);
+        Models.get(InstanceQuotaModel.class).save(quota);
+        return quota;
+    }
+
+    /**
+     * An activity entry that stored no actor label still names the person who acted.
+     */
+    @Test
+    @Order(27)
+    void theActivityListNamesAnActorThatStoredNoLabel() throws Exception {
+
+        int actorId = labelUser("activity-actor@label.test", "Activity Label Actor");
+        Row entry = Models.get(ActivityModel.class).createEmptyRow();
+        entry.set(ActivityModel.MODEL, "hohenheim:label-probe");
+        entry.set(ActivityModel.RECORD_ID, "1");
+        entry.set(ActivityModel.ACTION, "update");
+        entry.set(ActivityModel.ACTOR, String.valueOf(actorId));
+        entry.set(ActivityModel.ORIGIN, "web");
+        entry.set(ActivityModel.CREATED_AT, Instant.now());
+        Models.get(ActivityModel.class).save(entry);
+
+        try {
+            // 1. The row genuinely carries no label -- otherwise step 2 proves nothing.
+            Row stored = Models.get(ActivityModel.class).findById(entry.get(ActivityModel.ID));
+            assertThat((String) stored.get(ActivityModel.ACTOR_LABEL))
+                .as("step 1: the entry stored no actor label").isNull();
+
+            // 2. The list resolves it through the one home that knows the subject
+            //    vocabulary, so the operator reads a name and not a bare id.
+            assertThat(get("/admin/activity").body())
+                .as("step 2: the activity list names the actor")
+                .contains(HohenheimAccess.subjectLabel("user:" + actorId))
+                .contains("Activity Label Actor");
+        } finally {
+            Models.get(ActivityModel.class).delete(entry.get(ActivityModel.ID));
+            AuthModels.users().delete(actorId);
+        }
+    }
+
+    private static int labelUser(String email, String displayName) {
+        Row user = AuthModels.users().createEmptyRow();
+        user.set(UserModel.EMAIL, email);
+        user.set(UserModel.DISPLAY_NAME, displayName);
+        user.set(UserModel.ENABLED, true);
+        user.set(UserModel.CREATED_AT, Instant.now());
+        user.set(UserModel.UPDATED_AT, Instant.now());
+        AuthModels.users().save(user);
+        return user.get(UserModel.ID);
     }
 }
