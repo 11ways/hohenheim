@@ -1981,196 +1981,441 @@
       "scope": "game_domain"
     },
     {
+      "text": "gamedomeinen",
+      "scope": "game_domain",
+      "case": "sentence"
+    },
+    {
       "text": "Toegangslijsten",
       "scope": "access_list"
+    },
+    {
+      "text": "toegangslijsten",
+      "scope": "access_list",
+      "case": "sentence"
     },
     {
       "text": "Authenticatieproviders",
       "scope": "auth_provider"
     },
     {
+      "text": "authenticatieproviders",
+      "scope": "auth_provider",
+      "case": "sentence"
+    },
+    {
       "text": "Certificaten",
       "scope": "certificate"
+    },
+    {
+      "text": "certificaten",
+      "scope": "certificate",
+      "case": "sentence"
     },
     {
       "text": "Databanken",
       "scope": "database"
     },
     {
+      "text": "databanken",
+      "scope": "database",
+      "case": "sentence"
+    },
+    {
       "text": "Meldingskanalen",
       "scope": "notification_channel"
+    },
+    {
+      "text": "meldingskanalen",
+      "scope": "notification_channel",
+      "case": "sentence"
     },
     {
       "text": "Hosts",
       "scope": "server"
     },
     {
+      "text": "hosts",
+      "scope": "server",
+      "case": "sentence"
+    },
+    {
       "text": "Sites",
       "scope": "site"
+    },
+    {
+      "text": "sites",
+      "scope": "site",
+      "case": "sentence"
     },
     {
       "text": "Gekoppelde databanken",
       "scope": "site_database"
     },
     {
+      "text": "gekoppelde databanken",
+      "scope": "site_database",
+      "case": "sentence"
+    },
+    {
       "text": "Gekoppelde databanken",
       "scope": "instance_database"
+    },
+    {
+      "text": "gekoppelde databanken",
+      "scope": "instance_database",
+      "case": "sentence"
     },
     {
       "text": "Sitedomeinen",
       "scope": "site_domain"
     },
     {
+      "text": "sitedomeinen",
+      "scope": "site_domain",
+      "case": "sentence"
+    },
+    {
       "text": "DNS-zones",
       "scope": "dns_zone"
+    },
+    {
+      "text": "DNS-zones",
+      "scope": "dns_zone",
+      "case": "sentence"
     },
     {
       "text": "DNS-records",
       "scope": "dns_record"
     },
     {
+      "text": "DNS-records",
+      "scope": "dns_record",
+      "case": "sentence"
+    },
+    {
       "text": "DNS-peers",
       "scope": "dns_peer"
+    },
+    {
+      "text": "DNS-peers",
+      "scope": "dns_peer",
+      "case": "sentence"
     },
     {
       "text": "Zone-secondaries",
       "scope": "dns_zone_peer"
     },
     {
+      "text": "zone-secondaries",
+      "scope": "dns_zone_peer",
+      "case": "sentence"
+    },
+    {
       "text": "IP-verbanningen",
       "scope": "ban"
+    },
+    {
+      "text": "IP-verbanningen",
+      "scope": "ban",
+      "case": "sentence"
     },
     {
       "text": "Spamservice-clients",
       "scope": "spamservice_client"
     },
     {
+      "text": "Spamservice-clients",
+      "scope": "spamservice_client",
+      "case": "sentence"
+    },
+    {
       "text": "Clientsleutels",
       "scope": "spamservice_key"
+    },
+    {
+      "text": "clientsleutels",
+      "scope": "spamservice_key",
+      "case": "sentence"
     },
     {
       "text": "Beveiligingsgebeurtenissen",
       "scope": "spamservice_event"
     },
     {
+      "text": "beveiligingsgebeurtenissen",
+      "scope": "spamservice_event",
+      "case": "sentence"
+    },
+    {
       "text": "Spamwoorden",
       "scope": "spamservice_word"
+    },
+    {
+      "text": "spamwoorden",
+      "scope": "spamservice_word",
+      "case": "sentence"
     },
     {
       "text": "Voorbeelden",
       "scope": "spamservice_sample"
     },
     {
+      "text": "voorbeelden",
+      "scope": "spamservice_sample",
+      "case": "sentence"
+    },
+    {
       "text": "Stacks",
       "scope": "stack"
+    },
+    {
+      "text": "stacks",
+      "scope": "stack",
+      "case": "sentence"
     },
     {
       "text": "Stack-services",
       "scope": "stack_service"
     },
     {
+      "text": "stack-services",
+      "scope": "stack_service",
+      "case": "sentence"
+    },
+    {
       "text": "Stack-bestanden",
       "scope": "stack_file"
+    },
+    {
+      "text": "stack-bestanden",
+      "scope": "stack_file",
+      "case": "sentence"
     },
     {
       "text": "Vrijgegeven hostnamen",
       "scope": "released_claim"
     },
     {
+      "text": "vrijgegeven hostnamen",
+      "scope": "released_claim",
+      "case": "sentence"
+    },
+    {
       "text": "Instanties",
       "scope": "instance"
+    },
+    {
+      "text": "instanties",
+      "scope": "instance",
+      "case": "sentence"
     },
     {
       "text": "Instantiequota's",
       "scope": "instance_quota"
     },
     {
+      "text": "instantiequota's",
+      "scope": "instance_quota",
+      "case": "sentence"
+    },
+    {
       "text": "Buildgeschiedenis",
       "scope": "build_operation"
+    },
+    {
+      "text": "buildgeschiedenis",
+      "scope": "build_operation",
+      "case": "sentence"
     },
     {
       "text": "Releasegeschiedenis",
       "scope": "release_operation"
     },
     {
+      "text": "releasegeschiedenis",
+      "scope": "release_operation",
+      "case": "sentence"
+    },
+    {
       "text": "Onverwachte workloads",
       "scope": "reconcile_finding"
+    },
+    {
+      "text": "onverwachte workloads",
+      "scope": "reconcile_finding",
+      "case": "sentence"
     },
     {
       "text": "Instantiesjablonen",
       "scope": "instance_template"
     },
     {
+      "text": "instantiesjablonen",
+      "scope": "instance_template",
+      "case": "sentence"
+    },
+    {
       "text": "Sjabloonvariabelen",
       "scope": "template_variable"
+    },
+    {
+      "text": "sjabloonvariabelen",
+      "scope": "template_variable",
+      "case": "sentence"
     },
     {
       "text": "Sjabloonbestanden",
       "scope": "template_file"
     },
     {
+      "text": "sjabloonbestanden",
+      "scope": "template_file",
+      "case": "sentence"
+    },
+    {
       "text": "Instantiebestanden",
       "scope": "instance_file"
+    },
+    {
+      "text": "instantiebestanden",
+      "scope": "instance_file",
+      "case": "sentence"
     },
     {
       "text": "Planningen",
       "scope": "instance_schedule"
     },
     {
+      "text": "planningen",
+      "scope": "instance_schedule",
+      "case": "sentence"
+    },
+    {
       "text": "Stappen",
       "scope": "schedule_step"
+    },
+    {
+      "text": "stappen",
+      "scope": "schedule_step",
+      "case": "sentence"
     },
     {
       "text": "Projecten",
       "scope": "project"
     },
     {
+      "text": "projecten",
+      "scope": "project",
+      "case": "sentence"
+    },
+    {
       "text": "Omgevingen",
       "scope": "environment"
+    },
+    {
+      "text": "omgevingen",
+      "scope": "environment",
+      "case": "sentence"
     },
     {
       "text": "Omgevingsvariabelen",
       "scope": "environment_variable"
     },
     {
+      "text": "omgevingsvariabelen",
+      "scope": "environment_variable",
+      "case": "sentence"
+    },
+    {
       "text": "Git-providers",
       "scope": "git_provider"
+    },
+    {
+      "text": "Git-providers",
+      "scope": "git_provider",
+      "case": "sentence"
     },
     {
       "text": "Preview-deployments",
       "scope": "preview_deployment"
     },
     {
+      "text": "preview-deployments",
+      "scope": "preview_deployment",
+      "case": "sentence"
+    },
+    {
       "text": "Instantiesnapshots",
       "scope": "instance_snapshot"
+    },
+    {
+      "text": "instantiesnapshots",
+      "scope": "instance_snapshot",
+      "case": "sentence"
     },
     {
       "text": "Instantieback-ups",
       "scope": "instance_backup"
     },
     {
+      "text": "instantieback-ups",
+      "scope": "instance_backup",
+      "case": "sentence"
+    },
+    {
       "text": "Back-updoelen",
       "scope": "backup_target"
+    },
+    {
+      "text": "back-updoelen",
+      "scope": "backup_target",
+      "case": "sentence"
     },
     {
       "text": "Apparaten",
       "scope": "instance_device"
     },
     {
+      "text": "apparaten",
+      "scope": "instance_device",
+      "case": "sentence"
+    },
+    {
       "text": "Regels",
       "scope": "access_rule"
+    },
+    {
+      "text": "regels",
+      "scope": "access_rule",
+      "case": "sentence"
     },
     {
       "text": "Volumes",
       "scope": "instance_volume"
     },
     {
+      "text": "volumes",
+      "scope": "instance_volume",
+      "case": "sentence"
+    },
+    {
       "text": "Runtime-images",
       "scope": "runtime_image"
     },
     {
+      "text": "runtime-images",
+      "scope": "runtime_image",
+      "case": "sentence"
+    },
+    {
       "text": "Beschermde paden",
       "scope": "protected_path"
+    },
+    {
+      "text": "beschermde paden",
+      "scope": "protected_path",
+      "case": "sentence"
     }
   ],
   "dashboard": [
@@ -7876,188 +8121,423 @@
       "scope": "project"
     },
     {
+      "text": "project",
+      "scope": "project",
+      "case": "sentence"
+    },
+    {
       "text": "toegangslijst",
       "scope": "access_list"
+    },
+    {
+      "text": "toegangslijst",
+      "scope": "access_list",
+      "case": "sentence"
     },
     {
       "text": "regel",
       "scope": "access_rule"
     },
     {
+      "text": "regel",
+      "scope": "access_rule",
+      "case": "sentence"
+    },
+    {
       "text": "authenticatieprovider",
       "scope": "auth_provider"
+    },
+    {
+      "text": "authenticatieprovider",
+      "scope": "auth_provider",
+      "case": "sentence"
     },
     {
       "text": "back-updoel",
       "scope": "backup_target"
     },
     {
+      "text": "back-updoel",
+      "scope": "backup_target",
+      "case": "sentence"
+    },
+    {
       "text": "IP-verbanning",
       "scope": "ban"
+    },
+    {
+      "text": "IP-verbanning",
+      "scope": "ban",
+      "case": "sentence"
     },
     {
       "text": "build",
       "scope": "build_operation"
     },
     {
+      "text": "build",
+      "scope": "build_operation",
+      "case": "sentence"
+    },
+    {
       "text": "certificaat",
       "scope": "certificate"
+    },
+    {
+      "text": "certificaat",
+      "scope": "certificate",
+      "case": "sentence"
     },
     {
       "text": "databank",
       "scope": "database"
     },
     {
+      "text": "databank",
+      "scope": "database",
+      "case": "sentence"
+    },
+    {
       "text": "DNS-peer",
       "scope": "dns_peer"
+    },
+    {
+      "text": "DNS-peer",
+      "scope": "dns_peer",
+      "case": "sentence"
     },
     {
       "text": "DNS-record",
       "scope": "dns_record"
     },
     {
+      "text": "DNS-record",
+      "scope": "dns_record",
+      "case": "sentence"
+    },
+    {
       "text": "zone-secondary",
       "scope": "dns_zone_peer"
+    },
+    {
+      "text": "zone-secondary",
+      "scope": "dns_zone_peer",
+      "case": "sentence"
     },
     {
       "text": "DNS-zone",
       "scope": "dns_zone"
     },
     {
+      "text": "DNS-zone",
+      "scope": "dns_zone",
+      "case": "sentence"
+    },
+    {
       "text": "omgeving",
       "scope": "environment"
+    },
+    {
+      "text": "omgeving",
+      "scope": "environment",
+      "case": "sentence"
     },
     {
       "text": "omgevingsvariabele",
       "scope": "environment_variable"
     },
     {
+      "text": "omgevingsvariabele",
+      "scope": "environment_variable",
+      "case": "sentence"
+    },
+    {
       "text": "gamedomein",
       "scope": "game_domain"
+    },
+    {
+      "text": "gamedomein",
+      "scope": "game_domain",
+      "case": "sentence"
     },
     {
       "text": "Git-provider",
       "scope": "git_provider"
     },
     {
+      "text": "Git-provider",
+      "scope": "git_provider",
+      "case": "sentence"
+    },
+    {
       "text": "instantieback-up",
       "scope": "instance_backup"
+    },
+    {
+      "text": "instantieback-up",
+      "scope": "instance_backup",
+      "case": "sentence"
     },
     {
       "text": "gekoppelde databank",
       "scope": "instance_database"
     },
     {
+      "text": "gekoppelde databank",
+      "scope": "instance_database",
+      "case": "sentence"
+    },
+    {
       "text": "apparaat",
       "scope": "instance_device"
+    },
+    {
+      "text": "apparaat",
+      "scope": "instance_device",
+      "case": "sentence"
     },
     {
       "text": "instantiebestand",
       "scope": "instance_file"
     },
     {
+      "text": "instantiebestand",
+      "scope": "instance_file",
+      "case": "sentence"
+    },
+    {
       "text": "instantiequotum",
       "scope": "instance_quota"
+    },
+    {
+      "text": "instantiequotum",
+      "scope": "instance_quota",
+      "case": "sentence"
     },
     {
       "text": "stap",
       "scope": "schedule_step"
     },
     {
+      "text": "stap",
+      "scope": "schedule_step",
+      "case": "sentence"
+    },
+    {
       "text": "instantiesnapshot",
       "scope": "instance_snapshot"
+    },
+    {
+      "text": "instantiesnapshot",
+      "scope": "instance_snapshot",
+      "case": "sentence"
     },
     {
       "text": "sjabloonbestand",
       "scope": "template_file"
     },
     {
+      "text": "sjabloonbestand",
+      "scope": "template_file",
+      "case": "sentence"
+    },
+    {
       "text": "instantiesjabloon",
       "scope": "instance_template"
+    },
+    {
+      "text": "instantiesjabloon",
+      "scope": "instance_template",
+      "case": "sentence"
     },
     {
       "text": "sjabloonvariabele",
       "scope": "template_variable"
     },
     {
+      "text": "sjabloonvariabele",
+      "scope": "template_variable",
+      "case": "sentence"
+    },
+    {
       "text": "volume",
       "scope": "instance_volume"
+    },
+    {
+      "text": "volume",
+      "scope": "instance_volume",
+      "case": "sentence"
     },
     {
       "text": "projectlid",
       "scope": "project_member"
     },
     {
+      "text": "projectlid",
+      "scope": "project_member",
+      "case": "sentence"
+    },
+    {
       "text": "meldingskanaal",
       "scope": "notification_channel"
+    },
+    {
+      "text": "meldingskanaal",
+      "scope": "notification_channel",
+      "case": "sentence"
     },
     {
       "text": "preview-deployment",
       "scope": "preview_deployment"
     },
     {
+      "text": "preview-deployment",
+      "scope": "preview_deployment",
+      "case": "sentence"
+    },
+    {
       "text": "onverwachte workload",
       "scope": "reconcile_finding"
+    },
+    {
+      "text": "onverwachte workload",
+      "scope": "reconcile_finding",
+      "case": "sentence"
     },
     {
       "text": "release",
       "scope": "release_operation"
     },
     {
+      "text": "release",
+      "scope": "release_operation",
+      "case": "sentence"
+    },
+    {
       "text": "vrijgegeven hostnaam",
       "scope": "released_claim"
+    },
+    {
+      "text": "vrijgegeven hostnaam",
+      "scope": "released_claim",
+      "case": "sentence"
     },
     {
       "text": "runtime-image",
       "scope": "runtime_image"
     },
     {
+      "text": "runtime-image",
+      "scope": "runtime_image",
+      "case": "sentence"
+    },
+    {
       "text": "host",
       "scope": "server"
+    },
+    {
+      "text": "host",
+      "scope": "server",
+      "case": "sentence"
     },
     {
       "text": "sitedomein",
       "scope": "site_domain"
     },
     {
+      "text": "sitedomein",
+      "scope": "site_domain",
+      "case": "sentence"
+    },
+    {
       "text": "site",
       "scope": "site"
+    },
+    {
+      "text": "site",
+      "scope": "site",
+      "case": "sentence"
     },
     {
       "text": "clientsleutel",
       "scope": "spamservice_key"
     },
     {
+      "text": "clientsleutel",
+      "scope": "spamservice_key",
+      "case": "sentence"
+    },
+    {
       "text": "Spamservice-client",
       "scope": "spamservice_client"
+    },
+    {
+      "text": "Spamservice-client",
+      "scope": "spamservice_client",
+      "case": "sentence"
     },
     {
       "text": "voorbeeld",
       "scope": "spamservice_sample"
     },
     {
+      "text": "voorbeeld",
+      "scope": "spamservice_sample",
+      "case": "sentence"
+    },
+    {
       "text": "beveiligingsgebeurtenis",
       "scope": "spamservice_event"
+    },
+    {
+      "text": "beveiligingsgebeurtenis",
+      "scope": "spamservice_event",
+      "case": "sentence"
     },
     {
       "text": "spamwoord",
       "scope": "spamservice_word"
     },
     {
+      "text": "spamwoord",
+      "scope": "spamservice_word",
+      "case": "sentence"
+    },
+    {
       "text": "stack-bestand",
       "scope": "stack_file"
+    },
+    {
+      "text": "stack-bestand",
+      "scope": "stack_file",
+      "case": "sentence"
     },
     {
       "text": "stack",
       "scope": "stack"
     },
     {
+      "text": "stack",
+      "scope": "stack",
+      "case": "sentence"
+    },
+    {
       "text": "stack-service",
       "scope": "stack_service"
     },
     {
+      "text": "stack-service",
+      "scope": "stack_service",
+      "case": "sentence"
+    },
+    {
       "text": "beschermd pad",
       "scope": "protected_path"
+    },
+    {
+      "text": "beschermd pad",
+      "scope": "protected_path",
+      "case": "sentence"
     }
   ],
   "member": {

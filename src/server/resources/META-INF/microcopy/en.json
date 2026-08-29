@@ -1981,196 +1981,441 @@
       "scope": "game_domain"
     },
     {
+      "text": "game domains",
+      "scope": "game_domain",
+      "case": "sentence"
+    },
+    {
       "text": "Access lists",
       "scope": "access_list"
+    },
+    {
+      "text": "access lists",
+      "scope": "access_list",
+      "case": "sentence"
     },
     {
       "text": "Auth providers",
       "scope": "auth_provider"
     },
     {
+      "text": "auth providers",
+      "scope": "auth_provider",
+      "case": "sentence"
+    },
+    {
       "text": "Certificates",
       "scope": "certificate"
+    },
+    {
+      "text": "certificates",
+      "scope": "certificate",
+      "case": "sentence"
     },
     {
       "text": "Databases",
       "scope": "database"
     },
     {
+      "text": "databases",
+      "scope": "database",
+      "case": "sentence"
+    },
+    {
       "text": "Notification channels",
       "scope": "notification_channel"
+    },
+    {
+      "text": "notification channels",
+      "scope": "notification_channel",
+      "case": "sentence"
     },
     {
       "text": "Hosts",
       "scope": "server"
     },
     {
+      "text": "hosts",
+      "scope": "server",
+      "case": "sentence"
+    },
+    {
       "text": "Sites",
       "scope": "site"
+    },
+    {
+      "text": "sites",
+      "scope": "site",
+      "case": "sentence"
     },
     {
       "text": "Attached databases",
       "scope": "site_database"
     },
     {
+      "text": "attached databases",
+      "scope": "site_database",
+      "case": "sentence"
+    },
+    {
       "text": "Attached databases",
       "scope": "instance_database"
+    },
+    {
+      "text": "attached databases",
+      "scope": "instance_database",
+      "case": "sentence"
     },
     {
       "text": "Site domains",
       "scope": "site_domain"
     },
     {
+      "text": "site domains",
+      "scope": "site_domain",
+      "case": "sentence"
+    },
+    {
       "text": "DNS zones",
       "scope": "dns_zone"
+    },
+    {
+      "text": "DNS zones",
+      "scope": "dns_zone",
+      "case": "sentence"
     },
     {
       "text": "DNS records",
       "scope": "dns_record"
     },
     {
+      "text": "DNS records",
+      "scope": "dns_record",
+      "case": "sentence"
+    },
+    {
       "text": "DNS peers",
       "scope": "dns_peer"
+    },
+    {
+      "text": "DNS peers",
+      "scope": "dns_peer",
+      "case": "sentence"
     },
     {
       "text": "Zone secondaries",
       "scope": "dns_zone_peer"
     },
     {
+      "text": "zone secondaries",
+      "scope": "dns_zone_peer",
+      "case": "sentence"
+    },
+    {
       "text": "IP bans",
       "scope": "ban"
+    },
+    {
+      "text": "IP bans",
+      "scope": "ban",
+      "case": "sentence"
     },
     {
       "text": "Spamservice clients",
       "scope": "spamservice_client"
     },
     {
+      "text": "Spamservice clients",
+      "scope": "spamservice_client",
+      "case": "sentence"
+    },
+    {
       "text": "Client keys",
       "scope": "spamservice_key"
+    },
+    {
+      "text": "client keys",
+      "scope": "spamservice_key",
+      "case": "sentence"
     },
     {
       "text": "Security events",
       "scope": "spamservice_event"
     },
     {
+      "text": "security events",
+      "scope": "spamservice_event",
+      "case": "sentence"
+    },
+    {
       "text": "Spam words",
       "scope": "spamservice_word"
+    },
+    {
+      "text": "spam words",
+      "scope": "spamservice_word",
+      "case": "sentence"
     },
     {
       "text": "Samples",
       "scope": "spamservice_sample"
     },
     {
+      "text": "samples",
+      "scope": "spamservice_sample",
+      "case": "sentence"
+    },
+    {
       "text": "Stacks",
       "scope": "stack"
+    },
+    {
+      "text": "stacks",
+      "scope": "stack",
+      "case": "sentence"
     },
     {
       "text": "Stack services",
       "scope": "stack_service"
     },
     {
+      "text": "stack services",
+      "scope": "stack_service",
+      "case": "sentence"
+    },
+    {
       "text": "Stack files",
       "scope": "stack_file"
+    },
+    {
+      "text": "stack files",
+      "scope": "stack_file",
+      "case": "sentence"
     },
     {
       "text": "Released hostnames",
       "scope": "released_claim"
     },
     {
+      "text": "released hostnames",
+      "scope": "released_claim",
+      "case": "sentence"
+    },
+    {
       "text": "Instances",
       "scope": "instance"
+    },
+    {
+      "text": "instances",
+      "scope": "instance",
+      "case": "sentence"
     },
     {
       "text": "Instance quotas",
       "scope": "instance_quota"
     },
     {
+      "text": "instance quotas",
+      "scope": "instance_quota",
+      "case": "sentence"
+    },
+    {
       "text": "Build history",
       "scope": "build_operation"
+    },
+    {
+      "text": "build history",
+      "scope": "build_operation",
+      "case": "sentence"
     },
     {
       "text": "Release history",
       "scope": "release_operation"
     },
     {
+      "text": "release history",
+      "scope": "release_operation",
+      "case": "sentence"
+    },
+    {
       "text": "Unexpected workloads",
       "scope": "reconcile_finding"
+    },
+    {
+      "text": "unexpected workloads",
+      "scope": "reconcile_finding",
+      "case": "sentence"
     },
     {
       "text": "Instance templates",
       "scope": "instance_template"
     },
     {
+      "text": "instance templates",
+      "scope": "instance_template",
+      "case": "sentence"
+    },
+    {
       "text": "Template variables",
       "scope": "template_variable"
+    },
+    {
+      "text": "template variables",
+      "scope": "template_variable",
+      "case": "sentence"
     },
     {
       "text": "Template files",
       "scope": "template_file"
     },
     {
+      "text": "template files",
+      "scope": "template_file",
+      "case": "sentence"
+    },
+    {
       "text": "Instance files",
       "scope": "instance_file"
+    },
+    {
+      "text": "instance files",
+      "scope": "instance_file",
+      "case": "sentence"
     },
     {
       "text": "Schedules",
       "scope": "instance_schedule"
     },
     {
+      "text": "schedules",
+      "scope": "instance_schedule",
+      "case": "sentence"
+    },
+    {
       "text": "Steps",
       "scope": "schedule_step"
+    },
+    {
+      "text": "steps",
+      "scope": "schedule_step",
+      "case": "sentence"
     },
     {
       "text": "Projects",
       "scope": "project"
     },
     {
+      "text": "projects",
+      "scope": "project",
+      "case": "sentence"
+    },
+    {
       "text": "Environments",
       "scope": "environment"
+    },
+    {
+      "text": "environments",
+      "scope": "environment",
+      "case": "sentence"
     },
     {
       "text": "Environment variables",
       "scope": "environment_variable"
     },
     {
+      "text": "environment variables",
+      "scope": "environment_variable",
+      "case": "sentence"
+    },
+    {
       "text": "Git providers",
       "scope": "git_provider"
+    },
+    {
+      "text": "Git providers",
+      "scope": "git_provider",
+      "case": "sentence"
     },
     {
       "text": "Preview deployments",
       "scope": "preview_deployment"
     },
     {
+      "text": "preview deployments",
+      "scope": "preview_deployment",
+      "case": "sentence"
+    },
+    {
       "text": "Instance snapshots",
       "scope": "instance_snapshot"
+    },
+    {
+      "text": "instance snapshots",
+      "scope": "instance_snapshot",
+      "case": "sentence"
     },
     {
       "text": "Instance backups",
       "scope": "instance_backup"
     },
     {
+      "text": "instance backups",
+      "scope": "instance_backup",
+      "case": "sentence"
+    },
+    {
       "text": "Backup targets",
       "scope": "backup_target"
+    },
+    {
+      "text": "backup targets",
+      "scope": "backup_target",
+      "case": "sentence"
     },
     {
       "text": "Devices",
       "scope": "instance_device"
     },
     {
+      "text": "devices",
+      "scope": "instance_device",
+      "case": "sentence"
+    },
+    {
       "text": "Rules",
       "scope": "access_rule"
+    },
+    {
+      "text": "rules",
+      "scope": "access_rule",
+      "case": "sentence"
     },
     {
       "text": "Volumes",
       "scope": "instance_volume"
     },
     {
+      "text": "volumes",
+      "scope": "instance_volume",
+      "case": "sentence"
+    },
+    {
       "text": "Runtime images",
       "scope": "runtime_image"
     },
     {
+      "text": "runtime images",
+      "scope": "runtime_image",
+      "case": "sentence"
+    },
+    {
       "text": "Protected paths",
       "scope": "protected_path"
+    },
+    {
+      "text": "protected paths",
+      "scope": "protected_path",
+      "case": "sentence"
     }
   ],
   "dashboard": [
@@ -7876,188 +8121,423 @@
       "scope": "project"
     },
     {
+      "text": "project",
+      "scope": "project",
+      "case": "sentence"
+    },
+    {
       "text": "access list",
       "scope": "access_list"
+    },
+    {
+      "text": "access list",
+      "scope": "access_list",
+      "case": "sentence"
     },
     {
       "text": "rule",
       "scope": "access_rule"
     },
     {
+      "text": "rule",
+      "scope": "access_rule",
+      "case": "sentence"
+    },
+    {
       "text": "auth provider",
       "scope": "auth_provider"
+    },
+    {
+      "text": "auth provider",
+      "scope": "auth_provider",
+      "case": "sentence"
     },
     {
       "text": "backup target",
       "scope": "backup_target"
     },
     {
+      "text": "backup target",
+      "scope": "backup_target",
+      "case": "sentence"
+    },
+    {
       "text": "IP ban",
       "scope": "ban"
+    },
+    {
+      "text": "IP ban",
+      "scope": "ban",
+      "case": "sentence"
     },
     {
       "text": "build",
       "scope": "build_operation"
     },
     {
+      "text": "build",
+      "scope": "build_operation",
+      "case": "sentence"
+    },
+    {
       "text": "certificate",
       "scope": "certificate"
+    },
+    {
+      "text": "certificate",
+      "scope": "certificate",
+      "case": "sentence"
     },
     {
       "text": "database",
       "scope": "database"
     },
     {
+      "text": "database",
+      "scope": "database",
+      "case": "sentence"
+    },
+    {
       "text": "DNS peer",
       "scope": "dns_peer"
+    },
+    {
+      "text": "DNS peer",
+      "scope": "dns_peer",
+      "case": "sentence"
     },
     {
       "text": "DNS record",
       "scope": "dns_record"
     },
     {
+      "text": "DNS record",
+      "scope": "dns_record",
+      "case": "sentence"
+    },
+    {
       "text": "zone secondary",
       "scope": "dns_zone_peer"
+    },
+    {
+      "text": "zone secondary",
+      "scope": "dns_zone_peer",
+      "case": "sentence"
     },
     {
       "text": "DNS zone",
       "scope": "dns_zone"
     },
     {
+      "text": "DNS zone",
+      "scope": "dns_zone",
+      "case": "sentence"
+    },
+    {
       "text": "environment",
       "scope": "environment"
+    },
+    {
+      "text": "environment",
+      "scope": "environment",
+      "case": "sentence"
     },
     {
       "text": "environment variable",
       "scope": "environment_variable"
     },
     {
+      "text": "environment variable",
+      "scope": "environment_variable",
+      "case": "sentence"
+    },
+    {
       "text": "game domain",
       "scope": "game_domain"
+    },
+    {
+      "text": "game domain",
+      "scope": "game_domain",
+      "case": "sentence"
     },
     {
       "text": "Git provider",
       "scope": "git_provider"
     },
     {
+      "text": "Git provider",
+      "scope": "git_provider",
+      "case": "sentence"
+    },
+    {
       "text": "instance backup",
       "scope": "instance_backup"
+    },
+    {
+      "text": "instance backup",
+      "scope": "instance_backup",
+      "case": "sentence"
     },
     {
       "text": "attached database",
       "scope": "instance_database"
     },
     {
+      "text": "attached database",
+      "scope": "instance_database",
+      "case": "sentence"
+    },
+    {
       "text": "device",
       "scope": "instance_device"
+    },
+    {
+      "text": "device",
+      "scope": "instance_device",
+      "case": "sentence"
     },
     {
       "text": "instance file",
       "scope": "instance_file"
     },
     {
+      "text": "instance file",
+      "scope": "instance_file",
+      "case": "sentence"
+    },
+    {
       "text": "instance quota",
       "scope": "instance_quota"
+    },
+    {
+      "text": "instance quota",
+      "scope": "instance_quota",
+      "case": "sentence"
     },
     {
       "text": "step",
       "scope": "schedule_step"
     },
     {
+      "text": "step",
+      "scope": "schedule_step",
+      "case": "sentence"
+    },
+    {
       "text": "instance snapshot",
       "scope": "instance_snapshot"
+    },
+    {
+      "text": "instance snapshot",
+      "scope": "instance_snapshot",
+      "case": "sentence"
     },
     {
       "text": "template file",
       "scope": "template_file"
     },
     {
+      "text": "template file",
+      "scope": "template_file",
+      "case": "sentence"
+    },
+    {
       "text": "instance template",
       "scope": "instance_template"
+    },
+    {
+      "text": "instance template",
+      "scope": "instance_template",
+      "case": "sentence"
     },
     {
       "text": "template variable",
       "scope": "template_variable"
     },
     {
+      "text": "template variable",
+      "scope": "template_variable",
+      "case": "sentence"
+    },
+    {
       "text": "volume",
       "scope": "instance_volume"
+    },
+    {
+      "text": "volume",
+      "scope": "instance_volume",
+      "case": "sentence"
     },
     {
       "text": "project member",
       "scope": "project_member"
     },
     {
+      "text": "project member",
+      "scope": "project_member",
+      "case": "sentence"
+    },
+    {
       "text": "notification channel",
       "scope": "notification_channel"
+    },
+    {
+      "text": "notification channel",
+      "scope": "notification_channel",
+      "case": "sentence"
     },
     {
       "text": "preview deployment",
       "scope": "preview_deployment"
     },
     {
+      "text": "preview deployment",
+      "scope": "preview_deployment",
+      "case": "sentence"
+    },
+    {
       "text": "unexpected workload",
       "scope": "reconcile_finding"
+    },
+    {
+      "text": "unexpected workload",
+      "scope": "reconcile_finding",
+      "case": "sentence"
     },
     {
       "text": "release",
       "scope": "release_operation"
     },
     {
+      "text": "release",
+      "scope": "release_operation",
+      "case": "sentence"
+    },
+    {
       "text": "released hostname",
       "scope": "released_claim"
+    },
+    {
+      "text": "released hostname",
+      "scope": "released_claim",
+      "case": "sentence"
     },
     {
       "text": "runtime image",
       "scope": "runtime_image"
     },
     {
+      "text": "runtime image",
+      "scope": "runtime_image",
+      "case": "sentence"
+    },
+    {
       "text": "host",
       "scope": "server"
+    },
+    {
+      "text": "host",
+      "scope": "server",
+      "case": "sentence"
     },
     {
       "text": "site domain",
       "scope": "site_domain"
     },
     {
+      "text": "site domain",
+      "scope": "site_domain",
+      "case": "sentence"
+    },
+    {
       "text": "site",
       "scope": "site"
+    },
+    {
+      "text": "site",
+      "scope": "site",
+      "case": "sentence"
     },
     {
       "text": "client key",
       "scope": "spamservice_key"
     },
     {
+      "text": "client key",
+      "scope": "spamservice_key",
+      "case": "sentence"
+    },
+    {
       "text": "Spamservice client",
       "scope": "spamservice_client"
+    },
+    {
+      "text": "Spamservice client",
+      "scope": "spamservice_client",
+      "case": "sentence"
     },
     {
       "text": "sample",
       "scope": "spamservice_sample"
     },
     {
+      "text": "sample",
+      "scope": "spamservice_sample",
+      "case": "sentence"
+    },
+    {
       "text": "security event",
       "scope": "spamservice_event"
+    },
+    {
+      "text": "security event",
+      "scope": "spamservice_event",
+      "case": "sentence"
     },
     {
       "text": "spam word",
       "scope": "spamservice_word"
     },
     {
+      "text": "spam word",
+      "scope": "spamservice_word",
+      "case": "sentence"
+    },
+    {
       "text": "stack file",
       "scope": "stack_file"
+    },
+    {
+      "text": "stack file",
+      "scope": "stack_file",
+      "case": "sentence"
     },
     {
       "text": "stack",
       "scope": "stack"
     },
     {
+      "text": "stack",
+      "scope": "stack",
+      "case": "sentence"
+    },
+    {
       "text": "stack service",
       "scope": "stack_service"
     },
     {
+      "text": "stack service",
+      "scope": "stack_service",
+      "case": "sentence"
+    },
+    {
       "text": "protected path",
       "scope": "protected_path"
+    },
+    {
+      "text": "protected path",
+      "scope": "protected_path",
+      "case": "sentence"
     }
   ],
   "member": {
