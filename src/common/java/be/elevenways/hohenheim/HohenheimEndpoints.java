@@ -977,9 +977,13 @@ public class HohenheimEndpoints {
     // --- Instance console: live output over a WebSocket, commands over a POST form ---
 
     /**
-     * Live console output of one instance (pl-terminal reads it; read-only -- commands
-     * go through {@link #INSTANCE_CONSOLE_COMMAND}, never raw keystrokes: a non-TTY
-     * container echoes nothing, so keystroke input would be invisible typing).
+     * Live console of one instance for pl-terminal. A PLAIN console is read-only here --
+     * commands go through {@link #INSTANCE_CONSOLE_COMMAND}, never raw keystrokes: a
+     * non-TTY container echoes nothing, so keystroke input would be invisible typing.
+     * An INTERACTIVE console ({@code console_kind=tty}: the workload's primary process
+     * sits behind a pseudo-terminal) carries keystrokes up and the
+     * {@code {"type":"resize",...}} control frame, exactly like {@link #INSTANCE_SHELL};
+     * which of the two applies is the session's fact, never a client choice.
      * Authorization is the handshake's requiresLogin plus the handler's per-record
      * CONSOLE check ({@code InstanceConsoles}), revalidated mid-session. Not manage:
      * console is its own enforced verb since the capability split, and manage merely

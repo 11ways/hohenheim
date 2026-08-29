@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
+import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
@@ -180,7 +181,9 @@ class StatusPresentationDriftTest {
                 Arrays.stream(ReadinessKind.values()).map(ReadinessKind::token).toList()),
             new Bound("stop kind", InstanceTemplateModel.STOP_KIND,
                 Arrays.stream(StopKind.values()).map(StopKind::token).toList()),
-            new Bound("console kind", InstanceTemplateModel.CONSOLE_KIND,
+            // The console vocabulary moved into the KIND SETTINGS (every Docker kind
+            // declares the same field off the same builder); bind one of them.
+            new Bound("console kind", DockerContainerKind.CONSOLE_KIND,
                 Arrays.stream(ConsoleKind.values()).map(ConsoleKind::token).toList()));
 
         for (Bound entry : bound) {
@@ -213,6 +216,18 @@ class StatusPresentationDriftTest {
         assertThat(ReadinessKind.forToken("vibes")).as("step 4: unknown readiness").isNull();
         assertThat(StopKind.forToken("plead")).as("step 4: unknown stop").isNull();
         assertThat(ConsoleKind.forToken("janeway")).as("step 4: unknown console").isNull();
+        assertThat(ConsoleKind.forToken("tty"))
+            .as("step 4: the interactive console is the tty member, and it is the only"
+                + " member that is interactive")
+            .isSameAs(ConsoleKind.TTY);
+        assertThat(ConsoleKind.TTY.interactive()).isTrue();
+        assertThat(ConsoleKind.PLAIN.interactive()).isFalse();
+        assertThat(ConsoleKind.declaredIn(java.util.Map.of()))
+            .as("step 4: an undeclared console is the plain default")
+            .isSameAs(ConsoleKind.PLAIN);
+        assertThat(ConsoleKind.declaredIn(java.util.Map.of(ConsoleKind.SETTING, "janeway")))
+            .as("step 4: an unknown declared token is null, never a default")
+            .isNull();
     }
 
     @Test

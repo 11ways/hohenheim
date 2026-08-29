@@ -100,9 +100,10 @@ class InstanceSettingsSectionTest {
             .as("step 2: every one of them starts folded")
             .allMatch(FormSection::startsCollapsed);
         assertThat(sectionMembers(WorkspaceKind.SETTINGS_SCHEMA, HohenheimFormSections.RUNTIME))
-            .as("step 2: the runtime fold carries the environment and every ceiling")
+            .as("step 2: the runtime fold carries the environment, every ceiling and the"
+                + " console shape")
             .containsExactly("home_quota_mb", "environment_variables", "memory_limit_mb",
-                "cpu_limit");
+                "cpu_limit", "console_kind");
         assertThat(sectionMembers(WorkspaceKind.SETTINGS_SCHEMA, HohenheimFormSections.DEPLOYMENT))
             .as("step 2: and the deployment fold owns the preview lane too")
             .containsExactly("auto_deploy", "poll_interval", "webhook_secret",
@@ -151,6 +152,9 @@ class InstanceSettingsSectionTest {
                 "environment_variables", "volumes");
         assertThat(sectionMembers(DockerContainerKind.SETTINGS_SCHEMA, HohenheimFormSections.PORTS))
             .containsExactly("port_protocol", "port_exposure", "host_port");
+        assertThat(sectionMembers(DockerContainerKind.SETTINGS_SCHEMA, HohenheimFormSections.RUNTIME))
+            .as("the console shape defaults to plain, so it folds")
+            .containsExactly("console_kind");
 
         // 2. A system container adds the privilege declaration to that visible run --
         //    a security decision is never folded away.

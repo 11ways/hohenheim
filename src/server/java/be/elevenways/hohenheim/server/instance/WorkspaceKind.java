@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -29,6 +30,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DoubleField;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
@@ -126,6 +128,12 @@ public final class WorkspaceKind implements InstanceKindHandler {
             .label(HohenheimFormCopy.label("cpu_limit"))
             .help(HohenheimFormCopy.help("cpu_limit")).build());
 
+    /** Which console the start command gets; {@link ConsoleKind} is the vocabulary's home. */
+    public static final EnumField CONSOLE_KIND = SETTINGS_SCHEMA.addField(
+        ConsoleKind.fieldBuilder(ConsoleKind.SETTING)
+            .label(HohenheimFormCopy.label("console_kind"))
+            .help(HohenheimFormCopy.help("console_kind")).build());
+
     // What a person DECIDES when creating a workspace is where the code comes from, what
     // builds it, what starts it and which port it serves. Everything else has a working
     // default, so it folds -- in NAMED sections, because a fold whose header says "Build"
@@ -145,7 +153,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
         SETTINGS_SCHEMA.addSection(
             HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME, List.of(
                 HOME_QUOTA_MB.getName(), ENVIRONMENT_VARIABLES.getName(),
-                MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+                MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(), CONSOLE_KIND.getName())));
     }
 
     @Override public @NonNull Identifier typeId() { return ID; }
@@ -255,7 +263,8 @@ public final class WorkspaceKind implements InstanceKindHandler {
                 OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
             .binds(binds)
             .publication(publicationOf(settings, image))
-            .runUser(uid);
+            .runUser(uid)
+            .tty(ConsoleKind.requireDeclared(settings).interactive());
 
         if (incus) {
             // The image lives in the HOST's own store (RuntimeImages converts it there),

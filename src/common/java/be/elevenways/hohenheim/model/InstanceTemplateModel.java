@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
-import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.instance.StopKind;
@@ -193,11 +192,11 @@ public class InstanceTemplateModel extends Model {
             .help(HohenheimFormCopy.help("stop_grace_seconds"))
             .build());
 
-    public static final EnumField CONSOLE_KIND = SCHEMA.addField(
-        ConsoleKind.fieldBuilder("console_kind")
-            .label(HohenheimFormCopy.label("console_kind"))
-            .help(HohenheimFormCopy.help("console_kind"))
-            .build());
+    // AIDEV-NOTE: there is deliberately NO console_kind column any more. The console
+    // vocabulary (ConsoleKind) lives in the KIND SETTINGS, which every template carries as
+    // its settings baseline, so an instance created without a template declares it the
+    // same way one created from a template does; the column this model used to declare
+    // was read by nothing and was dropped by M003_TemplateConsoleKindDropped.
 
     /**
      * When an operator approved this template for tenant selection; null = NOT

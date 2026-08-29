@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
@@ -121,6 +122,15 @@ public final class ApplicationKind implements InstanceKindHandler {
             .label(HohenheimFormCopy.label("memory_limit"))
             .help(HohenheimFormCopy.help("memory_limit")).build());
 
+    /**
+     * Which console every release's primary process gets; copied onto each release's
+     * settings by {@code ApplicationReleases}. {@link ConsoleKind} is the vocabulary's home.
+     */
+    public static final EnumField CONSOLE_KIND = SETTINGS_SCHEMA.addField(
+        ConsoleKind.fieldBuilder(ConsoleKind.SETTING)
+            .label(HohenheimFormCopy.label("console_kind"))
+            .help(HohenheimFormCopy.help("console_kind")).build());
+
     public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
         DoubleField.builder().name("cpu_limit")
             .label(HohenheimFormCopy.label("cpu_limit"))
@@ -142,7 +152,8 @@ public final class ApplicationKind implements InstanceKindHandler {
                 GitSourceSchema.PREVIEWS)));
         SETTINGS_SCHEMA.addSection(
             HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME, List.of(
-                ENVIRONMENT_VARIABLES.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+                ENVIRONMENT_VARIABLES.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
+                CONSOLE_KIND.getName())));
     }
 
     /**

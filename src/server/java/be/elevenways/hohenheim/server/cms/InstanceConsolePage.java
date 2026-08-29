@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -81,6 +82,13 @@ public final class InstanceConsolePage implements RecordScopedPage<Row>, Termina
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status)
             || InstanceModel.STATUS_STARTING.equals(status));
         vars.put("stopCommand", stopCommand == null ? "" : stopCommand);
+        // The console's shape is the kind setting's fact (ConsoleKind, one home): an
+        // interactive terminal takes keystrokes on the socket and has no command form.
+        // An unknown token renders the plain shape; the deploy already refused it.
+        Object settings = instance.get(InstanceModel.SETTINGS);
+        ConsoleKind consoleKind = settings instanceof Map<?, ?> map
+            ? ConsoleKind.declaredIn(castSettings(map)) : ConsoleKind.PLAIN;
+        vars.put("interactive", consoleKind != null && consoleKind.interactive());
         vars.put("returnUrl", ReturnTarget.capture(conduit));
         // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
         // ReturnTarget is server-only, so the common template cannot reach it.
@@ -94,6 +102,11 @@ public final class InstanceConsolePage implements RecordScopedPage<Row>, Termina
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-console"), vars);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @NonNull Map<String, Object> castSettings(@NonNull Map<?, ?> settings) {
+        return (Map<String, Object>) settings;
     }
 
     /**

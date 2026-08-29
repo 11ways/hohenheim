@@ -48,9 +48,15 @@ final class InstanceConsoleSession {
                          ConsoleStream.@NonNull Termination termination, @NonNull String detail);
     }
 
+    /** The driver's geometry setter for an INTERACTIVE console (a bound resizeConsole). */
+    interface Resizer {
+        void resize(int cols, int rows) throws IOException;
+    }
+
     private final int instanceId;
     private final @NonNull String handle;
     private final ConsoleStreamSupport.@NonNull Console console;
+    private final @NonNull Resizer resizer;
     private final @Nullable String stopCommand;
     private final @NonNull ExitListener exitListener;
     private final ConsoleRedaction.@NonNull Redactor redactor;
@@ -75,6 +81,7 @@ final class InstanceConsoleSession {
 
     InstanceConsoleSession(int instanceId, @NonNull String handle,
                            ConsoleStreamSupport.@NonNull Console console,
+                           @NonNull Resizer resizer,
                            @Nullable String stopCommand,
                            ConsoleRedaction.@NonNull Redactor redactor,
                            InstanceConsoleLogs.@Nullable Sink logSink,
@@ -82,6 +89,7 @@ final class InstanceConsoleSession {
         this.instanceId = instanceId;
         this.handle = handle;
         this.console = console;
+        this.resizer = resizer;
         this.stopCommand = stopCommand == null || stopCommand.isBlank()
             ? null : stopCommand.trim();
         this.redactor = redactor;
@@ -106,6 +114,44 @@ final class InstanceConsoleSession {
 
     boolean stdinDelivered() {
         return this.console.stdinDelivered();
+    }
+
+    /** Whether the workload sits behind a pseudo-terminal (keystrokes and resize apply). */
+    boolean interactive() {
+        return this.console.interactive();
+    }
+
+    /**
+     * Raw keystrokes toward an INTERACTIVE workload's pseudo-terminal: no newline is
+     * appended and no stop command is matched, because a terminal echoes what is typed and
+     * a keystroke stream has no line to match.
+     *
+     * @throws IOException when the console is not interactive, stdin does not reach the
+     *         workload, or the stream is over
+     */
+    void writeRaw(@NonNull String keystrokes) throws IOException {
+        if (!this.interactive()) {
+            throw new IOException("Container '" + this.handle + "' has a plain console;"
+                + " keystrokes need a pseudo-terminal (console_kind=tty)");
+        }
+        if (!this.console.stdinDelivered()) {
+            throw new IOException("Container '" + this.handle + "' was created without"
+                + " OpenStdin; keystrokes cannot reach it (redeploy to fix)");
+        }
+        this.console.stream().writeStdin(keystrokes.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Tell an INTERACTIVE workload's pseudo-terminal its viewer's geometry.
+     *
+     * @throws IOException when the console is not interactive or the driver refuses
+     */
+    void resize(int cols, int rows) throws IOException {
+        if (!this.interactive()) {
+            throw new IOException("Container '" + this.handle + "' has a plain console;"
+                + " there is no terminal geometry to set");
+        }
+        this.resizer.resize(cols, rows);
     }
 
     /** The stream is over (any termination). */

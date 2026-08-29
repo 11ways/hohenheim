@@ -112,6 +112,11 @@ silently aborts used to make a run of nothing look green.
   INSTANCE kind (`hohenheim:workspace`, `hohenheim:application`, ...). A site that serves
   one names it through the real `sites.instance_id` column, and the git SOURCE lives on
   that instance's settings, never on the site.
+- The console of an instance is the KIND SETTING `console_kind` (`ConsoleKind`, one home):
+  `plain` = output on the socket, commands through the form; `tty` = the primary process
+  behind a real pseudo-terminal, keystrokes + resize on the socket (the Janeway console).
+  See `docs/interactive-console.md`; never a second interactive lane beside
+  `InstanceConsoles.attach`.
 - Handlers are long-lived: created when a site loads, updated on config change, destroyed on removal. Not per-request.
 - ClientMain MUST call `HohenheimModels.registerAll()` + `HohenheimSources.register()` before `ClientZenitRuntime.main` (the browser has no MODELS/MODULES boot stage).
 

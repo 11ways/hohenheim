@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -17,6 +18,7 @@ import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DoubleField;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
@@ -97,6 +99,12 @@ public final class ReleaseKind implements InstanceKindHandler {
     public static final StringField COMMAND = SETTINGS_SCHEMA.addField(
         StringField.builder().name("command").label(HohenheimFormCopy.label("container_command"))
             .help(HohenheimFormCopy.help("container_command")).build());
+
+    /** The application's declared console, copied per release by ApplicationReleases. */
+    public static final EnumField CONSOLE_KIND = SETTINGS_SCHEMA.addField(
+        ConsoleKind.fieldBuilder(ConsoleKind.SETTING)
+            .label(HohenheimFormCopy.label("console_kind"))
+            .help(HohenheimFormCopy.help("console_kind")).build());
 
     public static final IntegerField CONTAINER_PORT = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("container_port").label(HohenheimFormCopy.label("container_port"))
@@ -210,6 +218,7 @@ public final class ReleaseKind implements InstanceKindHandler {
             .env(EnvVars.toMap(settings.get("environment_variables")))
             .binds(binds)
             .publication(publication)
+            .tty(ConsoleKind.requireDeclared(settings).interactive())
             .build();
     }
 

@@ -83,6 +83,12 @@ import java.util.Map;
  *                      {@code rootDiskGb} and for the same reason: a driver with no
  *                      per-workload rate limiter refuses BY NAME rather than accepting a
  *                      number it cannot enforce (see {@code NetworkBandwidth}).
+ * @param tty           whether the primary process runs behind a PSEUDO-TERMINAL
+ *                      ({@code ConsoleKind.TTY}): the console echoes, takes keystrokes
+ *                      and resize frames, and a full-screen TUI (Alchemy's Janeway)
+ *                      renders. False is the plain pipe console. A driver that has no
+ *                      pseudo-terminal to give refuses BY NAME rather than attaching a
+ *                      pipe and calling it a terminal.
  */
 public record InstanceSpec(@NonNull String handle,
                            @NonNull String image,
@@ -103,7 +109,8 @@ public record InstanceSpec(@NonNull String handle,
                            @Nullable HealthCheck healthCheck,
                            @Nullable Integer rootDiskGb,
                            @Nullable Integer networkLimitMbit,
-                           @Nullable Integer runUser) {
+                           @Nullable Integer runUser,
+                           boolean tty) {
 
     /**
      * Every collection component is defensively copied, so a caller that keeps mutating the
@@ -180,6 +187,7 @@ public record InstanceSpec(@NonNull String handle,
         private @Nullable Integer rootDiskGb;
         private @Nullable Integer networkLimitMbit;
         private @Nullable Integer runUser;
+        private boolean tty;
 
         private Builder(@NonNull String handle, @NonNull String image,
                         @NonNull ResourceLimits limits,
@@ -276,12 +284,19 @@ public record InstanceSpec(@NonNull String handle,
             return this;
         }
 
+        /** Whether the primary process gets a pseudo-terminal; see the record docblock. */
+        public @NonNull Builder tty(boolean tty) {
+            this.tty = tty;
+            return this;
+        }
+
         public @NonNull InstanceSpec build() {
             return new InstanceSpec(this.handle, this.image, this.command, this.env,
                 this.volumes, this.binds, this.publications, this.limits, this.hardening,
                 this.ownerLabels, this.cloudInitUserData, this.imageFingerprint,
                 this.imageOrigin, this.secureBoot, this.guestAgent, this.tmpfs,
-                this.healthCheck, this.rootDiskGb, this.networkLimitMbit, this.runUser);
+                this.healthCheck, this.rootDiskGb, this.networkLimitMbit, this.runUser,
+                this.tty);
         }
     }
 
@@ -311,7 +326,7 @@ public record InstanceSpec(@NonNull String handle,
             this.binds, List.copyOf(claimed), this.limits, this.hardening,
             this.ownerLabels, this.cloudInitUserData, this.imageFingerprint, this.imageOrigin,
             this.secureBoot, this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
-            this.networkLimitMbit, this.runUser);
+            this.networkLimitMbit, this.runUser, this.tty);
     }
 
     /** A copy carrying the record's pinned resolved image identity. */
@@ -320,7 +335,7 @@ public record InstanceSpec(@NonNull String handle,
             this.binds, this.publications, this.limits, this.hardening, this.ownerLabels,
             this.cloudInitUserData, fingerprint, this.imageOrigin, this.secureBoot,
             this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
-            this.networkLimitMbit, this.runUser);
+            this.networkLimitMbit, this.runUser, this.tty);
     }
 
     private static @NonNull List<PortPublication> listOf(@Nullable PortPublication one) {

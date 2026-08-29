@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -425,6 +426,13 @@ public final class ApplicationReleases {
         Object port = settings.get("container_port");
         if (port instanceof Number number && number.intValue() > 0) {
             desired.put("container_port", number.intValue());
+        }
+        // The console vocabulary travels by TOKEN, read off the same home the release's
+        // specFor reads it back from; the default is left implicit so an unchanged
+        // application converges to an unchanged release.
+        ConsoleKind console = ConsoleKind.requireDeclared(settings);
+        if (console != ConsoleKind.PLAIN) {
+            desired.put(ConsoleKind.SETTING, console.token());
         }
         String healthPath = str(settings.get("health_path"));
         if (!healthPath.isEmpty()) {

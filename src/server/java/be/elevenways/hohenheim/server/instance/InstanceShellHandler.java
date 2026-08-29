@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.zenit.common.setting.ContentLocales;
@@ -13,8 +12,6 @@ import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
-
-import java.util.Map;
 
 /**
  * One interactive shell over the terminal WebSocket: keystrokes up, terminal output down,
@@ -32,9 +29,6 @@ import java.util.Map;
  * second socket close.
  */
 public final class InstanceShellHandler implements WebSocketHandler {
-
-    /** The control frame {@code pl-terminal} sends when its geometry changes. */
-    private static final String RESIZE_TYPE = "resize";
 
     private final @NonNull WebSocketSession session;
     private final @Nullable Integer instanceId;
@@ -85,23 +79,14 @@ public final class InstanceShellHandler implements WebSocketHandler {
         return permitted;
     }
 
-    /**
-     * Keystrokes, or one resize control frame.
-     *
-     * AIDEV-NOTE: the discriminator is STRUCTURAL -- a JSON object carrying
-     * {@code type:"resize"} plus numeric cols/rows -- and everything else is keystrokes,
-     * verbatim. The ambiguity that leaves is deliberate and bounded: a viewer who pastes
-     * exactly that JSON object resizes their OWN terminal instead of typing it. Nothing
-     * about another session, another record or another identity is reachable this way, so
-     * a second control channel would be cost without a safety gain.
-     */
+    /** Keystrokes, or one resize control frame (see {@link TerminalControlFrames}). */
     @Override
     public void onTextMessage(String message) {
         InstanceShell.Session live = this.shell;
         if (live == null || message == null || message.isEmpty()) {
             return;
         }
-        int[] size = resizeOf(message);
+        int[] size = TerminalControlFrames.resizeOf(message);
         if (size != null) {
             live.resize(size[0], size[1]);
             return;
@@ -130,28 +115,6 @@ public final class InstanceShellHandler implements WebSocketHandler {
         if (this.session.isOpen()) {
             this.session.close();
         }
-    }
-
-    /** {@code {"type":"resize","cols":N,"rows":N}} as [cols, rows], or null for keystrokes. */
-    private static int @Nullable [] resizeOf(@NonNull String message) {
-        // Cheap reject first: a keystroke stream must not pay for a parse attempt.
-        if (message.length() < 2 || message.charAt(0) != '{'
-                || !message.contains(RESIZE_TYPE)) {
-            return null;
-        }
-        Object parsed;
-        try {
-            parsed = new Dry().parse(message);
-        } catch (RuntimeException notJson) {
-            return null;
-        }
-        if (!(parsed instanceof Map<?, ?> frame)
-                || !RESIZE_TYPE.equals(frame.get("type"))
-                || !(frame.get("cols") instanceof Number cols)
-                || !(frame.get("rows") instanceof Number rows)) {
-            return null;
-        }
-        return new int[] { cols.intValue(), rows.intValue() };
     }
 
     /**

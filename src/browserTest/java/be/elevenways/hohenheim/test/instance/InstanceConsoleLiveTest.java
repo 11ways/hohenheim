@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -298,6 +299,98 @@ class InstanceConsoleLiveTest {
                 cleanup(docker, handle);
             }
         });
+    }
+
+    /**
+     * The interactive console against a REAL pseudo-terminal: {@code console_kind=tty}
+     * creates the container with a TTY, the hub's viewer handle carries keystrokes and
+     * geometry to it, and what comes back is what a terminal would show -- the echo of
+     * the typed line and a {@code stty size} that reports the viewer's geometry, which is
+     * the whole reason a full-screen TUI (Alchemy's Janeway) can run in it.
+     */
+    @Test
+    void anInteractiveConsoleIsARealPseudoTerminalWithKeystrokesAndGeometry() {
+        assumeLiveDaemon();
+        DockerClient docker = new DockerClient();
+
+        Db.run(datasource, () -> {
+            HostFixtures.admitLocal();
+            int id = ttyInstanceRecord("console-tty");
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
+            InstanceService service = new InstanceService();
+            try {
+                // 1. Deploy: the daemon confirms the pseudo-terminal, and the record runs.
+                service.deploy(id);
+                assertThat(status(id)).as("step 1: deployed and running")
+                    .isEqualTo(InstanceModel.STATUS_RUNNING);
+                Object config = docker.inspectContainer(handle).get("Config");
+                assertThat(config instanceof Map<?, ?> c && Boolean.TRUE.equals(c.get("Tty")))
+                    .as("step 1: the container was created WITH a TTY").isTrue();
+
+                // 2. The hub attaches interactively and a viewer follows the raw stream.
+                InstanceConsoles.Viewer viewer = InstanceConsoles.attach(id);
+                assertThat(viewer.interactive())
+                    .as("step 2: the session knows it is a pseudo-terminal").isTrue();
+                StringBuilder seen = new StringBuilder();
+                viewer.follow(chunk -> {
+                    synchronized (seen) {
+                        seen.append(chunk);
+                    }
+                });
+
+                // 3. The viewer's geometry reaches the terminal: the shell reports it.
+                viewer.resize(120, 40);
+                viewer.write("stty size\r");
+                assertThat(await(15_000, () -> text(seen).contains("40 120")))
+                    .as("step 3: `stty size` reports the geometry the viewer set: "
+                        + text(seen)).isTrue();
+
+                // 4. Typed input echoes (a terminal echoes; a pipe never does) and runs.
+                viewer.write("echo tty-o''k\r");
+                assertThat(await(15_000, () -> text(seen).contains("tty-ok")))
+                    .as("step 4: the typed command ran and printed: " + text(seen)).isTrue();
+                assertThat(text(seen))
+                    .as("step 4: and the keystrokes themselves were echoed back")
+                    .contains("echo tty-o''k");
+
+                // 5. A second geometry is honoured live, mid-session.
+                viewer.resize(80, 24);
+                viewer.write("stty size\r");
+                assertThat(await(15_000, () -> text(seen).contains("24 80")))
+                    .as("step 5: a live resize reaches the running process: " + text(seen))
+                    .isTrue();
+                viewer.close();
+
+                // 6. Destroy tears it down with the workload.
+                service.destroy(id);
+                assertThat(await(5_000, () -> InstanceConsoles.liveSessionCount() == 0))
+                    .as("step 6: no session survives destroy").isTrue();
+            } catch (IOException e) {
+                throw new AssertionError("the daemon could not be asked: " + e.getMessage(), e);
+            } finally {
+                cleanup(docker, handle);
+            }
+        });
+    }
+
+    private static int ttyInstanceRecord(String name) {
+        Row row = Models.get(InstanceModel.class).createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND, "hohenheim:docker_container");
+        // alpine's /bin/sh on a TTY is an interactive shell: it echoes, prompts and
+        // answers `stty size` -- the smallest stand-in for a TUI workload.
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of(
+            "image", "alpine", "tag", "latest", "command", "sh",
+            ConsoleKind.SETTING, ConsoleKind.TTY.token())));
+        row.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_NONE);
+        Models.get(InstanceModel.class).save(row);
+        return row.get(InstanceModel.ID);
+    }
+
+    private static String text(StringBuilder seen) {
+        synchronized (seen) {
+            return seen.toString();
+        }
     }
 
     private static void cleanup(DockerClient docker, String handle) {

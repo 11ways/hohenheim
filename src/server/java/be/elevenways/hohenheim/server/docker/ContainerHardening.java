@@ -251,10 +251,11 @@ public final class ContainerHardening {
      * alias is for. {@code NetworkDisabled} would silently produce a workload the network
      * policy has nothing to bind to. {@code WorkingDir}, {@code StopSignal},
      * {@code StopTimeout}, {@code Shell}, {@code Volumes} (anonymous volumes with no
-     * owner labels, so unattributable debris) and the {@code AttachStd*}/{@code Tty}
-     * family are refused not for danger but for the allow-list's whole point: permission
-     * is DECLARED once a caller needs it and a reviewer has read the reason, never
-     * inherited by silence.
+     * owner labels, so unattributable debris) and the {@code AttachStd*} family are
+     * refused not for danger but for the allow-list's whole point: permission is DECLARED
+     * once a caller needs it and a reviewer has read the reason, never inherited by
+     * silence -- which is exactly how {@code Tty} moved from this list to the permitted
+     * one when the interactive console got its consumer.
      *
      * AIDEV-NOTE: {@code Labels} is LOAD-BEARING since the bind rule below reads the
      * instance identity off it. Forging it does not widen anything -- it re-attributes
@@ -282,6 +283,9 @@ public final class ContainerHardening {
             + " console lane takes commands on stdin.",
         "StdinOnce", "kept false beside OpenStdin so a console reconnect never half-closes"
             + " the workload's stdin.",
+        "Tty", "the DECLARED pseudo-terminal of a ConsoleKind.TTY workload (an Alchemy app's"
+            + " Janeway console): a terminal on the primary process's own stdio, which"
+            + " isolates nothing differently from the pipe it replaces.",
         "NetworkingConfig", "attaching to the per-workload network AT CREATE, which is what"
             + " keeps the container off the default bridge for the window a post-hoc"
             + " connect would leave it there. Structurally constrained to that ONE network"
