@@ -161,17 +161,35 @@ public final class HostnameAuthority {
 
         /** An exact row outranks every wildcard; a wildcard ranks by the labels it spells. */
         private static int specificityOf(@NonNull Row domain) {
-            String matchType = domain.get(SiteDomainModel.MATCH_TYPE);
-            String pattern = SiteDomainModel.canonicalHostname(
-                domain.get(SiteDomainModel.HOSTNAME), matchType);
-            if (pattern == null) {
-                return Integer.MIN_VALUE;
-            }
-            if (SiteDomainModel.MATCH_EXACT.equals(HostnamePatterns.effectiveKind(pattern, matchType))) {
-                return Integer.MAX_VALUE;
-            }
-            return pattern.split("\\.", -1).length;
+            return HostnameAuthority.specificityOf(domain.get(SiteDomainModel.HOSTNAME),
+                domain.get(SiteDomainModel.MATCH_TYPE));
         }
+    }
+
+    /**
+     * THE routing-specificity rank of a configured hostname: an exact row outranks every
+     * wildcard, and a wildcard ranks by the labels it spells.
+     *
+     * AIDEV-NOTE: this is the ONE spelling of the tier order, shared by {@link
+     * Snapshot#deciding} (which decides who answers for a name) and by the write-time
+     * overlap scan in {@code SiteDomainResource} (which decides whether a foreign row may
+     * refuse a claim). A regex pattern's reach is undecidable here, so it ranks with an
+     * exact row and is therefore never LESS specific than anything -- the fail-closed
+     * answer. Regex rows never cover a name ({@code HostnamePatterns.covers}), so they
+     * never reach {@code deciding} and this costs that lane nothing.
+     *
+     * @return a comparable rank; higher is more specific
+     */
+    public static int specificityOf(@Nullable String hostname, @Nullable String matchType) {
+        String pattern = SiteDomainModel.canonicalHostname(hostname, matchType);
+        if (pattern == null) {
+            return Integer.MIN_VALUE;
+        }
+        String kind = HostnamePatterns.effectiveKind(pattern, matchType);
+        if (SiteDomainModel.MATCH_EXACT.equals(kind) || SiteDomainModel.MATCH_REGEX.equals(kind)) {
+            return Integer.MAX_VALUE;
+        }
+        return pattern.split("\\.", -1).length;
     }
 
     /**

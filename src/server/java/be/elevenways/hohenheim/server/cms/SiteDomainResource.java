@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.proxy.ListenerAddressMatcher;
 import be.elevenways.hohenheim.server.proxy.ReleasedClaims;
@@ -394,6 +395,7 @@ public class SiteDomainResource extends RowResource {
         List<String> listenOn = ListenerAddressMatcher.parse(
             stringValue(SiteDomainModel.effective(row, SiteDomainModel.LISTEN_ON)));
         Object ownId = row.has(SiteDomainModel.ID.getName()) ? row.get(SiteDomainModel.ID) : null;
+        boolean introducesClaim = introducesClaim(storedDomainOf(row), row, canonicalHostname, matchType);
 
         Map<Integer, Row> sitesById = new HashMap<>();
         for (Row candidateSite : Models.get(SiteModel.class).find().all()) {
@@ -430,7 +432,8 @@ public class SiteDomainResource extends RowResource {
                     || !HostnamePatterns.intersect(canonicalHostname, matchType,
                         candidate.get(SiteDomainModel.HOSTNAME),
                         candidate.get(SiteDomainModel.MATCH_TYPE))
-                    || HohenheimAccess.sameOwner(siteId, candidateSiteId)) {
+                    || HohenheimAccess.sameOwner(siteId, candidateSiteId)
+                    || !overlapRefuses(canonicalHostname, matchType, candidate, introducesClaim)) {
                     continue;
                 }
                 // AIDEV-NOTE: the holder's pattern and name reach only a reader who may
@@ -478,6 +481,62 @@ public class SiteDomainResource extends RowResource {
     }
 
     /**
+     * THE overlap rule, shared by create, update and the site-enable seam: whether a
+     * foreign row whose hostname set merely INTERSECTS this one may refuse the write.
+     *
+     * An overlap with a LESS SPECIFIC foreign row (a wildcard covering an exact host, a
+     * broader wildcard covering a narrower one) is a takeover only while the write
+     * INTRODUCES the claim. Routing already gives the more specific row precedence
+     * ({@link HostnameAuthority#specificityOf}, the same rank {@code Snapshot.deciding}
+     * uses), so a claim that already exists is decided by its own row and re-refusing it
+     * would only lock its owner out of every later edit -- which is exactly what happened
+     * to a tenant's exact row the moment an operator added a catch-all wildcard over it.
+     * An IDENTICAL claim never reaches here, and a MORE (or equally) specific foreign row
+     * still refuses in every direction, so staging a name on a routeless site and enabling
+     * it stays closed: those rows hold no claim yet.
+     *
+     * @param introducesClaim whether the write hands the row a claim it does not hold live
+     */
+    private static boolean overlapRefuses(@Nullable String canonicalHostname,
+                                          @Nullable String matchType,
+                                          @NonNull Row candidate, boolean introducesClaim) {
+        if (introducesClaim) {
+            return true;
+        }
+        return HostnameAuthority.specificityOf(candidate.get(SiteDomainModel.HOSTNAME),
+            candidate.get(SiteDomainModel.MATCH_TYPE))
+            >= HostnameAuthority.specificityOf(canonicalHostname, matchType);
+    }
+
+    /**
+     * Whether a pending write hands the row a route claim it does not already hold LIVE:
+     * a create, a changed route tuple, a changed routing tier, or a row whose site is not
+     * routing (its {@code live_route_key} is null, which is what the enable seam sees).
+     *
+     * AIDEV-NOTE: the claim key deliberately omits the match type (see RouteClaims), so
+     * the TIER is compared separately -- flipping one literal hostname from exact to
+     * wildcard spells the same key while claiming a whole namespace, and reading the key
+     * alone would wave that through as "unchanged".
+     */
+    private static boolean introducesClaim(@Nullable Row stored, @NonNull Row row,
+                                           @Nullable String canonicalHostname,
+                                           @Nullable String matchType) {
+        if (stored == null) {
+            return true;
+        }
+        if (!RouteClaims.keyOfPendingWrite(row)
+                .equals(stored.get(SiteDomainModel.LIVE_ROUTE_KEY))) {
+            return true;
+        }
+        String storedHostname = stored.get(SiteDomainModel.HOSTNAME);
+        String storedMatchType = stored.get(SiteDomainModel.MATCH_TYPE);
+        return !HostnamePatterns.effectiveKind(canonicalHostname, matchType).equals(
+            HostnamePatterns.effectiveKind(
+                SiteDomainModel.canonicalHostname(storedHostname, storedMatchType),
+                storedMatchType));
+    }
+
+    /**
      * The quarantine refusal text.
      *
      * AIDEV-NOTE: it must NOT name the former owner. The refusals above name the holding
@@ -513,8 +572,13 @@ public class SiteDomainResource extends RowResource {
             }
             String ownHostname = SiteDomainModel.canonicalHostname(
                 own.get(SiteDomainModel.HOSTNAME), own.get(SiteDomainModel.MATCH_TYPE));
+            String ownMatchType = stringValue(own.get(SiteDomainModel.MATCH_TYPE));
             String ownPath = normalizedPath(own.get(SiteDomainModel.PATH));
             List<String> ownListen = ListenerAddressMatcher.parse(own.get(SiteDomainModel.LISTEN_ON));
+            // The stored row IS the pending write here, so this asks whether the row
+            // already holds its claim live -- false for every row of a site that is going
+            // live, which is what keeps the stage-then-enable two-step refused.
+            boolean introducesClaim = introducesClaim(own, own, ownHostname, ownMatchType);
             for (Row candidate : allRows) {
                 Integer candidateSiteId = candidate.get(SiteDomainModel.SITE_ID);
                 if (Objects.equals(candidateSiteId, siteId)) {
@@ -540,11 +604,12 @@ public class SiteDomainResource extends RowResource {
                 // owner-scoped rule refuseRouteConflicts documents.
                 boolean identical = Objects.equals(ownHostname, candidateHostname);
                 if (!identical && (!HostnamePatterns.intersect(
-                        own.get(SiteDomainModel.HOSTNAME), own.get(SiteDomainModel.MATCH_TYPE),
+                        own.get(SiteDomainModel.HOSTNAME), ownMatchType,
                         candidate.get(SiteDomainModel.HOSTNAME),
                         candidate.get(SiteDomainModel.MATCH_TYPE))
                     || candidateSiteId == null
-                    || HohenheimAccess.sameOwner(siteId, candidateSiteId))) {
+                    || HohenheimAccess.sameOwner(siteId, candidateSiteId)
+                    || !overlapRefuses(ownHostname, ownMatchType, candidate, introducesClaim))) {
                     continue;
                 }
                 String ownName = String.valueOf(own.get(SiteDomainModel.HOSTNAME));
@@ -563,8 +628,7 @@ public class SiteDomainResource extends RowResource {
             // whole mechanism bypassable by a two-step the code above documents as LEGAL:
             // stage the released hostname on a DISABLED site (exempt by design), then
             // enable it. Anchored on 'enabled', like every other refusal on this path.
-            Row quarantine = ReleasedClaims.refusalFor(RouteClaims.keyOf(own),
-                stringValue(own.get(SiteDomainModel.MATCH_TYPE)), siteId);
+            Row quarantine = ReleasedClaims.refusalFor(RouteClaims.keyOf(own), ownMatchType, siteId);
             if (quarantine != null) {
                 throw Violations.ofField("enabled", true,
                     quarantineViolation(quarantine, "enable_route_quarantined"));
