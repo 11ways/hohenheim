@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
+import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
+import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypes;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -104,6 +107,17 @@ public final class TemplatePortability {
             files.add(entry);
         }
         body.put("files", files);
+
+        List<Map<String, Object>> databases = new ArrayList<>();
+        for (Row declared : Models.get(InstanceTemplateDatabaseModel.class)
+                .findByTemplateId(templateId)) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("engine", declared.get(InstanceTemplateDatabaseModel.ENGINE));
+            entry.put("env_prefix", declared.get(InstanceTemplateDatabaseModel.ENV_PREFIX));
+            entry.put("image", declared.get(InstanceTemplateDatabaseModel.IMAGE));
+            databases.add(entry);
+        }
+        body.put("databases", databases);
         return body;
     }
 
@@ -114,7 +128,7 @@ public final class TemplatePortability {
      * changes number types and key order without changing meaning. Anything that DOES
      * change meaning (a value, a key, an entry) still changes the digest.
      */
-    private static @NonNull String checksumOf(@NonNull Map<String, Object> body) {
+    public static @NonNull String checksumOf(@NonNull Map<String, Object> body) {
         return SecureTokens.sha256Hex(Zenit.DRY.stringify(canonical(body)));
     }
 
@@ -231,6 +245,20 @@ public final class TemplatePortability {
                     violationText("file_path_absolute"));
             }
         }
+        // A declared database is judged by the SAME vocabulary the record column stores:
+        // an engine token no engine carries fails closed here, never at create time.
+        List<Map<String, Object>> databases = entryList(body.get("databases"));
+        for (Map<String, Object> database : databases) {
+            String engine = str(database.get("engine"));
+            if (ManagedDatabase.Engine.forToken(engine) == null) {
+                throw Violations.ofField("engine", engine,
+                    violationText("unknown_engine").withArg("engine", engine));
+            }
+            String prefix = str(database.get("env_prefix"));
+            if (!prefix.matches(InstanceDatabaseModel.PREFIX_PATTERN)) {
+                throw Violations.ofField("env_prefix", prefix, violationText("prefix_format"));
+            }
+        }
 
         InstanceTemplateModel templates = Models.get(InstanceTemplateModel.class);
         Row template = templates.createEmptyRow();
@@ -288,6 +316,17 @@ public final class TemplatePortability {
             String mode = str(file.get("mode"));
             row.set(InstanceTemplateFileModel.MODE, mode.isEmpty() ? "0644" : mode);
             fileModel.save(row);
+        }
+
+        InstanceTemplateDatabaseModel databaseModel = Models.get(InstanceTemplateDatabaseModel.class);
+        for (Map<String, Object> database : databases) {
+            Row row = databaseModel.createEmptyRow();
+            row.set(InstanceTemplateDatabaseModel.TEMPLATE_ID, templateId);
+            row.set(InstanceTemplateDatabaseModel.ENGINE, str(database.get("engine")));
+            row.set(InstanceTemplateDatabaseModel.ENV_PREFIX, str(database.get("env_prefix")));
+            String image = str(database.get("image"));
+            row.set(InstanceTemplateDatabaseModel.IMAGE, image.isEmpty() ? null : image);
+            databaseModel.save(row);
         }
         return templateId;
     }

@@ -63,9 +63,12 @@ public final class TenantDatabases {
     private TenantDatabases() {
     }
 
-    /** Whether the context may allocate databases at all (admins always may). */
-    public static boolean canAllocate(@NonNull AccessContext ctx) {
-        return HohenheimAccess.isAdmin(ctx) || ctx.hasPermission(DATABASES_CREATE);
+    /**
+     * Whether the context may allocate databases at all (admins always may; a null
+     * context is in-process operator work, the {@code InstancePlacement.forActor} seam).
+     */
+    public static boolean canAllocate(@Nullable AccessContext ctx) {
+        return ctx == null || HohenheimAccess.isAdmin(ctx) || ctx.hasPermission(DATABASES_CREATE);
     }
 
     /**
@@ -116,6 +119,21 @@ public final class TenantDatabases {
      */
     public static @NonNull Row allocate(@NonNull AccessContext ctx, @Nullable Object rawName,
                                         @Nullable Object rawEngine) {
+        return allocate(ctx, rawName, rawEngine, null, null);
+    }
+
+    /**
+     * {@link #allocate(AccessContext, Object, Object)} for a TEMPLATE-declared database:
+     * the image is the template's operator-authored override (null = the engine's
+     * default) and the requested host is the instance's, honoured exactly as
+     * {@link InstancePlacement#forActor} honours it -- for an admin or in-process
+     * caller; a tenant still walks the chooser and the caller compares the answer.
+     *
+     * @throws Violations as the three-argument form
+     */
+    public static @NonNull Row allocate(@Nullable AccessContext ctx, @Nullable Object rawName,
+                                        @Nullable Object rawEngine, @Nullable String image,
+                                        @Nullable Integer requestedServerId) {
         if (!canAllocate(ctx)) {
             throw Violations.ofForm(CmsSupport.violationText("databases_not_permitted"));
         }
@@ -130,18 +148,22 @@ public final class TenantDatabases {
         ManagedDatabase.Engine engine = engineOf(engineToken);
 
         String storedName = storedNameFor(ctx, label);
-        // The engine's own default image, never a submitted one: the managed-database
-        // reading of "tenants run operator-approved images only".
+        // The engine's own default image, never a SUBMITTED one: the managed-database
+        // reading of "tenants run operator-approved images only". A template's declared
+        // image is operator-authored (and approval-gated for tenants), which is the one
+        // override this funnel takes.
         InstanceKindHandler kind = InstanceKinds.getHandler(DatabaseContainerKind.ID.toString());
+        String resolvedImage = image == null || image.isBlank() ? engine.defaultImage : image;
         Map<String, Object> placementSettings = Map.of("engine", engine.token(),
-            "image", engine.defaultImage);
-        int serverId = InstancePlacement.forActor(ctx, null,
+            "image", resolvedImage);
+        int serverId = InstancePlacement.forActor(ctx, requestedServerId,
             InstancePlacement.Workload.of(kind, placementSettings));
 
         DatabaseService service = new DatabaseService();
         Row[] created = new Row[1];
         TenantWrites.inDatabaseAllocation(() -> created[0] = service.insertRecord(storedName,
-            engine, null, "app", Secrets.generatePassword(), sqlIdentifier(label), false,
+            engine, image == null || image.isBlank() ? null : image, "app",
+            Secrets.generatePassword(), sqlIdentifier(label), false,
             ServerModel.nameOf(serverId), ResourceLimits.none(),
             DatabaseService.STATUS_PROVISIONING));
         Row record = created[0];

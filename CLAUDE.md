@@ -117,6 +117,12 @@ silently aborts used to make a run of nothing look green.
   behind a real pseudo-terminal, keystrokes + resize on the socket (the Janeway console).
   See `docs/interactive-console.md`; never a second interactive lane beside
   `InstanceConsoles.attach`.
+- A template DECLARES the managed databases its instances need
+  (`instance_template_databases`); create-from-template allocates them through
+  `TenantDatabases.allocate` on the instance's host and attaches them under the declared
+  env prefix. The seeded WordPress templates are the reference consumer
+  (`docs/wordpress.md`); never a hand-attached database in a seeder or a second
+  allocation lane.
 - Handlers are long-lived: created when a site loads, updated on config change, destroyed on removal. Not per-request.
 - ClientMain MUST call `HohenheimModels.registerAll()` + `HohenheimSources.register()` before `ClientZenitRuntime.main` (the browser has no MODELS/MODULES boot stage).
 

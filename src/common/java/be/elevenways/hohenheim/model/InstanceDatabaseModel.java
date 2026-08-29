@@ -37,6 +37,13 @@ public class InstanceDatabaseModel extends Model {
     /** Default {@link #ENV_PREFIX} when none is given; the site lane's spelling. */
     public static final String DEFAULT_PREFIX = "DB";
 
+    /**
+     * What an env prefix may look like: it becomes a variable name, so a letter then
+     * letters/digits/underscores. THE one home, shared by the attachment form and a
+     * template's declared database ({@code InstanceTemplateDatabaseModel}).
+     */
+    public static final String PREFIX_PATTERN = "[A-Za-z][A-Za-z0-9_]*";
+
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
         IntegerField.builder().name("instance_id").build());

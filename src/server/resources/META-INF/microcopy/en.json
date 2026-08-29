@@ -563,6 +563,10 @@
     {
       "text": "Image",
       "scope": "stack_services"
+    },
+    {
+      "text": "Image",
+      "scope": "template_contents"
     }
   ],
   "image_tag": [
@@ -1247,6 +1251,10 @@
     {
       "text": "Database engine. Fixed after creation; destroy and recreate to change it.",
       "scope": "help"
+    },
+    {
+      "text": "Engine",
+      "scope": "template_contents"
     }
   ],
   "env_prefix": [
@@ -2445,6 +2453,15 @@
       "text": "protected paths",
       "scope": "protected_path",
       "case": "sentence"
+    },
+    {
+      "text": "Template databases",
+      "scope": "template_database"
+    },
+    {
+      "text": "template databases",
+      "scope": "template_database",
+      "case": "sentence"
     }
   ],
   "dashboard": [
@@ -2603,10 +2620,16 @@
     "text": "Clone",
     "scope": "site"
   },
-  "databases": {
-    "text": "Databases",
-    "scope": "site"
-  },
+  "databases": [
+    {
+      "text": "Databases",
+      "scope": "site"
+    },
+    {
+      "text": "Declared databases",
+      "scope": "template_contents"
+    }
+  ],
   "clone_confirm": {
     "text": "Create a copy with the same settings and domains (disabled by default)? API keys are not copied.",
     "scope": "site"
@@ -8655,6 +8678,15 @@
       "text": "protected path",
       "scope": "protected_path",
       "case": "sentence"
+    },
+    {
+      "text": "template database",
+      "scope": "template_database"
+    },
+    {
+      "text": "template database",
+      "scope": "template_database",
+      "case": "sentence"
     }
   ],
   "member": {
@@ -11458,5 +11490,49 @@
   "lifted_by": {
     "text": "Lifted by",
     "scope": "field"
+  },
+  "template_database_engine": {
+    "text": "Engine of the managed database created for every instance made from this template.",
+    "scope": "help"
+  },
+  "template_database_prefix": {
+    "text": "Names the injected variable family on the created attachment: WORDPRESS_DB gives WORDPRESS_DB_HOST, _USER, _PASSWORD, _NAME and _URL.",
+    "scope": "help"
+  },
+  "template_database_image": {
+    "text": "Engine image override for the created database; leave blank for the engine's default image.",
+    "scope": "help"
+  },
+  "add_database": {
+    "text": "Add database",
+    "scope": "template_contents"
+  },
+  "no_databases": {
+    "text": "No declared databases",
+    "scope": "template_contents"
+  },
+  "no_databases_description": {
+    "text": "This template declares no managed databases; an instance created from it has to attach one by hand.",
+    "scope": "template_contents"
+  },
+  "prefix": {
+    "text": "Env prefix",
+    "scope": "template_contents"
+  },
+  "template_required": {
+    "text": "Choose a template",
+    "scope": "violations"
+  },
+  "template_missing": {
+    "text": "That template no longer exists",
+    "scope": "violations"
+  },
+  "template_database_prefix_taken": {
+    "text": "Env prefix '{$prefix}' is already declared by this template",
+    "scope": "violations"
+  },
+  "template_database_host_mismatch": {
+    "text": "Database '{$name}' was placed on {$server} but the instance runs on {$instance_server}; it could never reach it",
+    "scope": "violations"
   }
 }
