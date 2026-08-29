@@ -19,6 +19,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -119,23 +120,37 @@ public final class DnsPeerApi {
     }
 
     /**
-     * Installs a freshly minted shared TSIG key on the peer.
+     * Installs a freshly minted shared TSIG key on the peer, announcing where that peer
+     * transfers from us.
      *
-     * @param localName the name this instance announces; the peer files us under it
-     * @return the key name the peer confirms, which both sides then store
+     * @param localName    the name this instance announces; the peer files us under it
+     * @param transferHost our own AXFR/NOTIFY address, or null to let the peer read it off
+     *                     the connection this request arrives on
+     * @return the peer's confirmation, naming the key and the endpoint it filed us under
      */
-    public @NonNull String negotiateTransferKey(@NonNull String localName, @NonNull String keyName,
-                                                @NonNull String algorithm, @NonNull String secret) {
-        String body = request("POST", HohenheimEndpoints.API_DNS_PEER_KEY.toUrl(), Map.of(
-            "peer", localName,
-            "key_name", keyName,
-            "algorithm", algorithm,
-            "secret", secret));
-        DnsPeerKeyResponse response = parseQuietly(body, DnsPeerKeyResponse.class);
+    public @NonNull DnsPeerKeyResponse negotiateTransferKey(@NonNull String localName,
+                                                            @NonNull String keyName,
+                                                            @NonNull String algorithm,
+                                                            @NonNull String secret,
+                                                            @Nullable String transferHost,
+                                                            int transferPort) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("peer", localName);
+        fields.put("key_name", keyName);
+        fields.put("algorithm", algorithm);
+        fields.put("secret", secret);
+        if (transferHost != null && !transferHost.isBlank()) {
+            fields.put("transfer_host", transferHost.trim());
+        }
+        fields.put("transfer_port", String.valueOf(transferPort));
+
+        DnsPeerKeyResponse response = parseQuietly(
+            request("POST", HohenheimEndpoints.API_DNS_PEER_KEY.toUrl(), fields),
+            DnsPeerKeyResponse.class);
         if (response == null || response.key_name() == null || response.key_name().isBlank()) {
             throw new PeerApiException("Unexpected response from peer", null, null);
         }
-        return response.key_name();
+        return response;
     }
 
     private @Nullable String request(@NonNull String method, @NonNull String path,

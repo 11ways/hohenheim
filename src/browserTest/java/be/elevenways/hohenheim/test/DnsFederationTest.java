@@ -116,7 +116,7 @@ class DnsFederationTest {
         String keyName = DnsFederationKeys.keyNameFor("here", "negotiated-peer");
         String secret = DnsFederationKeys.mintSecret();
         Row peer = DnsFederationKeys.install("negotiated-peer", keyName,
-            DnsFederationKeys.ALGORITHM, secret);
+            DnsFederationKeys.ALGORITHM, secret, "127.0.0.1", primaryPort).peer();
         linkZonePeer(primaryZoneId, peer.get(DnsPeerModel.ID));
 
         TSIG key = new TSIG(TSIG.HMAC_SHA256, keyName + ".", secret);

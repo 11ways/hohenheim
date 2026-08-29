@@ -10194,6 +10194,14 @@
     "text": "Both sides now hold transfer key {$key}",
     "scope": "dns_peer"
   },
+  "negotiate_key_done_endpoint": {
+    "text": "Both sides now hold transfer key {$key}; the peer transfers from {$endpoint}",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_endpoint_kept": {
+    "text": "Both sides now hold transfer key {$key}, but the peer already had {$endpoint} as our transfer address and kept it",
+    "scope": "dns_peer"
+  },
   "negotiate_key_failed": {
     "text": "The peer refused the key exchange: {$reason}",
     "scope": "dns_peer"
