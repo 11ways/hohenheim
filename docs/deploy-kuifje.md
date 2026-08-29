@@ -554,3 +554,28 @@ serial 2. No service was restarted anywhere.
    (3600000 s = 41 days) afterwards.
 4. Give ns2 a genuinely separate host (robbedoes) so the two names stop sharing
    one machine.
+
+## deloecker.eu zone removed, declared nameservers moved to mooo.com, 2026-08-30
+
+`deloecker.eu` is out of scope again, so the zone created above is GONE: deleted
+through the panel on kuifje (zone id 2, "Its 13 stored records go with it") and
+on robbedoes (zone id 2, the replica, 0 stored records). Both boxes now answer
+REFUSED for `deloecker.eu` and stay authoritative (`aa=1`) for `starfleet.life`,
+which was not touched. No service was restarted.
+
+The nameserver names moved off `deloecker.eu` before that: Hetzner konsoleH
+registers no glue for a `.eu` domain, so in-bailiwick `ns1/ns2.deloecker.eu`
+were impossible there. The declared set is now the pair Jelle created at
+afraid.org -- `nskuifje.mooo.com` (kuifje, 137.74.171.228 /
+2001:41d0:305:2100::1:4afe) and `nsrobbedoes.mooo.com` (robbedoes,
+51.255.43.81 / 2001:41d0:305:2100::1:4b26) -- set as `dns.nameservers` on BOTH
+controllers (robbedoes had an empty set before) and verified in
+`/opt/hohenheim/settings/hohenheim.dry` on each:
+
+    "dns":{"nameservers":["nskuifje.mooo.com","nsrobbedoes.mooo.com"], ...}
+
+Neither name resolves yet: `ENOTFOUND` at 1.1.1.1 and `REFUSED` at
+ns1.afraid.org, both at the start and at the end of this wave. A zone created
+on either controller from now on gets these two apex NS rows, and a zone-file
+import substitutes them, so the next migration inherits the new names with no
+extra step. Nothing at any registrar was touched.
