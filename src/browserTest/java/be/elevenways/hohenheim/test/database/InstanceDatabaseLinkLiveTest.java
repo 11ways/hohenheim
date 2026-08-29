@@ -156,6 +156,21 @@ class InstanceDatabaseLinkLiveTest {
             assertThat(ioQuiet(() -> docker.findNetworkByName(netA)))
                 .as("step 1: the (instance, database A) pair has its link network")
                 .isNotNull();
+            // The link is INTERNAL and therefore never the workload's default route: a
+            // member sits on it beside its own network, and Docker hands the gateway to
+            // the network that sorts first by name (`idblink` before `instance`), which
+            // is how a non-internal link once swallowed a workspace's every packet out.
+            assertThat(ioQuiet(() -> docker.inspectNetwork(netA)).get("Internal"))
+                .as("step 1: the link network is Docker-internal").isEqualTo(Boolean.TRUE);
+            String routes = docker.exec(instanceHandle,
+                List.of("/bin/sh", "-c", "ip route 2>/dev/null || cat /proc/net/route")).output();
+            Object linkSubnet = ((Map<?, ?>) ((List<?>) ((Map<?, ?>) ioQuiet(
+                () -> docker.inspectNetwork(netA)).get("IPAM")).get("Config")).get(0)).get("Subnet");
+            String linkGateway = String.valueOf(linkSubnet).replaceAll("\\.\\d+/\\d+$", ".1");
+            assertThat(routes)
+                .as("step 1: the workload's default route does not go through the link: "
+                    + routes)
+                .doesNotContain("default via " + linkGateway);
 
             // 2. The injected environment is container-network shaped: the engine's
             //    container hostname and its own port, never a published loopback one.

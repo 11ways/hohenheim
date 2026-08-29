@@ -65,6 +65,31 @@ public final class WorkloadNetworks {
                                          @NonNull Map<String, String> ownerLabels,
                                          @NonNull Egress egress)
             throws IOException {
+        return ensure(docker, policy, handle, ownerLabels, egress, false);
+    }
+
+    /**
+     * {@link #ensure(DockerClient, WorkloadNetworkPolicy, String, Map, Egress)} with the
+     * network's Docker {@code Internal} flag declared.
+     *
+     * AIDEV-NOTE: a LINK network is always internal. A member sits on it BESIDE its own
+     * per-instance network, and Docker hands a container's default route to whichever of
+     * its networks sorts FIRST BY NAME (`idblink-...` before `instance-...`), so a
+     * non-internal link network became the workspace's default gateway on starfleet
+     * (2026-08-29) and every packet to the internet died in the link chain's deliberate
+     * egress drop: no DNS, no git clone, `source_checkout_failed`. An internal network is
+     * excluded from gateway selection, has no masquerade, and carries exactly what a link
+     * means: member-to-member traffic. An existing network of ours whose flag disagrees is
+     * recreated when nothing is attached and refused by name otherwise, because the flag
+     * is immutable on a live network.
+     */
+    public static @NonNull String ensure(@NonNull DockerClient docker,
+                                         @NonNull WorkloadNetworkPolicy policy,
+                                         @NonNull String handle,
+                                         @NonNull Map<String, String> ownerLabels,
+                                         @NonNull Egress egress,
+                                         boolean internal)
+            throws IOException {
         String name = networkName(handle);
         // Loudest, cheapest refusal first: nothing reaches the daemon on a host that
         // cannot enforce the policy.
@@ -72,11 +97,22 @@ public final class WorkloadNetworks {
 
         Map<String, Object> existing = docker.findNetworkByName(name);
         boolean created = false;
-        if (existing == null) {
-            docker.createNetwork(name, ownerLabels, null, null, false);
-            created = true;
-        } else {
+        if (existing != null) {
             requireOwnedBy(name, existing.get("Labels"), ownerLabels);
+            if (Boolean.TRUE.equals(existing.get("Internal")) != internal) {
+                if (existing.get("Containers") instanceof Map<?, ?> members && !members.isEmpty()) {
+                    throw new IOException("Network '" + name + "' exists with Internal="
+                        + Boolean.TRUE.equals(existing.get("Internal")) + " but must be "
+                        + internal + "; it still has " + members.size()
+                        + " member(s) attached, so redeploy those first and it is recreated");
+                }
+                docker.removeNetwork(name);
+                existing = null;
+            }
+        }
+        if (existing == null) {
+            docker.createNetwork(name, ownerLabels, null, null, false, internal);
+            created = true;
         }
 
         try {

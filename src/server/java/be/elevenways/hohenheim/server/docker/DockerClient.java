@@ -457,14 +457,30 @@ public class DockerClient {
      * @param enableIpv6 whether the network gets IPv6 addressing
      * @return the new network's id
      */
-    @SuppressWarnings("unchecked")
     public String createNetwork(String name, Map<String, String> labels,
                                 String subnet, String gateway, boolean enableIpv6)
+            throws IOException {
+        return createNetwork(name, labels, subnet, gateway, enableIpv6, false);
+    }
+
+    /**
+     * {@link #createNetwork(String, Map, String, String, boolean)} with Docker's
+     * {@code Internal} flag: an internal network has no gateway to the outside and no
+     * masquerade, and -- the part that matters for a container on several networks --
+     * Docker never picks it as the container's DEFAULT ROUTE.
+     */
+    @SuppressWarnings("unchecked")
+    public String createNetwork(String name, Map<String, String> labels,
+                                String subnet, String gateway, boolean enableIpv6,
+                                boolean internal)
             throws IOException {
         Map<String, Object> spec = new LinkedHashMap<>();
         spec.put("Name", name);
         spec.put("Driver", "bridge");
         spec.put("EnableIPv6", enableIpv6);
+        if (internal) {
+            spec.put("Internal", true);
+        }
         if (labels != null && !labels.isEmpty()) {
             spec.put("Labels", labels);
         }

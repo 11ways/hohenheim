@@ -12,6 +12,11 @@ import java.util.Map;
  * network gets the SAME kernel policy as a per-instance network -- members reach each
  * other over it and nothing else -- so attaching two workloads opens exactly one
  * authorized pair, never the host, the metadata range or another tenant.
+ *
+ * AIDEV-NOTE: a link network is Docker-{@code Internal} by construction (no gateway, no
+ * masquerade, never a member's default route). Every member keeps its OWN per-instance
+ * network for egress; the link carries member-to-member traffic and nothing else, which
+ * is what the {@code egress} declaration below bounds in the kernel on top of that.
  */
 public interface LinkNetworkSupport {
 
