@@ -18,15 +18,14 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
-import java.net.URLEncoder;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import static be.elevenways.hohenheim.test.ApiSupport.codeOf;
+import static be.elevenways.hohenheim.test.ApiSupport.form;
+import static be.elevenways.hohenheim.test.ApiSupport.idOf;
+import static be.elevenways.hohenheim.test.ApiSupport.user;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -85,41 +84,6 @@ class AccessListApiTest extends HohenheimTestBase {
     }
 
     // -- fixtures --------------------------------------------------------------
-
-    private static int user(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
-        user.set(UserModel.EMAIL, email);
-        user.set(UserModel.DISPLAY_NAME, name);
-        user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
-        AuthModels.users().save(user);
-        return user.get(UserModel.ID);
-    }
-
-    private static String form(String... pairs) {
-        StringBuilder body = new StringBuilder();
-        for (int i = 0; i < pairs.length; i += 2) {
-            if (body.length() > 0) {
-                body.append('&');
-            }
-            body.append(URLEncoder.encode(pairs[i], StandardCharsets.UTF_8)).append('=')
-                .append(URLEncoder.encode(pairs[i + 1], StandardCharsets.UTF_8));
-        }
-        return body.toString();
-    }
-
-    private static int idOf(String json) {
-        Matcher matcher = Pattern.compile("\"id\"\\s*:\\s*(\\d+)").matcher(json);
-        assertThat(matcher.find()).as("the response carries an id: " + json).isTrue();
-        return Integer.parseInt(matcher.group(1));
-    }
-
-    private static String codeOf(String json) {
-        Matcher matcher = Pattern.compile("\"code\"\\s*:\\s*\"([^\"]+)\"").matcher(json);
-        assertThat(matcher.find()).as("the refusal carries a code: " + json).isTrue();
-        return matcher.group(1);
-    }
 
     private static List<Row> rulesOf(int listId) {
         return Models.get(AccessRuleModel.class).findForAccessList(listId);

@@ -36,6 +36,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 
+import static be.elevenways.hohenheim.test.DnsFixtures.record;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -354,14 +355,4 @@ class DnsSecTest {
         return zone.get(DnsZoneModel.ID);
     }
 
-    private static void record(int zone, String name, String type, String value) {
-        DnsRecordModel records = Models.get(DnsRecordModel.class);
-        Row row = records.createEmptyRow();
-        row.set(DnsRecordModel.ZONE_ID, zone);
-        row.set(DnsRecordModel.NAME, name);
-        row.set(DnsRecordModel.TYPE, type);
-        row.set(DnsRecordModel.VALUE, value);
-        row.set(DnsRecordModel.ENABLED, true);
-        records.save(row);
-    }
 }
