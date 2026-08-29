@@ -35,7 +35,7 @@ plan_of() {
     bash "$SCRIPT" --dry-run --jar "$JAR" "$@" 2>&1
 }
 
-# 1. A proxy/dns/firewall node: the OVH box's shape.
+# 1. A proxy/dns/firewall node: kuifje's shape.
 PLAN="$(plan_of --roles proxy,dns,firewall --main-url https://panel.example --admin-email ops@example)"
 expect "roles line names the three enabled roles" "$PLAN" "proxy=true dns=true firewall=true"
 expect "instances stays off" "$PLAN" "instances=false"
