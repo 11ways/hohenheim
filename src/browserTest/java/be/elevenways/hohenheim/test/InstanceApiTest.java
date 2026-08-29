@@ -3,14 +3,18 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.InstanceResource;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
@@ -45,6 +49,11 @@ class InstanceApiTest extends HohenheimTestBase {
     private static String keyTenant;
     private static String keyNarrow;
 
+    /** The same tenant, with a key wide enough to carry a `destroy` grant once one exists. */
+    private static String keyTenantDestroy;
+
+    private static int tenantId;
+
     /** A pre-existing workload the tenant may SEE and must not be able to destroy. */
     private static Integer viewOnlyId;
 
@@ -57,7 +66,7 @@ class InstanceApiTest extends HohenheimTestBase {
     @BeforeAll
     static void seed() {
         hostId = host(PREFIX + "docker-host");
-        int tenantId = user("instance-api-tenant@surface.test", "Instance Api Tenant");
+        tenantId = user("instance-api-tenant@surface.test", "Instance Api Tenant");
         viewOnlyId = instance(PREFIX + "view-only");
         // VIEW and nothing else: the capability the read lane asks, deliberately not the
         // one a destroy asks.
@@ -70,6 +79,12 @@ class InstanceApiTest extends HohenheimTestBase {
             .plaintext();
         keyTenant = ApiKeyService.create(tenantId, PREFIX + "tenant",
             List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.VIEW)), null)
+            .plaintext();
+        // The key never GRANTS anything; it only narrows its owner. This one leaves the
+        // destroy verb inside the narrowing so the GRANT is what the last journey moves.
+        keyTenantDestroy = ApiKeyService.create(tenantId, PREFIX + "tenant-destroy",
+            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.VIEW),
+                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.DESTROY)), null)
             .plaintext();
         // The admin's OWN key narrowed to an unrelated vocabulary: no admin permission
         // survives the narrowing, so the create door must be shut for it.
@@ -242,5 +257,66 @@ class InstanceApiTest extends HohenheimTestBase {
         assertThat((Object) Models.get(InstanceModel.class).findById(viewOnlyId)
                 .get(InstanceModel.DELETED_AT))
             .as("step 1: the other workload is untouched").isNull();
+    }
+
+    /**
+     * ONE resolver answers the delete affordance and the POST: a delegate who may only SEE
+     * the workload is offered a DEAD delete carrying the teardown funnel's own refusal, and
+     * the same fact refuses every write lane -- until the `destroy` grant lands, after which
+     * the reason is gone and the very same call tears the workload down.
+     *
+     * AIDEV-NOTE: the RENDER half asserted here is the resource's verdict, not markup: the
+     * forwarding of {@code deleteUnavailableReason} into a dead row action is zenit-cms's
+     * own contract (and DnsZoneRecordsDeleteAffordanceTest for the tab lane). It is also why
+     * the assertion below insists the delete stays OFFERED -- a hidden affordance would carry
+     * no reason at all, which is the answer this defect had before.
+     */
+    @Test
+    @Order(4)
+    void oneResolverAnswersTheDeleteAffordanceAndThePost() throws Exception {
+        InstanceResource resource = new InstanceResource();
+        Row viewOnly = Models.get(InstanceModel.class).findById(viewOnlyId);
+        AccessContext tenant = AccessContext.of(TenantConduits.stubFor(
+            new UserPrincipal(tenantId, "Instance Api Tenant")));
+
+        // 1. The affordance is OFFERED (the record is theirs to see) and DEAD, naming the
+        //    tier's uniform refusal -- the very key the POST answers with.
+        assertThat(resource.deletableBy(viewOnly, tenant))
+            .as("step 1: the delete is offered rather than hidden").isTrue();
+        Microcopy reason = resource.deleteUnavailableReason(viewOnly, tenant);
+        assertThat(reason).as("step 1: and it is known to be refused").isNotNull();
+        assertThat(reason.key())
+            .as("step 1: with the service gate's own refusal, never a second wording")
+            .isEqualTo("instance_not_permitted");
+
+        // 2. A key wide enough to carry the verb changes nothing while no grant does: the
+        //    narrowing is not authority, and the refusal is the resolver's.
+        HttpResponse<String> refused = keyPost(keyTenantDestroy,
+            "/api/v1/instances/" + viewOnlyId + "/delete", "");
+        assertThat(refused.statusCode())
+            .as("step 2: an unheld verb inside the key's scope is still refused: "
+                + refused.body())
+            .isEqualTo(422);
+        assertThat(codeOf(refused.body()))
+            .as("step 2: with the same key the dead button carries")
+            .isEqualTo("instance_not_permitted");
+
+        // 3. The grant lands: the reason is gone, and the delete the panel now offers LIVE
+        //    is the one that runs.
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, viewOnlyId,
+            HohenheimAccess.DESTROY, true);
+        // A FRESH context, because the reason resolver reads the request memo and a grant
+        // written inside a request is deliberately not seen by that request's render.
+        AccessContext granted = AccessContext.of(TenantConduits.stubFor(
+            new UserPrincipal(tenantId, "Instance Api Tenant")));
+        assertThat(resource.deleteUnavailableReason(viewOnly, granted))
+            .as("step 3: a destroy holder is offered a live delete").isNull();
+        HttpResponse<String> deleted = keyPost(keyTenantDestroy,
+            "/api/v1/instances/" + viewOnlyId + "/delete", "");
+        assertThat(deleted.statusCode())
+            .as("step 3: and it tears the workload down: " + deleted.body()).isEqualTo(200);
+        assertThat((Object) Models.get(InstanceModel.class).findById(viewOnlyId)
+                .get(InstanceModel.DELETED_AT))
+            .as("step 3: soft-deleted, exactly like the operator's own destroy").isNotNull();
     }
 }

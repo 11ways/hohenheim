@@ -826,9 +826,68 @@ public final class HohenheimAccess {
         // returns false for an anonymous principal before any lookup, so this is an explicit
         // fail-closed spelling for readability, not a behaviour change.
         if (ctx == null || ctx.isAnonymous() || !hasInstanceCapability(ctx, instanceId, capability)) {
-            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(instanceNotPermitted());
         }
+    }
+
+    /**
+     * THE destroy decision, in the shape a RENDER asks it: why this instance's delete is
+     * offered yet certain to be refused, or null when it can run.
+     *
+     * AIDEV-NOTE: this and {@link #requireDestroyPermitted} are the two faces of ONE
+     * decision -- same capability, same text -- because the panel used to answer the
+     * delete affordance with {@code deletableBy} while the only real gate sat inside
+     * {@code InstanceService.destroy}: a view-only delegate was shown a live Delete that
+     * could only 422. The FACT is asked over the walk each lane demands (see the note on
+     * {@link #hasInstanceCapability}), which is the one thing the two spellings differ on.
+     */
+    public static @Nullable Microcopy destroyUnavailableReason(@NonNull AccessContext ctx,
+                                                               int instanceId) {
+        return destroyRefusal(ctx, instanceId, true);
+    }
+
+    /**
+     * THE destroy gate, in the shape a WRITE asks it: the same refusal
+     * {@link #destroyUnavailableReason} renders the dead Delete with, thrown.
+     *
+     * @throws Violations {@code instance_not_permitted}
+     */
+    public static void requireDestroyPermitted(int instanceId) {
+        if (!TenantWrites.isTenantOriginated()) {
+            return;
+        }
+        AccessContext ctx = TenantWrites.acting();
+        if (ctx == null) {
+            throw Violations.ofForm(instanceNotPermitted());
+        }
+        Microcopy refusal = destroyRefusal(ctx, instanceId, false);
+        if (refusal != null) {
+            throw Violations.ofForm(refusal);
+        }
+    }
+
+    /**
+     * @param memoized the render lane's request memo ({@link #reachesRecord}); false is
+     *                 the fresh walk every write gate keeps
+     */
+    private static @Nullable Microcopy destroyRefusal(@NonNull AccessContext ctx, int instanceId,
+                                                      boolean memoized) {
+        if (ctx.isAnonymous()) {
+            return instanceNotPermitted();
+        }
+        boolean holds = memoized
+            ? reachesRecord(ctx, InstanceModel.MODEL_ID, instanceId, DESTROY)
+            : hasInstanceCapability(ctx, instanceId, DESTROY);
+        return holds ? null : instanceNotPermitted();
+    }
+
+    /**
+     * The instance tier's uniform refusal, which deliberately never names the capability
+     * that is missing -- rendered as a dead affordance's reason exactly as it is answered
+     * to a POST, so neither surface is a capability oracle the other is not.
+     */
+    private static @NonNull Microcopy instanceNotPermitted() {
+        return Microcopy.of("instance_not_permitted").withFilter("scope", "violations");
     }
 
     /**
@@ -847,8 +906,7 @@ public final class HohenheimAccess {
         }
         AccessContext ctx = TenantWrites.acting();
         if (ctx == null || ctx.isAnonymous() || !isAdmin(ctx)) {
-            throw Violations.ofForm(Microcopy.of("instance_not_permitted")
-                .withFilter("scope", "violations"));
+            throw Violations.ofForm(instanceNotPermitted());
         }
     }
 
