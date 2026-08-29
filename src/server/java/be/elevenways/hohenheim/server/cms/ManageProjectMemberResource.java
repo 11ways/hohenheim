@@ -1,12 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.auth.model.PermissionGroupModel;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.Resource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -129,8 +127,9 @@ public final class ManageProjectMemberResource extends Resource<ManageProjectMem
      */
     private static @NonNull List<Membership> memberships(@NonNull AccessContext ctx) {
         List<Membership> rows = new ArrayList<>();
-        Map<Integer, String> userNames = new LinkedHashMap<>();
-        Map<Integer, String> groupNames = new LinkedHashMap<>();
+        // Memoized per listing only: one subject usually sits in several projects, and the
+        // label costs a lookup. The MEANING of the label is not ours -- see HohenheimAccess.
+        Map<String, String> labels = new LinkedHashMap<>();
         for (Row project : Projects.visibleTo(ctx)) {
             Integer projectId = project.get(ProjectModel.ID);
             String projectName = String.valueOf((Object) project.get(ProjectModel.NAME));
@@ -138,36 +137,13 @@ public final class ManageProjectMemberResource extends Resource<ManageProjectMem
                 continue;
             }
             for (Projects.Member member : Projects.directMembersOf(project)) {
-                String name = "group".equals(member.subjectType())
-                    ? groupNames.computeIfAbsent(member.subjectId(),
-                        ManageProjectMemberResource::groupName)
-                    : userNames.computeIfAbsent(member.subjectId(),
-                        ManageProjectMemberResource::userName);
+                String subject = member.subjectType() + ":" + member.subjectId();
+                String name = labels.computeIfAbsent(subject, HohenheimAccess::subjectLabel);
                 rows.add(new Membership(projectId + ":" + member.subjectType() + ":" + member.subjectId(),
                     projectId, projectName, member.subjectType(), member.subjectId(), name));
             }
         }
         return rows;
-    }
-
-    private static @NonNull String userName(int userId) {
-        Row user = AuthModels.users().findById(userId);
-        if (user == null) {
-            return "#" + userId;
-        }
-        String name = user.get(UserModel.DISPLAY_NAME);
-        return name == null || name.isBlank()
-            ? String.valueOf((Object) user.get(UserModel.EMAIL)) : name;
-    }
-
-    private static @NonNull String groupName(int groupId) {
-        Row group = AuthModels.permissionGroups().findById(groupId);
-        if (group == null) {
-            return "#" + groupId;
-        }
-        String title = group.get(PermissionGroupModel.TITLE);
-        return title == null || title.isBlank()
-            ? String.valueOf((Object) group.get(PermissionGroupModel.SLUG)) : title;
     }
 
     @Override public @NonNull String rowKey(@NonNull Membership row) { return row.key(); }

@@ -124,6 +124,12 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
         assertThat(members.body()).as("step 2: and never the other project's member")
             .doesNotContain(PREFIX + "Member Bravo");
 
+        // 2b. And the name it shows is the one HohenheimAccess gives that packed subject,
+        //     not a lookup this resource spells for itself -- the roster, the quota list
+        //     and the released-claim list all render subjects out of the one home.
+        assertThat(members.body()).as("step 2b: the roster renders the shared subject label")
+            .contains(HohenheimAccess.subjectLabel("user:" + memberAId));
+
         // 3. The mirror image, so step 2 is not just "A sees the first row of everything":
         //    B sees exactly the other side.
         HttpResponse<String> mirror = get("/manage/project-members", sessionB);

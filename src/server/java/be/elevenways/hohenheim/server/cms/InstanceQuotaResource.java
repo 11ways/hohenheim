@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -92,6 +93,37 @@ public final class InstanceQuotaResource extends RowResource {
         return List.of(InstanceQuotaModel.MAX_INSTANCES, InstanceQuotaModel.MAX_MEMORY_MB,
             InstanceQuotaModel.MAX_DISK_GB, InstanceQuotaModel.MAX_NICS,
             InstanceQuotaModel.MAX_SITES, InstanceQuotaModel.MAX_DATABASES);
+    }
+
+    /**
+     * The subjects column reads as PEOPLE, never as the packed {@code user:5} storage key.
+     *
+     * AIDEV-NOTE: the label is {@link HohenheimAccess#labelSubjects}' and never a lookup
+     * spelled here -- the released-claim list renders the same packed set, and two
+     * labellers is how one of them ends up printing a raw token. The stored value is still
+     * what the FORM edits: this is the reader's spelling of the key, not a second key.
+     */
+    @Override
+    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        if (InstanceQuotaModel.SUBJECTS.getName().equals(column.name())) {
+            return HohenheimAccess.labelSubjects(row.get(InstanceQuotaModel.SUBJECTS));
+        }
+        return super.cellValue(row, column);
+    }
+
+    /**
+     * The same names, wherever a quota is SPOKEN ABOUT rather than listed.
+     *
+     * AIDEV-NOTE: the derived title is the display column, which here is the packed key --
+     * so the delete confirmation asked an operator to retire "user:5". A confirmation that
+     * names a storage token is a confirmation nobody can check.
+     */
+    @Override
+    public @NonNull String recordTitle(@NonNull Row record) {
+        String labels = HohenheimAccess.labelSubjects(record.get(InstanceQuotaModel.SUBJECTS));
+        // The empty (operator) set labels to nothing at all; a blank heading names less
+        // than the derived title did, so that one case keeps it.
+        return labels.isEmpty() ? super.recordTitle(record) : labels;
     }
 
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }

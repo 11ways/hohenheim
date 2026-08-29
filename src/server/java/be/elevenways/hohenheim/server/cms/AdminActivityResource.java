@@ -1,8 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.resource.ActivityResource;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
+import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -31,6 +35,29 @@ public final class AdminActivityResource extends ActivityResource {
     @Override
     public @Nullable Microcopy description() {
         return Microcopy.of("nav_hint").withFilter("scope", "activity");
+    }
+
+    /**
+     * The actor column names a PERSON even when the entry stored no label.
+     *
+     * AIDEV-NOTE: an entry carries the display name AS IT WAS at the time of acting, and
+     * that stays authoritative whenever it is there -- an audit trail must not rewrite who
+     * a row said acted. Only the blank case is resolved, and it is resolved by
+     * {@link HohenheimAccess#subjectLabel} rather than a lookup spelled here, because the
+     * stored actor is a bare principal id and every other surface in this panel renders
+     * that id through the packed {@code user:5} vocabulary. Unresolvable renders the raw
+     * token, which is the shared home's deliberate answer for a deleted user.
+     */
+    @Override
+    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        Object value = super.cellValue(row, column);
+        if (!ActivityModel.ACTOR_LABEL.getName().equals(column.name())
+                || (value instanceof String label && !label.isBlank())) {
+            return value;
+        }
+        String actor = row.get(ActivityModel.ACTOR);
+        return actor == null || actor.isBlank() ? value
+            : HohenheimAccess.subjectLabel("user:" + actor);
     }
 
     /**
