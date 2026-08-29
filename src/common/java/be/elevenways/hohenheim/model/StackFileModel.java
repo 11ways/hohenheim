@@ -6,6 +6,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 
 import java.util.List;
 
@@ -24,6 +25,14 @@ public class StackFileModel extends Model {
 
     public static final IntegerField STACK_SERVICE_ID = SCHEMA.addField(
         IntegerField.builder().name("stack_service_id").build());
+
+    /** The owning service, declared so its delete takes the files along (StackCascades). */
+    public static final BelongsTo<StackServiceModel> SERVICE = SCHEMA.addRelation(
+        BelongsTo.to(StackServiceModel.class)
+            .name("service")
+            .localKey(STACK_SERVICE_ID)
+            .remoteKey(StackServiceModel.ID)
+            .build());
 
     public static final StringField CONTAINER_PATH = SCHEMA.addField(StringField.builder().name("container_path")
         .required()

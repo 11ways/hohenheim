@@ -73,12 +73,24 @@ public final class OnboardingCollector {
         return false;
     }
 
+    /**
+     * Done only once a host is ADMITTED: an enrolled host that is still blocked has not
+     * been brought into the fleet, and a green first step above a blocked second one read
+     * as progress that had not happened.
+     */
     private static OnboardingStep hostEnrolled(List<Row> servers) {
+        boolean admitted = false;
+        for (Row server : servers) {
+            if (ServerModel.ADMISSION_ADMITTED.equals(server.get(ServerModel.ADMISSION))) {
+                admitted = true;
+                break;
+            }
+        }
         return new OnboardingStep(
-            servers.isEmpty() ? OnboardingStep.TODO : OnboardingStep.DONE,
+            admitted ? OnboardingStep.DONE : OnboardingStep.TODO,
             "server",
             copy("checklist_host"),
-            copy("checklist_host_detail"),
+            copy(!admitted && !servers.isEmpty() ? "checklist_host_pending" : "checklist_host_detail"),
             listTarget("servers"));
     }
 

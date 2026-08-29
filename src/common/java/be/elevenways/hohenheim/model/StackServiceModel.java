@@ -8,6 +8,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 
 import java.util.List;
 
@@ -91,6 +92,14 @@ public class StackServiceModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     public static final IntegerField STACK_ID = SCHEMA.addField(IntegerField.builder().name("stack_id").build());
+
+    /** The owning stack, declared so a stack delete takes its services in one statement (StackCascades). */
+    public static final BelongsTo<StackModel> STACK = SCHEMA.addRelation(
+        BelongsTo.to(StackModel.class)
+            .name("stack")
+            .localKey(STACK_ID)
+            .remoteKey(StackModel.ID)
+            .build());
 
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()

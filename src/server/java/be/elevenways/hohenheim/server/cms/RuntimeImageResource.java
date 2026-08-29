@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -110,5 +112,30 @@ public class RuntimeImageResource extends RowResource {
     public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
         return !Boolean.TRUE.equals(record.get(RuntimeImageModel.BUILTIN))
             && super.deletableBy(record, accessContext);
+    }
+
+    /**
+     * An image a live instance or a template still runs inside is offered DEAD with the
+     * counts on screen; a dangling reference would otherwise surface as
+     * {@code runtime_image_unknown} at the next deploy, hours after the decision. The
+     * enforcement for every other writer is the model funnel's {@code InstanceCatalogGuards}.
+     */
+    @Override
+    public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
+                                                       @NonNull AccessContext accessContext) {
+        Integer id = record.get(RuntimeImageModel.ID);
+        long instances = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.RUNTIME_IMAGE_ID.eq(id))
+            .where(InstanceModel.DELETED_AT.isNull())
+            .count();
+        long templates = Models.get(InstanceTemplateModel.class).find()
+            .where(InstanceTemplateModel.RUNTIME_IMAGE_ID.eq(id))
+            .count();
+        if (instances > 0 || templates > 0) {
+            return Microcopy.of("delete_in_use").withFilter("scope", "runtime_image")
+                .withArg("instances", instances)
+                .withArg("templates", templates);
+        }
+        return super.deleteUnavailableReason(record, accessContext);
     }
 }

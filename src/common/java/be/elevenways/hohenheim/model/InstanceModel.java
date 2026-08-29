@@ -525,6 +525,39 @@ public class InstanceModel extends Model {
             .remoteKey(ServerModel.ID)
             .build());
 
+    /** The template this instance was created from; its delete refuses while a live row names it. */
+    public static final BelongsTo<InstanceTemplateModel> TEMPLATE =
+        SCHEMA.addRelation(BelongsTo.to(InstanceTemplateModel.class)
+            .name("template")
+            .localKey(TEMPLATE_ID)
+            .remoteKey(InstanceTemplateModel.ID)
+            .build());
+
+    /** The runtime image this instance runs inside; its delete refuses while a live row names it. */
+    public static final BelongsTo<RuntimeImageModel> RUNTIME_IMAGE =
+        SCHEMA.addRelation(BelongsTo.to(RuntimeImageModel.class)
+            .name("runtime_image")
+            .localKey(RUNTIME_IMAGE_ID)
+            .remoteKey(RuntimeImageModel.ID)
+            .build());
+
+    /**
+     * The stack service this instance is the lowered workload of.
+     *
+     * AIDEV-NOTE: {@link #GENERATED_FOR_ID} is POLYMORPHIC ({@link #GENERATED_FOR_MODEL}
+     * names the owning model), so this relation is only meaningful beside a
+     * {@code GENERATED_FOR_MODEL.eq(StackServiceModel.MODEL_ID.toString())} criteria: on its
+     * own it would happily match a site's release instance whose owner id collides with a
+     * service id. It exists so a service delete can ask, correlated, whether a LIVE workload
+     * still hangs off a doomed service (StackCascades).
+     */
+    public static final BelongsTo<StackServiceModel> OWNING_STACK_SERVICE =
+        SCHEMA.addRelation(BelongsTo.to(StackServiceModel.class)
+            .name("owning_stack_service")
+            .localKey(GENERATED_FOR_ID)
+            .remoteKey(StackServiceModel.ID)
+            .build());
+
     static {
         SCHEMA.setDisplayFields(NAME);
         // Soft delete by hand (the SiteModel shape): DELETED_AT is lifecycle state, and the

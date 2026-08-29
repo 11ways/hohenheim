@@ -6,6 +6,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 
 import java.util.List;
@@ -30,6 +31,14 @@ public class InstanceTemplateVolumeModel extends Model {
 
     public static final IntegerField TEMPLATE_ID = SCHEMA.addField(
         IntegerField.builder().name("template_id").build());
+
+    /** The owning template, declared so its delete takes the volumes along (InstanceCatalogGuards). */
+    public static final BelongsTo<InstanceTemplateModel> TEMPLATE = SCHEMA.addRelation(
+        BelongsTo.to(InstanceTemplateModel.class)
+            .name("template")
+            .localKey(TEMPLATE_ID)
+            .remoteKey(InstanceTemplateModel.ID)
+            .build());
 
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()

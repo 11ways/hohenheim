@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 
 import java.util.List;
@@ -41,6 +42,22 @@ public class InstanceDatabaseModel extends Model {
         IntegerField.builder().name("instance_id").build());
     public static final IntegerField DATABASE_ID = SCHEMA.addField(
         IntegerField.builder().name("database_id").build());
+
+    /** The attached workload, declared so a database delete can ask which live ones still hold it. */
+    public static final BelongsTo<InstanceModel> INSTANCE = SCHEMA.addRelation(
+        BelongsTo.to(InstanceModel.class)
+            .name("instance")
+            .localKey(INSTANCE_ID)
+            .remoteKey(InstanceModel.ID)
+            .build());
+
+    /** The attached database, declared so its delete takes the links along (InstanceDatabaseLinks). */
+    public static final BelongsTo<DatabaseModel> DATABASE = SCHEMA.addRelation(
+        BelongsTo.to(DatabaseModel.class)
+            .name("database")
+            .localKey(DATABASE_ID)
+            .remoteKey(DatabaseModel.ID)
+            .build());
     public static final StringField ENV_PREFIX = SCHEMA.addField(
         StringField.builder().name("env_prefix")
             .label(HohenheimFormCopy.label("env_prefix"))

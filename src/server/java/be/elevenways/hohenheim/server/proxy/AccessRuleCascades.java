@@ -2,14 +2,8 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
-import be.elevenways.zenit.common.orm.model.Model;
-import be.elevenways.zenit.common.orm.model.relation.Relation;
+import be.elevenways.hohenheim.server.orm.PendingDeletes;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryContext;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * A rule cannot outlive what encloses it: deleting an access list takes its rules, and
@@ -29,7 +23,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * AIDEV-NOTE: the recursion terminates on the COUNT, not on the criteria. Each level's
  * criteria is structurally non-empty forever (it nests one more EXISTS), so a hook that
  * simply issued the next delete would recurse until the stack ran out; asking first whether
- * any row matches is what ends it, one query per level of nesting.
+ * any row matches is what ends it, one query per level of nesting. That count lives in
+ * {@link PendingDeletes#deleteDependents}, which every cascade in this repo now shares.
  */
 public final class AccessRuleCascades {
 
@@ -46,34 +41,11 @@ public final class AccessRuleCascades {
         installed = true;
 
         // Every rule of a doomed list, at any depth: they all carry access_list_id.
-        AccessListModel.SCHEMA.addBeforeRemoveHook(context ->
-            deleteRulesRelatedTo(AccessRuleModel.ACCESS_LIST, doomCriteria(context)));
+        AccessListModel.SCHEMA.addBeforeRemoveHook(context -> PendingDeletes.deleteDependents(
+            Models.get(AccessRuleModel.class), AccessRuleModel.ACCESS_LIST, context));
 
         // The subtree under a doomed group rule, one level per pass.
-        AccessRuleModel.SCHEMA.addBeforeRemoveHook(context ->
-            deleteRulesRelatedTo(AccessRuleModel.PARENT, doomCriteria(context)));
-    }
-
-    /**
-     * Delete every rule whose {@code relation} points at a row the pending delete removes.
-     *
-     * @param doomed the pending delete's criteria, or null when it removes every row
-     */
-    private static void deleteRulesRelatedTo(@NonNull Relation<?, ?> relation,
-                                             @Nullable Criteria doomed) {
-        Model rules = Models.get(AccessRuleModel.class);
-        Criteria scope = doomed == null
-            ? Criteria.related(relation)
-            : Criteria.related(relation, doomed);
-        if (rules.find().where(scope).count() == 0) {
-            return;
-        }
-        rules.find().where(scope).delete();
-    }
-
-    /** @return the criteria the pending delete runs on, or null when it removes every row */
-    private static @Nullable Criteria doomCriteria(@NonNull RemoveFromDatasource context) {
-        QueryContext queryContext = context.getQueryContext();
-        return queryContext != null ? queryContext.getCriteria() : null;
+        AccessRuleModel.SCHEMA.addBeforeRemoveHook(context -> PendingDeletes.deleteDependents(
+            Models.get(AccessRuleModel.class), AccessRuleModel.PARENT, context));
     }
 }

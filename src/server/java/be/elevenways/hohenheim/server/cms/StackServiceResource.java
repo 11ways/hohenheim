@@ -156,9 +156,8 @@ public class StackServiceResource extends RowResource {
     }
 
     /**
-     * Config files hang off the service with no FK cascade, and their content is
-     * encrypted-at-rest credential material: leaving them behind would keep secrets
-     * in a table no UI can reach any more.
+     * The daemon half of a service delete; the row half (its config files, and the refusal
+     * while its workload is still live) is the model funnel's ({@code StackCascades}).
      *
      * @throws Violations when a sibling still depends on this service; deleting it
      *         would leave an unresolvable graph that blocks the next deploy
@@ -175,14 +174,13 @@ public class StackServiceResource extends RowResource {
             // The owned instance must die WITH the record: InstanceService.destroy
             // soft-deletes, so no remove hook fires and nothing else would ever take the
             // workload down. Refusing here beats leaving a running container behind a
-            // deleted record -- the next deploy's prune is the SECOND line, not the first.
+            // deleted record -- the next deploy's prune is the SECOND line, not the first,
+            // and the funnel's own refusal is the LAST (it fires for a direct delete).
             try {
                 StackInstances.destroyFor(serviceId);
             } catch (java.io.IOException undeletable) {
                 throw Violations.ofForm(CmsSupport.violationText("stack_destroy_failed"));
             }
-            Models.get(StackFileModel.class).find()
-                .where(StackFileModel.STACK_SERVICE_ID.eq(serviceId)).delete();
         }
         super.deleteRow(row, accessContext);
     }
