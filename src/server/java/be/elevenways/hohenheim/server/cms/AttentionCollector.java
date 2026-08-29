@@ -89,8 +89,11 @@ public final class AttentionCollector {
             failedDatabases(items);
             unavailableAttachedDatabases(items);
         }
-        if (HohenheimRoles.enabled(Role.STACKS)) {
-            dockerUnreachable(items);
+        if (HohenheimRoles.dockerRequired()) {
+            AttentionItem daemon = dockerUnreachable(DockerHealth.instance());
+            if (daemon != null) {
+                items.add(daemon);
+            }
         }
         if (HohenheimRoles.hostWorkloadsEnabled()) {
             // Stored reconciler findings only -- the sweep itself is a scheduled
@@ -415,16 +418,20 @@ public final class AttentionCollector {
         }
     }
 
-    /** A stacks node whose boot probe found no Docker daemon: a red item, not silence. */
-    private static void dockerUnreachable(List<AttentionItem> items) {
-        DockerHealth health = DockerHealth.instance();
+    /**
+     * A docker-requiring node whose probe found no daemon: a red item, not silence.
+     *
+     * @param health the probe to read, injectable so the decision is testable without a daemon
+     * @return the item, or null when the daemon answered or no role needed it
+     */
+    public static @Nullable AttentionItem dockerUnreachable(@NonNull DockerHealth health) {
         if (health.status() != DockerHealth.Status.UNREACHABLE) {
-            return;
+            return null;
         }
-        items.add(item("error", "cubes",
+        return item("error", "cubes",
             copy("docker_unreachable", "attention_title"),
             literal(health.problem()),
-            CmsRoutes.list(ADMIN, "settings")));
+            CmsRoutes.list(ADMIN, "settings"));
     }
 
     /** Surfaces an enabled managed Spamservice that is not currently ready. */
