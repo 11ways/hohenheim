@@ -103,7 +103,7 @@ final class DnsRecordApiHandlers {
             row.set(DnsRecordModel.ZONE_ID, zoneId);
             applyRecordValues(row, values);
             model.save(row);
-            ActivityLog.record(model, row.get(DnsRecordModel.ID), "created", "api");
+            ActivityLog.record(model, row.get(DnsRecordModel.ID), "created", recordDetail(row));
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zoneId);
             return new JsonResult<Object>(
                 new DnsRecordMutationResponse(row.get(DnsRecordModel.ID)));
@@ -128,7 +128,8 @@ final class DnsRecordApiHandlers {
             }
             applyRecordValues(record, values);
             model.save(record);
-            ActivityLog.record(model, record.get(DnsRecordModel.ID), "updated", "api");
+            ActivityLog.record(model, record.get(DnsRecordModel.ID), "updated",
+                recordDetail(record));
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
             return new JsonResult<Object>(
                 new DnsRecordMutationResponse(record.get(DnsRecordModel.ID)));
@@ -144,11 +145,17 @@ final class DnsRecordApiHandlers {
                 return null;
             }
             Integer recordId = record.get(DnsRecordModel.ID);
+            String detail = recordDetail(record);
             model.delete(record);
-            ActivityLog.record(model, recordId, "deleted", "api");
+            ActivityLog.record(model, recordId, "deleted", detail);
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
             return new JsonResult<Object>(new DnsRecordDeleteResponse("deleted"));
         });
+    }
+
+    /** Activity detail naming the record an operator would recognise it by. */
+    private static String recordDetail(Row record) {
+        return record.get(DnsRecordModel.TYPE) + " " + record.get(DnsRecordModel.NAME);
     }
 
     private static DnsRecordDto recordDto(Row record) {

@@ -59,10 +59,11 @@ public final class SiteApi {
             try {
                 int siteId = (Integer) ResourceWrites.create(SITES,
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
+                Row created = Objects.requireNonNull(
+                    Models.get(SiteModel.class).findById(siteId));
                 ActivityLog.record(Models.get(SiteModel.class), siteId, "created",
-                    ApiConduits.ORIGIN);
-                return ApiConduits.json(PaasApi.siteProjection(
-                    Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId)), true));
+                    created.get(SiteModel.NAME));
+                return ApiConduits.json(PaasApi.siteProjection(created, true));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
@@ -129,10 +130,11 @@ public final class SiteApi {
             raw.put(siteKey, String.valueOf(siteId));
             try {
                 int domainId = (Integer) ResourceWrites.create(DOMAINS, raw, ctx);
+                Row added = Objects.requireNonNull(
+                    Models.get(SiteDomainModel.class).findById(domainId));
                 ActivityLog.record(Models.get(SiteModel.class), siteId, "domain_added",
-                    ApiConduits.ORIGIN);
-                return ApiConduits.json(domainProjection(Objects.requireNonNull(
-                    Models.get(SiteDomainModel.class).findById(domainId))));
+                    added.get(SiteDomainModel.HOSTNAME));
+                return ApiConduits.json(domainProjection(added));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
@@ -164,7 +166,7 @@ public final class SiteApi {
             try {
                 ResourceWrites.delete(DOMAINS, domain, ctx);
                 ActivityLog.record(Models.get(SiteModel.class), siteId, "domain_removed",
-                    ApiConduits.ORIGIN);
+                    domain.get(SiteDomainModel.HOSTNAME));
                 return ApiConduits.json(Map.of("id", domainId, "site_id", siteId,
                     "status", "deleted"));
             } catch (Violations refused) {

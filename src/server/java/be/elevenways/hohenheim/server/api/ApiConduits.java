@@ -26,9 +26,6 @@ import java.util.Map;
  */
 public final class ApiConduits {
 
-    /** Accountability origin of everything the automation surface does. */
-    public static final String ORIGIN = "api";
-
     private ApiConduits() {
     }
 

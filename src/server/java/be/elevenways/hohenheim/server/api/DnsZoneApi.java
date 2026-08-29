@@ -67,10 +67,11 @@ public final class DnsZoneApi {
             try {
                 int zoneId = (Integer) ResourceWrites.create(ZONES,
                     FormSubmissionRawValues.fromConduit(conduit), ctx);
+                Row created = Objects.requireNonNull(
+                    Models.get(DnsZoneModel.class).findById(zoneId));
                 ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, "created",
-                    ApiConduits.ORIGIN);
-                return ApiConduits.json(projection(
-                    Objects.requireNonNull(Models.get(DnsZoneModel.class).findById(zoneId))));
+                    created.get(DnsZoneModel.ORIGIN));
+                return ApiConduits.json(projection(created));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             } catch (AccessRefusedException refused) {
@@ -99,7 +100,7 @@ public final class DnsZoneApi {
                 DnsZoneFiles.ImportResult result = DnsZoneFiles.importText(zone, text,
                     DnsZoneFiles.ApexNsPolicy.forKeepFlag(ApiConduits.formValue(conduit, "keep_ns")));
                 ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, "imported",
-                    ApiConduits.ORIGIN);
+                    zone.get(DnsZoneModel.ORIGIN));
                 Row reloaded = Objects.requireNonNull(Models.get(DnsZoneModel.class).findById(zoneId));
                 Map<String, Object> body = new LinkedHashMap<>();
                 body.put("id", zoneId);
