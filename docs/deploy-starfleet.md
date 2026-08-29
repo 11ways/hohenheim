@@ -193,6 +193,9 @@ a process failure: deploy from a committed worktree, always.
 6. Verify from OUTSIDE, then restart AGAIN and verify again.
 7. `zenit-dev deployed starfleet` must now answer `current` for every repo with
    no RESTART PENDING warning; anything else is the deploy not being finished.
+8. If the deploy APPLIED migrations, raise `MigrationIntegrityTest.DEPLOYED_THROUGH`
+   to the highest applied version and paste the pin lines the test prints into
+   `src/browserTest/resources/migration-pins.txt`; those migrations are frozen now.
 
 ## Verification commands
 

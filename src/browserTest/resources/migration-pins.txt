@@ -1,0 +1,8 @@
+# Structural checksums of every migration a deployed install has APPLIED.
+# One line per migration: <class simple name><TAB><digest>.
+# The mark is MigrationIntegrityTest.DEPLOYED_THROUGH; a migration at or below it must
+# appear here and must still hash to its pinned digest. A deploy that applied migrations
+# raises the mark and pastes the lines the failing test prints. Never regenerate a pin.
+InitialMigration	0c97fcc11994ef46f73afa244b7de0aef0d67e1913c21d818743599f4726d9b5
+M002_ManagedDatabaseFailureReason	8e96b9a4490a9732f92f7c5a36786b9640c07363a40dfaa4d37d984a44b6c56e
+M003_TemplateConsoleKindDropped	2fcebda0363c2180cdc13ee6f0a0fd57bd9ee06dbe08344a23123d19fbf4dc20

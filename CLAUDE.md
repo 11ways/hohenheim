@@ -170,13 +170,21 @@ carries the schema-diff proof); older docs in `docs/` still cite `M0xx` class
 names as provenance for when something landed, and those citations are history,
 not files you will find.
 
-- `InitialMigration` is FROZEN (2026-08-29). Starfleet is a deployed install
-  whose `zenit_migrations` row for version 001 stores that migration's
-  structural checksum, so editing an operation in it makes the next
+- Every APPLIED migration is FROZEN (2026-08-29), not just `InitialMigration`.
+  A deployed install's `zenit_migrations` row stores each applied migration's
+  structural checksum, so editing an operation in one makes the next
   `--run-migrations` rehearsal REFUSE under `database.migration_integrity=fail`.
-  `MigrationIntegrityTest` pins the checksum: an edit fails the build instead of
-  a deploy, and the constant is never regenerated to make it pass. Comments and
-  formatting are outside the digest.
+  The rule is ONE declared fact plus a committed table:
+  `MigrationIntegrityTest.DEPLOYED_THROUGH` is the highest version every deployed
+  install has applied (`003` today), and `src/browserTest/resources/migration-pins.txt`
+  carries one `<class><TAB><digest>` line per migration at or below it. Editing a
+  pinned migration fails the build naming both digests; a migration below the mark
+  with no pin fails it as "deployed but unpinned" and the failure prints the lines
+  to paste. A migration ABOVE the mark is deliberately unpinned -- nothing has
+  applied it, so editing it is still free. A deploy that applied migrations raises
+  the mark and adds the pins (`docs/deploy-starfleet.md` step 8); a pin is never
+  regenerated to make a red build green. Comments and formatting are outside the
+  digest.
 - A schema change APPENDS a migration in the same package and stream, numbered
   from `M002_` upwards (`M002_ManagedDatabaseFailureReason` is the first), using
   the ORM DSL (`alterTable` + `addColumn`/`dropColumn`), never raw SQL. Existing
