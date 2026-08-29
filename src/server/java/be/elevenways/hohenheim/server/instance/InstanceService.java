@@ -434,7 +434,9 @@ public final class InstanceService {
     /** {@link #destroy}'s body; the in-flight mark is the wrapper's job. */
     private void destroyNow(int instanceId) {
         // Destroy is its OWN verb, not a power action: stopping is reversible, this is not.
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.DESTROY);
+        // Through the SHARED resolver, so the panel's dead Delete and this refusal are one
+        // decision with one text (HohenheimAccess.destroyUnavailableReason).
+        HohenheimAccess.requireDestroyPermitted(instanceId);
         if (releaseManaged(instanceId)) {
             ApplicationReleases.destroyFor(instanceId);
             trash(instanceId);

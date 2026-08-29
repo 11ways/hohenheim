@@ -491,6 +491,24 @@ public class InstanceResource extends RowResource {
             && super.deletableBy(record, accessContext);
     }
 
+    /**
+     * Offered but DEAD without the {@code destroy} capability on this record, carrying the
+     * teardown funnel's own refusal: the delete IS
+     * {@link InstanceService#destroy}, whose gate a caller who can merely SEE the workload
+     * cannot pass, and this is the same resolver it refuses the POST with -- so the button
+     * is never the gate and a delegate reads WHY instead of clicking into a 422.
+     */
+    @Override
+    public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
+                                                       @NonNull AccessContext accessContext) {
+        Integer instanceId = record.get(InstanceModel.ID);
+        if (instanceId == null) {
+            return super.deleteUnavailableReason(record, accessContext);
+        }
+        Microcopy refused = HohenheimAccess.destroyUnavailableReason(accessContext, instanceId);
+        return refused != null ? refused : super.deleteUnavailableReason(record, accessContext);
+    }
+
     /** Whether this row's lifecycle belongs to a product tier rather than an operator. */
     static boolean isGenerated(@NonNull Row row) {
         return row.get(InstanceModel.GENERATED_BY) != null;
