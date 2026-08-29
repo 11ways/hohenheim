@@ -39,6 +39,17 @@
     "text": "Er bestaat al een databank met de naam '{$name}'; verwijder ze eerst of kies een andere naam",
     "scope": "violations"
   },
+  "database_not_ready": [
+    {
+      "text": "Databank '{$name}' is nog niet klaar (status: {$state}); de workload zou zonder haar inloggegevens starten, wacht dus tot ze actief is en deploy dan",
+      "scope": "violations"
+    },
+    {
+      "text": "Databank '{$name}' kon niet aangemaakt worden: {$reason}",
+      "scope": "violations",
+      "state": "failed"
+    }
+  ],
   "database_remote": {
     "text": "Databank '{$name}' draait op host '{$server}': haar poort is enkel op de loopback van die host gepubliceerd, dus sites op deze host kunnen ze niet bereiken",
     "scope": "violations"

@@ -64,10 +64,19 @@ authored on the template's Contents tab (`InstanceTemplateDatabaseResource`, whi
 needs both the instances and the databases role).
 
 The database is allocated `provisioning` and provisions in the background (image pull,
-engine readiness). Deploying the WordPress instance before it is `active` leaves the
-`WORDPRESS_DB_*` family out of the environment (`hohenheim.db_injection.unresolved`,
-surfaced by the dashboard attention panel) and WordPress answers "Error establishing a
-database connection": wait for the database to turn active, then deploy.
+engine readiness). Deploying the instance before it is `active` is REFUSED, on every
+surface, with `database_not_ready` naming the database and its state (a `failed` database
+names its failure reason instead): injection fail-softs, so a deploy that got through
+would leave the `WORDPRESS_DB_*` family out of the environment and WordPress would answer
+"Error establishing a database connection" while the instance looked healthy. The refusal
+rides one resolver (`InstanceDatabaseLinks.notReadyReason`), so the Deploy row action
+renders DEAD with the reason on screen and the POST refuses with the same sentence. Wait
+for the database to turn active, then deploy.
+
+The fail-soft in `DatabaseEnvInjection` stays for the cases the refusal deliberately does
+not cover: a link whose database RECORD is gone, and an active database whose container is
+not running (`hohenheim.db_injection.unresolved`, surfaced by the dashboard attention
+panel).
 
 ## Fresh site
 

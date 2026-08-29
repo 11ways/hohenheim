@@ -191,6 +191,12 @@ public final class InstanceService {
         // hold power; operator and system work (crash restarts, schedule chains, installs)
         // runs outside a request and passes untouched.
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
+        // Every lane below assembles its environment through DatabaseEnvInjection, which
+        // fail-softs: a database that is still provisioning (or failed) would drop its
+        // whole variable family and the workload would boot without credentials looking
+        // healthy. Refuse HERE, above the fold, so all three lanes and every surface --
+        // row action, automation API, schedule chain -- answer the same way.
+        InstanceOperationGuard.requireDatabasesReady(instanceId);
         // A release-managed record owns no container: deploying it means checking the
         // source out and converging a RELEASE. The branch is here, after the gate and
         // before any driver work, so every existing power surface deploys an application
@@ -247,6 +253,9 @@ public final class InstanceService {
         // step completed runs the workload on half-written data.
         InstanceOperationGuard.requireOperable(resolved.row());
         InstanceOperationGuard.requireInstalled(resolved.row());
+        // Asked again on the workload half, for the same reason the power gate is: an
+        // in-package caller (restart, a source build's bring-up) must not be a wider door.
+        InstanceOperationGuard.requireDatabasesReady(instanceId);
         long fence = this.leases.requireFence(resolved.serverId());
         // The predicate (and the reasoning behind it) lives on OwnedInstances.isPlacementGated,
         // so the instance overview can explain this refusal by asking the SAME question.

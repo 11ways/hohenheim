@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -65,6 +66,24 @@ final class InstanceOperationGuard {
             .withFilter("scope", "violations")
             .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
             .withArg("state", state));
+    }
+
+    /**
+     * Refuse deploy while an attached managed database is not {@code active}: injection
+     * fail-softs, so the workload would boot with its credential family silently missing
+     * and look healthy. Stop and destroy stay ungated.
+     *
+     * AIDEV-NOTE: the reason comes from {@code InstanceDatabaseLinks.notReadyReason},
+     * which is also what the Deploy row action renders itself dead with -- one resolver,
+     * so the dead button is never the gate and the POST refuses with the same sentence.
+     *
+     * @throws Violations {@code database_not_ready}
+     */
+    static void requireDatabasesReady(int instanceId) {
+        Microcopy reason = InstanceDatabaseLinks.notReadyReason(instanceId);
+        if (reason != null) {
+            throw Violations.ofForm(reason);
+        }
     }
 
     /**
