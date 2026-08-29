@@ -26,7 +26,7 @@ const server = http.createServer((req, res) => {
             res.writeHead(status, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(payload));
         };
-        if (req.url === '/api/v1/sites') {
+        if (req.url === '/api/v1/sites' && req.method === 'GET') {
             return respond(200, { sites: [{ id: 7, slug: 'alpha', type: 'hohenheim:docker',
                 source: 'git', enabled: true, health: 'healthy' }] });
         }
@@ -45,6 +45,26 @@ const server = http.createServer((req, res) => {
         }
         if (req.url === '/api/v1/sites/9') {
             return respond(404, {});
+        }
+        if (req.url === '/api/v1/sites' && req.method === 'POST') {
+            return respond(200, { id: 11, slug: 'earl', type: 'hohenheim:address', enabled: true });
+        }
+        if (req.url === '/api/v1/sites/11') {
+            return respond(200, { id: 11, slug: 'earl' });
+        }
+        if (req.url === '/api/v1/sites/11/domains' && req.method === 'POST') {
+            return respond(200, { id: 21, site_id: 11, hostname: 'earl.example',
+                match_type: 'exact', live: true });
+        }
+        if (req.url === '/api/v1/sites/11/domains') {
+            return respond(200, { id: 11, domains: [{ id: 21, hostname: 'earl.example',
+                match_type: 'exact', path: '', listen_on: '', force_ssl: true, live: true }] });
+        }
+        if (req.url === '/api/v1/sites/11/domains/21/delete') {
+            return respond(200, { id: 21, site_id: 11, status: 'deleted' });
+        }
+        if (req.url === '/api/v1/sites/11/delete') {
+            return respond(200, { id: 11, status: 'deleted' });
         }
         if (req.url === '/api/v1/instances/3/variables') {
             return req.method === 'POST'
@@ -127,6 +147,44 @@ server.listen(0, '127.0.0.1', async () => {
         r = await run(['deploy', '9']);
         check('typed refusal surfaces its code',
             r.status === 1 && r.stderr.includes('deploy_not_available'), r.stderr);
+
+        // 8. site create: name, kind and VERBATIM dotted fields travel form-encoded to
+        //    the create lane -- the CLI learns no field vocabulary of its own.
+        r = await run(['site', 'create', 'Earl', 'hohenheim:address',
+            'settings.forward_host=127.0.0.1', 'settings.forward_port=8080', 'enabled=true']);
+        check('site create posts', r.status === 0 && r.stdout.includes('"earl"'), r.stdout + r.stderr);
+        check('site create hit the create lane',
+            requests.at(-1).method === 'POST' && requests.at(-1).url === '/api/v1/sites');
+        check('site create passed the dotted fields verbatim',
+            requests.at(-1).body.includes('settings.forward_host=127.0.0.1')
+                && requests.at(-1).body.includes('upstream_kind=hohenheim%3Aaddress')
+                && requests.at(-1).body.includes('name=Earl'), requests.at(-1).body);
+
+        // 9. domain add / list / remove ride the documented site-domain lanes; remove
+        //    has the same slug interlock as rollback.
+        r = await run(['site', 'domain', 'add', '11', 'earl.example',
+            'custom_headers.0.key=Host', 'custom_headers.0.value=earl.phoenix']);
+        check('domain add posts', r.status === 0 && r.stdout.includes('earl.example'), r.stderr);
+        check('domain add hit the domain lane with the header rows',
+            requests.at(-1).url === '/api/v1/sites/11/domains'
+                && requests.at(-1).body.includes('custom_headers.0.value=earl.phoenix'));
+        r = await run(['site', 'domains', '11']);
+        check('domains lists', r.status === 0 && r.stdout.includes('earl.example'), r.stderr);
+        const beforeRemove = requests.length;
+        r = await run(['site', 'domain', 'remove', '11', '21']);
+        check('domain remove refuses without confirmation', r.status === 1, r.stdout + r.stderr);
+        check('and never sent the delete',
+            !requests.slice(beforeRemove).some(q => q.url.endsWith('/delete')));
+        r = await run(['site', 'domain', 'remove', '11', '21', '--yes']);
+        check('domain remove --yes acts', r.status === 0
+            && requests.at(-1).url === '/api/v1/sites/11/domains/21/delete', r.stderr);
+
+        // 10. site delete: same interlock, documented delete lane.
+        r = await run(['site', 'delete', '11', '--yes']);
+        check('site delete --yes acts', r.status === 0
+            && requests.at(-1).url === '/api/v1/sites/11/delete', r.stderr);
+        r = await run(['site', '11']);
+        check('site <id> still reads the detail', r.status === 0 && r.stdout.includes('earl'), r.stderr);
     } finally {
         server.close();
     }

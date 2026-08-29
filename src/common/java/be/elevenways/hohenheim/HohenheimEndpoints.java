@@ -49,6 +49,11 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
+    public static final ParameterDefinition<Integer> DOMAIN_ID = ParameterDefinition.builder(Integer.class)
+        .name("domainId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     public static final ParameterDefinition<Integer> TEMPLATE_ID = ParameterDefinition.builder(Integer.class)
         .name("templateId")
         .stringResolver(Integer::parseInt)
@@ -178,6 +183,13 @@ public class HohenheimEndpoints {
         RateLimitPolicy.of(30, Duration.ofMinutes(1))
             .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
             .named("hh_paas_write");
+
+    // Route writes (a site, a domain row) spawn nothing and are what an import of a
+    // whole old installation drives in a burst, so they get their own, wider bucket.
+    private static final RateLimitPolicy ROUTE_WRITE_LIMIT =
+        RateLimitPolicy.of(120, Duration.ofMinutes(1))
+            .keyBy(RateLimitPolicy.KeyBy.PRINCIPAL_OR_IP)
+            .named("hh_paas_route_write");
 
     // --- Let's Encrypt request (POST for the CMS certificate-request page) ---
     public static final Endpoint<Object> CERTIFICATES_REQUEST = Endpoint.<Object>builder()
@@ -671,6 +683,73 @@ public class HohenheimEndpoints {
         .requiresLogin()
         .csrfExempt()
         .rateLimit(DEPLOY_LIMIT)
+        .build();
+
+    // --- PaaS API v1: site and domain writes ---
+    //
+    // The programmatic front door of the proxy tier: a site row and its domain rows,
+    // created and deleted through the SAME resource pipeline the admin form runs
+    // (zenit-cms ResourceWrites over SiteResource / SiteDomainResource), so the route
+    // claim, hostname canonicalization, tenant column freeze and proxy reload hooks all
+    // fire exactly as they do for a form save. Mutations are POST like every other
+    // write here (delete is a POST to `.../delete`, the DNS record lane's spelling).
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_V1_SITE_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(ROUTE_WRITE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_V1_SITE_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("delete").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(ROUTE_WRITE_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_V1_SITE_DOMAINS = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_domains"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("domains").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_V1_SITE_DOMAIN_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_domain_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("domains").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(ROUTE_WRITE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_V1_SITE_DOMAIN_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_domain_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("domains").addDelimiter().addParameter(DOMAIN_ID)
+            .addDelimiter().addStatic("delete").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(ROUTE_WRITE_LIMIT)
         .build();
 
     public static final Endpoint<Object> API_V1_SITE_DEPLOYMENTS = Endpoint.<Object>builder()

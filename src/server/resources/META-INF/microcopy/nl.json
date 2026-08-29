@@ -51,6 +51,10 @@
     "text": "Databank '{$name}' draait op host '{$server}' terwijl deze site op host '{$site_server}' draait: een Docker-site bereikt haar databank via een linknetwerk, dat enkel bestaat wanneer beide op dezelfde host draaien",
     "scope": "violations"
   },
+  "domain_site_mismatch": {
+    "text": "Het domein in de body noemt een andere site dan die in de URL",
+    "scope": "violations"
+  },
   "hostname_required": {
     "text": "Hostnaam is verplicht",
     "scope": "violations"

@@ -68,6 +68,11 @@ returned). Say so when delegating; the grant UI does not.
 | GET | `/api/v1/sites/{id}/releases/{op}` | One operation, with its step log |
 | GET | `/api/v1/sites/{id}/builds` | Sandbox build operations |
 | GET | `/api/v1/sites/{id}/builds/{build}/log` | One build's captured log (build credentials were redacted at capture) |
+| POST | `/api/v1/sites` | Create a site through the admin form's own pipeline (ADMIN-ONLY, 403 otherwise) -- see Sites and domains below |
+| POST | `/api/v1/sites/{id}/delete` | Soft-delete a site exactly as the admin form does (ADMIN-ONLY); 404 for a trashed or unknown id |
+| GET | `/api/v1/sites/{id}/domains` | The site's hostname rows, oldest first |
+| POST | `/api/v1/sites/{id}/domains` | Add a hostname row to the site (whoever holds `manage` on it) |
+| POST | `/api/v1/sites/{id}/domains/{domain}/delete` | Remove a hostname row; a row of another site answers 404 |
 | GET | `/api/v1/instances` | Instances the key holds `view` on -- which eight capabilities imply; see Authentication (product-tier-generated ones excluded) |
 | GET | `/api/v1/instances/{id}` | One instance |
 | GET | `/api/v1/instances/{id}/logs?lines=N` | Console tail (default 200, max 2000); 422 `logs_unavailable` when the daemon cannot answer |
@@ -98,6 +103,109 @@ worth keeping when this line is rewritten: the path always travels as the `path`
 QUERY PARAMETER, never as a route segment (a segment would be split and
 reassembled, and a second decode is how a normalized traversal slips in), and
 the lane carries its own read rate limit.
+
+## Sites and domains
+
+The write lane of the proxy tier, added for the migration of an old installation
+(the Phoenix Mongo `sites` collection converts to exactly these calls). It is the
+admin panel's own create pipeline reached without a browser: the request body is
+the SAME form-encoded transport the site form and the domain form post, coerced
+against the SAME `FormSpec` (`SiteResource` / `SiteDomainResource`) through
+zenit-cms' `ResourceWrites`, so the route claim, hostname canonicalization, the
+tenant column freeze (`TenantWrites`) and the proxy reload all fire as they do for
+a form save. There is no JSON body: dotted keys nest (`settings.forward_host`),
+and indexed keys make rows (`custom_headers.0.key` / `custom_headers.0.value`).
+
+Rate limit: 120 route writes per minute per principal (`hh_paas_route_write`).
+
+Doors, exactly the panels': sites are created and deleted only in the admin panel
+(`ManageSiteResource` is neither creatable nor deletable), so both verbs demand
+the admin permission as narrowed by the key's scopes and answer **403** otherwise.
+Domain rows are a tenant's own affordance on a site they `manage`: the site must be
+visible to the key (the uniform 404 otherwise), and a delegated key is then held
+to the delegated columns by the write pipeline (`hostname`, `force_ssl`,
+`hsts_enabled`, `hsts_subdomains`, `exclude_from_letsencrypt`; anything else is a
+422 naming the column), exact match type only, no path, no listener restriction.
+
+### `POST /api/v1/sites`
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `name` | string, required | The slug derives from it (`lowercase`, non-alphanumerics to `-`); `status` is stamped `active` |
+| `upstream_kind` | enum, required | `hohenheim:address`, `hohenheim:static`, `hohenheim:redirect`, `hohenheim:instance`, `hohenheim:dev_namespace`, `hohenheim:tls_passthrough` |
+| `enabled` | boolean | `true`/`false`; default true. A disabled site's rows claim no route |
+| `description` | string | |
+| `instance_id` | integer | Required by `hohenheim:instance` (refused on every other kind, `upstream_instance_unexpected`) |
+| `auth_provider_id` | integer | An existing site auth provider; refused on `tls_passthrough` |
+| `access_list_id` | integer | An existing access list; refused on `tls_passthrough` |
+| `settings.*` | per kind | The kind's own schema; an undeclared setting is refused (`zenit.coercion.unknown_field`) |
+
+Settings per kind (every key optional unless said otherwise):
+
+- `hohenheim:address`: `forward_scheme` (`http`/`https`), `forward_host`,
+  `forward_port` (integer), `socket` (a unix socket path, instead of host+port),
+  `upstream_protocol` (`http1`/`h2`), `request_timeout` (seconds),
+  `websocket_upgrade` (default true), `ignore_certificates` (default false),
+  `rewrite_location` (default TRUE: upstream `Location` headers are rewritten with
+  the forwarded Host, so a domain that rewrites `Host` to an internal name wants
+  `settings.rewrite_location=false`), `delay` (ms).
+- `hohenheim:static`: `root_path`, `fallback_file` (the SPA fallback, relative to
+  the root), `autoindex` (default true), `indexes` (default true),
+  `show_hidden_files` (default false), `delay` (ms).
+- `hohenheim:redirect`: `target_url`, `http_status` (`301`/`302`/`307`/`308`),
+  `preserve_path` (default false), `delay` (ms).
+
+Answer: the site detail projection (as `GET /api/v1/sites/{id}`), which now
+carries `domains` (the rows below, empty for a fresh site). A refusal is the usual
+422 whose `code` is the violation key: `name_required`,
+`zenit.coercion.unknown_field` (a stranger key, top-level or inside `settings`),
+`upstream_instance_required`, and the coercion keys of the form.
+
+### `POST /api/v1/sites/{id}/domains`
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `hostname` | string, required | Stored canonical: trimmed, lowercased, root dot stripped (regex sources keep their case) |
+| `match_type` | enum | `exact` (default), `wildcard`, `regex`; a glob-shaped hostname is stored as `wildcard` whatever this says |
+| `listen_on` | string | One of the host's discovered local addresses; blank = every interface |
+| `path` | string | Route prefix, canonicalized like the dispatcher (`app` -> `/app`, `/` -> catch-all) |
+| `strip_path` | boolean | default false |
+| `force_ssl` | boolean | default TRUE |
+| `certificate_id` | integer | Pin a certificate; null = platform selection |
+| `hsts_enabled`, `hsts_subdomains` | boolean | default false |
+| `exclude_from_letsencrypt` | boolean | default false |
+| `custom_headers.N.key` / `custom_headers.N.value` | rows | Request headers set on forward (empty value = delete the header). `Host` is honoured: this is the Apache-fallthrough spelling |
+| `response_headers.N.key` / `response_headers.N.value` | rows | Response headers |
+| `site_id` | integer | Optional; must equal the URL's site (`domain_site_mismatch` otherwise) |
+
+Answer, and each element of `domains`:
+
+```
+{"id":21,"site_id":11,"hostname":"earl.example","match_type":"exact","listen_on":"",
+ "path":"","strip_path":false,"force_ssl":true,"certificate_id":null,
+ "hsts_enabled":false,"hsts_subdomains":false,"exclude_from_letsencrypt":false,
+ "custom_headers":{"Host":"earl.phoenix"},"response_headers":{},
+ "live":true,"generated":false}
+```
+
+`live` is whether the row holds its route claim right now (false on a disabled or
+trashed site); `generated` marks a row a system authored (a preview hostname),
+which no caller may edit or remove. Refusals: `hostname_required`,
+`hostname_invalid`, `hostname_taken` / `route_taken` (same site),
+`route_taken_other_site` / `route_overlaps_other_site` (admin reader) or the
+neutral `hostname_unavailable` (a tenant reader: byte-identical whether the name
+is held or merely covered by a foreign wildcard, so the lane is no hostname
+oracle), `route_quarantined` (a released name another owner may not take back
+yet), `tenant_*` for a delegated key writing a frozen column.
+
+### Deletes
+
+`POST /api/v1/sites/{id}/delete` runs `SiteResource.deleteRow`: previews reclaimed,
+`deleted_at` stamped, the domain rows KEPT for a restore, every claim released. The
+site serving the panel itself refuses (`delete_self_lockout`), exactly like the
+form. `POST /api/v1/sites/{id}/domains/{domain}/delete` removes the row and
+releases its claim into the quarantine ledger: the same owner may re-add the name
+at once, a different owner waits out the quarantine.
 
 ## Environment variables are admin-only
 
@@ -167,6 +275,12 @@ API before storing); `HOH_HOST`/`HOH_TOKEN`/`HOH_CONTEXT` override it.
 hoh login https://panel.example       # prompts for the key, hidden
 hoh projects | hoh projects 3
 hoh sites | hoh site 7
+hoh site create Earl hohenheim:address settings.forward_host=127.0.0.1 \
+    settings.forward_port=8080 settings.rewrite_location=false   # admin; fields verbatim
+hoh site domains 11
+hoh site domain add 11 earl.example custom_headers.0.key=Host custom_headers.0.value=earl.phoenix
+hoh site domain remove 11 21 [--yes]  # asks for the site slug
+hoh site delete 11 [--yes]            # admin; asks for the site slug
 hoh deploy 7
 hoh rollback 7 [--yes]
 hoh releases 7 | hoh release 7 12     # detail prints the step log
@@ -183,6 +297,6 @@ hoh vars env 5 set KEY value          # environment (deploy baseline) values, AD
 ```
 
 `--json` prints the raw API response of any read. Tests: `node tools/hoh.test.js`
-(stub server; proves paths, the key header, the rollback interlock and secret
-masking), driven in the verification lane by `HohCliTest`. Server-side coverage:
-`PaasApiTest` (browserTest).
+(stub server; proves paths, the key header, the rollback and delete interlocks,
+the verbatim field pass-through of the site verbs and secret masking), driven in the verification lane by `HohCliTest`. Server-side coverage:
+`PaasApiTest` and `SiteApiTest` (browserTest).
