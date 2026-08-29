@@ -237,7 +237,8 @@ Columns: id, name, description, icon, `docker_image` (ref), `incus_image`
 (alias or fingerprint, nullable), `default_command`, `default_port`,
 `default_build_command` (nullable), `workdir`, `shell` (/bin/bash), `uid_mode`
 (`mapped` only for now), `builtin` (code-owned, `Seeder.sync`), `enabled`,
-timestamps. Seeded members: `node-22`, `java-21`, `debian-13`, `static` (an
+timestamps. Seeded members: `node-22`, `node-16`, `node-12` (the Phoenix
+migration's legacy Alchemy runtimes), `java-21`, `debian-13`, `static` (an
 nginx-style file server for workspaces that only hold files). Image references
 are HOHENHEIM-BUILT (Dockerfiles under `images/` in the repo, built by a
 `zenit-dev`-driven task and pushed to the configured registry; Incus variants
