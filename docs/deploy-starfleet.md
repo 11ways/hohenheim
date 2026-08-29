@@ -825,3 +825,63 @@ Memory after the session: ~880 MB available with the JVM, herald, mongo and the
 workspace running; the runtime image `hohenheim/node-22:1` was loaded from a
 workstation build (`docker save | docker load`) rather than built by kaniko on
 this 1-vCPU box.
+
+## Deploy 2026-08-29 (tenth): the rollout mechanisms, M004 + M006, and OVH's first swap
+
+Shipped hohenheim `1c8a8a8b` (previous `d17494d2`) to starfleet AND, for the
+first time, to the OVH DNS primary (`deploy-ovh.md`). Isolated worktree
+`build-worktrees/deploy-20260829-1c8a8a8b` (every chain repo clean at its
+pushed sha, zenit-cms `b59c63df` republished; 98 s warm build, removed
+afterwards), stamp 13/13 clean, sha256
+`5ff10f8b9e0cb947a13ac4ffda07e3ce489232940e7baa0f7cac383c07483b2b`,
+267,595,641 bytes, `upload_file` gated on `grep -c false | grep -qx 13`.
+Commits carried (19): the site/domain, access-list, instance and DNS-zone
+create APIs over zenit-cms `ResourceWrites`, `hoh` verbs, `hoh-import-legacy`,
+`hoh-dns-diff`, the WordPress templates and template-declared databases
+(**M006**), the fresh-host installer, DNS federation health (**M004**), the
+declared nameserver set + NS-swapping zone import, the deploy-while-database-
+provisioning refusal, subject labels through one home, the access-rule reload
+hook, the API activity-detail fix, the migration pin rule.
+
+Migration diff `d17494d2..1c8a8a8b`: `M004_DnsFederationHealth` (12 nullable
+columns on `dns_zone_peers`/`dns_zones`) and `M006_TemplateDatabases` (a new
+table). Rehearsed as the service user from
+`/opt/hohenheim-rehearsal-20260829-tenth` on a byte copy: `Migrations complete
+2 applied`, 45 rows, the new columns present, inert boot on 13999 healthy after
+23 s with `-Xmx384m` (the box had ~610 MB available beside the JVM, herald,
+mongo and the workspace; a bounded heap is what makes the rehearsal safe
+here), 0 exceptions, killed by port. Live lane as for M002: at-swap `.backup`
+(integrity ok), stop, `mv`, `--run-migrations` as `hohenheim` (2 applied),
+start; 33 s to health. Second restart 23 s. Preflight
+`/root/hohenheim-preflight-20260829-tenth/` (`.pre`, `.at-swap`, `settings/`,
+keyring sha256 equal, `hohenheim-server.jar.rollback`).
+
+Verified after both restarts: panel 302/200, apex 200, wildcard 200,
+`comms.starfleet.life` 200, `skeleton.starfleet.life` 200 with the Hawkejs page
+(one probe answered 202 during the instance supervisor's re-attach right after
+the first start; 200 thereafter) and its Console tab renders the terminal;
+listeners 53/80/443/3000 + 8092 loopback; 0 journal errors; `roles_captured
+[databases, dns, firewall, instances, proxy]`; both instance containers kept
+running; `zenit-dev deployed starfleet` = `current` 13/13.
+
+THE DNS HEALTH TIER ON THE REAL FEDERATION: zone row action "Check health"
+(it lands on the record page; the header button runs it) wrote
+`delegation_status = matches` (the declared `dns.nameservers` set is empty on
+this box, and an empty set is deliberately no finding) and probed the `ovh`
+link at served serial 34; the Secondaries tab showed Freshness "Current",
+served 34, probed "just now". A disposable `visual-qa-20260829-deploy TXT
+"deploy"` added then deleted through the Records tab moved the serial to 35
+then 36; the primary journaled `dns.notify_sent` (peer ovh, noerror) and
+`dns.axfr_served` (key `xfer-ovh-starfleet`, ok) for each, OVH transferred
+each serial within 3 s, `hoh-dns-diff compare` was IDENTICAL for the TXT and
+the SOA, and the Secondaries tab filled "Last AXFR served 36 just now" and
+"Last NOTIFY noerror just now". Both records are gone. One oddity to keep an
+eye on: the first `dns.notify_sent` carried serial 34 while the zone was
+already at 35 (the delete's carried 36 correctly).
+
+Pins: `MigrationIntegrityTest.DEPLOYED_THROUGH` raised to `006` and the M004
++ M006 digests added to `migration-pins.txt` (step 8 of the procedure, first
+exercised here).
+
+ROLLBACK IS DB + JAR: `/root/hohenheim-preflight-20260829-tenth/hohenheim.db.at-swap`
+plus `hohenheim-server.jar.rollback`, exactly as for the fifth deploy.

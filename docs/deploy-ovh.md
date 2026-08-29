@@ -223,4 +223,49 @@ Two observations, neither a blocker:
 - Open the provider firewall for 80 and 443; keep 3000 closed. 53 udp+tcp is
   already open and proven.
 - Add it to `~/.config/zenit-dev/config.json` under `deployments` so
-  `zenit-dev deployed <name>` can read its build stamp over ssh.
+  `zenit-dev deployed <name>` can read its build stamp over ssh. DONE
+  2026-08-29 as target `ovh` (`debian@137.74.171.228`; `unzip -p` and
+  `systemctl show` both work unprivileged, so no sudo is needed for the read).
+
+## Deploy 2026-08-29 (first jar swap): `1c8a8a8b`, migrations M004 + M006
+
+Shipped hohenheim `1c8a8a8b` (previous `d17494d2`) right after starfleet got
+the same jar (`deploy-starfleet.md`, tenth deploy): the isolated worktree
+`build-worktrees/deploy-20260829-1c8a8a8b`, stamp 13/13 clean, sha256
+`5ff10f8b9e0cb947a13ac4ffda07e3ce489232940e7baa0f7cac383c07483b2b`,
+267,595,641 bytes, gated by `upload_file`'s `grep -c false | grep -qx 13`.
+
+This box is not root over ssh, so the whole lane is `sudo -n`: preflight
+`/root/hohenheim-preflight-20260829-tenth/` (`hohenheim.db.pre`, `.at-swap`,
+`settings/`, `hohenheim-server.jar.rollback`, keyring sha256 equal), rehearsal
+as the service user from `/opt/hohenheim-rehearsal-20260829-tenth` (a byte
+copy; `--run-migrations` printed `Running migration 004 DNS federation health`,
+`006 Template-declared managed databases`, `Migrations complete 2 applied`, 45
+rows; inert boot on 13999 healthy after 11 s, `roles_captured enabled=[]`, 0
+exceptions; the dir was removed afterwards). TRAP: the live `hohenheim.dry`
+here is DRY text written by the panel's settings editor (`i443`-style integer
+prefixes), NOT JSON; a rehearsal copy is easiest written by hand as plain JSON,
+which the loader also accepts.
+
+Live: at-swap `.backup` (integrity ok), `install` beside, `systemctl stop`,
+`mv`, `--run-migrations` as `hohenheim` from `/opt/hohenheim` (2 applied, 45
+rows), `systemctl start`; 15 s to health. Second restart 11 s. Verified: 0
+journal errors, `roles_captured [dns, firewall, proxy]`, listeners 53/80/3000,
+`SecondaryZoneService: restored persisted replica of starfleet.life serial 34`
+on the first boot, `dig @127.0.0.1 starfleet.life SOA` = the primary's serial,
+google REFUSED, login page 200 over loopback, panel over the forward: dashboard
+attention is only the pre-existing "No off-host backup destination", peer
+`starfleet` listed, zone `starfleet.life` Secondary / Transferred.
+`zenit-dev deployed ovh` = `current` 13/13.
+
+Federation after the deploy (the first run of the health tier on a real WAN):
+a TXT added then deleted on starfleet moved the serial 34 -> 35 -> 36; this box
+journaled `transferred secondary zone starfleet.life serial 35` within 3 s of
+the add and `serial 36` within 3 s of the delete, `hoh-dns-diff compare` was
+IDENTICAL at every step, and starfleet's Secondaries tab filled its new
+columns (see its runbook).
+
+ROLLBACK IS DB + JAR (the M002 rule from starfleet): stop, restore
+`/root/hohenheim-preflight-20260829-tenth/hohenheim.db.at-swap` over
+`hohenheim.db` (drop `-wal`/`-shm`), restore `hohenheim-server.jar.rollback`,
+start. The only writes since the swap are federation bookkeeping.
