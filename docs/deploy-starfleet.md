@@ -567,3 +567,36 @@ No jar changed. Preflight `/root/hohenheim-preflight-20260829-095543/` holds the
   set `auth.external_base_url = https://admin.starfleet.life`, configure a mail transport and
   an `AuthMail` sender, then click the button and open the mailed link; or accept the
   unverified state.
+
+## Deploy 2026-08-29 (third): the dashboard respects the disabled roles
+
+Deployed hohenheim `12490d6e` at 12:38 CEST (`767be086` gates the readiness checklist,
+the Docker/host attention items and the Reconcile-findings peer on
+`HohenheimRoles.hostWorkloadsEnabled()`; `12490d6e` adds `dockerRequired()` so a dead
+daemon is reported by stacks OR instances, the pair the boot probe already used). This
+closes the two dashboard oddities the previous entry recorded. Upstream chain unchanged
+since the second deploy of the day (`zd_deployed` was `current` for the 12 other repos).
+
+The MAIN hohenheim worktree cannot stamp clean: `git status --porcelain` counts the
+untracked harness files (`.claude/`, `.zembleignore`), so the first jar read
+`hohenheim ... dirty=true` although HEAD was committed. Built again in the secondary
+workspace (`~/projects/javaweb-deploy`, 15 detached worktrees at HEAD, own maven-local;
+592 s), stamp 13/13 clean, sha256 `7e719678...bf80571`, uploaded with the 13-`false`
+`verify_command`. Migration diff `871275c5..HEAD` EMPTY. Rehearsal on a byte copy in
+`/root/hohenheim-rehearsal` (every role false, LE and DNS off, ports 18080/18443/15353,
+panel 13999): `--build-info` 13/13 clean, `--run-migrations` `0 applied`, integrity ok,
+inert boot health 200 in 20 s, 0 exceptions, no `settings.unknown_key`. Two restarts
+(health 200 after 28 s and 27 s); after each: panel and apex 200 over public HTTPS, `aa`
+on the SOA from 104.223.42.142, listeners 53/80/443/3000, journal free of errors,
+`roles_captured enabled=[dns, firewall, proxy]`. `zd_deployed starfleet` = `current`
+13/13, no restart pending. Live: the dashboard shows no readiness checklist, "All clear -
+nothing needs attention", the four proxy/firewall tiles (Sites 2, Certificates 2, Access
+lists 0, Active bans 8), and the sidebar without the runtime groups.
+
+Rollback: `/root/hohenheim-preflight-20260829-102626/` (previous jar as
+`hohenheim-server.jar.rollback`, `hohenheim.db.pre` + `hohenheim.db.at-swap` with
+integrity ok, `settings/`, `keyring.sha256` over `settings/field-encryption.keys`, which
+IS the keyring on this install). The rehearsal dir and the staged jar were removed; no
+stray JVM. The secondary workspace was deleted afterwards. Note for the next deploy:
+`~/projects/hohenext/build-worktrees/` still registers eight detached worktrees from the
+08-23..08-27 deploys; they are not this lane's and were left alone.
