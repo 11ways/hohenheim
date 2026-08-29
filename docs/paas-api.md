@@ -496,7 +496,41 @@ non-interactive contexts unless `--yes` is passed.
 
 `tools/hoh` -- single-file node (>= 20), stdlib only. Configuration lives in
 `~/.config/hoh/config.json` (written 0600 by `hoh login`, verified against the
-API before storing); `HOH_HOST`/`HOH_TOKEN`/`HOH_CONTEXT` override it.
+API before storing).
+
+### Contexts
+
+One config file holds every controller you drive, as a named context, plus a
+`current` naming the stored default. Selecting a context and MOVING the default
+are deliberately two different acts: `hoh context use` moves it, while
+`--context <name>` (or `HOH_CONTEXT`) selects a context for a single invocation
+and leaves it where it was. That is what lets two lanes on two boxes run
+concurrently -- before, each `hoh context use` clobbered the other lane's
+default mid-flight, and `HOH_HOST`/`HOH_TOKEN` were the only way out.
+
+Precedence is explicit-beats-ambient:
+
+1. `--context <name>` -- a flag typed on this command line, so it wins outright,
+   `HOH_HOST`/`HOH_TOKEN` included. A named context always presents its OWN
+   stored key, never the ambient `HOH_TOKEN`.
+2. `HOH_HOST`/`HOH_TOKEN` -- bypass the config file entirely.
+3. `HOH_CONTEXT` -- names a stored context, same as `--context` but ambient.
+4. `current` in the config file, else the context named `default`.
+
+```
+hoh context list                      # name, host, whether a key is stored, default, selected
+hoh context list --json               # { contexts, current, selected, env_host }
+hoh context use staging               # move the stored default (the only thing that does)
+hoh --context staging sites           # one command against staging; the default never moves
+HOH_CONTEXT=staging hoh sites         # the same, ambient
+hoh --context staging login https://staging.example   # store a key UNDER that name
+```
+
+`context list` makes no API call, so it still answers when the default context's
+host is unreachable. An unknown name is a named refusal naming the config file,
+never a crash.
+
+### Commands
 
 ```
 hoh login https://panel.example       # prompts for the key, hidden
@@ -531,9 +565,11 @@ hoh vars instance 3 unset KEY
 hoh vars env 5 set KEY value          # environment (deploy baseline) values, ADMIN-ONLY
 ```
 
-`--json` prints the raw API response of any read. Tests: `node tools/hoh.test.js`
+`--json` prints the raw API response of any read; `hoh help` (also `--help`/`-h`)
+prints the command list. Tests: `node --test "tools/*.test.js"`
 (stub server; proves paths, the key header, the rollback and delete interlocks,
-the verbatim field pass-through of the site verbs and secret masking), driven in the verification lane by `HohCliTest`. Server-side coverage:
+the verbatim field pass-through of the site verbs, secret masking, and that a
+`--context`/`HOH_CONTEXT` selection never moves the stored default), driven in the verification lane by `HohCliTest`. Server-side coverage:
 `PaasApiTest` and `SiteApiTest` (browserTest).
 
 ## The `hoh-import-legacy` converter

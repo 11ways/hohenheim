@@ -121,12 +121,15 @@ const server = http.createServer((req, res) => {
     });
 });
 
-function run(args) {
+function run(args, overrides = {}) {
     return new Promise(resolve => {
+        const env = { ...process.env,
+            HOH_HOST: `http://127.0.0.1:${server.address().port}`,
+            HOH_TOKEN: 'znit_test_token', HOH_CONTEXT: undefined, ...overrides };
+        // An undefined override means "unset", which spawn cannot express.
+        for (const key of Object.keys(env)) if (env[key] === undefined) delete env[key];
         const child = cp.spawn(process.execPath, [HOH, ...args], {
-            env: { ...process.env, HOH_HOST: `http://127.0.0.1:${server.address().port}`,
-                HOH_TOKEN: 'znit_test_token' },
-            stdio: ['pipe', 'pipe', 'pipe'],
+            env, stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '', stderr = '';
         child.stdout.on('data', d => stdout += d);
@@ -319,6 +322,97 @@ server.listen(0, '127.0.0.1', async () => {
         r = await run(['dns', 'zones']);
         check('dns zones lists', r.status === 0 && r.stdout.includes('example.test')
             && r.stdout.includes('matches'), r.stdout + r.stderr);
+
+        // 13. help: prints AND exits clean. It used to print the whole page and then
+        //     die on `.catch` of undefined, because the handler is synchronous -- so
+        //     the exit status and an empty stderr are the assertions that matter.
+        for (const args of [['help'], ['--help'], ['-h'], []]) {
+            r = await run(args);
+            check(`help exits clean (hoh ${args.join(' ') || '<no args>'})`,
+                r.status === 0 && r.stderr === '', `status=${r.status} stderr=${r.stderr}`);
+            check(`help prints the usage (hoh ${args.join(' ') || '<no args>'})`,
+                r.stdout.includes('Hohenheim PaaS CLI') && r.stdout.includes('--context'),
+                r.stdout);
+        }
+
+        // 14. contexts: --context / HOH_CONTEXT select a lane for ONE command without
+        //     moving the stored default, which is what let two boxes clobber each other.
+        const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hoh-home-'));
+        const configPath = path.join(home, '.config', 'hoh', 'config.json');
+        const stubHost = `http://127.0.0.1:${server.address().port}`;
+        const readCurrent = () => JSON.parse(fs.readFileSync(configPath, 'utf8')).current;
+        try {
+            fs.mkdirSync(path.dirname(configPath), { recursive: true });
+            fs.writeFileSync(configPath, JSON.stringify({
+                current: 'bravo',
+                contexts: {
+                    alpha: { host: stubHost, token: 'znit_alpha' },
+                    bravo: { host: 'http://127.0.0.1:1', token: 'znit_bravo' },
+                },
+            }, null, 2) + '\n');
+            // The file lane only: no ambient HOH_HOST/HOH_TOKEN to lean on.
+            const onFile = { HOME: home, HOH_HOST: undefined, HOH_TOKEN: undefined };
+
+            r = await run(['--context', 'alpha', 'sites'], onFile);
+            check('--context selects the named context', r.status === 0
+                && r.stdout.includes('alpha'), r.stdout + r.stderr);
+            check('and presents THAT context\'s key',
+                requests.at(-1).key === 'znit_alpha', JSON.stringify(requests.at(-1)));
+            check('and left the stored default alone', readCurrent() === 'bravo', readCurrent());
+
+            r = await run(['sites'], onFile);
+            check('the stored default is still the unreachable bravo',
+                r.status === 1 && r.stderr.includes('Cannot reach'), r.stderr);
+
+            r = await run(['sites', '--context=alpha'], onFile);
+            check('--context=name spelling works, after the command too',
+                r.status === 0 && requests.at(-1).key === 'znit_alpha', r.stderr);
+
+            r = await run(['sites'], { ...onFile, HOH_CONTEXT: 'alpha' });
+            check('HOH_CONTEXT selects the same way',
+                r.status === 0 && requests.at(-1).key === 'znit_alpha', r.stderr);
+            check('and it too left the default alone', readCurrent() === 'bravo', readCurrent());
+
+            // Explicit beats ambient: a shell pointed at a dead box does not win, and
+            // the named context brings its OWN key rather than the ambient one.
+            r = await run(['--context', 'alpha', 'sites'],
+                { HOME: home, HOH_HOST: 'http://127.0.0.1:1', HOH_TOKEN: 'znit_env' });
+            check('--context outranks HOH_HOST/HOH_TOKEN', r.status === 0
+                && requests.at(-1).key === 'znit_alpha', r.stdout + r.stderr);
+
+            r = await run(['--context', 'nope', 'sites'], onFile);
+            check('an unknown context is a named refusal, not a crash',
+                r.status === 1 && r.stderr.includes('nope')
+                    && r.stderr.includes('context list'), r.stderr);
+
+            const beforeList = requests.length;
+            r = await run(['context', 'list'], onFile);
+            check('context list shows every context with its host', r.status === 0
+                && r.stdout.includes('alpha') && r.stdout.includes('bravo')
+                && r.stdout.includes(stubHost), r.stdout + r.stderr);
+            check('context list is offline (no API call, so it works with a dead default)',
+                requests.length === beforeList, JSON.stringify(requests.slice(beforeList)));
+            r = await run(['context', 'list', '--json'], onFile);
+            check('context list --json names current and selected',
+                r.status === 0 && JSON.parse(r.stdout).current === 'bravo'
+                    && JSON.parse(r.stdout).selected === 'bravo', r.stdout + r.stderr);
+            r = await run(['context', 'list', '--context', 'alpha', '--json'], onFile);
+            check('and reports the selected one under --context',
+                JSON.parse(r.stdout).selected === 'alpha'
+                    && JSON.parse(r.stdout).current === 'bravo', r.stdout);
+
+            r = await run(['context', 'use', 'alpha'], onFile);
+            check('context use moves the stored default', r.status === 0
+                && readCurrent() === 'alpha', r.stdout + r.stderr);
+            r = await run(['sites'], onFile);
+            check('and the bare command now rides it',
+                r.status === 0 && requests.at(-1).key === 'znit_alpha', r.stderr);
+            r = await run(['context', 'use', 'nope'], onFile);
+            check('context use refuses an unknown name and keeps the default',
+                r.status === 1 && readCurrent() === 'alpha', r.stderr);
+        } finally {
+            fs.rmSync(home, { recursive: true, force: true });
+        }
     } finally {
         server.close();
     }
