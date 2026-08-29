@@ -551,12 +551,30 @@ public class HohenheimEndpoints {
         .rateLimit(INSTANCE_ARTIFACT_LIMIT)
         .build();
 
-    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    /**
+     * Create one instance. TWO lanes behind one URL, discriminated by whether the body
+     * carries a {@code template_id}: with one, the tenant's approved-template funnel;
+     * without, the admin form's own pipeline over InstanceResource (the migration lane).
+     *
+     * csrfExempt is safe: the handler refuses non-API-key principals.
+     */
     public static final Endpoint<Object> API_INSTANCE_CREATE = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "api_instance_create"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("instances").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(INSTANCE_CREATE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_INSTANCE_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_instance_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("instances").addDelimiter().addParameter(INSTANCE_ID)
+            .addDelimiter().addStatic("delete").build())
         .requiresLogin()
         .csrfExempt()
         .rateLimit(INSTANCE_CREATE_LIMIT)
@@ -747,6 +765,68 @@ public class HohenheimEndpoints {
             .addStatic("sites").addDelimiter().addParameter(SITE_ID)
             .addDelimiter().addStatic("domains").addDelimiter().addParameter(DOMAIN_ID)
             .addDelimiter().addStatic("delete").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(ROUTE_WRITE_LIMIT)
+        .build();
+
+    // --- PaaS API v1: access lists and their rule tree ---
+    //
+    // The other half of the proxy tier's write lane, added for the same migration: a
+    // legacy installation's htpasswd folders and IP allow-lists convert to a list plus
+    // one call per rule. Both panels create access lists (ManageAccessListResource is
+    // creatable and plants the creator's ownership grant), so these verbs demand no
+    // permission of their own -- the resource pipeline and TenantWrites are the gate,
+    // and the resource CHOSEN mirrors which panel the caller would have used.
+
+    public static final Endpoint<Object> API_V1_ACCESS_LISTS = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_access_lists"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("access-lists").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_V1_ACCESS_LIST = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_access_list"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID).build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_V1_ACCESS_LIST_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_access_list_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("access-lists").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(ROUTE_WRITE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_V1_ACCESS_LIST_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_access_list_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID)
+            .addDelimiter().addStatic("delete").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(ROUTE_WRITE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_V1_ACCESS_LIST_RULE_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_access_list_rule_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("access-lists").addDelimiter().addParameter(ACCESS_LIST_ID)
+            .addDelimiter().addStatic("rules").build())
         .requiresLogin()
         .csrfExempt()
         .rateLimit(ROUTE_WRITE_LIMIT)

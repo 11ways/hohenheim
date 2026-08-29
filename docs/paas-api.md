@@ -73,13 +73,19 @@ returned). Say so when delegating; the grant UI does not.
 | GET | `/api/v1/sites/{id}/domains` | The site's hostname rows, oldest first |
 | POST | `/api/v1/sites/{id}/domains` | Add a hostname row to the site (whoever holds `manage` on it) |
 | POST | `/api/v1/sites/{id}/domains/{domain}/delete` | Remove a hostname row; a row of another site answers 404 |
+| GET | `/api/v1/access-lists` | Access lists the key holds `manage` on -- see Access lists below |
+| GET | `/api/v1/access-lists/{id}` | One list, with its whole rule tree |
+| POST | `/api/v1/access-lists` | Create a list through the panel's own form pipeline (needs the panel permission) |
+| POST | `/api/v1/access-lists/{id}/delete` | Delete a list; its rules go with it |
+| POST | `/api/v1/access-lists/{id}/rules` | Add one node to the list's rule tree |
 | GET | `/api/v1/instances` | Instances the key holds `view` on -- which eight capabilities imply; see Authentication (product-tier-generated ones excluded) |
 | GET | `/api/v1/instances/{id}` | One instance |
 | GET | `/api/v1/instances/{id}/logs?lines=N` | Console tail (default 200, max 2000); 422 `logs_unavailable` when the daemon cannot answer |
 | POST | `/api/v1/instances/{id}/power` | `action=start|stop|restart` |
 | POST | `/api/v1/instances/{id}/command` | `command=...` to the console |
 | POST | `/api/v1/instances/{id}/backup` / `snapshot` | Capability-gated in the service |
-| POST | `/api/v1/instances` | Create from an approved template (same funnel as the create page) |
+| POST | `/api/v1/instances` | Create one workload. TWO lanes behind one URL, chosen by whether the body carries `template_id`: with one, the tenant's approved-template funnel; without, the admin create form's own pipeline -- see Instances below |
+| POST | `/api/v1/instances/{id}/delete` | Destroy and trash a workload, exactly as the form's delete does (the `destroy` capability, asked by the teardown service itself) |
 | GET | `/api/v1/instances/{id}/devices` | Attached extra disks and NICs (`name`, `type`, `size_gb`) |
 | POST | `/api/v1/instances/{id}/devices` | Attach: `type=disk\|nic`, `name`, `size_gb` (disks). Quota and capability refusals are named: `disk_quota_reached`, `nic_quota_reached`, `devices_unsupported`, `device_exists`, `device_attach_failed` |
 | POST | `/api/v1/instances/{id}/devices/resize` | `name`, `size_gb`. Block volumes resize STOPPED only -- a running resize returns the daemon's own "In use" inside `device_resize_failed` |
@@ -207,6 +213,149 @@ form. `POST /api/v1/sites/{id}/domains/{domain}/delete` removes the row and
 releases its claim into the quarantine ledger: the same owner may re-add the name
 at once, a different owner waits out the quarantine.
 
+## Access lists
+
+The other half of the proxy tier's write lane, added for the same migration (an old
+installation's htpasswd folders and IP allow-lists convert to one list plus one call
+per rule). Same transport as sites: form-encoded, dotted keys nest
+(`data.username`), no JSON body. The write goes through the panels' own resources
+via zenit-cms' `ResourceWrites`, which is what argon2-hashes a basic-auth password
+-- a value written any other way is stored in plaintext and then refuses every
+visitor, so there is no second way in.
+
+Rate limit: 120 route writes per minute per principal (`hh_paas_route_write`).
+
+Doors, exactly the panels': BOTH panels create access lists, so this lane is not
+admin-only. An admin key writes through the operator form (`AccessListResource`,
+`shared` included); every other key writes through the delegated one
+(`ManageAccessListResource`), which has no `shared` entry and plants the creator's
+`manage` grant -- a tenant owns what it authored. Creating demands the panel
+permission the form lives behind (`hohenheim.manage.access`, or the admin one), as
+narrowed by the key's scopes, and answers **403** otherwise; every other verb asks
+`manage` on the LIST and answers the uniform **404** for a list that is absent, not
+yours, or merely SHARED with you (attaching a shared list is a picker's affordance,
+not an editing right).
+
+### `POST /api/v1/access-lists`
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `name` | string, required | |
+| `satisfy` | enum | `any` (default) or `all`; this IS the implicit root group's mode |
+| `shared` | boolean | Offer the list to every picker. ADMIN keys only -- a delegated key submitting it is refused `zenit.coercion.unknown_field`, because the /manage form has no such entry |
+
+Answer: the list detail (as `GET /api/v1/access-lists/{id}`), whose `rules` array is
+empty for a fresh list.
+
+### `POST /api/v1/access-lists/{id}/rules`
+
+One node of the tree per call, the two steps the Rules tab takes (birth, then
+configure) in one request.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `type` | enum, required | `group`, `basic_auth`, `ip_allow`, `ip_deny`, `auth_provider` |
+| `parent_id` | integer | An enclosing GROUP of THIS list; absent, blank, or anything else means the implicit root |
+| `enabled` | boolean | Absent keeps the birth default: a group is born ON, every leaf OFF |
+| `data.*` | per type | The type's own schema; an undeclared key is refused (`zenit.coercion.unknown_field`) |
+
+Settings per type:
+
+- `group`: `data.satisfy` (`any` default / `all`).
+- `basic_auth`: `data.username` (no `:`, RFC 7617), `data.password` (typed in
+  plaintext, stored as an argon2 hash; blank on a later write keeps the stored one).
+- `ip_allow` / `ip_deny`: `data.network`, one literal IP or CIDR (`203.0.113.8`,
+  `10.0.0.0/8`) -- never a hostname.
+- `auth_provider`: `data.provider_id`, `data.required_permission` (blank = any
+  identity that provider authenticates).
+
+Answer, and each element of a list's `rules`:
+
+```
+{"id":41,"access_list_id":31,"parent_id":38,"type":"basic_auth","enabled":true,
+ "data":{"username":"earl"},"has_password":true}
+```
+
+The stored password is absent BY NAME, hash included: it is credential material, and
+a value written as a credential has no representation over this API afterwards.
+Refusals: `unknown_type`, `zenit.coercion.unknown_field`,
+`access_rule_network_invalid`, `access_rule_username_invalid`,
+`access_rule_provider_invalid`, and -- only once a rule is switched ON --
+`access_rule_credential_incomplete`, `access_rule_provider_missing`. A refusal at the
+CONFIGURE half leaves the node behind SWITCHED OFF, exactly as an abandoned add form
+does: it enforces nothing, and the next read shows it.
+
+`POST /api/v1/access-lists/{id}/delete` runs the resource's delete: the rule rows
+cascade off the model hook, and whatever the list gated stops being gated -- which is
+the dangerous direction, because a site with no access list allows everyone.
+
+## Instances
+
+`POST /api/v1/instances` carries TWO lanes, discriminated by whether the body has a
+`template_id` KEY (its presence, never whether it resolves -- a typo'd id is still
+refused `unknown_template` rather than falling into the other lane):
+
+- WITH `template_id`: unchanged, the tenant's approved-template funnel
+  (`InstanceTemplates.createFromTemplate`), which decides create authority, template
+  approval, placement, typed variables, image policy and quota.
+- WITHOUT: the admin create form's own pipeline over `InstanceResource`. ADMIN-ONLY
+  (403 otherwise) for the site-create reason: `ManageInstanceResource` is deliberately
+  not creatable, so the only panel with this form is the admin one.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `name` | string, required | |
+| `kind` | enum, required | `hohenheim:docker_container`, `hohenheim:workspace`, `hohenheim:application`, `hohenheim:system_container`, `hohenheim:vm` (the authorable set; product-tier kinds are refused) |
+| `server_id` | integer | The host. Honoured verbatim for an admin; absent means placement chooses, and refuses by name (`no_placement_capacity`, `host_capacity_unproven`, `no_placement_available`) rather than silently landing on the local daemon |
+| `runtime_image_id` | integer | Required by `hohenheim:workspace` (`runtime_image_required`) |
+| `environment_id` | integer | Grouping only; the environment's project must have the same owner set (`environment_project_mismatch`) |
+| `crash_policy` | enum | `none` (default) or `restart` |
+| `backup_target_id` | integer | |
+| `settings.*` | per kind | The kind's own schema; an undeclared setting is refused (`zenit.coercion.unknown_field`) |
+
+Settings per kind (every key optional unless said otherwise):
+
+- `hohenheim:docker_container`: `image`, `tag`, `command`, `container_port`,
+  `port_protocol` (`tcp`/`udp`), `port_exposure` (`loopback`/`public`), `host_port`,
+  `environment_variables` (a map, secret), `volumes` (a map), `memory_limit_mb`,
+  `cpu_limit`, `console_kind` (`plain`/`tty`).
+- `hohenheim:application`: the git source below plus `image`, `tag`, `builder`
+  (`dockerfile`/`nixpacks`), `dockerfile`, `build_arguments` (a map),
+  `container_port`, `health_path`, `environment_variables` (secret),
+  `keep_releases` (1..10, default 2), `memory_limit_mb`, `cpu_limit`, `console_kind`.
+- `hohenheim:workspace`: the git source below plus `start_command`, `container_port`,
+  `home_quota_mb`, `environment_variables` (secret), `memory_limit_mb`, `cpu_limit`,
+  `console_kind`.
+- git source (workspace and application): `repository_url`, `provider_id`,
+  `repository`, `branch`, `build_command`, `build_directory`, `build_timeout`,
+  `auto_deploy` (default true), `poll_interval`, `webhook_secret` (secret),
+  `shallow_clone` (default true), `submodules`, `build_environment_variables`
+  (secret), `previews_enabled`, `preview_branches`,
+  `preview_environment_variables` (secret).
+
+Answer: the instance projection (as `GET /api/v1/instances/{id}`):
+
+```
+{"id":51,"name":"earl","kind":"hohenheim:application","status":"created",
+ "install_state":"none","crash_policy":"none","template":"","created_at":"..."}
+```
+
+A create DEPLOYS NOTHING. The row lands in `created` and the explicit deploy verb
+(`POST /api/v1/sites/{id}/deploy`, or the panel's own) starts it -- which is what the
+create form does too, so there is no background provisioning to wait for here.
+Table-backed variables are a separate call (`POST /api/v1/instances/{id}/variables`)
+because they are a separate table; the `settings.environment_variables` map rides the
+create.
+
+`POST /api/v1/instances/{id}/delete` runs `InstanceResource.deleteRow`, which IS
+`InstanceService.destroy`: the workload is torn down for real and the row soft-deleted.
+The authority is the SERVICE's, not this route's -- `requireOperationCapability(...,
+destroy)` -- so SEEING an instance (`view`, which eight capabilities imply) is not
+enough to destroy it: a caller holding only `view` gets a **422**
+`instance_not_permitted` (the refusal never says which capability is missing, so it is
+no capability oracle) while an unrelated id gets the uniform 404. A failed teardown is
+also a 422 (`instance_destroy_failed`) and leaves the record alive.
+
 ## Environment variables are admin-only
 
 **CORRECTED 2026-08-13: this lane used to require "project membership plus
@@ -286,7 +435,15 @@ hoh rollback 7 [--yes]
 hoh releases 7 | hoh release 7 12     # detail prints the step log
 hoh builds 7 | hoh build-log 7 4
 hoh deployments 7 | hoh deploy-log 7 9
-hoh instances | hoh instance 3
+hoh instances | hoh instance 3 | hoh instance show 3
+hoh instance create earl hohenheim:application \
+    settings.repository_url=https://example.test/earl.git settings.branch=main  # admin
+hoh instance delete 3 [--yes]         # destroys the workload; asks for the name
+hoh access-list list | hoh access-list 31
+hoh access-list create Staff satisfy=all shared=true   # shared is admin-only
+hoh access-list rule add 31 basic_auth data.username=earl data.password=hunter2 enabled=true
+hoh access-list rule add 31 ip_allow data.network=10.0.0.0/8 enabled=true
+hoh access-list delete 31 [--yes]     # takes its rules; asks for the name
 hoh logs 3 -n 500
 hoh power 3 restart
 hoh vars instance 3                   # secrets show "(set)", never the value

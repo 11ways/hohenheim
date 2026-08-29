@@ -67,6 +67,7 @@ public final class PaasApi {
         initOperations();
         initEnvironmentVariables();
         SiteApi.init();
+        AccessListApi.init();
     }
 
     // -- projects -------------------------------------------------------------

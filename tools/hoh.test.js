@@ -66,6 +66,35 @@ const server = http.createServer((req, res) => {
         if (req.url === '/api/v1/sites/11/delete') {
             return respond(200, { id: 11, status: 'deleted' });
         }
+        if (req.url === '/api/v1/access-lists' && req.method === 'POST') {
+            return respond(200, { id: 31, name: 'Staff', satisfy: 'any', shared: false,
+                rules: [] });
+        }
+        if (req.url === '/api/v1/access-lists' && req.method === 'GET') {
+            return respond(200, { access_lists: [{ id: 31, name: 'Staff',
+                satisfy: 'any', shared: false }] });
+        }
+        if (req.url === '/api/v1/access-lists/31/rules') {
+            return respond(200, { id: 41, access_list_id: 31, parent_id: null,
+                type: 'basic_auth', enabled: true, data: { username: 'earl' },
+                has_password: true });
+        }
+        if (req.url === '/api/v1/access-lists/31/delete') {
+            return respond(200, { id: 31, status: 'deleted' });
+        }
+        if (req.url === '/api/v1/access-lists/31') {
+            return respond(200, { id: 31, name: 'Staff', satisfy: 'any', shared: false });
+        }
+        if (req.url === '/api/v1/instances' && req.method === 'POST') {
+            return respond(200, { id: 51, name: 'earl-app', kind: 'hohenheim:application',
+                status: 'created' });
+        }
+        if (req.url === '/api/v1/instances/51/delete') {
+            return respond(200, { id: 51, status: 'deleted' });
+        }
+        if (req.url === '/api/v1/instances/51') {
+            return respond(200, { id: 51, name: 'earl-app', status: 'created' });
+        }
         if (req.url === '/api/v1/instances/3/variables') {
             return req.method === 'POST'
                 ? respond(200, { id: 3, status: 'set', key: 'TOKEN' })
@@ -185,6 +214,64 @@ server.listen(0, '127.0.0.1', async () => {
             && requests.at(-1).url === '/api/v1/sites/11/delete', r.stderr);
         r = await run(['site', '11']);
         check('site <id> still reads the detail', r.status === 0 && r.stdout.includes('earl'), r.stderr);
+
+        // 11. access lists: create, list, a rule with its dotted data fields, delete --
+        //     same verbatim pass-through and the same name interlock as the site verbs.
+        r = await run(['access-list', 'create', 'Staff', 'satisfy=all']);
+        check('access-list create posts', r.status === 0 && r.stdout.includes('"Staff"'),
+            r.stdout + r.stderr);
+        check('access-list create hit the create lane with its fields',
+            requests.at(-1).method === 'POST' && requests.at(-1).url === '/api/v1/access-lists'
+                && requests.at(-1).body.includes('name=Staff')
+                && requests.at(-1).body.includes('satisfy=all'), requests.at(-1).body);
+        r = await run(['access-list', 'list']);
+        check('access-list list renders', r.status === 0 && r.stdout.includes('Staff'), r.stderr);
+        r = await run(['access-list', 'rule', 'add', '31', 'basic_auth',
+            'data.username=earl', 'data.password=hunter2', 'enabled=true']);
+        check('rule add posts', r.status === 0 && r.stdout.includes('basic_auth'),
+            r.stdout + r.stderr);
+        check('rule add passed the dotted data fields verbatim',
+            requests.at(-1).url === '/api/v1/access-lists/31/rules'
+                && requests.at(-1).body.includes('data.username=earl')
+                && requests.at(-1).body.includes('type=basic_auth'), requests.at(-1).body);
+        const beforeListDelete = requests.length;
+        r = await run(['access-list', 'delete', '31']);
+        check('access-list delete refuses without confirmation', r.status === 1,
+            r.stdout + r.stderr);
+        check('and never sent the delete',
+            !requests.slice(beforeListDelete).some(q => q.url.endsWith('/delete')));
+        r = await run(['access-list', 'delete', '31', '--yes']);
+        check('access-list delete --yes acts', r.status === 0
+            && requests.at(-1).url === '/api/v1/access-lists/31/delete', r.stderr);
+
+        // 12. instances: create through the resource lane, show, and the same interlock
+        //     on the destroy verb.
+        r = await run(['instance', 'create', 'earl-app', 'hohenheim:application',
+            'settings.repository_url=https://example.test/earl.git', 'settings.branch=main']);
+        check('instance create posts', r.status === 0 && r.stdout.includes('earl-app'),
+            r.stdout + r.stderr);
+        check('instance create hit the create lane with its dotted settings',
+            requests.at(-1).method === 'POST' && requests.at(-1).url === '/api/v1/instances'
+                && requests.at(-1).body.includes('settings.branch=main')
+                && requests.at(-1).body.includes('kind=hohenheim%3Aapplication'),
+            requests.at(-1).body);
+        check('instance create carries NO template_id (that is the other lane)',
+            !requests.at(-1).body.includes('template_id'), requests.at(-1).body);
+        r = await run(['instance', 'show', '51']);
+        check('instance show reads the detail', r.status === 0 && r.stdout.includes('earl-app'),
+            r.stderr);
+        const beforeInstanceDelete = requests.length;
+        r = await run(['instance', 'delete', '51']);
+        check('instance delete refuses without confirmation', r.status === 1,
+            r.stdout + r.stderr);
+        check('and never sent the destroy',
+            !requests.slice(beforeInstanceDelete).some(q => q.url.endsWith('/delete')));
+        r = await run(['instance', 'delete', '51', '--yes']);
+        check('instance delete --yes acts', r.status === 0
+            && requests.at(-1).url === '/api/v1/instances/51/delete', r.stderr);
+        r = await run(['instance', '51']);
+        check('instance <id> still reads the detail', r.status === 0
+            && r.stdout.includes('earl-app'), r.stderr);
     } finally {
         server.close();
     }
