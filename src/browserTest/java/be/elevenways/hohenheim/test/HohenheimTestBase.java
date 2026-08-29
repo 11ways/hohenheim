@@ -4,6 +4,7 @@ import be.elevenways.hawkeye.testSupport.HawkeyeBrowserTestBase;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.HohenheimCommsSettings;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
@@ -75,6 +76,10 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
             settingsDry.delete();
             settingsDry.deleteOnExit();
             System.setProperty("hohenheim.settings", settingsDry.getAbsolutePath());
+            File commsDry = File.createTempFile("hohenheim-test-comms", ".dry");
+            commsDry.delete();
+            commsDry.deleteOnExit();
+            System.setProperty("hohenheim.comms.settings", commsDry.getAbsolutePath());
         } catch (IOException e) {
             throw new RuntimeException("Failed to create temp database file", e);
         }
@@ -92,6 +97,9 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         // Load the (empty) test settings file into the context so the panel's
         // framework SettingsPage can locate its editable DryFileSource.
         HohenheimSettingsFiles.load();
+        // The comms context too, exactly as ServerMain does it, so the panel's comms
+        // mount can locate its editable file.
+        HohenheimCommsSettings.load();
 
         HohenheimEndpoints.init();
         // Before the migrations, exactly as ServerMain does it: the declarations carry the

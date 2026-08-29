@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
+import be.elevenways.hohenheim.server.HohenheimCommsSettings;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -14,6 +15,8 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.server.page.BuildInfoPage;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
+import be.elevenways.zenit.comms.CommsSettings;
+import be.elevenways.zenit.comms.server.cms.CommsSettingsLabels;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.ServerZenitRuntime;
@@ -249,6 +252,12 @@ public final class HohenheimPanel extends Panel {
                 Microcopy.of("framework").withFallback("Framework"), frameworkEditor));
         } catch (IllegalArgumentException notLoaded) {
             // Boot without the standard zenit chain: app settings only.
+        }
+        try {
+            mounts.add(new SettingsPage.Mount(CommsSettingsLabels.MOUNT_KEY, CommsSettingsLabels.mount(),
+                SettingsEditor.forFile(CommsSettings.VALUES, HohenheimCommsSettings.settingsFile())));
+        } catch (IllegalArgumentException notLoaded) {
+            // Boot without the comms settings file: no transport chain to edit.
         }
         mounts.add(new SettingsPage.Mount("spamservice",
             Microcopy.literal("Spamservice"), new SpamserviceSettingsBackend()));
