@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -99,6 +100,22 @@ public class DnsZoneModel extends Model {
             .help(HohenheimFormCopy.help("last_transfer_at")).build());
     public static final StringField REPLICA_RECORDS = SCHEMA.addField(
         StringField.builder().name("replica_records").build());
+
+    // --- Delegation health of a PRIMARY zone (written by the delegation check) ---
+    /** The worst finding of the last delegation check; the vocabulary lives on {@link DelegationVerdict}. */
+    public static final EnumField DELEGATION_STATUS = SCHEMA.addField(
+        DelegationVerdict.fieldBuilder("delegation_status")
+            .label(HohenheimFormCopy.label("delegation_status"))
+            .help(HohenheimFormCopy.help("delegation_status")).build());
+    /** One line per finding of the last check, diagnostic text like {@link #TRANSFER_MESSAGE}. */
+    public static final StringField DELEGATION_DETAIL = SCHEMA.addField(
+        StringField.builder().name("delegation_detail")
+            .label(HohenheimFormCopy.label("delegation_detail"))
+            .help(HohenheimFormCopy.help("delegation_detail")).build());
+    public static final DateTimeField DELEGATION_CHECKED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("delegation_checked_at")
+            .label(HohenheimFormCopy.label("delegation_checked_at"))
+            .help(HohenheimFormCopy.help("delegation_checked_at")).build());
 
     // --- DNSSEC (online signing; one Combined Signing Key per zone) ---
     public static final BooleanField DNSSEC_ENABLED = SCHEMA.addField(

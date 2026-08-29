@@ -94,6 +94,50 @@ secondary replication is pulled and then answered from this instance's own
 listener with the zone row marked transferred, and an unreachable primary
 marks the secondary errored.
 
+## Health: secondary freshness and delegation (shipped 2026-08-30)
+
+The transfer bookkeeping above is what a SECONDARY believes about itself. A
+secondary that silently stopped pulling (dead peer row, firewall change, a
+NOTIFY nobody answers) is invisible from there, so the PRIMARY keeps its own
+view on every `dns_zone_peers` link: `ProbeDnsSecondaries` (every 5 minutes)
+sends a real SOA query to the peer's transfer host/port and stores
+`served_serial`, `probed_at` and `probe_error`; `behind_since` is stamped by
+the first probe that finds the peer behind (RFC 1982) or silent and cleared
+when it serves our serial again. A lag older than
+`DnsSecondaryFreshness.STALE_AFTER` (15 minutes; a constant, because a knob
+would only hide a broken secondary) raises a warning attention item naming
+peer and zone, linking to the zone's Secondaries tab, and ONE
+`dns_secondary_stale` alert per lag (`stale_alerted_at`, cleared on catch-up).
+The Secondaries tab shows a freshness pill (not probed / current / behind /
+stale), the served serial and the probe time per link.
+
+`CheckDnsDelegations` (hourly) judges each primary zone from the parent's side:
+`SystemDelegationLookup` finds the parent zone's nameservers through the
+system resolver, `DelegationCheck` asks one of them for the zone's NS with
+recursion OFF (a recursive answer would come from our own servers and could
+never show a registrar-side mismatch), reads the delegation and glue from the
+referral, compares it with the apex NS rows we serve, and asks every delegated
+server for the zone SOA. Verdicts are the closed `DelegationVerdict`
+vocabulary, least severe first: matches, parent unreachable (inconclusive,
+never healthy), not delegated, listed-not-delegated, delegated-not-listed,
+stale serial (a delegated server answers behind our serial), missing glue
+(in-bailiwick NS without a glue address), lame (a delegated server does not
+answer authoritatively). The worst verdict
+and one line per finding land on `dns_zones.delegation_status`,
+`delegation_detail` and `delegation_checked_at` (read-only in the zone form,
+a badge column in the list); a verdict with a severity is an attention item
+whose detail is the verdict label, and the `dns_delegation_broken` alert fires
+on a CHANGE of verdict only. A zone without an apex NS RRset is skipped (the
+"no NS records" item already covers it). The zone row action "Check health"
+runs both checks on demand and reports the verdict and how many secondaries
+are behind.
+
+During a zone migration the expected sequence of verdicts is:
+delegated-not-listed + listed-not-delegated while the registrar still points
+at the old provider, then matches after the NS change. Verification:
+`DnsFederationHealthTest` (real sockets, fake parent and secondary
+nameservers on loopback).
+
 ## Central editing (edit forwarding)
 
 One instance can be the single pane for every federated zone.

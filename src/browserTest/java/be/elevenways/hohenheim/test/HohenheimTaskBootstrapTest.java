@@ -9,7 +9,9 @@ import be.elevenways.hohenheim.server.task.CleanOldActivity;
 import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
 import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
 import be.elevenways.hohenheim.server.task.MonitorStacks;
+import be.elevenways.hohenheim.server.task.CheckDnsDelegations;
 import be.elevenways.hohenheim.server.task.ObserveInstanceDisk;
+import be.elevenways.hohenheim.server.task.ProbeDnsSecondaries;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
 import be.elevenways.hohenheim.server.task.ReconcileDockerResources;
@@ -66,11 +68,13 @@ class HohenheimTaskBootstrapTest {
     private static final List<Class<? extends ScheduledTask>> PINNED = List.of(
         BackupControlPlane.class,
         BackupDatabases.class,
+        CheckDnsDelegations.class,
         CleanOldActivity.class,
         CleanOldInstanceLogs.class,
         CleanOrphanCertificates.class,
         MonitorStacks.class,
         ObserveInstanceDisk.class,
+        ProbeDnsSecondaries.class,
         ReapIncusControllers.class,
         ReclaimDockerImages.class,
         ReconcileDockerResources.class,

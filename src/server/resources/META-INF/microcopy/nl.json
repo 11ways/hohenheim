@@ -11502,6 +11502,136 @@
     "text": "Opgeheven door",
     "scope": "field"
   },
+  "matches": {
+    "text": "Delegatie klopt",
+    "scope": "dns_delegation"
+  },
+  "parent_unreachable": {
+    "text": "Nameservers van de bovenliggende zone onbereikbaar",
+    "scope": "dns_delegation"
+  },
+  "not_delegated": {
+    "text": "Niet gedelegeerd bij de bovenliggende zone",
+    "scope": "dns_delegation"
+  },
+  "ns_stale_serial": {
+    "text": "Een nameserver serveert een verouderd serienummer",
+    "scope": "dns_delegation"
+  },
+  "listed_not_delegated": {
+    "text": "Vermelde nameserver niet gedelegeerd",
+    "scope": "dns_delegation"
+  },
+  "delegated_not_listed": {
+    "text": "Gedelegeerde nameserver niet vermeld",
+    "scope": "dns_delegation"
+  },
+  "missing_glue": {
+    "text": "Glue-record ontbreekt",
+    "scope": "dns_delegation"
+  },
+  "ns_unreachable": {
+    "text": "Lamme delegatie",
+    "scope": "dns_delegation"
+  },
+  "unprobed": {
+    "text": "Nog niet gepeild",
+    "scope": "dns_freshness"
+  },
+  "current": {
+    "text": "Actueel",
+    "scope": "dns_freshness"
+  },
+  "behind": {
+    "text": "Loopt achter",
+    "scope": "dns_freshness"
+  },
+  "stale": {
+    "text": "Verouderd",
+    "scope": "dns_freshness"
+  },
+  "freshness": {
+    "text": "Actualiteit",
+    "scope": "dns_secondaries"
+  },
+  "served_serial": {
+    "text": "Geserveerd serienummer",
+    "scope": "dns_secondaries"
+  },
+  "probed_at": {
+    "text": "Gepeild",
+    "scope": "dns_secondaries"
+  },
+  "check_health": {
+    "text": "Gezondheid controleren",
+    "scope": "dns_zone"
+  },
+  "check_health_hint": {
+    "text": "Vergelijk de delegatie bij de bovenliggende zone met de NS-records van deze zone en vraag elke secundaire welk serienummer die serveert.",
+    "scope": "dns_zone"
+  },
+  "check_health_done": {
+    "text": "Delegatie: {$verdict}. {$secondaries} secundaire(n) gepeild, {$behind} achter.",
+    "scope": "dns_zone"
+  },
+  "check_health_unserved": {
+    "text": "Deze zone wordt niet geserveerd of heeft geen NS-records, dus er valt niets te controleren.",
+    "scope": "dns_zone"
+  },
+  "dns_secondary_stale": [
+    {
+      "text": "Secundaire {$peer} van zone {$origin} is verouderd",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Ze serveert serienummer {$served} terwijl deze primaire {$serial} serveert.",
+      "scope": "attention_detail"
+    },
+    {
+      "text": "DNS-secundaire verouderd",
+      "scope": "notification_event"
+    }
+  ],
+  "dns_delegation_broken": [
+    {
+      "text": "Delegatie van zone {$origin} vraagt aandacht",
+      "scope": "attention_title"
+    },
+    {
+      "text": "DNS-delegatie defect",
+      "scope": "notification_event"
+    }
+  ],
+  "delegation_status": [
+    {
+      "text": "Delegatie",
+      "scope": "field"
+    },
+    {
+      "text": "Ernstigste bevinding van de laatste delegatiecontrole tegen de bovenliggende zone. Alleen voor primaire zones.",
+      "scope": "help"
+    }
+  ],
+  "delegation_detail": [
+    {
+      "text": "Delegatiebevindingen",
+      "scope": "field"
+    },
+    {
+      "text": "Een regel per bevinding van de laatste delegatiecontrole.",
+      "scope": "help"
+    }
+  ],
+  "delegation_checked_at": [
+    {
+      "text": "Delegatie gecontroleerd",
+      "scope": "field"
+    },
+    {
+      "text": "Wanneer de delegatie voor het laatst met de bovenliggende zone vergeleken werd.",
+      "scope": "help"
+    }
+  ],
   "template_database_engine": {
     "text": "Engine van de beheerde databank die voor elke instantie uit dit sjabloon wordt aangemaakt.",
     "scope": "help"
