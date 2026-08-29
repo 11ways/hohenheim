@@ -13,6 +13,9 @@ import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.instance.GeneratedInstanceFiles;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.hohenheim.server.instance.InstanceCatalogGuards;
+import be.elevenways.hohenheim.server.stack.StackCascades;
+import be.elevenways.hohenheim.server.tls.CertificateCascades;
 import be.elevenways.hohenheim.server.instance.InstanceDeclarations;
 import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceImagePin;
@@ -79,6 +82,17 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // An access rule dies with the list that holds it and with the group that encloses
         // it, on every delete lane. AFTER TenantWrites for the same reason as above.
         be.elevenways.hohenheim.server.proxy.AccessRuleCascades.install();
+        // A deleted certificate releases every domain row that pinned it (the pin is
+        // cleared, platform selection takes over) instead of leaving a dangling reference.
+        CertificateCascades.install();
+        // A stack takes its services, their config files and its deployment history with
+        // it; a service whose lowered workload is still live refuses to go. AFTER
+        // TenantWrites for the same reason as above.
+        StackCascades.install();
+        // A template still named by a live instance, and a runtime image still named by a
+        // live instance or a template, refuse to go; a template that may go takes its
+        // variables, files and volume declarations with it.
+        InstanceCatalogGuards.install();
         // The pl-terminal page gets the wasm concessions; no other admin page does.
         SiteTerminalCsp.install();
         // A tenant-originated instance write may only run an APPROVED template's image;

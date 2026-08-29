@@ -237,8 +237,8 @@ public class DatabaseResource extends RowResource {
                 .withArg("name", name)
                 .withArg("reason", e.getMessage()));
         }
-        // Links to soft-deleted owners are debris once the database is gone.
-        InstanceDatabaseLinks.deleteForDatabase(id);
+        // Links to soft-deleted owners are debris once the database is gone: the row delete
+        // inside destroy takes them along through the model funnel (InstanceDatabaseLinks).
     }
 
     @Override
@@ -287,10 +287,17 @@ public class DatabaseResource extends RowResource {
             .handler((row, ctx) -> {
                 String name = row.get(DatabaseModel.NAME);
                 Integer id = row.get(DatabaseModel.ID);
-                ActivityLog.withAction(ActivityLog.ACTION_DELETE, "force-destroy", () -> {
-                    this.databaseService.forceDestroyRecord(name);
-                    InstanceDatabaseLinks.deleteForDatabase(id);
-                });
+                // The same in-use refusal deleteRow makes, asked BEFORE the engine instance
+                // is abandoned: the funnel would refuse the row delete anyway, but by then
+                // the abandon has already run.
+                List<String> attachedTo = InstanceDatabaseLinks.liveInstanceNames(id);
+                if (!attachedTo.isEmpty()) {
+                    throw Violations.ofForm(CmsSupport.violationText("database_in_use")
+                        .withArg("name", name)
+                        .withArg("workloads", String.join(", ", attachedTo)));
+                }
+                ActivityLog.withAction(ActivityLog.ACTION_DELETE, "force-destroy",
+                    () -> this.databaseService.forceDestroyRecord(name));
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("force_delete_done").withFilter("scope", "database")
                         .withArg("name", name));

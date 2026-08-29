@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 
@@ -150,6 +151,14 @@ public class InstanceTemplateModel extends Model {
         IntegerField.builder().name("runtime_image_id")
             .label(HohenheimFormCopy.label("runtime_image"))
             .help(HohenheimFormCopy.help("template_runtime_image"))
+            .build());
+
+    /** The layered runtime image, declared so its delete can refuse while templates name it. */
+    public static final BelongsTo<RuntimeImageModel> RUNTIME_IMAGE = SCHEMA.addRelation(
+        BelongsTo.to(RuntimeImageModel.class)
+            .name("runtime_image")
+            .localKey(RUNTIME_IMAGE_ID)
+            .remoteKey(RuntimeImageModel.ID)
             .build());
 
     /** Overrides the runtime image's default command; {@code \{$VAR\}} expanded at start. */

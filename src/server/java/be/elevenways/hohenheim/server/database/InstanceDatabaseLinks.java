@@ -1,14 +1,19 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
+import be.elevenways.hohenheim.server.orm.PendingDeletes;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
@@ -96,6 +101,42 @@ public final class InstanceDatabaseLinks {
                 }
             }
         });
+        // The DATABASE side of the same rows: a database still attached to a LIVE workload
+        // refuses to go (the workload keeps injected credentials pointing at a dead engine
+        // with nothing saying why), and one that is not takes its attachment rows with it --
+        // through this model's own hooks above, so the link networks come down too.
+        // Correlated over the pending delete's criteria: every delete lane, no re-read.
+        DatabaseModel.SCHEMA.addBeforeRemoveHook(context -> {
+            refuseWhileAttachedToLiveWorkloads(context);
+            PendingDeletes.deleteDependents(Models.get(InstanceDatabaseModel.class),
+                InstanceDatabaseModel.DATABASE, context);
+        });
+    }
+
+    /**
+     * @throws Violations {@code database_in_use} naming the database and the live workloads
+     *         still attached to it
+     */
+    private static void refuseWhileAttachedToLiveWorkloads(@NonNull RemoveFromDatasource context) {
+        List<Row> live = Models.get(InstanceDatabaseModel.class).find()
+            .where(PendingDeletes.dependents(InstanceDatabaseModel.DATABASE, context))
+            .where(Criteria.related(InstanceDatabaseModel.INSTANCE, InstanceModel.DELETED_AT.isNull()))
+            .all();
+        if (live.isEmpty()) {
+            return;
+        }
+        Row database = live.get(0).get(InstanceDatabaseModel.DATABASE);
+        List<String> names = new ArrayList<>();
+        for (Row link : live) {
+            Row instance = link.get(InstanceDatabaseModel.INSTANCE);
+            if (instance != null) {
+                names.add(String.valueOf((Object) instance.get(InstanceModel.NAME)));
+            }
+        }
+        throw Violations.ofForm(CmsSupport.violationText("database_in_use")
+            .withArg("name", database != null
+                ? String.valueOf((Object) database.get(DatabaseModel.NAME)) : "")
+            .withArg("workloads", String.join(", ", names)));
     }
 
     /**
@@ -139,15 +180,4 @@ public final class InstanceDatabaseLinks {
         InstanceDatabaseNetworks.sweepFor(instanceId, true);
     }
 
-    /** Drop every attachment pointing at one database (its record is going away). */
-    public static void deleteForDatabase(int databaseId) {
-        for (Row link : Models.get(InstanceDatabaseModel.class).findByDatabaseId(databaseId)) {
-            Integer instanceId = link.get(InstanceDatabaseModel.INSTANCE_ID);
-            Models.get(InstanceDatabaseModel.class).find()
-                .where(InstanceDatabaseModel.ID.eq(link.get(InstanceDatabaseModel.ID))).delete();
-            if (instanceId != null) {
-                InstanceDatabaseNetworks.sweepFor(instanceId, false);
-            }
-        }
-    }
 }

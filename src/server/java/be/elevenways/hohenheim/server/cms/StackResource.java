@@ -2,9 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
-import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
@@ -242,28 +240,12 @@ public class StackResource extends RowResource {
                     "refused -- the runtime teardown failed:", e.getMessage());
                 throw Violations.ofForm(CmsSupport.violationText("stack_destroy_failed"));
             }
-            // No FK cascades on these tables: files hang off the services and deployment
-            // history (with encrypted credential-bearing snapshots) off the stack, and
-            // both would linger unreachable forever without an explicit sweep. ONE
-            // transaction around the whole cascade plus the stack row itself, so a
-            // failure mid-sweep never leaves a stack alive with its children gone (or
-            // the reverse). The Docker destroy above deliberately stays OUTSIDE it.
-            inMutationTransaction(() -> {
-                List<Integer> serviceIds = new ArrayList<>();
-                for (Row service : Models.get(StackServiceModel.class).find()
-                        .where(StackServiceModel.STACK_ID.eq(stackId)).all()) {
-                    serviceIds.add(service.get(StackServiceModel.ID));
-                }
-                if (!serviceIds.isEmpty()) {
-                    Models.get(StackFileModel.class).find()
-                        .where(StackFileModel.STACK_SERVICE_ID.in(serviceIds)).delete();
-                }
-                Models.get(StackServiceModel.class).find()
-                    .where(StackServiceModel.STACK_ID.eq(stackId)).delete();
-                Models.get(StackDeploymentModel.class).find()
-                    .where(StackDeploymentModel.STACK_ID.eq(stackId)).delete();
-                super.deleteRow(row, accessContext);
-            });
+            // The row cascade (services, their files, the deployment history) is the model
+            // funnel's -- StackCascades, on every delete lane. ONE transaction around it plus
+            // the stack row itself, so a failure mid-sweep never leaves a stack alive with
+            // its children gone (or the reverse). The Docker destroy above deliberately
+            // stays OUTSIDE it.
+            inMutationTransaction(() -> super.deleteRow(row, accessContext));
             return;
         }
         super.deleteRow(row, accessContext);

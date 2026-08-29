@@ -5765,6 +5765,14 @@
     "text": "Sjabloon {$name} wordt nog gebruikt door {$count} instantie(s)",
     "scope": "violations"
   },
+  "runtime_image_in_use": {
+    "text": "Image {$name} wordt nog gebruikt door {$instances} instantie(s) en {$templates} sjablo(o)n(en); wijs die eerst een andere image toe",
+    "scope": "violations"
+  },
+  "stack_service_running": {
+    "text": "Service {$service} draait nog een workload; vernietig die eerst",
+    "scope": "violations"
+  },
   "variable_key_taken": {
     "text": "Dit sjabloon heeft al een variabele met de naam {$key}",
     "scope": "violations"
@@ -8758,6 +8766,10 @@
     "text": "Een host is de machine waarop je workloads draaien.",
     "scope": "onboarding_checklist"
   },
+  "checklist_host_pending": {
+    "text": "Er is een host toegevoegd, maar hij is nog niet toegelaten, dus er kan nog niets op draaien.",
+    "scope": "onboarding_checklist"
+  },
   "checklist_admit": {
     "text": "Laat de host workloads aannemen",
     "scope": "onboarding_checklist"
@@ -10388,10 +10400,20 @@
     "text": "Dit is de machine waarop Hohenheim zelf draait; zijn vermelding verwijderen zou de installatie zonder host achterlaten.",
     "scope": "server"
   },
-  "delete_in_use": {
-    "text": "{$workloads} opgeslagen workloads verwijzen nog naar deze host. Verwijder of migreer ze eerst, anders verwijzen hun records naar een host die niet meer bestaat.",
-    "scope": "server"
-  },
+  "delete_in_use": [
+    {
+      "text": "{$workloads} opgeslagen workloads verwijzen nog naar deze host. Verwijder of migreer ze eerst, anders verwijzen hun records naar een host die niet meer bestaat.",
+      "scope": "server"
+    },
+    {
+      "text": "{$count} actieve instanties zijn van dit sjabloon gemaakt. Vernietig ze eerst, anders verwijzen hun records naar een sjabloon dat niet meer bestaat.",
+      "scope": "instance_template"
+    },
+    {
+      "text": "{$instances} actieve instanties en {$templates} sjablonen draaien nog in deze image. Wijs ze eerst een andere toe, anders mislukt hun volgende deploy op een image die niet meer bestaat.",
+      "scope": "runtime_image"
+    }
+  ],
   "delete_confirm_dependents": {
     "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.",
     "scope": "dns_zone"

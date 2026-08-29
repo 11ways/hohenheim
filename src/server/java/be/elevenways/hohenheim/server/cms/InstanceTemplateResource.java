@@ -36,7 +36,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -137,20 +136,26 @@ public class InstanceTemplateResource extends RowResource {
             InstanceTemplateModel.STOP_COMMAND);
     }
 
-    /** A template with live instances is load-bearing: refuse to delete it. */
+    /**
+     * A template with live instances is load-bearing: its delete is offered DEAD with the
+     * count on screen, and the same resolver refuses a direct POST.
+     *
+     * AIDEV-NOTE: this used to be a refusal inside {@code deleteRow}, so the button was
+     * offered on every surface and failed on click. The enforcement for every OTHER writer
+     * (a criteria delete, the API) is the model funnel's {@code InstanceCatalogGuards}.
+     */
     @Override
-    public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
-        Integer id = existing.get(InstanceTemplateModel.ID);
+    public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
+                                                       @NonNull AccessContext accessContext) {
         long referencing = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.TEMPLATE_ID.eq(id))
+            .where(InstanceModel.TEMPLATE_ID.eq(record.get(InstanceTemplateModel.ID)))
             .where(InstanceModel.DELETED_AT.isNull())
             .count();
         if (referencing > 0) {
-            throw Violations.ofForm(CmsSupport.violationText("template_in_use")
-                .withArg("name", String.valueOf((Object) existing.get(InstanceTemplateModel.NAME)))
-                .withArg("count", referencing));
+            return Microcopy.of("delete_in_use").withFilter("scope", "instance_template")
+                .withArg("count", referencing);
         }
-        super.deleteRow(existing, accessContext);
+        return super.deleteUnavailableReason(record, accessContext);
     }
 
     @Override

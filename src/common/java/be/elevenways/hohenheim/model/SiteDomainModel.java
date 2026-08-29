@@ -183,6 +183,17 @@ public class SiteDomainModel extends Model {
         .label(HohenheimFormCopy.label("certificate"))
         .help(HohenheimFormCopy.help("certificate"))
         .build());
+
+    /**
+     * The pinned certificate, declared so a certificate delete can release every row that
+     * pins it in one correlated statement (CertificateCascades); null = platform selection.
+     */
+    public static final BelongsTo<CertificateModel> CERTIFICATE = SCHEMA.addRelation(
+        BelongsTo.to(CertificateModel.class)
+            .name("certificate")
+            .localKey(CERTIFICATE_ID)
+            .remoteKey(CertificateModel.ID)
+            .build());
     public static final BooleanField HSTS_ENABLED = SCHEMA.addField(BooleanField.builder("hsts_enabled")
         .defaultValue(false)
         .label(HohenheimFormCopy.label("hsts_enabled"))

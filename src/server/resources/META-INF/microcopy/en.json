@@ -5765,6 +5765,14 @@
     "text": "Template {$name} is still used by {$count} instance(s)",
     "scope": "violations"
   },
+  "runtime_image_in_use": {
+    "text": "Image {$name} is still used by {$instances} instance(s) and {$templates} template(s); repoint those first",
+    "scope": "violations"
+  },
+  "stack_service_running": {
+    "text": "Service {$service} still runs a workload; destroy it first",
+    "scope": "violations"
+  },
   "variable_key_taken": {
     "text": "This template already declares a variable named {$key}",
     "scope": "violations"
@@ -8758,6 +8766,10 @@
     "text": "A host is the machine your workloads run on.",
     "scope": "onboarding_checklist"
   },
+  "checklist_host_pending": {
+    "text": "A host is enrolled but not admitted yet, so nothing can run on it.",
+    "scope": "onboarding_checklist"
+  },
   "checklist_admit": {
     "text": "Let the host accept workloads",
     "scope": "onboarding_checklist"
@@ -10388,10 +10400,20 @@
     "text": "This is the machine Hohenheim itself runs on; removing its entry would leave the installation without a host.",
     "scope": "server"
   },
-  "delete_in_use": {
-    "text": "{$workloads} stored workloads still name this host. Remove or migrate them first, or their records would name a host that no longer exists.",
-    "scope": "server"
-  },
+  "delete_in_use": [
+    {
+      "text": "{$workloads} stored workloads still name this host. Remove or migrate them first, or their records would name a host that no longer exists.",
+      "scope": "server"
+    },
+    {
+      "text": "{$count} live instances were created from this template. Destroy them first, or their records would name a template that no longer exists.",
+      "scope": "instance_template"
+    },
+    {
+      "text": "{$instances} live instances and {$templates} templates still run inside this image. Repoint them first, or their next deploy fails on an image that no longer exists.",
+      "scope": "runtime_image"
+    }
+  ],
   "delete_confirm_dependents": {
     "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.",
     "scope": "dns_zone"
