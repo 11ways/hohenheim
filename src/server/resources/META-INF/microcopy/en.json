@@ -11502,6 +11502,136 @@
     "text": "Lifted by",
     "scope": "field"
   },
+  "matches": {
+    "text": "Delegation matches",
+    "scope": "dns_delegation"
+  },
+  "parent_unreachable": {
+    "text": "Parent nameservers unreachable",
+    "scope": "dns_delegation"
+  },
+  "not_delegated": {
+    "text": "Not delegated at the parent",
+    "scope": "dns_delegation"
+  },
+  "ns_stale_serial": {
+    "text": "A nameserver serves a stale serial",
+    "scope": "dns_delegation"
+  },
+  "listed_not_delegated": {
+    "text": "Listed nameserver not delegated",
+    "scope": "dns_delegation"
+  },
+  "delegated_not_listed": {
+    "text": "Delegated nameserver not listed",
+    "scope": "dns_delegation"
+  },
+  "missing_glue": {
+    "text": "Missing glue",
+    "scope": "dns_delegation"
+  },
+  "ns_unreachable": {
+    "text": "Lame delegation",
+    "scope": "dns_delegation"
+  },
+  "unprobed": {
+    "text": "Not probed yet",
+    "scope": "dns_freshness"
+  },
+  "current": {
+    "text": "Current",
+    "scope": "dns_freshness"
+  },
+  "behind": {
+    "text": "Behind",
+    "scope": "dns_freshness"
+  },
+  "stale": {
+    "text": "Stale",
+    "scope": "dns_freshness"
+  },
+  "freshness": {
+    "text": "Freshness",
+    "scope": "dns_secondaries"
+  },
+  "served_serial": {
+    "text": "Served serial",
+    "scope": "dns_secondaries"
+  },
+  "probed_at": {
+    "text": "Probed",
+    "scope": "dns_secondaries"
+  },
+  "check_health": {
+    "text": "Check health",
+    "scope": "dns_zone"
+  },
+  "check_health_hint": {
+    "text": "Compare the delegation at the parent with this zone's NS records and ask every secondary which serial it serves.",
+    "scope": "dns_zone"
+  },
+  "check_health_done": {
+    "text": "Delegation: {$verdict}. {$secondaries} secondaries probed, {$behind} behind.",
+    "scope": "dns_zone"
+  },
+  "check_health_unserved": {
+    "text": "This zone is not served or lists no NS records, so there is nothing to check.",
+    "scope": "dns_zone"
+  },
+  "dns_secondary_stale": [
+    {
+      "text": "Secondary {$peer} of zone {$origin} is stale",
+      "scope": "attention_title"
+    },
+    {
+      "text": "It serves serial {$served} while this primary serves {$serial}.",
+      "scope": "attention_detail"
+    },
+    {
+      "text": "DNS secondary stale",
+      "scope": "notification_event"
+    }
+  ],
+  "dns_delegation_broken": [
+    {
+      "text": "Delegation of zone {$origin} needs attention",
+      "scope": "attention_title"
+    },
+    {
+      "text": "DNS delegation broken",
+      "scope": "notification_event"
+    }
+  ],
+  "delegation_status": [
+    {
+      "text": "Delegation",
+      "scope": "field"
+    },
+    {
+      "text": "Worst finding of the last delegation check against the parent zone. Primary zones only.",
+      "scope": "help"
+    }
+  ],
+  "delegation_detail": [
+    {
+      "text": "Delegation findings",
+      "scope": "field"
+    },
+    {
+      "text": "One line per finding of the last delegation check.",
+      "scope": "help"
+    }
+  ],
+  "delegation_checked_at": [
+    {
+      "text": "Delegation checked",
+      "scope": "field"
+    },
+    {
+      "text": "When the delegation was last compared with the parent zone.",
+      "scope": "help"
+    }
+  ],
   "template_database_engine": {
     "text": "Engine of the managed database created for every instance made from this template.",
     "scope": "help"

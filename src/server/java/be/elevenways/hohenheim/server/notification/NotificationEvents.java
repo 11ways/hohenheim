@@ -43,7 +43,11 @@ public enum NotificationEvents {
      * not confirm. One event for both tiers: an operator subscribes to "my tenants may not
      * be isolated from each other", not to a per-runtime sweep.
      */
-    WORKLOAD_ISOLATION("workload_isolation");
+    WORKLOAD_ISOLATION("workload_isolation"),
+    /** DnsSecondaryFreshness raises this ONCE per lag, when a secondary has been behind for the stale window. */
+    DNS_SECONDARY_STALE("dns_secondary_stale"),
+    /** DnsDelegationHealth raises this when a zone's delegation verdict CHANGES into a defect, never per tick. */
+    DNS_DELEGATION_BROKEN("dns_delegation_broken");
 
     /** Every declared event token, in declaration order; DERIVED, never hand-listed. */
     public static final List<String> ALL =

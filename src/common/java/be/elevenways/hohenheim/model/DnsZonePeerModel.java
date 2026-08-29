@@ -21,6 +21,22 @@ public class DnsZonePeerModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField ZONE_ID = SCHEMA.addField(IntegerField.builder().name("zone_id").build());
     public static final IntegerField PEER_ID = SCHEMA.addField(IntegerField.builder().name("peer_id").build());
+
+    // --- Freshness of the secondary, as probed from THIS primary (DnsSecondaryFreshness) ---
+    /** The SOA serial the peer answered with at the last probe; null when it never answered. */
+    public static final IntegerField SERVED_SERIAL = SCHEMA.addField(
+        IntegerField.builder().name("served_serial").build());
+    public static final DateTimeField PROBED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("probed_at").build());
+    /** Why the last probe got no usable answer; null when the peer answered. */
+    public static final StringField PROBE_ERROR = SCHEMA.addField(
+        StringField.builder().name("probe_error").build());
+    /** First probe at which the peer was behind or silent; null while it serves our serial. */
+    public static final DateTimeField BEHIND_SINCE = SCHEMA.addField(
+        DateTimeField.builder().name("behind_since").build());
+    /** When the stale alert for the current lag went out; null once the peer caught up. */
+    public static final DateTimeField STALE_ALERTED_AT = SCHEMA.addField(
+        DateTimeField.builder().name("stale_alerted_at").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

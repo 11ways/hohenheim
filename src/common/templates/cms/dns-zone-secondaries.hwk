@@ -5,6 +5,7 @@
 {% declare links: List %}
 {% declare attachPeerTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
+{% declare timeWording: RelativeTimeWording %}
 {% declare flashMessage: Microcopy = null %}
 {% declare flashVariant: String = "default" %}
 {% declare flashDuration: Integer = 0 %}
@@ -25,12 +26,25 @@
         <pl-table-header><pl-table-row>
             <pl-table-head>{{ t("peer", scope: "dns_secondaries") }}</pl-table-head>
             <pl-table-head>{{ t("transfer_host", scope: "dns_secondaries") }}</pl-table-head>
+            <pl-table-head>{{ t("freshness", scope: "dns_secondaries") }}</pl-table-head>
+            <pl-table-head>{{ t("served_serial", scope: "dns_secondaries") }}</pl-table-head>
+            <pl-table-head>{{ t("probed_at", scope: "dns_secondaries") }}</pl-table-head>
         </pl-table-row></pl-table-header>
         <pl-table-body>
             {% each links as index, link %}
             <pl-table-row>
                 <pl-table-cell><a use:Zenit.route={% link.get("editTarget") %}>{{ link.get("peerName") }}</a></pl-table-cell>
                 <pl-table-cell><code>{{ link.get("transferHost") }}</code></pl-table-cell>
+                <pl-table-cell>
+                    <pl-badge variant={% link.get("freshnessVariant") %}>{{ link.get("freshnessLabel") }}</pl-badge>
+                    {% if link.get("probeError") != "" %}<small>{{ link.get("probeError") }}</small>{% /if %}
+                </pl-table-cell>
+                <pl-table-cell><code>{{ link.get("servedSerial") }}</code></pl-table-cell>
+                <pl-table-cell>
+                    {% if link.get("probedAtIso") != "" %}
+                    <pl-relative-time datetime={% link.get("probedAtIso") %} wording={% timeWording %} title={% link.get("probedAtIso") %}></pl-relative-time>
+                    {% /if %}
+                </pl-table-cell>
             </pl-table-row>
             {% /each %}
         </pl-table-body>

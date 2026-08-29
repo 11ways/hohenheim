@@ -59,12 +59,32 @@ class DnsZoneTransferSurfaceTest extends HohenheimTestBase {
         for (ResourceFieldBinding binding : resource.fieldBindings()) {
             bound.put(binding.path(), binding.access());
         }
+        List<String> delegation = List.of(DnsZoneModel.DELEGATION_STATUS.getName(),
+            DnsZoneModel.DELEGATION_CHECKED_AT.getName(),
+            DnsZoneModel.DELEGATION_DETAIL.getName());
         assertThat(bound.keySet())
             .as("step 3: the diagnostics are the bound fields")
             .containsExactlyInAnyOrder(DnsZoneModel.TRANSFER_STATUS.getName(),
                 DnsZoneModel.LAST_TRANSFER_AT.getName(),
-                DnsZoneModel.TRANSFER_MESSAGE.getName());
+                DnsZoneModel.TRANSFER_MESSAGE.getName(),
+                DnsZoneModel.DELEGATION_STATUS.getName(),
+                DnsZoneModel.DELEGATION_CHECKED_AT.getName(),
+                DnsZoneModel.DELEGATION_DETAIL.getName());
         AccessContext anonymous = AccessContext.anonymous();
+        for (String path : delegation) {
+            // The delegation trio is the mirror image: readable on a primary, absent on a
+            // secondary, and absent with no record at all.
+            FieldAccess access = bound.remove(path);
+            assertThat(access.decide(anonymous, zone(DnsZoneModel.ROLE_PRIMARY)))
+                .as("step 3: '" + path + "' is readable on a primary, never editable")
+                .isEqualTo(FieldAccess.Decision.READONLY);
+            assertThat(access.decide(anonymous, zone(DnsZoneModel.ROLE_SECONDARY)))
+                .as("step 3: '" + path + "' is absent on a secondary")
+                .isEqualTo(FieldAccess.Decision.HIDDEN);
+            assertThat(access.decide(anonymous))
+                .as("step 3: '" + path + "' is absent with no record at all")
+                .isEqualTo(FieldAccess.Decision.HIDDEN);
+        }
         for (Map.Entry<String, FieldAccess> entry : bound.entrySet()) {
             assertThat(entry.getValue().decide(anonymous, zone(DnsZoneModel.ROLE_SECONDARY)))
                 .as("step 3: '" + entry.getKey() + "' is readable on a secondary, never editable")

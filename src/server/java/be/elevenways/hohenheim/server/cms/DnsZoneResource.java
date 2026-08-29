@@ -3,8 +3,13 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.dns.DelegationCheck;
+import be.elevenways.hohenheim.server.dns.DnsDelegationHealth;
 import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.dns.DnsSecondaryFreshness;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.server.dns.SystemDelegationLookup;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -83,6 +88,11 @@ public final class DnsZoneResource extends RowResource {
         .add(DnsZoneModel.TRANSFER_STATUS)
         .add(DnsZoneModel.LAST_TRANSFER_AT)
         .add(DnsZoneModel.TRANSFER_MESSAGE)
+        // Delegation diagnostics: written by the delegation check, read-only here and
+        // hidden entirely on a secondary zone (the mirror image of the transfer trio).
+        .add(DnsZoneModel.DELEGATION_STATUS)
+        .add(DnsZoneModel.DELEGATION_CHECKED_AT)
+        .add(DnsZoneModel.DELEGATION_DETAIL)
         // A zone is its origin, its role and who answers for it. The SOA timers have
         // working defaults and the replication diagnostics are read-only output, so both
         // fold -- and on a primary zone the diagnostics are hidden entirely, which simply
@@ -95,7 +105,10 @@ public final class DnsZoneResource extends RowResource {
             DnsZoneModel.SOA_EXPIRE.getName(),
             DnsZoneModel.TRANSFER_STATUS.getName(),
             DnsZoneModel.LAST_TRANSFER_AT.getName(),
-            DnsZoneModel.TRANSFER_MESSAGE.getName()))
+            DnsZoneModel.TRANSFER_MESSAGE.getName(),
+            DnsZoneModel.DELEGATION_STATUS.getName(),
+            DnsZoneModel.DELEGATION_CHECKED_AT.getName(),
+            DnsZoneModel.DELEGATION_DETAIL.getName()))
         .build();
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
@@ -105,6 +118,7 @@ public final class DnsZoneResource extends RowResource {
         .column(ColumnSpec.fromField(DnsZoneModel.ROLE).build())
         .column(ColumnSpec.fromField(DnsZoneModel.SERIAL).build())
         .column(ColumnSpec.fromField(DnsZoneModel.TRANSFER_STATUS).build())
+        .column(ColumnSpec.fromField(DnsZoneModel.DELEGATION_STATUS).build())
         .column(ColumnSpec.virtual("record_count", Microcopy.of("record_count")
             .withFilter("scope", "dns_zone")).build())
         .filter(FilterSpec.forField(DnsZoneModel.ORIGIN, FilterSpec.Kind.TEXT)
@@ -175,7 +189,39 @@ public final class DnsZoneResource extends RowResource {
             .icon(Icon.of("list-ul"))
             .url(row -> new Uri(recordsUrl(row)))
             .build());
+        actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "check_dns_health"))
+            .label(Microcopy.of("check_health").withFilter("scope", "dns_zone"))
+            .description(Microcopy.of("check_health_hint").withFilter("scope", "dns_zone"))
+            .icon(Icon.of("stethoscope"))
+            .visibleFor((row, ctx) -> !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(row)))
+            .handler((row, ctx) -> checkHealth(row))
+            .build());
         return actions;
+    }
+
+    /**
+     * The on-demand run of what the two DNS health tasks do on their schedule: the
+     * delegation check against the parent and one SOA probe per linked secondary.
+     */
+    private static @NonNull CmsActionResult checkHealth(@NonNull Row zone) {
+        DelegationCheck.Report report = DnsDelegationHealth.check(zone,
+            new DelegationCheck(SystemDelegationLookup.INSTANCE));
+        List<DnsSecondaryFreshness.Outcome> probed = DnsSecondaryFreshness.probeZone(zone);
+        int behind = 0;
+        for (DnsSecondaryFreshness.Outcome outcome : probed) {
+            if (!outcome.current()) {
+                behind++;
+            }
+        }
+        if (report == null) {
+            return CmsActionResult.errorToast(
+                Microcopy.of("check_health_unserved").withFilter("scope", "dns_zone"));
+        }
+        return CmsActionResult.refreshWithToast(
+            Microcopy.of("check_health_done").withFilter("scope", "dns_zone")
+                .withArg("verdict", report.verdict().label())
+                .withArg("secondaries", probed.size())
+                .withArg("behind", behind));
     }
 
     private static @NonNull String recordsUrl(@NonNull Row row) {
@@ -255,10 +301,18 @@ public final class DnsZoneResource extends RowResource {
             record instanceof Row zone && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))
                 ? FieldAccess.Decision.READONLY
                 : FieldAccess.Decision.HIDDEN);
+        // The mirror image: a secondary's delegation is judged where it is owned.
+        FieldAccess primaryOnly = FieldAccess.customRecordAware((ctx, record) ->
+            record instanceof Row zone && !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))
+                ? FieldAccess.Decision.READONLY
+                : FieldAccess.Decision.HIDDEN);
         return List.of(
             ResourceFieldBinding.of(DnsZoneModel.TRANSFER_STATUS.getName(), secondaryOnly),
             ResourceFieldBinding.of(DnsZoneModel.LAST_TRANSFER_AT.getName(), secondaryOnly),
-            ResourceFieldBinding.of(DnsZoneModel.TRANSFER_MESSAGE.getName(), secondaryOnly));
+            ResourceFieldBinding.of(DnsZoneModel.TRANSFER_MESSAGE.getName(), secondaryOnly),
+            ResourceFieldBinding.of(DnsZoneModel.DELEGATION_STATUS.getName(), primaryOnly),
+            ResourceFieldBinding.of(DnsZoneModel.DELEGATION_CHECKED_AT.getName(), primaryOnly),
+            ResourceFieldBinding.of(DnsZoneModel.DELEGATION_DETAIL.getName(), primaryOnly));
     }
 
     @Override
@@ -267,6 +321,11 @@ public final class DnsZoneResource extends RowResource {
         // null cell renders blank rather than as a badge.
         if (DnsZoneModel.TRANSFER_STATUS.getName().equals(column.name())
             && !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(row))) {
+            return null;
+        }
+        // And a secondary's delegation is its primary's business.
+        if (DnsZoneModel.DELEGATION_STATUS.getName().equals(column.name())
+            && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(row))) {
             return null;
         }
         if ("record_count".equals(column.name())) {

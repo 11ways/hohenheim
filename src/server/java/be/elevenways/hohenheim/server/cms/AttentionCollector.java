@@ -19,6 +19,11 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
+import be.elevenways.hohenheim.dns.DelegationVerdict;
+import be.elevenways.hohenheim.model.DnsPeerModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.DnsZonePeerModel;
+import be.elevenways.hohenheim.server.dns.DnsSecondaryFreshness;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
@@ -479,6 +484,61 @@ public final class AttentionCollector {
                     copy("dns_zone_no_ns", "attention_detail"),
                     CmsRoutes.subpage(ADMIN, "dns-zones", zone.getZoneId(), "records")));
             }
+        }
+        staleDnsSecondaries(items);
+        brokenDnsDelegations(items);
+    }
+
+    /**
+     * A linked secondary that has served an old serial, or nothing, for longer than the
+     * stale window -- read off the link rows the probe task writes, never probed here.
+     * Public so a test can prove the projection directly.
+     */
+    public static void staleDnsSecondaries(List<AttentionItem> items) {
+        DnsZoneModel zones = Models.get(DnsZoneModel.class);
+        DnsPeerModel peers = Models.get(DnsPeerModel.class);
+        for (Row link : Models.get(DnsZonePeerModel.class).find().all()) {
+            if (!DnsSecondaryFreshness.isStale(link)) {
+                continue;
+            }
+            Integer zoneId = link.get(DnsZonePeerModel.ZONE_ID);
+            Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
+            Row zone = zoneId != null ? zones.findById(zoneId) : null;
+            Row peer = peerId != null ? peers.findById(peerId) : null;
+            if (zone == null || !Boolean.TRUE.equals(zone.get(DnsZoneModel.ENABLED))) {
+                continue;
+            }
+            String error = link.get(DnsZonePeerModel.PROBE_ERROR);
+            Integer served = link.get(DnsZonePeerModel.SERVED_SERIAL);
+            Microcopy detail = error != null
+                ? literal(error)
+                : copy("dns_secondary_stale", "attention_detail",
+                    "served", served != null ? served : 0,
+                    "serial", zone.get(DnsZoneModel.SERIAL) != null ? zone.get(DnsZoneModel.SERIAL) : 0);
+            items.add(item("warning", "handshake",
+                copy("dns_secondary_stale", "attention_title",
+                    "peer", peer != null ? String.valueOf(peer.get(DnsPeerModel.NAME)) : "#" + peerId,
+                    "origin", String.valueOf(zone.get(DnsZoneModel.ORIGIN))),
+                detail,
+                CmsRoutes.subpage(ADMIN, "dns-zones", zoneId, "secondaries")));
+        }
+    }
+
+    /**
+     * A primary zone whose last delegation check ended in a verdict that carries a
+     * severity; the verdict's own label is the detail. Public so a test can prove it.
+     */
+    public static void brokenDnsDelegations(List<AttentionItem> items) {
+        for (Row zone : Models.get(DnsZoneModel.class).findEnabled()) {
+            DelegationVerdict verdict = DelegationVerdict.forToken(zone.get(DnsZoneModel.DELEGATION_STATUS));
+            if (verdict == null || verdict.severity() == null) {
+                continue;
+            }
+            items.add(item(verdict.severity(), verdict.icon(),
+                copy("dns_delegation_broken", "attention_title",
+                    "origin", String.valueOf(zone.get(DnsZoneModel.ORIGIN))),
+                verdict.label(),
+                CmsRoutes.detail(ADMIN, "dns-zones", zone.get(DnsZoneModel.ID))));
         }
     }
 

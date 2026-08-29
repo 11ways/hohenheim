@@ -77,6 +77,24 @@ RRset, which is adjacent to -- but not the same as -- the lame-delegation and
 missing-glue sub-items (it checks OUR zone data, not the parent's delegation).
 Genuinely absent, as stated: stale secondaries and failed ACME publishes.
 
+CORRECTED 2026-08-30: stale secondaries and lame delegations SHIPPED (M004).
+`ProbeDnsSecondaries` (every 5 minutes, DNS role) asks each linked secondary
+of every primary zone for the zone SOA over its transfer channel and records
+on the `dns_zone_peers` link what it serves (`served_serial`, `probed_at`,
+`probe_error`, `behind_since`, `stale_alerted_at`); a link behind or silent
+for longer than `DnsSecondaryFreshness.STALE_AFTER` (15 minutes, a constant)
+is a WARNING attention item and one `dns_secondary_stale` alert per lag.
+`CheckDnsDelegations` (hourly, DNS role) runs `DelegationCheck` for every
+primary zone: the parent's NS RRset and glue read with recursion off, compared
+with the apex NS rows, then every delegated server asked for the zone SOA;
+the closed verdict vocabulary is `DelegationVerdict` (matches, parent
+unreachable, not delegated, listed-not-delegated, delegated-not-listed,
+stale serial, missing glue, lame), the worst verdict plus one line per
+finding lands on `dns_zones.delegation_status/detail/checked_at`, a verdict
+with a severity is an attention item, and the `dns_delegation_broken` alert
+fires only when the verdict CHANGES. The zone row action "Check health" runs
+both on demand. Still absent: failed ACME publishes.
+
 Hohenheim can become the authoritative DNS service for zones it manages. This
 removes the runtime dependency on a hosted DNS control panel and gives ACME
 DNS-01 a first-party TXT publisher, but it does not replace the domain
