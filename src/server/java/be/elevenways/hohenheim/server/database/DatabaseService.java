@@ -117,15 +117,15 @@ public class DatabaseService extends DatasourceScoped {
                                              String user, String password, String database,
                                              boolean ephemeral, String serverName,
                                              ResourceLimits limits) throws IOException {
-        insertRecord(name, engine, image, user, password, database, ephemeral,
+        Row created = insertRecord(name, engine, image, user, password, database, ephemeral,
             serverName, limits, STATUS_PROVISIONING);
+        int recordId = created.get(DatabaseModel.ID);
         try {
-            ManagedDatabase.Connection connection = provisionRuntime(name, engine, user,
-                password, database, limits);
-            setStatus(name, STATUS_ACTIVE);
+            ManagedDatabase.Connection connection = provisionRuntime(created);
+            setStatus(recordId, STATUS_ACTIVE, null);
             return connection;
         } catch (IOException e) {
-            setStatus(name, STATUS_FAILED);
+            setStatus(recordId, STATUS_FAILED, e.getMessage());
             throw e;
         }
     }
@@ -138,12 +138,14 @@ public class DatabaseService extends DatasourceScoped {
      * re-allocates its published port, so the port is re-observed AFTER the joins and
      * the returned connection carries the final number.
      */
-    private ManagedDatabase.Connection provisionRuntime(String name, ManagedDatabase.Engine engine,
-                                                        String user, String password,
-                                                        String database, ResourceLimits limits)
-            throws IOException {
-        Row row = require(name);
+    private ManagedDatabase.Connection provisionRuntime(Row row) throws IOException {
         Integer recordId = row.get(DatabaseModel.ID);
+        ManagedDatabase.Engine engine = engineOf(row);
+        String user = row.get(DatabaseModel.DB_USER);
+        String password = row.get(DatabaseModel.DB_PASSWORD);
+        String database = row.get(DatabaseModel.DB_NAME);
+        ResourceLimits limits = ResourceLimits.of(row.get(DatabaseModel.MEMORY_LIMIT_MB),
+            row.get(DatabaseModel.CPU_LIMIT));
         int port = scoped(() -> DatabaseInstances.deploy(row, limits));
         // Every attached consumer rejoins -- an application's serving release included,
         // which InstanceDatabaseNetworks resolves off the owning record. A rejoin can move
@@ -219,15 +221,18 @@ public class DatabaseService extends DatasourceScoped {
                            String serverName, ResourceLimits limits) {
         Row created = insertRecord(name, engine, image, user, password, database, ephemeral,
             serverName, limits, STATUS_PROVISIONING);
-        PROVISION_EXECUTOR.submit(() -> {
-            try {
-                provisionRuntime(name, engine, user, password, database, limits);
-                setStatus(name, STATUS_ACTIVE);
-            } catch (Exception e) {
-                setStatus(name, STATUS_FAILED);
-                Blast.log("DB: provisioning failed for", name, "-", e.getMessage());
-            }
-        });
+        int recordId = created.get(DatabaseModel.ID);
+        // AIDEV-NOTE: scheduled AFTER COMMIT, by id. The CMS create submit runs
+        // persistRow inside the resource's mutation transaction (every create does,
+        // unrestricted admins included), so a pool job submitted from here used to read
+        // the row on its own connection BEFORE the request thread committed: "No managed
+        // database named ..." 100 ms after a successful create, and the status stamp
+        // that followed found nothing to stamp either, which is how the record stayed
+        // "Provisioning" forever with no container and no error (F4, 2026-08-29).
+        // Outside a transaction afterCommit runs the hook at once, so the tests' and
+        // TenantDatabases' bare-call shape is unchanged.
+        exec(() -> model().getResolvedDatasource().afterCommit(
+            () -> provisionInBackground(recordId)));
         return created;
     }
 
@@ -286,26 +291,43 @@ public class DatabaseService extends DatasourceScoped {
      * its status to active or failed. The half of {@link #createAsync} that talks to the
      * daemon, for callers ({@link TenantDatabases}) that persisted the record and reserved
      * its engine instance row themselves and only owe the container work.
+     *
+     * @param recordId the COMMITTED record; everything the container needs (engine,
+     *                 credentials, limits) is read off the row on the pool thread
      */
-    public void provisionInBackground(String name, ManagedDatabase.Engine engine, String user,
-                                      String password, String database, ResourceLimits limits) {
+    public void provisionInBackground(int recordId) {
         PROVISION_EXECUTOR.submit(() -> {
+            Row row = query(() -> model().findById(recordId));
+            if (row == null) {
+                // The one shape left that can miss: the record was committed and then
+                // deleted before the pool got to it. Loud, never a silent no-op.
+                Blast.log("DB: provisioning skipped, database record", recordId,
+                    "is gone before its container was provisioned");
+                return;
+            }
+            String name = row.get(DatabaseModel.NAME);
             try {
-                provisionRuntime(name, engine, user, password, database, limits);
-                setStatus(name, STATUS_ACTIVE);
+                provisionRuntime(row);
+                setStatus(recordId, STATUS_ACTIVE, null);
             } catch (Exception e) {
-                setStatus(name, STATUS_FAILED);
-                Blast.log("DB: provisioning failed for", name, "-", e.getMessage());
+                // TERMINAL and visible: the status is what the list badge, the detail
+                // page and AttentionCollector.failedDatabases read; the reason rides the
+                // record so the operator learns WHY without the journal.
+                String reason = e.getMessage() != null ? e.getMessage() : e.toString();
+                setStatus(recordId, STATUS_FAILED, reason);
+                Blast.log("DB: provisioning failed for", name, "-", reason);
             }
         });
     }
 
-    private void setStatus(String name, String status) {
+    /** Stamp the provisioning outcome; a reason is stored on failure and cleared otherwise. */
+    private void setStatus(int recordId, String status, String failureReason) {
         exec(() -> {
             DatabaseModel model = model();
-            Row row = model.findByName(name);
+            Row row = model.findById(recordId);
             if (row != null) {
                 row.set(DatabaseModel.STATUS, status);
+                row.set(DatabaseModel.FAILURE_REASON, failureReason);
                 model.save(row);
             }
         });
@@ -335,7 +357,7 @@ public class DatabaseService extends DatasourceScoped {
     /** Full detail for one database, including the password (admin detail page only). */
     public record Detail(String name, String engine, String image, String database, String user,
                          String password, boolean ephemeral, String server, String status,
-                         boolean running, ContainerState containerState,
+                         String failureReason, boolean running, ContainerState containerState,
                          Integer port, WorkloadLiveness liveness) {
 
         /** The container runs but the kernel killed the engine inside it. */
@@ -368,6 +390,7 @@ public class DatabaseService extends DatasourceScoped {
             Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL)),
             serverOf(row),
             statusOf(row),
+            row.get(DatabaseModel.FAILURE_REASON),
             live.running(),
             live.state(),
             live.port(),
@@ -517,7 +540,9 @@ public class DatabaseService extends DatasourceScoped {
                     return null;
                 });
             } catch (IOException e) {
-                setStatus(name, STATUS_DESTROY_FAILED);
+                if (recordId != null) {
+                    setStatus(recordId, STATUS_DESTROY_FAILED, e.getMessage());
+                }
                 throw new IOException("Destroy of '" + name + "' could not verify its teardown"
                     + " (record kept): " + e.getMessage(), e);
             }

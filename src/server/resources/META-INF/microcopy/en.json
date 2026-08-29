@@ -20,7 +20,7 @@
     "scope": "violations"
   },
   "database_in_use": {
-    "text": "Database '{$name}' is attached to {$workloads}; detach it there first",
+    "text": "Database '{$name}' is attached to {$workloads}; detach it on the instance's Databases tab first",
     "scope": "violations"
   },
   "database_missing": {
@@ -1169,6 +1169,10 @@
       "scope": "instance_volume"
     },
     {
+      "text": "No attached databases",
+      "scope": "instance_database"
+    },
+    {
       "text": "No protected paths",
       "scope": "site_protected_paths"
     }
@@ -1213,6 +1217,10 @@
     {
       "text": "This instance declares no data directories yet.",
       "scope": "instance_volume"
+    },
+    {
+      "text": "No managed database injects its connection details into this instance yet.",
+      "scope": "instance_database"
     },
     {
       "text": "Add a path prefix and an access list; requests under it must pass that list on top of anything the site already requires.",
@@ -1433,6 +1441,10 @@
     "text": "Provisioning failed",
     "scope": "attention_detail"
   },
+  "provisioning_failed_reason": {
+    "text": "Provisioning failed: {$reason}",
+    "scope": "attention_detail"
+  },
   "ready": {
     "text": "Ready",
     "scope": "spamservice"
@@ -1587,6 +1599,10 @@
     {
       "text": "Status: {$status}",
       "scope": "database_tab"
+    },
+    {
+      "text": "Status",
+      "scope": "instance_database"
     },
     {
       "text": "Status",
@@ -2804,6 +2820,10 @@
   ],
   "database_name": {
     "text": "Unique name for this managed database; also names its container and volume. Lowercase letters, digits, and dashes.",
+    "scope": "help"
+  },
+  "database_failure_reason": {
+    "text": "Why the last provision or destroy failed, as the host reported it. Cleared when the next attempt succeeds.",
     "scope": "help"
   },
   "db_user": [
@@ -4058,6 +4078,10 @@
   ],
   "ban_reason": {
     "text": "Reason",
+    "scope": "field"
+  },
+  "failure_reason": {
+    "text": "Failure reason",
     "scope": "field"
   },
   "ban_source": {
@@ -5330,6 +5354,10 @@
   },
   "instance_destroy_failed": {
     "text": "Destroy of {$name} failed: {$reason}. The record is kept; retry once the host is reachable.",
+    "scope": "violations"
+  },
+  "instance_data_destroy_failed": {
+    "text": "The data of {$name} could not be removed: {$reason}. The volumes the host still holds are reported by the reconciler; retry once it is reachable.",
     "scope": "violations"
   },
   "quota_reached": {
@@ -6677,6 +6705,10 @@
     {
       "text": "Add volume",
       "scope": "instance_volume"
+    },
+    {
+      "text": "Attach database",
+      "scope": "instance_database"
     }
   ],
   "run_now": {
@@ -8832,6 +8864,10 @@
       "scope": "instance_volume"
     },
     {
+      "text": "{$name} - Databases",
+      "scope": "instance_database"
+    },
+    {
       "text": "{$name} - Deployments",
       "scope": "instance_deployments"
     },
@@ -8986,6 +9022,10 @@
     {
       "text": "This permanently deletes the volume's directory on the host and everything in it.",
       "scope": "instance_volume"
+    },
+    {
+      "text": "Detach '{$database}' from '{$instance}'? The workload can no longer reach the database as soon as you confirm, and loses its {$prefix}_* connection variables at its next deploy.",
+      "scope": "instance_database"
     }
   ],
   "probe_now": {
@@ -10573,7 +10613,7 @@
     "scope": "instance"
   },
   "delete_with_data_confirm": {
-    "text": "This removes the container of '{$name}' AND every volume it owns. The files are gone for good. Type the name to confirm.",
+    "text": "This removes the container of '{$name}', every named volume it owns and every host directory mounted into it. The files are gone for good. Type the name to confirm.",
     "scope": "instance"
   },
   "deleted_with_data_toast": {
@@ -10606,9 +10646,19 @@
     "text": "Create a site that serves this instance on a hostname",
     "scope": "instance"
   },
-  "tab_hint": {
-    "text": "Each volume is a directory on the host, mounted into the container at the path you choose. Changes apply at the next deploy.",
-    "scope": "instance_volume"
+  "tab_hint": [
+    {
+      "text": "Each volume is a directory on the host, mounted into the container at the path you choose. Changes apply at the next deploy.",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "Each attached database injects its connection variables into the workload at deploy. Detaching revokes reachability at once; the variables disappear at the next deploy.",
+      "scope": "instance_database"
+    }
+  ],
+  "record_title": {
+    "text": "{$database} on {$instance}",
+    "scope": "instance_database"
   },
   "usage": {
     "text": "In use",
@@ -10847,7 +10897,7 @@
     "scope": "instance"
   },
   "delete_with_data_confirm_stranding": {
-    "text": "This removes the container of '{$name}' AND every volume it owns. The files are gone for good. These sites expose it and will be DISABLED: {$sites}. Type the name to confirm.",
+    "text": "This removes the container of '{$name}', every named volume it owns and every host directory mounted into it. The files are gone for good. These sites expose it and will be DISABLED: {$sites}. Type the name to confirm.",
     "scope": "instance"
   },
   "state_on": {
@@ -10972,6 +11022,10 @@
     {
       "text": "{$count} live instances were created from this template. Destroy them first, or their records would name a template that no longer exists.",
       "scope": "instance_template"
+    },
+    {
+      "text": "Database '{$name}' is attached to {$workloads}. Detach it on each instance's Databases tab first.",
+      "scope": "database"
     },
     {
       "text": "{$instances} live instances and {$templates} templates still run inside this image. Repoint them first, or their next deploy fails on an image that no longer exists.",

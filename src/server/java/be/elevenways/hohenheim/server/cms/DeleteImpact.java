@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
@@ -75,7 +76,11 @@ final class DeleteImpact {
     private static final IdentifierKey<List<Row>> ENVIRONMENTS =
         IdentifierKey.of("hohenheim", "delete_impact_environments");
 
-    /** Request-scoped snapshot of every instance, so an environment listing names its holders once. */
+    /** Request-scoped snapshot of every managed database, so an attachment listing names it once. */
+    private static final IdentifierKey<List<Row>> DATABASES =
+        IdentifierKey.of("hohenheim", "delete_impact_databases");
+
+    /** Request-scoped snapshot of every instance, so an attachment listing names its workload once. */
     private static final IdentifierKey<List<Row>> INSTANCES =
         IdentifierKey.of("hohenheim", "delete_impact_instances");
 
@@ -184,6 +189,32 @@ final class DeleteImpact {
         for (Row environment : environments()) {
             if (environmentId.equals(environment.get(EnvironmentModel.ID))) {
                 return environment.get(EnvironmentModel.NAME);
+            }
+        }
+        return null;
+    }
+
+    /** @return the managed database's name, or null when the reference is absent or dangling */
+    static @Nullable String databaseNameOf(@Nullable Integer databaseId) {
+        if (databaseId == null) {
+            return null;
+        }
+        for (Row database : databases()) {
+            if (databaseId.equals(database.get(DatabaseModel.ID))) {
+                return database.get(DatabaseModel.NAME);
+            }
+        }
+        return null;
+    }
+
+    /** @return the instance's name, or null when the reference is absent or dangling */
+    static @Nullable String instanceNameOf(@Nullable Integer instanceId) {
+        if (instanceId == null) {
+            return null;
+        }
+        for (Row instance : instances()) {
+            if (instanceId.equals(instance.get(InstanceModel.ID))) {
+                return instance.get(InstanceModel.NAME);
             }
         }
         return null;
@@ -411,7 +442,11 @@ final class DeleteImpact {
         return snapshot(ENVIRONMENTS, () -> Models.get(EnvironmentModel.class).find().all());
     }
 
-    /** Soft-deleted instances included; environment usage filters them out itself. */
+    private static @NonNull List<Row> databases() {
+        return snapshot(DATABASES, () -> Models.get(DatabaseModel.class).find().all());
+    }
+
+    /** Soft-deleted instances included: an attachment to a destroyed workload still names it. */
     private static @NonNull List<Row> instances() {
         return snapshot(INSTANCES, () -> Models.get(InstanceModel.class).find().withTrashed().all());
     }

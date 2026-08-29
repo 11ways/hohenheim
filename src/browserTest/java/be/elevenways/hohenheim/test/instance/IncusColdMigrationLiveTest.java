@@ -6,8 +6,11 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
+import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
+import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -156,11 +159,27 @@ class IncusColdMigrationLiveTest {
                 int backupId = offHostBackup(vmId, targetDir);
                 exec(remoteA, handle, "echo v2 > /root/marker && sync");
 
-                // 3. The peer container runs on the DESTINATION host (the negative
-                //    probe's vantage point).
-                assertThat(service.deploy(peerId).running())
-                    .as("step 3: the peer runs on " + HOST_B)
-                    .isTrue();
+                // 3. The DESTINATION has never placed one of this controller's
+                //    workloads: it carries NO isolation ACL for our token (only the
+                //    presence marker the enrolment sweep stamped). This is the exact
+                //    state a fresh second host is in, and the state the earlier passes
+                //    of this class never exercised -- the peer used to deploy on the
+                //    destination BEFORE the drain, which created the ACL there through
+                //    the ordinary create() path. Own token only, so a foreign ACL is
+                //    never touched.
+                IncusClient daemonB = new ServerService().incusClientFor(HOST_B);
+                String isolationAcl = IncusNetworkPolicy.aclName();
+                try {
+                    if (daemonB.networkAcl(isolationAcl) != null) {
+                        daemonB.deleteNetworkAcl(isolationAcl);
+                    }
+                    assertThat(daemonB.networkAcl(isolationAcl))
+                        .as("step 3: " + HOST_B + " starts WITHOUT this controller's"
+                            + " isolation ACL " + isolationAcl)
+                        .isNull();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
 
                 // 4. Cordon the source, then DRAIN it through the cold-migration
                 //    policy: the one live record on it moves, the drain is complete.
@@ -209,6 +228,26 @@ class IncusColdMigrationLiveTest {
                 assertThat(query(remoteB, "/1.0/instances/" + handle + "/snapshots"))
                     .as("step 7: the pool-resident snapshot travelled with the workload")
                     .contains("mig-snap");
+                try {
+                    assertThat(daemonB.networkAcl(isolationAcl))
+                        .as("step 7: the import ensured this controller's isolation ACL"
+                            + " on " + HOST_B + " itself (nothing else placed one)")
+                        .isNotNull();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                // The peer container joins the DESTINATION only now (the negative
+                // probe's vantage point), so nothing but the migration could have
+                // created the ACL asserted above.
+                assertThat(service.deploy(peerId).running())
+                    .as("step 7: the peer runs on " + HOST_B)
+                    .isTrue();
+                // A container that was started seconds ago is still acquiring its lease
+                // and routes; the probes below measure POLICY, so they wait for a NIC
+                // that demonstrably works first (an address, then the internet).
+                addressOf(remoteB, peerHandle);
+                awaitTrue("peer egress to 1.1.1.1 on " + HOST_B, 120_000,
+                    () -> canReach(remoteB, peerHandle, "1.1.1.1"));
 
                 // 8. KERNEL truth on the destination: nft names the LIVE tap of the
                 //    migrated NIC with reject rules -- read on nightstrom's kernel,

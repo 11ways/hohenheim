@@ -609,7 +609,12 @@ public final class InstanceSnapshots {
 
     /** Logical volume name to container path, from the instance settings. */
     static @NonNull Map<String, String> logicalVolumes(@NonNull Resolved resolved) {
-        Object settings = resolved.row().get(InstanceModel.SETTINGS);
+        return logicalVolumes(resolved.row());
+    }
+
+    /** The declared named volumes of a record that may already be soft-deleted. */
+    static @NonNull Map<String, String> logicalVolumes(@NonNull Row row) {
+        Object settings = row.get(InstanceModel.SETTINGS);
         Object declared = settings instanceof Map<?, ?> map ? map.get("volumes") : null;
         Map<String, String> volumes = new LinkedHashMap<>();
         EnvVars.toMap(declared).forEach((name, path) -> {

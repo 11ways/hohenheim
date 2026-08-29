@@ -145,18 +145,27 @@ public final class InstanceDatabaseLinks {
      * names nobody.
      */
     public static @NonNull List<String> liveInstanceNames(int databaseId) {
-        InstanceModel instances = Models.get(InstanceModel.class);
         List<String> names = new ArrayList<>();
+        for (Row instance : liveInstances(databaseId)) {
+            names.add(String.valueOf((Object) instance.get(InstanceModel.NAME)));
+        }
+        return names;
+    }
+
+    /** The live (non-deleted) instance ROWS a database is attached to, in link order. */
+    public static @NonNull List<Row> liveInstances(int databaseId) {
+        InstanceModel instances = Models.get(InstanceModel.class);
+        List<Row> live = new ArrayList<>();
         for (Row link : Models.get(InstanceDatabaseModel.class).findByDatabaseId(databaseId)) {
             Row instance = instances.find()
                 .where(InstanceModel.ID.eq(link.get(InstanceDatabaseModel.INSTANCE_ID)))
                 .where(InstanceModel.DELETED_AT.isNull())
                 .first();
             if (instance != null) {
-                names.add(String.valueOf((Object) instance.get(InstanceModel.NAME)));
+                live.add(instance);
             }
         }
-        return names;
+        return live;
     }
 
     /**

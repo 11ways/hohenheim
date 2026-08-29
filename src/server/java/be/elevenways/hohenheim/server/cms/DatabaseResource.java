@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.Secrets;
@@ -17,6 +18,7 @@ import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -37,6 +39,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
@@ -72,6 +75,7 @@ public class DatabaseResource extends RowResource {
         .add(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID)
             .creatable(false).build())
         .add(DatabaseModel.STATUS)
+        .add(DatabaseModel.FAILURE_REASON)
         // A managed database is an engine, a database name and its credentials. The image
         // override, the ephemeral flag and the resource ceilings all have defaults.
         .section(FormSection.advanced(
@@ -141,7 +145,18 @@ public class DatabaseResource extends RowResource {
     @Override
     public @NonNull List<ResourceFieldBinding> fieldBindings() {
         // STATUS is service-owned even on create.
-        return List.of(ResourceFieldBinding.of(DatabaseModel.STATUS.getName(), FieldAccess.alwaysReadonly()));
+        return List.of(
+            ResourceFieldBinding.of(DatabaseModel.STATUS.getName(), FieldAccess.alwaysReadonly()),
+            // The reason is shown ONLY on a record that carries one: the create form
+            // (null record) and a healthy record never render an empty failure box.
+            ResourceFieldBinding.of(DatabaseModel.FAILURE_REASON.getName(),
+                FieldAccess.customRecordAware((ctx, record) ->
+                    record instanceof Row row && hasText(row.get(DatabaseModel.FAILURE_REASON))
+                        ? FieldAccess.Decision.READONLY : FieldAccess.Decision.HIDDEN)));
+    }
+
+    private static boolean hasText(@Nullable Object value) {
+        return value != null && !String.valueOf(value).isBlank();
     }
 
     @Override
@@ -222,12 +237,7 @@ public class DatabaseResource extends RowResource {
     public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
         String name = existing.get(DatabaseModel.NAME);
         Integer id = existing.get(DatabaseModel.ID);
-        List<String> attachedTo = new ArrayList<>(InstanceDatabaseLinks.liveInstanceNames(id));
-        if (!attachedTo.isEmpty()) {
-            throw Violations.ofForm(CmsSupport.violationText("database_in_use")
-                .withArg("name", name)
-                .withArg("workloads", String.join(", ", attachedTo)));
-        }
+        refuseWhileAttached(name, id);
         try {
             this.databaseService.destroy(name, true);
         } catch (IOException e) {
@@ -239,6 +249,54 @@ public class DatabaseResource extends RowResource {
         }
         // Links to soft-deleted owners are debris once the database is gone: the row delete
         // inside destroy takes them along through the model funnel (InstanceDatabaseLinks).
+    }
+
+    /**
+     * A database a live workload still holds is offered DEAD, naming the workloads and
+     * the page each is detached on -- the row-action doctrine every other in-use refusal
+     * here follows (host, template, runtime image). {@link #deleteRow} refuses with the
+     * same facts, so the dead button is never the gate.
+     */
+    @Override
+    public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
+                                                       @NonNull AccessContext accessContext) {
+        String workloads = attachedWorkloads(record.get(DatabaseModel.ID));
+        if (!workloads.isEmpty()) {
+            return Microcopy.of("delete_in_use").withFilter("scope", "database")
+                .withArg("name", String.valueOf((Object) record.get(DatabaseModel.NAME)))
+                .withArg("workloads", workloads);
+        }
+        return super.deleteUnavailableReason(record, accessContext);
+    }
+
+    /** @throws Violations {@code database_in_use} naming the workloads and their detach page */
+    private static void refuseWhileAttached(@Nullable String name, @Nullable Integer id) {
+        String workloads = attachedWorkloads(id);
+        if (!workloads.isEmpty()) {
+            throw Violations.ofForm(CmsSupport.violationText("database_in_use")
+                .withArg("name", name)
+                .withArg("workloads", workloads));
+        }
+    }
+
+    /**
+     * The live workloads attached to a database, each with the URL of the instance's
+     * Databases tab (the page a detach happens on), joined for a sentence; empty when
+     * nothing holds it.
+     */
+    private static @NonNull String attachedWorkloads(@Nullable Integer databaseId) {
+        if (databaseId == null) {
+            return "";
+        }
+        Conduit conduit = RouteScope.currentConduit();
+        String panel = conduit != null ? CmsSupport.panelSlug(conduit) : "admin";
+        List<String> workloads = new ArrayList<>();
+        for (Row instance : InstanceDatabaseLinks.liveInstances(databaseId)) {
+            workloads.add(instance.get(InstanceModel.NAME) + " ("
+                + CmsRoutes.subpage(panel, "instances", instance.get(InstanceModel.ID),
+                    InstanceDatabasesPage.SLUG).toUrl() + ")");
+        }
+        return DeleteImpact.join(workloads);
     }
 
     @Override
@@ -290,12 +348,7 @@ public class DatabaseResource extends RowResource {
                 // The same in-use refusal deleteRow makes, asked BEFORE the engine instance
                 // is abandoned: the funnel would refuse the row delete anyway, but by then
                 // the abandon has already run.
-                List<String> attachedTo = InstanceDatabaseLinks.liveInstanceNames(id);
-                if (!attachedTo.isEmpty()) {
-                    throw Violations.ofForm(CmsSupport.violationText("database_in_use")
-                        .withArg("name", name)
-                        .withArg("workloads", String.join(", ", attachedTo)));
-                }
+                refuseWhileAttached(name, id);
                 ActivityLog.withAction(ActivityLog.ACTION_DELETE, "force-destroy",
                     () -> this.databaseService.forceDestroyRecord(name));
                 return CmsActionResult.refreshWithToast(

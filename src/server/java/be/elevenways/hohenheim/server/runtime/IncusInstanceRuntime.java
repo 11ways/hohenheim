@@ -992,6 +992,21 @@ public final class IncusInstanceRuntime
     @Override
     public void importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
             throws IOException {
+        // AIDEV-NOTE: the isolation ACL is ensured BEFORE the import, on THIS daemon. The
+        // archive carries the source's device config, and its eth0 names this
+        // controller's isolation ACL (`security.acls`); the daemon validates every
+        // device while creating the instance record, so a destination that has never
+        // placed one of our workloads refused the whole import with `Network ACL
+        // "hohenheim-<token>-isolation" does not exist` (F1, cold migration daystrom ->
+        // nightstrom, 2026-08-29). The live proof never caught it because its peer
+        // container deployed on the destination first, which created the ACL there
+        // through the ordinary create() path. This is the SAME ensure the source used
+        // (conditional write, verified read-back), never a copy of the source's object
+        // -- and doing it here is strictly safer than after the import: a conditional
+        // UPDATE of a stale ACL retriggers every referencing NIC, and before the import
+        // the clone that could carry a duplicate MAC does not exist yet.
+        this.policy.ensureIsolationAcl();
+        stampPresence();
         this.incus.importInstance(archive, spec.handle());
         // Re-identification is part of the import contract: the tarball carries the
         // SOURCE instance's user.* labels (until they are replaced the import is
@@ -1015,20 +1030,22 @@ public final class IncusInstanceRuntime
             }
         }
         spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
-        // AIDEV-NOTE: the MAC strip is its OWN write, BEFORE ensureIsolationAcl, and the
-        // order is load-bearing. Between import and the strip the clone and its source
-        // share a MAC at the daemon, and ANY ACL write in that window makes the daemon
-        // re-trigger every referencing NIC and fail 409 on the duplicate (observed live
-        // on the source instance, not the clone). This write touches only the clone's
-        // own definition -- devices unchanged -- so it cannot trip over other instances.
+        // AIDEV-NOTE: the MAC strip is its OWN write, BEFORE the post-import
+        // ensureIsolationAcl, and the order is load-bearing. Between import and the
+        // strip the clone and its source share a MAC at the daemon, and ANY ACL write in
+        // that window makes the daemon re-trigger every referencing NIC and fail 409 on
+        // the duplicate (observed live on the source instance, not the clone). This
+        // write touches only the clone's own definition -- devices unchanged -- so it
+        // cannot trip over other instances.
         if (carriedMacs) {
             putDefinition(spec.handle(), existing, config, null);
         }
         // An imported instance re-joins the fleet's isolation exactly like a fresh one:
         // its NIC gets the verified ACL override, so a backup made before isolation
-        // existed cannot land an unisolated container.
+        // existed cannot land an unisolated container. The pre-import ensure above
+        // already converged the ACL, so this call writes nothing and is the read-back
+        // VERIFICATION that the daemon still carries every tenant-range reject.
         this.policy.ensureIsolationAcl();
-        stampPresence();
         replaceDefinition(spec.handle(), existing, config,
             this.policy.nicDevice(managedNetworkName(), this.egress, spec.networkLimitMbit()));
         verifyIsolated(spec);

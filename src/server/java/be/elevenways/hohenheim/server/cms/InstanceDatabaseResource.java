@@ -14,6 +14,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
@@ -87,6 +88,43 @@ public class InstanceDatabaseResource extends RowResource {
     @Override
     public @NonNull List<Field<?, ?>> searchFields() {
         return List.of(InstanceDatabaseModel.ENV_PREFIX);
+    }
+
+    /**
+     * "{database} on {instance}": the two sides ARE the record. The schema's display
+     * field is the env prefix, which titled every attachment "DB" on its page, in its
+     * breadcrumb and in its delete dialog (F7, 2026-08-29).
+     */
+    @Override
+    public @NonNull String recordTitle(@NonNull Row record) {
+        String database = DeleteImpact.databaseNameOf(record.get(InstanceDatabaseModel.DATABASE_ID));
+        String instance = DeleteImpact.instanceNameOf(record.get(InstanceDatabaseModel.INSTANCE_ID));
+        if (database == null || instance == null) {
+            return super.recordTitle(record);
+        }
+        return CmsSupport.resolvedTextOrDefault(Microcopy.of("record_title")
+            .withFilter("scope", "instance_database")
+            .withArg("database", database)
+            .withArg("instance", instance));
+    }
+
+    /**
+     * The delete dialog names BOTH sides and the consequence: reachability is revoked at
+     * the daemon on confirm, the injected variable family at the next deploy.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
+        String database = DeleteImpact.databaseNameOf(record.get(InstanceDatabaseModel.DATABASE_ID));
+        String instance = DeleteImpact.instanceNameOf(record.get(InstanceDatabaseModel.INSTANCE_ID));
+        if (database == null || instance == null) {
+            return super.deleteConfirmationFor(record);
+        }
+        return deleteConfirmation(Microcopy.of("delete_confirm")
+            .withFilter("scope", "instance_database")
+            .withArg("database", database)
+            .withArg("instance", instance)
+            .withArg("prefix", DatabaseEnvInjection.normalizedPrefix(
+                record.get(InstanceDatabaseModel.ENV_PREFIX))));
     }
 
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.DEPLOY_GROUP; }

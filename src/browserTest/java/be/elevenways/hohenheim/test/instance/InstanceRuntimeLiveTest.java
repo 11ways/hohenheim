@@ -192,6 +192,21 @@ class InstanceRuntimeLiveTest {
                 assertThat(inspectVolume(docker, volumeName))
                     .as("step 6: the data volume SURVIVES destroy (removal is a human act)")
                     .isNotNull();
+
+                // 7. DELETE WITH DATA on the already-destroyed record: the human act.
+                //    The named daemon volume goes WITH it, verified absent at the
+                //    daemon and named in the removal report -- the wording of the
+                //    dialog ("every volume it owns") used to promise exactly this while
+                //    only host-directory rows were ever removed.
+                List<String> removed = service.destroyWithData(id);
+                assertThat(removed)
+                    .as("step 7: the removal report names the named volume")
+                    .contains(volumeName);
+                assertThat(catchThrowable(() -> docker.inspectVolume(volumeName)))
+                    .as("step 7: the named volume is ABSENT at the daemon after delete"
+                        + " with data")
+                    .isInstanceOfSatisfying(DockerClient.ApiException.class,
+                        e -> assertThat(e.isNotFound()).isTrue());
             } finally {
                 cleanup(docker, handle, volumeName);
             }
