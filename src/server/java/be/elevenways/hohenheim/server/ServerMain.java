@@ -67,6 +67,10 @@ public class ServerMain {
         // flat proxy/ssl/... shape. Also captures the HohenheimRoles snapshot,
         // which every role gate below reads.
         HohenheimSettingsFiles.load();
+        // zenit-comms' own context (settings/comms.dry + COMMS__* env): the transport
+        // chains the MODULES stage builds the dispatcher from. Loaded here, not in
+        // local.dry, because a comms key there lands in the framework context and is inert.
+        HohenheimCommsSettings.load();
 
         // Upstream kinds and auth-provider types self-register through compile-time
         // discovery (BlastAutoLoadInit); nothing needs an explicit boot here since the
