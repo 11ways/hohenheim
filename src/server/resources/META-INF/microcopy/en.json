@@ -11675,5 +11675,13 @@
   "template_database_host_mismatch": {
     "text": "Database '{$name}' was placed on {$server} but the instance runs on {$instance_server}; it could never reach it",
     "scope": "violations"
+  },
+  "last_axfr": {
+    "text": "Last AXFR served",
+    "scope": "dns_secondaries"
+  },
+  "last_notify": {
+    "text": "Last NOTIFY",
+    "scope": "dns_secondaries"
   }
 }

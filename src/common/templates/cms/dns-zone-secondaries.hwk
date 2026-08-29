@@ -29,6 +29,8 @@
             <pl-table-head>{{ t("freshness", scope: "dns_secondaries") }}</pl-table-head>
             <pl-table-head>{{ t("served_serial", scope: "dns_secondaries") }}</pl-table-head>
             <pl-table-head>{{ t("probed_at", scope: "dns_secondaries") }}</pl-table-head>
+            <pl-table-head>{{ t("last_axfr", scope: "dns_secondaries") }}</pl-table-head>
+            <pl-table-head>{{ t("last_notify", scope: "dns_secondaries") }}</pl-table-head>
         </pl-table-row></pl-table-header>
         <pl-table-body>
             {% each links as index, link %}
@@ -43,6 +45,18 @@
                 <pl-table-cell>
                     {% if link.get("probedAtIso") != "" %}
                     <pl-relative-time datetime={% link.get("probedAtIso") %} wording={% timeWording %} title={% link.get("probedAtIso") %}></pl-relative-time>
+                    {% /if %}
+                </pl-table-cell>
+                <pl-table-cell>
+                    {% if link.get("axfrAtIso") != "" %}
+                    <code>{{ link.get("axfrSerial") }}</code>
+                    <pl-relative-time datetime={% link.get("axfrAtIso") %} wording={% timeWording %} title={% link.get("axfrAtIso") %}></pl-relative-time>
+                    {% /if %}
+                </pl-table-cell>
+                <pl-table-cell>
+                    {% if link.get("notifyAtIso") != "" %}
+                    <code>{{ link.get("notifyOutcome") }}</code>
+                    <pl-relative-time datetime={% link.get("notifyAtIso") %} wording={% timeWording %} title={% link.get("notifyAtIso") %}></pl-relative-time>
                     {% /if %}
                 </pl-table-cell>
             </pl-table-row>

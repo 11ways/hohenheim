@@ -11675,5 +11675,13 @@
   "template_database_host_mismatch": {
     "text": "Databank '{$name}' werd op {$server} geplaatst maar de instantie draait op {$instance_server}; ze zou die nooit bereiken",
     "scope": "violations"
+  },
+  "last_axfr": {
+    "text": "Laatste AXFR geleverd",
+    "scope": "dns_secondaries"
+  },
+  "last_notify": {
+    "text": "Laatste NOTIFY",
+    "scope": "dns_secondaries"
   }
 }

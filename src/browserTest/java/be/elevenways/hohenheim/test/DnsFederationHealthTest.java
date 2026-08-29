@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.dns.AxfrResponder;
 import be.elevenways.hohenheim.server.dns.DelegationCheck;
 import be.elevenways.hohenheim.server.dns.DelegationLookup;
 import be.elevenways.hohenheim.server.dns.DnsDelegationHealth;
+import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsResponder;
 import be.elevenways.hohenheim.server.dns.DnsSecondaryFreshness;
 import be.elevenways.hohenheim.server.dns.DnsServer;
@@ -37,6 +38,8 @@ import org.xbill.DNS.NSRecord;
 import org.xbill.DNS.Name;
 import org.xbill.DNS.Record;
 import org.xbill.DNS.SOARecord;
+import org.xbill.DNS.TSIG;
+import org.xbill.DNS.ZoneTransferIn;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -58,6 +61,7 @@ class DnsFederationHealthTest {
 
     private static final String ORIGIN = "health.example";
     private static final String PARENT = "example";
+    private static final String KEY_SECRET = "c2VjcmV0LXRzaWcta2V5LWZvci1ob2hlbmhlaW0tdGVzdA==";
 
     private static DnsServer ownServer;
     private static int ownPort;
@@ -173,6 +177,34 @@ class DnsFederationHealthTest {
             assertThat(dead.get(DnsZonePeerModel.PROBE_ERROR)).as("step 5: the error is recorded").isNotBlank();
             assertThat(dead.get(DnsZonePeerModel.SERVED_SERIAL)).as("step 5: nothing served").isNull();
             assertThat(dead.get(DnsZonePeerModel.BEHIND_SINCE)).as("step 5: silence is a lag").isNotNull();
+
+            // 6. The primary's own trace: a TSIG AXFR it serves is stamped on the link of
+            //    the peer holding that key, with the serial it carried.
+            Row keyed = Models.get(DnsPeerModel.class).findById(peerId);
+            keyed.set(DnsPeerModel.TSIG_KEY_NAME, "health-key");
+            keyed.set(DnsPeerModel.TSIG_ALGORITHM, "hmac-sha256");
+            keyed.set(DnsPeerModel.TSIG_SECRET, KEY_SECRET);
+            Models.get(DnsPeerModel.class).save(keyed);
+            ZoneTransferIn xfr = ZoneTransferIn.newAXFR(Name.fromString(ORIGIN + "."),
+                "127.0.0.1", ownPort, new TSIG(TSIG.HMAC_SHA256, "health-key.", KEY_SECRET));
+            xfr.run();
+            assertThat(xfr.getAXFR()).as("step 6: the transfer streamed").isNotEmpty();
+            link = link(linkId);
+            assertThat(link.get(DnsZonePeerModel.LAST_AXFR_AT)).as("step 6: AXFR served stamped").isNotNull();
+            assertThat(link.get(DnsZonePeerModel.LAST_AXFR_SERIAL))
+                .as("step 6: with the serial it carried").isEqualTo((int) bumped);
+            assertThat(link(deadLinkId).get(DnsZonePeerModel.LAST_AXFR_AT))
+                .as("step 6: the other peer's link is untouched").isNull();
+
+            // 7. And a NOTIFY it sends: the acked peer records the ack's rcode, the dead
+            //    one records the timeout, each on its own link.
+            new DnsNotifier().notifyZonePeersBlocking(zoneId);
+            link = link(linkId);
+            assertThat(link.get(DnsZonePeerModel.LAST_NOTIFY_AT)).as("step 7: NOTIFY stamped").isNotNull();
+            assertThat(link.get(DnsZonePeerModel.LAST_NOTIFY_OUTCOME))
+                .as("step 7: the fake secondary acks").isEqualTo("noerror");
+            assertThat(link(deadLinkId).get(DnsZonePeerModel.LAST_NOTIFY_OUTCOME))
+                .as("step 7: nobody listens on the dead port").isEqualTo("timeout");
         }
         finally {
             secondary.stop();
