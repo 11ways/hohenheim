@@ -636,3 +636,109 @@ image cache started empty.
    `tavernetomberg.be` going quiet; Phoenix stays the rollback (its process and
    Mongo are untouched) until then.
 5. Rotate the `tomberg staging` API key or let it expire (30 days).
+
+## Microcopy staged, 2026-08-30
+
+The Alchemy app merlina calls on every page render (`microcopy.elevenways.be`,
+342k requests/quarter from `2a01:4f8:a0:948c::2`), staged on robbedoes as a
+`docker_container` on `hohenheim/node-16:1`; NOT cut over. Phoenix keeps serving.
+
+Records: managed database 2 `microcopy-mongo` (`mongo:7`, db `11ways_microcopy`,
+user `microcopy`, host `local`; its container is `hohenheim-luguij0q-instance-4`),
+instance 2 `microcopy` (`hohenheim:docker_container`, image `hohenheim/node-16`
+tag `1`, command `node server.js`, container port 3000, volume `app` ->
+`/home/site` = `hohenheim-luguij0q-instance-2-vol-app`, env `ALCHEMY_ENV=live`,
+console `tty`, 512 MB), attachment 2 (prefix `DB`, so `DB_HOST/PORT/USER/PASSWORD/
+NAME/URL` + `DATABASE_URL` are injected), site 3 `Microcopy` (instance upstream),
+domain 6 `microcopy.elevenways.be` (exact, `force_ssl=false` until a certificate
+exists; domain 5 was the first, force_ssl=true, removed).
+
+Source: `/home/11ways/microcopy` on Phoenix read as `skerit` (575 MB = 325 MB
+`node_modules` + 250 MB `node_modules_old`; the app itself is 188 KB), tarred
+without both `node_modules*` and `temp/imagecache`, plus `mongodump` of
+`11ways_microcopy` with the app's own credentials (152 KB: 589 microcopies, 4
+users, 3 acl groups, 2 acl rules, 22 persistent cookies). Both restored on
+robbedoes from `/home/debian/microcopy-stage/`; the Phoenix temp dir was removed.
+Nothing on Phoenix was modified.
+
+What differs from Phoenix:
+
+- Node 16.20.2 (image) instead of 16.13.2; same major, native modules rebuilt.
+- The app listened on a UNIX socket handed over by hohenchild (`--port=<socket>`);
+  without it alchemy falls back to `settings.port` = 3000 over TCP. No `PORT` env
+  is read by alchemy 1.2.5-alpha.
+- `app/config/live/database.js` rewritten (the only app edit): prefers
+  `DATABASE_URL` as a full uri (alchemy's mongo datasource accepts `options.uri`),
+  falls back to the `DB_*` family. The uri is REQUIRED here, not a nicety: the
+  managed user is the engine's ROOT user living in the `admin` database, and the
+  injected uri carries `authSource=admin`; the host/login/password form
+  authenticates against the target db and fails with `AuthenticationFailed`.
+- Dependencies: `npm ci` refuses the 2022 lockfile under npm 8's strict peer
+  rules (`--legacy-peer-deps` needed), and `@11ways/exiv2` has no prebuilt binary
+  and needs `libexiv2-dev`, which the runtime image does not ship. Installed with
+  `npm ci --legacy-peer-deps --ignore-scripts`, then `npm rebuild mmmagic canvas
+  bcrypt sass-embedded` (canvas + bcrypt fetch prebuilts, mmmagic compiles), then
+  `node node_modules/sass-embedded/download-compiler-for-end-user.js` (its
+  postinstall fetches the dart-sass binary). exiv2 stays unbuilt: alchemy-media
+  loads it through `alchemy.use` and degrades to no EXIF extraction, which is
+  what Phoenix effectively did for a text-only app. 287 modules, 323 MB in the
+  volume, 78 MB RSS at idle (mongo 103 MB).
+- The mongodump was restored with `docker cp` + `mongorestore --drop
+  --authenticationDatabase admin` inside the database container (the panel's
+  Restore lane was not tried; the dump is a directory archive).
+
+Procedure that worked (the copy-into-volume shape from `docs/wordpress.md`):
+create the instance through the API, attach the database, deploy once (the
+container exits 1: empty volume), then a helper container `docker run --rm -v
+<volume>:/home/site -v <stage>:/src:ro hohenheim/node-16:1` copies the tree and
+installs, then `hoh power 2 restart`.
+
+Verification (2026-08-30 01:5x CEST):
+
+- Inside the container `curl -H 'Host: microcopy.elevenways.be'
+  http://127.0.0.1:3000/` -> 200, 6699 bytes, `<title>Microcopy | Eleven Ways</title>`
+  (Phoenix answers 200, 6700 bytes, same title).
+- Through robbedoes' proxy from the workstation `curl -H 'Host:
+  microcopy.elevenways.be' http://51.255.43.81/` -> 200, 6699 bytes, same title.
+  With `force_ssl=true` and no certificate the proxy answered `503 HTTPS
+  required`, which is why domain 6 carries `force_ssl=false` for now.
+- merlina's real calls replayed (`GET /api/microcopy/{key}?locales[0]=en&locales
+  [1]=en&locales[2]=fi` for `proud-partner-of`, `switch-light-dark`,
+  `skip-to-main-content`, plus `proud-partner-of?locales[0]=nl`): Phoenix and
+  robbedoes answer BYTE-IDENTICAL bodies (484/491/501/486 bytes, DRY-JSON with the
+  same ObjectIDs). The endpoint returns `null` unless the request carries either
+  a `Referer` header or the `access-key` header matching the plugin's
+  `wanted_key` (alchemy-i18n `bootstrap.js:18-22`); merlina sends the key, the
+  replay used a Referer.
+- Panel: Overview `Running`, `Status confirmed`; the Console tab renders the
+  terminal ("This workload runs in a real terminal"). `docker logs` of the tty
+  container is EMPTY (Janeway draws on the PTY's alternate screen); a plain
+  `docker exec ... node server.js` is how the boot errors above were read.
+
+Traps and product findings:
+
+- `hoh instance create ... settings.volumes.app=/home/site
+  settings.environment_variables.ALCHEMY_ENV=live` was ACCEPTED and both maps
+  landed EMPTY (`"volumes":{},"environment_variables":{}` in the row): the dotted
+  map spelling is neither the StringMapField transport nor refused as an unknown
+  key. Silent drop; the panel form's Add-row was used instead. Worth a refusal.
+- The instance row read `running` while the first container had exited 1;
+  `InstanceStatusReconciler` corrected it a minute later.
+- `hoh` reads `~/.config/hoh/config.json`, shared by every lane on the
+  workstation; drive it with `HOH_HOST`/`HOH_TOKEN` per call.
+
+### Cutover steps remaining (in order)
+
+1. Zone `elevenways.be` onto kuifje (primary; robbedoes secondary), import from
+   the Hetzner export (it carries Google MX + SPF/DKIM: the mail lines are the
+   gate), `hoh-dns-diff compare` IDENTICAL, registrar NS change, `delegation` OK.
+2. Certificate for `microcopy.elevenways.be` on robbedoes (DNS-01 through kuifje
+   once its admin channel is reachable, else HTTP-01 right after step 3), then
+   `force_ssl=true` on domain 6.
+3. Lower the TTL, flip A/AAAA of `microcopy.elevenways.be` to `51.255.43.81` /
+   `2001:41d0:305:2100::1:4b26` in the kuifje zone, `hoh-dns-diff propagate`.
+   THIS is the moment merlina's hard dependency moves: merlina calls over IPv6,
+   so the AAAA must be right, and the `access-key` it sends must still match the
+   plugin config (unchanged, copied verbatim).
+4. Watch Phoenix's access log for `microcopy.elevenways.be` going quiet; Phoenix
+   stays the rollback until then.
