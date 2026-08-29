@@ -603,3 +603,58 @@ IS the keyring on this install). The rehearsal dir and the staged jar were remov
 stray JVM. The secondary workspace was deleted afterwards. Note for the next deploy:
 `~/projects/hohenext/build-worktrees/` still registers eight detached worktrees from the
 08-23..08-27 deploys; they are not this lane's and were left alone.
+
+## Operations 2026-08-29 (catch-all + wildcard): the wildcard certificate exists
+
+No jar change; the running build is `12490d6e`. Preflight copy of the control-plane
+database in `/root/hohenheim-preflight-20260829-catchall/hohenheim.db.pre` (integrity ok).
+
+Why a site first: `CertificateAuthority.authorize` refuses any SAN no live site-domain
+row covers (`NOT_SERVED`, checked before the admin bypass), and `HostnamePatterns.covers`
+lets a `*.starfleet.life` SAN be covered only by a row that is itself a leading-`*.`
+wildcard on that base. The proxy also selects the certificate at the handshake by the
+hostname it serves, so a wildcard with no wildcard row would never be presented. The
+zone already carried a `*` A record (id 2, `104.223.42.142`), so names resolved before
+this change; they just landed on the proxy's "No site configured" 404.
+
+Created, in this order:
+
+- `/opt/hohenheim/public/catch-all/index.html` (owner `hohenheim:hohenheim`, 755/644):
+  an ASCII placeholder page ("starfleet.life -- Nothing is configured at this address
+  yet."). Sibling of `public/apex`; the rule that `public/` holds only authored content
+  still holds.
+- Site 5 `Starfleet catch-all`, upstream `hohenheim:static`, document root that path,
+  directory listing OFF, index files on, fallback file `index.html` (so every path on an
+  unclaimed subdomain renders the placeholder), enabled.
+- Site domain 7 on site 5: `*.starfleet.life`, match type `wildcard`, Exclude from Let's
+  Encrypt OFF, Force SSL OFF at creation and switched ON after issuance.
+- Certificate 4 `Starfleet catch-all`: SAN `*.starfleet.life` only (the apex and `www`
+  keep certificate 3), DNS-01 through Hosted DNS (this server), requested exactly once
+  from `/admin/certificates-request?site=5`. Journal: `ACME: account ready (global,
+  production)` 11:30:48Z, `ACME: certificate issued for *.starfleet.life` 11:30:56Z --
+  eight seconds, the validation TXT record was published and removed by the hosted zone
+  (zero TXT rows remain). Issuer Let's Encrypt YR2, valid 2026-08-29 10:32:24Z to
+  2026-11-27 10:32:23Z, `auto_renew` 1, `dns_publisher` internal.
+
+Routing precedence, proven from the host with `curl --resolve`/`Host:` against
+127.0.0.1: `visual-qa-20260829d.starfleet.life` and `foo.bar.starfleet.life/some/path`
+answer the placeholder (200); `admin.starfleet.life` still 301s to HTTPS and serves the
+panel (200); the apex answers 200. `SiteDispatcher` logged `5 exact routes, 1 wildcard
+routes` and resolves exact first (`RouteResolver`), so an exact row always beats the
+wildcard row. TLS: `openssl s_client -servername visual-qa-20260829d.starfleet.life`
+presents `CN=*.starfleet.life` with SAN `DNS:*.starfleet.life`; `curl` verifies against
+the system CA store (`verify=0`), and the existing `admin.starfleet.life` and
+`starfleet.life` certificates are byte-unchanged (same notBefore/notAfter). After Force
+SSL: plain HTTP on a subdomain 301s to HTTPS, HTTPS 200.
+
+How to add a subdomain site from now on: create the site, add its hostname as an EXACT
+domain row (it wins over the wildcard row for routing), leave Exclude from Let's Encrypt
+off and the certificate blank -- the wildcard covers it at the handshake, so no
+per-subdomain certificate request is needed; only a name with more than one label under
+`starfleet.life` (`a.b.starfleet.life`) falls outside the wildcard SAN and needs its
+own certificate. Never give another site a second `*.starfleet.life` row: `RouteClaims`
+refuses the overlap, and the wildcard certificate is authorised by this row.
+
+Residue noted, not touched: sites 4 and 6 (`visual-qa-20260829m-a/b`, exact domain rows
+5 and 6, Exclude-from-LE on) are still live rows from an earlier QA pass this day and
+show in the Sites list; the dispatcher logs them as having no routable domain.
