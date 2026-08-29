@@ -13,10 +13,17 @@ import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,24 +35,27 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * constraints the code relies on; and down() undoes it completely enough that up() can
  * rebuild it.
  *
- * AIDEV-NOTE: the golden checksum pin is BACK, for InitialMigration alone (2026-08-29).
- * It was dropped with the consolidation because hohenheim had no installations and every
- * schema change legitimately edited that one migration. Starfleet is deployed now: its
- * zenit_migrations row for version 001 carries the structural checksum, so an edit to
- * InitialMigration's operations makes the next --run-migrations rehearsal refuse under
- * database.migration_integrity=fail. A schema change APPENDS a migration instead, and the
- * pin below turns the mistake this guards (it already happened once, b3e9e840) into a
- * failing build instead of a failed deploy. Appended migrations are deliberately NOT
- * pinned: only an applied one is dangerous to edit, and every install applies 001.
+ * AIDEV-NOTE: the golden checksum pins are a DEPLOYED HIGH-WATER MARK, not a hand-list
+ * (2026-08-29). Editing an APPLIED migration makes the next --run-migrations rehearsal
+ * refuse under database.migration_integrity=fail, and "applied" stopped meaning "001" the
+ * day starfleet ran M002/M003. So exactly one fact is declared here -- DEPLOYED_THROUGH,
+ * the highest version every deployed install has applied -- and the rule derives from it:
+ * every discovered migration at or below the mark MUST carry a digest in the committed
+ * pin table, and that digest MUST still match. A migration ABOVE the mark is not pinned,
+ * because nothing has applied it yet and editing it is still free. Raising the mark plus
+ * pasting the pin lines the failure prints is the ONE edit a deploy that applied
+ * migrations owes (docs/deploy-starfleet.md step 8); a pin is never regenerated to make a
+ * red build green. Comments and formatting are outside the digest.
  */
 class MigrationIntegrityTest {
 
     /**
-     * The structural checksum every deployed install recorded for version 001; see the
-     * class note before touching it.
+     * The highest migration version every deployed install has applied; see the class note.
      */
-    private static final String INSTALL_MIGRATION_CHECKSUM =
-        "0c97fcc11994ef46f73afa244b7de0aef0d67e1913c21d818743599f4726d9b5";
+    private static final String DEPLOYED_THROUGH = "003";
+
+    /** Classpath resource holding one {@code <class>&lt;TAB&gt;<digest>} line per pinned migration. */
+    private static final String PIN_RESOURCE = "migration-pins.txt";
 
     @Test
     void aFreshInstallMigratesReMigratesAndPassesStrictIntegrity() throws Exception {
@@ -284,21 +294,24 @@ class MigrationIntegrityTest {
     }
 
     /**
-     * Every hohenheim migration declares the one version stream, and the INSTALL migration
-     * still hashes to what every deployed install recorded.
+     * Every hohenheim migration declares the one version stream, and every migration a
+     * deployed install has already applied still hashes to what that install recorded.
      */
     @Test
-    void everyMigrationDeclaresTheStreamAndTheInstallMigrationIsUnchanged() {
-        // 1. One stream, so out-of-order detection judges the whole module together. A
-        //    migration in another package that forgets HohenheimMigration shows up here.
-        List<String> found = new ArrayList<>();
+    void everyMigrationDeclaresTheStreamAndEveryDeployedMigrationIsUnchanged() {
+        List<Migration> migrations = new ArrayList<>();
         for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
             Migration migration = supplier.get();
-            if (!migration.getClass().getName().startsWith("be.elevenways.hohenheim.")) {
-                continue;
+            if (migration.getClass().getName().startsWith("be.elevenways.hohenheim.")) {
+                migrations.add(migration);
             }
-            found.add(migration.getClass().getSimpleName() + " stream=" + migration.getVersionStream());
         }
+
+        // 1. One stream, so out-of-order detection judges the whole module together. A
+        //    migration in another package that forgets HohenheimMigration shows up here.
+        List<String> found = migrations.stream()
+            .map(migration -> migration.getClass().getSimpleName() + " stream=" + migration.getVersionStream())
+            .toList();
         assertThat(found)
             .as("step 1: every hohenheim migration declares the module's version stream")
             .isNotEmpty()
@@ -307,18 +320,88 @@ class MigrationIntegrityTest {
             .as("step 1: and the install migration is one of them")
             .contains("InitialMigration stream=" + HohenheimMigration.STREAM);
 
-        // 2. The pin. This digest is what a deployed install's zenit_migrations row holds
-        //    for version 001; changing an operation in InitialMigration moves it and makes
-        //    that install refuse to boot. Append a migration instead -- never regenerate
-        //    this constant to make the test pass.
-        assertThat(MigrationChecksum.compute(new InitialMigration()))
-            .as("step 2: InitialMigration is FROZEN -- a schema change appends a migration."
-                + " Its canonical operations are:%n%s",
-                MigrationChecksum.canonicalText(new InitialMigration()))
-            .isEqualTo(INSTALL_MIGRATION_CHECKSUM);
+        // 2. The deployed high-water mark. Every migration at or below DEPLOYED_THROUGH is
+        //    APPLIED somewhere, so its structural checksum is recorded in that install's
+        //    zenit_migrations row: moving it makes the install refuse to boot. Append a
+        //    migration instead -- a pin is never regenerated to make this green.
+        Map<String, String> pins = readPins();
+        Set<String> pinnable = new LinkedHashSet<>();
+        List<String> problems = new ArrayList<>();
+        List<String> pasteLines = new ArrayList<>();
+
+        for (Migration migration : migrations) {
+            String name = migration.getClass().getSimpleName();
+            if (!isAtOrBelowMark(migration.getVersion())) {
+                continue;
+            }
+            pinnable.add(name);
+            String digest = MigrationChecksum.compute(migration);
+            String pinned = pins.get(name);
+            if (pinned == null) {
+                problems.add(name + " (version " + migration.getVersion() + ") is DEPLOYED"
+                    + " (at or below the mark " + DEPLOYED_THROUGH + ") but UNPINNED");
+                pasteLines.add(name + "\t" + digest);
+            } else if (!pinned.equals(digest)) {
+                problems.add(name + " (version " + migration.getVersion() + ") CHANGED after it was"
+                    + " applied: pinned " + pinned + ", current " + digest
+                    + System.lineSeparator() + "its canonical operations are now:" + System.lineSeparator()
+                    + MigrationChecksum.canonicalText(migration));
+            }
+        }
+        for (String pinnedName : pins.keySet()) {
+            if (!pinnable.contains(pinnedName)) {
+                problems.add(pinnedName + " is pinned but is not a discovered migration at or below"
+                    + " the mark " + DEPLOYED_THROUGH + ": remove the pin, or raise the mark");
+            }
+        }
+
+        assertThat(problems)
+            .as("step 2: the deployed migrations (version <= %s) must match %s.%s",
+                DEPLOYED_THROUGH, PIN_RESOURCE,
+                pasteLines.isEmpty() ? "" : System.lineSeparator()
+                    + "Paste these lines into src/browserTest/resources/" + PIN_RESOURCE + ":"
+                    + System.lineSeparator() + String.join(System.lineSeparator(), pasteLines))
+            .isEmpty();
     }
 
     // -- helpers --------------------------------------------------------------
+
+    /**
+     * Whether a version is at or below {@link #DEPLOYED_THROUGH}, comparing zero-padded so
+     * a future four-digit version never sorts below a three-digit one.
+     */
+    private static boolean isAtOrBelowMark(String version) {
+        int width = Math.max(version.length(), DEPLOYED_THROUGH.length());
+        return padded(version, width).compareTo(padded(DEPLOYED_THROUGH, width)) <= 0;
+    }
+
+    private static String padded(String version, int width) {
+        return "0".repeat(width - version.length()) + version;
+    }
+
+    /** @return the committed pin table, class simple name to structural checksum */
+    private static Map<String, String> readPins() {
+        Map<String, String> pins = new LinkedHashMap<>();
+        try (InputStream stream = MigrationIntegrityTest.class.getClassLoader()
+                .getResourceAsStream(PIN_RESOURCE)) {
+            assertThat(stream).as("the committed pin table %s is on the test classpath", PIN_RESOURCE)
+                .isNotNull();
+            String text = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            for (String line : text.split("\n")) {
+                String trimmed = line.strip();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+                String[] parts = trimmed.split("\t");
+                assertThat(parts).as("every pin line is class<TAB>digest, this one is: %s", trimmed)
+                    .hasSize(2);
+                pins.put(parts[0].strip(), parts[1].strip());
+            }
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+        return pins;
+    }
 
     /** {@link #emptyDatabase} with SQLite foreign-key enforcement switched on per connection. */
     private static SqliteDatasource enforcingDatabase(String label) throws Exception {
