@@ -3674,6 +3674,18 @@
       "scope": "dns_remote"
     },
     {
+      "text": "Delete this peer? Its transfer key and admin credentials go with it, and the zones that notify it or accept transfers from it stop doing so. A peer a secondary zone still replicates from is refused.",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "Delete this auth provider? Its stored credentials and realm settings go with it. A provider still gating a site or named by an access rule is refused, because the proxy would fail those sites closed.",
+      "scope": "auth_provider"
+    },
+    {
+      "text": "Delete this variable? It leaves its environment now; workloads there stop receiving it at their next deploy, and anything running keeps the value it was deployed with until then.",
+      "scope": "environment_variable"
+    },
+    {
       "text": "Delete this access list? Its rules go with it, and every site and protected path it gates is let through unchecked from that moment on.",
       "scope": "access_list"
     },
@@ -7297,6 +7309,22 @@
     "text": "This environment is still referenced by instances or variables",
     "scope": "violations"
   },
+  "dns_peer_in_use": {
+    "text": "Peer {$name} is still the primary of {$count} secondary zone(s) such as {$zone}; repoint or delete them first",
+    "scope": "violations"
+  },
+  "auth_provider_in_use": {
+    "text": "Auth provider {$name} still gates {$sites} site(s) and is named by {$rules} access rule(s); assign them another provider first",
+    "scope": "violations"
+  },
+  "system_user_in_use": {
+    "text": "System user {$name} is the user the Spamservice installation runs as; assign it another user first",
+    "scope": "violations"
+  },
+  "server_migration_target": {
+    "text": "Host {$name} is the destination of the migration of {$instance} that is in flight; let it settle first",
+    "scope": "violations"
+  },
   "variable_one_owner": {
     "text": "A variable belongs to exactly one instance or one environment",
     "scope": "violations"
@@ -10870,8 +10898,20 @@
     {
       "text": "Delete {$name} {$type} {$value} from zone {$origin}? Authoritative answers change immediately. This cannot be undone.",
       "scope": "dns_record"
+    },
+    {
+      "text": "Delete the peer {$name}? Its transfer key and admin credentials go with it. No zone notifies it or accepts transfers from it right now.",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "Delete the variable {$key} from environment {$environment}? Workloads in that environment stop receiving it at their next deploy; anything running keeps the value it was deployed with until then.",
+      "scope": "environment_variable"
     }
   ],
+  "delete_confirm_linked": {
+    "text": "Delete the peer {$name}? Its transfer key and admin credentials go with it, and these zones stop notifying it and stop accepting transfers from it: {$zones}.",
+    "scope": "dns_peer"
+  },
   "delete_confirm_gating": {
     "text": "Delete the access list {$name}? Its {$rules} rules go with it, and these stop being gated -- their traffic is let through unchecked from that moment on: {$gated}.",
     "scope": "access_list"
@@ -10892,8 +10932,24 @@
     {
       "text": "{$instances} live instances and {$templates} templates still run inside this image. Repoint them first, or their next deploy fails on an image that no longer exists.",
       "scope": "runtime_image"
+    },
+    {
+      "text": "These secondary zones replicate from this peer: {$zones}. Point them at another primary or delete them first, or they stop answering once their SOA expire window closes.",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "These sites use this provider as their login gate: {$sites} ({$rules} access rules name it too). Assign them another provider first, or they refuse every request from the next route load on.",
+      "scope": "auth_provider"
     }
   ],
+  "delete_in_use_rules": {
+    "text": "{$rules} access rules name this provider. Repoint or remove them first, or the lists holding them deny every request from the next route load on.",
+    "scope": "auth_provider"
+  },
+  "delete_migrating": {
+    "text": "The workload {$instance} is being migrated onto this host right now. Let the migration settle first.",
+    "scope": "server"
+  },
   "delete_confirm_dependents": {
     "text": "Delete the zone {$origin}? Its {$records} stored records go with it and this server stops answering for that name. These sites and certificates resolve inside it and lose their DNS: {$dependents}.",
     "scope": "dns_zone"

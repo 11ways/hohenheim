@@ -2,7 +2,9 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.server.cms.SiteDomainResource;
 import be.elevenways.hohenheim.server.cms.SiteResource;
+import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.dns.DnsPeerCascades;
 import be.elevenways.hohenheim.server.cms.SiteTerminalCsp;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -93,6 +95,14 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // live instance or a template, refuse to go; a template that may go takes its
         // variables, files and volume declarations with it.
         InstanceCatalogGuards.install();
+        // A DNS peer a secondary zone replicates from refuses to go; a peer that may go
+        // clears the stale pointer a primary zone kept and takes its zone links with it.
+        DnsPeerCascades.install();
+        // A site auth provider still gating a live site or named by an access rule refuses
+        // to go: a dangling reference fails the whole site closed at the next route load.
+        SiteAuthProviderGuards.install();
+        // The system user the Spamservice installation runs as refuses to go.
+        SystemUserGuards.install();
         // The pl-terminal page gets the wasm concessions; no other admin page does.
         SiteTerminalCsp.install();
         // A tenant-originated instance write may only run an APPROVED template's image;

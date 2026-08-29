@@ -200,6 +200,47 @@ public final class DnsPeerResource extends RowResource {
                 .withArg("key", keyName));
     }
 
+    /**
+     * A peer that a secondary zone still replicates from is offered DEAD, naming the
+     * zones: without it they decay to {@code error} and stop answering once their SOA
+     * expire window closes. The enforcement for every other writer is
+     * {@code DnsPeerCascades}.
+     */
+    @Override
+    public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
+                                                       @NonNull AccessContext accessContext) {
+        String zones = DeleteImpact.join(
+            DeleteImpact.secondaryZonesOfPeer(record.get(DnsPeerModel.ID)));
+        if (!zones.isEmpty()) {
+            return Microcopy.of("delete_in_use").withFilter("scope", "dns_peer")
+                .withArg("zones", zones);
+        }
+        return super.deleteUnavailableReason(record, accessContext);
+    }
+
+    /** The record-less dialog says what a peer delete takes: the transfer relationship. */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(Microcopy.of("delete_confirm").withFilter("scope", "dns_peer"));
+    }
+
+    /**
+     * The same warning NAMING the primary zones that stop notifying this peer and stop
+     * accepting its transfers -- the links die with the peer, silently otherwise.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
+        String zones = DeleteImpact.join(
+            DeleteImpact.zonesLinkedToPeer(record.get(DnsPeerModel.ID)));
+        Microcopy body = Microcopy.of(zones.isEmpty() ? "delete_confirm_named" : "delete_confirm_linked")
+            .withFilter("scope", "dns_peer")
+            .withArg("name", String.valueOf((Object) record.get(DnsPeerModel.NAME)));
+        if (!zones.isEmpty()) {
+            body = body.withArg("zones", zones);
+        }
+        return deleteConfirmation(body);
+    }
+
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {

@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -116,6 +117,14 @@ public class SiteModel extends Model {
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
+
+    /** The site-level login gate; the provider's delete refuses while a live site names it. */
+    public static final BelongsTo<SiteAuthProviderModel> AUTH_PROVIDER = SCHEMA.addRelation(
+        BelongsTo.to(SiteAuthProviderModel.class)
+            .name("auth_provider")
+            .localKey(AUTH_PROVIDER_ID)
+            .remoteKey(SiteAuthProviderModel.ID)
+            .build());
 
     // Sites are the proxy's central config records: keep full snapshots so
     // admins can diff and restore them from the CMS history tab.

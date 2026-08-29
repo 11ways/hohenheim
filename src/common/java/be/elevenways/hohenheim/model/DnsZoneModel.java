@@ -7,6 +7,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 
 import java.util.List;
 
@@ -116,6 +117,14 @@ public class DnsZoneModel extends Model {
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
+
+    /** The peer a SECONDARY zone replicates from; its delete refuses while a secondary names it. */
+    public static final BelongsTo<DnsPeerModel> PRIMARY_PEER = SCHEMA.addRelation(
+        BelongsTo.to(DnsPeerModel.class)
+            .name("primary_peer")
+            .localKey(PRIMARY_PEER_ID)
+            .remoteKey(DnsPeerModel.ID)
+            .build());
 
     public List<Row> findEnabled() {
         return find().where(ENABLED.eq(true)).all();

@@ -3,18 +3,28 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.DnsZonePeerModel;
+import be.elevenways.hohenheim.model.EnvironmentModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.cms.AccessListResource;
+import be.elevenways.hohenheim.server.cms.AuthProviderResource;
 import be.elevenways.hohenheim.server.cms.CertificateResource;
+import be.elevenways.hohenheim.server.cms.DnsPeerResource;
 import be.elevenways.hohenheim.server.cms.DnsRecordResource;
 import be.elevenways.hohenheim.server.cms.DnsZoneResource;
 import be.elevenways.hohenheim.server.cms.EnvironmentResource;
+import be.elevenways.hohenheim.server.cms.EnvironmentVariableResource;
 import be.elevenways.hohenheim.server.cms.ManageDnsRecordResource;
 import be.elevenways.hohenheim.server.cms.NotificationChannelResource;
 import be.elevenways.hohenheim.server.cms.ServerResource;
@@ -30,6 +40,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -303,7 +314,163 @@ class DeleteConfirmationTest {
         });
     }
 
+    /**
+     * The 2026-08-29 cross-reference pass: a DNS peer names the zones that stop notifying
+     * it and is dead while a secondary replicates from it, an auth provider is dead naming
+     * the sites it gates, and an environment variable says what is removed and when the
+     * removal lands.
+     */
+    @Test
+    void theCrossReferenceDialogsNameTheirZonesSitesAndEnvironments() {
+        Db.run(datasource, () -> {
+            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            DnsPeerResource peers = new DnsPeerResource();
+
+            // 1. A peer nothing links to: the dialog names it and says nothing notifies it.
+            int peerId = peer("ns2");
+            Row peer = Models.get(DnsPeerModel.class).findById(peerId);
+            assertThat(peers.deleteUnavailableReason(peer, operator))
+                .as("step 1: an unreferenced peer is deletable").isNull();
+            ConfirmationSpec lonely = peers.deleteConfirmationFor(peer);
+            assertThat(lonely.body().key()).as("step 1: the named wording").isEqualTo("delete_confirm_named");
+            assertThat(lonely.body().filters().get("scope")).isEqualTo("dns_peer");
+            assertThat(lonely.body().args().get("name")).as("step 1: naming the peer").isEqualTo("ns2");
+
+            // 2. Two primary zones link it as a NOTIFY/AXFR target: the dialog names them.
+            int notified = zone("notified." + ORIGIN);
+            int alsoNotified = zone("also." + ORIGIN);
+            zonePeer(notified, peerId);
+            zonePeer(alsoNotified, peerId);
+            ConfirmationSpec linked = peers.deleteConfirmationFor(peer);
+            assertThat(linked.body().key()).as("step 2: links switch to the linked wording")
+                .isEqualTo("delete_confirm_linked");
+            assertThat(String.valueOf(linked.body().args().get("zones")))
+                .as("step 2: naming every zone that stops notifying the peer")
+                .contains("notified." + ORIGIN)
+                .contains("also." + ORIGIN);
+
+            // 3. A secondary zone replicates from it: the delete is OFFERED and dead,
+            //    naming the zone that would decay.
+            Row replica = Models.get(DnsZoneModel.class).findById(zone("replica." + ORIGIN));
+            replica.set(DnsZoneModel.ROLE, DnsZoneModel.ROLE_SECONDARY);
+            replica.set(DnsZoneModel.PRIMARY_PEER_ID, peerId);
+            Models.get(DnsZoneModel.class).save(replica);
+            Microcopy replicated = peers.deleteUnavailableReason(peer, operator);
+            assertThat(replicated).as("step 3: a peer a secondary replicates from is dead").isNotNull();
+            assertThat(replicated.key()).isEqualTo("delete_in_use");
+            assertThat(String.valueOf(replicated.args().get("zones")))
+                .as("step 3: naming the secondary zone").contains("replica." + ORIGIN);
+
+            // 4. An auth provider nothing names is deletable and its dialog speaks for
+            //    itself; one gating a live site is dead naming the site.
+            AuthProviderResource providers = new AuthProviderResource();
+            int providerId = authProvider("Office SSO");
+            Row provider = Models.get(SiteAuthProviderModel.class).findById(providerId);
+            assertThat(providers.deleteUnavailableReason(provider, operator))
+                .as("step 4: an unreferenced provider is deletable").isNull();
+            assertThat(providers.deleteConfirmation().body().filters().get("scope"))
+                .as("step 4: the provider dialog is its own, not the generic").isEqualTo("auth_provider");
+            Row intranet = Models.get(SiteModel.class).findById(site("intranet", null));
+            intranet.set(SiteModel.AUTH_PROVIDER_ID, providerId);
+            Models.get(SiteModel.class).save(intranet);
+            Microcopy gating = providers.deleteUnavailableReason(provider, operator);
+            assertThat(gating).as("step 4: a provider gating a site is dead").isNotNull();
+            assertThat(gating.key()).isEqualTo("delete_in_use");
+            assertThat(String.valueOf(gating.args().get("sites")))
+                .as("step 4: naming the site").contains("intranet");
+
+            // 5. A trashed site no longer holds it, but an access rule naming it does --
+            //    with the rules-only wording, since there is no site to name.
+            intranet.set(SiteModel.DELETED_AT, Instant.now());
+            Models.get(SiteModel.class).save(intranet);
+            assertThat(providers.deleteUnavailableReason(provider, operator))
+                .as("step 5: a trashed site releases the provider").isNull();
+            providerRule(accessList("Staff"), providerId);
+            Microcopy ruled = providers.deleteUnavailableReason(provider, operator);
+            assertThat(ruled).as("step 5: a rule naming the provider keeps it dead").isNotNull();
+            assertThat(ruled.key()).isEqualTo("delete_in_use_rules");
+            assertThat(ruled.args().get("rules")).as("step 5: counting the rules").isEqualTo(1L);
+
+            // 6. An environment variable's dialog names the key and the environment it
+            //    leaves; the record-less one still says when the removal lands.
+            EnvironmentVariableResource variables = new EnvironmentVariableResource();
+            int environmentId = environment("production");
+            Row variable = Models.get(InstanceVariableModel.class)
+                .findById(environmentVariable(environmentId, "DATABASE_URL"));
+            ConfirmationSpec named = variables.deleteConfirmationFor(variable);
+            assertThat(named.body().key()).as("step 6: the named wording").isEqualTo("delete_confirm_named");
+            assertThat(named.body().filters().get("scope")).isEqualTo("environment_variable");
+            assertThat(named.body().args().get("key")).as("step 6: naming the key").isEqualTo("DATABASE_URL");
+            assertThat(named.body().args().get("environment")).as("step 6: and the environment")
+                .isEqualTo("production");
+            assertThat(variables.deleteConfirmation().body().filters().get("scope"))
+                .as("step 6: the record-less dialog is the variable's own").isEqualTo("environment_variable");
+
+            // 7. A variable whose environment reference dangles cannot name one and keeps
+            //    the type-level body rather than a sentence with a hole in it.
+            variable.set(InstanceVariableModel.ENVIRONMENT_ID, null);
+            assertThat(variables.deleteConfirmationFor(variable).body().key())
+                .as("step 7: an unresolvable environment falls back to the type-level body")
+                .isEqualTo("delete_confirm");
+        });
+    }
+
     // -- fixtures ---------------------------------------------------------------
+
+    private static int peer(String name) {
+        Row row = Models.get(DnsPeerModel.class).createEmptyRow();
+        row.set(DnsPeerModel.NAME, name);
+        row.set(DnsPeerModel.TRANSFER_HOST, "192.0.2.10");
+        Models.get(DnsPeerModel.class).save(row);
+        return row.get(DnsPeerModel.ID);
+    }
+
+    private static void zonePeer(int zoneId, int peerId) {
+        Row row = Models.get(DnsZonePeerModel.class).createEmptyRow();
+        row.set(DnsZonePeerModel.ZONE_ID, zoneId);
+        row.set(DnsZonePeerModel.PEER_ID, peerId);
+        Models.get(DnsZonePeerModel.class).save(row);
+    }
+
+    private static int authProvider(String name) {
+        Row row = Models.get(SiteAuthProviderModel.class).createEmptyRow();
+        row.set(SiteAuthProviderModel.NAME, name);
+        row.set(SiteAuthProviderModel.PROVIDER_TYPE, BasicAuthProviderType.ID.toString());
+        row.set(SiteAuthProviderModel.CONFIG, Map.of());
+        Models.get(SiteAuthProviderModel.class).save(row);
+        return row.get(SiteAuthProviderModel.ID);
+    }
+
+    /** A provider leaf naming one provider, switched on so its data is complete. */
+    private static void providerRule(int listId, int providerId) {
+        Row row = Models.get(AccessRuleModel.class).createEmptyRow();
+        row.set(AccessRuleModel.ACCESS_LIST_ID, listId);
+        row.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_AUTH_PROVIDER);
+        row.set(AccessRuleModel.ENABLED, true);
+        row.set(AccessRuleModel.DATA, Map.of(AccessRuleModel.PROVIDER_ID.getName(), providerId));
+        Models.get(AccessRuleModel.class).save(row);
+    }
+
+    private static int environment(String name) {
+        Row project = Models.get(ProjectModel.class).createEmptyRow();
+        project.set(ProjectModel.NAME, "delete-confirm-" + name);
+        Models.get(ProjectModel.class).save(project);
+        Row row = Models.get(EnvironmentModel.class).createEmptyRow();
+        row.set(EnvironmentModel.PROJECT_ID, project.get(ProjectModel.ID));
+        row.set(EnvironmentModel.NAME, name);
+        Models.get(EnvironmentModel.class).save(row);
+        return row.get(EnvironmentModel.ID);
+    }
+
+    private static int environmentVariable(int environmentId, String key) {
+        Row row = Models.get(InstanceVariableModel.class).createEmptyRow();
+        row.set(InstanceVariableModel.ENVIRONMENT_ID, environmentId);
+        row.set(InstanceVariableModel.KEY, key);
+        row.set(InstanceVariableModel.KIND, InstanceVariableModel.KIND_PLAIN);
+        row.set(InstanceVariableModel.PLAIN_VALUE, "postgres://db");
+        Models.get(InstanceVariableModel.class).save(row);
+        return row.get(InstanceVariableModel.ID);
+    }
 
     private static int accessList(String name) {
         Row row = Models.get(AccessListModel.class).createEmptyRow();

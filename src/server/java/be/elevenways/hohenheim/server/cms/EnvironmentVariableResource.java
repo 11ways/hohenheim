@@ -7,6 +7,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
@@ -101,6 +102,33 @@ public final class EnvironmentVariableResource extends RowResource {
 
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("sliders"); }
+
+    /**
+     * The dialog says what IS removed and when it lands: the variable leaves its
+     * environment now, and a workload reads its environment's values only at deploy
+     * ({@code InstanceVariables.valuesFor}), so anything running keeps the value it was
+     * deployed with until its next deploy.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(
+            Microcopy.of("delete_confirm").withFilter("scope", "environment_variable"));
+    }
+
+    /** The same statement naming the key and the environment it leaves. */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
+        String environment = DeleteImpact.environmentNameOf(
+            record.get(InstanceVariableModel.ENVIRONMENT_ID));
+        String key = record.get(InstanceVariableModel.KEY);
+        if (environment == null || environment.isBlank() || key == null || key.isBlank()) {
+            return deleteConfirmation();
+        }
+        return deleteConfirmation(Microcopy.of("delete_confirm_named")
+            .withFilter("scope", "environment_variable")
+            .withArg("key", key)
+            .withArg("environment", environment));
+    }
 
     /** Only environment-owned rows exist on this surface, list AND load AND create. */
     @Override
