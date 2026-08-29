@@ -17,6 +17,10 @@ PREFIX="/opt/hohenheim"
 SERVICE_USER="hohenheim"
 SERVICE_NAME="hohenheim"
 PANEL_PORT="3000"
+# The panel is published through the proxy as a site whose upstream is
+# 127.0.0.1:3000, so the admin listener has no reason to answer the internet;
+# the proxy's own 0.0.0.0:80/:443 listener is a separate Undertow instance.
+PANEL_BIND="127.0.0.1"
 JAVA_MAJOR="25"
 
 JAR_PATH=""
@@ -80,6 +84,9 @@ Options:
   --volume-root-size <GB>   create the btrfs loop-file volume root and its sudoers line
   --swap <size>             create a swapfile of this size (e.g. 2G) with vm.swappiness=10
   --panel-port <port>       admin listener port (default 3000)
+  --panel-bind <addr>       admin listener address (default 127.0.0.1; the panel
+                            is reached through the proxy, so binding it publicly
+                            puts a login page on a raw port)
   --prefix <dir>            install root (default /opt/hohenheim)
   --dry-run                 print the plan, execute nothing
   --help                    this text
@@ -100,6 +107,7 @@ while [ $# -gt 0 ]; do
         --volume-root-size) VOLUME_ROOT_GB="${2:-}"; shift 2 ;;
         --swap) SWAP_SIZE="${2:-}"; shift 2 ;;
         --panel-port) PANEL_PORT="${2:-}"; shift 2 ;;
+        --panel-bind) PANEL_BIND="${2:-}"; shift 2 ;;
         --prefix) PREFIX="${2:-}"; shift 2 ;;
         --with-docker) WITH_DOCKER="yes"; shift ;;
         --dry-run) DRY_RUN="yes"; shift ;;
@@ -370,6 +378,12 @@ fi
 
 step "Settings files"
 
+info "panel listener: $PANEL_BIND:$PANEL_PORT (--panel-bind to change)"
+if [ "$PANEL_BIND" != "127.0.0.1" ] && [ "$PANEL_BIND" != "::1" ] && [ "$PANEL_BIND" != "localhost" ]; then
+    info "WARNING: the admin login page will answer on a public port"
+fi
+info "an existing settings file is never rewritten; edit it by hand to change a seeded value"
+
 # Creates a settings file once; an existing file is never rewritten, because the
 # panel's settings editor persists into these same files.
 seed_settings() {
@@ -435,6 +449,7 @@ seed_settings "$SETTINGS_DIR/local.dry" 0600 "{
     \"environment\": \"live\",
     \"network\": {
         \"port\": $PANEL_PORT,
+        \"bind_address\": \"$PANEL_BIND\",
         \"main_url\": \"$MAIN_URL\",
         \"trusted_proxies\": \"loopback\"
     },
