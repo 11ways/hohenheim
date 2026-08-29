@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -16,10 +17,13 @@ import org.xbill.DNS.Type;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -36,6 +40,10 @@ public final class DnsZoneStore {
     private final Map<String, DnsZoneSnapshot> secondaryByOrigin = new ConcurrentHashMap<>();
     private volatile Map<String, DnsZoneSnapshot> serving = Map.of();
     private volatile @Nullable ZonePublishListener onZoneChanged;
+
+    /** Datasources whose current transaction already has this store's reload queued. */
+    private final ThreadLocal<Set<Datasource>> pendingReload = ThreadLocal.withInitial(
+        () -> Collections.newSetFromMap(new IdentityHashMap<>()));
 
     private DnsZoneStore() {}
 
@@ -67,11 +75,45 @@ public final class DnsZoneStore {
     }
 
     /**
+     * Rebuilds every enabled PRIMARY zone from the database and re-merges the serving
+     * view, deferred to after the commit when a transaction is active on this thread.
+     *
+     * AIDEV-NOTE: rebuilding here on the request thread INSIDE a zenit-cms mutation
+     * transaction (Resource.inMutationTransaction -> Datasource.withTransaction) read the
+     * uncommitted rows through the transaction's own connection and PUBLISHED them. When
+     * that transaction then rolled back -- the scoped re-load check in zenit-cms
+     * ResourcePageEndpoints throws on an out-of-scope result, and any validation failure
+     * after the write does the same -- the primary kept serving a serial and a record set
+     * that never landed in the database, until something unrelated reloaded. The NOTIFY
+     * already waits for the commit (see bumpSerialAndReload); the serving view has to
+     * follow it. Coalesced per datasource transaction like ProxyReloadHooks.maybeReload:
+     * reload() rebuilds every zone, so several bumps in one transaction need one rebuild.
+     */
+    public void reload() {
+        Datasource datasource = Models.get(DnsZoneModel.class).getResolvedDatasource();
+        if (!datasource.hasActiveTransaction()) {
+            reloadNow();
+            return;
+        }
+        Set<Datasource> pending = this.pendingReload.get();
+        if (!pending.add(datasource)) {
+            return;
+        }
+        datasource.afterCommit(this::reloadNow);
+        datasource.afterTransaction(() -> {
+            pending.remove(datasource);
+            if (pending.isEmpty()) {
+                this.pendingReload.remove();
+            }
+        });
+    }
+
+    /**
      * Rebuilds every enabled PRIMARY zone from the database and re-merges the
      * serving view. Also prunes secondary snapshots whose zone row was deleted,
      * disabled, or flipped to primary, so those stop being answered immediately.
      */
-    public synchronized void reload() {
+    private synchronized void reloadNow() {
         Map<String, DnsZoneSnapshot> rebuilt = new HashMap<>();
         java.util.Set<String> activeSecondaryOrigins = new java.util.HashSet<>();
         DnsZoneModel zoneModel = Models.get(DnsZoneModel.class);
@@ -112,6 +154,11 @@ public final class DnsZoneStore {
      * stale. Observed live on starfleet 2026-08-29 (notify 34, AXFR 35). The hook also
      * waits for the commit: its trace stamp is a WRITE, and on the single-writer
      * backends that write cannot land while the mutation still holds the connection.
+     *
+     * AIDEV-NOTE: the serial is read INSIDE the hook, never captured before it. reload()
+     * is itself deferred to after the commit inside a transaction, so a serial read here
+     * would be the PREVIOUS snapshot's -- the very staleness the note above describes.
+     * Registration order carries this: reload()'s afterCommit is queued first.
      */
     public void bumpSerialAndReload(int zoneId) {
         Models.get(DnsZoneModel.class).find()
@@ -121,9 +168,8 @@ public final class DnsZoneStore {
         this.reload();
         ZonePublishListener hook = this.onZoneChanged;
         if (hook != null) {
-            long serial = publishedSerial(zoneId);
             Models.get(DnsZoneModel.class).getResolvedDatasource()
-                .afterCommit(() -> hook.zonePublished(zoneId, serial));
+                .afterCommit(() -> hook.zonePublished(zoneId, publishedSerial(zoneId)));
         }
     }
 
