@@ -2,11 +2,15 @@
 
 Hohenheim's primary deployment shape is running ON the host it manages: one
 machine, Incus over the local unix socket, Docker over the local socket,
-nftables written locally through `sudo nft`. This document is the repeatable
-path that was exercised end to end on daystrom (Arch, 2026-08-06); a future
-wave must be able to redo it from here. The remote (ssh/https) lane is a
+nftables written locally through `sudo nft`. The remote (ssh/https) lane is a
 DIFFERENT deployment shape and is documented by the live tests
 (`LiveIncusHost`, `LiveRemoteHost`).
+
+THE INSTALLER IS THE PROCEDURE. `tools/install-host.sh` performs every step of
+a fresh Debian install; the manual spellings below survive only where the
+script has no equivalent (a non-Debian host, registrar glue, the provider's
+firewall panel). Anything the script does and this document also describes by
+hand is a bug in one of the two -- fix the script.
 
 ## Artifact
 
@@ -20,7 +24,118 @@ defaults. It does NOT carry the TeaVM client bundle: `public/cms.js` (and its
 `.map`) must ship alongside, served from `<workdir>/public/` (the asset
 middleware reads disk first, then classpath -- the classpath has no cms.js).
 
-## Host prerequisites (Arch spelling; adapt per distro)
+## The installer
+
+    tools/install-host.sh --jar <path to hohenheim-server.jar> \
+        --roles proxy,dns,firewall \
+        --main-url https://panel.example.com \
+        --admin-email hostmaster@example.com \
+        [--with-docker] [--volume-root-size 8] [--panel-port 3000] [--prefix /opt/hohenheim]
+
+Debian 12/13 first (Debian 13 trixie is what it is proven on); it runs as root,
+takes no input (`DEBIAN_FRONTEND=noninteractive` throughout) and is
+re-runnable: every step checks its own precondition, prints `skip:` when it is
+already satisfied and mutates nothing. A second run on a finished host restarts
+nothing. `--dry-run` prints the plan and executes nothing;
+`tools/install-host.test.sh` drives that mode and asserts the plan, so a
+regression is catchable without a VM.
+
+What each step does, in order:
+
+1. **Host preflight** -- reads `/etc/os-release`, warns on a non-Debian host.
+2. **Base packages** -- `curl gnupg sqlite3 unzip nftables sudo dnsutils` plus
+   `ca-certificates`, decided per COMMAND (`dig`, not the transitional
+   `dnsutils` package name, which would reinstall on every run).
+3. **Java 25** -- the build targets Java 25, which no Debian release ships, so
+   `temurin-25-jre` comes from Adoptium's apt repo (the repo's own codename when
+   it publishes one, else `bookworm`). An existing java >= 25 is used as is.
+4. **Docker CE** -- only with `--with-docker`, or implied by the
+   `instances`/`databases`/`stacks` roles; Docker's own apt repo, same codename
+   fallback.
+5. **Service user** -- system user `hohenheim`, home `/opt/hohenheim`, nologin;
+   added to `docker` when Docker is installed.
+6. **Layout** -- `settings/ data/ public/ logs/ tmp/` plus
+   `/var/log/hohenheim`, `0750` and owned by the service user; the prefix is
+   `0711` and `settings/` is `0700`.
+7. **Sudoers** -- `/etc/sudoers.d/hohenheim-nft` (the nft binary resolved on
+   this host) for the proxy/firewall roles, `/etc/sudoers.d/hohenheim-volumes`
+   for the instances role or `--volume-root-size`. Both `visudo -cf` validated.
+8. **Volume root** -- with `--volume-root-size <GB>`: `btrfs-progs`, a loop file
+   `<prefix>/volumes.btrfs`, `mkfs.btrfs`, an `loop,defaults,nofail` fstab entry
+   and the mount at `<prefix>/data/volumes`.
+9. **Settings** -- seeds `settings/hohenheim.dry` (0640), `settings/local.dry`
+   and `settings/auth.dry` (0600, secrets). An existing file is NEVER rewritten:
+   the panel's settings editor persists into these same files.
+10. **Port 53** -- with the dns role: switches systemd-resolved's stub listener
+    off through a `/etc/systemd/resolved.conf.d/hohenheim.conf` drop-in and
+    points `/etc/resolv.conf` at `/run/systemd/resolve/resolv.conf` (the uplink
+    file, which carries the real upstream servers). `resolv.conf` is never
+    deleted, and any OTHER process still holding udp/53 is reported by name
+    rather than killed.
+11. **Kernel limits** -- `fs.file-max = 200000` in `/etc/sysctl.d/99-hohenheim.conf`
+    (the 2026-08-04 starfleet incident: a low `fs.file-max` killed the HTTPS
+    listener and nothing retried it).
+12. **Jar** -- installed 0644 owned by the service user, skipped when the
+    sha256 already matches.
+13. **systemd unit** -- `/etc/systemd/system/hohenheim.service`, the starfleet
+    unit: `AmbientCapabilities=CAP_NET_BIND_SERVICE`, `NoNewPrivileges=false`,
+    `LimitNOFILE=60000`, `SuccessExitStatus=143`, `KillMode=control-group`,
+    `UMask=0027`, `-Djava.io.tmpdir=<prefix>/tmp`. The heap is derived from
+    MemTotal: 40%, rounded down to a 64 MB step, clamped to 512..2048 MB
+    (starfleet's 1971 MB gives exactly the 768 MB its runbook pins by hand).
+14. **Migrations** -- `--run-migrations` as the service user, with the service
+    stopped, when the database is new or the jar changed.
+15. **Service** -- enable, start (or restart when the jar/unit moved), then poll
+    `/api/health` for up to 120s and fail loudly with the journal command.
+16. **Next steps** -- prints the admin bootstrap and the manual remainder.
+
+What it deliberately does NOT do: create the first administrator (there is no
+offline command for it -- see below), touch the registrar, open the provider's
+firewall, enrol this host as a DNS peer, or rewrite a settings file an operator
+has edited.
+
+### The first administrator
+
+Through the product, once: `http://127.0.0.1:<panel port>/` redirects to
+`/setup` while no user exists, and that page creates the superuser. Tunnel it
+if the box is headless (`ssh -L 3000:127.0.0.1:3000 root@host`) rather than
+exposing 3000. `--set-password --email <address>` is a RESET for an existing
+user (it revokes every session and forces a rotation at next login), not a way
+to create the first one; hand-writing `auth_users` is never the answer.
+
+## New server checklist
+
+The OVH box and every server after it follow this list:
+
+1. Buy the machine; pick Debian 13 (or 12) as the image.
+2. Set the reverse DNS (PTR) for its IPv4 and IPv6 at the provider.
+3. Put your ssh key on it and disable password login.
+4. Copy the jar over (`scp build/libs/hohenheim-*-server.jar root@host:/root/`).
+5. Run `tools/install-host.sh` with the roles this machine has:
+   `proxy,dns,firewall` for a public front node, plus `instances,databases`
+   and `--volume-root-size` for a compute node.
+6. Complete `/setup` over an ssh tunnel and create the administrator.
+7. Open the provider's firewall: 53 udp+tcp, 80, 443. Keep the panel port
+   closed to the internet and reach it through the proxy on a real hostname.
+8. Add the machine as a DNS peer on the existing primary (and, for a public
+   zone, delegate it at the registrar with matching glue) -- see
+   `docs/authoritative-dns.md` for the two-nameserver threshold.
+9. Record the deploy target in `~/.config/zenit-dev/config.json` so
+   `zenit-dev deployed <name>` can read its build stamp.
+
+### Proven on a disposable VM (2026-08-29)
+
+Debian 13 (trixie) VM on nightstrom, 2 GB: fresh install with
+`--roles proxy,dns,firewall --volume-root-size 2` came up healthy (43
+migrations applied, `roles_captured [dns, firewall, proxy]`, listeners on
+53 udp+tcp, 80 and 3000, `/` 302 to `/setup`, an out-of-zone SOA cleanly
+REFUSED over UDP and TCP, `--build-info` printing all 13 module stamps), and an
+immediate second run skipped all 28 steps and did not restart the service.
+HTTPS/443 does not listen until a certificate exists -- the journal says
+`Proxy HTTPS not started: no certificates available`, which is correct on a
+box with no sites yet.
+
+## Host prerequisites by hand (Arch spelling; only for a host the installer does not cover)
 
     pacman -S --needed jre-openjdk-headless        # Java >= 25 (26 works)
     # docker + incus daemons installed and running; nftables package for nft.
@@ -79,7 +194,7 @@ is per-UID) and `setpriv --no-new-privs`. The per-site run-as user still needs
 the controller's existing NOPASSWD sudo for `-u #uid`, which this tier has
 always required.
 
-## Layout
+## Layout (what the installer creates)
 
     /opt/hohenheim/
       hohenheim-server.jar
@@ -109,7 +224,7 @@ without it the Docker isolation sweep reports every workload unverifiable by
 design. The admin listener defaults to port 3000 (`network.port` in
 `settings/local.dry` to change it).
 
-## systemd unit (/etc/systemd/system/hohenheim.service)
+## systemd unit (written by the installer; this is the by-hand equivalent)
 
     [Unit]
     Description=Hohenheim controller (native, manages this host's Docker and Incus)
