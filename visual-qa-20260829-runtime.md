@@ -175,4 +175,33 @@ name and a link would let the operator act.
 | `hohenheim-qa.service`, `/opt/hohenheim-qa` | stopped, disabled, removed at teardown |
 | `~/projects/javaweb-qa` secondary workspace | removed |
 
-TEARDOWN_STATUS
+## Teardown (executed 2026-08-29 ~15:10 CEST)
+
+- Product deletes, in dependency order: attachment, database, stack (cascade verified),
+  instances 1-4 (typed confirm), site, DNS zone (typed confirm), access list, variable
+  (dialog names the environment and the next-deploy effect), environment (refused while
+  the variable existed, then deleted), project (refused while the environment existed,
+  then deleted), ban (lifted). The QA controller's database ended with 0 live instances,
+  0 stacks, 0 databases, 0 zones, 0 access lists, 0 active bans; the soft-deleted site
+  and instance rows are the documented tombstone shape.
+- daystrom: Docker volume `hohenheim-yi3ormt1-instance-1-vol-html` removed by hand (F5);
+  `hohenheim-qa.service` disabled and stopped, unit removed, `/opt/hohenheim-qa` removed
+  after unmounting the btrfs subvolume the controller mounted at `data/volumes`, and that
+  subvolume (`hohenheim-qa-volumes` on the Incus pool) deleted; nothing listens on
+  3100/8081/8444; `docker ps -a` shows only the foreign `hohenheim-u548fz9h-instance-1`
+  that predates this pass; `incus list` empty. Left for the reaper (its own controller's
+  objects, presence stamped 2026-08-29): ACLs `hohenheim-yi3ormt1-isolation` and
+  `hohenheim-yi3ormt1-presence`; the legacy unstamped ACL/bridge pile predates this pass.
+  The old `/opt/hohenheim` install and its ACTIVE `hohenheim.service` on port 3000 were
+  left exactly as found. No authorized_keys line was added on daystrom.
+- nightstrom: trust certificate `visual-qa-20260829q-controller` removed; the
+  `hohenheim-visual-qa-20260829q-nightstrom` authorized_keys line removed (backup at
+  `/root/.ssh/authorized_keys.bak-visual-qa-20260829q`, the pre-existing
+  `hohenheim-nightstrom` line kept); ACL `hohenheim-yi3ormt1-presence` left for the
+  reaper; no instances.
+- Workstation: `~/projects/javaweb-qa` secondary workspace removed and worktrees pruned;
+  all QA browser views and the daystrom port forward closed. The `visual-qa-daystrom`
+  browser profile holds no live session (the controller is gone).
+
+Host state before/after: daystrom 2 controllers active -> 1 (the old one, untouched);
+nightstrom untouched except the two credentials above.
