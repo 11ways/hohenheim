@@ -4,6 +4,8 @@ import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -40,25 +42,39 @@ public final class OnboardingCollector {
     }
 
     /**
+     * Every step DECLARES the role that can act on it and is omitted when that role is
+     * off: the host steps belong to the tiers that place workloads on enrolled hosts
+     * (the gate {@link be.elevenways.hohenheim.server.cms.HohenheimPanel} puts the
+     * Servers list behind), the instance steps to the instance tier.
+     *
+     * AIDEV-NOTE: a proxy/DNS appliance has no Servers list and no Instances list, so
+     * the ungated checklist told it to walk to two pages that 404 and could never reach
+     * "done" -- an onboarding card that retires itself by state can only retire if every
+     * step it shows is reachable.
+     *
      * @return the ordered steps; a list whose every entry is done means there is nothing to show
      */
     public static @NonNull List<OnboardingStep> collect() {
 
         List<OnboardingStep> steps = new ArrayList<>(4);
 
-        List<Row> servers = Models.get(ServerModel.class).find().all();
-        steps.add(hostEnrolled(servers));
+        if (HohenheimRoles.hostWorkloadsEnabled()) {
+            List<Row> servers = Models.get(ServerModel.class).find().all();
+            steps.add(hostEnrolled(servers));
 
-        Microcopy placementRefusal = firstPlacementRefusal(servers);
-        boolean placeable = !servers.isEmpty() && placementRefusal == null;
-        steps.add(hostAcceptsWorkloads(placeable, placementRefusal));
+            Microcopy placementRefusal = firstPlacementRefusal(servers);
+            boolean placeable = !servers.isEmpty() && placementRefusal == null;
+            steps.add(hostAcceptsWorkloads(placeable, placementRefusal));
+        }
 
-        List<Row> instances = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.DELETED_AT.isNull())
-            .limit(1)
-            .all();
-        steps.add(instanceCreated(!instances.isEmpty()));
-        steps.add(instanceRunning());
+        if (HohenheimRoles.enabled(Role.INSTANCES)) {
+            List<Row> instances = Models.get(InstanceModel.class).find()
+                .where(InstanceModel.DELETED_AT.isNull())
+                .limit(1)
+                .all();
+            steps.add(instanceCreated(!instances.isEmpty()));
+            steps.add(instanceRunning());
+        }
 
         return steps;
     }

@@ -179,8 +179,10 @@ public final class HohenheimPanel extends Panel {
         // tier: instance placement is gated on an ADMITTED host, and admit/
         // preflight/trust live on this resource -- an instances-only node
         // without it cannot place anything.
-        addIf(peers, new ServerResource(), Role.STACKS, Role.DATABASES, Role.INSTANCES);
-        addIf(peers, new ReconcileFindingResource(), Role.STACKS, Role.DATABASES, Role.INSTANCES);
+        if (HohenheimRoles.hostWorkloadsEnabled()) {
+            peers.add(new ServerResource());
+            peers.add(new ReconcileFindingResource());
+        }
         addIf(peers, new DnsZoneResource(), Role.DNS);
         addIf(peers, new DnsRecordResource(), Role.DNS);
         addIf(peers, new DnsPeerResource(), Role.DNS);
