@@ -66,6 +66,7 @@ public final class PaasApi {
         initSites();
         initOperations();
         initEnvironmentVariables();
+        SiteApi.init();
     }
 
     // -- projects -------------------------------------------------------------
@@ -222,8 +223,8 @@ public final class PaasApi {
      *
      * @return the row, or null when the response has already been ended
      */
-    private static @Nullable Row visibleSite(@NonNull Conduit conduit,
-                                             @NonNull AccessContext ctx) {
+    static @Nullable Row visibleSite(@NonNull Conduit conduit,
+                                     @NonNull AccessContext ctx) {
         Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
         Row site = siteId == null ? null : Models.get(SiteModel.class).find()
             .where(SiteModel.ID.eq(siteId))
@@ -240,8 +241,8 @@ public final class PaasApi {
      * THE enumerated tenant view of a site. A whitelist, never a row dump -- settings
      * (env maps, api keys, webhook secrets) are absent BY NAME.
      */
-    private static @NonNull Map<String, Object> siteProjection(@NonNull Row site,
-                                                               boolean detail) {
+    static @NonNull Map<String, Object> siteProjection(@NonNull Row site,
+                                                       boolean detail) {
         Map<String, Object> entry = new LinkedHashMap<>();
         Integer siteId = site.get(SiteModel.ID);
         entry.put("id", siteId);
@@ -267,6 +268,11 @@ public final class PaasApi {
         if (project != null) {
             entry.put("project", Map.of("id", project.get(ProjectModel.ID),
                 "name", project.get(ProjectModel.NAME)));
+        }
+        if (detail && siteId != null) {
+            // The hostnames are the one thing a site IS to the proxy; the write lane
+            // (SiteApi) answers with the same rows, so a caller can verify what it made.
+            entry.put("domains", SiteApi.domainProjections(siteId));
         }
         if (detail && applicationId != null) {
             Row latest = Models.get(ReleaseOperationModel.class)

@@ -51,6 +51,10 @@
     "text": "Database '{$name}' runs on host '{$server}' while this site deploys on host '{$site_server}': a Docker site reaches its database over a link network, which only exists when both run on the same host",
     "scope": "violations"
   },
+  "domain_site_mismatch": {
+    "text": "The domain in the body names another site than the one in the URL",
+    "scope": "violations"
+  },
   "hostname_required": {
     "text": "Hostname is required",
     "scope": "violations"

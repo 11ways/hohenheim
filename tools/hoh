@@ -135,6 +135,85 @@ function ask(question, { hidden = false } = {}) {
     });
 }
 
+// -- site write verbs (hoh site create|delete|domains|domain ...) --------------
+//
+// key=value pairs are passed to the API VERBATIM as form fields, dotted keys
+// included (settings.forward_host=127.0.0.1, custom_headers.0.key=Host): the
+// field vocabulary is the server's form, documented in docs/paas-api.md, and
+// this tool never learns it -- an unknown key comes back as a named refusal.
+
+function fieldsOf(pairs, usage) {
+    const form = {};
+    for (const pair of pairs) {
+        const at = pair.indexOf('=');
+        if (at < 1) die(usage);
+        form[pair.slice(0, at)] = pair.slice(at + 1);
+    }
+    return form;
+}
+
+async function confirmSlug(id, verb) {
+    const site = await get(`/api/v1/sites/${id}`);
+    if (flags.yes) return site;
+    const typed = await ask(`${verb} "${site.slug}". Type the site slug to confirm: `);
+    if (typed === null) die(`Refusing to ${verb.toLowerCase()} without confirmation (pass --yes in scripts).`);
+    if (typed.trim() !== site.slug) die('Slug mismatch; nothing was done.');
+    return site;
+}
+
+const domainColumns = ['id', 'hostname', 'match_type', 'path', 'listen_on', 'force_ssl', 'live'];
+
+const siteVerbs = {
+
+    async create([name, kind, ...pairs]) {
+        const usage = 'Usage: hoh site create <name> <upstream-kind> [field=value ...]';
+        if (!name || !kind) die(usage);
+        const form = fieldsOf(pairs, usage);
+        form.name = name;
+        form.upstream_kind = kind;
+        const site = await post('/api/v1/sites', form);
+        if (flags.json) return emit(site);
+        console.log(`Site ${site.id} "${site.slug}" created (${site.type}, enabled=${site.enabled}).`);
+    },
+
+    async delete([id]) {
+        if (!id) die('Usage: hoh site delete <site-id> [--yes]');
+        await confirmSlug(id, 'Delete');
+        const result = await post(`/api/v1/sites/${id}/delete`);
+        console.log(`Site ${result.id} ${result.status}.`);
+    },
+
+    async domains([id]) {
+        if (!id) die('Usage: hoh site domains <site-id>');
+        emit(await get(`/api/v1/sites/${id}/domains`), 'domains', domainColumns);
+    },
+
+    async domain([verb, siteId, ...rest]) {
+        const usage = 'Usage: hoh site domain add <site-id> <hostname> [field=value ...]'
+            + ' | hoh site domain remove <site-id> <domain-id> [--yes]';
+        if (verb === 'add') {
+            const [hostname, ...pairs] = rest;
+            if (!siteId || !hostname) die(usage);
+            const form = fieldsOf(pairs, usage);
+            form.hostname = hostname;
+            const domain = await post(`/api/v1/sites/${siteId}/domains`, form);
+            if (flags.json) return emit(domain);
+            console.log(`Domain ${domain.id} ${domain.hostname} added to site ${domain.site_id}`
+                + ` (${domain.match_type}, live=${domain.live}).`);
+            return;
+        }
+        if (verb === 'remove') {
+            const [domainId] = rest;
+            if (!siteId || !domainId) die(usage);
+            await confirmSlug(siteId, `Remove domain ${domainId} from`);
+            const result = await post(`/api/v1/sites/${siteId}/domains/${domainId}/delete`);
+            console.log(`Domain ${result.id} removed from site ${result.site_id}.`);
+            return;
+        }
+        die(usage);
+    },
+};
+
 // -- commands -----------------------------------------------------------------
 
 const commands = {
@@ -184,9 +263,10 @@ const commands = {
         })), ['id', 'slug', 'type', 'source', 'enabled', 'health', 'project']);
     },
 
-    async site([id]) {
-        if (!id) die('Usage: hoh site <site-id>');
-        emit(await get(`/api/v1/sites/${id}`));
+    async site([first, ...rest]) {
+        if (siteVerbs[first]) return siteVerbs[first](rest);
+        if (!first) die('Usage: hoh site <site-id> | hoh site create|delete|domains|domain ...');
+        emit(await get(`/api/v1/sites/${first}`));
     },
 
     async deploy([id]) {
@@ -323,6 +403,12 @@ Usage: hoh <command> [args] [--json] [--yes]
   login <host>                       Store host + API key (verified first)
   projects [<id>]                    Projects and environments you belong to
   sites | site <id>                  Sites you hold manage on
+  site create <name> <kind> [f=v..]  Create a site (admin): fields are the form's, dotted
+                                     for settings (settings.forward_host=127.0.0.1)
+  site delete <site-id> [--yes]      Soft-delete a site (admin; asks for the slug)
+  site domains <site-id>             Hostnames of a site
+  site domain add <id> <host> [f=v]  Add a hostname (custom_headers.0.key=Host ...)
+  site domain remove <id> <dom-id>   Remove a hostname (asks for the slug)
   deploy <site-id>                   Queue a git deploy
   rollback <site-id> [--yes]        Roll back to the retained release (asks for the slug)
   releases <site-id>                 Release/rollback operations
