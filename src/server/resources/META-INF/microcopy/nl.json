@@ -10194,6 +10194,14 @@
     "text": "Beide kanten hebben nu transfersleutel {$key}",
     "scope": "dns_peer"
   },
+  "negotiate_key_done_endpoint": {
+    "text": "Beide kanten hebben nu transfersleutel {$key}; de peer haalt op bij {$endpoint}",
+    "scope": "dns_peer"
+  },
+  "negotiate_key_endpoint_kept": {
+    "text": "Beide kanten hebben nu transfersleutel {$key}, maar de peer had {$endpoint} al als ons transferadres en behield dat",
+    "scope": "dns_peer"
+  },
   "negotiate_key_failed": {
     "text": "De peer weigerde de sleuteluitwisseling: {$reason}",
     "scope": "dns_peer"

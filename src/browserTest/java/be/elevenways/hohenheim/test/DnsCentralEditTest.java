@@ -374,7 +374,8 @@ class DnsCentralEditTest extends HohenheimTestBase {
         String keyName = DnsFederationKeys.keyNameFor(localName, "negotiate-peer");
         assertThat(keyName).startsWith("xfer-");
         stub.status = 200;
-        stub.body = "{\"status\":\"ok\",\"key_name\":\"" + keyName + "\",\"peer\":\"us\"}";
+        stub.body = "{\"status\":\"ok\",\"key_name\":\"" + keyName + "\",\"peer\":\"us\","
+            + "\"transfer_host\":\"198.51.100.7\",\"transfer_port\":53,\"transfer_kept\":false}";
 
         var negotiated = postForm("/admin/dns-peers/" + peerId + "/action/negotiate_transfer_key", confirmed(""));
         assertThat(negotiated.statusCode()).describedAs("the action runs").isIn(200, 302, 303);
@@ -387,6 +388,11 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(call.body()).contains("key_name=" + keyName)
             .contains("algorithm=hmac-sha256")
             .contains("peer=" + URLEncoder.encode(localName, StandardCharsets.UTF_8));
+        // ...and it announces where the peer must transfer FROM, so the peer never has to
+        // be told this instance's address by hand.
+        assertThat(formValue(call.body(), "transfer_port"))
+            .describedAs("the announcement carries our own DNS listen port")
+            .isEqualTo(String.valueOf(DnsFederationKeys.localTransferPort()));
 
         // 3. Both sides hold the SAME material: what went over the wire is what was stored.
         String sentSecret = formValue(call.body(), "secret");
@@ -412,29 +418,64 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat((String) peers.findById(peerId).get(DnsPeerModel.TSIG_SECRET))
             .isEqualTo(sentSecret);
 
-        // 6. The receiving half: a peer installs its key HERE over the same endpoint.
+        // 6. The receiving half: a peer installs its key HERE over the same endpoint, and
+        //    the row it creates carries the ANNOUNCED transfer endpoint -- without it this
+        //    side could neither NOTIFY nor probe the secondary it just keyed.
         String incomingSecret = DnsFederationKeys.mintSecret();
         var installed = apiPost("/api/dns/peer-key",
             "peer=office&key_name=xfer-office-us&algorithm=hmac-sha256"
+            + "&transfer_host=203.0.113.9&transfer_port=5353"
             + "&secret=" + URLEncoder.encode(incomingSecret, StandardCharsets.UTF_8));
         assertThat(installed.statusCode()).isEqualTo(200);
         assertThat(installed.body()).contains("xfer-office-us");
+        assertThat(installed.body())
+            .describedAs("the response names the endpoint it filed the caller under")
+            .contains("203.0.113.9").contains("5353");
         Row incoming = peers.findByTsigKeyName("xfer-office-us");
         assertThat(incoming).isNotNull();
         assertThat((String) incoming.get(DnsPeerModel.TSIG_SECRET)).isEqualTo(incomingSecret);
+        assertThat((String) incoming.get(DnsPeerModel.TRANSFER_HOST)).isEqualTo("203.0.113.9");
+        assertThat((Integer) incoming.get(DnsPeerModel.TRANSFER_PORT)).isEqualTo(5353);
         assertThat(DnsPeerModel.typeOf(incoming))
             .describedAs("we hold no admin credentials for the caller")
             .isEqualTo(DnsPeerModel.TYPE_NAMESERVER);
 
-        // 7. Re-negotiating rotates the SAME row rather than growing a second peer.
+        // 6b. An announcer that names no address (one behind NAT, whose own listen address
+        //     is private) is filed under the address its connection arrived from.
+        var natted = apiPost("/api/dns/peer-key",
+            "peer=natted&key_name=xfer-natted-us&algorithm=hmac-sha256"
+            + "&secret=" + URLEncoder.encode(DnsFederationKeys.mintSecret(), StandardCharsets.UTF_8));
+        assertThat(natted.statusCode()).isEqualTo(200);
+        assertThat((String) peers.findByTsigKeyName("xfer-natted-us").get(DnsPeerModel.TRANSFER_HOST))
+            .describedAs("the connection peer is the honest fallback")
+            .isIn("127.0.0.1", "::1", "0:0:0:0:0:0:0:1");
+
+        // 7. Re-negotiating rotates the SAME row rather than growing a second peer, and an
+        //    announcement that disagrees with a filled endpoint is REPORTED, never applied:
+        //    overwriting it would silently re-point a running transfer relationship.
         String rotated = DnsFederationKeys.mintSecret();
         var again = apiPost("/api/dns/peer-key",
             "peer=office&key_name=xfer-office-us&algorithm=hmac-sha256"
+            + "&transfer_host=198.51.100.44&transfer_port=53"
             + "&secret=" + URLEncoder.encode(rotated, StandardCharsets.UTF_8));
         assertThat(again.statusCode()).isEqualTo(200);
         Row rotatedRow = peers.findByTsigKeyName("xfer-office-us");
         assertThat(rotatedRow.get(DnsPeerModel.ID)).isEqualTo(incoming.get(DnsPeerModel.ID));
         assertThat((String) rotatedRow.get(DnsPeerModel.TSIG_SECRET)).isEqualTo(rotated);
+        assertThat((String) rotatedRow.get(DnsPeerModel.TRANSFER_HOST))
+            .describedAs("an operator's transfer address is never overwritten")
+            .isEqualTo("203.0.113.9");
+        assertThat(again.body()).contains("203.0.113.9");
+        assertThat(again.body())
+            .describedAs("the disagreement is reported instead")
+            .contains("\"transfer_kept\":true");
+
+        // ...and an announcement that AGREES reports no disagreement at all.
+        var agreeing = apiPost("/api/dns/peer-key",
+            "peer=office&key_name=xfer-office-us&algorithm=hmac-sha256"
+            + "&transfer_host=203.0.113.9&transfer_port=5353"
+            + "&secret=" + URLEncoder.encode(DnsFederationKeys.mintSecret(), StandardCharsets.UTF_8));
+        assertThat(agreeing.body()).contains("\"transfer_kept\":false");
 
         // 8. Falsification of the guards: unusable material and an unknown algorithm are
         //    refused before storage, and a session cookie can never plant a key at all.

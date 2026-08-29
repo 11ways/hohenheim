@@ -67,6 +67,41 @@ public final class DnsFederationKeys {
     }
 
     /**
+     * @return the address this instance announces as its own AXFR/NOTIFY endpoint, or
+     *         null when the DNS listener is bound to a wildcard or loopback address and
+     *         only the receiver can say where our packets came from
+     */
+    public static @Nullable String localTransferHost() {
+        String bind = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.BIND_ADDRESS);
+        if (bind == null || bind.isBlank()) {
+            return null;
+        }
+        String address = bind.trim();
+        try {
+            InetAddress parsed = InetAddress.getByName(address);
+            if (parsed.isAnyLocalAddress() || parsed.isLoopbackAddress()) {
+                return null;
+            }
+        }
+        catch (Exception unresolvable) {
+            // An address this host cannot even parse is not one to announce.
+            return null;
+        }
+        return address;
+    }
+
+    /** @return the port this instance's DNS listener serves, which is where a peer transfers from */
+    public static int localTransferPort() {
+        Integer port = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.PORT);
+        return port != null && port > 0 && port < 65536 ? port : 53;
+    }
+
+    /** What {@link #install} did with the announced transfer endpoint. */
+    public record Installation(@NonNull Row peer, @Nullable String transferHost,
+                               @Nullable Integer transferPort, boolean transferKept) {
+    }
+
+    /**
      * Writes a negotiated key onto the peer row this instance keeps for the other side,
      * creating that row when the other side is new here.
      *
@@ -76,10 +111,21 @@ public final class DnsFederationKeys {
      * instance holds no admin credentials for the caller, and claiming otherwise would
      * make {@code DnsPeerApi.forPeer} promise a channel that does not exist.
      *
-     * @return the peer row now holding the key
+     * AIDEV-NOTE: the endpoint is filled only when the row has NO transfer host yet.
+     * Before that, negotiation left every created row with an empty transfer host, so the
+     * primary could neither NOTIFY nor probe the secondary it had just keyed until an
+     * operator typed the address by hand -- and overwriting a filled one would silently
+     * re-point a running transfer relationship at whatever the caller claimed, which is
+     * why a disagreement is REPORTED ({@code transferKept}) instead of applied.
+     *
+     * @param transferHost the endpoint the caller announces, already resolved by the
+     *                     handler to the connection's peer address when unannounced
+     * @return the peer row now holding the key, and what became of the endpoint
      */
-    public static @NonNull Row install(@NonNull String peerName, @NonNull String keyName,
-                                       @NonNull String algorithm, @NonNull String secret) {
+    public static @NonNull Installation install(@NonNull String peerName, @NonNull String keyName,
+                                                @NonNull String algorithm, @NonNull String secret,
+                                                @Nullable String transferHost,
+                                                @Nullable Integer transferPort) {
         DnsPeerModel peers = Models.get(DnsPeerModel.class);
         Row peer = peers.findByTsigKeyName(keyName);
         if (peer == null) {
@@ -94,8 +140,25 @@ public final class DnsFederationKeys {
         peer.set(DnsPeerModel.TSIG_KEY_NAME, keyName);
         peer.set(DnsPeerModel.TSIG_ALGORITHM, algorithm);
         peer.set(DnsPeerModel.TSIG_SECRET, secret);
+
+        String storedHost = peer.get(DnsPeerModel.TRANSFER_HOST);
+        boolean kept = false;
+        if (storedHost == null || storedHost.isBlank()) {
+            if (transferHost != null && !transferHost.isBlank()) {
+                peer.set(DnsPeerModel.TRANSFER_HOST, transferHost.trim());
+                if (transferPort != null && transferPort > 0 && transferPort < 65536) {
+                    peer.set(DnsPeerModel.TRANSFER_PORT, transferPort);
+                }
+            }
+        }
+        else if (transferHost != null && !transferHost.isBlank()) {
+            // An operator's address stands; only say that the two disagree.
+            kept = !storedHost.trim().equals(transferHost.trim())
+                || (transferPort != null && !transferPort.equals(peer.get(DnsPeerModel.TRANSFER_PORT)));
+        }
         peers.save(peer);
-        return peer;
+        return new Installation(peer, peer.get(DnsPeerModel.TRANSFER_HOST),
+            peer.get(DnsPeerModel.TRANSFER_PORT), kept);
     }
 
     /** Peer names are unique in the schema, so a colliding announced name gets a suffix. */

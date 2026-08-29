@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
@@ -11,12 +12,10 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
-import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -108,33 +107,13 @@ public final class DnsPeerResource extends RowResource {
         return List.of(DnsPeerModel.NAME);
     }
 
-    /**
-     * The edit-forwarding credentials exist only on a Hohenheim peer: on a peer typed
-     * as a plain nameserver they can never be written.
-     *
-     * AIDEV-NOTE: the null-record arm returns EDITABLE rather than the usual fail-closed
-     * HIDDEN, and that is deliberate: the null record IS the create form, where there is
-     * no stored type yet and no record data to leak -- hiding them there would make a
-     * Hohenheim peer impossible to create in one pass.
-     *
-     * AIDEV-NOTE: this binding is a WRITE guard, not a display one. The form renderer
-     * resolves field access WITHOUT the record
-     * ({@code ResourceFormPageRenderer} hands the translator only {@code fieldAccessByPath}
-     * plus the AccessContext), so a record-aware decision cannot hide a field on the
-     * detail form today -- the inputs still render on a nameserver peer, and what the
-     * type actually enforces is {@code enforceFieldAccess} stripping the submitted values
-     * plus {@link #validate}. Making the render record-aware is a zenit-cms change.
-     */
-    @Override
-    public @NonNull List<ResourceFieldBinding> fieldBindings() {
-        FieldAccess hohenheimOnly = FieldAccess.customRecordAware((ctx, record) ->
-            !(record instanceof Row peer) || DnsPeerModel.isHohenheim(peer)
-                ? FieldAccess.Decision.EDITABLE
-                : FieldAccess.Decision.HIDDEN);
-        return List.of(
-            ResourceFieldBinding.of(DnsPeerModel.BASE_URL.getName(), hohenheimOnly),
-            ResourceFieldBinding.of(DnsPeerModel.API_KEY.getName(), hohenheimOnly));
-    }
+    // AIDEV-NOTE: there is deliberately NO record-aware FieldAccess hiding base_url/api_key
+    // on a nameserver peer any more. It hid them from the STORED type while validate demanded
+    // them for the SUBMITTED one, so switching a peer to Hohenheim was a guaranteed dead end:
+    // the renderer skipped both inputs, enforceFieldAccess stripped them out of the submit,
+    // and validate then refused the save against the empty stored values. The type gate that
+    // actually matters is DnsPeerApi.forPeer, which keys on the TYPE and never on "has a base
+    // URL and a key" -- credentials on a nameserver peer are inert, not dangerous.
 
     /**
      * Exchanges a fresh shared TSIG key with a Hohenheim peer, writing both sides.
@@ -173,10 +152,11 @@ public final class DnsPeerResource extends RowResource {
         String keyName = DnsFederationKeys.keyNameFor(localName, peerName);
         String secret = DnsFederationKeys.mintSecret();
 
-        String confirmed;
+        DnsPeerKeyResponse confirmation;
         try {
-            confirmed = api.negotiateTransferKey(localName, keyName,
-                DnsFederationKeys.ALGORITHM, secret);
+            confirmation = api.negotiateTransferKey(localName, keyName,
+                DnsFederationKeys.ALGORITHM, secret,
+                DnsFederationKeys.localTransferHost(), DnsFederationKeys.localTransferPort());
         }
         catch (DnsPeerApi.PeerApiException refused) {
             return CmsActionResult.errorToast(
@@ -184,7 +164,7 @@ public final class DnsPeerResource extends RowResource {
                     .withArg("reason", refused.getMessage() != null
                         ? refused.getMessage() : refused.toString()));
         }
-        if (!keyName.equals(confirmed)) {
+        if (!keyName.equals(confirmation.key_name())) {
             // The peer stored the name IT was told; a different one back means the two
             // sides would look each other up under different names and never transfer.
             return CmsActionResult.errorToast(
@@ -195,9 +175,31 @@ public final class DnsPeerResource extends RowResource {
         peer.set(DnsPeerModel.TSIG_ALGORITHM, DnsFederationKeys.ALGORITHM);
         peer.set(DnsPeerModel.TSIG_SECRET, secret);
         Models.get(DnsPeerModel.class).save(peer);
+
+        String endpoint = endpointOf(confirmation);
+        if (endpoint.isEmpty()) {
+            return CmsActionResult.refreshWithToast(
+                Microcopy.of("negotiate_key_done").withFilter("scope", "dns_peer")
+                    .withArg("key", keyName));
+        }
+        // A kept endpoint is the one outcome the operator must act on: the key works, but
+        // the peer still pulls from an address that is not the one we announced.
         return CmsActionResult.refreshWithToast(
-            Microcopy.of("negotiate_key_done").withFilter("scope", "dns_peer")
-                .withArg("key", keyName));
+            Microcopy.of(Boolean.TRUE.equals(confirmation.transfer_kept())
+                    ? "negotiate_key_endpoint_kept" : "negotiate_key_done_endpoint")
+                .withFilter("scope", "dns_peer")
+                .withArg("key", keyName)
+                .withArg("endpoint", endpoint));
+    }
+
+    /** @return {@code host:port} as the peer now files this instance, or empty when it named none */
+    private static @NonNull String endpointOf(@NonNull DnsPeerKeyResponse confirmation) {
+        String host = confirmation.transfer_host();
+        if (host == null || host.isBlank()) {
+            return "";
+        }
+        Integer port = confirmation.transfer_port();
+        return port != null ? host.trim() + ":" + port : host.trim();
     }
 
     /**

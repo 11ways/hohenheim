@@ -76,6 +76,13 @@ A zone with no secondaries keeps the old serves-immediately behavior.
 
 1. On BOTH boxes create a `dns_peer` for the other, sharing one TSIG key
    (name + algorithm + base64 secret) and the other's transfer host/port.
+   On a Hohenheim peer "Negotiate transfer key" does all of that: the
+   announcement carries the caller's own transfer endpoint (its `dns.bind_address`
+   when that is a specific reachable address, else the address the receiver sees
+   the call arrive from, plus `dns.port`), and the receiver fills `transfer_host`
+   / `transfer_port` on the row it creates. An address an operator already typed
+   is never overwritten -- the response reports the disagreement instead, and the
+   toast says which endpoint the peer will transfer from.
 2. Office (primary): own the zone (`role=primary`), and on the zone's
    Secondaries tab attach the VPS peer -- this authorizes its AXFR and makes
    it a NOTIFY target.

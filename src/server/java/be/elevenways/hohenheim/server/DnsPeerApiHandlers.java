@@ -15,6 +15,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.JsonResult;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.TSIG;
 
 import java.util.Map;
@@ -62,14 +64,51 @@ final class DnsPeerApiHandlers {
                 return refusal(conduit, "validation");
             }
 
-            Row peer = DnsFederationKeys.install(peerName, keyName, algorithm, secret);
+            DnsFederationKeys.Installation installed = DnsFederationKeys.install(peerName,
+                keyName, algorithm, secret,
+                announcedHost(trimmed(form.get("transfer_host")), conduit),
+                port(form.get("transfer_port")));
+            Row peer = installed.peer();
             ActivityLog.record(Models.get(DnsPeerModel.class), peer.get(DnsPeerModel.ID),
                 "updated", keyName);
             Blast.log("DNS: transfer key", keyName, "installed for peer",
-                peer.get(DnsPeerModel.NAME));
+                peer.get(DnsPeerModel.NAME), "transferring from", installed.transferHost());
             return new JsonResult<Object>(new DnsPeerKeyResponse("ok", keyName,
-                peer.get(DnsPeerModel.NAME)));
+                peer.get(DnsPeerModel.NAME), installed.transferHost(),
+                installed.transferPort(), installed.transferKept()));
         });
+    }
+
+    /**
+     * The address the caller transfers from: what it announced, else the address its own
+     * connection arrived from.
+     *
+     * AIDEV-NOTE: the connection peer is the HONEST fallback, and it is the only workable
+     * one for an announcer behind NAT -- its own listen address is then a private address
+     * this side can never reach. An announced host with whitespace in it is not a host, so
+     * it degrades to the connection peer rather than being stored.
+     */
+    private static @Nullable String announcedHost(@NonNull String announced, @NonNull Conduit conduit) {
+        if (!announced.isEmpty() && announced.indexOf(' ') < 0 && announced.length() <= 253) {
+            return announced;
+        }
+        String remote = trimmed(conduit.getRemoteIp());
+        return remote.isEmpty() ? null : remote;
+    }
+
+    /** @return the announced transfer port, or null when absent or out of range */
+    private static @Nullable Integer port(@Nullable String raw) {
+        String value = trimmed(raw);
+        if (value.isEmpty()) {
+            return null;
+        }
+        try {
+            int parsed = Integer.parseInt(value);
+            return parsed > 0 && parsed < 65536 ? parsed : null;
+        }
+        catch (NumberFormatException malformed) {
+            return null;
+        }
     }
 
     private static ActionResult<Object> refusal(Conduit conduit, String error) {

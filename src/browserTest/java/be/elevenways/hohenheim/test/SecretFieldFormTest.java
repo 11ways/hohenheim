@@ -27,9 +27,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SecretFieldFormTest extends HohenheimTestBase {
 
     // AIDEV-NOTE: the specimen is the TSIG secret rather than the peer api key, which it
-    // was until the peer TYPE landed: a nameserver peer's api key is not writable at all
-    // (the type's field binding strips it) and a hohenheim peer's may not be cleared, so
-    // neither half of that column can carry the generic secret contract any more.
+    // was until the peer TYPE landed: a hohenheim peer's api key may not be cleared (validate
+    // demands it), so that column can no longer carry the generic secret contract. The api
+    // key IS writable on a nameserver peer again since the record-aware FieldAccess that hid
+    // it came out of DnsPeerResource -- step 7 below is what that removal bought.
     private static final String STORED_KEY = "peer-tsig-secret-original-value";
 
     private HttpResponse<String> get(String path) throws Exception {
@@ -116,6 +117,26 @@ class SecretFieldFormTest extends HohenheimTestBase {
         assertThat(reload.body())
             .as("6. a reload must not re-disclose the minted token")
             .doesNotContain(disclosed);
+
+        // 7. Promoting the same peer to a Hohenheim one carries its admin credentials in
+        //    the SAME submit. This was a dead end while a record-aware FieldAccess hid both
+        //    inputs from a peer whose STORED type was nameserver: the renderer dropped them,
+        //    the submit was stripped of them, and validate then refused for lacking them.
+        String promoted = "name=secret-form-peer&peer_type=hohenheim"
+            + "&transfer_host=peer.secret-form.example&transfer_port=53"
+            + "&tsig_key_name=&tsig_algorithm=hmac-sha256&tsig_secret=&enabled=true"
+            + "&base_url=https%3A%2F%2Fpeer.secret-form.example&api_key=peer-admin-api-key";
+        HttpResponse<String> switched = post(editPath, promoted);
+        assertThat(switched.statusCode()).as("7. the type switch must be accepted").isIn(200, 302, 303);
+
+        Row peer = Models.get(DnsPeerModel.class).findById(peerId);
+        assertThat(DnsPeerModel.typeOf(peer))
+            .as("7. the submitted type must be stored")
+            .isEqualTo(DnsPeerModel.TYPE_HOHENHEIM);
+        assertThat((String) peer.get(DnsPeerModel.BASE_URL))
+            .as("7. the credentials submitted WITH the switch must survive it")
+            .isEqualTo("https://peer.secret-form.example");
+        assertThat((String) peer.get(DnsPeerModel.API_KEY)).isEqualTo("peer-admin-api-key");
     }
 
     // ------------------------------------------------------------------
