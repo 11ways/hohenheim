@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
@@ -987,6 +988,13 @@ public class InstanceResource extends RowResource {
                 && InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND))
                 && HohenheimAccess.reachesRecord(ctx, InstanceModel.MODEL_ID,
                     row.get(InstanceModel.ID), HohenheimAccess.POWER))
+            // Offered but DEAD while an attached managed database is not active, with the
+            // database and its state on screen: the same resolver InstanceService refuses
+            // the POST with, so the button is never the gate.
+            .unavailableWhen((row, ctx) -> {
+                Integer id = row.get(InstanceModel.ID);
+                return id == null ? null : InstanceDatabaseLinks.notReadyReason(id);
+            })
             .handler((row, ctx) -> {
                 this.instances.deploy(row.get(InstanceModel.ID), DeployTrigger.MANUAL);
                 return CmsActionResult.refreshWithToast(

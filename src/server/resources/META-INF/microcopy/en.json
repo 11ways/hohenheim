@@ -39,6 +39,17 @@
     "text": "A database named '{$name}' already exists; destroy it first or pick another name",
     "scope": "violations"
   },
+  "database_not_ready": [
+    {
+      "text": "Database '{$name}' is not ready yet (state: {$state}); the workload would start without its credentials, so wait until it is active and deploy then",
+      "scope": "violations"
+    },
+    {
+      "text": "Database '{$name}' failed to provision: {$reason}",
+      "scope": "violations",
+      "state": "failed"
+    }
+  ],
   "database_remote": {
     "text": "Database '{$name}' runs on host '{$server}': its port is only published on that host's loopback, so sites on this host cannot reach it",
     "scope": "violations"

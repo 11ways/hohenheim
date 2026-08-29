@@ -13,8 +13,10 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -137,6 +139,59 @@ public final class InstanceDatabaseLinks {
             .withArg("name", database != null
                 ? String.valueOf((Object) database.get(DatabaseModel.NAME)) : "")
             .withArg("workloads", String.join(", ", names)));
+    }
+
+    /**
+     * WHY this instance may not be deployed right now, database-wise: the first attached
+     * database that is not {@code active}, named with its state (and, when it failed, with
+     * its failure reason); null when every attached database can serve the workload.
+     *
+     * AIDEV-NOTE: THE one resolver behind both halves of the dead-button-plus-refusal
+     * shape -- {@code InstanceResource.deployAction}'s unavailableWhen and
+     * {@code InstanceOperationGuard.requireDatabasesReady} -- so the button and the POST
+     * can never disagree. It exists because {@link DatabaseEnvInjection} FAIL-SOFTS: a
+     * database that is still provisioning contributes NO variables, the workload boots
+     * without its credentials and looks healthy, and the only trace is an attention item
+     * (the WordPress template lane made this reachable in one click).
+     *
+     * AIDEV-NOTE: deliberately NOT widened past the RECORD's status. A link whose database
+     * record is gone stays fail-soft (injection logs {@code record_missing}), because
+     * refusing every deploy of a workload whose database someone deleted would leave the
+     * operator no way to bring it back up; and an active database whose CONTAINER is not
+     * running is left to the injection lane too -- that answer needs a daemon roundtrip
+     * and would race the deploy that is about to start the engine's own host anyway.
+     */
+    public static @Nullable Microcopy notReadyReason(int instanceId) {
+        DatabaseModel databases = Models.get(DatabaseModel.class);
+        InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
+        if (databases == null || links == null) {
+            return null;
+        }
+        for (Row link : links.findByInstanceId(instanceId)) {
+            Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
+            Row database = databaseId == null ? null
+                : databases.find().where(DatabaseModel.ID.eq(databaseId)).first();
+            if (database == null) {
+                continue;
+            }
+            String status = database.get(DatabaseModel.STATUS);
+            if (DatabaseModel.STATUS_ACTIVE.equals(status)) {
+                continue;
+            }
+            String name = String.valueOf((Object) database.get(DatabaseModel.NAME));
+            String failure = database.get(DatabaseModel.FAILURE_REASON);
+            if (DatabaseModel.STATUS_FAILED.equals(status) && failure != null
+                    && !failure.isBlank()) {
+                return CmsSupport.violationText("database_not_ready")
+                    .withFilter("state", DatabaseModel.STATUS_FAILED)
+                    .withArg("name", name)
+                    .withArg("reason", failure);
+            }
+            return CmsSupport.violationText("database_not_ready")
+                .withArg("name", name)
+                .withArg("state", String.valueOf(status));
+        }
+        return null;
     }
 
     /**
