@@ -24,6 +24,7 @@ ROLES_RAW=""
 MAIN_URL=""
 ADMIN_EMAIL=""
 VOLUME_ROOT_GB=""
+SWAP_SIZE=""
 WITH_DOCKER="no"
 DRY_RUN="no"
 
@@ -77,6 +78,7 @@ Options:
   --with-docker             install Docker CE from Docker's apt repo (implied by
                             the instances/databases/stacks roles)
   --volume-root-size <GB>   create the btrfs loop-file volume root and its sudoers line
+  --swap <size>             create a swapfile of this size (e.g. 2G) with vm.swappiness=10
   --panel-port <port>       admin listener port (default 3000)
   --prefix <dir>            install root (default /opt/hohenheim)
   --dry-run                 print the plan, execute nothing
@@ -96,6 +98,7 @@ while [ $# -gt 0 ]; do
         --main-url) MAIN_URL="${2:-}"; shift 2 ;;
         --admin-email) ADMIN_EMAIL="${2:-}"; shift 2 ;;
         --volume-root-size) VOLUME_ROOT_GB="${2:-}"; shift 2 ;;
+        --swap) SWAP_SIZE="${2:-}"; shift 2 ;;
         --panel-port) PANEL_PORT="${2:-}"; shift 2 ;;
         --prefix) PREFIX="${2:-}"; shift 2 ;;
         --with-docker) WITH_DOCKER="yes"; shift ;;
@@ -129,6 +132,13 @@ fi
 if [ "$VOLUME_ROOT_GB" != "" ]; then
     case "$VOLUME_ROOT_GB" in
         ''|*[!0-9]*) fail "--volume-root-size takes whole gigabytes, got '$VOLUME_ROOT_GB'" ;;
+    esac
+fi
+
+if [ -n "$SWAP_SIZE" ]; then
+    case "$SWAP_SIZE" in
+        [1-9]*[MG]) ;;
+        *) fail "--swap takes a size like 2G or 512M, got '$SWAP_SIZE'" ;;
     esac
 fi
 
@@ -492,14 +502,41 @@ fi
 
 # --- 11. kernel limits ------------------------------------------------------
 
+step "Swap"
+SWAP_FILE="/swapfile"
+if [ -z "$SWAP_SIZE" ]; then
+    skip "--swap not given"
+elif [ "$(awk 'NR>1 {print $3; exit}' /proc/swaps 2>/dev/null || true)" != "" ]; then
+    skip "swap is already active"
+elif [ -f "$SWAP_FILE" ]; then
+    skip "$SWAP_FILE exists"
+else
+    info "creating a $SWAP_SIZE swapfile at $SWAP_FILE"
+    run fallocate -l "$SWAP_SIZE" "$SWAP_FILE"
+    run chmod 0600 "$SWAP_FILE"
+    run mkswap -q "$SWAP_FILE"
+    run swapon "$SWAP_FILE"
+    if grep -qF "$SWAP_FILE none swap" /etc/fstab 2>/dev/null; then
+        skip "fstab swap entry present"
+    else
+        run bash -c "printf '%s none swap sw 0 0\n' '$SWAP_FILE' >> /etc/fstab"
+    fi
+fi
+
 step "Kernel limits"
 SYSCTL_FILE="/etc/sysctl.d/99-hohenheim.conf"
-if [ -f "$SYSCTL_FILE" ]; then
-    skip "$SYSCTL_FILE exists"
-else
-    # The 2026-08-04 starfleet incident: a low fs.file-max killed the HTTPS listener.
-    write_file "$SYSCTL_FILE" 0644 root:root "fs.file-max = 200000
+# The 2026-08-04 starfleet incident: a low fs.file-max killed the HTTPS listener.
+SYSCTL_BODY="fs.file-max = 200000
 "
+if [ -n "$SWAP_SIZE" ]; then
+    # A server heap should page out reluctantly; swap is a safety net, not a tier.
+    SYSCTL_BODY="${SYSCTL_BODY}vm.swappiness = 10
+"
+fi
+if [ -f "$SYSCTL_FILE" ] && [ "$(cat "$SYSCTL_FILE" 2>/dev/null)" = "$(printf '%s' "$SYSCTL_BODY")" ]; then
+    skip "$SYSCTL_FILE up to date"
+else
+    write_file "$SYSCTL_FILE" 0644 root:root "$SYSCTL_BODY"
     run sysctl -q -p "$SYSCTL_FILE"
 fi
 

@@ -51,6 +51,14 @@ expect "prints the setup step" "$PLAN" "redirects to /setup"
 expect "no docker without a docker role" "$PLAN" "docker-ce" no
 expect "no volume root without the flag" "$PLAN" "--volume-root-size not given"
 expect "dns role handles port 53" "$PLAN" "Port 53"
+expect "no swap without the flag" "$PLAN" "--swap not given"
+
+# 1b. The same node with a swapfile.
+PLAN="$(plan_of --roles proxy,dns,firewall --swap 2G)"
+# Host-independent: a host that already swaps skips the step, so assert only that
+# the flag engaged it (the plan itself is proven on a swapless VPS).
+expect "the swap step is engaged" "$PLAN" "--swap not given" no
+expect "the sysctl drop-in is still handled" "$PLAN" "99-hohenheim.conf"
 
 # 2. A compute node: instances imply docker and the volume grant.
 PLAN="$(plan_of --roles instances,databases --volume-root-size 8)"
@@ -83,6 +91,11 @@ if OUT="$(bash "$SCRIPT" --dry-run --jar "$JAR" --roles proxy --volume-root-size
     no "a non-numeric volume size is refused"
 else
     expect "non-numeric volume size is named" "$OUT" "whole gigabytes"
+fi
+if OUT="$(bash "$SCRIPT" --dry-run --jar "$JAR" --roles proxy --swap plenty 2>&1)"; then
+    no "a bad swap size is refused"
+else
+    expect "bad swap size is named" "$OUT" "--swap takes a size"
 fi
 
 # 4. The dry run must not have touched the host.

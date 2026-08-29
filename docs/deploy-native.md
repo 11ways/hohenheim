@@ -30,7 +30,8 @@ middleware reads disk first, then classpath -- the classpath has no cms.js).
         --roles proxy,dns,firewall \
         --main-url https://panel.example.com \
         --admin-email hostmaster@example.com \
-        [--with-docker] [--volume-root-size 8] [--panel-port 3000] [--prefix /opt/hohenheim]
+        [--with-docker] [--volume-root-size 8] [--swap 2G] \
+        [--panel-port 3000] [--prefix /opt/hohenheim]
 
 Debian 12/13 first (Debian 13 trixie is what it is proven on); it runs as root,
 takes no input (`DEBIAN_FRONTEND=noninteractive` throughout) and is
@@ -46,9 +47,10 @@ What each step does, in order:
 2. **Base packages** -- `curl gnupg sqlite3 unzip nftables sudo dnsutils` plus
    `ca-certificates`, decided per COMMAND (`dig`, not the transitional
    `dnsutils` package name, which would reinstall on every run).
-3. **Java 25** -- the build targets Java 25, which no Debian release ships, so
+3. **Java 25** -- the build targets Java 25. An existing java >= 25 is used as
+   is (Debian 13 ships openjdk 25, so trixie needs nothing); otherwise
    `temurin-25-jre` comes from Adoptium's apt repo (the repo's own codename when
-   it publishes one, else `bookworm`). An existing java >= 25 is used as is.
+   it publishes one, else `bookworm`).
 4. **Docker CE** -- only with `--with-docker`, or implied by the
    `instances`/`databases`/`stacks` roles; Docker's own apt repo, same codename
    fallback.
@@ -72,22 +74,26 @@ What each step does, in order:
     file, which carries the real upstream servers). `resolv.conf` is never
     deleted, and any OTHER process still holding udp/53 is reported by name
     rather than killed.
-11. **Kernel limits** -- `fs.file-max = 200000` in `/etc/sysctl.d/99-hohenheim.conf`
+11. **Swap** -- with `--swap <size>` (e.g. `2G`) on a host that swaps nowhere
+    yet: a `/swapfile`, 0600, `mkswap`/`swapon` and an fstab entry. A host that
+    already has any swap active is left alone.
+12. **Kernel limits** -- `fs.file-max = 200000` in `/etc/sysctl.d/99-hohenheim.conf`
     (the 2026-08-04 starfleet incident: a low `fs.file-max` killed the HTTPS
-    listener and nothing retried it).
-12. **Jar** -- installed 0644 owned by the service user, skipped when the
+    listener and nothing retried it), plus `vm.swappiness = 10` when a swapfile
+    was requested -- swap is the safety net, not a memory tier.
+13. **Jar** -- installed 0644 owned by the service user, skipped when the
     sha256 already matches.
-13. **systemd unit** -- `/etc/systemd/system/hohenheim.service`, the starfleet
+14. **systemd unit** -- `/etc/systemd/system/hohenheim.service`, the starfleet
     unit: `AmbientCapabilities=CAP_NET_BIND_SERVICE`, `NoNewPrivileges=false`,
     `LimitNOFILE=60000`, `SuccessExitStatus=143`, `KillMode=control-group`,
     `UMask=0027`, `-Djava.io.tmpdir=<prefix>/tmp`. The heap is derived from
     MemTotal: 40%, rounded down to a 64 MB step, clamped to 512..2048 MB
     (starfleet's 1971 MB gives exactly the 768 MB its runbook pins by hand).
-14. **Migrations** -- `--run-migrations` as the service user, with the service
+15. **Migrations** -- `--run-migrations` as the service user, with the service
     stopped, when the database is new or the jar changed.
-15. **Service** -- enable, start (or restart when the jar/unit moved), then poll
+16. **Service** -- enable, start (or restart when the jar/unit moved), then poll
     `/api/health` for up to 120s and fail loudly with the journal command.
-16. **Next steps** -- prints the admin bootstrap and the manual remainder.
+17. **Next steps** -- prints the admin bootstrap and the manual remainder.
 
 What it deliberately does NOT do: create the first administrator (there is no
 offline command for it -- see below), touch the registrar, open the provider's
@@ -122,6 +128,9 @@ The OVH box and every server after it follow this list:
    `docs/authoritative-dns.md` for the two-nameserver threshold.
 9. Record the deploy target in `~/.config/zenit-dev/config.json` so
    `zenit-dev deployed <name>` can read its build stamp.
+
+The first host installed this way is the OVH DNS primary; its facts, transcript
+and rollback note live in `docs/deploy-ovh.md`.
 
 ### Proven on a disposable VM (2026-08-29)
 
