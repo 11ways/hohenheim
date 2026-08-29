@@ -512,3 +512,58 @@ login and the first writes within the minute, so activity recording is on.
 Rollback: `/root/hohenheim-preflight-20260829-093220/` (previous jar as
 `hohenheim-server.jar.rollback`, `hohenheim.db.pre` and `hohenheim.db.atswap` both
 integrity-checked, `settings/` with the pre-edit files and the sha256-matched keyring).
+
+## Operations 2026-08-29: the security block, the install roles, the wildcard (not issued)
+
+No jar changed. Preflight `/root/hohenheim-preflight-20260829-095543/` holds the pre-edit
+`settings/` directory and `hohenheim.db.pre` (`PRAGMA integrity_check` ok). One restart.
+
+- `local.dry`: the root-level `security` block is GONE. It was never a declared group (the
+  boot logged `settings.unknown_key key=security group=""` since install), so its
+  `never_ban` hostnames had never protected anyone. Its `nftables_enabled: true` was already
+  set in `hohenheim.dry`; its three `never_ban` entries were merged into
+  `hohenheim.dry`'s `security.never_ban`, which now reads `31.70.71.228`, `77.109.82.95`,
+  `kumulus.11ways.be`, `loeckout.be` (hostnames are valid entries: `NeverBanHostnames`
+  resolves them in the background; `kumulus.11ways.be` resolves to 77.109.82.95, the
+  operator address the ssh session came from, `loeckout.be` to 77.109.112.183). The
+  settings page shows all four after the restart and the boot logs no unknown key.
+- `hohenheim.dry` roles: `stacks`, `databases`, `instances` are now `false`; `proxy`, `dns`
+  and `firewall` stay `true`. Firewall is KEPT on purpose: it owns ban enforcement (8 active
+  auto-bans, 91 rows, the `inet hohenheim` nft table) and spamservice reputation. Boot logged
+  `hohenheim.roles_captured enabled=[dns, firewall, proxy]` and one `role_disabled` line per
+  disabled role. The sidebar lost Hosts, Instances, Runtime images, Stacks, Databases and
+  Instance templates; Dashboard, Projects, Sites, Git providers, DNS zones, Certificates,
+  Access lists, Released hostnames, Users, Roles, Abuse protection, IP bans, Activity,
+  Notification channels, Settings and Build info remain. Health 200 after 23s, panel and
+  apex 200, `aa` on the SOA, listeners 53/80/443/3000, no application errors.
+  Rows that stay in the database behind the disabled roles: 4 seeded runtime images, 2
+  seeded instance templates, the backup target `phoenix` (still used by the control-plane
+  backup, whose task `BackupControlPlane` carries no role gate and reads the model
+  directly, so nightly backups are unaffected; only its admin surface is hidden), and one
+  instance row `visual-qa-20260826-invalid` (id 1, no host, state `created`) that the
+  Instances list already did not show before the role was disabled: QA debris from the
+  2026-08-26 pass, deletable only through the database or by re-enabling the role.
+  Two dashboard oddities to know: the onboarding checklist still shows the instance-tier
+  steps ("Create an instance", "Deploy it") and Needs attention still lists Docker reconcile
+  findings for `local`/`phoenix` although no role that acts on them is enabled.
+- Wildcard certificate: NOT requested. `CertificateAuthority.authorize` refuses a hostname no
+  site domain row covers (`NOT_SERVED`, before the admin bypass), and a `*.starfleet.life`
+  SAN is covered only by a site domain row that is itself `*.starfleet.life`
+  (`HostnamePatterns.covers`). The three live domain rows are `admin.starfleet.life`,
+  `starfleet.life`, `www.starfleet.life` (all `exact`), so issuing the wildcard first needs a
+  decision on which site owns `*.starfleet.life` (a wildcard domain row routes every unmatched
+  subdomain to that site's upstream instead of today's "404 - No site configured"). The
+  request page itself is ready for it: DNS-01 with "Hosted DNS" available because this server
+  serves the zone, and the form copy says a wildcard does not cover the apex (already on the
+  `starfleet.life,www.starfleet.life` certificate).
+- Admin email confirmation: read-only assessment. `auth_users.email_verified_at` is NULL for
+  `admin@starfleet.life`; `/account` shows "Your email address has not been confirmed yet"
+  with a "Send a confirmation link" button. That button cannot work here: `EmailVerification
+  .issueAndSend` requires `auth.external_base_url` (unset on this box, and hohenheim sets
+  none) and a mail lane installed through `AuthMail.install` (hohenheim installs none, and no
+  comms mail transport is configured). Consequence worth knowing: `PasswordReset` refuses a
+  reset for an unverified address, so forgot-password does not work for the administrator
+  either; `--set-password` (offline command) is the recovery path. To confirm the address:
+  set `auth.external_base_url = https://admin.starfleet.life`, configure a mail transport and
+  an `AuthMail` sender, then click the button and open the mailed link; or accept the
+  unverified state.
