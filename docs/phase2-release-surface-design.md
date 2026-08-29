@@ -130,8 +130,9 @@ Two facts are not stored today and cannot be derived honestly:
 - COMMIT. The op stores only IMAGE_ID (a digest). The commit lives in the
   candidate instance's settings, and reclaimed instances take it with them.
 
-New columns on `release_operations` (InitialMigration edited in place, up()
-AND down() -- MigrationIntegrityTest enforces the pair):
+New columns on `release_operations` (an APPENDED `M0xx_` migration, up() AND
+down() -- since 2026-08-29 `InitialMigration` is frozen and checksum-pinned by
+MigrationIntegrityTest, see CLAUDE.md):
 
 | column | type | filled by |
 | --- | --- | --- |
@@ -467,8 +468,9 @@ ignores ARE claimed deliveries and do surface).
 
 ## 7. Schema changes and the deploy consequence
 
-`InitialMigration` edited IN PLACE (never a second migration --
-MigrationIntegrityTest):
+An APPENDED `M0xx_` migration (never an edit of `InitialMigration`, which is
+frozen and checksum-pinned by MigrationIntegrityTest since 2026-08-29; new
+columns on existing tables must be nullable or defaulted):
 
 - `release_operations`: add `trigger` STRING, `triggered_by` STRING nullable,
   `commit_sha` STRING nullable, `build_operation_id` INTEGER nullable,
@@ -580,7 +582,7 @@ it (5 can start on the `<pre>` fallback in parallel).
 | # | repo | brief | size |
 | --- | --- | --- | --- |
 | 1 | plumage | `pl-log-view`: monospace follow-tail log pane. Property `text` (String), auto-follow unless user-scrolled, "jump to latest" (microcopy), no live-region on the body. New component template under `src/common/templates/components/`, tag styles in-component (cascade layer rule), showcase page `src/browserTest/templates/test/log-view-test.hwk` (axe swept fail-closed), `LogViewTest`. Acceptance: test plan item 9 green; llms.md regenerated. | S |
-| 2 | hohenheim | Model + attribution wave. Edit `InitialMigration` (section 7 columns). `ReleaseOperationModel`: TRIGGER EnumField (7 members with facets), TRIGGERED_BY, COMMIT_SHA, BUILD_OPERATION_ID, SPEC_SNAPSHOT fields. New `server/application/DeployAttribution` (GeneratedRows.as shape) read by `ReleaseEngine.newOperation` (:869); stamp commit_sha beside the three IMAGE_ID writes (:229, :328, :446); thread `build_operation_id` out of `ApplicationReleases.desiredSettings` (:349 -- return the buildId beside the map, or stash it on the map under a reserved key stripped before store; pick the former). New `SpecSnapshots` (snapshot at the same stamps; diff). Wrap callers: `SiteControlHandlers` (:44-62), `GitWebhookHandler` (:267 deploy, :361 preview, no-op), `PaasApi`, boot/reload converge path. `WebhookDeliveryModel.ACTION` enum + call-site sweep. Tests: plan items 2, 5, 6 + extend `ApplicationReleaseTest`. Verify with `zd_test --class` on the touched suites. | M |
+| 2 | hohenheim | Model + attribution wave. Append the section 7 migration (never edit `InitialMigration`). `ReleaseOperationModel`: TRIGGER EnumField (7 members with facets), TRIGGERED_BY, COMMIT_SHA, BUILD_OPERATION_ID, SPEC_SNAPSHOT fields. New `server/application/DeployAttribution` (GeneratedRows.as shape) read by `ReleaseEngine.newOperation` (:869); stamp commit_sha beside the three IMAGE_ID writes (:229, :328, :446); thread `build_operation_id` out of `ApplicationReleases.desiredSettings` (:349 -- return the buildId beside the map, or stash it on the map under a reserved key stripped before store; pick the former). New `SpecSnapshots` (snapshot at the same stamps; diff). Wrap callers: `SiteControlHandlers` (:44-62), `GitWebhookHandler` (:267 deploy, :361 preview, no-op), `PaasApi`, boot/reload converge path. `WebhookDeliveryModel.ACTION` enum + call-site sweep. Tests: plan items 2, 5, 6 + extend `ApplicationReleaseTest`. Verify with `zd_test --class` on the touched suites. | M |
 | 3 | hohenheim | Live tap + hub. `BuildLog.subscribe` (atomic replay+attach, notify after redact/cap), `server/build/LiveBuildLogs` registered/unregistered inside `SandboxedBuilds.run` (:79/:123 finally), `server/application/DeployProgress` hub + publish calls in `ReleaseEngine.step(RecordStamp,line)` (:908) and finish (:930). `DeployFrame` @HawkeyeClass record in common. Tests: plan item 3. | M |
 | 4 | hohenheim | Channel. `HohenheimChannels.DEPLOY_LOG` (+ init forced like INSTANCE_STATS), `server/application/DeployLogHandler` (InstanceStatsHandler shape: onOpen capability walk via `HohenheimAccess.hasInstanceCapability(principal, id, VIEW)`, backlog per section 3.3, 15s revalidation, onClose unsubscribes), factory install at MODULES beside `InstanceStatsHandler.init`. Client `HohenheimDeployFunctions.follow` (HohenheimStatsFunctions.series shape). Tests: plan item 4 (FakeChannelLink). | M |
 | 5 | hohenheim | The Releases tab. Rework `InstanceDeploymentsPage` + `instance-deployments.hwk` into the five-card layout (section 1): serving strip (one primary Deploy now; Roll back with the named confirmation via `t("rollback_confirm_named", ...)` args computed from `SpecSnapshots.diff` of serving vs `ReleaseEngine.newestRetired`), live activity card (SSR backlog seed + `HohenheimDeployFunctions.follow` + `pl-log-view`, `<pre class="hh-deploy-log">` until brief 1 publishes), timeline (trigger/commit columns from the new fields, per-row overflow Compare + View build log, retained-release tag), `?compare=` card. Keep the existing `use:Zenit.form` + `ReturnTarget` wiring untouched. Microcopy en+nl for every new key. Tests: plan item 1; browser item 8 lands here. Screenshot review by Jelle is part of done (phase-0 section 6 rule). | L |
