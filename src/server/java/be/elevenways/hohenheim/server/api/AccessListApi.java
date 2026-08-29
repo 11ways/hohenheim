@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.server.auth.AccessRuleNodes;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.AccessListResource;
 import be.elevenways.hohenheim.server.cms.AccessRuleResource;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.ManageAccessListResource;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.cms.ManageAccessRuleResource;
@@ -174,12 +173,7 @@ public final class AccessListApi {
                 Microcopy.of("unknown_type").withFilter("scope", "access_rule")));
         }
         Row rule = AccessRuleNodes.add(listId,
-            AccessRuleNodes.parentIn(stringOf(form.get("parent_id")), listId),
-            type, ApiConduits.ORIGIN);
-        // The rule model is deliberately NOT in ProxyReloadHooks' routing set, so the
-        // birth reloads by hand exactly as the Rules tab does; the configure below
-        // reloads again through AccessRuleResource.updateRow.
-        CmsSupport.reloadProxy();
+            AccessRuleNodes.parentIn(stringOf(form.get("parent_id")), listId), type);
         // Only the rule form's own entries travel on: parent_id is a tree fact the birth
         // above consumed, and ResourceWrites refuses a key the form does not declare.
         Map<String, Object> values = new LinkedHashMap<>();

@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.AccessRuleNodes;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -60,8 +59,7 @@ final class AccessRuleHandlers {
         }
 
         Row rule = AccessRuleNodes.add(listId,
-            AccessRuleNodes.parentIn(form.get("parent_id"), listId), type, type);
-        CmsSupport.reloadProxy();
+            AccessRuleNodes.parentIn(form.get("parent_id"), listId), type);
 
         // A group has nothing to fill in; a leaf does, so the operator lands on its
         // form with a way back to the tree.

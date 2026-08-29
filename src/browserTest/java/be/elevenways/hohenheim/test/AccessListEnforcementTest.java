@@ -4,9 +4,13 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.auth.AccessRuleNodes;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
+import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -19,6 +23,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -245,6 +250,43 @@ class AccessListEnforcementTest {
         assertThat(halfTyped.get(AccessRuleModel.ID))
             .as("step 12: an EMPTY draft saves fine while switched off")
             .isNotNull();
+
+        // Step 13: the reload belongs to the MODEL, not to whoever wrote the row. Empty the
+        // tree by hand first, so the serving baseline is unambiguous.
+        deleteRule(allow);
+        deleteRule(group);
+        deleteRule(halfTyped.get(AccessRuleModel.ID));
+        reload();
+        assertThat(request("/"))
+            .as("step 13: an emptied tree serves again (baseline for the automatic reload)")
+            .contains("200").contains("guarded-content");
+
+        // The hooks reload through the ADOPTED proxy, exactly as ServerMain wires them;
+        // detached again immediately, because a published proxy is visible to the
+        // background supervision ticks this suite does not want mid-assertion.
+        ProxyReloadHooks.install();
+        ServerMain.adoptProxyServer(proxy);
+        try {
+            rule(null, AccessRuleModel.TYPE_IP_DENY, Map.of("network", "127.0.0.1"), true);
+            assertThat(request("/"))
+                .as("step 13: a rule saved through the model alone reloads the proxy itself")
+                .contains("403").doesNotContain("guarded-content");
+
+            // Step 14: the birth funnel records WHAT was created. The origin column is
+            // Accountability's ("system" outside a request), never an argument the caller
+            // invents, so the rule type is the activity DETAIL.
+            Row born = AccessRuleNodes.add(accessList.get(AccessListModel.ID), null,
+                AccessRuleModel.TYPE_IP_ALLOW);
+            List<Row> recorded = new ActivityModel().find()
+                .where(ActivityModel.MODEL.eq(AccessRuleModel.MODEL_ID.toString()))
+                .and(ActivityModel.RECORD_ID.eq(String.valueOf(born.get(AccessRuleModel.ID))))
+                .all();
+            assertThat(recorded.stream().map(entry -> entry.get(ActivityModel.DETAIL)))
+                .as("step 14: the recorded detail is the rule type, not a surface token")
+                .contains(AccessRuleModel.TYPE_IP_ALLOW);
+        } finally {
+            ServerMain.adoptProxyServer(null);
+        }
     }
 
     private static void reload() {
