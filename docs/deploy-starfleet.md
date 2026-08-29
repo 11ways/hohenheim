@@ -709,3 +709,53 @@ absolute-path jar before every rehearsal. The comms coupling (settings/comms.dry
 survived the restart. Live pass and cleanup ledger: `visual-qa-20260829-final.md`;
 one high finding (F1: a tenant cannot save its own exact domain row under the
 operator's wildcard) is open there.
+
+## Deploy 2026-08-29 (fifth): the runtime-tier fixes and the first appended migration
+
+Shipped hohenheim `c4e08045` (previous `5d07a5f8`) from an isolated detached
+worktree (`build-worktrees/deploy-20260829-c4e08045`, deleted afterwards) with
+every chain repo clean at its committed sha, so the main checkouts resolved the
+chain (410 s, zenit-forms `e4b00b28` republished, the rest stamp-only). Stamp
+13/13 clean, sha256 `b57e192e0a1f2e7ce0b52319ff70506eebac4dc948662cc8803045217fe6889b`,
+267,477,750 bytes. Commits carried: `c4102b83` (tenant domain save under the
+wildcard), `631b8a98` + `b3e9e840` (runtime-tier QA fixes), `4c69811a` +
+`c4e08045` (M002 instead of an edited install migration).
+
+THE FIRST REAL MIGRATION SINCE THE 08-23 CUTOVER. `git diff 5d07a5f8..HEAD --stat
+-- '*igration*'` showed `M002_ManagedDatabaseFailureReason.java` (new) and a
+comment-only edit of `InitialMigration.java`; the live `zenit_migrations` row for
+001 carried checksum `0c97fcc11994...`, the digest `MigrationIntegrityTest` pins.
+Rehearsal on a byte copy (as the service user, from `/opt/hohenheim-rehearsal-
+20260829-fifth`, NOT under `/root`: the service user cannot traverse `/root`, so
+`Unable to access jarfile` there is a permissions symptom, not a jar problem):
+`--run-migrations` printed `Running migration 002 Managed database failure
+reason` ... `Migrations complete 1 applied` with `database.migration_integrity`
+at its default `fail`; `PRAGMA table_info(managed_databases)` listed
+`failure_reason TEXT` nullable; the inert boot answered `/api/health` 200 after
+26 s, `/login` 200, 0 exceptions, `roles_captured enabled=[]`.
+
+Live lane, because the service does not need to be the one applying it: at-swap
+`.backup` (integrity ok), `install` the staged jar beside the live one,
+`systemctl stop hohenheim`, `mv` into place, `java -jar ... --run-migrations` as
+`hohenheim` from `/opt/hohenheim` (`Migrations complete 1 applied`, 42 rows,
+`002|Managed database failure reason`), `systemctl start`. Downtime 43 s to
+health. Second restart 27 s. Verified after both: panel, apex, `comms.
+starfleet.life`, a wildcard subdomain all 200 over public HTTPS; `aa` SOA;
+listeners 53/80/443/3000 + 8092 loopback; 0 errors in the journal;
+`roles_captured [dns, firewall, proxy]`; no unknown keys; `zenit-dev deployed
+starfleet` = `current` for all 13 repos, no restart pending. Read-only live check:
+`/admin/sites` (4 rows), `/admin/released-claims` (empty state "No released
+hostnames yet"; the former-owner column had no row to render), `/account` still
+reports the pending confirmation mail ("A confirmation link was already sent").
+
+ROLLBACK IS NOW DB + JAR, NOT JAR ALONE. `MigrationRunner.checkIntegrity` treats
+an applied migration that is absent from the discovered set as a finding, and at
+`fail` (the default, no override in the settings files) the previous jar
+`5d07a5f8` refuses to boot a database carrying 002 unless that version is
+acknowledged in code. To roll back: stop, restore
+`/root/hohenheim-preflight-20260829-fifth/hohenheim.db.at-swap` (taken
+immediately before the migration; `.pre` is the earlier copy) over
+`hohenheim.db` (remove `-wal`/`-shm`), restore `hohenheim-server.jar.rollback`,
+start. Writes made after the swap are lost by that restore; `failure_reason` is
+only ever written by a database provision, which the disabled databases role
+makes impossible here.
