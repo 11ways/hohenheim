@@ -508,3 +508,131 @@ Panel over the forward: `/admin/sites` lists one row, `Earl / earl`, hostname
 4. Re-run the curl above: the 503 becomes a 301 to HTTPS, and HTTPS serves the
    page.
 5. Retire the Phoenix vhost only after that.
+
+## Taverne Tomberg staged, 2026-08-30
+
+The first Alchemy/Node app from Phoenix, staged on robbedoes WITHOUT a cutover:
+`tavernetomberg.be` still resolves to Phoenix; robbedoes answers the same site
+when asked by `Host` header. Everything below is proven live.
+
+### What it is
+
+`/home/www-data/tomberg` on Phoenix (git `skerit/tomberg`, last commit
+`1180a4a` 2017-02-20, so the working copy IS the source): `alchemymvc
+1.1.7-alpha` installed from GitHub with its own nested `node_modules` (3.3 GB of
+the 4.7 GB: hawkejs 1 GB, janeway/protoblast/sputnik 0.6 GB each, each carrying
+its git history), Node 12.18.2 on Phoenix, `settings.port = 3000` in
+`app/config/default.js`, Mongo `tomberg` on `127.0.0.1` in
+`app/config/live/database.js`, mailer through `calamity.develry.be:587`
+(unchanged, reachable from the container). No `.phoenix` hostname and no
+absolute path in `app/config`. `temp/imagecache` (492 MB) is a regenerable
+cache; `files/` (27 MB) holds the uploads.
+
+### Rows on robbedoes
+
+| Object | Id | Notes |
+| --- | --- | --- |
+| managed database `tomberg-mongo` | 1 | engine mongo, image default `mongo:7` (robbedoes has AVX), db `tomberg`, user `tomberg`, host `local`; container `hohenheim-luguij0q-instance-1` (row instance 1 `db-tomberg-mongo`) |
+| instance `taverne-tomberg` | 3 | `hohenheim:workspace` on runtime image `node-12` (id 6), NO git source, `start_command = node server.js`, `container_port 3000`, `console_kind tty`, `memory_limit_mb 1024`, `auto_deploy false`; container `hohenheim-luguij0q-instance-3`, home volume `/opt/hohenheim/data/volumes/3/home` -> `/home/site`, uid 200003, published `127.0.0.1:32773->3000` |
+| link `instance_databases` | 1 | instance 3 -> database 1, prefix `TOMBERG_DB`; injects `TOMBERG_DB_*` AND the bare `DATABASE_URL` (first link) |
+| site `Taverne Tomberg` | 2 | `hohenheim:instance`, instance 3 |
+| domains | 3, 4 | `tavernetomberg.be`, `www.tavernetomberg.be`, exact, `force_ssl=false` for the staging check (robbedoes has no TLS listener yet), both `live` |
+
+### Exact lane
+
+1. Dump on Phoenix as `skerit` (credentials read from `app/config/live/database.js`,
+   never printed): `mongodump --host 127.0.0.1 --db tomberg -u tomberg -p ... --out
+   ~/tomberg-dump` (988 KB, 15 collections), tarred. Temp files removed afterwards.
+2. Code streamed Phoenix -> workstation -> robbedoes with NO local copy:
+   `ssh phoenix 'tar cf - --exclude=.git --exclude=.nyc_output --exclude=coverage
+   --exclude=tomberg/temp/imagecache tomberg' | ssh robbedoes 'tar xf - -C
+   ~/tomberg-stage'` (3.9 GB after the excludes). `node_modules` was kept as-is:
+   Node 12.18.2 and the image's 12.22.12 share ABI 72, and buster's glibc 2.28 is
+   newer than xenial's 2.23, so no native module needed a rebuild (mmmagic loads).
+3. `app/config/live/database.js` in the staged copy rewritten to
+   `Datasource.create('mongo', 'default', { uri: process.env.DATABASE_URL })`
+   (alchemy 1.1's Mongo datasource honours `options.uri`, see its
+   `mongo_datasource.js:30`); `temp/imagecache` recreated empty.
+4. API key `tomberg staging` (scope `hohenheim.*`, 30 days) minted on
+   `/account/api-keys` over loopback; `hoh` driven from the workstation over an
+   ssh forward (`HOH_HOST=http://127.0.0.1:13001`). Database created through the
+   panel form `POST /admin/databases/new` (no API for databases yet).
+5. `hoh instance create taverne-tomberg hohenheim:workspace server_id=1
+   runtime_image_id=6 settings.start_command='node server.js'
+   settings.container_port=3000 settings.console_kind=tty
+   settings.memory_limit_mb=1024 settings.auto_deploy=false`, the attachment
+   through `POST /admin/instance-databases/new` (database 1, prefix `TOMBERG_DB`),
+   `hoh power 3 start`.
+6. Restore: `docker cp` the dump into the database container, then inside it
+   `mongorestore --username $MONGO_INITDB_ROOT_USERNAME ... --authenticationDatabase
+   admin --db tomberg --drop /tmp/tomberg-dump` (the `mongo:7` image ships
+   `mongorestore` and `mongosh`; the restore-from-upload lane was not used because
+   its accepted shape for Mongo was not verified). Result: 15 collections, 10
+   pages, 241 products. Temp dir removed from the container.
+7. Code into the home volume on the host: `tar cf - . | tar xf - -C
+   /opt/hohenheim/data/volumes/3/home` then `chown -R 200003:200003` (there is no
+   rsync on robbedoes). `hoh power 3 restart`.
+8. `hoh site create "Taverne Tomberg" hohenheim:instance instance_id=3`, then
+   `hoh site domain add 2 tavernetomberg.be force_ssl=false` and the `www` twin.
+
+### Proof
+
+- Inside the container: `tini -- bash -lc node server.js`, `node server.js`
+  listening on `*:3000` as uid 200003.
+- Direct: `curl http://127.0.0.1:32773/` on robbedoes = 200, 145 409 bytes,
+  `<title>Taverne Tomberg</title>`, same `<h1>` sequence as the live site
+  (`Taverne Tomberg`, `Update november 2024: ... Een nieuw seizoen, een warm
+  welkom!`, `Openingsuren`), i.e. the restored database is what renders.
+- Through the proxy from the workstation: `curl --noproxy '*' -H 'Host:
+  tavernetomberg.be' http://51.255.43.81/` = 200 / 145 412 bytes, the `www`
+  twin 200 / 145 416, `/menu` 200, the page's first stylesheet 200. Live Phoenix
+  (`https://tavernetomberg.be/` fetched from Phoenix itself) = 200 / 145 413
+  bytes, identical title and headings.
+- `docker stats`: instance 3 96 MiB / 1 GiB, the Mongo 121 MiB / 1.25 GiB.
+- `SiteDispatcher` journal: `loaded 1 -> 2 -> 3 exact routes` as the site and its
+  two domains landed; no error or exception.
+
+### What differs from Phoenix
+
+Node 12.22.12 instead of 12.18.2 (same major, same ABI); TCP port 3000 instead of
+the hohenchild UNIX socket (`alchemy.js:452-465` only binds a socket when
+`--port=<path>` is passed, which nothing passes now); Mongo 7 instead of 3.4 (the
+dump restored cleanly; the app's driver speaks the wire protocol fine); the
+database is reached by the link network handle instead of `127.0.0.1`; the
+image cache started empty.
+
+### Traps hit
+
+- A workspace WITHOUT a git source runs `bash -lc <start_command>` directly in
+  `/home/site` (the `if [ ! -d /home/site/app ]` idle wrapper belongs to the
+  source lane only), so the code goes in the volume ROOT, not under `app/`.
+  The first start exited 1 with `Cannot find module '/home/site/server.js'`
+  before the copy, and `InstanceStatusReconciler` moved the row to `stopped`
+  within a minute; a restart after the copy was enough.
+- The streamed tar's second member (the dump tgz) never arrived; copied it with
+  `scp` separately.
+- `~/.config/hoh/config.json` is shared by every agent on the workstation and a
+  concurrent lane overwrote the default context (`hoh` then said `ECONNREFUSED
+  127.0.0.1:3000`); drive `hoh` with explicit `HOH_HOST`/`HOH_TOKEN` when more
+  than one lane runs.
+- `hoh help` prints the help and then crashes (`handler(positional).catch` on an
+  undefined return), harmless but ugly.
+- `hoh logs 3` printed nothing for the tty console (the console history of a
+  TTY workload is raw ANSI and Janeway draws on the alternate screen); `docker
+  top`/`ss` inside the container and a curl are the honest checks.
+
+### Cutover steps remaining (in order)
+
+1. Zone `tavernetomberg.be` onto kuifje (primary; robbedoes secondary), import
+   from the Hetzner export, `hoh-dns-diff compare` IDENTICAL, registrar NS
+   change, `delegation` OK. The zone carries MX to calamity: the MX/TXT lines
+   are the gate.
+2. Certificate for `tavernetomberg.be` + `www` requested on robbedoes via DNS-01
+   through kuifje (needs kuifje's admin channel reachable from robbedoes) or via
+   HTTP-01 right after step 3; then set `force_ssl=true` on domains 3 and 4.
+3. Lower the A/AAAA TTL, flip both names to `51.255.43.81` /
+   `2001:41d0:305:2100::1:4b26` in the kuifje zone, `hoh-dns-diff propagate`.
+4. Re-run the Host-header curl over HTTPS; watch Phoenix's access log for
+   `tavernetomberg.be` going quiet; Phoenix stays the rollback (its process and
+   Mongo are untouched) until then.
+5. Rotate the `tomberg staging` API key or let it expire (30 days).
