@@ -48,6 +48,9 @@ public class DnsZonePeerModel extends Model {
     /** When this primary last sent the peer a NOTIFY for the zone. */
     public static final DateTimeField LAST_NOTIFY_AT = SCHEMA.addField(
         DateTimeField.builder().name("last_notify_at").build());
+    /** The serial that NOTIFY announced: the one the serving view published, not a re-read. */
+    public static final IntegerField LAST_NOTIFY_SERIAL = SCHEMA.addField(
+        IntegerField.builder().name("last_notify_serial").build());
     /** What came back for that NOTIFY: the ack's rcode, a timeout, or the send error. */
     public static final StringField LAST_NOTIFY_OUTCOME = SCHEMA.addField(
         StringField.builder().name("last_notify_outcome").build());

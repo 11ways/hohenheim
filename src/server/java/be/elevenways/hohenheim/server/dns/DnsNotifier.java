@@ -33,12 +33,18 @@ public final class DnsNotifier {
 
     private final JobRunner jobs = JobRunner.create("dns-notify");
 
-    /** Asynchronously NOTIFY every secondary linked to the zone. */
-    public void notifyZonePeers(int zoneId) {
-        jobs.fireAndForget(() -> notifyZonePeersBlocking(zoneId));
+    /**
+     * Asynchronously NOTIFY every secondary linked to the zone about {@code serial}.
+     *
+     * AIDEV-NOTE: the serial is a PARAMETER, never re-read from the zone row here. This
+     * runs on a JobRunner thread, so it holds none of the caller's transaction and would
+     * read the pre-commit serial for every CMS edit; see DnsZoneStore.bumpSerialAndReload.
+     */
+    public void notifyZonePeers(int zoneId, long serial) {
+        jobs.fireAndForget(() -> notifyZonePeersBlocking(zoneId, serial));
     }
 
-    public void notifyZonePeersBlocking(int zoneId) {
+    public void notifyZonePeersBlocking(int zoneId, long serial) {
         Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
         if (zone == null || DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
             return;
@@ -66,13 +72,18 @@ public final class DnsNotifier {
             Integer port = peer.get(DnsPeerModel.TRANSFER_PORT);
             String outcome = sendNotify(host.trim(), port != null ? port : 53, origin,
                 DnsTsig.forPeer(peer));
-            Integer serial = zone.get(DnsZoneModel.SERIAL);
-            DnsFederationTrace.notifySent(link, peer, originString,
-                serial != null ? serial : 0, outcome);
+            DnsFederationTrace.notifySent(link, peer, originString, serial, outcome);
         }
     }
 
-    /** @return what came back: the ack's rcode, {@code timeout}, or the send error */
+    /**
+     * @return what came back: the ack's rcode, {@code timeout}, or the send error
+     *
+     * AIDEV-NOTE: the wire NOTIFY is question-section only. RFC 1996 makes the SOA in the
+     * answer section an optional hint, and we send none, so no serial ever leaves this
+     * machine in a NOTIFY -- the secondary always SOA-queries us and then AXFRs. That is
+     * why the stale serial was a reporting defect and never a replication one.
+     */
     private static @NonNull String sendNotify(@NonNull String host, int port, @NonNull Name origin,
                                               TSIG tsig) {
         try {

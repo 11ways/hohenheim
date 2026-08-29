@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.IntConsumer;
 
 /**
  * Builds immutable zone snapshots and swaps the serving view atomically. Primary
@@ -36,7 +35,7 @@ public final class DnsZoneStore {
     private volatile Map<String, DnsZoneSnapshot> primaryByOrigin = Map.of();
     private final Map<String, DnsZoneSnapshot> secondaryByOrigin = new ConcurrentHashMap<>();
     private volatile Map<String, DnsZoneSnapshot> serving = Map.of();
-    private volatile @Nullable IntConsumer onZoneChanged;
+    private volatile @Nullable ZonePublishListener onZoneChanged;
 
     private DnsZoneStore() {}
 
@@ -54,11 +53,17 @@ public final class DnsZoneStore {
     }
 
     /**
-     * Registers a callback fired (with the zone id) after a primary zone's serial
-     * bumps, so the transfer layer can NOTIFY that zone's secondaries.
+     * Registers a callback fired after a primary zone's serial bumps, so the transfer
+     * layer can NOTIFY that zone's secondaries about the serial now being served.
      */
-    public void setOnZoneChanged(@Nullable IntConsumer onZoneChanged) {
+    public void setOnZoneChanged(@Nullable ZonePublishListener onZoneChanged) {
         this.onZoneChanged = onZoneChanged;
+    }
+
+    /** Told which zone republished and which serial the serving view now carries for it. */
+    @FunctionalInterface
+    public interface ZonePublishListener {
+        void zonePublished(int zoneId, long serial);
     }
 
     /**
@@ -94,17 +99,42 @@ public final class DnsZoneStore {
         rebuildServing();
     }
 
-    /** Atomically bumps the zone's SOA serial, rebuilds, and notifies its secondaries. */
+    /**
+     * Atomically bumps the zone's SOA serial, rebuilds, and notifies its secondaries.
+     *
+     * AIDEV-NOTE: the listener is handed the serial off the snapshot this call just
+     * published, never a zone id to look the serial up by. A CMS create/update runs
+     * inside a THREAD-BOUND transaction (zenit-cms Resource.inMutationTransaction), so
+     * the increment is still uncommitted here: the async NOTIFY job, on its own thread
+     * and therefore its own connection, read the PRE-bump serial and journalled it,
+     * while the AXFR it triggered was served from this in-memory snapshot and carried
+     * the new one. Deletes run outside a transaction, which is why only edits looked
+     * stale. Observed live on starfleet 2026-08-29 (notify 34, AXFR 35). The hook also
+     * waits for the commit: its trace stamp is a WRITE, and on the single-writer
+     * backends that write cannot land while the mutation still holds the connection.
+     */
     public void bumpSerialAndReload(int zoneId) {
         Models.get(DnsZoneModel.class).find()
             .where(DnsZoneModel.ID.eq(zoneId))
             .increment(DnsZoneModel.SERIAL)
             .updateAll();
         this.reload();
-        IntConsumer hook = this.onZoneChanged;
+        ZonePublishListener hook = this.onZoneChanged;
         if (hook != null) {
-            hook.accept(zoneId);
+            long serial = publishedSerial(zoneId);
+            Models.get(DnsZoneModel.class).getResolvedDatasource()
+                .afterCommit(() -> hook.zonePublished(zoneId, serial));
         }
+    }
+
+    /** @return the serial the serving view publishes for the primary zone, or 0 when it serves none */
+    public long publishedSerial(int zoneId) {
+        for (DnsZoneSnapshot zone : this.primaryByOrigin.values()) {
+            if (zone.getZoneId() == zoneId) {
+                return zone.getSerial();
+            }
+        }
+        return 0;
     }
 
     /** Installs (or replaces) a secondary zone's compiled snapshot in the serving view. */

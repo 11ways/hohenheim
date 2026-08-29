@@ -54,6 +54,7 @@ public final class DnsFederationTrace {
         Blast.slog("dns.notify_sent", fields(origin, serial,
             String.valueOf(peer.get(DnsPeerModel.NAME)), "outcome", outcome));
         link.set(DnsZonePeerModel.LAST_NOTIFY_AT, Instant.now());
+        link.set(DnsZonePeerModel.LAST_NOTIFY_SERIAL, (int) serial);
         link.set(DnsZonePeerModel.LAST_NOTIFY_OUTCOME,
             outcome.length() > 255 ? outcome.substring(0, 255) : outcome);
         Models.get(DnsZonePeerModel.class).save(link);
