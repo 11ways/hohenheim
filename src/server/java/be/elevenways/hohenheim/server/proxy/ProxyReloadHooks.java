@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
@@ -46,11 +47,18 @@ public final class ProxyReloadHooks {
     // address and nothing else), so a database status flip reaches a workload through the
     // application's next deploy, not through a reload. What stays true is that these models
     // decide which hostnames exist and where they point.
+    //
+    // AIDEV-NOTE: AccessRuleModel belongs here for the same reason AccessListModel does --
+    // the gate evaluates the TREE, and the rules ARE the tree. It used to be absent, which
+    // made every writer of a rule (the resource's save/delete/toggle/move, the Rules tab's
+    // add handler, the automation API) remember a hand-rolled reload; a rule written
+    // through the model alone enforced nothing until the next unrelated reload.
     private static final Set<Identifier> ROUTING_MODELS = Set.of(
         SiteModel.MODEL_ID,
         SiteDomainModel.MODEL_ID,
         CertificateModel.MODEL_ID,
         AccessListModel.MODEL_ID,
+        AccessRuleModel.MODEL_ID,
         ProtectedPathModel.MODEL_ID,
         SiteAuthProviderModel.MODEL_ID,
         DatabaseModel.MODEL_ID);

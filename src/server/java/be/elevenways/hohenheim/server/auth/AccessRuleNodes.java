@@ -28,12 +28,17 @@ public final class AccessRuleNodes {
     /**
      * Append one node to a list's tree, at the end of its parent's sibling run.
      *
+     * AIDEV-NOTE: the fourth argument of {@code ActivityLog.record} is the DETAIL, not the
+     * accountability origin -- the origin column is stamped from {@code Accountability},
+     * which zenit-auth resolves per request ("api" for an API key, "web" for the panel).
+     * Both callers used to hand it a surface token, and the Rules tab handed it the rule
+     * TYPE, so the recorded detail said nothing about what was created.
+     *
      * @param parentId the enclosing group, or null for a direct child of the implicit root
-     * @param origin the accountability origin recorded for the creation
      * @return the saved row
      */
     public static @NonNull Row add(int listId, @Nullable Integer parentId,
-                                   @NonNull String type, @NonNull String origin) {
+                                   @NonNull String type) {
         AccessRuleModel model = Models.get(AccessRuleModel.class);
         Row rule = model.createEmptyRow();
         rule.set(AccessRuleModel.ACCESS_LIST_ID, listId);
@@ -42,7 +47,7 @@ public final class AccessRuleNodes {
         rule.set(AccessRuleModel.SORT, model.findChildren(listId, parentId).size());
         rule.set(AccessRuleModel.ENABLED, AccessRuleModel.TYPE_GROUP.equals(type));
         model.save(rule);
-        ActivityLog.record(model, rule.get(AccessRuleModel.ID), "created", origin);
+        ActivityLog.record(model, rule.get(AccessRuleModel.ID), "created", type);
         return rule;
     }
 

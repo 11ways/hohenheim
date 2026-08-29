@@ -24,7 +24,6 @@ import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -43,6 +42,17 @@ import java.util.Map;
  * it counts -- because where a node SITS is a property of the tree, not of the row: the
  * tab's add form chooses the parent and the move actions choose the order, so no operator
  * types a parent id into a text box.
+ *
+ * AIDEV-NOTE: deleting a group takes its whole subtree with it -- an orphaned rule is a
+ * policy the proxy cannot reconstruct, and {@code AccessRuleTree} refuses (denies) a list
+ * that carries one. The subtree walk lives in {@code AccessRuleCascades}, on the model
+ * funnel, so a rule deleted by anything but this form (a list delete, a direct save, the
+ * peer API) takes its children too.
+ *
+ * AIDEV-NOTE: this resource carries NO proxy reload of its own any more. Every write here
+ * (save, delete, toggle, move) goes through the model, and {@code ProxyReloadHooks} now
+ * carries {@code AccessRuleModel} -- one reload path, after the transaction commits,
+ * whatever wrote the row.
  */
 public class AccessRuleResource extends RowResource {
 
@@ -150,29 +160,6 @@ public class AccessRuleResource extends RowResource {
         }
     }
 
-    /** Saving a rule changes who reaches a live site: the proxy reloads immediately. */
-    @Override
-    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
-                          @NonNull AccessContext accessContext) {
-        super.updateRow(existing, coerced, accessContext);
-        CmsSupport.reloadProxy();
-    }
-
-    /**
-     * Deleting a group takes its whole subtree with it: an orphaned rule is a policy the
-     * proxy cannot reconstruct, and {@code AccessRuleTree} refuses (denies) a list that
-     * carries one.
-     *
-     * AIDEV-NOTE: the subtree walk itself moved to {@code AccessRuleCascades}, on the model
-     * funnel, so a rule deleted by anything but this form (a list delete, a direct save, the
-     * peer API) takes its children too. What is left here is the proxy reload.
-     */
-    @Override
-    public void deleteRow(@NonNull Row existing, @NonNull AccessContext accessContext) {
-        super.deleteRow(existing, accessContext);
-        CmsSupport.reloadProxy();
-    }
-
     @Override
     public @NonNull List<RowAction<Row>> rowActions() {
         List<RowAction<Row>> actions = new ArrayList<>(super.rowActions());
@@ -194,7 +181,6 @@ public class AccessRuleResource extends RowResource {
                 // Enabling runs the model's completeness hook: a half-configured rule is
                 // refused here rather than becoming a request-time FAIL on a live site.
                 Models.get(AccessRuleModel.class).save(row);
-                CmsSupport.reloadProxy();
                 return CmsActionResult.refreshWithToast(Microcopy
                     .of(enabled ? "turned_off" : "turned_on").withFilter("scope", "access_rule"));
             })
@@ -242,7 +228,6 @@ public class AccessRuleResource extends RowResource {
                 : null)
             .handler((row, ctx) -> {
                 move(row, direction);
-                CmsSupport.reloadProxy();
                 return CmsActionResult.refreshWithToast(
                     Microcopy.of("moved").withFilter("scope", "access_rule"));
             })
