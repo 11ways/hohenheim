@@ -221,7 +221,9 @@ Two observations, neither a blocker:
 - Delegate at the registrar with matching glue -- the peering and the
   `starfleet.life` replica are done (see above), the delegation is not.
 - Open the provider firewall for 80 and 443; keep 3000 closed. 53 udp+tcp is
-  already open and proven.
+  already open and proven. The 3000 exposure was closed IN THE PRODUCT on
+  2026-08-30 (see "Panel exposure" below); the firewall work for 80/443 is
+  still to do.
 - Add it to `~/.config/zenit-dev/config.json` under `deployments` so
   `zenit-dev deployed <name>` can read its build stamp over ssh. DONE
   2026-08-29 as target `ovh` (`debian@137.74.171.228`; `unzip -p` and
@@ -269,3 +271,82 @@ ROLLBACK IS DB + JAR (the M002 rule from starfleet): stop, restore
 `/root/hohenheim-preflight-20260829-tenth/hohenheim.db.at-swap` over
 `hohenheim.db` (drop `-wal`/`-shm`), restore `hohenheim-server.jar.rollback`,
 start. The only writes since the swap are federation bookkeeping.
+
+## Deploy 2026-08-29 (second jar swap): `b486427f`, migration M007
+
+Shipped hohenheim `b486427f` (previous `1c8a8a8b`) right after starfleet
+(`deploy-starfleet.md`, eleventh deploy): same worktree, stamp 13/13 clean,
+sha256 `f9d9b2d0412438f0537494b14029be6f5d79baee119dd1b019cf8f113c188c07`,
+267,596,947 bytes, gated by `upload_file`'s `grep -c false | grep -qx 13`.
+
+The whole lane is `sudo -n`, as before: preflight
+`/root/hohenheim-preflight-20260830-eleventh/` (`.pre`, `.at-swap`, `settings/`,
+`hohenheim-server.jar.rollback`, keyring sha256 equal), rehearsal as the
+service user from `/opt/hohenheim-rehearsal-20260830-eleventh` on a byte copy
+with a hand-written JSON `hohenheim.dry` (the live one is panel-written DRY
+text): `Running migration 007 DNS NOTIFY serial trace`, `Migrations complete 1
+applied`, 46 rows, `last_notify_serial` present, inert boot on 13999 healthy
+after 10 s with `-Xmx512m`, `/login` 200, 0 exceptions, dir removed.
+
+Live: at-swap `.backup` (integrity ok), `install` beside, `systemctl stop`,
+`mv`, `--run-migrations` as `hohenheim` (1 applied, 46 rows), `systemctl
+start`; 15 s to health. Second restart 10 s. Verified: 0 journal errors
+(`journalctl -q -p err`), `roles_captured [dns, firewall, proxy]`, listeners
+53/80/3000, `restored persisted replica of starfleet.life serial 36` on the
+first boot, `dig @127.0.0.1 starfleet.life SOA` = the primary's serial, google
+REFUSED, login page 200 over loopback; over a loopback curl session the
+dashboard still carries only the pre-existing "No off-host backup destination"
+attention item and `/admin/dns-zones` shows `starfleet.life Secondary
+Transferred`. `zenit-dev deployed ovh` = `current` 13/13. The staged jar in
+`/home/debian` was removed.
+
+Federation after the deploy: starfleet's disposable TXT add + delete moved the
+serial 36 -> 37 -> 38; this box journaled `transferred secondary zone
+starfleet.life serial 37` and `serial 38` within 3 s of each, served the TXT in
+between and answers SOA 38 now, byte-identical to the primary.
+
+ROLLBACK IS DB + JAR: `/root/hohenheim-preflight-20260830-eleventh/hohenheim.db.at-swap`
+plus `hohenheim-server.jar.rollback`, as for the first swap.
+
+## Panel exposure closed, 2026-08-30: `network.bind_address` = 127.0.0.1
+
+`http://137.74.171.228:3000/` answered its login page FROM THE INTERNET. This
+provider passes every port by default and the installer bound zenit's HTTP
+listener to `0.0.0.0`, so an admin login page sat on a raw public port. Closed
+exactly as the sites box was (`deploy-sites.md`, "Panel exposure"), in the
+product rather than at a firewall this box cannot reach.
+
+The live `settings/local.dry` here is still the installer's plain JSON (unlike
+`hohenheim.dry`, which the panel's settings editor has since rewritten as DRY
+text with `i443`-style prefixes -- CHECK BOTH before editing a settings file by
+hand). One line added inside `network`, beside `port`:
+
+    "bind_address": "127.0.0.1",
+
+A copy of the pre-edit file is at `/root/hohenheim-local.dry.bak-20260830`, kept
+OUT of `settings/` so the loader never sees it. Then `systemctl restart
+hohenheim`. Undo by removing the line and restarting.
+
+Verified after the restart:
+
+- `ss -ltnp`: 3000 is now `[::ffff:127.0.0.1]:3000` only; `*:80` and `*:53`
+  (udp+tcp) are unchanged, which is correct -- the proxy and the DNS server are
+  separate listeners that loopback binding does not touch.
+- From the workstation, `curl -m 5 http://137.74.171.228:3000/` fails to
+  connect (exit 7) in 11 ms.
+- Over loopback on the host, `/` still 302s to `/login`.
+- `systemctl is-active` = active, `journalctl -u hohenheim -p err` = 0 lines,
+  `roles_captured enabled=[dns, firewall, proxy]`,
+  `restored persisted replica of starfleet.life serial 38` on the first boot.
+- The secondary still serves: `starfleet.life` SOA serial 38 from this box and
+  from the primary (104.223.42.142), identical; and a raw UDP AND TCP SOA query
+  from the workstation to `137.74.171.228:53` answers `rcode=0 aa=1` with the
+  same serial as the primary's, so nothing about the DNS role moved.
+- `zenit-dev deployed ovh` reads the same as before the restart: 12/13 repos
+  `current`, `hohenheim local-ahead` (the pre-existing 2 undeployed commits),
+  same jar mtime.
+
+Since 2026-08-30 `tools/install-host.sh` seeds `network.bind_address` =
+`127.0.0.1` (`--panel-bind` to override), so a NEW host arrives closed. That
+does not help this box or the sites box: the installer never rewrites an
+existing settings file, which is why both needed the hand edit above.

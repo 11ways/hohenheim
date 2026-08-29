@@ -52,6 +52,14 @@ expect "no docker without a docker role" "$PLAN" "docker-ce" no
 expect "no volume root without the flag" "$PLAN" "--volume-root-size not given"
 expect "dns role handles port 53" "$PLAN" "Port 53"
 expect "no swap without the flag" "$PLAN" "--swap not given"
+expect "the panel listener is loopback by default" "$PLAN" "panel listener: 127.0.0.1:3000"
+expect "no public-port warning on the default" "$PLAN" "answer on a public port" no
+expect "the seeded settings are declared write-once" "$PLAN" "never rewritten"
+
+# 1c. --panel-bind is the escape hatch, and it says so out loud.
+PLAN="$(plan_of --roles proxy --panel-bind 0.0.0.0)"
+expect "--panel-bind moves the listener" "$PLAN" "panel listener: 0.0.0.0:3000"
+expect "a public bind is warned about" "$PLAN" "answer on a public port"
 
 # 1b. The same node with a swapfile.
 PLAN="$(plan_of --roles proxy,dns,firewall --swap 2G)"

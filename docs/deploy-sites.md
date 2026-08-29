@@ -125,9 +125,10 @@ published later the same way starfleet publishes it -- a site whose upstream is
 line and restarting.
 
 Note for whoever owns the provider firewalls: the OVH DNS primary
-(`137.74.171.228:3000`) is still publicly reachable and answers its login page.
-starfleet's is not. That box's `deploy-ovh.md` lists "keep 3000 closed" as
-still-to-do; it is still to do.
+(`137.74.171.228:3000`) had the same exposure and was closed the same way on
+2026-08-30 (`deploy-ovh.md`). starfleet's was never exposed. Since 2026-08-30
+the installer seeds `network.bind_address` = `127.0.0.1`, so a NEW host arrives
+closed; both of these boxes predate that and needed the hand edit.
 
 ## Verified after the install
 
@@ -186,9 +187,20 @@ exists on the workstation:
     gunzip -c node-22.tar.gz | docker load      ->  Loaded image: hohenheim/node-22:1
 
 Image id `da4ccc5030d9`, 853 MB disk / 213 MB content, identical to the
-workstation's. node-16 and node-12 were deliberately NOT loaded (another lane is
-still building them). `alpine:latest` and `hello-world:latest` are also present:
+workstation's. `alpine:latest` and `hello-world:latest` are also present:
 the preflight probe pulls alpine, and hello-world was the Docker smoke test.
+
+2026-08-30: `hohenheim/node-16:1` and `hohenheim/node-12:1` were loaded the same
+way (`docker save <tag> | gzip -1 | ssh ... 'gunzip | sudo docker load'`, one
+tag per invocation), so all three runtime images this box can schedule are now
+present and their full ids are byte-identical to the workstation's:
+
+    hohenheim/node-12:1   0c94252f7f05   651 MB
+    hohenheim/node-16:1   eec8a2ad45e9   761 MB
+    hohenheim/node-22:1   da4ccc5030d9   853 MB
+
+Disk went 5.1 GB -> 6.7 GB of 99 GB. Nothing else on the box was touched: no
+site, zone, certificate or peer.
 
 ## Deploy target
 
@@ -247,5 +259,5 @@ a byte copy whenever the migration diff is non-empty.
   should carry -- a separate lane owns peering, and nothing here was configured
   for it.
 - Load the node-16 and node-12 runtime images once the lane building them is
-  done.
+  done. DONE 2026-08-30 (see "Runtime image").
 - Migrate the Phoenix sites onto it (`docs/legacy-import.md`, `hoh-import-legacy`).

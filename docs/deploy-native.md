@@ -31,7 +31,7 @@ middleware reads disk first, then classpath -- the classpath has no cms.js).
         --main-url https://panel.example.com \
         --admin-email hostmaster@example.com \
         [--with-docker] [--volume-root-size 8] [--swap 2G] \
-        [--panel-port 3000] [--prefix /opt/hohenheim]
+        [--panel-port 3000] [--panel-bind 127.0.0.1] [--prefix /opt/hohenheim]
 
 Debian 12/13 first (Debian 13 trixie is what it is proven on); it runs as root,
 takes no input (`DEBIAN_FRONTEND=noninteractive` throughout) and is
@@ -67,7 +67,17 @@ What each step does, in order:
    and the mount at `<prefix>/data/volumes`.
 9. **Settings** -- seeds `settings/hohenheim.dry` (0640), `settings/local.dry`
    and `settings/auth.dry` (0600, secrets). An existing file is NEVER rewritten:
-   the panel's settings editor persists into these same files.
+   the panel's settings editor persists into these same files. That idempotence
+   cuts both ways -- a host installed BEFORE a seeded default changed keeps the
+   old value, and the only fix is editing its settings file by hand (which is
+   what the sites box and the OVH primary each needed for `bind_address`).
+   `network.bind_address` is seeded `127.0.0.1`: the panel is published through
+   the proxy as a site whose upstream is `127.0.0.1:3000`, so the admin listener
+   never needs to answer the internet, and the proxy's own `0.0.0.0:80`/`:443`
+   listener is a separate Undertow instance that loopback binding does not
+   touch. `--panel-bind <addr>` is the escape hatch for the rare host that wants
+   otherwise; anything but loopback prints a warning, because it puts a login
+   page on a raw port.
 10. **Port 53** -- with the dns role: switches systemd-resolved's stub listener
     off through a `/etc/systemd/resolved.conf.d/hohenheim.conf` drop-in and
     points `/etc/resolv.conf` at `/run/systemd/resolve/resolv.conf` (the uplink
@@ -230,8 +240,8 @@ always required.
 
 `security.nftables_enabled` is what turns per-workload kernel enforcement on;
 without it the Docker isolation sweep reports every workload unverifiable by
-design. The admin listener defaults to port 3000 (`network.port` in
-`settings/local.dry` to change it).
+design. The admin listener defaults to `127.0.0.1:3000` (`network.port` and
+`network.bind_address` in `settings/local.dry` to change either).
 
 ## systemd unit (written by the installer; this is the by-hand equivalent)
 
