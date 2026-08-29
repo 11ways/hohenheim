@@ -241,8 +241,11 @@ public final class DockerInstanceRuntime
             throws IOException {
         // The SAME create-verify-or-refuse path as a per-instance network: a link network
         // whose kernel policy cannot land never exists to be attached to. The egress is
-        // the CALLER'S declaration for the link lane, not this runtime's kind egress.
-        return WorkloadNetworks.ensure(this.docker, this.policy, linkHandle, ownerLabels, egress);
+        // the CALLER'S declaration for the link lane, not this runtime's kind egress. And
+        // it is INTERNAL: see WorkloadNetworks.ensure -- a link must never become a
+        // member's default route.
+        return WorkloadNetworks.ensure(this.docker, this.policy, linkHandle, ownerLabels,
+            egress, true);
     }
 
     @Override
