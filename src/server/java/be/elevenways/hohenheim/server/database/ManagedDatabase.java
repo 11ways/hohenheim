@@ -275,16 +275,21 @@ public class ManagedDatabase {
         // socket-only temporary server during init, so only the real server binds TCP. Mongo's
         // init server DOES bind TCP, so its probe must authenticate to confirm the real (auth-
         // enabled) server with the root user is up -- an unauthenticated ping passes too early.
-        List<String> readyCommand(String user, String password, String database) {
+        public List<String> readyCommand(String user, String password, String database) {
             return switch (this) {
                 case POSTGRES -> List.of("pg_isready", "-h", "127.0.0.1", "-p", String.valueOf(port),
                     "-U", user, "-d", database);
                 case MYSQL -> List.of("mysqladmin", "ping", "-h", "127.0.0.1", "-P", String.valueOf(port),
                     "-u", user);
                 case REDIS -> List.of("redis-cli", "-p", String.valueOf(port), "ping");
-                case MONGO -> List.of("mongosh", "--host", "127.0.0.1", "--port", String.valueOf(port),
-                    "--username", user, "--password", password, "--authenticationDatabase", "admin",
-                    "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok");
+                // AIDEV-NOTE: mongosh where the image ships it (5.0+), the legacy `mongo`
+                // shell where it does not -- mongo:4.4 is the LAST engine that runs without
+                // AVX, and pinning it through the image column is exactly what a host like
+                // starfleet (QEMU CPU, no AVX) needs. Both shells take the same flags. The
+                // password rides the environment (readyEnv), never the argv, so neither
+                // shell's command line carries it.
+                case MONGO -> List.of("sh", "-c", MONGO_READY_SCRIPT,
+                    "hohenheim-ready", String.valueOf(port), user);
             };
         }
 
@@ -294,9 +299,20 @@ public class ManagedDatabase {
                 case MYSQL -> List.of("MYSQL_PWD=" + password);
                 case REDIS -> password != null && !password.isBlank()
                     ? List.of("REDISCLI_AUTH=" + password) : List.of();
+                case MONGO -> List.of(MONGO_PROBE_PASSWORD + "=" + password);
                 default -> List.of();
             };
         }
+
+        /** The env variable the mongo probe reads its password from. */
+        public static final String MONGO_PROBE_PASSWORD = "HOHENHEIM_MONGO_PROBE_PASSWORD";
+
+        /** {@code sh -c} body: $1 = port, $2 = user; picks whichever shell the image has. */
+        static final String MONGO_READY_SCRIPT =
+            "if command -v mongosh >/dev/null 2>&1; then shell=mongosh; else shell=mongo; fi;"
+            + " exec \"$shell\" --host 127.0.0.1 --port \"$1\" --username \"$2\""
+            + " --password \"$" + MONGO_PROBE_PASSWORD + "\" --authenticationDatabase admin"
+            + " --quiet --eval 'db.runCommand({ ping: 1 }).ok'";
 
         /**
          * The STDOUT text a successful readiness probe must contain, or null when this
