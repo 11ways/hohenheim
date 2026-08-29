@@ -34,8 +34,12 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
 
     private final HostShell shell;
 
+    /** {@code sudo -n } on a shell that is not root, nothing on one that is. */
+    private final String sudo;
+
     public BtrfsVolumeOperations(@NonNull HostShell shell) {
         this.shell = shell;
+        this.sudo = shell.sudo();
     }
 
     @Override
@@ -44,24 +48,24 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
         // A plain directory left by an earlier backend is NOT silently adopted: it would
         // take no quota and no snapshot, which is the failure this whole tier exists to
         // make impossible. Only an absent path or an existing subvolume is acceptable.
-        run("mkdir -p " + HostShell.quote(parentOf(hostPath))
-            + " && { btrfs subvolume show " + quoted + " >/dev/null 2>&1"
-            + " || btrfs subvolume create " + quoted + "; }", "volume_create_failed", hostPath);
+        run(this.sudo + "mkdir -p " + HostShell.quote(parentOf(hostPath))
+            + " && { " + this.sudo + "btrfs subvolume show " + quoted + " >/dev/null 2>&1"
+            + " || " + this.sudo + "btrfs subvolume create " + quoted + "; }", "volume_create_failed", hostPath);
     }
 
     @Override
     public void setQuota(@NonNull String hostPath, @Nullable Long bytes) {
         String quoted = HostShell.quote(hostPath);
         String limit = bytes == null || bytes <= 0 ? "none" : String.valueOf(bytes);
-        run("btrfs quota enable " + HostShell.quote(mountpointOf(hostPath)) + " >/dev/null 2>&1;"
-            + " btrfs qgroup limit " + limit + " " + quoted,
+        run(this.sudo + "btrfs quota enable " + HostShell.quote(mountpointOf(hostPath)) + " >/dev/null 2>&1;"
+            + " " + this.sudo + "btrfs qgroup limit " + limit + " " + quoted,
             "volume_quota_failed", hostPath);
     }
 
     @Override
     public long usage(@NonNull String hostPath) {
         HostShell.Result result = this.shell.run(
-            "btrfs qgroup show --raw -f " + HostShell.quote(hostPath));
+            this.sudo + "btrfs qgroup show --raw -f " + HostShell.quote(hostPath));
         if (!result.ok()) {
             Blast.log("VOLUMES: btrfs could not report usage of", hostPath, "-", result.text());
             return -1;
@@ -93,8 +97,8 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
     @Override
     public @NonNull String snapshot(@NonNull String hostPath, @NonNull String label) {
         String target = snapshotPathFor(hostPath, label);
-        run("mkdir -p " + HostShell.quote(parentOf(target))
-            + " && btrfs subvolume snapshot -r " + HostShell.quote(hostPath) + " "
+        run(this.sudo + "mkdir -p " + HostShell.quote(parentOf(target))
+            + " && " + this.sudo + "btrfs subvolume snapshot -r " + HostShell.quote(hostPath) + " "
             + HostShell.quote(target), "volume_snapshot_failed", hostPath);
         return target;
     }
@@ -107,8 +111,8 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
     @Override
     public void destroy(@NonNull String hostPath) {
         String quoted = HostShell.quote(hostPath);
-        run("if btrfs subvolume show " + quoted + " >/dev/null 2>&1; then"
-            + " btrfs subvolume delete " + quoted + "; else rm -rf " + quoted + "; fi",
+        run("if " + this.sudo + "btrfs subvolume show " + quoted + " >/dev/null 2>&1; then"
+            + " " + this.sudo + "btrfs subvolume delete " + quoted + "; else " + this.sudo + "rm -rf " + quoted + "; fi",
             "volume_destroy_failed", hostPath);
     }
 
@@ -117,7 +121,7 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
         String quoted = HostShell.quote(hostPath);
         // The directory itself, and its mode: 0700 so the number that owns it is the only
         // identity that can read it. Nothing else on the host answers to that number.
-        run("chown " + uid + ":" + uid + " " + quoted + " && chmod 0700 " + quoted,
+        run(this.sudo + "chown " + uid + ":" + uid + " " + quoted + " && " + this.sudo + "chmod 0700 " + quoted,
             "volume_own_failed", hostPath);
     }
 

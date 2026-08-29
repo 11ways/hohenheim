@@ -34,6 +34,8 @@ class VolumeOperationsTest {
 
         private final List<String> scripts = new ArrayList<>();
         private final Function<String, Result> answer;
+        /** Whether the fake pretends to be root; the default every older step assumes. */
+        private boolean elevated = true;
 
         FakeShell(@NonNull Function<String, Result> answer) {
             this.answer = answer;
@@ -41,6 +43,16 @@ class VolumeOperationsTest {
 
         static FakeShell succeeding() {
             return new FakeShell(script -> new Result(0, ""));
+        }
+
+        FakeShell unprivileged() {
+            this.elevated = false;
+            return this;
+        }
+
+        @Override
+        public boolean elevated() {
+            return this.elevated;
         }
 
         @Override
@@ -127,6 +139,52 @@ class VolumeOperationsTest {
             .as("step 6: a failed create refuses by name and quotes the host")
             .isInstanceOf(Violations.class)
             .hasMessageContaining("volume_create_failed");
+    }
+
+    /**
+     * The btrfs lane is root work: on a shell that is NOT root every privileged binary is
+     * elevated with {@code sudo -n} (never a bare command that fails EPERM, never a
+     * password prompt), and on a root shell nothing is prefixed. This is the starfleet
+     * {@code volume_own_failed}: the unprivileged controller chowning a workspace volume
+     * to a foreign uid.
+     */
+    @Test
+    void anUnprivilegedShellElevatesEveryPrivilegedBtrfsCommandWithSudo() {
+
+        FakeShell shell = FakeShell.succeeding().unprivileged();
+        VolumeOperations btrfs = VolumeOperations.forBackend(VolumeBackend.BTRFS, shell);
+        String volume = "/srv/data/volumes/42/home";
+
+        // 1. own: chown to the foreign uid and the chmod both need root.
+        btrfs.own(volume, 100042);
+        assertThat(shell.last())
+            .as("step 1: chown and chmod are elevated")
+            .contains("sudo -n chown 100042:100042 '" + volume + "'")
+            .contains("sudo -n chmod 0700 '" + volume + "'");
+
+        // 2. create, quota, snapshot, destroy: every btrfs verb, mkdir and rm alike.
+        btrfs.create(volume);
+        assertThat(shell.last()).as("step 2: create")
+            .contains("sudo -n mkdir -p").contains("sudo -n btrfs subvolume create");
+        btrfs.setQuota(volume, 1024L);
+        assertThat(shell.last()).as("step 2: quota")
+            .contains("sudo -n btrfs quota enable").contains("sudo -n btrfs qgroup limit");
+        btrfs.snapshot(volume, "pre");
+        assertThat(shell.last()).as("step 2: snapshot")
+            .contains("sudo -n btrfs subvolume snapshot -r");
+        btrfs.destroy(volume);
+        assertThat(shell.last()).as("step 2: destroy")
+            .contains("sudo -n btrfs subvolume delete").contains("sudo -n rm -rf");
+        assertThat(shell.all())
+            .as("step 2: no privileged binary is ever spelled without the prefix")
+            .doesNotContainPattern("(^|[^n] )(btrfs|chown|chmod|mkdir|rm) ");
+
+        // 3. A root shell keeps the bare commands: sudo is never assumed where it is
+        //    not needed (a root ssh target may not even have it installed).
+        FakeShell root = FakeShell.succeeding();
+        VolumeOperations asRoot = VolumeOperations.forBackend(VolumeBackend.BTRFS, root);
+        asRoot.own(volume, 100042);
+        assertThat(root.last()).as("step 3: root runs chown bare").doesNotContain("sudo");
     }
 
     /** Usage is parsed off the qgroup report, and an unreadable answer is -1, never 0. */
