@@ -658,3 +658,38 @@ refuses the overlap, and the wildcard certificate is authorised by this row.
 Residue noted, not touched: sites 4 and 6 (`visual-qa-20260829m-a/b`, exact domain rows
 5 and 6, Exclude-from-LE on) are still live rows from an earlier QA pass this day and
 show in the Sites list; the dispatcher logs them as having no routable domain.
+
+## Operations 2026-08-29 (comms hub): herald deployed, hohenheim coupled
+
+Herald now runs beside hohenheim as the central comms hub (its own runbook:
+`herald/docs/deploy-starfleet.md`, "Deploy 2026-08-29"). What changed on THIS
+install:
+
+- Site 7 `Herald comms hub`, address upstream HTTP `127.0.0.1:8092`, domain row 8
+  `comms.starfleet.life` (exact, Force SSL on, Exclude from Let's Encrypt on --
+  the `*.starfleet.life` wildcard covers it). Sites are now 4, domains 5.
+- `settings/auth.dry` = `{"external_base_url": "https://admin.starfleet.life"}`
+  and `settings/comms.dry` = `{"channels": {"mail_transports": "hub://zcm_...@127.0.0.1:8092?insecure=true"}}`,
+  both 0600 owner hohenheim. The earlier 2026-08-29 entry's remedy ("set them in
+  local.dry") was WRONG: zenit-auth reads `settings/auth.dry` (keys relative to
+  the `auth` group) and zenit-comms has a context of its own that hohenheim
+  never loaded from any file, so a `comms.*` key in `local.dry` is accepted and
+  inert. `HohenheimCommsSettings` (hohenheim `a7cb2514`) now loads
+  `settings/comms.dry` + `COMMS__*` env before the dispatcher is built and the
+  settings page carries a Communication mount editing it.
+- Deployed hohenheim `a7cb2514` (13/13 clean stamp; migration diff
+  `12490d6e..a7cb2514` empty; rehearsal on a byte copy `0 applied`, health in
+  20 s, 0 exceptions; ONE restart, health in 22 s, panel/apex/comms 200, `aa`
+  SOA, listeners 53/80/443/3000 + herald on loopback 8092). RAM after: hohenheim
+  RSS 360 MB, herald 340 MB, 746 MB available. Rollback for this swap:
+  `/root/herald-preflight-20260829-115128/hohenheim-server.jar.rollback` with
+  `hohenheim.db.at-swap`; the previous jar was `12490d6e`.
+- Smoke: `/account` "Send a confirmation link" is accepted; the delivery is
+  `sent` here (transport `hub`) and `queued` on the hub with
+  `No transports configured for channel MAIL` until an smtp DSN is set ON THE
+  HUB. Forgot-password now passes its 503 gate as well (base URL + lane).
+- The `settings.source_missing /opt/hohenheim/settings/default.dry` boot line
+  is pre-existing (the live install never had that file); harmless.
+
+Still pending: the smtp DSN on herald (Settings -> Communication), then click
+the button once more and open the mailed link to confirm the admin address.
