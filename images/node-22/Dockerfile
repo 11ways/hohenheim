@@ -2,8 +2,12 @@
 # runtime image keeps (tini PID 1, /home/site, numeric uid, /bin/bash).
 FROM node:22-bookworm-slim
 
+# python3/make/g++: node-gyp, so an npm install with a native module that ships no
+# prebuilt binary (measured 2026-08-29: alchemymvc's @picturae/mmmagic) builds
+# instead of failing -- a Node runtime that cannot install native modules is not one.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends bash busybox ca-certificates iproute2 util-linux curl git tini \
+        python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
 
 # The Incus lane's PID 1 (see ../hohenheim-init): shared by every runtime image and

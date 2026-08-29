@@ -642,11 +642,22 @@ public class DockerClient {
      * @param tail max number of trailing lines, or {@code <= 0} for the full log
      */
     public String containerLogs(String id, boolean stdout, boolean stderr, int tail) throws IOException {
+        return containerLogs(id, stdout, stderr, tail, false);
+    }
+
+    /**
+     * {@link #containerLogs(String, boolean, boolean, int)} with the container's TTY-ness
+     * DECLARED: the daemon keeps a TTY container's log raw (no 8-byte frames), so
+     * demultiplexing it would eat the first bytes of every chunk as a frame header.
+     */
+    public String containerLogs(String id, boolean stdout, boolean stderr, int tail,
+                                boolean tty) throws IOException {
         String path = "/containers/" + id + "/logs?stdout=" + (stdout ? 1 : 0) + "&stderr=" + (stderr ? 1 : 0);
         if (tail > 0) {
             path += "&tail=" + tail;
         }
-        return demuxStream(exchange("GET", path, null, null, timeoutMillis).body());
+        byte[] body = exchange("GET", path, null, null, timeoutMillis).body();
+        return tty ? new String(body, StandardCharsets.UTF_8) : demuxStream(body);
     }
 
     /** Result of an in-container {@link #exec}: exit code plus stdout and stderr, kept separate
@@ -739,9 +750,29 @@ public class DockerClient {
      * @throws IOException also when this client's transport has no streaming lane
      */
     public ContainerStream attach(String id) throws IOException {
+        return attach(id, false);
+    }
+
+    /**
+     * {@link #attach(String)} with the container's TTY-ness DECLARED by the caller (read
+     * off the inspect payload's {@code Config.Tty}): a TTY container's attach stream is
+     * raw, never frame-multiplexed, and declaring it removes the first-byte guess that
+     * {@link ContainerStream}'s docblock explains for a stream whose bytes the workload
+     * chooses.
+     */
+    public ContainerStream attach(String id, boolean tty) throws IOException {
         String path = "/containers/" + id + "/attach?stream=1&stdout=1&stderr=1&stdin=1";
         byte[] request = buildStreamRequest("POST", path);
-        return ContainerStream.open(streamTransport(), request, timeoutMillis, true);
+        return ContainerStream.open(streamTransport(), request, timeoutMillis, true, tty);
+    }
+
+    /**
+     * Tell a TTY container's pseudo-terminal its new geometry (the daemon delivers
+     * SIGWINCH to the primary process). Refused by the daemon for a container that is
+     * not running or was created without {@code Tty}.
+     */
+    public void resizeTty(String id, int cols, int rows) throws IOException {
+        request("POST", "/containers/" + id + "/resize?h=" + rows + "&w=" + cols, null);
     }
 
     /**

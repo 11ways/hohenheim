@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -124,6 +125,10 @@ final class FakeNativeDaemons {
         boolean running;
         Identifier ownerModel;
         String ownerId;
+        /** Created with a pseudo-terminal (the spec's {@code tty}); see {@link #geometry}. */
+        boolean tty;
+        /** The last {@code cols x rows} a resize set, or null when nobody sized it. */
+        String geometry;
     }
 
     /**
@@ -229,6 +234,11 @@ final class FakeNativeDaemons {
             return this.closed;
         }
 
+        /** Every stdin write so far, each exactly as the bytes arrived. */
+        List<String> stdinWrites() {
+            return List.copyOf(this.stdinWrites);
+        }
+
         @Override
         public ConsoleStream.@Nullable Chunk next() {
             while (!this.closed) {
@@ -313,6 +323,7 @@ final class FakeNativeDaemons {
             FakeWorkload workload = new FakeWorkload();
             workload.ownerModel = owner.model();
             workload.ownerId = owner.id();
+            workload.tty = spec.tty();
             this.daemon.put(spec.handle(), workload);
             return spec.handle();
         }
@@ -478,10 +489,19 @@ final class FakeNativeDaemons {
 
         @Override
         public @NonNull Console openConsole(@NonNull String handle) throws IOException {
-            require(handle);
+            FakeWorkload workload = require(handle);
             ScriptedStream stream = new ScriptedStream();
             CONSOLE_STREAMS.put(handle, stream);
-            return new Console(stream, true);
+            return new Console(stream, true, workload.tty);
+        }
+
+        @Override
+        public void resizeConsole(@NonNull String handle, int cols, int rows) throws IOException {
+            FakeWorkload workload = require(handle);
+            if (!workload.tty) {
+                throw new IOException(handle + " has no pseudo-terminal");
+            }
+            workload.geometry = cols + "x" + rows;
         }
 
         @Override
@@ -576,6 +596,8 @@ final class FakeNativeDaemons {
                     new ContainerHardening.Profile("fake", List.of()),
                     OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
                 .publication(publication)
+                // The real kinds read the same key off the same vocabulary.
+                .tty(ConsoleKind.requireDeclared(settings).interactive())
                 .build();
         }
 

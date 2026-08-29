@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
+import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -142,6 +143,12 @@ public final class DockerContainerKind implements InstanceKindHandler {
         DoubleField.builder().name("cpu_limit").label(HohenheimFormCopy.label("cpu_limit"))
             .help(HohenheimFormCopy.help("cpu_limit")).build());
 
+    /** Which console the primary process gets; {@link ConsoleKind} is the vocabulary's home. */
+    public static final EnumField CONSOLE_KIND = SETTINGS_SCHEMA.addField(
+        ConsoleKind.fieldBuilder(ConsoleKind.SETTING)
+            .label(HohenheimFormCopy.label("console_kind"))
+            .help(HohenheimFormCopy.help("console_kind")).build());
+
     // Image, tag, command, port and what the container carries are the create decisions;
     // HOW the port is published and what it may consume have safe defaults and fold.
     // AIDEV-NOTE: after the fields -- Schema.addSection validates membership eagerly.
@@ -150,6 +157,9 @@ public final class DockerContainerKind implements InstanceKindHandler {
             List.of(PORT_PROTOCOL.getName(), PORT_EXPOSURE.getName(), HOST_PORT.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.LIMITS,
             List.of(MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+        // The console shape has a working default (plain); a TUI workload opts in.
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME,
+            List.of(CONSOLE_KIND.getName())));
     }
 
     @Override
@@ -212,6 +222,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
             .env(EnvVars.toMap(settings.get("environment_variables")))
             .volumes(volumes)
             .publication(publicationOf(settings))
+            .tty(ConsoleKind.requireDeclared(settings).interactive())
             .build();
     }
 

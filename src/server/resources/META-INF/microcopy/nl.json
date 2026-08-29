@@ -1733,6 +1733,11 @@
       "scope": "instance_console"
     },
     {
+      "text": "Deze workload draait in een echte terminal: wat je hier typt gaat er rechtstreeks naartoe, en hij volgt de grootte van dit venster.",
+      "scope": "instance_console",
+      "console": "tty"
+    },
+    {
       "text": "Live VGA-uitvoer van deze VM, opgevangen aan de hypervisorzijde. Werkt voordat de gastagent actief is.",
       "scope": "instance_framebuffer"
     },
@@ -5340,6 +5345,10 @@
     "text": "Geen runtime kan instantiesoort {$kind} uitvoeren",
     "scope": "violations"
   },
+  "console_kind_unknown": {
+    "text": "Onbekende consolesoort {$token}",
+    "scope": "violations"
+  },
   "instance_image_required": {
     "text": "Een image is vereist voordat deze instantie gedeployd kan worden",
     "scope": "violations"
@@ -6409,6 +6418,10 @@
       "scope": "console_kind"
     }
   ],
+  "tty": {
+    "text": "Interactieve terminal",
+    "scope": "console_kind"
+  },
   "string": {
     "text": "Tekst",
     "scope": "variable_type"
@@ -10334,7 +10347,7 @@
       "scope": "field"
     },
     {
-      "text": "Welke consoleweergave de workload van dit sjabloon krijgt.",
+      "text": "Welke console het hoofdproces van de workload krijgt. Een interactieve terminal geeft het een echte pseudo-terminal: toetsaanslagen, echo en herschalen op het consoletabblad, wat een schermvullende TUI zoals Janeway van Alchemy nodig heeft.",
       "scope": "help"
     }
   ],

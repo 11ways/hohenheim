@@ -254,6 +254,7 @@ class ContainerEscapeKeyTest {
         legitimate.put("Healthcheck", Map.of("Test", List.of("CMD-SHELL", "true")));
         legitimate.put("OpenStdin", Boolean.TRUE);
         legitimate.put("StdinOnce", Boolean.FALSE);
+        legitimate.put("Tty", Boolean.TRUE);
         legitimate.put("NetworkingConfig",
             Map.of("EndpointsConfig", Map.of("hohenheim-wl-41", Map.of())));
         legitimate.put("HostConfig",
@@ -286,7 +287,6 @@ class ContainerEscapeKeyTest {
         refused.put("StopTimeout", 0);
         refused.put("Shell", List.of("/bin/sh", "-c"));
         refused.put("Volumes", Map.of("/anonymous", Map.of()));
-        refused.put("Tty", Boolean.TRUE);
         refused.put("AttachStdin", Boolean.TRUE);
         refused.put("OnBuild", List.of("RUN true"));
         refused.put("ArgsEscaped", Boolean.TRUE);

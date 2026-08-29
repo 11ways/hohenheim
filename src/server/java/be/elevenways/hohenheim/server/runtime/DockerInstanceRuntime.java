@@ -186,6 +186,23 @@ public final class DockerInstanceRuntime
             WorkloadNetworks.ensureForStart(this.docker, this.policy, handle, this.egress);
         }
         this.docker.startContainer(handle);
+        // AIDEV-NOTE: a TTY container's pseudo-terminal has NO size until someone resizes
+        // it (the daemon only sizes it for an attached CLI client): a TUI that starts
+        // before a viewer connects would read 0x0 columns. HostConfig.ConsoleSize would
+        // size it at create, but Docker honours that on Linux only from API 1.42, and
+        // starfleet's daemon is 20.10 (1.41) -- so the geometry is given right after
+        // start, and every viewer re-sizes it to its own terminal on connect.
+        if (ttyOf(handle)) {
+            this.docker.resizeTty(handle, ConsoleStreamSupport.INITIAL_COLS,
+                ConsoleStreamSupport.INITIAL_ROWS);
+        }
+    }
+
+    /** Whether the daemon created this container with a pseudo-terminal ({@code Config.Tty}). */
+    private boolean ttyOf(@NonNull String handle) throws IOException {
+        Map<String, Object> inspect = this.docker.inspectContainer(handle);
+        return inspect.get("Config") instanceof Map<?, ?> config
+            && Boolean.TRUE.equals(config.get("Tty"));
     }
 
     @Override
@@ -852,12 +869,24 @@ public final class DockerInstanceRuntime
         Map<String, Object> inspect = this.docker.inspectContainer(handle);
         boolean stdinOpen = inspect.get("Config") instanceof Map<?, ?> config
             && Boolean.TRUE.equals(config.get("OpenStdin"));
-        return new Console(this.docker.attach(handle), stdinOpen);
+        // The same observed fact decides the attach FRAMING: a TTY container streams raw.
+        boolean tty = inspect.get("Config") instanceof Map<?, ?> config
+            && Boolean.TRUE.equals(config.get("Tty"));
+        return new Console(this.docker.attach(handle, tty), stdinOpen, tty);
+    }
+
+    @Override
+    public void resizeConsole(@NonNull String handle, int cols, int rows) throws IOException {
+        if (!ttyOf(handle)) {
+            throw new IOException("Container '" + handle + "' was created without a"
+                + " pseudo-terminal; there is no console geometry to set");
+        }
+        this.docker.resizeTty(handle, cols, rows);
     }
 
     @Override
     public @NonNull String consoleTail(@NonNull String handle, int lines) throws IOException {
-        return this.docker.containerLogs(handle, true, true, lines);
+        return this.docker.containerLogs(handle, true, true, lines, ttyOf(handle));
     }
 
     @Override
@@ -1050,6 +1079,12 @@ public final class DockerInstanceRuntime
         // stays false so console reconnects never half-close the workload's stdin.
         containerSpec.put("OpenStdin", true);
         containerSpec.put("StdinOnce", false);
+        // A DECLARED pseudo-terminal (ConsoleKind.TTY): the primary process sees a real
+        // terminal on its stdio, so a TUI renders and keystrokes echo. The attach stream
+        // is then raw, which openConsole reads back off the same Config.Tty fact.
+        if (spec.tty()) {
+            containerSpec.put("Tty", true);
+        }
         // AIDEV-NOTE: attached in the CREATE body, never with a connect call afterwards.
         // A post-hoc connect leaves the container on the DEFAULT BRIDGE for the interval in
         // between -- a real window of unisolated tenant runtime, next to every other
@@ -1071,6 +1106,11 @@ public final class DockerInstanceRuntime
         }
         List<String> env = new ArrayList<>();
         spec.env().forEach((name, value) -> env.add(name + "=" + value));
+        // A terminal without a TERM is a terminal every TUI refuses to draw on; the
+        // declared environment still wins when it names one.
+        if (spec.tty() && !spec.env().containsKey(ConsoleStreamSupport.TERM_VARIABLE)) {
+            env.add(ConsoleStreamSupport.TERM_VARIABLE + "=" + ConsoleStreamSupport.TERM_VALUE);
+        }
         if (!env.isEmpty()) {
             containerSpec.put("Env", env);
         }

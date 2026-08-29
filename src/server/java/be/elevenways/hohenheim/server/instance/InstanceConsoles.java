@@ -289,15 +289,89 @@ public final class InstanceConsoles {
      */
     public static @NonNull Subscription subscribe(int instanceId,
                                                   @NonNull Consumer<String> viewer) {
+        Viewer attached = attach(instanceId);
+        attached.follow(viewer);
+        return attached;
+    }
+
+    /**
+     * Attach to an instance's console WITHOUT following it yet: the viewer learns whether
+     * the console is interactive first (a pl-terminal renders raw terminal bytes and a
+     * line console differently), then {@link Viewer#follow}s. Same funnel and same
+     * session as {@link #subscribe}; keystrokes and resize frames ride the same handle.
+     *
+     * @throws Violations {@code console_unsupported}, {@code console_not_running}
+     */
+    public static @NonNull Viewer attach(int instanceId) {
         InstanceConsoleSession session = ensureSession(instanceId);
-        session.subscribe(viewer);
-        return () -> session.unsubscribe(viewer);
+        return new Viewer() {
+
+            private @Nullable Consumer<String> following;
+
+            @Override
+            public boolean interactive() {
+                return session.interactive();
+            }
+
+            @Override
+            public void follow(@NonNull Consumer<String> viewer) {
+                this.following = viewer;
+                session.subscribe(viewer);
+            }
+
+            @Override
+            public void write(@NonNull String keystrokes) throws IOException {
+                session.writeRaw(keystrokes);
+            }
+
+            @Override
+            public void resize(int cols, int rows) throws IOException {
+                session.resize(cols, rows);
+            }
+
+            @Override
+            public void close() {
+                Consumer<String> viewer = this.following;
+                this.following = null;
+                if (viewer != null) {
+                    session.unsubscribe(viewer);
+                }
+            }
+        };
     }
 
     /** Detach handle for {@link #subscribe}. */
-    @FunctionalInterface
     public interface Subscription extends AutoCloseable {
         @Override void close();
+    }
+
+    /**
+     * One viewer's handle on a console: output out, and -- for an INTERACTIVE console
+     * only -- keystrokes and geometry in. The write side needs no second capability
+     * check: {@code console} already gates the attach, and typing into a terminal one
+     * may watch is what a terminal is.
+     */
+    public interface Viewer extends Subscription {
+
+        /** Whether the workload sits behind a pseudo-terminal. */
+        boolean interactive();
+
+        /** Replay the session ring, then follow live chunks (redacted text). */
+        void follow(@NonNull Consumer<String> viewer);
+
+        /**
+         * Raw keystrokes toward the pseudo-terminal.
+         *
+         * @throws IOException when the console is not interactive or the write is refused
+         */
+        void write(@NonNull String keystrokes) throws IOException;
+
+        /**
+         * The viewer's terminal geometry, handed to the pseudo-terminal.
+         *
+         * @throws IOException when the console is not interactive or the driver refuses
+         */
+        void resize(int cols, int rows) throws IOException;
     }
 
     /** The live session of an instance, or null. */
@@ -416,9 +490,10 @@ public final class InstanceConsoles {
         // Built HERE, under the caller's Db scope: the pump thread must never have to read
         // the variable table itself, and an unreadable table must fail loudly at open
         // rather than silently stream a secret later.
+        String handle = resolved.spec().handle();
         InstanceConsoleSession session = new InstanceConsoleSession(instanceId,
-            resolved.spec().handle(), console, stopCommand,
-            ConsoleRedaction.redactorFor(instanceId),
+            handle, console, (cols, rows) -> support.resizeConsole(handle, cols, rows),
+            stopCommand, ConsoleRedaction.redactorFor(instanceId),
             InstanceConsoleLogs.sinkFor(instanceId, resolved.spec().handle(), datasource),
             (endedSession, termination, detail) -> handleStreamEnd(endedSession, instanceId,
                 serverId, name, support, leases, datasource, termination, detail));

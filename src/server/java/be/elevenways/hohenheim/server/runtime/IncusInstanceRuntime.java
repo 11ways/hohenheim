@@ -150,6 +150,15 @@ public final class IncusInstanceRuntime
             throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid owner"
                 + " labels; an unattributable instance container is forbidden by design");
         }
+        if (spec.tty()) {
+            // The same honest refusal for the pseudo-terminal: this driver runs the start
+            // command under the guest's own init, and attaching /dev/console to it is not
+            // the interactive lane the declaration promises. Refuse rather than deploy a
+            // workload whose console tab says "terminal" over a pipe.
+            throw new IOException("The incus driver cannot give '" + spec.handle()
+                + "' a pseudo-terminal on its primary process; an interactive console"
+                + " (console_kind=tty) is a docker capability");
+        }
         if (!spec.tmpfs().isEmpty()) {
             // The honest refusal, the cloud-init shape in reverse: silently dropping a
             // DECLARED discardable mount would land the workload's "ephemeral" data on
@@ -791,7 +800,11 @@ public final class IncusInstanceRuntime
             "/1.0/operations/" + id, secret);
         // /dev/console is bidirectional by construction: what we write IS delivered to
         // the workload's console, unlike Docker's discarded attach-without-OpenStdin.
-        return new Console(new IncusConsoleStream(socket), true);
+        // AIDEV-NOTE: NOT declared interactive, deliberately. /dev/console of a system
+        // container or VM is a terminal, but what answers on it is the guest's own init
+        // and getty, and the surface here stays the line console it always was (the form
+        // POST); flipping it to keystrokes is a separate decision with its own consumer.
+        return new Console(new IncusConsoleStream(socket), true, false);
     }
 
     @Override

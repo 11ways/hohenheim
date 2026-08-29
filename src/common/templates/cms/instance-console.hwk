@@ -1,11 +1,14 @@
 {#- Console tab on an instance: the live output terminal (instance-console
-    WebSocket) and the command form (POST; a non-TTY container echoes nothing,
-    so input never rides raw terminal keystrokes). -#}
+    WebSocket) and, for a PLAIN console, the command form (POST; a non-TTY
+    container echoes nothing, so input never rides raw terminal keystrokes).
+    An INTERACTIVE console (console_kind=tty, the Janeway shape) is a real
+    pseudo-terminal: keystrokes and resize ride the socket and there is no form. -#}
 {% declare title: String %}
 {% declare instanceName: String %}
 {% declare instanceId: Integer %}
 {% declare status: String %}
 {% declare running: Boolean = false %}
+{% declare interactive: Boolean = false %}
 {% declare stopCommand: String = "" %}
 {% declare returnUrl: String = "" %}
 {#- ReturnTarget.PARAM, supplied by the page: ReturnTarget lives in zenit's SERVER
@@ -36,20 +39,29 @@
             <pl-card>
                 <pl-card-header>
                     <pl-card-title>{{ t("title", scope: "instance_console") }}</pl-card-title>
-                    <pl-card-description>{{ t("description", scope: "instance_console") }}</pl-card-description>
+                    {% if interactive %}
+                        <pl-card-description>{{ t("description", scope: "instance_console", console: "tty") }}</pl-card-description>
+                    {% else %}
+                        <pl-card-description>{{ t("description", scope: "instance_console") }}</pl-card-description>
+                    {% /if %}
                 </pl-card-header>
-                <pl-card-content>
+                <pl-card-content attr:data-console-interactive={% interactive %}>
+                    {#- readOnly follows the console's shape: a pseudo-terminal echoes, so
+                        keystrokes ride the socket (pl-terminal forwards its own resize);
+                        a plain pipe never echoes, so its terminal stays read-only. -#}
                     <pl-terminal
                         rows={% 24{:} %}
                         cols={% 100{:} %}
-                        readOnly={% true %}
+                        readOnly={% !interactive %}
                         wsUrl={% consoleWsUrl %}>
                     </pl-terminal>
-                    <form use:Zenit.form={% commandTarget %} class="instance-console-command">
-                        <input type="hidden" name={% returnParam %} value={% returnUrl %}>
-                        <pl-input name="command" placeholder={% t("command_placeholder", scope: "instance_console") %}></pl-input>
-                        <pl-button variant="outline" type={% "submit" %}>{{ t("send", scope: "instance_console") }}</pl-button>
-                    </form>
+                    {% if !interactive %}
+                        <form use:Zenit.form={% commandTarget %} class="instance-console-command">
+                            <input type="hidden" name={% returnParam %} value={% returnUrl %}>
+                            <pl-input name="command" placeholder={% t("command_placeholder", scope: "instance_console") %}></pl-input>
+                            <pl-button variant="outline" type={% "submit" %}>{{ t("send", scope: "instance_console") }}</pl-button>
+                        </form>
+                    {% /if %}
                     {% if stopCommand != "" %}
                         <p class="instance-console-hint">{{ t("stop_hint", scope: "instance_console", command: stopCommand) }}</p>
                     {% /if %}
