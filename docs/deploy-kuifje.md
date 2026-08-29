@@ -416,3 +416,141 @@ the primary.
 
 ROLLBACK IS JAR ONLY (no schema change); the at-swap copy sits in the
 preflight dir regardless.
+
+## Nameserver zone deloecker.eu, 2026-08-30
+
+The box got the domain its own nameserver names live in. `deloecker.eu` is
+registered at Hetzner Robot and still hosted on Hetzner DNS; the decision was
+`ns1.deloecker.eu` and `ns2.deloecker.eu`, BOTH pointing at kuifje for now (a
+second address follows when robbedoes gets its own name). Nothing at the
+registrar was touched: this wave only makes kuifje serve a faithful copy that
+already carries the nameserver names.
+
+Setting first (`dns.nameservers`, settings editor, DNS server group), verified
+on disk in `/opt/hohenheim/settings/hohenheim.dry`:
+
+    "dns":{...,"nameservers":["ns1.deloecker.eu","ns2.deloecker.eu"]}
+
+### What public DNS held, 2026-08-30
+
+Delegation (`hoh-dns-diff delegation deloecker.eu`): parent `eu.` publishes
+`ns.second-ns.com`, `ns1.your-server.de`, `ns3.second-ns.de`, no glue (all
+out-of-bailiwick), all three authoritative at serial `2026011500`, no DS.
+VERDICT: DELEGATION OK.
+
+AXFR is REFUSED at Hetzner, so the zone was RECONSTRUCTED by probing ~110
+labels x 9 types against all three authoritative servers plus `1.1.1.1`; all
+four agreed on every question. The draft is
+`scratchpad/zones/deloecker.eu.zone`. Found, and nothing else: apex `A
+213.133.104.4`, apex `MX 10 mail.deloecker.eu.`, apex `TXT "v=spf1 +a +mx
+?all"`, `www A` and `mail A` (same address), `autoconfig CNAME
+mail.your-server.de.`, `smtp`/`imap`/`pop CNAME mail.deloecker.eu.`, `ftp CNAME
+www.deloecker.eu.`, `_autodiscover._tcp SRV 0 100 443 mail.your-server.de.`,
+all TTL 7200. NO AAAA anywhere, no CAA, no `_dmarc`, no DKIM selector that any
+of the ~15 guessed names hit, no wildcard (`randomprobe*.deloecker.eu` is
+NXDOMAIN), no `ns1`/`ns2` today.
+
+THIS COPY IS PROVISIONAL. A probe cannot enumerate a zone: any owner nobody
+guessed -- a DKIM selector, a third-party verification TXT -- is missing from
+it and would silently disappear at the cutover. The real Hetzner export must
+be pasted into the zone's Zone-file tab before the delegation moves; the import
+REPLACES every operator row, so it heals this copy rather than merging with it.
+
+### The zone
+
+Created through the panel as `deloecker.eu`, role primary, SOA MNAME
+`ns1.deloecker.eu`, contact `hostmaster@deloecker.eu` -- kuifje zone id 2
+(`starfleet.life` remains zone id 1). The create seeded exactly two apex NS
+rows from the declared set (`ns1.deloecker.eu`, `ns2.deloecker.eu`), which the
+Records tab showed before anything was imported.
+
+Then the Zone-file tab's import ("Imported 17 records.", serial 1 -> 2) with
+the 15 data rows above plus the four nameserver address rows; the checkbox was
+left unchecked, so the file's apex NS set (deliberately absent from the pasted
+text) was replaced by the declared one. The served zone file now reads:
+
+    deloecker.eu.  3600 IN SOA ns1.deloecker.eu. hostmaster.deloecker.eu. 2 7200 3600 1209600 300
+    deloecker.eu.  7200 IN A 213.133.104.4
+    deloecker.eu.  7200 IN MX 10 mail.deloecker.eu.
+    deloecker.eu.  7200 IN TXT "v=spf1 +a +mx ?all"
+    deloecker.eu.  3600 IN NS ns1.deloecker.eu.
+    deloecker.eu.  3600 IN NS ns2.deloecker.eu.
+    _autodiscover._tcp.  7200 IN SRV 0 100 443 mail.your-server.de.
+    autoconfig.    7200 IN CNAME mail.your-server.de.
+    ftp.           7200 IN CNAME www.deloecker.eu.
+    imap.          7200 IN CNAME mail.deloecker.eu.
+    mail.          7200 IN A 213.133.104.4
+    ns1.           3600 IN A 137.74.171.228
+    ns1.           3600 IN AAAA 2001:41d0:305:2100::1:4afe
+    ns2.           3600 IN A 137.74.171.228
+    ns2.           3600 IN AAAA 2001:41d0:305:2100::1:4afe
+    pop.           7200 IN CNAME mail.deloecker.eu.
+    smtp.          7200 IN CNAME mail.deloecker.eu.
+    www.           7200 IN A 213.133.104.4
+
+Both nameserver names resolve to the SAME host today, exactly the shape
+`dns-migration.md` calls out for `starfleet.life`: two NAMES, one HOST, no
+redundancy until robbedoes gets an address of its own here.
+
+### Replication
+
+`dns_zone_peers` id 1 on kuifje links the zone to peer `robbedoes` (transfer
+host 51.255.43.81), riding the TSIG key negotiated for `sites` earlier. On
+robbedoes the same origin was created with role secondary and primary peer
+`kuifje` -- robbedoes zone id 2 -- and pulled within 20 s of the save. Its
+Records tab correctly says the primary peer has no admin base URL (kuifje's
+panel is loopback-only), so records are shown read-only from the replica; that
+is the known asymmetry from the starfleet federation, not a fault.
+
+`compare` against the old provider (`--old 213.133.100.102 --new
+137.74.171.228`, name list @,www,ns1,ns2,mail,smtp,imap,pop,ftp,autoconfig,
+_dmarc,_autodiscover._tcp plus the draft zone file) is DIFFERENT (5), and every
+one of the five is expected:
+
+    deloecker.eu.  NS    apex-ns    ns.second-ns.com. | ns1.your-server.de. | ns3.second-ns.de.  ->  ns1.deloecker.eu. | ns2.deloecker.eu.
+    deloecker.eu.  SOA   differs    ns1.your-server.de. postmaster.your-server.de. 2026011500 ...  ->  ns1.deloecker.eu. hostmaster.deloecker.eu. 2 ...
+    ns1.deloecker.eu.  A     only-new  137.74.171.228
+    ns1.deloecker.eu.  AAAA  only-new  2001:41d0:305:2100::1:4afe
+    ns2.deloecker.eu.  A     only-new  137.74.171.228
+    ns2.deloecker.eu.  AAAA  only-new  2001:41d0:305:2100::1:4afe
+
+Every other question is `identical`; the only warnings are the apex NS/SOA TTL
+(7200 vs 3600) and the serial, both reported and neither a difference.
+
+`compare --old 137.74.171.228 --new 51.255.43.81 --strict` is IDENTICAL on all
+17 questions, apex NS and SOA included. Both servers answer `aa=1` over UDP AND
+TCP.
+
+### Health
+
+The zone row action **Check health** on kuifje answers:
+
+    Delegation: delegated_not_listed. 1 secondaries probed, 0 behind.
+
+with findings (zone form, Advanced, checked 2026-08-30 01:27):
+
+    listed_not_delegated ns1.deloecker.eu
+    listed_not_delegated ns2.deloecker.eu
+    delegated_not_listed ns1.your-server.de
+    delegated_not_listed ns.second-ns.com
+    delegated_not_listed ns3.second-ns.de
+
+That is the CORRECT pre-cutover verdict `dns-federation.md` predicts: the
+parent still names Hetzner's three servers and we still publish only our two.
+It becomes `matches` at the registrar step and not before. The Secondaries tab
+shows `robbedoes` Current at served serial 2, probed just now, last AXFR served
+serial 2. No service was restarted anywhere.
+
+### Still pending at the registrar (NOT done here)
+
+1. Paste the real Hetzner zone export into the Zone-file tab and re-run
+   `compare` -- until then this zone is a probe reconstruction.
+2. Register `ns1.deloecker.eu` and `ns2.deloecker.eu` as host objects / glue at
+   Hetzner Robot (both in-bailiwick, so the `.eu` registry DEMANDS glue:
+   137.74.171.228 + 2001:41d0:305:2100::1:4afe).
+3. Change the delegation from Hetzner DNS to those two names, then
+   `hoh-dns-diff delegation deloecker.eu --expect-ns ns1.deloecker.eu,ns2.deloecker.eu`
+   and `compare --strict`, and keep Hetzner's zone alive for its SOA expire
+   (3600000 s = 41 days) afterwards.
+4. Give ns2 a genuinely separate host (robbedoes) so the two names stop sharing
+   one machine.
