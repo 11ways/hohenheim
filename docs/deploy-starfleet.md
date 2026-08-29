@@ -477,3 +477,38 @@ listeners on 53/80/443/3000, no `[ERR]` lines that were not Undertow's INFO-on-s
 Rollback, if it is ever needed: `/root/hohenheim-preflight-20260828-234105/` holds the
 previous jar as `hohenheim-server.jar.rollback`, a `.backup`ed database that passed
 `PRAGMA integrity_check`, the settings directory and a sha256-matched keyring copy.
+
+## Deploy 2026-08-29 (second): the third remediation wave, plus three settings edits
+
+Shipped hohenheim `871275c5` at 09:44Z. Same clean-secondary-workspace lane. Every chain
+repo was clean and committed this time, but protoblast (`c202f6a`) and hawkeye (`9552aee0`)
+both moved (the boot-index presence requirements and the bridge version bump to 5), so the
+whole chain republished: 586s warm. Migration diff between the deployed `5a030dcb` and HEAD:
+EMPTY. Rehearsal against a byte copy: `--build-info` 13/13 clean, `--run-migrations`
+`Migrations complete 0 applied`, inert boot answered `/api/health` 200 in 20s.
+
+Three settings edits went in BEFORE the first restart, copies of both files kept in the
+preflight directory:
+
+- `local.dry` (the file the panel's settings editor persists to, root-scoped): added
+  `brand.name = Hohenheim` (live setting; the login card had read "Zenit") and
+  `activity.enabled = true` (restart-required; the audit trail had been off since install).
+- `hohenheim.dry` (the `hohenheim.*` group): removed the obsolete `roles.processes` key,
+  which every boot since `5a030dcb` logged as `settings.unknown_key`.
+
+Still logged at boot, deliberately NOT touched: `settings.unknown_key key=security group=""`.
+That is `local.dry`'s root-level `security` block (`never_ban` hostnames, `nftables_enabled`),
+which has been silently ignored all along -- hohenheim's security group lives at
+`hohenheim.security`, i.e. in `hohenheim.dry`, where a `security` block already exists with
+two IPs. Moving the hostnames over changes ban behaviour and needs a decision on whether
+hostnames are even valid `never_ban` entries.
+
+Two restarts (26s and 22s to health). Verified after the second: `/api/health` 200, panel and
+apex 200 over public HTTPS, the login page reads "Hohenheim", `aa` on the SOA from
+104.223.42.142, listeners 53/80/443/3000, no application errors, and `zd_deployed starfleet`
+= `current` for all 13 repos with no restart pending. The panel's Recent activity showed the
+login and the first writes within the minute, so activity recording is on.
+
+Rollback: `/root/hohenheim-preflight-20260829-093220/` (previous jar as
+`hohenheim-server.jar.rollback`, `hohenheim.db.pre` and `hohenheim.db.atswap` both
+integrity-checked, `settings/` with the pre-edit files and the sha256-matched keyring).
