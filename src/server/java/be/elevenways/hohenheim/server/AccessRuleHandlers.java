@@ -3,29 +3,26 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
+import be.elevenways.hohenheim.server.auth.AccessRuleNodes;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.List;
 import java.util.Map;
 
 /**
  * Adding a node to an access list's rule tree, from the list's Rules tab.
  *
- * The node is created DISABLED unless it is a group: a leaf is enforced per REQUEST, so a
- * rule that counted the moment it appeared -- before the operator typed its network or its
- * credential -- would refuse live traffic between two clicks. A group carries nothing that
- * can be half-typed (an empty group passes), so it starts on.
+ * The birth itself is {@link AccessRuleNodes}, shared with the automation API; what is
+ * here is the panel's half -- the per-list authority walk, the flash copy and where the
+ * operator lands afterwards.
  */
 final class AccessRuleHandlers {
 
@@ -62,18 +59,8 @@ final class AccessRuleHandlers {
             return HandlerSupport.redirect(target);
         }
 
-        AccessRuleModel model = Models.get(AccessRuleModel.class);
-        Integer parentId = parentIn(form.get("parent_id"), listId, model);
-
-        Row rule = model.createEmptyRow();
-        rule.set(AccessRuleModel.ACCESS_LIST_ID, listId);
-        rule.set(AccessRuleModel.PARENT_ID, parentId);
-        rule.set(AccessRuleModel.TYPE, type);
-        rule.set(AccessRuleModel.SORT, model.findChildren(listId, parentId).size());
-        rule.set(AccessRuleModel.ENABLED, AccessRuleModel.TYPE_GROUP.equals(type));
-        model.save(rule);
-
-        ActivityLog.record(model, rule.get(AccessRuleModel.ID), "created", type);
+        Row rule = AccessRuleNodes.add(listId,
+            AccessRuleNodes.parentIn(form.get("parent_id"), listId), type, type);
         CmsSupport.reloadProxy();
 
         // A group has nothing to fill in; a leaf does, so the operator lands on its
@@ -85,30 +72,6 @@ final class AccessRuleHandlers {
         return HandlerSupport.redirect(be.elevenways.zenit.server.http.ReturnTarget.bind(
             CmsRoutes.detail(panel, "access-rules", rule.get(AccessRuleModel.ID)),
             target.toUrl()));
-    }
-
-    /**
-     * @return the submitted parent, or null (the list's implicit root) when it is absent or
-     *         names a row that is not a GROUP of THIS list -- a rule may not be parented
-     *         onto another list's tree or onto a leaf
-     */
-    private static @Nullable Integer parentIn(@Nullable String submitted, int listId,
-                                              AccessRuleModel model) {
-        if (submitted == null || submitted.isBlank()) {
-            return null;
-        }
-        int parentId;
-        try {
-            parentId = Integer.parseInt(submitted.trim());
-        } catch (NumberFormatException notANumber) {
-            return null;
-        }
-        List<Row> candidates = model.find()
-            .where(AccessRuleModel.ID.eq(parentId))
-            .and(AccessRuleModel.ACCESS_LIST_ID.eq(listId))
-            .and(AccessRuleModel.TYPE.eq(AccessRuleModel.TYPE_GROUP))
-            .all();
-        return candidates.isEmpty() ? null : parentId;
     }
 
     private static Microcopy ruleText(String key) {

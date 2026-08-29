@@ -7,7 +7,11 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.InstanceResource;
+import be.elevenways.zenit.cms.common.access.AccessRefusedException;
+import be.elevenways.zenit.cms.server.page.ResourceWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -39,6 +43,16 @@ import java.util.Map;
  *    than the UI it claims to mirror. The only check the handlers make themselves is the
  *    per-record VISIBILITY test, and that one is shared with the list scope.
  *
+ *    AIDEV-NOTE: the resource-pipeline create (no {@code template_id} in the body) is the
+ *    ONE place this file names a permission itself, and it is the SiteApi argument
+ *    verbatim: {@code ManageInstanceResource} is not creatable, so the only panel with an
+ *    instance create form is the admin one, and mirroring it means demanding the admin
+ *    permission as narrowed by the key's scopes. Everything the create then decides --
+ *    placement, declarations, image policy, quota, project grouping -- is the resource's
+ *    and the model hooks', not this file's. The delete lane names nothing: it reaches
+ *    {@code InstanceService.destroy} through the resource, and THAT funnel demands the
+ *    {@code destroy} capability.
+ *
  *    AIDEV-NOTE: {@link #visibleInstance} checks {@code view} and NOTHING ELSE, by design
  *    -- it answers "may you see this record", never "may you do this to it". Every
  *    MUTATING handler below therefore has to reach a service that asks its own capability;
@@ -57,6 +71,9 @@ import java.util.Map;
  *    secret-variable material is exactly what a leak would be made of.
  */
 public final class InstanceApi {
+
+    /** The admin create/delete form's own resource; see createThroughResource. */
+    private static final InstanceResource INSTANCES = new InstanceResource();
 
     private InstanceApi() {
     }
@@ -197,6 +214,11 @@ public final class InstanceApi {
                 return null;
             }
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
+            if (!form.containsKey("template_id")) {
+                // The migration lane: no template, so the admin create form's own
+                // pipeline decides everything instead.
+                return createThroughResource(conduit, ctx, form);
+            }
             Row template = InstanceTemplates.templateFrom(form);
             if (template == null) {
                 return ApiConduits.refusal(conduit,
@@ -215,6 +237,34 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
+        });
+
+        HohenheimEndpoints.API_INSTANCE_DELETE.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row row = visibleInstance(conduit, ctx);
+            if (row == null) {
+                return null;
+            }
+            int instanceId = row.get(InstanceModel.ID);
+            try {
+                // InstanceResource.deleteRow IS InstanceService.destroy: the workload is
+                // torn down for real and the row soft-deleted, and the service's own
+                // funnel demands the `destroy` capability -- so seeing an instance
+                // (rule 1's `view`) is not enough to destroy it, and the refusal is the
+                // service's typed one rather than anything decided here.
+                ResourceWrites.delete(INSTANCES, row, ctx);
+            } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            } catch (AccessRefusedException refused) {
+                conduit.forbidden();
+                return null;
+            }
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "deleted",
+                ApiConduits.ORIGIN);
+            return ApiConduits.json(Map.of("id", instanceId, "status", "deleted"));
         });
 
         HohenheimEndpoints.API_INSTANCE_LOGS.setHandler(conduit -> {
@@ -422,6 +472,41 @@ public final class InstanceApi {
             devices.add(device);
         }
         return devices;
+    }
+
+    /**
+     * Create one instance through the admin form's own pipeline: kind, name, host,
+     * runtime image, environment and the kind's own settings schema, coerced and
+     * validated by {@link InstanceResource} and refused by every model hook that guards
+     * a form save (placement, declarations, image policy, quota, capacity, project
+     * grouping).
+     *
+     * ADMIN-ONLY, exactly like the site create lane and for the same reason: the /manage
+     * instance resource is deliberately not creatable, so a tenant's only create door is
+     * the approved-template funnel one branch up. Nothing is deployed here -- a fresh
+     * instance lands in {@code created} and the explicit deploy verb starts it, which is
+     * what the create form does too.
+     *
+     * @return the answer, or null when the response has already been ended
+     */
+    private static @Nullable ActionResult<Object> createThroughResource(
+            @NonNull Conduit conduit, @NonNull AccessContext ctx,
+            @NonNull Map<String, Object> form) {
+        if (!HohenheimAccess.isAdmin(ctx)) {
+            conduit.forbidden();
+            return null;
+        }
+        try {
+            int instanceId = (Integer) ResourceWrites.create(INSTANCES, form, ctx);
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId, "created",
+                ApiConduits.ORIGIN);
+            return ApiConduits.json(projection(reload(instanceId)));
+        } catch (Violations refused) {
+            return ApiConduits.refusal(conduit, refused);
+        } catch (AccessRefusedException refused) {
+            conduit.forbidden();
+            return null;
+        }
     }
 
     // -- visibility -----------------------------------------------------------

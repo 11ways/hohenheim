@@ -214,6 +214,94 @@ const siteVerbs = {
     },
 };
 
+// -- access-list verbs (hoh access-list create|list|delete|rule add) ----------
+
+const accessListColumns = ['id', 'name', 'satisfy', 'shared'];
+
+const accessListVerbs = {
+
+    async create([name, ...pairs]) {
+        const usage = 'Usage: hoh access-list create <name> [field=value ...]';
+        if (!name) die(usage);
+        const form = fieldsOf(pairs, usage);
+        form.name = name;
+        const list = await post('/api/v1/access-lists', form);
+        if (flags.json) return emit(list);
+        console.log(`Access list ${list.id} "${list.name}" created`
+            + ` (satisfy=${list.satisfy}, shared=${list.shared}).`);
+    },
+
+    async list() {
+        const data = await get('/api/v1/access-lists');
+        emit(data, 'access_lists', accessListColumns);
+    },
+
+    async delete([id]) {
+        if (!id) die('Usage: hoh access-list delete <access-list-id> [--yes]');
+        const list = await get(`/api/v1/access-lists/${id}`);
+        if (!flags.yes) {
+            const typed = await ask(`Delete "${list.name}" and its rules.`
+                + ' Type the list name to confirm: ');
+            if (typed === null) {
+                die('Refusing to delete without confirmation (pass --yes in scripts).');
+            }
+            if (typed.trim() !== list.name) die('Name mismatch; nothing was done.');
+        }
+        const result = await post(`/api/v1/access-lists/${id}/delete`);
+        console.log(`Access list ${result.id} ${result.status}.`);
+    },
+
+    async rule([verb, listId, type, ...pairs]) {
+        const usage = 'Usage: hoh access-list rule add <access-list-id> <type>'
+            + ' [field=value ...]';
+        if (verb !== 'add') die(usage);
+        if (!listId || !type) die(usage);
+        const form = fieldsOf(pairs, usage);
+        form.type = type;
+        const rule = await post(`/api/v1/access-lists/${listId}/rules`, form);
+        if (flags.json) return emit(rule);
+        console.log(`Rule ${rule.id} (${rule.type}) added to access list`
+            + ` ${rule.access_list_id}, enabled=${rule.enabled}.`);
+    },
+};
+
+// -- instance write verbs (hoh instance create|show|delete) -------------------
+
+const instanceVerbs = {
+
+    async create([name, kind, ...pairs]) {
+        const usage = 'Usage: hoh instance create <name> <kind> [field=value ...]';
+        if (!name || !kind) die(usage);
+        const form = fieldsOf(pairs, usage);
+        form.name = name;
+        form.kind = kind;
+        const instance = await post('/api/v1/instances', form);
+        if (flags.json) return emit(instance);
+        console.log(`Instance ${instance.id} "${instance.name}" created`
+            + ` (${instance.kind}, status=${instance.status}).`);
+    },
+
+    async show([id]) {
+        if (!id) die('Usage: hoh instance show <instance-id>');
+        emit(await get(`/api/v1/instances/${id}`));
+    },
+
+    async delete([id]) {
+        if (!id) die('Usage: hoh instance delete <instance-id> [--yes]');
+        const instance = await get(`/api/v1/instances/${id}`);
+        if (!flags.yes) {
+            const typed = await ask(`Destroy "${instance.name}" and its workload.`
+                + ' Type the instance name to confirm: ');
+            if (typed === null) {
+                die('Refusing to delete without confirmation (pass --yes in scripts).');
+            }
+            if (typed.trim() !== instance.name) die('Name mismatch; nothing was done.');
+        }
+        const result = await post(`/api/v1/instances/${id}/delete`);
+        console.log(`Instance ${result.id} ${result.status}.`);
+    },
+};
+
 // -- commands -----------------------------------------------------------------
 
 const commands = {
@@ -336,9 +424,16 @@ const commands = {
             ['id', 'name', 'kind', 'status', 'template']);
     },
 
-    async instance([id]) {
-        if (!id) die('Usage: hoh instance <instance-id>');
-        emit(await get(`/api/v1/instances/${id}`));
+    async instance([first, ...rest]) {
+        if (instanceVerbs[first]) return instanceVerbs[first](rest);
+        if (!first) die('Usage: hoh instance <instance-id> | hoh instance create|show|delete ...');
+        emit(await get(`/api/v1/instances/${first}`));
+    },
+
+    async 'access-list'([first, ...rest]) {
+        if (accessListVerbs[first]) return accessListVerbs[first](rest);
+        if (!first) die('Usage: hoh access-list create|list|delete|rule ...');
+        emit(await get(`/api/v1/access-lists/${first}`));
     },
 
     async logs([id]) {
@@ -418,6 +513,13 @@ Usage: hoh <command> [args] [--json] [--yes]
   deployments <site-id>              Git deployment records
   deploy-log <site-id> <deploy-id>   One git deploy's captured log
   instances | instance <id>          Instances you hold manage on
+  instance create <name> <kind> [f=v]  Create a workload (admin): settings.* per kind
+  instance show <id>                 One instance
+  instance delete <id> [--yes]       Destroy a workload (asks for the name)
+  access-list list | access-list <id>  Access lists you hold manage on
+  access-list create <name> [f=v..]  Create a list (name, satisfy, shared for admins)
+  access-list delete <id> [--yes]    Delete a list and its rules (asks for the name)
+  access-list rule add <id> <type> [f=v]  Add a rule (data.username=..., enabled=true)
   logs <instance-id> [-n <lines>]    Tail an instance's console output
   power <instance-id> <action>       start | stop | restart
   vars instance|env <id> ...         List / set / unset variables (--secret for secrets;
