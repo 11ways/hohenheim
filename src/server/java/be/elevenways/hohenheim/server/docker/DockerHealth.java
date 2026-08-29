@@ -30,14 +30,10 @@ public final class DockerHealth {
         UNREACHABLE
     }
 
-    // STACKS or INSTANCES: both roles REQUIRE a daemon by definition, so either alone
-    // makes silent absence unacceptable (the recon's "do not repeat the role gating"
-    // warning). PROXY and DATABASES only MAY use docker, so they stay out -- probing for
-    // them would raise a false daemon-down alarm on every docker-less proxy install.
+    // The role pair lives on HohenheimRoles.dockerRequired(), shared with the dashboard's
+    // daemon-unreachable item so the probe and its reporting can never disagree.
     private static final DockerHealth BOOT = new DockerHealth(
-        () -> HohenheimRoles.anyEnabled(HohenheimRoles.Role.STACKS,
-            HohenheimRoles.Role.INSTANCES),
-        DockerClient::new);
+        HohenheimRoles::dockerRequired, DockerClient::new);
 
     private final @NonNull BooleanSupplier dockerRoleEnabled;
     private final @NonNull Supplier<DockerClient> clientFactory;
@@ -89,8 +85,9 @@ public final class DockerHealth {
         problem = reason;
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("problem", reason);
-        data.put("message", "roles.stacks is enabled but the local Docker daemon is"
-            + " unreachable; stacks cannot deploy or be monitored on this node");
+        data.put("message", "a docker-requiring role (stacks or instances) is enabled but the"
+            + " local Docker daemon is unreachable; workloads cannot deploy or be monitored"
+            + " on this node");
         Blast.slog("hohenheim.docker_unreachable", data);
     }
 

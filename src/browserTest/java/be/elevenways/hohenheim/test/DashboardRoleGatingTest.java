@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.cms.OnboardingCollector;
+import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -27,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The dashboard offers only what an ENABLED role can act on: with the workload tiers off,
  * the readiness checklist and every host-tier attention item are ABSENT, while the proxy
- * tier's own items still speak.
+ * tier's own items still speak; a dead Docker daemon is reported by every role that needs one.
  *
  * AIDEV-NOTE: observed live on starfleet -- instances/stacks/databases off, proxy on, and
  * the dashboard still said "Enrol a host" and listed Docker reconcile findings whose links
@@ -112,6 +113,38 @@ class DashboardRoleGatingTest {
                     .as("step 4: the instance steps are the instance role's")
                     .containsExactly("checklist_host", "checklist_admit",
                         "checklist_create_instance", "checklist_deploy");
+
+                // 5. A dead daemon is the instance tier's problem as much as the stack
+                //    tier's, and a proxy-only node never asks. The process-wide probe
+                //    cannot be made to fail here without a daemon, so the decision is
+                //    exercised through an injected probe whose client cannot connect.
+                assertThat(HohenheimRoles.dockerRequired())
+                    .as("step 5: an instances-only node requires a daemon")
+                    .isTrue();
+                DockerHealth dead = new DockerHealth(() -> true, () -> {
+                    throw new IllegalStateException("connect ECONNREFUSED /var/run/docker.sock");
+                });
+                dead.probe();
+                AttentionItem daemon = AttentionCollector.dockerUnreachable(dead);
+                assertThat(daemon)
+                    .as("step 5: an unreachable daemon is a red item carrying the reason")
+                    .isNotNull();
+                assertThat(daemon.title().key())
+                    .as("step 5: the item is the daemon-unreachable one")
+                    .isEqualTo("docker_unreachable");
+                roles(EnumSet.of(Role.PROXY));
+                assertThat(HohenheimRoles.dockerRequired())
+                    .as("step 5: a proxy-only node never asks after a daemon")
+                    .isFalse();
+                DockerHealth notNeeded = new DockerHealth(HohenheimRoles::dockerRequired, () -> {
+                    throw new IllegalStateException("never constructed");
+                });
+                assertThat(notNeeded.probe())
+                    .as("step 5: so its probe declares docker DISABLED without a client")
+                    .isEqualTo(DockerHealth.Status.DISABLED);
+                assertThat(AttentionCollector.dockerUnreachable(notNeeded))
+                    .as("step 5: and no item is raised")
+                    .isNull();
             } finally {
                 roles(booted);
                 local.set(ServerModel.ADMISSION, admission);

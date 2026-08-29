@@ -111,6 +111,19 @@ public final class HohenheimRoles {
     }
 
     /**
+     * True when a role that cannot work without a local Docker daemon is on.
+     *
+     * AIDEV-NOTE: THE declaring home of that pair. Stacks and instances REQUIRE a daemon;
+     * proxy and databases only MAY use one, so they stay out, or every docker-less proxy
+     * install would raise a daemon-down alarm. The boot probe and the dashboard's
+     * daemon-unreachable item both read this, which is what keeps an instances-only node
+     * from probing red and then staying silent about it.
+     */
+    public static boolean dockerRequired() {
+        return anyEnabled(Role.STACKS, Role.INSTANCES);
+    }
+
+    /**
      * The shared schedule gate for role-owned tasks: the declarations when any of the
      * given roles is enabled, an explicit retraction (empty list) otherwise.
      */
