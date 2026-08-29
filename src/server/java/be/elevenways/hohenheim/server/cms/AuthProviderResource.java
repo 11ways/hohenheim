@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RowResource;
@@ -80,6 +81,37 @@ public final class AuthProviderResource extends RowResource {
 
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull Icon icon() { return Icon.of("key"); }
+
+    /**
+     * A provider still gating a live site or named by an access rule is offered DEAD,
+     * naming the sites: the proxy fails a site whose provider is gone CLOSED, so the
+     * delete would take those sites offline from a page that never mentioned them. The
+     * enforcement for every other writer is {@code SiteAuthProviderGuards}.
+     */
+    @Override
+    public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
+                                                       @NonNull AccessContext accessContext) {
+        Integer id = record.get(SiteAuthProviderModel.ID);
+        String sites = DeleteImpact.join(DeleteImpact.sitesGatedByAuthProvider(id));
+        long rules = DeleteImpact.rulesNamingAuthProvider(id);
+        if (!sites.isEmpty()) {
+            return Microcopy.of("delete_in_use").withFilter("scope", "auth_provider")
+                .withArg("sites", sites)
+                .withArg("rules", rules);
+        }
+        if (rules > 0) {
+            return Microcopy.of("delete_in_use_rules").withFilter("scope", "auth_provider")
+                .withArg("rules", rules);
+        }
+        return super.deleteUnavailableReason(record, accessContext);
+    }
+
+    /** The dialog names what goes (the stored credentials) and the refusal the funnel enforces. */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmation() {
+        return deleteConfirmation(
+            Microcopy.of("delete_confirm").withFilter("scope", "auth_provider"));
+    }
 
 
     @Override

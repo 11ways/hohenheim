@@ -3674,6 +3674,18 @@
       "scope": "dns_remote"
     },
     {
+      "text": "Deze peer verwijderen? Zijn overdrachtssleutel en beheerreferenties verdwijnen mee, en de zones die hem notificeren of overdrachten van hem aanvaarden doen dat niet langer. Een peer waarvan een secundaire zone nog repliceert wordt geweigerd.",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "Deze auth-provider verwijderen? Zijn opgeslagen referenties en realm-instellingen verdwijnen mee. Een provider die nog een site bewaakt of waarnaar een toegangsregel verwijst wordt geweigerd, omdat de proxy die sites dan volledig zou sluiten.",
+      "scope": "auth_provider"
+    },
+    {
+      "text": "Deze variabele verwijderen? Ze verlaat haar omgeving nu; workloads daar krijgen ze bij hun volgende deploy niet meer, en wat nu draait behoudt tot dan de waarde waarmee het werd uitgerold.",
+      "scope": "environment_variable"
+    },
+    {
       "text": "Deze toegangslijst verwijderen? De regels verdwijnen mee, en elke site en beveiligd pad die ze bewaakt wordt vanaf dat moment ongecontroleerd doorgelaten.",
       "scope": "access_list"
     },
@@ -7297,6 +7309,22 @@
     "text": "Deze omgeving wordt nog gebruikt door instanties of variabelen",
     "scope": "violations"
   },
+  "dns_peer_in_use": {
+    "text": "Peer {$name} is nog de primaire van {$count} secundaire zone(s) zoals {$zone}; wijs ze eerst om of verwijder ze",
+    "scope": "violations"
+  },
+  "auth_provider_in_use": {
+    "text": "Auth-provider {$name} bewaakt nog {$sites} site(s) en {$rules} toegangsregel(s) verwijzen ernaar; wijs ze eerst een andere provider toe",
+    "scope": "violations"
+  },
+  "system_user_in_use": {
+    "text": "Systeemgebruiker {$name} is de gebruiker waaronder de Spamservice-installatie draait; wijs eerst een andere gebruiker toe",
+    "scope": "violations"
+  },
+  "server_migration_target": {
+    "text": "Host {$name} is de bestemming van de lopende migratie van {$instance}; laat die eerst afronden",
+    "scope": "violations"
+  },
   "variable_one_owner": {
     "text": "Een variabele hoort bij precies één instantie of één omgeving",
     "scope": "violations"
@@ -10870,8 +10898,20 @@
     {
       "text": "{$name} {$type} {$value} verwijderen uit zone {$origin}? Autoritatieve antwoorden veranderen onmiddellijk. Dit kan niet ongedaan worden gemaakt.",
       "scope": "dns_record"
+    },
+    {
+      "text": "De peer {$name} verwijderen? Zijn overdrachtssleutel en beheerreferenties verdwijnen mee. Op dit moment notificeert geen enkele zone hem of aanvaardt overdrachten van hem.",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "De variabele {$key} uit omgeving {$environment} verwijderen? Workloads in die omgeving krijgen ze bij hun volgende deploy niet meer; wat nu draait behoudt tot dan de waarde waarmee het werd uitgerold.",
+      "scope": "environment_variable"
     }
   ],
+  "delete_confirm_linked": {
+    "text": "De peer {$name} verwijderen? Zijn overdrachtssleutel en beheerreferenties verdwijnen mee, en deze zones notificeren hem niet langer en aanvaarden geen overdrachten meer van hem: {$zones}.",
+    "scope": "dns_peer"
+  },
   "delete_confirm_gating": {
     "text": "De toegangslijst {$name} verwijderen? De {$rules} regels verdwijnen mee, en deze worden niet langer bewaakt -- hun verkeer wordt vanaf dat moment ongecontroleerd doorgelaten: {$gated}.",
     "scope": "access_list"
@@ -10892,8 +10932,24 @@
     {
       "text": "{$instances} actieve instanties en {$templates} sjablonen draaien nog in deze image. Wijs ze eerst een andere toe, anders mislukt hun volgende deploy op een image die niet meer bestaat.",
       "scope": "runtime_image"
+    },
+    {
+      "text": "Deze secundaire zones repliceren van deze peer: {$zones}. Wijs ze eerst een andere primaire toe of verwijder ze, anders stoppen ze met antwoorden zodra hun SOA-verloopvenster sluit.",
+      "scope": "dns_peer"
+    },
+    {
+      "text": "Deze sites gebruiken deze provider als aanmeldpoort: {$sites} ({$rules} toegangsregels verwijzen er ook naar). Wijs ze eerst een andere provider toe, anders weigeren ze vanaf de volgende route-lading elk verzoek.",
+      "scope": "auth_provider"
     }
   ],
+  "delete_in_use_rules": {
+    "text": "{$rules} toegangsregels verwijzen naar deze provider. Wijs ze eerst om of verwijder ze, anders weigeren de lijsten die ze bevatten vanaf de volgende route-lading elk verzoek.",
+    "scope": "auth_provider"
+  },
+  "delete_migrating": {
+    "text": "De workload {$instance} wordt op dit moment naar deze host gemigreerd. Laat de migratie eerst afronden.",
+    "scope": "server"
+  },
   "delete_confirm_dependents": {
     "text": "De zone {$origin} verwijderen? De {$records} opgeslagen records verdwijnen mee en deze server antwoordt niet langer voor die naam. Deze sites en certificaten resolven erin en verliezen hun DNS: {$dependents}.",
     "scope": "dns_zone"

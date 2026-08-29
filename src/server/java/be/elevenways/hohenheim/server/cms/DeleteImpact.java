@@ -3,9 +3,12 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.DnsZonePeerModel;
+import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
@@ -61,7 +64,99 @@ final class DeleteImpact {
     private static final IdentifierKey<List<Row>> RULES =
         IdentifierKey.of("hohenheim", "delete_impact_rules");
 
+    /** Request-scoped snapshot of every zone-peer link, so a peer listing resolves its zones once. */
+    private static final IdentifierKey<List<Row>> ZONE_PEERS =
+        IdentifierKey.of("hohenheim", "delete_impact_zone_peers");
+
+    /** Request-scoped snapshot of every environment, so a variable listing names its owner once. */
+    private static final IdentifierKey<List<Row>> ENVIRONMENTS =
+        IdentifierKey.of("hohenheim", "delete_impact_environments");
+
     private DeleteImpact() {}
+
+    /** @return the origins of the SECONDARY zones that replicate from one peer */
+    static @NonNull List<String> secondaryZonesOfPeer(@Nullable Integer peerId) {
+        List<String> origins = new ArrayList<>();
+        if (peerId == null) {
+            return origins;
+        }
+        for (Row zone : zones()) {
+            if (peerId.equals(zone.get(DnsZoneModel.PRIMARY_PEER_ID))
+                    && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
+                addOrigin(origins, zone);
+            }
+        }
+        return origins;
+    }
+
+    /** @return the origins of the zones linked to one peer as a NOTIFY/AXFR target, deduplicated */
+    static @NonNull List<String> zonesLinkedToPeer(@Nullable Integer peerId) {
+        Set<String> origins = new LinkedHashSet<>();
+        if (peerId == null) {
+            return new ArrayList<>(origins);
+        }
+        for (Row link : zonePeers()) {
+            if (!peerId.equals(link.get(DnsZonePeerModel.PEER_ID))) {
+                continue;
+            }
+            String origin = originOfZone(link.get(DnsZonePeerModel.ZONE_ID));
+            if (origin != null && !origin.isEmpty()) {
+                origins.add(origin);
+            }
+        }
+        return new ArrayList<>(origins);
+    }
+
+    /** @return the names of the LIVE sites whose login gate is one auth provider */
+    static @NonNull List<String> sitesGatedByAuthProvider(@Nullable Integer providerId) {
+        List<String> gated = new ArrayList<>();
+        if (providerId == null) {
+            return gated;
+        }
+        for (Row site : sites()) {
+            if (providerId.equals(site.get(SiteModel.AUTH_PROVIDER_ID))
+                    && site.get(SiteModel.DELETED_AT) == null) {
+                String name = site.get(SiteModel.NAME);
+                gated.add(name == null || name.isBlank() ? String.valueOf((Object) site.get(SiteModel.ID)) : name);
+            }
+        }
+        return gated;
+    }
+
+    /** @return how many access rules name one auth provider */
+    static long rulesNamingAuthProvider(@Nullable Integer providerId) {
+        if (providerId == null) {
+            return 0;
+        }
+        long rules = 0;
+        for (Row rule : rules()) {
+            if (AccessRuleModel.TYPE_AUTH_PROVIDER.equals(rule.get(AccessRuleModel.TYPE))
+                    && providerId.equals(SiteAuthProviderGuards.providerIdOf(rule))) {
+                rules++;
+            }
+        }
+        return rules;
+    }
+
+    /** @return the environment's name, or null when the reference is absent or dangling */
+    static @Nullable String environmentNameOf(@Nullable Integer environmentId) {
+        if (environmentId == null) {
+            return null;
+        }
+        for (Row environment : environments()) {
+            if (environmentId.equals(environment.get(EnvironmentModel.ID))) {
+                return environment.get(EnvironmentModel.NAME);
+            }
+        }
+        return null;
+    }
+
+    private static void addOrigin(@NonNull List<String> origins, @NonNull Row zone) {
+        String origin = zone.get(DnsZoneModel.ORIGIN);
+        if (origin != null && !origin.isEmpty()) {
+            origins.add(origin);
+        }
+    }
 
     /**
      * Everything that is gated by one access list and stops being gated when it goes:
@@ -268,6 +363,14 @@ final class DeleteImpact {
 
     private static @NonNull List<Row> rules() {
         return snapshot(RULES, () -> Models.get(AccessRuleModel.class).find().all());
+    }
+
+    private static @NonNull List<Row> zonePeers() {
+        return snapshot(ZONE_PEERS, () -> Models.get(DnsZonePeerModel.class).find().all());
+    }
+
+    private static @NonNull List<Row> environments() {
+        return snapshot(ENVIRONMENTS, () -> Models.get(EnvironmentModel.class).find().all());
     }
 
     /** Read a snapshot from the request scope, loading it once when it is not there yet. */

@@ -1,7 +1,12 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.DnsPeerModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
@@ -9,14 +14,20 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.model.SystemUserModel;
+import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.cms.InstanceTemplateResource;
 import be.elevenways.hohenheim.server.cms.RuntimeImageResource;
+import be.elevenways.hohenheim.server.cms.ServerResource;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -42,7 +53,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Nothing in the runtime tier survives its parent dangling, on the MODEL funnel rather than
  * on one admin button: a certificate releases the domains that pinned it, a stack takes its
  * services, files and history with it, and a database, a template and a runtime image
- * refuse to go while a live workload still names them.
+ * refuse to go while a live workload still names them; a DNS peer, an auth provider, a
+ * system user and a migration-target host refuse to go while a zone, a site or rule, the
+ * Spamservice installation or an in-flight migration still names them.
  *
  * AIDEV-NOTE: every delete here goes through {@code Models.get(...).delete(row)}, never a
  * resource, because the resources already cascaded by hand and the finding was precisely
@@ -298,7 +311,267 @@ class RuntimeCascadeTest {
         });
     }
 
+    /**
+     * A DNS peer a secondary zone replicates from refuses to go naming the zone; once the
+     * zone is repointed the peer goes, clearing the stale pointer a primary zone kept and
+     * taking its zone links with it.
+     */
+    @Test
+    void aDnsPeerRefusesWhileASecondaryReplicatesFromItAndTakesItsLinksWithIt() {
+        Db.run(datasource, () -> {
+            int doomedId = peer("cascade-doomed-peer");
+            int keptId = peer("cascade-kept-peer");
+            int secondaryId = zone("replica.cascade.test", DnsZoneModel.ROLE_SECONDARY, doomedId);
+            int stalePrimaryId = zone("stale.cascade.test", DnsZoneModel.ROLE_PRIMARY, doomedId);
+            int primaryId = zone("primary.cascade.test", DnsZoneModel.ROLE_PRIMARY, null);
+            int doomedLink = zonePeer(primaryId, doomedId);
+            int keptLink = zonePeer(primaryId, keptId);
+            Model peers = Models.get(DnsPeerModel.class);
+
+            // 1. A secondary zone still replicates from the peer: refused BY NAME, and the
+            //    zone links were not swept ahead of the refusal.
+            assertThatThrownBy(() -> peers.delete(peers.findById(doomedId)))
+                .as("step 1: a peer a secondary replicates from refuses to go")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("replica.cascade.test");
+            assertThat(peers.findById(doomedId)).as("step 1: the peer is kept").isNotNull();
+            assertThat(Models.get(DnsZonePeerModel.class).findById(doomedLink))
+                .as("step 1: the zone link was not swept ahead of the refusal").isNotNull();
+
+            // 2. Repointed at another primary, the secondary no longer holds it: the peer
+            //    goes, the secondary keeps its new pointer, the stale pointer a PRIMARY
+            //    zone carried is cleared and the link died with the peer.
+            Row secondary = Models.get(DnsZoneModel.class).findById(secondaryId);
+            secondary.set(DnsZoneModel.PRIMARY_PEER_ID, keptId);
+            Models.get(DnsZoneModel.class).save(secondary);
+            peers.delete(peers.findById(doomedId));
+            assertThat(peers.findById(doomedId)).as("step 2: the peer is gone").isNull();
+            assertThat(Models.get(DnsZoneModel.class).findById(secondaryId).get(DnsZoneModel.PRIMARY_PEER_ID))
+                .as("step 2: the repointed secondary keeps its new primary").isEqualTo(keptId);
+            assertThat(Models.get(DnsZoneModel.class).findById(stalePrimaryId).get(DnsZoneModel.PRIMARY_PEER_ID))
+                .as("step 2: a primary zone's stale pointer is cleared, never refused").isNull();
+            assertThat(Models.get(DnsZonePeerModel.class).findById(doomedLink))
+                .as("step 2: the zone link died with the peer").isNull();
+
+            // 3. The link to the surviving peer is untouched.
+            assertThat(Models.get(DnsZonePeerModel.class).findById(keptLink))
+                .as("step 3: the sibling link survives").isNotNull();
+        });
+    }
+
+    /**
+     * A site auth provider gating a live site, and one an access rule names, both refuse
+     * to go -- the proxy fails those sites CLOSED once the provider is gone -- and the
+     * provider goes once nothing names it.
+     */
+    @Test
+    void anAuthProviderRefusesWhileASiteOrARuleNamesIt() {
+        Db.run(datasource, () -> {
+            int providerId = authProvider("cascade-gate");
+            int siteId = site("cascade-gated");
+            Row gated = Models.get(SiteModel.class).findById(siteId);
+            gated.set(SiteModel.AUTH_PROVIDER_ID, providerId);
+            Models.get(SiteModel.class).save(gated);
+            Model providers = Models.get(SiteAuthProviderModel.class);
+
+            // 1. A live site names it as its login gate: refused by name.
+            assertThatThrownBy(() -> providers.delete(providers.findById(providerId)))
+                .as("step 1: a provider gating a live site refuses to go")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("cascade-gate");
+            assertThat(providers.findById(providerId)).as("step 1: the provider is kept").isNotNull();
+
+            // 2. The site is trashed (deleted_at, as SiteResource does): a soft-deleted site
+            //    no longer holds the provider, but an access rule naming it still does.
+            gated.set(SiteModel.DELETED_AT, Instant.now());
+            Models.get(SiteModel.class).save(gated);
+            int listId = accessList("cascade-list");
+            int ruleId = providerRule(listId, providerId);
+            assertThatThrownBy(() -> providers.delete(providers.findById(providerId)))
+                .as("step 2: a rule naming the provider still holds it")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("cascade-gate");
+
+            // 3. With the rule gone the provider goes.
+            Models.get(AccessRuleModel.class).delete(Models.get(AccessRuleModel.class).findById(ruleId));
+            providers.delete(providers.findById(providerId));
+            assertThat(providers.findById(providerId)).as("step 3: the provider is gone").isNull();
+        });
+    }
+
+    /**
+     * The system user the Spamservice installation runs as refuses to go; a user nothing
+     * runs as goes.
+     */
+    @Test
+    void aSystemUserRefusesWhileTheSpamserviceInstallationRunsAsIt() {
+        Db.run(datasource, () -> {
+            int userId = systemUser("cascade-spam", 1500);
+            int otherId = systemUser("cascade-idle", 1501);
+            Model users = Models.get(SystemUserModel.class);
+            Row installation = spamserviceInstallation();
+            installation.set(SpamserviceInstallationModel.SYSTEM_USER_ID, userId);
+            Models.get(SpamserviceInstallationModel.class).save(installation);
+
+            // 1. The installation runs as it: refused by name.
+            assertThatThrownBy(() -> users.delete(users.findById(userId)))
+                .as("step 1: the Spamservice user refuses to go")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("cascade-spam");
+            assertThat(users.findById(userId)).as("step 1: the user is kept").isNotNull();
+
+            // 2. A user nothing runs as goes.
+            users.delete(users.findById(otherId));
+            assertThat(users.findById(otherId)).as("step 2: an unreferenced user goes").isNull();
+
+            // 3. Reassigned, the former user goes too.
+            installation.set(SpamserviceInstallationModel.SYSTEM_USER_ID, null);
+            Models.get(SpamserviceInstallationModel.class).save(installation);
+            users.delete(users.findById(userId));
+            assertThat(users.findById(userId)).as("step 3: released, the user goes").isNull();
+        });
+    }
+
+    /**
+     * A host that is the DESTINATION of an in-flight cold migration refuses to go naming
+     * the workload: mid-flight the record still names its source host, so the ownership
+     * count alone never sees the destination.
+     */
+    @Test
+    void aMigrationTargetHostRefusesToGoWhileTheMigrationIsInFlight() {
+        Db.run(datasource, () -> {
+            int sourceId = server("cascade-source");
+            int targetId = server("cascade-target");
+            int instanceId = instance("cascade-mover", null, null);
+            Model servers = Models.get(ServerModel.class);
+            ServerResource resource = new ServerResource();
+            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            // The window opens the way InstanceOperationGuard opens it: one set-based
+            // statement that fires no write hooks and leaves SERVER_ID on the source.
+            Models.get(InstanceModel.class).find()
+                .where(InstanceModel.ID.eq(instanceId))
+                .assign(InstanceModel.SERVER_ID, sourceId)
+                .assign(InstanceModel.STATUS, InstanceModel.STATUS_MIGRATING)
+                .assign(InstanceModel.MIGRATE_TARGET_ID, targetId)
+                .updateAll();
+
+            // 1. The resource offers the target's delete DEAD, naming the workload.
+            Microcopy reason = resource.deleteUnavailableReason(servers.findById(targetId), operator);
+            assertThat(reason).as("step 1: a migration target is offered dead").isNotNull();
+            assertThat(reason.key()).as("step 1: with the migrating reason").isEqualTo("delete_migrating");
+            assertThat(reason.args().get("instance")).as("step 1: naming the workload")
+                .isEqualTo("cascade-mover");
+
+            // 2. The funnel refuses a direct delete the same way.
+            assertThatThrownBy(() -> servers.delete(servers.findById(targetId)))
+                .as("step 2: the funnel refuses too")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("cascade-mover");
+            assertThat(servers.findById(targetId)).as("step 2: the host is kept").isNotNull();
+
+            // 3. The window settled without a handoff (the rollback half): the target
+            //    holds nothing and goes.
+            Models.get(InstanceModel.class).find()
+                .where(InstanceModel.ID.eq(instanceId))
+                .assign(InstanceModel.STATUS, "stopped")
+                .assign(InstanceModel.MIGRATE_TARGET_ID, (Object) null)
+                .updateAll();
+            assertThat(resource.deleteUnavailableReason(servers.findById(targetId), operator))
+                .as("step 3: nothing is moving onto it any more").isNull();
+            servers.delete(servers.findById(targetId));
+            assertThat(servers.findById(targetId)).as("step 3: the host is gone").isNull();
+
+            // 4. The source still owns the workload and refuses as before.
+            assertThatThrownBy(() -> servers.delete(servers.findById(sourceId)))
+                .as("step 4: the source host still owns the workload")
+                .isInstanceOf(Violations.class);
+        });
+    }
+
     // -- fixtures ---------------------------------------------------------------
+
+    private static int peer(String name) {
+        Row row = Models.get(DnsPeerModel.class).createEmptyRow();
+        row.set(DnsPeerModel.NAME, name);
+        row.set(DnsPeerModel.TRANSFER_HOST, "192.0.2.10");
+        Models.get(DnsPeerModel.class).save(row);
+        return row.get(DnsPeerModel.ID);
+    }
+
+    private static int zone(String origin, String role, Integer primaryPeerId) {
+        Row row = Models.get(DnsZoneModel.class).createEmptyRow();
+        row.set(DnsZoneModel.ORIGIN, origin);
+        row.set(DnsZoneModel.ROLE, role);
+        row.set(DnsZoneModel.PRIMARY_PEER_ID, primaryPeerId);
+        row.set(DnsZoneModel.ENABLED, true);
+        Models.get(DnsZoneModel.class).save(row);
+        return row.get(DnsZoneModel.ID);
+    }
+
+    private static int zonePeer(int zoneId, int peerId) {
+        Row row = Models.get(DnsZonePeerModel.class).createEmptyRow();
+        row.set(DnsZonePeerModel.ZONE_ID, zoneId);
+        row.set(DnsZonePeerModel.PEER_ID, peerId);
+        Models.get(DnsZonePeerModel.class).save(row);
+        return row.get(DnsZonePeerModel.ID);
+    }
+
+    private static int authProvider(String name) {
+        Row row = Models.get(SiteAuthProviderModel.class).createEmptyRow();
+        row.set(SiteAuthProviderModel.NAME, name);
+        row.set(SiteAuthProviderModel.PROVIDER_TYPE, BasicAuthProviderType.ID.toString());
+        row.set(SiteAuthProviderModel.CONFIG, Map.of());
+        Models.get(SiteAuthProviderModel.class).save(row);
+        return row.get(SiteAuthProviderModel.ID);
+    }
+
+    private static int accessList(String name) {
+        Row row = Models.get(AccessListModel.class).createEmptyRow();
+        row.set(AccessListModel.NAME, name);
+        Models.get(AccessListModel.class).save(row);
+        return row.get(AccessListModel.ID);
+    }
+
+    /** A provider leaf naming one provider, switched on so its data is complete. */
+    private static int providerRule(int listId, int providerId) {
+        Row row = Models.get(AccessRuleModel.class).createEmptyRow();
+        row.set(AccessRuleModel.ACCESS_LIST_ID, listId);
+        row.set(AccessRuleModel.TYPE, AccessRuleModel.TYPE_AUTH_PROVIDER);
+        row.set(AccessRuleModel.ENABLED, true);
+        row.set(AccessRuleModel.DATA, Map.of(AccessRuleModel.PROVIDER_ID.getName(), providerId));
+        Models.get(AccessRuleModel.class).save(row);
+        return row.get(AccessRuleModel.ID);
+    }
+
+    private static int systemUser(String name, int uid) {
+        Row row = Models.get(SystemUserModel.class).createEmptyRow();
+        row.set(SystemUserModel.NAME, name);
+        row.set(SystemUserModel.UID, uid);
+        row.set(SystemUserModel.GID, uid);
+        row.set(SystemUserModel.HOME, "/home/" + name);
+        Models.get(SystemUserModel.class).save(row);
+        return row.get(SystemUserModel.ID);
+    }
+
+    /** The seeded singleton installation row, created here when the seed did not run. */
+    private static Row spamserviceInstallation() {
+        Row row = Models.get(SpamserviceInstallationModel.class).installation();
+        if (row != null) {
+            return row;
+        }
+        row = Models.get(SpamserviceInstallationModel.class).createEmptyRow();
+        row.set(SpamserviceInstallationModel.ID, SpamserviceInstallationModel.SINGLETON_ID);
+        row.set(SpamserviceInstallationModel.ENABLED, false);
+        Models.get(SpamserviceInstallationModel.class).save(row);
+        return row;
+    }
+
+    private static int server(String name) {
+        Row row = Models.get(ServerModel.class).createEmptyRow();
+        row.set(ServerModel.NAME, name);
+        Models.get(ServerModel.class).save(row);
+        return row.get(ServerModel.ID);
+    }
 
     private static int certificate(String niceName, String domains) {
         Row row = Models.get(CertificateModel.class).createEmptyRow();

@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -519,8 +520,16 @@ public class ServerModel extends Model {
 
     /**
      * Refuse deleting any server that live stacks, managed databases or live (not
-     * soft-deleted) instances still reference; runs on EVERY delete path (service,
-     * admin resource, criteria delete) because it is a schema hook.
+     * soft-deleted) instances still reference, or that an in-flight cold migration is
+     * moving a workload ONTO; runs on EVERY delete path (service, admin resource,
+     * criteria delete) because it is a schema hook.
+     *
+     * AIDEV-NOTE: the migration target is checked FIRST and by name. A workload mid-flight
+     * is still attributed to its SOURCE host ({@code InstanceModel.SERVER_ID} stays the data
+     * authority until the handoff), so the ownership count below never sees the
+     * destination; without this branch the target could go while its daemon holds the
+     * half-copied guest, and {@code InstanceMigrations.settle} would then resolve a host
+     * that no longer exists.
      *
      * @throws Violations naming the server and what still owns it
      */
@@ -539,6 +548,13 @@ public class ServerModel extends Model {
             if (serverId == null) {
                 continue;
             }
+            Row migrating = migratingOnto(serverId).first();
+            if (migrating != null) {
+                throw Violations.ofForm(Microcopy.of("server_migration_target")
+                    .withFilter("scope", "violations")
+                    .withArg("name", String.valueOf((Object) doomed.get(NAME)))
+                    .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME))));
+            }
             long stacks = Models.get(StackModel.class).find()
                 .where(StackModel.SERVER_ID.eq(serverId)).count();
             long databases = Models.get(DatabaseModel.class).find()
@@ -555,6 +571,16 @@ public class ServerModel extends Model {
                     .withArg("instances", instances));
             }
         }
+    }
+
+    /**
+     * The live instances an open cold migration is moving onto this host -- THE one
+     * query behind both the funnel refusal above and the admin resource's dead delete.
+     */
+    public static @NonNull QueryBuilder<Row> migratingOnto(int serverId) {
+        return Models.get(InstanceModel.class).find()
+            .where(InstanceModel.MIGRATE_TARGET_ID.eq(serverId))
+            .where(InstanceModel.DELETED_AT.isNull());
     }
 
     /** The server with this unique name, or null if none. */

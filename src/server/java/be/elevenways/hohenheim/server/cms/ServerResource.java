@@ -964,7 +964,15 @@ public final class ServerResource extends RowResource {
         if (ServerService.LOCAL.equals(record.get(ServerModel.NAME))) {
             return Microcopy.of("delete_local").withFilter("scope", "server");
         }
-        long workloads = workloadsOn(record.get(ServerModel.ID));
+        Integer id = record.get(ServerModel.ID);
+        Row migrating = id == null ? null : ServerModel.migratingOnto(id).first();
+        if (migrating != null) {
+            // Mid-flight the record still names its SOURCE host, so the workload count
+            // below never sees the destination; the funnel refuses this by name too.
+            return Microcopy.of("delete_migrating").withFilter("scope", "server")
+                .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME)));
+        }
+        long workloads = workloadsOn(id);
         if (workloads > 0) {
             return Microcopy.of("delete_in_use").withFilter("scope", "server")
                 .withArg("workloads", workloads);
