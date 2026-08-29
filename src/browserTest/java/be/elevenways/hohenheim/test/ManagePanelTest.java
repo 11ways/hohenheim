@@ -208,6 +208,14 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(manageAccess.statusCode()).isEqualTo(200);
         assertThat(manageAccess.body()).contains("<pl-capability-matrix");
 
+        // The tenant's subject picker is an EXACT lookup, never the directory: the
+        // administrator's address (a fact of the installation, not of site A) is in the
+        // admin's page, which ships the listing, and nowhere in the tenant's, which ships
+        // the lookup and its own copy (finding F4).
+        assertThat(pageView.body()).contains("test@hohenheim.local");
+        assertThat(manageAccess.body()).doesNotContain("test@hohenheim.local");
+        assertThat(manageAccess.body()).contains("Exact email address");
+
         // Site B's manage detail URL reads as missing, not forbidden.
         assertThat(operatorGet("/manage/sites/" + siteBId).statusCode()).isEqualTo(404);
 
