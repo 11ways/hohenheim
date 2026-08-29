@@ -7,10 +7,12 @@ import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.common.setting.SettingsContext;
 import be.elevenways.zenit.common.validation.PathKind;
 import be.elevenways.hohenheim.security.IpAddressSyntax;
+import be.elevenways.protoblast.common.util.BlastString;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * All Hohenheim configuration settings, organized by group.
@@ -323,6 +325,48 @@ public class HohenheimSettings {
                 + "shared transfer key; it becomes half of the TSIG key name and the peer row "
                 + "the other side creates. Blank uses the system hostname")
             .build();
+
+        private static final Pattern NAMESERVER_NAME = Pattern.compile(
+            "^(?!-)[a-z0-9-]{1,63}(?<!-)(\\.(?!-)[a-z0-9-]{1,63}(?<!-))+$");
+
+        public static final SettingDefinition<List<String>> NAMESERVERS = GROUP
+            .buildStringListSetting("nameservers")
+            .defaultValue(List.of())
+            .coercer(Dns::coerceNameservers)
+            .description("The nameserver hostnames this controller publishes for the zones it is "
+                + "primary for (ns1.example.be, ns2.example.be). A new primary zone gets one apex "
+                + "NS record per name, a zone-file import replaces the file's apex NS set with them "
+                + "unless told to keep it, and the delegation check reports an apex NS set that "
+                + "disagrees with them. Each name is listed once; a registrar that wants two names "
+                + "for one host needs two names here")
+            .build();
+
+        /** Lowercased, root-dot stripped, deduplicated hostnames of at least two labels. */
+        private static SettingDefinition.CoercionResult<List<String>> coerceNameservers(Object raw) {
+            if (!(raw instanceof List<?> list)) {
+                return SettingDefinition.CoercionResult.rejected();
+            }
+            ArrayList<String> result = new ArrayList<>();
+            for (Object item : list) {
+                if (!(item instanceof String value)) {
+                    return SettingDefinition.CoercionResult.rejected();
+                }
+                String name = BlastString.lower(value.trim());
+                while (name.endsWith(".")) {
+                    name = name.substring(0, name.length() - 1);
+                }
+                if (name.isEmpty()) {
+                    continue;
+                }
+                if (!NAMESERVER_NAME.matcher(name).matches()) {
+                    return SettingDefinition.CoercionResult.rejected();
+                }
+                if (!result.contains(name)) {
+                    result.add(name);
+                }
+            }
+            return SettingDefinition.CoercionResult.accepted(List.copyOf(result));
+        }
 
         public static final SettingDefinition<Integer> RATE_LIMIT_PER_SECOND = GROUP
             .buildSetting("rate_limit_per_second", Integer.class)

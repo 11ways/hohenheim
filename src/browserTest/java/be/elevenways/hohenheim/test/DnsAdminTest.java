@@ -188,8 +188,18 @@ class DnsAdminTest extends HohenheimTestBase {
             mail 3600 IN MX 10 mx.admin-zone.example.
             _svc._tcp 3600 IN SRV 5 0 8443 www.admin-zone.example.
             """;
-        var imported = postForm("/admin/dns-zones/" + zoneId + "/zonefile",
+        // This controller declares no nameservers (dns.nameservers is empty), so the default
+        // policy -- swap the file's apex NS set for the declared one -- has nothing to put in
+        // its place and REFUSES rather than publishing the zone under nobody's names: the
+        // records are untouched. Keeping the file's NS rows is the explicit option.
+        var refused = postForm("/admin/dns-zones/" + zoneId + "/zonefile",
             "zone_text=" + URLEncoder.encode(zoneText, StandardCharsets.UTF_8));
+        assertThat(refused.statusCode()).isIn(302, 303);
+        assertThat(Models.get(DnsRecordModel.class).findByZoneId(zoneId))
+            .as("an undeclared controller refuses a foreign apex NS set and leaves the rows alone")
+            .hasSize(1);
+        var imported = postForm("/admin/dns-zones/" + zoneId + "/zonefile",
+            "zone_text=" + URLEncoder.encode(zoneText, StandardCharsets.UTF_8) + "&keep_ns=on");
         assertThat(imported.statusCode()).isIn(302, 303);
 
         List<Row> importedRecords = Models.get(DnsRecordModel.class).findByZoneId(zoneId);

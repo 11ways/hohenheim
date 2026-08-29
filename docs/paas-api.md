@@ -356,6 +356,84 @@ enough to destroy it: a caller holding only `view` gets a **422**
 no capability oracle) while an unrelated id gets the uniform 404. A failed teardown is
 also a 422 (`instance_destroy_failed`) and leaves the record alive.
 
+## DNS zones
+
+The DNS half of the migration lane (`docs/dns-migration.md`): a primary zone created
+through the admin form's own pipeline (`DnsZoneResource` via zenit-cms
+`ResourceWrites`, so the origin is canonicalized, the SOA fields validated and the
+apex NS rows SEEDED from the controller's declared nameservers exactly as for a form
+save), and the Zone-file tab's import reached with an API key. Every verb demands the
+admin permission as narrowed by the key's scopes and answers **403** otherwise: zones
+are an operator surface (the tenant panel exposes records under a delegated zone,
+never zones). Rate limits: `hh_paas_read` on the list, `hh_paas_route_write` on the
+writes.
+
+### The declared nameserver set
+
+Setting `dns.nameservers` (a list, `ns1.example.be` one per line) is THE declared
+nameserver set of a controller, with three consumers: a new primary zone gets one
+apex NS row per name (seeded once at create, then ordinary operator-editable rows,
+never re-asserted); an import replaces the file's apex NS RRset with them unless
+told to keep it; the delegation check reports an apex set that disagrees with them
+as `apex_undeclared`. Nothing else generates apex NS rows.
+
+### `GET /api/v1/dns/zones`
+
+`{"zones":[...]}`, one element per zone, ordered by origin:
+
+```
+{"id":3,"origin":"example.be","role":"primary","enabled":true,"serial":12,
+ "soa_primary_ns":"ns1.example.be","soa_contact":"hostmaster@example.be",
+ "default_ttl":3600,"delegation_status":"matches",
+ "nameservers":["ns1.example.be","ns2.example.be"],"record_count":9}
+```
+
+`nameservers` are the zone's ENABLED apex NS row targets in row order (what the
+responder serves), never the setting.
+
+### `POST /api/v1/dns/zones`
+
+The zone form's fields, form-encoded:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `origin` | string, required | Stored canonical (lowercased, root dot stripped); `dns_origin_format` / `dns_origin_taken` |
+| `enabled` | boolean | default true |
+| `role` | enum | `primary` (default) / `secondary`; a secondary needs `primary_peer_id` and is seeded with nothing |
+| `soa_primary_ns`, `soa_contact` | string | SOA MNAME / RNAME (`dns_target_format`, `dns_contact_format`) |
+| `default_ttl`, `negative_ttl`, `soa_refresh`, `soa_retry`, `soa_expire` | integer | seconds, model defaults apply (`dns_ttl_range`, `dns_interval_range`) |
+| `dnssec_enabled` | boolean | default false |
+
+Answer: the zone element above, `nameservers` carrying the declared set. A stranger
+key is `zenit.coercion.unknown_field`.
+
+### `POST /api/v1/dns/zones/{id}/import`
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `zone_text` | string, required | Standard master-file text (`$ORIGIN`/`$TTL` honoured, `$INCLUDE` refused); `import_empty` when blank |
+| `keep_ns` | flag | Any non-blank value keeps the file's apex NS rows; absent = replace them with the declared set |
+
+What it does, exactly: REPLACES every operator-managed row (`managed_by` null) with
+the file's rows, keeps Hohenheim-managed rows (ACME), ignores the SOA (the zone row
+owns those values) and NAMES the ignored MNAME/RNAME/serial/TTL in `notes`, drops
+the file's apex NS rows and writes the declared set (naming the swap in `notes`)
+unless `keep_ns`, bumps the serial and reloads the served snapshot. Answer:
+
+```
+{"id":3,"origin":"example.be","serial":13,"imported":11,
+ "skipped":["mail.example.be. HINFO (unsupported type)"],
+ "notes":["SOA ignored: ns1.afraid.org dnsadmin.afraid.org serial 2604070003 ttl 3600 (the zone form owns the SOA values)",
+          "apex NS ns1.afraid.org, ns2.afraid.org replaced by the declared ns1.example.be, ns2.example.be"],
+ "nameservers":["ns1.example.be","ns2.example.be"]}
+```
+
+Refusals (422): `import_nameservers_undeclared` (the file carries a foreign NS set,
+nothing is declared and `keep_ns` was not given: the rows are left untouched rather
+than published under nobody's nameservers), `import_secondary_zone` (a secondary's
+rows are its primary's), `import_failed` (unparseable text, the parser's reason in
+the message). An unknown zone is 404.
+
 ## Environment variables are admin-only
 
 **CORRECTED 2026-08-13: this lane used to require "project membership plus

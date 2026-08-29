@@ -17,6 +17,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.DryResult;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -53,17 +54,28 @@ final class DnsZoneHandlers {
             }
 
             try {
-                DnsZoneFiles.ImportResult result = DnsZoneFiles.importText(zone, text);
+                DnsZoneFiles.ImportResult result = DnsZoneFiles.importText(zone, text,
+                    DnsZoneFiles.ApexNsPolicy.forKeepFlag(form.get("keep_ns")));
                 ActivityLog.record(Models.get(DnsZoneModel.class), zoneId, "imported",
                     zone.get(DnsZoneModel.ORIGIN));
-                if (result.skipped().isEmpty()) {
-                    HohenheimFlash.success(conduit, zoneError("import_done")
-                        .withArg("count", result.imported()));
-                } else {
+                String notes = String.join("; ", result.notes());
+                if (!result.skipped().isEmpty()) {
                     HohenheimFlash.warning(conduit, zoneError("import_partial")
                         .withArg("count", result.imported())
-                        .withArg("skipped", String.join("; ", result.skipped())));
+                        .withArg("skipped", String.join("; ", result.skipped()))
+                        .withArg("notes", notes));
+                } else if (!notes.isEmpty()) {
+                    HohenheimFlash.success(conduit, zoneError("import_done_notes")
+                        .withArg("count", result.imported())
+                        .withArg("notes", notes));
+                } else {
+                    HohenheimFlash.success(conduit, zoneError("import_done")
+                        .withArg("count", result.imported()));
                 }
+                return HandlerSupport.redirect(back);
+            }
+            catch (Violations refused) {
+                HohenheimFlash.error(conduit, refused.all().get(0).message());
                 return HandlerSupport.redirect(back);
             }
             catch (Exception e) {

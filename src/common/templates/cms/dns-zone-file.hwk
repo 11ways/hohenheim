@@ -75,6 +75,13 @@
                     <pl-field-error>{{ String.trim(zoneTextValue{:}) == ""
                         ? t("import_empty", scope: "dns_zone") : "" }}</pl-field-error>
                 </pl-field>
+                {#- Unchecked (the migration default) the file's apex NS rows are replaced by
+                    the controller's declared nameservers (dns.nameservers); the checkbox
+                    submits "on" only when checked, which is the whole keep_ns protocol. -#}
+                <pl-field>
+                    <pl-checkbox name="keep_ns">{{ t("import_keep_nameservers", scope: "dns_zone") }}</pl-checkbox>
+                    <pl-field-description>{{ t("import_keep_nameservers_hint", scope: "dns_zone") }}</pl-field-description>
+                </pl-field>
             </pl-card-content>
         </pl-card>
         <div class="cms-form-actions">

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DelegationCheck;
 import be.elevenways.hohenheim.server.dns.DnsDelegationHealth;
 import be.elevenways.hohenheim.server.dns.DnsNames;
+import be.elevenways.hohenheim.server.dns.DnsNameservers;
 import be.elevenways.hohenheim.server.dns.DnsSecondaryFreshness;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.SystemDelegationLookup;
@@ -372,6 +373,12 @@ public final class DnsZoneResource extends RowResource {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, null, this.model());
         Object id = super.persistRow(values, accessContext);
+        // A new primary zone starts with the controller's declared nameservers at its apex;
+        // a secondary's rows come from its primary. Seeded once, never re-asserted.
+        if (id instanceof Integer zoneId
+                && !DnsZoneModel.ROLE_SECONDARY.equals(values.get(DnsZoneModel.ROLE.getName()))) {
+            DnsNameservers.seedApexRows(zoneId);
+        }
         DnsZoneStore.INSTANCE.reload();
         return id;
     }
