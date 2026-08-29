@@ -226,6 +226,76 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
     }
 
     /**
+     * The update half of the same rule the DNS lane already honoured: an EXISTING claim is
+     * decided by its own row, so a foreign wildcard covering it may not re-refuse every
+     * later edit of it -- while the name that claim does not cover stays refused.
+     */
+    @Test
+    @Order(3)
+    void anExistingClaimIsNeverReRefusedByTheWildcardItAlreadyOutranks() {
+        var domains = Models.get(SiteDomainModel.class);
+        var sites = Models.get(SiteModel.class);
+
+        // 1. Saving the tenant's own exact row UNCHANGED under the operator catch-all
+        //    succeeds: the row already holds the claim and routing decides for it.
+        Row own = domains.findById(aliceDomainId);
+        assertThat((String) own.get(SiteDomainModel.LIVE_ROUTE_KEY))
+            .as("precondition: the row holds its claim live")
+            .isNotNull();
+        assertThat((Object) refusalOf(alice, () -> {
+            Row unchanged = domains.findById(aliceDomainId);
+            unchanged.set(SiteDomainModel.FORCE_SSL, true);
+            domains.save(unchanged);
+        })).as("step 1: an unchanged claim is not re-refused by the foreign wildcard over it")
+            .isNull();
+
+        // 2. Changing the hostname to another name the wildcard covers introduces a NEW
+        //    claim there, and that is refused with the one neutral sentence.
+        Violations moved = refusalOf(alice, () -> {
+            Row changed = domains.findById(aliceDomainId);
+            changed.set(SiteDomainModel.HOSTNAME, "moved." + ZONE);
+            domains.save(changed);
+        });
+        assertThat((Object) moved).as("step 2: moving onto a wildcard-covered name is refused").isNotNull();
+        assertThat(moved.all().get(0).message().key())
+            .as("step 2: with the neutral sentence, exactly like a create there")
+            .isEqualTo("hostname_unavailable");
+        assertThat((String) domains.findById(aliceDomainId).get(SiteDomainModel.HOSTNAME))
+            .as("step 2: and the stored hostname is untouched")
+            .isEqualTo("a." + ZONE);
+
+        // 3. Re-saving the site with enable UNCHANGED succeeds too: the enable seam runs
+        //    the same rule and a site that already routes introduces no claim.
+        assertThat((Object) refusalOf(alice, () -> {
+            Row site = sites.findById(aliceSiteId);
+            site.set(SiteModel.ENABLED, true);
+            sites.save(site);
+        })).as("step 3: an already-routing site re-saves under the foreign wildcard")
+            .isNull();
+
+        // 4. The staging two-step stays closed: a routeless site's rows hold no claim, so
+        //    a name only the foreign wildcard covers is refused when it goes live.
+        Integer stagedSiteId = site("Tenant-iso staged", "tenant-iso-staged");
+        RecordGrants.grant(GrantSubjectType.USER, aliceId, SiteModel.MODEL_ID,
+            stagedSiteId, HohenheimAccess.MANAGE, true);
+        Row staged = sites.findById(stagedSiteId);
+        staged.set(SiteModel.ENABLED, false);
+        sites.save(staged);
+        domain(stagedSiteId, "staged." + ZONE, SiteDomainModel.MATCH_EXACT);
+        Violations enabled = refusalOf(alice, () -> {
+            Row site = sites.findById(stagedSiteId);
+            site.set(SiteModel.ENABLED, true);
+            sites.save(site);
+        });
+        assertThat((Object) enabled)
+            .as("step 4: enabling a site staged on the wildcard's namespace is refused")
+            .isNotNull();
+        assertThat(enabled.all().get(0).fieldName())
+            .as("step 4: anchored on enabled, like every refusal on that path")
+            .isEqualTo("enabled");
+    }
+
+    /**
      * AIDEV-NOTE: the role snapshot is process-global, Panel.peers() memoizes per instance
      * and a Panel self-registers in its constructor, so this asserts the panel's peer
      * DECLARATION for each role set (ManagePanel.declarePeers, which buildPeers returns and
@@ -233,7 +303,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
      * the shared server, exactly like DashboardRoleGatingTest asserts the collectors.
      */
     @Test
-    @Order(3)
+    @Order(4)
     void theDelegatedPanelOffersNoTierTheNodeHasSwitchedOff() {
         Set<Role> booted = EnumSet.noneOf(Role.class);
         for (Role role : Role.values()) {
@@ -285,7 +355,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
 
     /** The zone cascade rides the model funnel: a model delete sweeps the records. */
     @Test
-    @Order(4)
+    @Order(5)
     void deletingAZoneThroughTheModelSweepsItsRecords() {
         DnsRecordModel records = Models.get(DnsRecordModel.class);
         assertThat(records.find().where(DnsRecordModel.ZONE_ID.eq(zoneId)).count())

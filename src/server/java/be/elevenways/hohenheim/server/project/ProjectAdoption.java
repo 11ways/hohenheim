@@ -9,9 +9,6 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.auth.model.PermissionGroupModel;
-import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -217,7 +214,7 @@ public final class ProjectAdoption {
     private static @NonNull String nameFor(@NonNull Set<String> subjects) {
         StringBuilder name = new StringBuilder();
         for (String subject : subjects) {
-            String part = subjectLabel(subject);
+            String part = HohenheimAccess.subjectLabel(subject);
             if (name.length() > 0) {
                 name.append(" + ");
             }
@@ -225,38 +222,5 @@ public final class ProjectAdoption {
         }
         String value = name.length() == 0 ? "Adopted project" : name.toString();
         return value.length() > 150 ? value.substring(0, 150) : value;
-    }
-
-    private static @NonNull String subjectLabel(@NonNull String subject) {
-        int separator = subject.indexOf(':');
-        String type = subject.substring(0, separator);
-        String rawId = subject.substring(separator + 1);
-        try {
-            int id = Integer.parseInt(rawId);
-            if ("user".equals(type)) {
-                Row user = AuthModels.users().findById(id);
-                if (user != null) {
-                    String display = user.get(UserModel.DISPLAY_NAME);
-                    if (display != null && !display.isBlank()) {
-                        return display;
-                    }
-                    String email = user.get(UserModel.EMAIL);
-                    if (email != null && !email.isBlank()) {
-                        return email;
-                    }
-                }
-            } else if ("group".equals(type)) {
-                Row group = AuthModels.permissionGroups().findById(id);
-                if (group != null) {
-                    String title = group.get(PermissionGroupModel.TITLE);
-                    if (title != null && !title.isBlank()) {
-                        return title;
-                    }
-                }
-            }
-        } catch (NumberFormatException ignored) {
-            // Fall through to the raw token.
-        }
-        return subject;
     }
 }

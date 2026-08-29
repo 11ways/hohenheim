@@ -43,6 +43,9 @@ public class ReleasedClaimResource extends RowResource {
     /** Virtual column: the former site's stored NAME, which outlives its visibility. */
     static final String FORMER_SITE_COLUMN = "former_site";
 
+    /** Virtual column: the former owner's subjects rendered as the people they name. */
+    static final String FORMER_OWNER_COLUMN = "former_owner";
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(ReleasedRouteClaimModel.HOSTNAME)
         .add(RelationPick.of(ReleasedRouteClaimModel.FORMER_SITE_ID, SiteModel.MODEL_ID).build())
@@ -61,7 +64,10 @@ public class ReleasedClaimResource extends RowResource {
         // only" scope and rendered the bare id. The name is read off the stored row here.
         .column(ColumnSpec.virtual(FORMER_SITE_COLUMN,
             FieldLabels.labelFor(ReleasedRouteClaimModel.FORMER_SITE_ID)).build())
-        .column(ColumnSpec.fromField(ReleasedRouteClaimModel.FORMER_SUBJECTS).build())
+        // NOT the stored column: it holds the packed "user:5" grant subjects, which is a
+        // storage key and not a name anyone reads. The people behind it are resolved here.
+        .column(ColumnSpec.virtual(FORMER_OWNER_COLUMN,
+            FieldLabels.labelFor(ReleasedRouteClaimModel.FORMER_SUBJECTS)).build())
         .column(ColumnSpec.fromField(ReleasedRouteClaimModel.RELEASED_AT).build())
         .filter(FilterSpec.forField(ReleasedRouteClaimModel.HOSTNAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(ReleasedRouteClaimModel.HOSTNAME)).build())
@@ -79,10 +85,16 @@ public class ReleasedClaimResource extends RowResource {
 
     /**
      * The former site's name, read off the stored row so a soft-deleted site still reads as
-     * itself; empty when the row was hard-deleted, which says more than its id would.
+     * itself, and the former owner's subjects rendered as people. Both are empty when the
+     * thing they name is gone, which says more than its id would; a subject that no longer
+     * resolves keeps its raw token ({@link HohenheimAccess#subjectLabel}), because a
+     * deleted tenant is exactly what a released claim usually records.
      */
     @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        if (FORMER_OWNER_COLUMN.equals(column.name())) {
+            return HohenheimAccess.labelSubjects(row.get(ReleasedRouteClaimModel.FORMER_SUBJECTS));
+        }
         if (!FORMER_SITE_COLUMN.equals(column.name())) {
             return super.cellValue(row, column);
         }

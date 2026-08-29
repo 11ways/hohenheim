@@ -12,7 +12,10 @@ import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantableModel;
 import be.elevenways.zenit.auth.server.RecordGrantCapabilityChecker;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -635,6 +638,68 @@ public final class HohenheimAccess {
             }
         }
         return subjects;
+    }
+
+    /**
+     * THE human label of ONE packed subject: the user's display name (else its email) or
+     * the group's title (else its slug).
+     *
+     * AIDEV-NOTE: it lives beside {@link #packSubjects}/{@link #parseSubjects} because it
+     * reads the SAME {@code subjectType:subjectId} vocabulary those write -- a labeller
+     * that cuts the token itself somewhere else is how a third subject type would end up
+     * rendered as a raw id by half the surfaces. An unresolvable subject renders as its
+     * RAW token on purpose: a deleted user is a fact worth showing, and a released claim's
+     * former owner is usually exactly that.
+     */
+    public static @NonNull String subjectLabel(@NonNull String subject) {
+        int separator = subject.indexOf(':');
+        if (separator < 0) {
+            return subject;
+        }
+        String type = subject.substring(0, separator);
+        int id;
+        try {
+            id = Integer.parseInt(subject.substring(separator + 1));
+        } catch (NumberFormatException notAnId) {
+            return subject;
+        }
+        if ("user".equals(type)) {
+            Row user = AuthModels.users().findById(id);
+            String label = user == null ? null : firstNonBlank(user.get(UserModel.DISPLAY_NAME),
+                user.get(UserModel.EMAIL));
+            return label != null ? label : subject;
+        }
+        if ("group".equals(type)) {
+            Row group = AuthModels.permissionGroups().findById(id);
+            String label = group == null ? null
+                : firstNonBlank(group.get(PermissionGroupModel.TITLE),
+                    group.get(PermissionGroupModel.SLUG));
+            return label != null ? label : subject;
+        }
+        return subject;
+    }
+
+    /**
+     * A whole packed subject set rendered for a reader, in the canonical order.
+     *
+     * @return the joined labels, empty for the operator-owned (empty) set
+     */
+    public static @NonNull String labelSubjects(@Nullable Object packed) {
+        StringBuilder labels = new StringBuilder();
+        for (String subject : parseSubjects(packed)) {
+            if (labels.length() > 0) {
+                labels.append(", ");
+            }
+            labels.append(subjectLabel(subject));
+        }
+        return labels.toString();
+    }
+
+    private static @Nullable String firstNonBlank(@Nullable String first, @Nullable String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second != null && !second.isBlank() ? second : null;
     }
 
     /**

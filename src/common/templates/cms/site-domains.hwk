@@ -66,8 +66,11 @@
                     {% elseif domain.get("certStatus") == "none" %}
                     <pl-badge variant={% "outline" %}>{{ t("none", scope: "site_domains") }}</pl-badge>
                     {% /if %}
+                    {#- The coverage badge and the expiry are two sentences in one cell:
+                        the newline between them is markup whitespace and does not survive,
+                        so the separator is explicit. -#}
                     {% if domain.get("certHasExpiry") == true %}
-                    <span class="hh-cert-expiry">{{ t("expires", scope: "site_domains") }} <pl-relative-time datetime={% domain.get("certExpiresIso") %} title={% domain.get("certExpiresIso") %}></pl-relative-time></span>
+                    &nbsp;<span class="hh-cert-expiry">{{ t("expires", scope: "site_domains") }} <pl-relative-time datetime={% domain.get("certExpiresIso") %} title={% domain.get("certExpiresIso") %}></pl-relative-time></span>
                     {% /if %}
                 </pl-table-cell>
                 {#- Row actions: the hostname link opens the form, but a row an operator
