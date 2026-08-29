@@ -579,3 +579,128 @@ ns1.afraid.org, both at the start and at the end of this wave. A zone created
 on either controller from now on gets these two apex NS rows, and a zone-file
 import substitutes them, so the next migration inherits the new names with no
 extra step. Nothing at any registrar was touched.
+
+## Zone wcag.be staged, 2026-08-30
+
+The second zone reconstructed onto these controllers, and the first created
+under the `mooo.com` nameserver pair. `wcag.be` is registered elsewhere and
+hosted on Hetzner DNS today; nothing at the registrar or at Hetzner was
+touched. This wave only makes kuifje and robbedoes serve a faithful copy.
+
+### What public DNS held, 2026-08-30
+
+`hoh-dns-diff delegation wcag.be`: parent `be.` (answered by 194.0.6.1)
+publishes `ns.second-ns.com`, `ns1.your-server.de`, `ns3.second-ns.de`, no glue
+(all out-of-bailiwick), all three authoritative at serial `2026011500`, parent
+set == apex set, no DS. VERDICT: DELEGATION OK. The IPv6 address of each of the
+three was not probed (no route from the workstation), which is a warning about
+the probe, not the zone.
+
+AXFR is REFUSED (rcode 5) by all three, so the zone was RECONSTRUCTED by
+probing 169 candidate owners x 9 types = 1521 questions against
+213.239.204.242, 213.133.100.102, 193.47.99.4 and 1.1.1.1. All four agreed on
+every question (0 disagreements, after retrying the queries Hetzner rate-limited
+away on the first pass). Draft: `scratchpad/zones/wcag.be.zone`.
+
+Found, and nothing else: apex `A 213.239.210.245` (merlina), apex `AAAA
+2a01:4f8:a0:948c::2`, apex `TXT "v=spf1 +a +mx ?all"`, `www` and `api` CNAME to
+the apex, `earl` (TTL 700) and `invulassistent` CNAME to `phoenix.develry.be.`
+-- the two hostnames still on Phoenix. NO MX anywhere, even though the SPF says
+`+mx`; no `_dmarc`, no DKIM selector among 15 guesses, no CAA, no SRV, no
+`mail`/`smtp`/`imap`/`pop`/`autoconfig`/`autodiscover` owner, no AAAA below the
+apex, and no wildcard (`randomprobe-a7f3q9` and `zz-wildcard-test-4471` are both
+NXDOMAIN on all three servers). Everything except `earl` is TTL 7200.
+
+THIS COPY IS PROVISIONAL, exactly as `deloecker.eu` was: a probe cannot
+enumerate a zone. The real Hetzner export must be pasted into the Zone-file tab
+before the delegation moves; the import REPLACES every operator row, so it heals
+this copy rather than merging with it.
+
+### The zones
+
+kuifje zone id 3 (`starfleet.life` is 1; 2 was the deleted `deloecker.eu`),
+role primary, SOA MNAME `nskuifje.mooo.com`, contact `hostmaster@wcag.be`. The
+create seeded exactly two apex NS rows from the declared set --
+`nskuifje.mooo.com` and `nsrobbedoes.mooo.com` -- which the Records tab showed
+before anything was imported. Both names are OUT of bailiwick, so this zone
+needs no glue rows and none were added.
+
+Then the Zone-file tab's import ("Imported 9 records.", serial 1 -> 2) with the
+7 data rows; the keep-nameservers checkbox was left unchecked and the pasted
+text deliberately carried no apex NS set. The served zone file:
+
+    wcag.be.                3600 IN SOA nskuifje.mooo.com. hostmaster.wcag.be. 2 7200 3600 1209600 300
+    wcag.be.                7200 IN A 213.239.210.245
+    wcag.be.                7200 IN AAAA 2a01:4f8:a0:948c:0:0:0:2
+    wcag.be.                7200 IN TXT "v=spf1 +a +mx ?all"
+    wcag.be.                3600 IN NS nskuifje.mooo.com.
+    wcag.be.                3600 IN NS nsrobbedoes.mooo.com.
+    api.wcag.be.            7200 IN CNAME wcag.be.
+    earl.wcag.be.            700 IN CNAME phoenix.develry.be.
+    invulassistent.wcag.be. 7200 IN CNAME phoenix.develry.be.
+    www.wcag.be.            7200 IN CNAME wcag.be.
+
+`dns_zone_peers` id 2 on kuifje links the zone to peer `robbedoes` (transfer
+host 51.255.43.81), riding the TSIG key negotiated for `sites` earlier. On
+robbedoes the same origin was created with role secondary and primary peer
+`kuifje` -- robbedoes zone id 3 -- and pulled 6 seconds after the save
+(`DNS: transferred secondary zone wcag.be serial 2`, `transfer_status ok`). Its
+Records tab shows the replica read-only, the known asymmetry (kuifje's panel is
+loopback-only, so the peer has no admin base URL).
+
+### Compare
+
+`compare wcag.be --old 213.133.100.102 --new 137.74.171.228 --zone-file
+<draft> --names @,www,api,earl,invulassistent,mail,autoconfig,_dmarc,
+_autodiscover._tcp` is DIFFERENT (1), and both non-identical rows are expected:
+
+    wcag.be.  NS   apex-ns  ns.second-ns.com. | ns1.your-server.de. | ns3.second-ns.de.  ->  nskuifje.mooo.com. | nsrobbedoes.mooo.com.
+    wcag.be.  SOA  differs  ns1.your-server.de. postmaster.your-server.de. 2026011500 ...  ->  nskuifje.mooo.com. hostmaster.wcag.be. 2 ...
+
+Every other question is `identical` (apex A/AAAA/TXT, www/api/earl/
+invulassistent CNAME); the only warnings are the apex NS/SOA TTL (7200 vs 3600)
+and the serial, both reported and neither a difference.
+
+`compare --old 137.74.171.228 --new 51.255.43.81 --strict` is IDENTICAL on all
+9 questions, apex NS and SOA included. Both servers answer `rcode=0 aa=1` for
+the zone SOA over UDP AND TCP from the workstation.
+
+### Health
+
+The zone row action **Check health** on kuifje answers, verbatim:
+
+    Delegation: delegated_not_listed. 1 secondaries probed, 0 behind.
+
+with findings (zone form, Advanced, checked 2026-08-30 01:50):
+
+    listed_not_delegated nskuifje.mooo.com
+    listed_not_delegated nsrobbedoes.mooo.com
+    delegated_not_listed ns.second-ns.com
+    delegated_not_listed ns1.your-server.de
+    delegated_not_listed ns3.second-ns.de
+
+That is the CORRECT pre-cutover verdict: the parent still names Hetzner's three
+servers and we publish only our two. It becomes `matches` at the registrar step
+and not before. The Secondaries tab shows `robbedoes` Current at served serial
+2, probed 35 seconds earlier, last AXFR served serial 2.
+
+NEITHER NAMESERVER NAME RESOLVES YET: `nskuifje.mooo.com` and
+`nsrobbedoes.mooo.com` are both NXDOMAIN for A and AAAA at 1.1.1.1, measured at
+the end of this wave -- the same state the deloecker.eu wave recorded an hour
+earlier. Moving the delegation before they resolve would take the domain
+offline, so step 3 below is genuinely blocking.
+
+No service was restarted anywhere; no site, certificate or registrar setting was
+touched.
+
+### Still pending (NOT done here)
+
+1. Paste the real Hetzner zone export into the Zone-file tab and re-run
+   `compare` -- until then this zone is a probe reconstruction.
+2. Make `nskuifje.mooo.com` and `nsrobbedoes.mooo.com` resolve at afraid.org.
+3. Jelle sets those two names as `wcag.be`'s nameservers in konsoleH (no glue:
+   out-of-bailiwick).
+4. `hoh-dns-diff delegation wcag.be --expect-ns nskuifje.mooo.com,nsrobbedoes.mooo.com`
+   and `propagate www.wcag.be CNAME --expect wcag.be.`, then `compare --strict`
+   against a Hetzner server, and keep Hetzner's zone alive for its SOA expire
+   (3600000 s = 41 days) afterwards.
