@@ -52,6 +52,29 @@ public interface HostShell {
      */
     @NonNull Result run(@NonNull String script, long timeoutSeconds);
 
+    /**
+     * Whether snippets already run as root on the host, so a privileged command needs no
+     * {@code sudo} in front of it.
+     *
+     * AIDEV-NOTE: the controller runs UNPRIVILEGED by design (deploy-native.md: one sudoers
+     * line per privileged binary, never a root service), and the local lane is a plain
+     * {@code sh -c} as the service user. The btrfs volume lane, however, is root work by
+     * nature -- chown to a workspace's foreign uid, qgroup limits, subvolume delete and
+     * snapshot all refuse to an ordinary user -- so a consumer that must act as root asks
+     * this and prefixes {@code sudo -n} itself (see {@code BtrfsVolumeOperations.sudo}).
+     * A denied {@code sudo -n} fails loudly with sudo's own text, never silently, which
+     * is what turned the starfleet {@code volume_own_failed} into a named sudoers gap.
+     * The ssh lane counts as root only when the pinned target logs in as root.
+     */
+    default boolean elevated() {
+        return true;
+    }
+
+    /** The {@code sudo -n } prefix a privileged command needs on this shell, or nothing. */
+    default @NonNull String sudo() {
+        return this.elevated() ? "" : "sudo -n ";
+    }
+
     /** The shell for an inventoried host record. */
     static @NonNull HostShell forServer(@NonNull Row server) {
         return new ProcessHostShell(server);
@@ -75,6 +98,15 @@ public interface HostShell {
 
         ProcessHostShell(@Nullable Row server) {
             this.server = server;
+        }
+
+        @Override
+        public boolean elevated() {
+            if (this.server != null && ServerModel.hasSshLane(this.server)) {
+                String target = String.valueOf((Object) this.server.get(ServerModel.SSH_TARGET));
+                return target.startsWith("root@");
+            }
+            return "root".equals(System.getProperty("user.name"));
         }
 
         @Override

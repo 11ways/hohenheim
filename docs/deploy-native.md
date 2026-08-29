@@ -36,8 +36,21 @@ middleware reads disk first, then classpath -- the classpath has no cms.js).
     chmod 440 /etc/sudoers.d/hohenheim-nft
     visudo -cf /etc/sudoers.d/hohenheim-nft
 
-`NftRunner.Sudo` invokes `/usr/bin/sudo -n -- nft`; the sudoers line above is
-the entire root surface the controller needs. The Incus admin group is
+`NftRunner.Sudo` invokes `/usr/bin/sudo -n -- nft`. A host that places
+WORKSPACES or APPLICATIONS (a btrfs volume root) needs one more line, because
+the volume lane is root work by nature -- chown to the workspace's foreign uid,
+qgroup limits, subvolume snapshot and delete all refuse to an ordinary user --
+and `BtrfsVolumeOperations` elevates each of those binaries with `sudo -n`
+whenever the shell is not root (`HostShell.elevated`):
+
+    printf 'hohenheim ALL=(root) NOPASSWD: /usr/bin/btrfs, /usr/bin/chown, /usr/bin/chmod, /usr/bin/mkdir, /usr/bin/rm\n' \
+        > /etc/sudoers.d/hohenheim-volumes
+    chmod 440 /etc/sudoers.d/hohenheim-volumes
+    visudo -cf /etc/sudoers.d/hohenheim-volumes
+
+Those two lines are the entire root surface the controller needs; a missing
+grant surfaces as `volume_own_failed` (or a sibling) carrying sudo's own
+"a password is required" text, never as a silent success. The Incus admin group is
 `incus-admin` (full API); the restricted `incus` group is NOT enough for the
 instance tier.
 
