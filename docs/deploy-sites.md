@@ -1,0 +1,251 @@
+# The sites VPS: the Phoenix successor
+
+The third public Hohenheim install and the first COMPUTE node: it carries the
+proxy, dns, firewall, instances and databases roles, so it can host sites,
+workspaces, applications and managed databases. It is also the intended DNS
+SECONDARY beside the OVH primary (`deploy-ovh.md`), but no peering was done
+here -- a separate lane owns that.
+
+Installed 2026-08-30 by `tools/install-host.sh`, which IS the procedure
+(`docs/deploy-native.md`). Nothing on this host was configured by hand except
+the first administrator (which the product itself creates), the first
+administrator's host admission through the panel, and one settings line
+(`network.bind_address`, see "Panel exposure" below).
+
+## Host facts
+
+    ssh              debian@51.255.43.81   (key auth, passwordless sudo -n)
+    IPv6             2001:41d0:305:2100::1:4b26
+    hostname         vps-801b1e2a
+    os               Debian GNU/Linux 13 (trixie)
+    cpu / ram / disk 6 vCPU / 11683 MB / 99 GB NVMe (5.0 GB used after the install)
+    java             Temurin 25.0.4.1 JRE from Adoptium (/usr/lib/jvm/temurin-25-jre-amd64)
+    swap             2 GB swapfile at /swapfile, vm.swappiness=10 (created by the installer)
+
+The box shipped with NO java at all, so the installer's Adoptium lane ran here
+for the first time on a real host (the OVH box already had Debian's own
+openjdk 25 and skipped it). No second JDK is installed.
+
+## What is installed
+
+    /opt/hohenheim/hohenheim-server.jar     hohenheim b486427f (starfleet's live build)
+    /opt/hohenheim/settings/hohenheim.dry   roles proxy, dns, firewall, instances, databases (0640)
+    /opt/hohenheim/settings/local.dry       0600, main_url placeholder, bind_address 127.0.0.1
+    /opt/hohenheim/settings/field-encryption.keys   0600, generated at first boot
+    /opt/hohenheim/hohenheim.db             sqlite control plane, 46 migrations
+    /opt/hohenheim/volumes.btrfs            40 GB loop file
+    /opt/hohenheim/data/volumes             the btrfs volume root (fstab, loop,defaults,nofail)
+    /etc/systemd/system/hohenheim.service   -Xmx2048m (40% of MemTotal clamped, the installer's rule)
+    /etc/sudoers.d/hohenheim-nft            the single nft grant
+    /etc/sudoers.d/hohenheim-volumes        btrfs, chown, chmod, mkdir, rm -- written by the installer
+    /etc/sysctl.d/99-hohenheim.conf         fs.file-max=200000, vm.swappiness=10
+    /etc/systemd/resolved.conf.d/hohenheim.conf   DNSStubListener=no
+    /root/hohenheim-admin.txt               0600, the generated admin password
+
+Docker CE 29.7.2 from Docker's own apt repo, cgroup v2, systemd driver.
+
+`network.main_url` is EMPTY and `auth.dry` was never seeded (the installer skips
+it without `--main-url`) because the naming decision for this box is still open.
+Set `network.main_url` and `auth.external_base_url` when the name is chosen.
+
+`network.trusted_proxies` was left at the installer's `loopback`, untouched.
+
+NOT created, deliberately: no site, no domain, no DNS zone, no certificate, no
+DNS peer, no instance, no database, no project.
+
+## Install transcript (2026-08-30)
+
+    tools/install-host.sh --jar /home/debian/hohenheim-server.jar \
+        --roles proxy,dns,firewall,instances,databases \
+        --with-docker --volume-root-size 40 --swap 2G \
+        --admin-email jelle@elevenways.be
+
+First run, all 28 steps executed: base packages
+(`gnupg sqlite3 unzip nftables dnsutils`), `installing temurin-25-jre from
+Adoptium (trixie)`, `installing docker-ce from Docker's repo (trixie)`, service
+user + layout, both sudoers files `parsed OK`, btrfs-progs + the 40 GB loop
+file, settings seeded (`skip: auth.dry needs --main-url`),
+`switching off systemd-resolved's stub listener (it owns 127.0.0.53:53)` then
+`udp/53 is free`, `creating a 2G swapfile at /swapfile`,
+`MemTotal 11683MB -> -Xmx2048m`, `Migrations complete 46 applied`, `health: OK`.
+
+Second run, immediately after: 30 `skip:` lines and no restart --
+`ActiveEnterTimestamp` stayed at the first run's 22:07:06 UTC while the second
+run executed at 22:08. Every step reported its own precondition already
+satisfied, including `skip: /opt/hohenheim/data/volumes already mounted` and
+`skip: /opt/hohenheim/hohenheim-server.jar is already this build`.
+
+The installer wrote `/etc/sudoers.d/hohenheim-volumes` itself; nothing had to be
+added by hand.
+
+## Jar provenance
+
+The jar was COPIED from starfleet's live deployment, never rebuilt:
+`zenit-dev deployed starfleet` reported `current` with the service active and no
+restart pending, then `scp root@starfleet.life:/opt/hohenheim/hohenheim-server.jar`.
+
+    sha256   f9d9b2d0412438f0537494b14029be6f5d79baee119dd1b019cf8f113c188c07
+    bytes    267,596,947
+    stamp    hohenheim b486427f, 13/13 modules, all clean
+
+The remote sha was re-read after the copy and matches, so no deploy wave swapped
+the file mid-transfer. `--build-info` on this host prints the same 13 clean rows.
+
+## First administrator
+
+Created through the product's own `/setup` page over loopback (curl with the
+page's `csrf_token`), never by writing the database. The password was generated
+on the host and lives ONLY there:
+
+    /root/hohenheim-admin.txt      (0600, root)
+
+It holds the email (`admin@panel.invalid`), the tunnel URL and the password.
+Rotate it once the box has a real name; `--set-password --email <address>` is the
+offline recovery lane if it is ever lost.
+
+Reaching the panel until this box has a hostname:
+
+    ssh -L 3000:127.0.0.1:3000 debian@51.255.43.81
+    # then http://127.0.0.1:3000/ in the browser
+
+## Panel exposure: `network.bind_address` = 127.0.0.1
+
+The ONE setting changed by hand. After the install, `http://51.255.43.81:3000/`
+answered a 302 to the login page FROM THE INTERNET: this provider's firewall
+passes every port by default, and the installer binds zenit's HTTP listener to
+`0.0.0.0`. An admin login page on a public port is not an acceptable resting
+state, and the provider panel is not reachable from here, so the exposure was
+closed in the product instead: `"bind_address": "127.0.0.1"` in
+`settings/local.dry`, then a restart.
+
+This is safe for every role on this box. The proxy is a SEPARATE Undertow
+listener that binds `0.0.0.0:80`/`:443` itself (`ProxyServer`), and the panel is
+published later the same way starfleet publishes it -- a site whose upstream is
+`127.0.0.1:3000`, which loopback binding does not affect. Undo by removing the
+line and restarting.
+
+Note for whoever owns the provider firewalls: the OVH DNS primary
+(`137.74.171.228:3000`) is still publicly reachable and answers its login page.
+starfleet's is not. That box's `deploy-ovh.md` lists "keep 3000 closed" as
+still-to-do; it is still to do.
+
+## Verified after the install
+
+- `systemctl is-active/is-enabled hohenheim` -> active / enabled.
+- Listeners: `*:53` udp AND tcp, `*:80`, and `127.0.0.1:3000` ONLY. 443 does not
+  listen yet and should not: there is no certificate on a box with no sites.
+- From the workstation: `http://51.255.43.81/` answers 404 with Hohenheim's own
+  "No site configured" page; `:3000` is `Connection refused`.
+- From the workstation, raw DNS queries (python3, no dig needed): an out-of-zone
+  `example.com SOA` is `REFUSED` over UDP AND over TCP, aa=0. The authoritative
+  server answers and refuses what it does not serve. It serves no zone yet.
+- `/` over the ssh forward: 302 to `/login`; a login with the generated password
+  is 302 and `/admin/dashboard` renders 200.
+- `--build-info` as the service user: `hohenheim b486427f clean` plus the 12
+  other module stamps, all clean.
+- `roles_captured enabled=[databases, dns, firewall, instances, proxy]` in the
+  journal; zero exceptions or errors since the restart.
+- `free -m`: 2047 MB swap; `sysctl` reports `fs.file-max = 200000` and
+  `vm.swappiness = 10`.
+- `/etc/resolv.conf` -> `/run/systemd/resolve/resolv.conf`; host DNS resolves.
+- Docker's daemon does NOT squat udp/53: the only listener there is the
+  hohenheim java process.
+- `docker run --rm hello-world` prints `Hello from Docker!`.
+- The btrfs volume root is mounted (`/dev/loop0` on
+  `/opt/hohenheim/data/volumes`, 40 GB) and quota-capable: `btrfs quota enable`
+  followed by `qgroup show` succeeded and was disabled again.
+
+## Host admission (`/admin/servers`)
+
+The implicit `local` Docker row was taken through the full ceremony in the
+panel:
+
+1. Posture set to `shared_container` ("Shared containers (operator risk)") and
+   saved -- the workspace kind refuses `trusted_only`.
+2. Preflight: PASSED. 9 of 10 checks `pass`, the tenth (`userns_remap`) is the
+   expected ADVISORY `warn` ("container root IS host root"). Required checks
+   green: `daemon` (Docker 29.7.2 reachable), `api_version` (1.55, minimum
+   1.41), `cgroup_pids_controller`, `pids_limit_enforced`, `seccomp`,
+   `no_new_privs`, `nftables` ("nft transaction applied and read back from the
+   kernel" -- the sudoers grant proving itself), `network_headroom`. State card
+   reports `Volume storage: Btrfs`.
+3. Admit: "Host local is admitted for placement".
+4. "Accept posture risk" (type-the-name confirmation): `Posture risk: Accepted
+   by Administrator (warning v1)`.
+
+Capacity reads Booked 0 MB / Budget 10915 MB / Bookable 10915 MB, and nothing
+runs on the host.
+
+## Runtime image
+
+`hohenheim/node-22:1` was LOADED, not built here -- the same lane starfleet
+used, because a kaniko build on a fresh box is slow and this image already
+exists on the workstation:
+
+    docker save hohenheim/node-22:1 | gzip -1   ->  211,516,899 bytes transferred
+    gunzip -c node-22.tar.gz | docker load      ->  Loaded image: hohenheim/node-22:1
+
+Image id `da4ccc5030d9`, 853 MB disk / 213 MB content, identical to the
+workstation's. node-16 and node-12 were deliberately NOT loaded (another lane is
+still building them). `alpine:latest` and `hello-world:latest` are also present:
+the preflight probe pulls alpine, and hello-world was the Docker smoke test.
+
+## Deploy target
+
+Registered in `~/.config/zenit-dev/config.json` under `deployments` as `sites`:
+
+    "sites": {
+        "ssh": "debian@51.255.43.81",
+        "jar": "/opt/hohenheim/hohenheim-server.jar",
+        "service": "hohenheim"
+    }
+
+`zenit-dev deployed sites` answers with the stamp: jar 267,596,947 bytes,
+service active and running the configured jar, `stamped: true`, 12 of 13 repos
+`current`. The 13th is hohenheim itself, reported `local-ahead` because the local
+checkout has one commit past `b486427f` -- correct, and the same answer
+`deployed starfleet` gives. `unzip -p` and `systemctl show` both work
+unprivileged, so the read needs no sudo.
+
+## Rollback
+
+There is nothing to roll back TO -- this was a fresh install, not an upgrade.
+Undoing it completely is:
+
+    systemctl disable --now hohenheim
+    rm /etc/systemd/system/hohenheim.service /etc/sudoers.d/hohenheim-nft \
+       /etc/sudoers.d/hohenheim-volumes /etc/sysctl.d/99-hohenheim.conf \
+       /etc/systemd/resolved.conf.d/hohenheim.conf
+    systemctl daemon-reload && systemctl restart systemd-resolved
+    umount /opt/hohenheim/data/volumes      # and its /etc/fstab line
+    swapoff /swapfile && rm /swapfile       # and its /etc/fstab line
+    rm -rf /opt/hohenheim /var/log/hohenheim /root/hohenheim-admin.txt
+    userdel hohenheim
+    # docker CE and temurin-25-jre stay unless purged explicitly
+
+Removing `/opt/hohenheim` destroys the field-encryption keyring together with the
+database, which is the right pairing (`deploy-starfleet.md`): a keyring without
+its database is useless and a database without its keyring cannot be read. It
+also destroys the volume root loop file and every workspace volume in it. Once
+this box holds real workloads, back the database and the keyring up together
+before touching either.
+
+From the FIRST jar swap onward the ordinary runbook applies
+(`deploy-starfleet.md`): preflight copy of the database, an at-swap `.backup`,
+the previous jar kept as `hohenheim-server.jar.rollback`, and a rehearsal against
+a byte copy whenever the migration diff is non-empty.
+
+## Still to do on this box
+
+- Choose its public name, then set `network.main_url` and
+  `auth.external_base_url`, and give it a site + certificate for the panel (an
+  address upstream to `127.0.0.1:3000`).
+- Open the provider firewall for 53 udp+tcp, 80 and 443, and CLOSE everything
+  else. Right now the provider passes every port; 3000 is only safe because the
+  listener itself is on loopback.
+- Enrol it as a DNS peer of the OVH primary and give it the secondary zones it
+  should carry -- a separate lane owns peering, and nothing here was configured
+  for it.
+- Load the node-16 and node-12 runtime images once the lane building them is
+  done.
+- Migrate the Phoenix sites onto it (`docs/legacy-import.md`, `hoh-import-legacy`).
