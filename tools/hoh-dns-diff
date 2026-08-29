@@ -1,0 +1,1052 @@
+#!/usr/bin/env node
+'use strict';
+// hoh-dns-diff - the DNS cutover GATE. Before a zone's registrar delegation is
+// moved to Hohenheim's nameservers it proves, name by name and type by type,
+// that our servers answer IDENTICALLY to the current provider; after the move it
+// proves the parent delegation, its glue and every listed NS agree.
+//
+// It carries its own DNS wire codec (raw UDP with TCP fallback) rather than
+// node:dns, because the questions this tool has to answer -- is this server
+// AUTHORITATIVE, what did the PARENT say in its authority section, what RCODE
+// came back -- are exactly the ones node:dns's Resolver cannot express: it has
+// no AA flag, no `+norec`, and no authority section.
+//
+// Single-file node (>= 20) script, stdlib only, same conventions as `hoh`.
+//
+// Usage:
+//   hoh-dns-diff compare <zone> --old <server[,server]> --new <server[,server]>
+//                        [--names <file|a,b,c>] [--zone-file <bind file>]
+//                        [--types A,AAAA,CNAME,MX,TXT,NS,SRV,CAA,SOA]
+//                        [--strict] [--timeout <seconds>]
+//   hoh-dns-diff delegation <zone> [--expect-ns ns1.x,ns2.x] [--timeout <seconds>]
+//   hoh-dns-diff propagate <name> <type> --expect <value>
+//                          [--resolvers 1.1.1.1,8.8.8.8,9.9.9.9]
+//                          [--deadline <seconds>] [--interval <seconds>]
+//
+// Exit codes: 0 = agreement, 1 = a difference or a broken delegation, 2 = the
+// tool could not run (bad usage, unreadable file).
+
+const dgram = require('node:dgram');
+const net = require('node:net');
+const fs = require('node:fs');
+
+// -- the wire vocabulary ------------------------------------------------------
+//
+// AIDEV-NOTE: TYPES is the ONE declaring home of every RR type this tool knows.
+// A type absent here cannot be asked for (compare refuses the name loudly) and
+// decodes as an opaque hex blob, which compares byte-for-byte and so is still a
+// sound verdict -- unknown data never silently reads as "identical".
+
+const TYPES = {
+    A: 1, NS: 2, CNAME: 5, SOA: 6, PTR: 12, MX: 15, TXT: 16, AAAA: 28,
+    SRV: 33, DS: 43, RRSIG: 46, NSEC: 47, DNSKEY: 48, CAA: 257,
+};
+const TYPE_NAMES = Object.fromEntries(Object.entries(TYPES).map(([k, v]) => [v, k]));
+
+const RCODES = {
+    0: 'NOERROR', 1: 'FORMERR', 2: 'SERVFAIL', 3: 'NXDOMAIN', 4: 'NOTIMP',
+    5: 'REFUSED', 9: 'NOTAUTH', 10: 'NOTZONE',
+};
+
+const DEFAULT_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SRV', 'CAA', 'SOA'];
+
+const ROOT_SERVERS = [
+    '198.41.0.4', '170.247.170.2', '192.33.4.12', '199.7.91.13',
+    '192.203.230.10', '192.5.5.241', '192.112.36.4', '198.97.190.53',
+    '192.36.148.17', '192.58.128.30', '193.0.14.129', '199.7.83.42',
+    '202.12.27.33',
+];
+
+const PUBLIC_RESOLVERS = ['1.1.1.1', '8.8.8.8', '9.9.9.9'];
+
+function die(message) {
+    process.stderr.write(message + '\n');
+    process.exit(2);
+}
+
+// -- name encoding ------------------------------------------------------------
+
+/** Encodes a domain name as length-prefixed labels; the root is a single zero. */
+function encodeName(name) {
+    const parts = [];
+    const trimmed = String(name).replace(/\.$/, '');
+    if (trimmed !== '') {
+        for (const label of trimmed.split('.')) {
+            const bytes = Buffer.from(label, 'latin1');
+            if (bytes.length === 0 || bytes.length > 63) throw new Error(`Bad label in "${name}"`);
+            parts.push(Buffer.from([bytes.length]), bytes);
+        }
+    }
+    parts.push(Buffer.from([0]));
+    return Buffer.concat(parts);
+}
+
+/** Decodes a possibly compressed name, returning the text and the offset after it. */
+function decodeName(msg, offset) {
+    const labels = [];
+    let jumped = false;
+    let next = offset;
+    let guard = 0;
+    for (;;) {
+        if (guard++ > 128) throw new Error('Compression loop in message');
+        if (offset >= msg.length) throw new Error('Truncated name');
+        const len = msg[offset];
+        if (len === 0) {
+            offset += 1;
+            if (!jumped) next = offset;
+            break;
+        }
+        if ((len & 0xC0) === 0xC0) {
+            const pointer = msg.readUInt16BE(offset) & 0x3FFF;
+            if (!jumped) next = offset + 2;
+            offset = pointer;
+            jumped = true;
+            continue;
+        }
+        offset += 1;
+        labels.push(msg.toString('latin1', offset, offset + len));
+        offset += len;
+    }
+    return { name: labels.length ? labels.join('.') + '.' : '.', offset: next };
+}
+
+// -- rdata --------------------------------------------------------------------
+
+function ipv6Text(buf) {
+    const groups = [];
+    for (let i = 0; i < 16; i += 2) groups.push(buf.readUInt16BE(i).toString(16));
+    // Collapse the longest run of zero groups, as RFC 5952 requires.
+    let bestStart = -1, bestLen = 0, start = -1, len = 0;
+    for (let i = 0; i <= groups.length; i++) {
+        if (i < groups.length && groups[i] === '0') {
+            if (start < 0) start = i;
+            len++;
+        } else {
+            if (len > bestLen) { bestLen = len; bestStart = start; }
+            start = -1; len = 0;
+        }
+    }
+    if (bestLen > 1) {
+        const head = groups.slice(0, bestStart).join(':');
+        const tail = groups.slice(bestStart + bestLen).join(':');
+        return `${head}::${tail}`;
+    }
+    return groups.join(':');
+}
+
+function quoteText(text) {
+    return '"' + text.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+}
+
+/** Renders one record's rdata in canonical presentation form. */
+function decodeRdata(msg, type, offset, length) {
+    const end = offset + length;
+    switch (type) {
+        case TYPES.A:
+            return Array.from(msg.subarray(offset, offset + 4)).join('.');
+        case TYPES.AAAA:
+            return ipv6Text(msg.subarray(offset, offset + 16));
+        case TYPES.NS:
+        case TYPES.CNAME:
+        case TYPES.PTR:
+            return decodeName(msg, offset).name.toLowerCase();
+        case TYPES.SOA: {
+            const mname = decodeName(msg, offset);
+            const rname = decodeName(msg, mname.offset);
+            let o = rname.offset;
+            const serial = msg.readUInt32BE(o);
+            const refresh = msg.readUInt32BE(o + 4);
+            const retry = msg.readUInt32BE(o + 8);
+            const expire = msg.readUInt32BE(o + 12);
+            const minimum = msg.readUInt32BE(o + 16);
+            return [mname.name.toLowerCase(), rname.name.toLowerCase(), serial,
+                refresh, retry, expire, minimum].join(' ');
+        }
+        case TYPES.MX: {
+            const pref = msg.readUInt16BE(offset);
+            return `${pref} ${decodeName(msg, offset + 2).name.toLowerCase()}`;
+        }
+        case TYPES.SRV: {
+            const target = decodeName(msg, offset + 6).name.toLowerCase();
+            return `${msg.readUInt16BE(offset)} ${msg.readUInt16BE(offset + 2)} ${msg.readUInt16BE(offset + 4)} ${target}`;
+        }
+        case TYPES.TXT: {
+            const chunks = [];
+            let o = offset;
+            while (o < end) {
+                const len = msg[o];
+                o += 1;
+                chunks.push(msg.toString('latin1', o, o + len));
+                o += len;
+            }
+            return chunks.map(quoteText).join(' ');
+        }
+        case TYPES.CAA: {
+            const flags = msg[offset];
+            const tagLength = msg[offset + 1];
+            const tag = msg.toString('latin1', offset + 2, offset + 2 + tagLength).toLowerCase();
+            const value = msg.toString('latin1', offset + 2 + tagLength, end);
+            return `${flags} ${tag} ${quoteText(value)}`;
+        }
+        case TYPES.DS: {
+            const digest = msg.toString('hex', offset + 4, end).toUpperCase();
+            return `${msg.readUInt16BE(offset)} ${msg[offset + 2]} ${msg[offset + 3]} ${digest}`;
+        }
+        default:
+            return msg.toString('hex', offset, end);
+    }
+}
+
+// -- messages -----------------------------------------------------------------
+
+/** Builds a query message; `rd` false is the `+norec` this tool needs for authoritative probes. */
+function encodeQuery(name, type, { id = null, rd = true } = {}) {
+    const header = Buffer.alloc(12);
+    header.writeUInt16BE(id === null ? Math.floor(Math.random() * 65536) : id, 0);
+    header.writeUInt16BE(rd ? 0x0100 : 0x0000, 2);
+    header.writeUInt16BE(1, 4);
+    const typeNumber = typeof type === 'number' ? type : TYPES[type];
+    if (!typeNumber) throw new Error(`Unknown record type "${type}"`);
+    const question = Buffer.alloc(4);
+    question.writeUInt16BE(typeNumber, 0);
+    question.writeUInt16BE(1, 2);
+    return Buffer.concat([header, encodeName(name), question]);
+}
+
+/** Parses a response into header flags plus the three record sections. */
+function decodeMessage(msg) {
+    const id = msg.readUInt16BE(0);
+    const flags = msg.readUInt16BE(2);
+    const counts = [msg.readUInt16BE(4), msg.readUInt16BE(6), msg.readUInt16BE(8), msg.readUInt16BE(10)];
+    let offset = 12;
+    const questions = [];
+    for (let i = 0; i < counts[0]; i++) {
+        const decoded = decodeName(msg, offset);
+        offset = decoded.offset;
+        questions.push({ name: decoded.name, type: TYPE_NAMES[msg.readUInt16BE(offset)] || msg.readUInt16BE(offset) });
+        offset += 4;
+    }
+    const sections = { answer: [], authority: [], additional: [] };
+    const order = ['answer', 'authority', 'additional'];
+    for (let s = 0; s < 3; s++) {
+        for (let i = 0; i < counts[s + 1]; i++) {
+            const decoded = decodeName(msg, offset);
+            offset = decoded.offset;
+            const type = msg.readUInt16BE(offset);
+            const klass = msg.readUInt16BE(offset + 2);
+            const ttl = msg.readUInt32BE(offset + 4);
+            const length = msg.readUInt16BE(offset + 8);
+            offset += 10;
+            if (type !== 41) {
+                sections[order[s]].push({
+                    name: decoded.name.toLowerCase(),
+                    type: TYPE_NAMES[type] || String(type),
+                    ttl,
+                    klass,
+                    data: decodeRdata(msg, type, offset, length),
+                });
+            }
+            offset += length;
+        }
+    }
+    return {
+        id,
+        rcode: flags & 0x0F,
+        rcodeName: RCODES[flags & 0x0F] || String(flags & 0x0F),
+        aa: Boolean(flags & 0x0400),
+        tc: Boolean(flags & 0x0200),
+        ra: Boolean(flags & 0x0080),
+        questions,
+        ...sections,
+    };
+}
+
+// -- transport ----------------------------------------------------------------
+
+function queryUdp(server, packet, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        const socket = dgram.createSocket(net.isIPv6(server) ? 'udp6' : 'udp4');
+        const timer = setTimeout(() => {
+            socket.close();
+            reject(new Error('timeout'));
+        }, timeoutMs);
+        socket.on('error', (error) => {
+            clearTimeout(timer);
+            try { socket.close(); } catch { /* already closed */ }
+            reject(error);
+        });
+        socket.on('message', (data) => {
+            clearTimeout(timer);
+            socket.close();
+            resolve(data);
+        });
+        socket.send(packet, 53, server, (error) => {
+            if (error) {
+                clearTimeout(timer);
+                try { socket.close(); } catch { /* already closed */ }
+                reject(error);
+            }
+        });
+    });
+}
+
+function queryTcp(server, packet, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        const socket = net.connect({ host: server, port: 53 });
+        const chunks = [];
+        let expected = -1;
+        socket.setTimeout(timeoutMs, () => {
+            socket.destroy();
+            reject(new Error('timeout'));
+        });
+        socket.on('error', (error) => reject(error));
+        socket.on('connect', () => {
+            const prefix = Buffer.alloc(2);
+            prefix.writeUInt16BE(packet.length, 0);
+            socket.write(Buffer.concat([prefix, packet]));
+        });
+        socket.on('data', (chunk) => {
+            chunks.push(chunk);
+            const all = Buffer.concat(chunks);
+            if (expected < 0 && all.length >= 2) expected = all.readUInt16BE(0);
+            if (expected >= 0 && all.length >= expected + 2) {
+                socket.destroy();
+                resolve(all.subarray(2, expected + 2));
+            }
+        });
+        socket.on('close', () => {
+            if (expected < 0 || Buffer.concat(chunks).length < expected + 2) {
+                reject(new Error('connection closed before a full answer'));
+            }
+        });
+    });
+}
+
+/**
+ * Asks one server one question; a truncated UDP answer is retried over TCP.
+ *
+ * @return {Promise<object>} the decoded message, or `{ error }` when nothing usable came back
+ */
+async function query(server, name, type, { rd = true, timeout = 5000, tcp = false } = {}) {
+    const packet = encodeQuery(name, type, { rd });
+    const started = Date.now();
+    try {
+        let data = tcp ? await queryTcp(server, packet, timeout) : await queryUdp(server, packet, timeout);
+        let message = decodeMessage(data);
+        if (message.tc && !tcp) {
+            data = await queryTcp(server, packet, timeout);
+            message = decodeMessage(data);
+        }
+        message.server = server;
+        message.ms = Date.now() - started;
+        return message;
+    } catch (error) {
+        return { error: error.message, server, ms: Date.now() - started, answer: [], authority: [], additional: [] };
+    }
+}
+
+// -- normalisation ------------------------------------------------------------
+//
+// AIDEV-NOTE: TTL is deliberately NOT part of a record's identity. Two providers
+// serving the same data with different TTLs are the same zone; reporting that as
+// a difference would make every real cutover look broken. It is a WARNING, and
+// only --strict lets it fail the run.
+
+/** Reduces a section to the RRset for exactly (name, type), as sorted canonical strings. */
+function rrset(records, name, type) {
+    const wanted = normaliseName(name);
+    return records
+        .filter((rr) => rr.type === type && rr.name.toLowerCase() === wanted)
+        .map((rr) => rr.data)
+        .sort();
+}
+
+/** Collects the distinct TTLs seen for exactly (name, type). */
+function ttls(records, name, type) {
+    const wanted = normaliseName(name);
+    const seen = new Set();
+    for (const rr of records) {
+        if (rr.type === type && rr.name.toLowerCase() === wanted) seen.add(rr.ttl);
+    }
+    return [...seen].sort((a, b) => a - b);
+}
+
+/** Lowercases and dot-terminates a name so two spellings of one owner compare equal. */
+function normaliseName(name) {
+    const text = String(name).trim().toLowerCase();
+    if (text === '' || text === '.') return '.';
+    return text.endsWith('.') ? text : text + '.';
+}
+
+/** Splits an SOA into the fields a cutover must match and the serial, which it must not. */
+function splitSoa(value) {
+    const parts = String(value).split(/\s+/);
+    if (parts.length < 7) return { stable: value, serial: null };
+    return {
+        stable: [parts[0], parts[1], parts[3], parts[4], parts[5], parts[6]].join(' '),
+        serial: Number(parts[2]),
+    };
+}
+
+function sameSet(a, b) {
+    return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+// -- name gathering -----------------------------------------------------------
+
+/** Strips comments and yields one logical record line per element, joining parenthesised groups. */
+function zoneFileLines(text) {
+    const lines = [];
+    let buffer = '';
+    let depth = 0;
+    for (const raw of text.split('\n')) {
+        let line = '';
+        let quoted = false;
+        for (let i = 0; i < raw.length; i++) {
+            const ch = raw[i];
+            if (ch === '"' && raw[i - 1] !== '\\') quoted = !quoted;
+            if (ch === ';' && !quoted) break;
+            line += ch;
+        }
+        for (const ch of line) {
+            if (ch === '(') depth++;
+            else if (ch === ')') depth--;
+        }
+        buffer += (buffer ? ' ' : '') + line;
+        if (depth <= 0) {
+            if (buffer.trim() !== '') lines.push(buffer);
+            buffer = '';
+            depth = 0;
+        }
+    }
+    if (buffer.trim() !== '') lines.push(buffer);
+    return lines;
+}
+
+/**
+ * Extracts every owner name a BIND zone file declares, honouring $ORIGIN.
+ *
+ * A blank first field continues the previous owner, which is why the fallback
+ * matters: dropping those lines would silently shrink the gate's name list.
+ */
+function zoneFileOwners(text, zone) {
+    let origin = normaliseName(zone);
+    let previous = origin;
+    const owners = new Set([origin]);
+    for (const line of zoneFileLines(text)) {
+        const directive = line.match(/^\$(ORIGIN|TTL|INCLUDE)\s+(\S+)/i);
+        if (directive) {
+            if (directive[1].toUpperCase() === 'ORIGIN') {
+                origin = directive[2].endsWith('.') ? normaliseName(directive[2]) : normaliseName(directive[2] + '.' + origin);
+                previous = origin;
+            }
+            continue;
+        }
+        if (/^\s/.test(line)) {
+            owners.add(previous);
+            continue;
+        }
+        const field = line.trim().split(/\s+/)[0];
+        if (!field) continue;
+        const owner = field === '@' ? origin
+            : field.endsWith('.') ? normaliseName(field)
+                : normaliseName(field + '.' + origin);
+        owners.add(owner);
+        previous = owner;
+    }
+    return [...owners];
+}
+
+/** Expands a `--names` argument, which is either a file path or a comma list. */
+function readNameArgument(value) {
+    let text = value;
+    if (fs.existsSync(value)) text = fs.readFileSync(value, 'utf8');
+    return text.split(/[\s,]+/).map((part) => part.trim()).filter(Boolean);
+}
+
+/** Qualifies a bare label against the zone; an already-absolute name is left alone. */
+function qualify(name, zone) {
+    const zoneName = normaliseName(zone);
+    const text = String(name).trim();
+    if (text === '' || text === '@') return zoneName;
+    if (text.endsWith('.')) return normaliseName(text);
+    const full = normaliseName(text);
+    if (full === zoneName || full.endsWith('.' + zoneName)) return full;
+    return normaliseName(text + '.' + zoneName);
+}
+
+// -- rendering ----------------------------------------------------------------
+
+function renderTable(headers, rows) {
+    const widths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => String(r[i] ?? '').length)));
+    const line = (cells) => cells.map((c, i) => String(c ?? '').padEnd(widths[i])).join('  ').replace(/\s+$/, '');
+    const out = [line(headers), widths.map((w) => '-'.repeat(w)).join('  ')];
+    for (const row of rows) out.push(line(row));
+    return out.join('\n');
+}
+
+// -- compare ------------------------------------------------------------------
+
+/**
+ * Judges one (name, type) across the old and new server sets.
+ *
+ * @return {object} verdict plus the evidence a human reviewer needs to agree
+ */
+function judge(name, type, oldResults, newResults, zone) {
+    const zoneName = normaliseName(zone);
+    const isApexNs = type === 'NS' && normaliseName(name) === zoneName;
+    const errors = [];
+    const collect = (results, label) => {
+        const sets = [];
+        const failures = [];
+        for (const result of results) {
+            if (result.error) {
+                failures.push(`${result.server}: ${result.error}`);
+                continue;
+            }
+            // NXDOMAIN is a real answer ("this name does not exist"); every other
+            // non-zero RCODE means the server would not answer the question at
+            // all, which must never be read as an empty RRset.
+            if (result.rcode !== 0 && result.rcode !== 3) {
+                failures.push(`${result.server}: ${result.rcodeName}`);
+                continue;
+            }
+            sets.push({
+                server: result.server,
+                values: rrset(result.answer, name, type),
+                ttls: ttls(result.answer, name, type),
+            });
+        }
+        for (const failure of failures) errors.push(`${label} ${failure}`);
+        return { sets, failures };
+    };
+    const oldSide = collect(oldResults, 'old');
+    const newSide = collect(newResults, 'new');
+    const oldSets = oldSide.sets;
+    const newSets = newSide.sets;
+    if (oldSets.length === 0 || newSets.length === 0) {
+        // Nothing to compare: the side that DID answer serves no such RRset
+        // either. Reporting it would inflate one unserved server into a row per
+        // question and bury the records that actually have to move.
+        const answered = [...oldSets, ...newSets];
+        if (answered.length > 0 && answered.every((set) => set.values.length === 0)) return null;
+        // Keep whichever side DID answer: a reviewer needs to see what the
+        // reachable provider serves, not just that the other one refused.
+        return {
+            name, type, verdict: 'error', notes: errors,
+            oldValues: oldSets.length ? oldSets[0].values : [],
+            newValues: newSets.length ? newSets[0].values : [],
+            oldStatus: oldSide.failures.join('; '),
+            newStatus: newSide.failures.join('; '),
+        };
+    }
+
+    const notes = [];
+    const inconsistent = (sets, label) => {
+        for (let i = 1; i < sets.length; i++) {
+            if (!sameSet(sets[0].values, sets[i].values)) {
+                notes.push(`${label} servers disagree with each other (${sets[0].server} vs ${sets[i].server})`);
+                break;
+            }
+        }
+    };
+    inconsistent(oldSets, 'old');
+    inconsistent(newSets, 'new');
+
+    const oldValues = oldSets[0].values;
+    const newValues = newSets[0].values;
+
+    if (oldValues.length === 0 && newValues.length === 0) return null;
+    if (oldValues.length > 0 && newValues.length === 0) {
+        return { name, type, verdict: 'only-old', oldValues, newValues, notes };
+    }
+    if (oldValues.length === 0 && newValues.length > 0) {
+        return { name, type, verdict: 'only-new', oldValues, newValues, notes };
+    }
+
+    let same;
+    if (type === 'SOA') {
+        const oldSoa = splitSoa(oldValues[0]);
+        const newSoa = splitSoa(newValues[0]);
+        same = oldSoa.stable === newSoa.stable;
+        if (oldSoa.serial !== newSoa.serial) {
+            notes.push(`serial differs: old ${oldSoa.serial} vs new ${newSoa.serial} (reported, never a difference)`);
+        }
+    } else {
+        same = sameSet(oldValues, newValues);
+    }
+
+    const oldTtl = oldSets[0].ttls.join('/');
+    const newTtl = newSets[0].ttls.join('/');
+    if (oldTtl !== newTtl) notes.push(`TTL differs: old ${oldTtl} vs new ${newTtl}`);
+
+    if (same) return { name, type, verdict: 'identical', oldValues, newValues, notes, ttlDiffers: oldTtl !== newTtl };
+    return {
+        name, type, verdict: isApexNs ? 'apex-ns' : 'differs',
+        oldValues, newValues, notes, ttlDiffers: oldTtl !== newTtl,
+    };
+}
+
+/** True when a verdict must fail the run at this strictness. */
+function counts(row, strict) {
+    if (row.verdict === 'differs' || row.verdict === 'only-old' || row.verdict === 'only-new' || row.verdict === 'error') return true;
+    if (!strict) return false;
+    return row.verdict === 'apex-ns' || Boolean(row.ttlDiffers);
+}
+
+async function runCompare(zone, options, queryFn = query) {
+    const zoneName = normaliseName(zone);
+    const names = new Set([zoneName]);
+    for (const name of options.names) names.add(qualify(name, zoneName));
+    if (options.zoneFile) {
+        let text;
+        try {
+            text = fs.readFileSync(options.zoneFile, 'utf8');
+        } catch (error) {
+            die(`Cannot read zone file ${options.zoneFile}: ${error.message}`);
+        }
+        for (const owner of zoneFileOwners(text, zoneName)) names.add(owner);
+    }
+    const nameList = [...names].sort();
+    const types = options.types;
+
+    process.stdout.write(`zone      ${zoneName}\n`);
+    process.stdout.write(`old       ${options.old.join(', ')}\n`);
+    process.stdout.write(`new       ${options.new.join(', ')}\n`);
+    process.stdout.write(`names     ${nameList.length} (${nameList.join(' ')})\n`);
+    process.stdout.write(`types     ${types.join(',')}\n`);
+    process.stdout.write(`strict    ${options.strict ? 'yes' : 'no'}\n\n`);
+
+    // Pre-flight: a server that does not serve the zone at all makes every row
+    // below an error, so say it ONCE, up front, in the operator's language.
+    const probeRows = [];
+    for (const [side, servers] of [['old', options.old], ['new', options.new]]) {
+        for (const server of servers) {
+            const probe = await queryFn(server, zoneName, 'SOA', { rd: false, timeout: options.timeout });
+            const state = probe.error ? `unreachable (${probe.error})`
+                : probe.rcode !== 0 ? `does not serve this zone (${probe.rcodeName})`
+                    : probe.aa ? 'serves this zone (authoritative)'
+                        : `answers but not authoritative (${probe.rcodeName})`;
+            probeRows.push([side, server, state]);
+        }
+    }
+    process.stdout.write(renderTable(['SIDE', 'SERVER', 'ZONE'], probeRows) + '\n\n');
+
+    const rows = [];
+    for (const name of nameList) {
+        for (const type of types) {
+            const oldResults = [];
+            for (const server of options.old) oldResults.push(await queryFn(server, name, type, { rd: false, timeout: options.timeout }));
+            const newResults = [];
+            for (const server of options.new) newResults.push(await queryFn(server, name, type, { rd: false, timeout: options.timeout }));
+            const row = judge(name, type, oldResults, newResults, zoneName);
+            if (row) rows.push(row);
+        }
+    }
+
+    const table = rows.map((row) => [
+        row.name, row.type, row.verdict,
+        row.oldValues.join(' | ') || row.oldStatus || '-',
+        row.newValues.join(' | ') || row.newStatus || '-',
+    ]);
+    if (table.length === 0) {
+        process.stdout.write('No records found on either side for any queried (name, type).\n');
+    } else {
+        process.stdout.write(renderTable(['NAME', 'TYPE', 'VERDICT', 'OLD', 'NEW'], table) + '\n');
+    }
+
+    // AIDEV-NOTE: warnings are GROUPED by their text. One unserved server produces
+    // the same note for every (name, type) asked, and 45 identical lines is not a
+    // report a human reads -- the grouped form names the cause once and counts it.
+    const grouped = new Map();
+    for (const row of rows) {
+        for (const note of row.notes || []) {
+            if (!grouped.has(note)) grouped.set(note, []);
+            grouped.get(note).push(`${row.name} ${row.type}`);
+        }
+    }
+    if (grouped.size) {
+        process.stdout.write('\nWARNINGS\n');
+        for (const [note, where] of grouped) {
+            const shown = where.slice(0, 3).join(', ');
+            const more = where.length > 3 ? `, +${where.length - 3} more` : '';
+            process.stdout.write(`  ${note}\n    on ${where.length} question(s): ${shown}${more}\n`);
+        }
+    }
+
+    const failing = rows.filter((row) => counts(row, options.strict));
+    process.stdout.write('\n');
+    if (failing.length === 0) {
+        process.stdout.write('VERDICT: IDENTICAL\n');
+        return 0;
+    }
+    process.stdout.write(`VERDICT: DIFFERENT (${failing.length})\n`);
+    const byVerdict = new Map();
+    for (const row of failing) {
+        if (!byVerdict.has(row.verdict)) byVerdict.set(row.verdict, []);
+        byVerdict.get(row.verdict).push(`${row.name} ${row.type}`);
+    }
+    for (const [verdict, where] of byVerdict) {
+        const shown = where.slice(0, 8).join(', ');
+        const more = where.length > 8 ? `, +${where.length - 8} more` : '';
+        process.stdout.write(`  ${verdict} (${where.length}): ${shown}${more}\n`);
+    }
+    return 1;
+}
+
+// -- delegation ---------------------------------------------------------------
+
+/** Picks the referral (NS RRset plus glue) out of a non-authoritative answer. */
+function referralOf(message) {
+    const ns = message.authority.filter((rr) => rr.type === 'NS');
+    if (ns.length === 0) return null;
+    const zone = ns[0].name;
+    const glue = {};
+    for (const rr of message.additional) {
+        if (rr.type === 'A' || rr.type === 'AAAA') {
+            (glue[rr.name] = glue[rr.name] || []).push(rr.data);
+        }
+    }
+    return { zone, names: ns.map((rr) => rr.data).sort(), glue };
+}
+
+function inBailiwick(nsName, zone) {
+    const z = normaliseName(zone);
+    const n = normaliseName(nsName);
+    return n === z || n.endsWith('.' + z);
+}
+
+/**
+ * Walks the root down to the zone's PARENT and reports the delegation it publishes.
+ *
+ * @return {Promise<object>} `{ parentServers, delegation, ds, chain }` or `{ error }`
+ */
+async function findDelegation(zone, queryFn, timeout) {
+    const zoneName = normaliseName(zone);
+    const chain = [];
+    let servers = ROOT_SERVERS.slice();
+    let parentZone = '.';
+    let delegation = null;
+
+    for (let depth = 0; depth < 10; depth++) {
+        let message = null;
+        for (const server of servers) {
+            const attempt = await queryFn(server, zoneName, 'NS', { rd: false, timeout });
+            if (!attempt.error && attempt.rcode === 0) { message = attempt; break; }
+        }
+        if (!message) return { error: `no server answered for ${zoneName} at ${parentZone}`, chain };
+        if (message.aa) {
+            // The parent we asked IS the zone: the previous referral was the delegation.
+            break;
+        }
+        const referral = referralOf(message);
+        if (!referral) return { error: `no referral from ${parentZone} for ${zoneName}`, chain };
+        chain.push({ from: parentZone, server: message.server, to: referral.zone, names: referral.names });
+        if (normaliseName(referral.zone) === zoneName) {
+            delegation = { parentZone, parentServers: servers, ...referral, answeredBy: message.server };
+            break;
+        }
+        // Descend: address the referred nameservers, using glue where we have it.
+        const next = [];
+        for (const name of referral.names) {
+            const glued = referral.glue[normaliseName(name)] || [];
+            for (const address of glued) if (net.isIPv4(address)) next.push(address);
+        }
+        if (next.length === 0) {
+            for (const name of referral.names) {
+                const lookup = await queryFn(PUBLIC_RESOLVERS[0], name, 'A', { rd: true, timeout });
+                if (!lookup.error) for (const rr of lookup.answer) if (rr.type === 'A') next.push(rr.data);
+            }
+        }
+        if (next.length === 0) return { error: `no addresses for the servers of ${referral.zone}`, chain };
+        servers = next;
+        parentZone = referral.zone;
+    }
+
+    if (!delegation) return { error: `no delegation for ${zoneName} found from the root`, chain };
+    return delegation;
+}
+
+/** Resolves a nameserver's addresses from glue when in-bailiwick, else via a public resolver. */
+async function addressesFor(nsName, delegation, queryFn, timeout) {
+    const glued = delegation.glue[normaliseName(nsName)] || [];
+    if (glued.length) return { addresses: glued, source: 'glue' };
+    const out = [];
+    for (const type of ['A', 'AAAA']) {
+        const lookup = await queryFn(PUBLIC_RESOLVERS[0], nsName, type, { rd: true, timeout });
+        if (!lookup.error) for (const rr of lookup.answer) if (rr.type === type) out.push(rr.data);
+    }
+    return { addresses: out, source: 'resolver' };
+}
+
+async function runDelegation(zone, options, queryFn = query) {
+    const zoneName = normaliseName(zone);
+    const timeout = options.timeout;
+    const delegation = await findDelegation(zoneName, queryFn, timeout);
+    if (delegation.error) {
+        process.stdout.write(`zone      ${zoneName}\nERROR: ${delegation.error}\n`);
+        return 1;
+    }
+
+    process.stdout.write(`zone      ${zoneName}\n`);
+    process.stdout.write(`parent    ${delegation.parentZone} (answered by ${delegation.answeredBy})\n`);
+    process.stdout.write(`parent NS ${delegation.names.join(', ')}\n`);
+    const glueLines = Object.entries(delegation.glue)
+        .filter(([name]) => delegation.names.some((n) => normaliseName(n) === name))
+        .map(([name, addresses]) => `${name} ${addresses.join(' ')}`);
+    process.stdout.write(`glue      ${glueLines.length ? glueLines.join('; ') : '(none)'}\n\n`);
+
+    const problems = [];
+    const warnings = [];
+    const rows = [];
+    const serials = new Map();
+    let apexNs = null;
+
+    for (const nsName of delegation.names) {
+        const { addresses, source } = await addressesFor(nsName, delegation, queryFn, timeout);
+        if (inBailiwick(nsName, zoneName) && source !== 'glue') {
+            problems.push(`missing glue for in-bailiwick nameserver ${nsName}`);
+        }
+        if (addresses.length === 0) {
+            rows.push([nsName, '-', 'unresolvable', '-', '-']);
+            problems.push(`${nsName}: no address`);
+            continue;
+        }
+        // AIDEV-NOTE: lameness is judged per NAMESERVER, never per address. This
+        // machine has no IPv6 route, so probing an AAAA glue address fails with
+        // ENETUNREACH -- a fact about the PROBE, not about the delegation. An
+        // unreachable address is reported and warned about; only a nameserver
+        // where NO address answers authoritatively is called lame.
+        let authoritativeHere = 0;
+        for (const address of addresses) {
+            const answer = await queryFn(address, zoneName, 'SOA', { rd: false, timeout });
+            if (answer.error) {
+                const local = /ENETUNREACH|EHOSTUNREACH|EAFNOSUPPORT/.test(answer.error);
+                rows.push([nsName, address, local ? 'no route from here' : 'no answer', '-', answer.error]);
+                if (!local) problems.push(`${nsName} (${address}): no answer (${answer.error})`);
+                else warnings.push(`${nsName} (${address}) was not probed: no route from this machine`);
+                continue;
+            }
+            const soa = answer.answer.filter((rr) => rr.type === 'SOA');
+            if (!answer.aa) {
+                rows.push([nsName, address, 'NOT AUTHORITATIVE', '-', answer.rcodeName]);
+                continue;
+            }
+            if (soa.length === 0) {
+                rows.push([nsName, address, 'aa, no SOA', '-', answer.rcodeName]);
+                continue;
+            }
+            const serial = splitSoa(soa[0].data).serial;
+            serials.set(`${nsName}@${address}`, serial);
+            authoritativeHere++;
+            rows.push([nsName, address, 'authoritative', String(serial), source]);
+            if (apexNs === null) {
+                const ns = await queryFn(address, zoneName, 'NS', { rd: false, timeout });
+                if (!ns.error && ns.aa) apexNs = rrset(ns.answer, zoneName, 'NS');
+            }
+        }
+        const probed = rows.filter((row) => row[0] === nsName && row[2] !== 'no route from here');
+        if (authoritativeHere === 0 && probed.length > 0) {
+            problems.push(`LAME: no address of ${nsName} answers authoritatively for ${zoneName}`);
+        }
+    }
+
+    process.stdout.write(renderTable(['NAMESERVER', 'ADDRESS', 'STATE', 'SERIAL', 'VIA'], rows) + '\n\n');
+
+    const parentSet = delegation.names.map(normaliseName).sort();
+    if (apexNs === null) {
+        process.stdout.write('apex NS   (unavailable: no authoritative server answered)\n');
+        problems.push('could not read the zone\'s own apex NS set');
+    } else {
+        const apexSet = apexNs.map(normaliseName).sort();
+        process.stdout.write(`apex NS   ${apexSet.join(', ')}\n`);
+        if (sameSet(parentSet, apexSet)) {
+            process.stdout.write('sets      parent == apex\n');
+        } else {
+            process.stdout.write('sets      MISMATCH\n');
+            const missing = apexSet.filter((n) => !parentSet.includes(n));
+            const extra = parentSet.filter((n) => !apexSet.includes(n));
+            if (missing.length) process.stdout.write(`          in apex but not at parent: ${missing.join(', ')}\n`);
+            if (extra.length) process.stdout.write(`          at parent but not in apex: ${extra.join(', ')}\n`);
+            problems.push(`parent NS set does not equal the zone's apex NS set`);
+        }
+    }
+
+    const seen = [...serials.values()];
+    if (seen.length > 1 && new Set(seen).size > 1) {
+        process.stdout.write(`serials   SKEW: ${[...serials.entries()].map(([k, v]) => `${k}=${v}`).join(', ')}\n`);
+        problems.push('serial skew between authoritative servers');
+    } else if (seen.length) {
+        process.stdout.write(`serials   ${seen[0]} on every authoritative server\n`);
+    }
+
+    let ds = { answer: [] };
+    for (const server of delegation.parentServers) {
+        const attempt = await queryFn(server, zoneName, 'DS', { rd: false, timeout });
+        if (!attempt.error && attempt.rcode === 0) { ds = attempt; break; }
+    }
+    const dsRecords = ds.answer.filter((rr) => rr.type === 'DS');
+    process.stdout.write(`DS        ${dsRecords.length ? dsRecords.map((rr) => rr.data).join(' | ') : 'none published at the parent (zone is unsigned from the parent\'s view)'}\n`);
+
+    if (options.expectNs && options.expectNs.length) {
+        const expected = options.expectNs.map(normaliseName).sort();
+        if (sameSet(expected, parentSet)) {
+            process.stdout.write(`expected  parent NS matches --expect-ns\n`);
+        } else {
+            process.stdout.write(`expected  MISMATCH: wanted ${expected.join(', ')}\n`);
+            problems.push('parent NS set does not match --expect-ns');
+        }
+    }
+
+    if (warnings.length) {
+        process.stdout.write('\nWARNINGS\n');
+        for (const warning of warnings) process.stdout.write(`  ${warning}\n`);
+    }
+
+    process.stdout.write('\n');
+    if (problems.length === 0) {
+        process.stdout.write('VERDICT: DELEGATION OK\n');
+        return 0;
+    }
+    process.stdout.write(`VERDICT: DELEGATION PROBLEMS (${problems.length})\n`);
+    for (const problem of problems) process.stdout.write(`  ${problem}\n`);
+    return 1;
+}
+
+// -- propagate ----------------------------------------------------------------
+
+/** Compares one answered value against the expected text, ignoring TXT quoting and case. */
+function matchesExpected(value, expected) {
+    const strip = (text) => String(text).replace(/^"|"$/g, '').replace(/"\s+"/g, '').trim().toLowerCase();
+    return strip(value) === strip(expected);
+}
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runPropagate(name, type, options, queryFn = query) {
+    const deadline = Date.now() + options.deadline * 1000;
+    process.stdout.write(`name      ${normaliseName(name)}\ntype      ${type}\nexpect    ${options.expect}\n`);
+    process.stdout.write(`resolvers ${options.resolvers.join(', ')}\n\n`);
+    for (let round = 1; ; round++) {
+        const rows = [];
+        let allMatch = true;
+        for (const resolver of options.resolvers) {
+            const answer = await queryFn(resolver, name, type, { rd: true, timeout: options.timeout });
+            if (answer.error) {
+                rows.push([resolver, 'error', answer.error]);
+                allMatch = false;
+                continue;
+            }
+            const values = rrset(answer.answer, name, type);
+            const ok = values.some((value) => matchesExpected(value, options.expect));
+            if (!ok) allMatch = false;
+            rows.push([resolver, ok ? 'MATCH' : (values.length ? 'stale' : 'absent'), values.join(' | ') || answer.rcodeName]);
+        }
+        process.stdout.write(`round ${round} (${new Date().toISOString()})\n`);
+        process.stdout.write(renderTable(['RESOLVER', 'STATE', 'ANSWER'], rows) + '\n\n');
+        if (allMatch) {
+            process.stdout.write('VERDICT: PROPAGATED\n');
+            return 0;
+        }
+        if (Date.now() + options.interval * 1000 > deadline) {
+            process.stdout.write('VERDICT: NOT PROPAGATED (deadline reached)\n');
+            return 1;
+        }
+        await sleep(options.interval * 1000);
+    }
+}
+
+// -- argument parsing ---------------------------------------------------------
+
+function parseFlags(argv) {
+    const flags = {};
+    const positional = [];
+    for (let i = 0; i < argv.length; i++) {
+        const arg = argv[i];
+        if (arg.startsWith('--')) {
+            const key = arg.slice(2);
+            if (key === 'strict') { flags.strict = true; continue; }
+            const value = argv[++i];
+            if (value === undefined) die(`--${key} needs a value`);
+            flags[key] = value;
+        } else {
+            positional.push(arg);
+        }
+    }
+    return { flags, positional };
+}
+
+function list(value, fallback) {
+    if (value === undefined) return fallback;
+    return String(value).split(',').map((part) => part.trim()).filter(Boolean);
+}
+
+const USAGE = `hoh-dns-diff - DNS cutover gate
+
+  compare <zone> --old <server[,server]> --new <server[,server]>
+          [--names <file|a,b,c>] [--zone-file <bind file>]
+          [--types A,AAAA,CNAME,MX,TXT,NS,SRV,CAA,SOA] [--strict] [--timeout 5]
+
+  delegation <zone> [--expect-ns ns1.x,ns2.x] [--timeout 5]
+
+  propagate <name> <type> --expect <value>
+            [--resolvers 1.1.1.1,8.8.8.8,9.9.9.9] [--deadline 900] [--interval 15]
+
+Exit: 0 agreement, 1 difference or broken delegation, 2 could not run.`;
+
+async function main(argv) {
+    const command = argv[0];
+    const { flags, positional } = parseFlags(argv.slice(1));
+    const timeout = Number(flags.timeout || 5) * 1000;
+
+    if (command === 'compare') {
+        const zone = positional[0];
+        if (!zone || !flags.old || !flags.new) die(USAGE);
+        const types = list(flags.types, DEFAULT_TYPES);
+        for (const type of types) if (!TYPES[type]) die(`Unknown record type "${type}"`);
+        return runCompare(zone, {
+            old: list(flags.old, []),
+            new: list(flags.new, []),
+            names: flags.names ? readNameArgument(flags.names) : [],
+            zoneFile: flags['zone-file'] || null,
+            types,
+            strict: Boolean(flags.strict),
+            timeout,
+        });
+    }
+    if (command === 'delegation') {
+        const zone = positional[0];
+        if (!zone) die(USAGE);
+        return runDelegation(zone, { expectNs: list(flags['expect-ns'], null), timeout });
+    }
+    if (command === 'propagate') {
+        const [name, type] = positional;
+        if (!name || !type || !flags.expect) die(USAGE);
+        if (!TYPES[type.toUpperCase()]) die(`Unknown record type "${type}"`);
+        return runPropagate(name, type.toUpperCase(), {
+            expect: flags.expect,
+            resolvers: list(flags.resolvers, PUBLIC_RESOLVERS),
+            deadline: Number(flags.deadline || 900),
+            interval: Number(flags.interval || 15),
+            timeout,
+        });
+    }
+    die(USAGE);
+}
+
+if (require.main === module) {
+    main(process.argv.slice(2)).then((code) => process.exit(code)).catch((error) => {
+        process.stderr.write(`hoh-dns-diff: ${error.stack || error.message}\n`);
+        process.exit(2);
+    });
+}
+
+module.exports = {
+    TYPES, TYPE_NAMES, ROOT_SERVERS, DEFAULT_TYPES,
+    encodeName, decodeName, encodeQuery, decodeMessage, decodeRdata, ipv6Text,
+    normaliseName, qualify, rrset, ttls, splitSoa, sameSet, judge, counts,
+    zoneFileLines, zoneFileOwners, referralOf, inBailiwick, findDelegation,
+    runCompare, runDelegation, runPropagate, matchesExpected, renderTable, query,
+};
