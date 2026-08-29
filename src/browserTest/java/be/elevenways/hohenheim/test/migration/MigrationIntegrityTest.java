@@ -6,6 +6,7 @@ import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.common.orm.migration.MigrationResult;
 import be.elevenways.zenit.common.orm.migration.MigrationRunnerResult;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.zenit.server.orm.migration.MigrationChecksum;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.server.setting.DryFileSource;
 import be.elevenways.zenit.server.setting.ServerSettings;
@@ -27,14 +28,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * constraints the code relies on; and down() undoes it completely enough that up() can
  * rebuild it.
  *
- * AIDEV-NOTE: there is deliberately no golden checksum ledger any more. It existed to
- * catch an edit to an ALREADY-SHIPPED migration, which was the right guard while the
- * schema grew by appending M003..M092. Hohenheim has no installations, so editing this
- * one migration in place IS the sanctioned way to change the schema (see
- * InitialMigration's own note) -- a pinned digest would fail on every legitimate change
- * and teach people to regenerate it without reading, which is worse than not having it.
+ * AIDEV-NOTE: the golden checksum pin is BACK, for InitialMigration alone (2026-08-29).
+ * It was dropped with the consolidation because hohenheim had no installations and every
+ * schema change legitimately edited that one migration. Starfleet is deployed now: its
+ * zenit_migrations row for version 001 carries the structural checksum, so an edit to
+ * InitialMigration's operations makes the next --run-migrations rehearsal refuse under
+ * database.migration_integrity=fail. A schema change APPENDS a migration instead, and the
+ * pin below turns the mistake this guards (it already happened once, b3e9e840) into a
+ * failing build instead of a failed deploy. Appended migrations are deliberately NOT
+ * pinned: only an applied one is dangerous to edit, and every install applies 001.
  */
 class MigrationIntegrityTest {
+
+    /**
+     * The structural checksum every deployed install recorded for version 001; see the
+     * class note before touching it.
+     */
+    private static final String INSTALL_MIGRATION_CHECKSUM =
+        "0c97fcc11994ef46f73afa244b7de0aef0d67e1913c21d818743599f4726d9b5";
 
     @Test
     void aFreshInstallMigratesReMigratesAndPassesStrictIntegrity() throws Exception {
@@ -73,6 +84,49 @@ class MigrationIntegrityTest {
             MigrationRunnerResult strict = new MigrationRunner(datasource).migrate();
             assertThat(strict.isSuccess()).as("strict migrate on a clean install").isTrue();
         });
+    }
+
+    /**
+     * The upgrade an APPENDED migration exists for: an install that only ever applied
+     * version 001 gains the new column, under the strict integrity posture a deployed
+     * host boots with.
+     */
+    @Test
+    void anInstallThatOnlyAppliedTheInstallMigrationUpgradesUnderStrictIntegrity() throws Exception {
+        SqliteDatasource datasource = emptyDatabase("upgrade");
+
+        // 1. The shape starfleet is in: version 001 applied, nothing appended yet.
+        new MigrationRunner(datasource, List.<Supplier<Migration>>of(InitialMigration::new))
+            .migrate().requireSuccess();
+        assertThat(columnsOf(datasource, "SELECT name FROM pragma_table_info('managed_databases')"))
+            .as("step 1: the pre-upgrade install has no failure_reason column")
+            .doesNotContain("failure_reason");
+
+        // 2. Upgrading refuses nothing: the recorded checksum for 001 still matches, so the
+        //    integrity check passes and the appended migration applies.
+        withIntegrityMode("fail", () -> {
+            MigrationRunnerResult upgrade = new MigrationRunner(datasource).migrate();
+            assertThat(upgrade.isSuccess())
+                .as("step 2: the upgrade under integrity=fail failed: %s", failureDetail(upgrade))
+                .isTrue();
+            assertThat(upgrade.getAppliedCount())
+                .as("step 2: the appended migration is applied").isPositive();
+        });
+
+        // 3. And the column the appended migration exists for is really there, nullable.
+        assertThat(columnsOf(datasource, "SELECT name FROM pragma_table_info('managed_databases')"))
+            .as("step 3: failure_reason arrived on the upgraded install")
+            .contains("failure_reason");
+        datasource.rawUpdate("INSERT INTO managed_databases (id, name) VALUES (1, 'db')");
+        assertThat(datasource.rawQuery(
+                "SELECT failure_reason AS name FROM managed_databases WHERE id = 1").get(0).get("name"))
+            .as("step 3: an existing row's failure_reason is null, never a fabricated reason")
+            .isNull();
+        datasource.rawUpdate("UPDATE managed_databases SET failure_reason = 'boom' WHERE id = 1");
+        assertThat(columnsOf(datasource,
+                "SELECT failure_reason AS name FROM managed_databases WHERE id = 1"))
+            .as("step 3: and it stores what a failed provision writes")
+            .containsExactly("boom");
     }
 
     /**
@@ -229,11 +283,14 @@ class MigrationIntegrityTest {
         }
     }
 
+    /**
+     * Every hohenheim migration declares the one version stream, and the INSTALL migration
+     * still hashes to what every deployed install recorded.
+     */
     @Test
-    void hohenheimShipsExactlyOneMigrationAndItDeclaresTheStream() {
-        // The consolidation's standing invariant: a second hohenheim migration means someone
-        // appended an incremental change instead of editing InitialMigration, which is what
-        // the no-installations doctrine forbids.
+    void everyMigrationDeclaresTheStreamAndTheInstallMigrationIsUnchanged() {
+        // 1. One stream, so out-of-order detection judges the whole module together. A
+        //    migration in another package that forgets HohenheimMigration shows up here.
         List<String> found = new ArrayList<>();
         for (Supplier<Migration> supplier : MigrationRunner.discoverMigrations("default")) {
             Migration migration = supplier.get();
@@ -243,8 +300,22 @@ class MigrationIntegrityTest {
             found.add(migration.getClass().getSimpleName() + " stream=" + migration.getVersionStream());
         }
         assertThat(found)
-            .as("hohenheim ships ONE migration; a schema change EDITS it, never appends")
-            .containsExactly("InitialMigration stream=" + HohenheimMigration.STREAM);
+            .as("step 1: every hohenheim migration declares the module's version stream")
+            .isNotEmpty()
+            .allSatisfy(entry -> assertThat(entry).endsWith(" stream=" + HohenheimMigration.STREAM));
+        assertThat(found)
+            .as("step 1: and the install migration is one of them")
+            .contains("InitialMigration stream=" + HohenheimMigration.STREAM);
+
+        // 2. The pin. This digest is what a deployed install's zenit_migrations row holds
+        //    for version 001; changing an operation in InitialMigration moves it and makes
+        //    that install refuse to boot. Append a migration instead -- never regenerate
+        //    this constant to make the test pass.
+        assertThat(MigrationChecksum.compute(new InitialMigration()))
+            .as("step 2: InitialMigration is FROZEN -- a schema change appends a migration."
+                + " Its canonical operations are:%n%s",
+                MigrationChecksum.canonicalText(new InitialMigration()))
+            .isEqualTo(INSTALL_MIGRATION_CHECKSUM);
     }
 
     // -- helpers --------------------------------------------------------------

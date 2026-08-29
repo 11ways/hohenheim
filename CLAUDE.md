@@ -151,24 +151,30 @@ test one end-to-end: inline `CommsDispatcher` + `webhook://default` + a local
 
 ## Migrations
 
-Hohenheim ships exactly ONE migration:
-`src/common/java/be/elevenways/hohenheim/migration/InitialMigration.java`. It
-creates the final schema directly. The M003..M092 chain was folded into it on
-2026-08-13 (`docs/migration-consolidation-2026-08-13.md` carries the
-schema-diff proof); older docs in `docs/` still cite `M0xx` class names as
-provenance for when something landed, and those citations are history, not
-files you will find.
+The INSTALL schema is one migration,
+`src/common/java/be/elevenways/hohenheim/migration/InitialMigration.java`
+(version `001`), which creates the final schema directly. The M003..M092 chain
+was folded into it on 2026-08-13 (`docs/migration-consolidation-2026-08-13.md`
+carries the schema-diff proof); older docs in `docs/` still cite `M0xx` class
+names as provenance for when something landed, and those citations are history,
+not files you will find.
 
-- A schema change EDITS `InitialMigration` in place. Never append a second
-  migration -- `MigrationIntegrityTest` fails the build if one appears.
-- There are no installations, so there is nothing to migrate FROM. Never write
-  a backfill, a heal, or a data step.
-- `database.migration_integrity` is `fail`, so a dev database that predates
-  your edit refuses to boot. Delete and recreate it; never downgrade the
-  setting to `warn` or `off`.
-- Adding a TABLE means editing BOTH `up()` and `down()`. `MigrationIntegrityTest`
-  rolls the whole schema back and counts what survived, so a table created and not
-  dropped fails the suite by name.
+- `InitialMigration` is FROZEN (2026-08-29). Starfleet is a deployed install
+  whose `zenit_migrations` row for version 001 stores that migration's
+  structural checksum, so editing an operation in it makes the next
+  `--run-migrations` rehearsal REFUSE under `database.migration_integrity=fail`.
+  `MigrationIntegrityTest` pins the checksum: an edit fails the build instead of
+  a deploy, and the constant is never regenerated to make it pass. Comments and
+  formatting are outside the digest.
+- A schema change APPENDS a migration in the same package and stream, numbered
+  from `M002_` upwards (`M002_ManagedDatabaseFailureReason` is the first), using
+  the ORM DSL (`alterTable` + `addColumn`/`dropColumn`), never raw SQL. Existing
+  rows are real now, so a column added to a populated table is nullable or
+  carries a default, and a backfill is a `builder.data(...)` step -- never a
+  hand-written `execute(sql)`.
+- Adding a TABLE means editing BOTH `up()` and `down()` of the migration that
+  creates it. `MigrationIntegrityTest` rolls the install schema back and counts
+  what survived, so a table created and not dropped fails the suite by name.
 - Default records are the `Seeder` SPI's job (SEED boot stage), never an
   INSERT in the migration -- `SpamserviceInstallationSeeder`, `RuntimeImageSeeder` and
   `LocalServerSeeder` are the examples.

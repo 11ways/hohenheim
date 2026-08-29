@@ -9,15 +9,18 @@ import java.util.List;
 /**
  * Creates the full Hohenheim control-plane schema.
  *
- * AIDEV-NOTE: this file IS the schema. Hohenheim has no deployed installations, so the
- * M003..M092 chain that grew this schema incrementally was folded into this one migration
- * on 2026-08-13; every backfill and heal in it became nothing (there was no data to
- * migrate) and M041's default spamservice row moved to SpamserviceInstallationSeeder.
- * A schema change during development EDITS THIS FILE IN PLACE -- never append an
- * incremental or backfill migration. Editing an already-applied migration trips zenit's
- * database.migration_integrity check, which REFUSES the boot by default on any dev
- * database that predates the edit; that refusal is the signal to drop and recreate the
- * dev database, never to downgrade the setting to warn or off.
+ * AIDEV-NOTE: this file is the INSTALL schema, and it is now FROZEN. The M003..M092 chain
+ * that grew this schema incrementally was folded into it on 2026-08-13 (every backfill and
+ * heal became nothing, there being no data to migrate, and M041's default spamservice row
+ * moved to SpamserviceInstallationSeeder); while hohenheim had no installations, editing
+ * this file in place was the sanctioned way to change the schema. That ended when starfleet
+ * was deployed: its zenit_migrations row for version 001 stores this migration's structural
+ * checksum, so any edit to the operations below trips zenit's database.migration_integrity
+ * check, which REFUSES the boot under the shipped "fail" posture. A schema change is now an
+ * APPENDED migration (M002 onwards) -- see M002_ManagedDatabaseFailureReason, which exists
+ * because its column first landed here and had to be taken back out. The checksum is pinned
+ * by MigrationIntegrityTest, so an edit fails the build rather than a deploy; comments and
+ * formatting are outside the digest and stay free to change.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -337,8 +340,6 @@ public class InitialMigration extends HohenheimMigration {
             table.timestamps();
             table.addColumn("status", ColumnType.STRING,
                 column -> column.nullable(true).maxLength(20).defaultValue("active"));
-            table.addColumn("failure_reason", ColumnType.TEXT,
-                column -> column.nullable(true));
             table.addColumn("memory_limit_mb", ColumnType.INTEGER,
                 column -> column.nullable(true));
             table.addColumn("cpu_limit", ColumnType.DOUBLE,
