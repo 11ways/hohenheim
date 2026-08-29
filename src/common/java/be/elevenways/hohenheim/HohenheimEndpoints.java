@@ -336,6 +336,45 @@ public class HohenheimEndpoints {
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
 
+    // --- PaaS API v1: DNS zones (list, create, zone-file import) ---
+    //
+    // The migration lane's DNS half: a primary zone created through the SAME resource
+    // pipeline the admin form runs (zenit-cms ResourceWrites over DnsZoneResource, so the
+    // declared nameservers are seeded exactly as for a form save), and the zone-file import
+    // the Zone-file tab posts, reached with an API key. Admin-only like site create.
+
+    public static final Endpoint<Object> API_V1_DNS_ZONES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_dns_zones"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("dns").addDelimiter().addStatic("zones").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_V1_DNS_ZONE_CREATE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_dns_zone_create"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("dns").addDelimiter().addStatic("zones").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(ROUTE_WRITE_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_V1_DNS_ZONE_IMPORT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_dns_zone_import"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("dns").addDelimiter().addStatic("zones").addDelimiter()
+            .addParameter(ZONE_ID).addDelimiter().addStatic("import").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(ROUTE_WRITE_LIMIT)
+        .build();
+
     // --- Certificate PEM bundle download ---
 
     /**

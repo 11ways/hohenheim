@@ -67,6 +67,16 @@ public final class DelegationCheck {
             }
             return text.toString();
         }
+
+        /** @return this report plus the extra findings, the verdict re-derived as the worst of all */
+        public @NonNull Report with(@NonNull List<Finding> extra) {
+            if (extra.isEmpty()) {
+                return this;
+            }
+            List<Finding> all = new ArrayList<>(this.findings);
+            all.addAll(extra);
+            return report(all);
+        }
     }
 
     /**

@@ -66,7 +66,8 @@ public final class DnsDelegationHealth {
             ours.add(((NSRecord) record).getTarget().toString(true).toLowerCase(Locale.ROOT));
         }
         Name origin = snapshot.getOrigin();
-        DelegationCheck.Report report = check.check(origin, ours, snapshot.getSerial());
+        DelegationCheck.Report report = check.check(origin, ours, snapshot.getSerial())
+            .with(DnsNameservers.compareWithDeclared(ours));
 
         DelegationVerdict previous = DelegationVerdict.forToken(zone.get(DnsZoneModel.DELEGATION_STATUS));
         zone.set(DnsZoneModel.DELEGATION_STATUS, report.verdict().token());

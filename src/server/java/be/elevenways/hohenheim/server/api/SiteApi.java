@@ -183,7 +183,7 @@ public final class SiteApi {
      *
      * @return the access context, or null when the response has already been ended
      */
-    private static @Nullable AccessContext requireAdminKey(@NonNull Conduit conduit) {
+    static @Nullable AccessContext requireAdminKey(@NonNull Conduit conduit) {
         AccessContext ctx = ApiConduits.requireKey(conduit);
         if (ctx == null) {
             return null;

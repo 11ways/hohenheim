@@ -205,3 +205,13 @@ The product flow should also weave existing features together:
    threshold.
 5. DNSSEC signing and key rollover only as a separate security project. An
    unsigned but correct zone is safer than an incomplete DNSSEC implementation.
+
+## Declared nameservers
+
+`dns.nameservers` is the controller's declared nameserver set (`DnsNameservers`):
+a new primary zone is seeded with one apex NS row per name, a zone-file import
+substitutes them for the file's apex NS set unless told to keep it, and the
+delegation check reports a served apex set that disagrees with them as
+`apex_undeclared`. Seeded once, never re-asserted: the apex NS rows stay ordinary
+records an operator may edit. The migration procedure that relies on it is
+`docs/dns-migration.md`.

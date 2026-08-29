@@ -65,23 +65,41 @@ you forget is a name the gate cannot prove, and it will be the one that breaks.
 1. **Export** the zone from the current provider as standard zone-file text.
    Keep the file: it is both the import payload and the `--zone-file` name list.
 
-2. **Import** it on the Hohenheim PRIMARY, on the zone's Zone-file tab (the
-   paste form, `DnsZoneFiles.importText`). What it does, exactly:
+2. **Declare the nameservers once per controller.** Setting `dns.nameservers`
+   (admin panel, DNS server group; one hostname per line, e.g. `ns1.<domain>` and
+   `ns2.<domain>`) is THE declared nameserver set: every zone created on the
+   controller starts with one apex NS row per name, and every import below
+   substitutes them for the provider's. Leave it empty and the import REFUSES a
+   file that carries a foreign NS set instead of publishing the zone under
+   somebody else's nameserver names.
+
+3. **Create the zone and import the file** on the Hohenheim PRIMARY, either on the
+   zone's Zone-file tab (the paste form) or with the CLI:
+
+   ```
+   hoh dns zone create example.com soa_contact=hostmaster@example.com
+   hoh dns zone import <zone-id> example.com.zone
+   ```
+
+   What the import (`DnsZoneFiles.importText`, the same call behind both) does:
    - it REPLACES every operator-managed record in the zone (rows with no
      `managed_by`); Hohenheim-generated rows are untouched,
    - it DROPS the SOA from the file -- zone metadata lives on the zone row and
-     the serial is framework-managed,
+     the serial is framework-managed -- and NAMES the ignored MNAME, RNAME,
+     serial and TTL in its notes, so nothing disappears silently,
+   - it drops the file's apex NS rows and writes the declared nameservers in
+     their place, naming the swap; `--keep-ns` (the "Keep the file's nameserver
+     records" checkbox) keeps the provider's set instead, which is only right when
+     the provider stays authoritative,
    - it bumps the serial and reloads the zone,
-   - anything it could not parse is named in the partial-import warning. Read
-     that warning; a skipped line is a record the gate will report as
+   - anything it could not parse is named in the partial-import warning
+     (`skipped`). Read it; a skipped line is a record the gate will report as
      `only-old` later, and finding it here is cheaper.
 
-3. **Rewrite the apex NS rows.** Nothing generates them: the responder serves
-   whatever NS rows the record table holds (`DnsZoneSnapshot`), so an imported
-   zone still publishes the OLD provider's nameserver names. Delete those rows
-   and add one NS row per Hohenheim nameserver name. If the nameserver names are
-   in-bailiwick (`ns1.<zone>`), add their A/AAAA records too -- the registrar
-   will demand glue for them.
+   If the nameserver names are in-bailiwick (`ns1.<zone>`), add their A/AAAA
+   records too -- the registrar will demand glue for them. The zone's own
+   **Check health** action reports an apex NS set that disagrees with the declared
+   one as `apex_undeclared` before the parent is even asked.
 
 4. **Replicate** to the secondaries (see `authoritative-dns.md`) and let them
    pull. Every listed nameserver must serve the zone BEFORE the delegation moves.

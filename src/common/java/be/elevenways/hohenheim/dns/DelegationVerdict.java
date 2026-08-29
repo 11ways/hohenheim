@@ -25,6 +25,12 @@ public enum DelegationVerdict {
     /** The parent delegates to exactly the NS names we list and every one serves our serial. */
     MATCHES("matches", null, "circle-check", "green"),
 
+    /**
+     * The apex NS set we serve disagrees with the controller's declared nameserver set
+     * ({@code dns.nameservers}): a local configuration fact, judged before the parent is.
+     */
+    APEX_UNDECLARED("apex_undeclared", "warning", "code-branch", "orange"),
+
     /** The parent's nameservers could not be reached, so nothing could be judged. */
     PARENT_UNREACHABLE("parent_unreachable", "warning", "question", "gray"),
 

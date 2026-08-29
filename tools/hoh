@@ -304,6 +304,63 @@ const instanceVerbs = {
 
 // -- commands -----------------------------------------------------------------
 
+// -- dns verbs (hoh dns zones | dns zone create|import) ------------------------
+//
+// The DNS half of the migration lane: a primary zone created through the admin
+// form's own pipeline (its apex NS rows seeded from the controller's declared
+// dns.nameservers), and the Zone-file tab's import. An import REPLACES the file's
+// apex NS set with the declared nameservers unless --keep-ns says otherwise, and
+// the answer names everything it did not take verbatim (the SOA, the swapped NS).
+
+const zoneColumns = ['id', 'origin', 'role', 'enabled', 'serial', 'nameservers', 'delegation_status'];
+
+const dnsVerbs = {
+
+    async zones() {
+        const data = await get('/api/v1/dns/zones');
+        if (flags.json) return emit(data);
+        table((data.zones || []).map(z => ({
+            ...z, nameservers: (z.nameservers || []).join(', '),
+        })), zoneColumns);
+    },
+
+    async zone([verb, ...rest]) {
+        const usage = 'Usage: hoh dns zone create <origin> [field=value ...]'
+            + ' | hoh dns zone import <zone-id> <zone-file> [--keep-ns]';
+        if (verb === 'create') {
+            const [origin, ...pairs] = rest;
+            if (!origin) die(usage);
+            const form = fieldsOf(pairs, usage);
+            form.origin = origin;
+            const zone = await post('/api/v1/dns/zones', form);
+            if (flags.json) return emit(zone);
+            const ns = (zone.nameservers || []).join(', ') || 'none declared';
+            console.log(`Zone ${zone.id} "${zone.origin}" created (${zone.role}, apex NS: ${ns}).`);
+            return;
+        }
+        if (verb === 'import') {
+            const [id, file] = rest;
+            if (!id || !file) die(usage);
+            let text;
+            try {
+                text = fs.readFileSync(file, 'utf8');
+            } catch (e) {
+                die(`Cannot read ${file}: ${e.message}`);
+            }
+            const form = { zone_text: text };
+            if (flags.keepNs) form.keep_ns = 'on';
+            const result = await post(`/api/v1/dns/zones/${id}/import`, form);
+            if (flags.json) return emit(result);
+            console.log(`Zone ${result.id} ${result.origin}: ${result.imported} records imported,`
+                + ` serial ${result.serial}.`);
+            for (const note of result.notes || []) console.log(`  note: ${note}`);
+            for (const line of result.skipped || []) console.log(`  skipped: ${line}`);
+            return;
+        }
+        die(usage);
+    },
+};
+
 const commands = {
 
     async login([host]) {
@@ -355,6 +412,11 @@ const commands = {
         if (siteVerbs[first]) return siteVerbs[first](rest);
         if (!first) die('Usage: hoh site <site-id> | hoh site create|delete|domains|domain ...');
         emit(await get(`/api/v1/sites/${first}`));
+    },
+
+    async dns([first, ...rest]) {
+        if (dnsVerbs[first]) return dnsVerbs[first](rest);
+        die('Usage: hoh dns zones | hoh dns zone create|import ...');
     },
 
     async deploy([id]) {
@@ -504,6 +566,11 @@ Usage: hoh <command> [args] [--json] [--yes]
   site domains <site-id>             Hostnames of a site
   site domain add <id> <host> [f=v]  Add a hostname (custom_headers.0.key=Host ...)
   site domain remove <id> <dom-id>   Remove a hostname (asks for the slug)
+  dns zones                          DNS zones this controller holds (admin)
+  dns zone create <origin> [f=v..]   Create a primary zone (admin): apex NS seeded from
+                                     the declared dns.nameservers
+  dns zone import <id> <file> [--keep-ns]  Import a zone file; the file's apex NS set is
+                                     replaced by the declared nameservers unless --keep-ns
   deploy <site-id>                   Queue a git deploy
   rollback <site-id> [--yes]        Roll back to the retained release (asks for the slug)
   releases <site-id>                 Release/rollback operations
@@ -537,6 +604,7 @@ for (const arg of process.argv.slice(2)) {
     if (arg === '--json') flags.json = true;
     else if (arg === '--yes' || arg === '-y') flags.yes = true;
     else if (arg === '--secret') flags.secret = true;
+    else if (arg === '--keep-ns') flags.keepNs = true;
     else if (arg.startsWith('-n=')) flags.n = arg.slice(3);
     else if (arg === '-n') flags.n = 'NEXT';
     else if (flags.n === 'NEXT') flags.n = arg;

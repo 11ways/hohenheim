@@ -9609,7 +9609,7 @@
     "scope": "server_overview"
   },
   "import_partial": {
-    "text": "Imported {$count} records; skipped: {$skipped}",
+    "text": "Imported {$count} records; skipped: {$skipped}. {$notes}",
     "scope": "dns_zone"
   },
   "import_failed": {
@@ -11683,5 +11683,29 @@
   "last_notify": {
     "text": "Last NOTIFY",
     "scope": "dns_secondaries"
+  },
+  "apex_undeclared": {
+    "text": "Apex NS differs from the declared nameservers",
+    "scope": "dns_delegation"
+  },
+  "import_done_notes": {
+    "text": "Imported {$count} records. {$notes}",
+    "scope": "dns_zone"
+  },
+  "import_keep_nameservers": {
+    "text": "Keep the file's nameserver (NS) records at the apex",
+    "scope": "dns_zone"
+  },
+  "import_keep_nameservers_hint": {
+    "text": "Unchecked, the apex NS records in the file are replaced by this controller's declared nameservers (setting dns.nameservers), which is what a migration from another provider wants.",
+    "scope": "dns_zone"
+  },
+  "import_nameservers_undeclared": {
+    "text": "The zone file names other nameservers and this controller declares none (dns.nameservers): declare them, or keep the file's nameservers",
+    "scope": "violations"
+  },
+  "import_secondary_zone": {
+    "text": "A secondary zone takes its records from its primary; import on the primary",
+    "scope": "violations"
   }
 }

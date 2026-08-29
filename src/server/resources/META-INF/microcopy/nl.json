@@ -9609,7 +9609,7 @@
     "scope": "server_overview"
   },
   "import_partial": {
-    "text": "{$count} records geïmporteerd; overgeslagen: {$skipped}",
+    "text": "{$count} records geïmporteerd; overgeslagen: {$skipped}. {$notes}",
     "scope": "dns_zone"
   },
   "import_failed": {
@@ -11683,5 +11683,29 @@
   "last_notify": {
     "text": "Laatste NOTIFY",
     "scope": "dns_secondaries"
+  },
+  "apex_undeclared": {
+    "text": "Apex-NS wijkt af van de gedeclareerde nameservers",
+    "scope": "dns_delegation"
+  },
+  "import_done_notes": {
+    "text": "{$count} records geïmporteerd. {$notes}",
+    "scope": "dns_zone"
+  },
+  "import_keep_nameservers": {
+    "text": "Behoud de nameserver-records (NS) van het bestand op de apex",
+    "scope": "dns_zone"
+  },
+  "import_keep_nameservers_hint": {
+    "text": "Niet aangevinkt worden de apex-NS-records uit het bestand vervangen door de gedeclareerde nameservers van deze controller (instelling dns.nameservers), wat een migratie van een andere provider wil.",
+    "scope": "dns_zone"
+  },
+  "import_nameservers_undeclared": {
+    "text": "Het zonebestand noemt andere nameservers en deze controller declareert er geen (dns.nameservers): declareer ze, of behoud de nameservers van het bestand",
+    "scope": "violations"
+  },
+  "import_secondary_zone": {
+    "text": "Een secundaire zone haalt haar records bij haar primaire; importeer op de primaire",
+    "scope": "violations"
   }
 }

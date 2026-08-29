@@ -12,6 +12,8 @@
 const http = require('node:http');
 const cp = require('node:child_process');
 const path = require('node:path');
+const os = require('node:os');
+const fs = require('node:fs');
 
 const HOH = path.join(__dirname, 'hoh');
 const requests = [];
@@ -26,6 +28,19 @@ const server = http.createServer((req, res) => {
             res.writeHead(status, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(payload));
         };
+        if (req.url === '/api/v1/dns/zones' && req.method === 'POST') {
+            return respond(200, { id: 41, origin: 'example.test', role: 'primary', enabled: true,
+                serial: 1, nameservers: ['ns1.hoh.test', 'ns2.hoh.test'], delegation_status: '' });
+        }
+        if (req.url === '/api/v1/dns/zones' && req.method === 'GET') {
+            return respond(200, { zones: [{ id: 41, origin: 'example.test', role: 'primary',
+                enabled: true, serial: 1, nameservers: ['ns1.hoh.test'], delegation_status: 'matches' }] });
+        }
+        if (req.url === '/api/v1/dns/zones/41/import' && req.method === 'POST') {
+            return respond(200, { id: 41, origin: 'example.test', serial: 2, imported: 3,
+                skipped: [], notes: ['SOA ignored: ns1.old.test hostmaster.old.test serial 5 ttl 3600'],
+                nameservers: body.includes('keep_ns=on') ? [] : ['ns1.hoh.test', 'ns2.hoh.test'] });
+        }
         if (req.url === '/api/v1/sites' && req.method === 'GET') {
             return respond(200, { sites: [{ id: 7, slug: 'alpha', type: 'hohenheim:docker',
                 source: 'git', enabled: true, health: 'healthy' }] });
@@ -272,6 +287,38 @@ server.listen(0, '127.0.0.1', async () => {
         r = await run(['instance', '51']);
         check('instance <id> still reads the detail', r.status === 0
             && r.stdout.includes('earl-app'), r.stderr);
+        // dns: zone create posts the origin plus verbatim fields; import reads the file
+        //      and carries keep_ns only when --keep-ns was given; the answer's notes print.
+        r = await run(['dns', 'zone', 'create', 'example.test', 'soa_contact=hostmaster@example.test']);
+        check('dns zone create posts', r.status === 0 && r.stdout.includes('ns1.hoh.test'),
+            r.stdout + r.stderr);
+        check('dns zone create hit the zone lane with its fields',
+            requests.at(-1).method === 'POST' && requests.at(-1).url === '/api/v1/dns/zones'
+                && requests.at(-1).body.includes('origin=example.test')
+                && requests.at(-1).body.includes('soa_contact=hostmaster%40example.test'),
+            requests.at(-1).body);
+        const zoneFile = path.join(os.tmpdir(), `hoh-test-${process.pid}.zone`);
+        fs.writeFileSync(zoneFile, '$ORIGIN example.test.\n@ IN NS ns1.old.test.\nwww IN A 192.0.2.1\n');
+        try {
+            r = await run(['dns', 'zone', 'import', '41', zoneFile]);
+            check('dns zone import posts the file text',
+                r.status === 0 && requests.at(-1).url === '/api/v1/dns/zones/41/import'
+                    && requests.at(-1).body.includes('zone_text=%24ORIGIN+example.test.')
+                    && !requests.at(-1).body.includes('keep_ns'),
+                requests.at(-1).body + r.stderr);
+            check('dns zone import prints the notes', r.stdout.includes('note: SOA ignored'), r.stdout);
+            r = await run(['dns', 'zone', 'import', '41', zoneFile, '--keep-ns']);
+            check('dns zone import --keep-ns carries keep_ns',
+                r.status === 0 && requests.at(-1).body.includes('keep_ns=on'), requests.at(-1).body);
+            r = await run(['dns', 'zone', 'import', '41', zoneFile + '.missing']);
+            check('dns zone import refuses an unreadable file before any request',
+                r.status === 1 && r.stderr.includes('Cannot read'), r.stderr);
+        } finally {
+            fs.unlinkSync(zoneFile);
+        }
+        r = await run(['dns', 'zones']);
+        check('dns zones lists', r.status === 0 && r.stdout.includes('example.test')
+            && r.stdout.includes('matches'), r.stdout + r.stderr);
     } finally {
         server.close();
     }
