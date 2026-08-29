@@ -759,3 +759,66 @@ immediately before the migration; `.pre` is the earlier copy) over
 start. Writes made after the swap are lost by that restore; `failure_reason` is
 only ever written by a database provision, which the disabled databases role
 makes impossible here.
+
+## Deploys 2026-08-29 (sixth to ninth): the interactive console, and the first Alchemy app on starfleet
+
+Four deploys in one session, each through the isolated-worktree lane (every
+chain repo clean at its committed sha; `build-worktrees/deploy-20260829-<sha>`,
+removed afterwards), each with a 13/13 clean stamp gated by `upload_file`'s
+`verify_command`, a preflight dir under `/root/hohenheim-preflight-20260829-
+tty{,2,3,4}/` (`.pre`, `.at-swap`, `settings/`, `hohenheim-server.jar.rollback`),
+two restarts (32/22 s, 32/22 s, 32/22 s, 33/25 s to health), the outside-in
+checks (panel 302, apex 200, `aa` SOA, google REFUSED, 0 journal errors) and
+`zenit-dev deployed starfleet` = `current` 13/13 after each.
+
+1. `f5b672e3` -- `console_kind = tty` (the Janeway console, `docs/interactive-
+   console.md`) and **M003** dropping the unread `instance_templates.console_kind`.
+   Rehearsed as the service user from `/opt/hohenheim-rehearsal-20260829-tty`:
+   `Migrations complete 1 applied`, 43 rows, column gone, integrity ok, inert
+   boot healthy after 26 s. Live lane as for M002 (stop, mv, `--run-migrations`
+   as `hohenheim`, start). The SAME restart enabled roles `instances` and
+   `databases` in `settings/hohenheim.dry` (`roles_captured [databases, dns,
+   firewall, instances, proxy]`). ROLLBACK IS DB + JAR (the M002 rule):
+   `/root/hohenheim-preflight-20260829-tty/hohenheim.db.at-swap`.
+   TRAP: the inert rehearsal boot has a RELATIVE cmdline (`java -jar
+   hohenheim-server.jar`), so `pkill -f <absolute path>` misses it; it sat on
+   :13999 for 20 minutes. Kill by `readlink /proc/$pid/cwd` or by port.
+2. `25179ee9` -- the Mongo readiness probe picks `mongosh` or the legacy `mongo`
+   shell (starfleet's QEMU CPU has no AVX, so only `mongo:4.4` runs there; its
+   first provision timed out on a missing `mongosh`). No migration.
+3. `2336ef52` -- the btrfs volume lane elevates its root work with `sudo -n`
+   when the controller is not root (`volume_own_failed`: chown to the workspace
+   uid). No migration. Starfleet's blanket sudoers grant covers it; the narrow
+   line is in `docs/deploy-native.md`.
+4. `d17494d2` -- link networks are Docker-internal: the `idblink` network sorted
+   before the workspace's own and became its default route, and every packet
+   out died in the link's egress drop (`source_checkout_failed`, no DNS). No
+   migration. The pre-fix link network was detached from both members and
+   removed by hand; the next deploy recreated it internal.
+
+Host changes beside the jar: `btrfs-progs` installed; an 8 GB loop file
+`/opt/hohenheim/volumes.btrfs` mounted at `/opt/hohenheim/data/volumes`
+(fstab, `loop,defaults,nofail`) because workspaces refuse a host without a
+quota-capable volume root; host `local` preflighted (all required checks pass,
+`Volume storage: Btrfs`), admitted, posture `shared_container` with the risk
+acknowledged (the workspace kind refuses `trusted_only`).
+
+Records created: database 2 `skeleton-mongo` (`mongo:4.4`, 512 MB, active;
+record 1 was the failed first provision, deleted), instance 3
+`alchemy-skeleton` (workspace, node-22, `https://github.com/skerit/alchemy-
+skeleton.git` branch `hohenheim`, `npm install --no-audit --no-fund`, `node
+server.js`, port 3000, 512 MB, console `tty`, env `ALCHEMY_SKIP_LOCAL_CONFIG=1`
+`ALCHEMY_ENV=live`), attachment 1 (prefix `DB`), site 9 `Alchemy skeleton`
+(instance upstream), domain 10 `skeleton.starfleet.life` (exact, wildcard
+certificate). PROVEN: `https://skeleton.starfleet.life/` answers 200 with the
+Hawkejs page; the Console tab renders Janeway (Mongo connected, HTTP on 3000)
+and `1+41` sent as keystrokes plus `\r` over the console socket printed `42`.
+Note for headless QA: the sketerm headless engine emits no terminal data for
+the Enter key on ghostty-web (printable keys work), so prove Enter by sending
+`\r` over the page's WebSocket; Janeway also ignores an Enter within 24 ms of
+the previous key and lets the first Enter pick an open autocomplete.
+
+Memory after the session: ~880 MB available with the JVM, herald, mongo and the
+workspace running; the runtime image `hohenheim/node-22:1` was loaded from a
+workstation build (`docker save | docker load`) rather than built by kaniko on
+this 1-vCPU box.
