@@ -560,13 +560,16 @@ No jar changed. Preflight `/root/hohenheim-preflight-20260829-095543/` holds the
   `admin@starfleet.life`; `/account` shows "Your email address has not been confirmed yet"
   with a "Send a confirmation link" button. That button cannot work here: `EmailVerification
   .issueAndSend` requires `auth.external_base_url` (unset on this box, and hohenheim sets
-  none) and a mail lane installed through `AuthMail.install` (hohenheim installs none, and no
-  comms mail transport is configured). Consequence worth knowing: `PasswordReset` refuses a
-  reset for an unverified address, so forgot-password does not work for the administrator
-  either; `--set-password` (offline command) is the recovery path. To confirm the address:
-  set `auth.external_base_url = https://admin.starfleet.life`, configure a mail transport and
-  an `AuthMail` sender, then click the button and open the mailed link; or accept the
-  unverified state.
+  none) and a configured mail transport. The mail SENDER itself is already installed:
+  zenit-auth's `AuthCommsBridge` autoloads because hohenheim ships zenit-comms, so
+  `AuthMail.isAvailable()` is true; what is unset is `comms.channels.mail_transports`
+  (one smtp DSN per line, `from=` required). Consequence worth knowing: `PasswordReset`
+  refuses a reset for an unverified address, so forgot-password does not work for the
+  administrator either; `--set-password` (offline command) is the recovery path. To confirm
+  the address: set `auth.external_base_url = https://admin.starfleet.life` and
+  `comms.channels.mail_transports` (keep `comms.delivery.synchronous` off, or forgot-password
+  latency becomes an address oracle), then click the button and open the mailed link; or
+  accept the unverified state.
 
 ## Deploy 2026-08-29 (third): the dashboard respects the disabled roles
 
