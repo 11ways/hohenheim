@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -235,6 +236,10 @@ public final class InstanceTemplates {
         FormSpec spec = variableFormSpec(templateId);
         Map<String, Object> coerced = SubmittedValueCoercion.coerceFormOrThrow(spec, rawVariableValues);
         FormValidator.validateCoercedFormOrThrow(spec, coerced);
+        // The declared databases' cheap refusals (engine, injectability, label taken)
+        // come BEFORE the instance row exists, so the common failures never need the
+        // compensation below.
+        TemplateDatabases.precheck(template, name.trim(), ctx);
 
         InstanceModel instances = Models.get(InstanceModel.class);
         Row instance = instances.createEmptyRow();
@@ -264,7 +269,36 @@ public final class InstanceTemplates {
         grantCreatorManage(instanceId, ctx);
         this.variables.writeForInstance(instanceId, declaredVariables(templateId), coerced);
         copyFiles(templateId, instanceId);
+        attachDeclaredDatabases(template, instance, placement, ctx);
         return instanceId;
+    }
+
+    /**
+     * Allocate and attach the template's declared databases on the instance's host.
+     *
+     * AIDEV-NOTE: the instance row is written FIRST and the databases after it, because a
+     * database allocation schedules daemon work after commit while an instance row does
+     * not: compensating a refused allocation is a destroy of a never-deployed record,
+     * compensating a refused instance save would race a background provision. Inside the
+     * panel's mutation transaction the rollback covers both anyway; the explicit destroy
+     * is for the in-process lane, and a destroy that itself fails is logged beside the
+     * original refusal rather than replacing it.
+     */
+    private static void attachDeclaredDatabases(@NonNull Row template, @NonNull Row instance,
+                                                int serverId, @Nullable AccessContext ctx) {
+        int instanceId = instance.get(InstanceModel.ID);
+        try {
+            TemplateDatabases.link(instanceId, TemplateDatabases.allocate(template,
+                instance.get(InstanceModel.NAME), serverId, ctx));
+        } catch (RuntimeException | Error refused) {
+            try {
+                new InstanceService().destroy(instanceId);
+            } catch (RuntimeException | Error compensation) {
+                Blast.log("TEMPLATE: instance", instanceId, "kept after its declared database"
+                    + " was refused; destroy failed:", compensation.getMessage());
+            }
+            throw refused;
+        }
     }
 
     /**

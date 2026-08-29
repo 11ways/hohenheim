@@ -563,6 +563,10 @@
     {
       "text": "Image",
       "scope": "stack_services"
+    },
+    {
+      "text": "Image",
+      "scope": "template_contents"
     }
   ],
   "image_tag": [
@@ -1247,6 +1251,10 @@
     {
       "text": "Database-engine. Vast na aanmaak; vernietig en maak opnieuw aan om te wijzigen.",
       "scope": "help"
+    },
+    {
+      "text": "Engine",
+      "scope": "template_contents"
     }
   ],
   "env_prefix": [
@@ -2445,6 +2453,15 @@
       "text": "beschermde paden",
       "scope": "protected_path",
       "case": "sentence"
+    },
+    {
+      "text": "Sjabloondatabanken",
+      "scope": "template_database"
+    },
+    {
+      "text": "sjabloondatabanken",
+      "scope": "template_database",
+      "case": "sentence"
     }
   ],
   "dashboard": [
@@ -2603,10 +2620,16 @@
     "text": "Dupliceren",
     "scope": "site"
   },
-  "databases": {
-    "text": "Databanken",
-    "scope": "site"
-  },
+  "databases": [
+    {
+      "text": "Databanken",
+      "scope": "site"
+    },
+    {
+      "text": "Gedeclareerde databanken",
+      "scope": "template_contents"
+    }
+  ],
   "clone_confirm": {
     "text": "Een kopie maken met dezelfde instellingen en domeinen (standaard uitgeschakeld)? API-sleutels worden niet gekopieerd.",
     "scope": "site"
@@ -8655,6 +8678,15 @@
       "text": "beschermd pad",
       "scope": "protected_path",
       "case": "sentence"
+    },
+    {
+      "text": "sjabloondatabank",
+      "scope": "template_database"
+    },
+    {
+      "text": "sjabloondatabank",
+      "scope": "template_database",
+      "case": "sentence"
     }
   ],
   "member": {
@@ -11458,5 +11490,49 @@
   "lifted_by": {
     "text": "Opgeheven door",
     "scope": "field"
+  },
+  "template_database_engine": {
+    "text": "Engine van de beheerde databank die voor elke instantie uit dit sjabloon wordt aangemaakt.",
+    "scope": "help"
+  },
+  "template_database_prefix": {
+    "text": "Bepaalt de naam van de geinjecteerde variabelen op de aangemaakte koppeling: WORDPRESS_DB geeft WORDPRESS_DB_HOST, _USER, _PASSWORD, _NAME en _URL.",
+    "scope": "help"
+  },
+  "template_database_image": {
+    "text": "Image-override voor de aangemaakte databank; laat leeg voor de standaardimage van de engine.",
+    "scope": "help"
+  },
+  "add_database": {
+    "text": "Databank toevoegen",
+    "scope": "template_contents"
+  },
+  "no_databases": {
+    "text": "Geen gedeclareerde databanken",
+    "scope": "template_contents"
+  },
+  "no_databases_description": {
+    "text": "Dit sjabloon declareert geen beheerde databanken; een instantie uit dit sjabloon moet er zelf een koppelen.",
+    "scope": "template_contents"
+  },
+  "prefix": {
+    "text": "Env-voorvoegsel",
+    "scope": "template_contents"
+  },
+  "template_required": {
+    "text": "Kies een sjabloon",
+    "scope": "violations"
+  },
+  "template_missing": {
+    "text": "Dat sjabloon bestaat niet meer",
+    "scope": "violations"
+  },
+  "template_database_prefix_taken": {
+    "text": "Env-voorvoegsel '{$prefix}' is al gedeclareerd door dit sjabloon",
+    "scope": "violations"
+  },
+  "template_database_host_mismatch": {
+    "text": "Databank '{$name}' werd op {$server} geplaatst maar de instantie draait op {$instance_server}; ze zou die nooit bereiken",
+    "scope": "violations"
   }
 }

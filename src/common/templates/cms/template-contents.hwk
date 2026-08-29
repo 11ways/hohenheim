@@ -4,8 +4,10 @@
 {% declare templateName: String %}
 {% declare variables: List %}
 {% declare files: List %}
+{% declare databases: List %}
 {% declare addVariableTarget: RouteTarget %}
 {% declare addFileTarget: RouteTarget %}
+{% declare addDatabaseTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% declare flashVariant: String = "default" %}
@@ -19,6 +21,7 @@
         <div>
             <pl-button variant="primary" use:Zenit.route={% addVariableTarget %} id="add-variable-link">{{ t("add_variable", scope: "template_contents") }}</pl-button>
             <pl-button variant="secondary" use:Zenit.route={% addFileTarget %} id="add-file-link">{{ t("add_file", scope: "template_contents") }}</pl-button>
+            <pl-button variant="secondary" use:Zenit.route={% addDatabaseTarget %} id="add-database-link">{{ t("add_database", scope: "template_contents") }}</pl-button>
         </div>
     </header>
 
@@ -74,6 +77,31 @@
     <pl-empty-state icon="file-code">
         <pl-empty-state-title>{{ t("no_files", scope: "template_contents") }}</pl-empty-state-title>
         <pl-empty-state-description>{{ t("no_files_description", scope: "template_contents") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+
+    <h2>{{ t("databases", scope: "template_contents") }}</h2>
+    {% if databases %}
+    <pl-table striped={% true %}>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("prefix", scope: "template_contents") }}</pl-table-head>
+            <pl-table-head>{{ t("engine", scope: "template_contents") }}</pl-table-head>
+            <pl-table-head>{{ t("image", scope: "template_contents") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each databases as index, database %}
+            <pl-table-row>
+                <pl-table-cell><a use:Zenit.route={% database.get("editTarget") %}><code>{{ database.get("prefix") }}</code></a></pl-table-cell>
+                <pl-table-cell><pl-badge variant="secondary">{{ database.get("engine") }}</pl-badge></pl-table-cell>
+                <pl-table-cell><code>{{ database.get("image") }}</code></pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="database">
+        <pl-empty-state-title>{{ t("no_databases", scope: "template_contents") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("no_databases_description", scope: "template_contents") }}</pl-empty-state-description>
     </pl-empty-state>
     {% /if %}
 </section>

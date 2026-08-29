@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
@@ -17,8 +18,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * The instance CATALOG's delete invariants, on every delete lane: a template still named by
- * a live instance is refused, and one that is not takes its variables, files and volume
- * declarations with it; a runtime image still named by a live instance or a template is
+ * a live instance is refused, and one that is not takes its variables, files, volume and
+ * database declarations with it; a runtime image still named by a live instance or a template is
  * refused.
  *
  * AIDEV-NOTE: refusal for the two catalog rows and cascade for the template's contents,
@@ -55,6 +56,8 @@ public final class InstanceCatalogGuards {
                 InstanceTemplateFileModel.TEMPLATE, context);
             PendingDeletes.deleteDependents(Models.get(InstanceTemplateVolumeModel.class),
                 InstanceTemplateVolumeModel.TEMPLATE, context);
+            PendingDeletes.deleteDependents(Models.get(InstanceTemplateDatabaseModel.class),
+                InstanceTemplateDatabaseModel.TEMPLATE, context);
         });
 
         RuntimeImageModel.SCHEMA.addBeforeRemoveHook(InstanceCatalogGuards::refuseImageInUse);

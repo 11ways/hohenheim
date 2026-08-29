@@ -55,9 +55,6 @@ import java.util.Map;
  */
 public class InstanceDatabaseResource extends RowResource {
 
-    /** env prefixes become variable names: a letter, then letters/digits/underscores. */
-    private static final String PREFIX_PATTERN = "[A-Za-z][A-Za-z0-9_]*";
-
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(InstanceDatabaseModel.INSTANCE_ID, InstanceModel.MODEL_ID).build())
         .add(RelationPick.of(InstanceDatabaseModel.DATABASE_ID, DatabaseModel.MODEL_ID).build())
@@ -283,7 +280,7 @@ public class InstanceDatabaseResource extends RowResource {
         }
 
         String prefix = prefixOf(coerced, existing);
-        if (!prefix.matches(PREFIX_PATTERN)) {
+        if (!prefix.matches(InstanceDatabaseModel.PREFIX_PATTERN)) {
             throw Violations.ofField("env_prefix", prefix,
                 CmsSupport.violationText("prefix_format"));
         }
