@@ -1504,3 +1504,99 @@ image is wrong. It was deliberately NOT restarted here: it carries live traffic
 and that was outside this lane. It needs one `hoh power 8 restart` in a lane
 that owns live traffic. Taverne Tomberg (instance 3) IS correctly on the
 rebuilt `hohenheim/node-12:1` `d1533013b76a` and has `gm`.
+
+## Invulassistent recreated on the GraphicsMagick image, 2026-08-30
+
+The one instance the previous section left on a pre-`gm` image. `hoh power 8
+restart` recreates the container, which is the mechanism that picks up a
+rebuilt tag. This lane owned live traffic, so both sides of the restart were
+measured.
+
+### Image and `gm`
+
+| | before | after |
+| --- | --- | --- |
+| container image | `0c94252f7f05` (built 02:21:06Z) | `d1533013b76a` (built 02:51:32Z) |
+| `/usr/bin/gm` | absent (`command -v gm` -> nothing) | present, `GraphicsMagick 1.3.35 2020-02-23 Q16` |
+
+`hohenheim/node-12:1` resolves to `d1533013b76a`, so the container is now on the
+current tag rather than a dangling copy of the old one.
+
+### Measured downtime
+
+Polled `https://invulassistent.wcag.be/login` every ~0.37s across the restart
+(`--resolve` to 51.255.43.81, no proxy):
+
+    03:18:28.284  200 9104   <- last good
+    03:18:28.666  503        <- restart issued 03:18:28.554
+    ...           503        (12 consecutive, 4 of them the 38-byte body)
+    03:18:32.663  503        <- last bad
+    03:18:33.033  200 9104   <- back
+
+**Unavailable 4.0 seconds** (first 503 to last 503); the outage cannot have
+been longer than 4.75s (last 200 to first 200). Every failed request was a
+503 from the hohenheim proxy, not a timeout.
+
+### Site answers, before vs after
+
+| path | before | after |
+| --- | --- | --- |
+| `/` | 401, 8950 bytes | 401, 8950 bytes |
+| `/login` | 200, 9104 bytes | 200, 9104 bytes |
+| `/chimera` | 401, 8367 bytes | 401, 8367 bytes |
+
+`ssl_verify_result 0` on all three; `http://invulassistent.wcag.be/` still
+answers `301 -> https://invulassistent.wcag.be/`.
+
+The sha256 of each body CHANGED at identical byte length. That is the app's
+per-boot asset id: the markup carries `?v=0.2.0&i=3d002c`, a fixed-width hex
+stamp that moves with the process. Two consecutive fetches after the restart
+are byte-identical, so nothing else moved.
+
+### Media proof: the placeholder probe, and why it does not answer here
+
+`db.media_files.countDocuments({})` in `invulassistent` is **0**, so there is no
+real derivative URL to fetch and the substitute probe applies. It does NOT
+answer on this app, before or after the restart:
+
+    before  /media/image/000000000000000000000000?width=100  504 after 30s (proxy timeout)
+    after   /media/image/000000000000000000000000?width=100  504 after 30s (proxy timeout)
+
+Hitting the container directly (`127.0.0.1:32795`) hangs past 60s and logs
+nothing, with OR without `?width`, so it is not the resize step. The cause is
+visible on `/media/placeholder`, which fails fast:
+
+    500: Error: The module '/home/site/node_modules/canvas/build/Release/canvas.node'
+    was compiled against a different Node.js version using
+    NODE_MODULE_VERSION 93. This version of Node.js requires
+    NODE_MODULE_VERSION 72.
+
+`canvas` in this app's `node_modules` was built for Node 16; the container runs
+Node 12.22.12. alchemy-media's placeholder generator needs `canvas`, so the
+missing-record path throws (and, for `/media/image/...`, hangs instead of
+answering). **Pre-existing, unrelated to GraphicsMagick, unchanged by this
+restart** -- the probe returned the same 504 at the same 30s before it.
+
+`gm` itself is proven working inside the container, which is what this restart
+was for:
+
+    # docker exec ... gm convert -size 320x200 gradient:blue-red /tmp/gmtest.jpg
+    /tmp/gmtest.jpg    JPEG 320x200+0+0 DirectClass 8-bit 1.5Ki
+    # docker exec ... gm convert /tmp/gmtest.jpg -resize 100x /tmp/gmtest100.jpg
+    /tmp/gmtest100.jpg JPEG 100x63+0+0 DirectClass 8-bit 466
+
+Sibling apps on the same host answer the placeholder probe normally, so the
+probe method is sound and the defect is app-local: microcopy (instance 2) and
+auditexport (instance 6) both return `200, 1382 bytes, PNG 100x300`.
+
+Note for the record: instance 8's Mongo is **instance 7**
+(`DB_HOST=hohenheim-luguij0q-instance-7`, database `invulassistent`), not
+instance 4 -- instance 4 is microcopy's Mongo.
+
+### Open item
+
+`invulassistent`'s `canvas` native module is built for the wrong Node ABI. It
+only surfaces on media paths, and the media library is empty, so nothing a
+visitor sees is affected today. Fixing it means rebuilding `canvas` against
+Node 12 in the app volume, or dropping the dependency -- deliberately not done
+in this lane.
