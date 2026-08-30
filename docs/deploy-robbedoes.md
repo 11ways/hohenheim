@@ -1651,3 +1651,94 @@ Media is healthy on the new jar -- real derivatives
 `/media/image/5898f37e9f3b0c780fc91145?width=50%&dpr=1|2` and
 `/media/image/5898f3899f3b0c780fc91148?width=50%&dpr=1` all return 200 JPEGs,
 not the 500s that the pre-GraphicsMagick images produced.
+
+## Udesign Preview BLOCKED on the host memory budget, 2026-08-30
+
+`staging.udesign.world`, the fifth and last phoenix Node app, could NOT be
+staged. Its inputs are ready and verified; the wall is the host's admission
+budget, and clearing it means re-sizing workloads this lane was told not to
+touch. Nothing was left half-built: the failed database record was deleted and
+the host is back to exactly the twelve workloads it carried before.
+
+### The wall, verbatim
+
+The database was created through the form (name `udesign-preview-mongo`, engine
+MongoDB, db `udesign_preview`, user `udesign`, image `mongo:7`, memory limit
+**512 MB set explicitly at creation**, the sibling shape). It saved as record 8
+and then failed to provision:
+
+    Database 'udesign-preview-mongo' could not be deployed: 1 violation(s):
+      -> host_capacity_reached {name=local, needed=512, free=163}
+
+Host `local`, from its Overview: **Booked 10752 MB of a 10915 MB budget (98%)**,
+so 163 MB free. `mem_total` is 12250845184 (11683 MB); the budget is that minus
+the reserve. The record was then deleted (`udesign-preview-mongo has been
+deleted.`) and the page re-read: booked back to 10752 MB, twelve workloads, no
+orphan.
+
+### Why the budget is full: bookings, not use
+
+Booked is the sum of DECLARED limits. Measured against `docker stats` at the
+same moment, the twelve containers were using **~2.1 GB in total** and the host
+had 8.4 GB available. The four databases created before the explicit-sizing
+rule each book 1280 MB (the default) while using a tenth of it:
+
+| workload | booked | actually using |
+| --- | --- | --- |
+| db-tomberg-mongo (instance 1) | 1280 MB | 143 MiB |
+| db-microcopy-mongo (instance 4) | 1280 MB | 124 MiB |
+| db-auditexport-mongo (instance 5) | 1280 MB | 187 MiB |
+| db-invulassistent-mongo (instance 7) | 1280 MB | **681 MiB** |
+| taverne-tomberg / auditexport / invulassistent | 1024 MB each | 148 / 174 / 109 MiB |
+| microcopy, oogfonds x2, udesign-live x2 | 512 MB each | 88-128 MiB |
+
+Only Invulassistent's Mongo (the 5 GB dataset) is anywhere near its cap. The
+other three 1280 MB bookings are pure default.
+
+### The remedy, and why this lane did not apply it
+
+Udesign Preview needs 512 MB for its database plus 512 MB for its instance.
+Re-sizing `microcopy-mongo` and `auditexport-mongo` from 1280 MB to 512 MB
+frees 1536 MB, which is enough with headroom -- and that is now a supported
+in-place edit (`b73e35a1`, deployed in the fourteenth wave), not a
+delete-and-recreate. Both apps are STAGED, carry no traffic and hold no live
+hostname, so the container recreate each edit performs is cheap.
+
+It was not done here because this lane's brief forbids touching the other
+staged instances. It is a one-line authorisation for whoever owns them, and
+after it the remaining work is the sibling recipe end to end.
+
+### What IS ready
+
+`node_modules` copied from phoenix per the standing rule (every Udesign
+dependency is a GitHub repo, so a fresh resolve is not even meaningful):
+`/opt/hohenheim/staging/phoenix/udesign-preview-node_modules.tgz`, 59,025,040
+bytes, streamed phoenix -> workstation -> robbedoes with no local copy. Verified
+by MEMBER COUNT and CONTENT BYTES rather than a re-tarred sha256 (a second
+`tar czf` of the same tree is a different byte stream):
+
+    phoenix   find node_modules | wc -l        19375     file bytes 212255890
+    robbedoes tar tzvf ... | wc -l             19375     file bytes 212255890
+
+Exact match on both. Top-level entries 411 on phoenix (`ls -A`, `.bin`
+included), 411 in the archive. The `/tmp` artefact on phoenix was deleted.
+
+Phoenix baselines for the eventual proof, captured today through
+`--resolve staging.udesign.world:443:144.76.30.204`:
+
+| request | result |
+| --- | --- |
+| `/` no credentials | 401, 12 bytes |
+| `/` with `preview:preview` | 200, **167576 bytes**, `<title>Udesign.world</title>`, sha256 `21bee53f01c0257c…` |
+| `/media/image/5d89fee8e7acbf36becddbd8?width=400` | 200, 43829 bytes, JPEG 400x533, sha256 `e668f9e1f9f9e738…` |
+
+That derivative hash is the SAME one Udesign Live serves from robbedoes, so the
+media proof has a known-good target. The code and dump tarballs
+(`phoenix-udesign-preview.tgz` 54,417,951 bytes, `phoenix-mongo-udesign-preview.tgz`
+53,088 bytes, 11 collections) were already on the box and were not touched.
+
+### Facts confirmed in passing
+
+The node-10 seed row IS live (runtime image row 7) and `hohenheim/node-10:1` is
+on the box, so nothing about Node 10 blocks this app. Disk on robbedoes: 28 GB
+of 99 GB before and after this lane (the `node_modules` tarball added 59 MB).
