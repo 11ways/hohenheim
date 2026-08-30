@@ -1539,3 +1539,53 @@ four polling rounds, from two vantage points. They were not -- afraid's own
 `ns1.afraid.org` (23.227.184.22) answered `nskuifje.mooo.com A 137.74.171.228`
 authoritatively throughout. Set RD (flags `0x0100`), and never conclude an
 outage from one probe when the authoritative servers still answer.
+
+## Deploy 2026-08-30 (fourth jar swap): e6d15bf1, no migration
+
+Swapped the SAME jar starfleet took in the thirteenth deploy -- built once in
+`build-worktrees/deploy-20260830-e6d15bf1`, sha256
+`605f53038b182deb4e7bb5151bc31ccf8405a16fc39e9b165edb0398f13cf417`,
+267,611,836 bytes, stamp 13/13 `dirty=false`. No rebuild: the jar was uploaded
+to `/home/debian/` (NOT `/tmp`, which is a 1.9 GB tmpfs here) behind the remote
+`unzip -p {} ... | grep -c false | grep -qx 13` gate, then
+`install -o hohenheim -g hohenheim -m 644` into place. Previous jar
+`17fa6993` (sha `efbf9b35...`) kept as the rollback.
+
+Migration diff: NONE (top M007, pin mark stays 007).
+
+Stop 01:47:21Z, start 01:47:26Z, healthy 01:48:12Z -- 51 s downtime. Second
+restart 01:48:29Z, healthy 01:48:39Z (10 s). Both: 0 journal errors, RSS
+323 MB, listeners 53 TCP+UDP, 80, and 3000 on loopback only (there is no 443
+here -- kuifje owns 0 sites and 0 certificates, which is correct for the
+DNS-primary role). Row counts identical before and after: 46 migrations,
+5 DNS zones, 67 records, 2 peers, 0 sites, 0 domains.
+
+THE TRAP THIS DEPLOY EXPOSED, and it looked alarming: `--run-migrations`
+reported **`Migrations complete 46 applied`** here, where starfleet had said
+`0 applied` minutes earlier. Nothing was wrong with the database. The default
+`database.path` is RELATIVE, so the command must run with `cwd=/opt/hohenheim`;
+this run was issued from `/home/debian`, which the `hohenheim` user cannot
+write, so the JVM fell back to its tmpdir and migrated a THROWAWAY database at
+`/tmp/hsperfdata_hohenheim/hohenheim.db` (1.2 MB, 46 rows) while the live
+`/opt/hohenheim/hohenheim.db` was never opened -- proven by its mtime (01:46,
+before the 01:47 swap) and by its counts being unchanged. The scratch file was
+deleted. Robbedoes was then done with an explicit `cd /opt/hohenheim` and
+correctly reported `0 applied`. ALWAYS run the offline migration command from
+`/opt/hohenheim`, and read a surprising "N applied" as a wrong-cwd symptom
+before believing it. Same family as `sqlite3` creating an empty database when
+handed a path that does not exist.
+
+DNS verified after each restart, against both boxes, with the same script:
+`wcag.be` SOA `aa` serial 11 and `tavernetomberg.be` SOA `aa` serial 6 on
+kuifje AND robbedoes (serials in agreement), both apex NS sets exactly
+`nskuifje.mooo.com` + `nsrobbedoes.mooo.com`, and -- because this zone now
+carries live mail -- `tavernetomberg.be MX 10 calamity.develry.be` plus all
+three SRV rows (`_autodiscover._tcp` 443, `_imaps._tcp` 993,
+`_submission._tcp` 587, all to `calamity.develry.be`) answering from both
+servers. `hoh-dns-diff delegation` = DELEGATION OK for both zones.
+`zenit-dev deployed kuifje` = the jar at `e6d15bf1`, all 12 upstream repos
+`current`.
+
+Rollback is jar only: `/root/hohenheim-preflight-20260830-thirteenth/`
+(`hohenheim.db.pre` + `.at-swap`, both `integrity_check` ok, `settings/` with
+the keyring sha256-equal, `hohenheim-server.jar.rollback`).

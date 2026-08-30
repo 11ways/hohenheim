@@ -800,3 +800,41 @@ mooo pair instead of the declared `ns1/ns2.elevenways.de`; it becomes
 
 Rollback (not needed): put `earl` back to `CNAME phoenix.develry.be.`;
 Phoenix still serves the site and keeps its own certificate.
+
+## Deploy 2026-08-30 (second jar swap): e6d15bf1, no migration
+
+Same jar again (sha256 `605f5303...`, stamp 13/13 clean), deployed AFTER kuifje
+and only once kuifje was verified answering -- these two are each other's only
+nameserver for two live zones, so they are never restarted together.
+
+Migration diff NONE; `--run-migrations` run with an explicit `cd /opt/hohenheim`
+reported `Migrations complete 0 applied` (see the kuifje runbook for why the
+working directory is load-bearing).
+
+Stop 01:49:48Z, start 01:49:51Z, healthy 01:50:00Z -- 12 s downtime, the
+shortest of the three boxes. Second restart 01:50:18Z, healthy 01:50:28Z (10 s).
+Both: 0 journal errors, RSS 383 MB, listeners 53/80/443 plus 3000 on loopback,
+`CertificateStore: loaded 1 certificates, 1 hostname mappings` and
+`Proxy HTTPS listening on port 443 (1 certificates...)`. Row counts identical
+before and after: 46 migrations, 5 DNS zones (all secondary), 3 sites,
+4 domains, 2 certificates, 4 instances, 2 managed databases.
+
+EARL SURVIVED THE SWAP UNCHANGED. Captured before the deploy and again after
+both restarts: `https://earl.wcag.be/` = 200, 1024 bytes, sha256
+`c994a6d8a87dd266724d84f209c90cd6a7295b1044ae189a8f3b7abc017c70c5`, `cmp`
+byte-identical, `ssl_verify_result 0`; certificate still `CN=earl.wcag.be`,
+issuer Let's Encrypt YR1, `notAfter Nov 28 00:22:29 2026 GMT`; HTTP 301. The
+probe was run both with `--resolve` against 51.255.43.81 and through public
+DNS, which answered `remote_ip 51.255.43.81` -- the real path.
+
+All four instance containers kept running across both restarts, and
+`/opt/hohenheim/staging/phoenix/` (1.5 GB, the ten Phoenix app + mongo
+tarballs) was untouched.
+
+Neighbouring live sites unaffected, still served by their old homes:
+`wcag.be` and `www.wcag.be` 200 from merlina (213.239.210.245),
+`tavernetomberg.be` and `www.` 200 from phoenix (144.76.30.204).
+
+`zenit-dev deployed robbedoes` = the jar at `e6d15bf1`, all 12 upstream repos
+`current`. Rollback jar only:
+`/root/hohenheim-preflight-20260830-thirteenth/`.
