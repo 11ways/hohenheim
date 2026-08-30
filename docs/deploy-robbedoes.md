@@ -1742,3 +1742,150 @@ media proof has a known-good target. The code and dump tarballs
 The node-10 seed row IS live (runtime image row 7) and `hohenheim/node-10:1` is
 on the box, so nothing about Node 10 blocks this app. Disk on robbedoes: 28 GB
 of 99 GB before and after this lane (the `node_modules` tarball added 59 MB).
+
+## Two databases resized in place, and Udesign Preview staged, 2026-08-30
+
+The blocked lane above was unblocked by an explicit authorisation to re-size two
+STAGED databases. This is the **first production use of the in-place resize**
+(`b73e35a1`, deployed in the fourteenth wave), and it did exactly what it says.
+
+### The resize
+
+`microcopy-mongo` (database 2) and `auditexport-mongo` (database 3), both
+1280 MB by DEFAULT -- the edit form showed **blank** memory and CPU fields, so
+the 1280 was never a stored value, it is what an UNDECLARED limit books. Set to
+512 MB each.
+
+The form froze everything a container's identity depends on -- name, engine,
+database name, user, password, host, status are rendered as plain text, only
+Memory limit and CPU limit are editable, and Delete is disabled with
+`Database 'microcopy-mongo' is attached to microcopy (...). Detach it on each
+instance's Databases tab first.` Save answered
+`Your changes to microcopy-mongo have been saved.` and the status went to
+**Provisioning**, so the recreate is scheduled after the commit rather than
+inside it.
+
+| database | container before | container after | cap before | cap after |
+| --- | --- | --- | --- | --- |
+| microcopy-mongo | instance-4, created 2026-08-29 23:45:50 | instance-4, created 2026-08-30 03:59:50 | 1.25 GiB | **512 MiB** |
+| auditexport-mongo | instance-5, created 2026-08-30 01:56:37 | instance-5, created 2026-08-30 04:00:06 | 1.25 GiB | **512 MiB** |
+
+**The engine container IS recreated** (both creation timestamps moved) and the
+data survived it -- the volume is keyed to the record's name, not the container.
+Verified collection by collection, before and after:
+
+    11ways_microcopy   collections=7  docs=620  (acl_groups=3, acl_persistent_cookies=22,
+                       acl_rules=2, media_files=0, menus=0, microcopies=589, users=4)
+    diax_auditexport   collections=10 docs=265  (acl_groups=3, acl_persistent_cookies=19,
+                       acl_rules=2, media_files=0, menus=0, report_languages=2,
+                       report_types=2, reports=221, themes=12, users=4)
+
+Identical on both sides. (Note for the record: the brief's "10 collections /
+265 docs" describes auditexport; microcopy is 7 collections / 620 docs.) Both
+apps still answer 200 through the proxy afterwards.
+
+Booked memory on host `local`: **10752 MB -> 9216 MB**, a drop of exactly
+1536 MB, 98% -> 84%.
+
+### Udesign Preview
+
+`staging.udesign.world`, the fifth and last phoenix Node app.
+
+| Object | Id | Notes |
+| --- | --- | --- |
+| managed database `udesign-preview-mongo` | 10 | **`mongo:4.4`**, db `udesign_preview`, user `udesign`, memory 512 MB at creation; container `hohenheim-luguij0q-instance-16` |
+| instance `udesign-preview` | 15 | `hohenheim:workspace` on runtime image **node-10** (id 7), `start_command = node server.js`, `container_port 3000`, `console_kind tty`, `memory_limit_mb 512`; container `hohenheim-luguij0q-instance-15`, volume `/opt/hohenheim/data/volumes/15/home`, uid 200015 |
+| attachment `instance_databases` | 8 | instance 15 -> database 10, prefix `DB` (+ `DATABASE_URL`) |
+| instance variable | - | `NODE_ENV=production` (plain) -- see below |
+| access list `Udesign preview` | 2 | one `basic_auth` rule (`preview`), satisfy `any`, attached SITE-WIDE on the site's Advanced -> Access list, the Oogfonds precedent |
+| site `Udesign Preview` | 8 | `hohenheim:instance`, instance 15 |
+| domain | 13 | `staging.udesign.world`, exact, **`force_ssl=false`** |
+
+`node_modules` came from phoenix per the standing rule (every Udesign dependency
+is a GitHub repo). Verified by member count and content bytes, not a re-tarred
+sha256: **19375 members / 212255890 file bytes on both sides**, 411 top-level
+entries. No package needed `npm rebuild`.
+
+### MongoDB 7 CANNOT serve this app -- use 4.4
+
+The first attempt built the database on `mongo:7`, the sibling default, and the
+app would not boot:
+
+    MongoError: Unsupported OP_QUERY command: count. The client driver may
+    require an upgrade. code: 352, codeName: UnsupportedOpQueryCommand
+      at /home/site/node_modules/mongodb-core/lib/connection/pool.js:581:63
+
+This app's 2020-era `mongodb-core` speaks the legacy OP_QUERY wire protocol,
+which MongoDB removed. Udesign LIVE (node-16, newer alchemy) is fine on
+`mongo:7`; this one is not. **The container image is frozen after creation** --
+only memory and CPU are editable -- so the database had to be detached, deleted
+and recreated on `mongo:4.4` (v4.4.30, the last release still serving OP_QUERY).
+Restore then read back **11 collections / 464 documents**. Pin `mongo:4.4` for
+any app of this vintage.
+
+### `NODE_ENV=production` is NOT set by default, and phoenix sets it
+
+Old Hohenheim passes `NODE_ENV=production` to every child (read off the live
+phoenix process). A Hohenheim workspace instance passes none, so alchemy renders
+in development mode. Setting it on instance 15 cut the page from 241392 to
+223985 bytes. **Every other migrated app on this box is missing it too**
+(instances 2, 3, 6, 11, 13 all report `NODE_ENV` unset) -- not fixed here,
+because they were out of this lane's scope, but they should get it.
+
+### Proof against phoenix
+
+| request | phoenix | robbedoes (proxy, `Host:` + `preview:preview`) |
+| --- | --- | --- |
+| `/` no credentials | 401, **12 bytes** | 401, **12 bytes** |
+| `/` with credentials | 200, `<title>Udesign.world</title>` | 200, same title |
+| `/media/image/5d89fee8e7acbf36becddbd8?width=400` | 200, 43829 bytes, JPEG 400x533, sha256 `e668f9e1f9f9e738...` | 200, 43829 bytes, JPEG 400x533, sha256 **`e668f9e1f9f9e738...`** |
+
+The media derivative is **byte-identical** to phoenix, which also proves the
+GraphicsMagick lane end to end on the node-10 image.
+
+Page structure, measured:
+
+    field        phoenix   robbedoes
+    body           20382       20384      (2 bytes)
+    expose         89502       89502      (identical)
+    _initHawkejs   55175      117464      (the whole difference)
+    imgs              21          21
+    unique media       6           6
+    sections           4           4
+
+So the RENDERED page is equivalent; the difference is entirely the hydration
+payload, which on robbedoes carries **20 extra `MediaFile` records** with
+EXIF-shaped fields (`ExifTag`, `DateTimeOriginal`, `XResolution`, ...) that
+phoenix's payload does not.
+
+**The cause is NOT determined, and the obvious explanation is wrong.** The EXIF
+is not stored data -- `media_raws.extra` holds only `width,height`, and zero
+documents carry `ExifTag`. And the native-module inventory runs the OTHER way:
+
+    module          phoenix (node 10)   robbedoes node-10 image
+    exiv2           OK                  FAIL: libexiv2.so.14 missing
+    mmmagic         OK                  OK
+    canvas          OK                  OK
+
+So phoenix can read EXIF and robbedoes cannot, yet robbedoes is the one shipping
+EXIF-shaped fields. Left as an open question rather than a guess. Two things are
+worth acting on separately: `libexiv2` is missing from the runtime images (the
+same class of gap as the GraphicsMagick one fixed earlier today), and a ~62 KB
+hydration payload on every page is worth understanding before this hostname is
+cut over.
+
+### State
+
+Host `local`: booked **10240 MB of 10915 (93%)**, 14 workloads, all Running or
+Active. Disk 28 GB -> 29 GB of 99 GB. Instance 15 uses 96 MiB of its 512, its
+Mongo 94 MiB. Nothing was cut over: no DNS record, no certificate, no
+`force_ssl`. The four live hostnames were re-checked afterwards and are
+unchanged (`earl` 200/1024, `invulassistent` 401/8950, `tavernetomberg` and
+`www` 200), as are the four staged siblings.
+
+### Two UI observations
+
+Deleting a database or an attachment re-renders the record it just deleted
+instead of navigating to the list (the record IS gone -- a follow-up read
+returns 403). And the attachment delete dialog shows the raw catalog key
+`delete_confirm` where its confirmation sentence belongs.
