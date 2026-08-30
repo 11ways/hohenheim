@@ -1335,3 +1335,56 @@ answers**. The Hetzner zone's SOA serial stayed 2026082900 and the parent still
 delegates to `ns.second-ns.com` / `ns1.your-server.de` / `ns3.second-ns.de`, so
 the four records were not yet published when the window closed. Re-poll before
 retrying the glue lines -- konsoleH resolves the names before it will accept them.
+
+## wcag.be delegated (mooo pair), 2026-08-30
+
+Jelle moved the registrar delegation of `wcag.be` to `nskuifje.mooo.com` /
+`nsrobbedoes.mooo.com`. The zone we serve still published `ns1.elevenways.de` /
+`ns2.elevenways.de` (the section above moved it there), and NEITHER of those
+names resolves publicly -- so the zone had to follow the registrar immediately.
+
+### What changed on the controllers
+
+kuifje zone 3 `wcag.be` ONLY. The two apex NS record VALUES were edited in place
+through the Records tab (inline value popover) and the zone form's Primary name
+server (the SOA MNAME) with them:
+
+    wcag.be.  3600 IN NS  nskuifje.mooo.com.
+    wcag.be.  3600 IN NS  nsrobbedoes.mooo.com.
+    wcag.be.  3600 IN SOA nskuifje.mooo.com. hostmaster.wcag.be. 8 7200 3600 1209600 300
+
+Serial 5 -> 8 (each save bumps), robbedoes zone 3 transferred within seconds
+(Secondaries tab: `robbedoes` **Current**, served serial 8). No other record
+value or TTL moved, no other zone was opened, no service restarted, no site or
+certificate touched.
+
+The nameserver names resolve, which is what makes this safe:
+
+    nskuifje.mooo.com     A 137.74.171.228   AAAA 2001:41d0:305:2100::1:4afe
+    nsrobbedoes.mooo.com  A 51.255.43.81     (no AAAA)
+
+### The data rows already matched Hetzner's export
+
+Checked row by row against the export before touching anything, values AND TTLs:
+apex `A 213.239.210.245`, apex `AAAA 2a01:4f8:a0:948c::2`, apex
+`TXT "v=spf1 +a +mx ?all"`, `api`/`www` CNAME `wcag.be.`, `earl` (TTL 700) and
+`invulassistent` CNAME `phoenix.develry.be.`, everything else TTL 7200. Nine
+records, no extras, nothing missing. NOTHING was corrected -- the probe
+reconstruction turned out to be exact.
+
+### Verification
+
+`hoh-dns-diff compare wcag.be --old 137.74.171.228 --new 51.255.43.81 --strict
+--names @,www,api,earl,invulassistent` -> **IDENTICAL** on all 9 questions, apex
+NS and SOA included, both sides serial 8.
+
+Zone row action **Check health** on kuifje, verbatim:
+
+    Delegation: delegated_not_listed. 1 secondaries probed, 0 behind.
+
+which is the CORRECT verdict while the parent still names Hetzner's three
+servers; it becomes `matches` once `.be` publishes the mooo pair.
+
+The site is unaffected -- only the nameservers moved, every A/CNAME value is
+unchanged -- and `curl -sI` from the workstation gets HTTP 200 from
+`https://wcag.be/`, `https://www.wcag.be/` and `https://earl.wcag.be/`.
