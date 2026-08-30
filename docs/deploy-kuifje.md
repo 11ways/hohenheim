@@ -1442,3 +1442,100 @@ phoenix.develry.be` to `A 51.255.43.81` + `AAAA 2001:41d0:305:2100::1:4b26`
 robbedoes Current within seconds. Certificate + byte-level site verification
 in `deploy-robbedoes.md` ("Earl LIVE"). Check health verdict:
 `apex_undeclared` -- expected under the interim mooo pair.
+
+## tavernetomberg.be delegated (mooo pair) + declared nameservers moved, 2026-08-30
+
+Jelle moved the registrar delegation of `tavernetomberg.be` to
+`nskuifje.mooo.com` / `nsrobbedoes.mooo.com` while the zone we serve still
+published `ns1.elevenways.de` / `ns2.elevenways.de`, neither of which resolves
+publicly. Same shape as the `wcag.be` section above, and the same fix.
+
+### The declared set now names the interim pair
+
+`dns.nameservers` on kuifje: `ns1.elevenways.de, ns2.elevenways.de` ->
+`nskuifje.mooo.com, nsrobbedoes.mooo.com`, saved through Settings > DNS server
+and confirmed in `/opt/hohenheim/settings/hohenheim.dry`:
+
+    "dns":{"nameservers":["nskuifje.mooo.com","nsrobbedoes.mooo.com"], ...}
+
+WHY: the mooo pair is the INTERIM delegation target for every zone until Hetzner
+delivers glue for `elevenways.de` (Jelle has an open support ticket). The
+declared set must match reality -- it makes `Check health` honest and makes a
+newly staged or imported zone seed the right apex NS instead of needing the
+hand edit this section had to perform. It flips back to `ns1`/`ns2.elevenways.de`
+when the glue lands and the zones are re-delegated.
+
+The change rewrites NO existing zone's records -- verified by asking kuifje for
+each apex NS set before and after the save:
+
+    wcag.be        before/after  nskuifje.mooo.com. | nsrobbedoes.mooo.com.   (unchanged)
+    elevenways.de  before/after  ns1.elevenways.de. | ns2.elevenways.de.      (unchanged)
+
+`elevenways.de` KEEPS `ns1`/`ns2.elevenways.de` by design: it is the zone those
+names live in and the one the glue bootstrap needs. Its health verdict is
+`delegated_not_listed` -- because its parent still delegates to Hetzner, not
+because of the declared set.
+
+### What changed in the zone (kuifje zone 5)
+
+The two apex NS record VALUES through the Records tab's inline value popover,
+and the zone form's Primary name server (the SOA MNAME) with them:
+
+    tavernetomberg.be.  3600 IN NS  nskuifje.mooo.com.
+    tavernetomberg.be.  3600 IN NS  nsrobbedoes.mooo.com.
+    tavernetomberg.be.  3600 IN SOA nskuifje.mooo.com. hostmaster.tavernetomberg.be. 6 7200 3600 1209600 300
+
+Serial 3 -> 6 (each save bumps). robbedoes zone 4 transferred within seconds.
+
+### The data rows already matched Jelle's export -- nothing was corrected
+
+Checked value AND TTL against the export he supplied (exported
+2026-08-30T01:24:47Z) before touching anything. All eight data rows matched:
+apex `A 144.76.30.204`, apex `AAAA 2a01:4f8:191:21cb::2`, apex
+`MX 10 calamity.develry.be.`, apex `TXT "v=spf1 +a +mx ?all"`, `www` CNAME to
+the apex, and `_autodiscover._tcp` / `_imaps._tcp` / `_submission._tcp` SRV
+`0 100 443|993|587 calamity.develry.be.`. Every TTL 7200, ten records in total
+counting the two NS rows, no extras, nothing missing.
+
+### Verification
+
+`hoh-dns-diff compare tavernetomberg.be --old 137.74.171.228 --new 51.255.43.81
+--strict --names @,www,_autodiscover._tcp,_imaps._tcp,_submission._tcp` ->
+**IDENTICAL** on all 10 questions, apex NS and SOA included, both sides serial 6.
+
+Zone row action **Check health**, verbatim, before the parent moved:
+
+    Delegation: delegated_not_listed. 1 secondaries probed, 0 behind.
+
+### The parent moved, between 01:39:06Z and 01:43:56Z
+
+    parent NS nskuifje.mooo.com., nsrobbedoes.mooo.com.
+    glue      (none)
+    nskuifje.mooo.com.     137.74.171.228  authoritative  6
+    nsrobbedoes.mooo.com.  51.255.43.81    authoritative  6
+    sets      parent == apex
+    VERDICT: DELEGATION OK
+
+**Check health** after the move, verbatim -- and `wcag.be` now reports the same,
+which is what the declared-set change bought:
+
+    Delegation: matches. 1 secondaries probed, 0 behind.
+
+Mail is intact. MX, the three SRV names, the apex A and `www` were queried at
+1.1.1.1, 8.8.8.8 and 9.9.9.9 both before and after the flip and every answer is
+the export's value; `curl --noproxy '*' -sI` gets HTTP 200 from
+`https://tavernetomberg.be/` and `https://www.tavernetomberg.be/`, still served
+by Phoenix. This wave moved NO traffic.
+
+### TRAP: a DNS probe without the RD bit reads as a global outage
+
+A hand-written probe that leaves the header flags at 0 sends RD=0. A recursive
+resolver then answers SERVFAIL (1.1.1.1, 8.8.8.8) or REFUSED (9.9.9.9,
+208.67.222.222) for anything it does not already have cached, while a hot name
+like `google.com` still answers from cache. That reads exactly like a
+provider-wide failure: for several minutes this lane believed `mooo.com`,
+`afraid.org` and therefore `wcag.be` were down at every major resolver, across
+four polling rounds, from two vantage points. They were not -- afraid's own
+`ns1.afraid.org` (23.227.184.22) answered `nskuifje.mooo.com A 137.74.171.228`
+authoritatively throughout. Set RD (flags `0x0100`), and never conclude an
+outage from one probe when the authoritative servers still answer.
