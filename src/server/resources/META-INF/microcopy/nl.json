@@ -3481,6 +3481,10 @@
     "text": "Geen ingeschakelde gehoste DNS-zone dekt: {$hostnames}",
     "scope": "certificate_request_error"
   },
+  "zone_not_primary": {
+    "text": "Deze instantie repliceert de zone die {$hostnames} dekt alleen van {$peer}; vraag het certificaat daar aan, geef die peer een admin-API-sleutel, of gebruik HTTP-01",
+    "scope": "certificate_request_error"
+  },
   "dns_server_disabled": {
     "text": "De DNS-server draait niet; schakel die eerst in bij de instellingen",
     "scope": "certificate_request_error"

@@ -184,6 +184,18 @@ certificates then renew automatically without provider credentials or a shell
 hook. Let's Encrypt explicitly permits multiple TXT values and DNS delegation;
 see its [DNS-01 documentation](https://letsencrypt.org/docs/challenge-types/).
 
+The `internal` publisher is only offered where this instance can actually write
+the zone. A zone this instance is PRIMARY for is written locally. A zone it only
+REPLICATES is written on its owning primary: when that primary is a Hohenheim
+peer with a stored admin API key, the challenge is created there over the peer
+record API and this instance waits until its own replica transfers it -- the
+transfer is what proves the CA will see it -- and cleanup deletes it over the
+same channel. A replicated zone whose primary is a plain nameserver (or a
+Hohenheim peer with no admin credentials) is NOT publishable: the certificate
+request is refused naming the owning peer, and the operator requests it on that
+instance, or uses HTTP-01 or the manual DNS mode instead. A replica's serial
+belongs to its primary and is never bumped locally.
+
 The product flow should also weave existing features together:
 
 - Offer to create A/AAAA/CNAME records from a site's domains and listener IPs.
