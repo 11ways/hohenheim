@@ -85,9 +85,29 @@ class DatabaseAdminTest extends HohenheimTestBase {
             navigateToApp("/admin/databases/" + readonly.get(DatabaseModel.ID));
             waitForHydration();
 
-            assertThat(page.locator(".cms-form-actions pl-button[type='submit']").count()).isZero();
+            // The form SAVES, because the resource ceilings are editable after create.
+            assertThat(page.locator(".cms-form-actions pl-button[type='submit']").count())
+                .as("the detail form offers Save, for the resource ceilings")
+                .isEqualTo(1);
             assertThat(page.locator("form.cms-delete-form pl-button").count()).isEqualTo(1);
-            assertThat(page.locator("input[name='name']").count()).isZero();
+            // Everything describing the provisioned container stays frozen. A readonly
+            // entry renders a static value and NO named control at all (zenit-forms
+            // form/plain.hwk), so the absence of the control IS the freeze -- asserted
+            // on any element, not on `input`, because a typed entry is a plumage control.
+            assertThat(page.locator("[name='name']").count())
+                .as("the name describes a provisioned container and stays frozen")
+                .isZero();
+            assertThat(page.locator("[name='db_user']").count()).isZero();
+            assertThat(page.locator("[name='db_password']").count()).isZero();
+            // ... while the memory ceiling is writable. Numeric entries are never a
+            // native number input (its decimal separator follows the BROWSER locale),
+            // so the control to look for is plumage's.
+            assertThat(page.locator("pl-number-input[name='memory_limit_mb']").count())
+                .as("the memory ceiling is the one thing an operator can correct")
+                .isEqualTo(1);
+            // The consequence is stated where the fields cannot state it.
+            assertThat(page.locator("body").textContent())
+                .contains("recreates the engine on the same data volume");
         } finally {
             model.delete(readonly);
         }

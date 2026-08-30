@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -51,11 +52,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
- * Docker-provisioned managed databases. Create provisions the container in
- * the background; records are immutable afterwards (all fields read-only on
- * edit) with backup/restore/destroy as actions.
+ * Docker-provisioned managed databases. Create provisions the container in the
+ * background; every field describing the provisioned engine is frozen afterwards, with
+ * backup/restore/destroy as actions -- EXCEPT the resource ceilings, which
+ * {@link #updateRow} applies by recreating the container onto the same data volume.
  */
 public class DatabaseResource extends RowResource {
 
@@ -138,21 +141,80 @@ public class DatabaseResource extends RowResource {
         return Microcopy.of("nav_hint").withFilter("scope", "database");
     }
     @Override public @NonNull Icon icon() { return Icon.of("database"); }
-    @Override public boolean updatable() { return false; }
+
+    /**
+     * Editable, but ONLY for the resource ceilings: {@link #fieldBindings} freezes every
+     * other entry once the record exists and {@link #updateRow} applies nothing else.
+     *
+     * AIDEV-NOTE: this was false until 2026-08-30, and the gap it left was not cosmetic.
+     * The caps are booked against the host's memory budget at CREATE and nothing could
+     * change them afterwards, so an operator whose database was sized wrong had exactly
+     * two options: live with it, or DELETE the record -- which for a database that has
+     * data in it is not an option at all. The engine instance is no help either: it is a
+     * {@code generatedOnly()} row that {@code InstanceResource.updatableBy} refuses to
+     * edit, pointing at "the owning record's own surface", which is this one.
+     *
+     * The database capability vocabulary deliberately still declares no {@code config}
+     * verb (see {@code HohenheimAccess.declareGrantableModels}, which names this
+     * resource's immutability as the reason). That stays correct: the tenant funnel's
+     * {@code DATABASE_TENANT_WRITABLE} is empty, so no tenant-originated write reaches a
+     * stored database row whatever a grant said, and {@link ManageDatabaseResource} keeps
+     * this surface closed. Declaring the verb before the funnel admits these two columns
+     * would ship a delegation matrix over something nothing enforces -- the very thing
+     * that comment forbids. This is an OPERATOR resize.
+     */
+    @Override public boolean updatable() { return true; }
 
 
-    /** Records are provisioned containers: no field is editable after create. */
+    /**
+     * A record describes a provisioned container, so its every field is frozen once that
+     * container exists -- except the resource ceilings, which are the one thing an
+     * operator can legitimately get wrong at create and must be able to correct.
+     */
     @Override
     public @NonNull List<ResourceFieldBinding> fieldBindings() {
         // STATUS is service-owned even on create.
         return List.of(
             ResourceFieldBinding.of(DatabaseModel.STATUS.getName(), FieldAccess.alwaysReadonly()),
+            frozenAfterCreate(DatabaseModel.NAME),
+            frozenAfterCreate(DatabaseModel.ENGINE),
+            frozenAfterCreate(DatabaseModel.DB_NAME),
+            frozenAfterCreate(DatabaseModel.DB_USER),
+            frozenAfterCreate(DatabaseModel.DB_PASSWORD),
+            frozenAfterCreate(DatabaseModel.IMAGE),
+            frozenAfterCreate(DatabaseModel.EPHEMERAL),
+            frozenAfterCreate(DatabaseModel.SERVER_ID),
             // The reason is shown ONLY on a record that carries one: the create form
             // (null record) and a healthy record never render an empty failure box.
             ResourceFieldBinding.of(DatabaseModel.FAILURE_REASON.getName(),
                 FieldAccess.customRecordAware((ctx, record) ->
                     record instanceof Row row && hasText(row.get(DatabaseModel.FAILURE_REASON))
                         ? FieldAccess.Decision.READONLY : FieldAccess.Decision.HIDDEN)));
+    }
+
+    /**
+     * Editable on the CREATE form, readonly once the record exists.
+     *
+     * AIDEV-NOTE: record-AWARE rather than {@code alwaysReadonly()}, and the difference is
+     * the whole create form: a readonly binding applies to both views, so freezing these
+     * with it would leave an operator unable to type a database name.
+     */
+    private static @NonNull ResourceFieldBinding frozenAfterCreate(@NonNull Field<?, ?> field) {
+        return ResourceFieldBinding.of(field.getName(),
+            FieldAccess.customRecordAware((ctx, record) ->
+                record == null ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY));
+    }
+
+    /**
+     * States the consequence the fields cannot: saving a new ceiling RECREATES the engine
+     * container, so open connections drop for as long as the engine takes to come back.
+     * Rendered only on a stored record -- on the create form there is nothing to recreate.
+     */
+    @Override
+    public @Nullable Microcopy formNotice(@NonNull Row record,
+                                          @NonNull AccessContext accessContext) {
+        return record.get(DatabaseModel.ID) == null ? super.formNotice(record, accessContext)
+            : Microcopy.of("resize_notice").withFilter("scope", "database");
     }
 
     private static boolean hasText(@Nullable Object value) {
@@ -206,6 +268,58 @@ public class DatabaseResource extends RowResource {
         // handed its id back as the new record's.
         return rowKey(this.databaseService.createAsync(name, engine,
             image.isEmpty() ? null : image, user, password, database, ephemeral, server, limits));
+    }
+
+    /**
+     * THE resize: the only update this resource performs, and it applies the two resource
+     * ceilings and nothing else.
+     *
+     * The order is the one {@code DatabaseInstances} was split for. The engine row's
+     * reservation runs INLINE, so a host without room refuses on the form the operator is
+     * looking at ({@code host_capacity_reached}, naming the host, what was asked and what
+     * is free) instead of flipping the record to failed on a pool thread minutes later.
+     * The container work then rides {@code afterCommit}: a deploy scheduled from inside
+     * the CMS mutation transaction would read the row on its own connection before this
+     * one commits and apply the OLD ceiling.
+     *
+     * An unchanged form is a no-op on purpose. A deploy is a RECREATE (there is no Docker
+     * update path here), so treating "operator pressed Save" as "recreate the engine"
+     * would drop every live connection for nothing.
+     */
+    @Override
+    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
+                          @NonNull AccessContext accessContext) {
+        Integer memoryMb = coerced.get("memory_limit_mb") instanceof Integer mb ? mb : null;
+        Double cpus = coerced.get("cpu_limit") instanceof Double c ? c : null;
+        if (Objects.equals(memoryMb, existing.get(DatabaseModel.MEMORY_LIMIT_MB))
+                && Objects.equals(cpus, existing.get(DatabaseModel.CPU_LIMIT))) {
+            return;
+        }
+        Integer recordId = existing.get(DatabaseModel.ID);
+        if (recordId == null) {
+            throw Violations.ofForm(CmsSupport.violationText("database_resize_failed")
+                .withArg("reason", "the record carries no id"));
+        }
+        ResourceLimits limits = ResourceLimits.of(memoryMb, cpus);
+        try {
+            // Books the new ceiling against the host budget through the instance write
+            // hook, and refuses here when it does not fit.
+            DatabaseInstances.reserveEngineRow(existing, limits);
+        } catch (Violations refused) {
+            throw refused;
+        } catch (Exception e) {
+            throw Violations.ofForm(CmsSupport.violationText("database_resize_failed")
+                .withArg("reason", String.valueOf(e.getMessage())));
+        }
+        existing.set(DatabaseModel.MEMORY_LIMIT_MB, memoryMb);
+        existing.set(DatabaseModel.CPU_LIMIT, cpus);
+        // Provisioning again is the honest status: the engine is being recreated, and it
+        // is what the list badge, the detail page and AttentionCollector already read.
+        existing.set(DatabaseModel.STATUS, DatabaseModel.STATUS_PROVISIONING);
+        existing.set(DatabaseModel.FAILURE_REASON, null);
+        model().save(existing);
+        model().getResolvedDatasource().afterCommit(
+            () -> this.databaseService.provisionInBackground(recordId));
     }
 
     /**

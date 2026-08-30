@@ -108,6 +108,21 @@ public final class ManageDatabaseResource extends DatabaseResource {
     }
 
     /**
+     * Closed here, although the admin resource this extends became updatable on
+     * 2026-08-30 to let an OPERATOR correct a database's resource ceilings.
+     *
+     * AIDEV-NOTE: this override is load-bearing, not defensive tidiness. A tenant write to
+     * a stored managed-database row is refused by the model funnel whatever it carries
+     * ({@code TenantWrites.DATABASE_TENANT_WRITABLE} is deliberately empty), so inheriting
+     * the editable form would render a tenant an editor whose every Save the pipeline can
+     * only refuse -- the same "control that lies about what it does" this class drops the
+     * other inherited surfaces for. It reopens the day that whitelist admits the two cap
+     * columns AND a {@code config} capability exists to gate them.
+     */
+    @Override
+    public boolean updatable() { return false; }
+
+    /**
      * THE tenant allocation funnel, in one call: the namespaced name, the credentials,
      * the placement, the creator's manage grant and the quota charge.
      */
