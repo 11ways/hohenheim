@@ -63,7 +63,7 @@ port. That matches the phase-0 section 6 promise.
   UNVERIFIED (framework rendering); nothing in this repo passes a reason into
   it. See defect 6.
 
-Seeded images: node-22 / node-16 / node-12 / java-21 / debian-13 / static
+Seeded images: node-22 / node-16 / node-12 / node-10 / java-21 / debian-13 / static
 (`RuntimeImageSeeder.java:47-66`), code-owned `sync`, LOCAL tags built from
 in-repo `images/` contexts at first use on each host
 (`RuntimeImages.ensurePresent` :121, Docker build :134, Docker-to-Incus import

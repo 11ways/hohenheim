@@ -202,6 +202,14 @@ present and their full ids are byte-identical to the workstation's:
 Disk went 5.1 GB -> 6.7 GB of 99 GB. Nothing else on the box was touched: no
 site, zone, certificate or peer.
 
+2026-08-30, later: `hohenheim/node-10:1` (Udesign Preview runs 10.15.3) was
+built ON THIS BOX from the committed `images/node-10` context rather than
+saved-and-loaded -- the workstation's outbound HTTPS goes through mitmproxy and
+its disk is near full. Image `be529adc128d`, 674 MB disk / 165 MB content;
+`node --version` v10.24.1, `npm` 6.14.12, and `npm install mmmagic` compiles and
+loads (g++ 8.3.0, python 2.7.16 + 3.7.3 both present). The seed row lands with
+the next deploy of the jar.
+
 ## Deploy target
 
 Registered in `~/.config/zenit-dev/config.json` under `deployments` as

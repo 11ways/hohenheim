@@ -44,11 +44,11 @@ class RuntimeImageSeedTest {
         List<Row> builtins = images.find().where(RuntimeImageModel.BUILTIN.eq(true)).all();
 
         // 1. Every one the design names is there, by name, so a renamed row is a failure
-        //    rather than a silent second image. node-16 and node-12 are the Phoenix
-        //    migration's legacy Alchemy runtimes.
+        //    rather than a silent second image. node-16, node-12 and node-10 are the
+        //    Phoenix migration's legacy Alchemy runtimes.
         assertThat(builtins.stream().map(row -> row.get(RuntimeImageModel.NAME)).toList())
             .as("step 1: the shipped built-ins")
-            .containsExactlyInAnyOrder("node-22", "node-16", "node-12", "java-21",
+            .containsExactlyInAnyOrder("node-22", "node-16", "node-12", "node-10", "java-21",
                 "debian-13", "static");
 
         for (Row image : builtins) {

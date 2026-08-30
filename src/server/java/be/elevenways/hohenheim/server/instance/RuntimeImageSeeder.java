@@ -36,6 +36,7 @@ public final class RuntimeImageSeeder implements Seeder {
     private static final int ID_STATIC = 4;
     private static final int ID_NODE_16 = 5;
     private static final int ID_NODE_12 = 6;
+    private static final int ID_NODE_10 = 7;
 
     public RuntimeImageSeeder() {
     }
@@ -50,19 +51,25 @@ public final class RuntimeImageSeeder implements Seeder {
             "code", "hohenheim/node-22:1", "images/node-22",
             "npm start", 3000, "npm ci && npm run build --if-present"));
 
-        // AIDEV-NOTE: node-16 and node-12 exist for the Phoenix migration's Alchemy apps,
-        // which run on EOL Node (16.13.2 and 12.18.2/12.16.2 in production). The base tags
-        // are the last releases of those lines, so the runtime is newer than the app was
-        // pinned to but the major -- the only thing Alchemy's native modules care about --
-        // matches. node-12's Dockerfile carries the archive.debian.org rewrite buster needs.
+        // AIDEV-NOTE: node-16, node-12 and node-10 exist for the Phoenix migration's Alchemy
+        // apps, which run on EOL Node (16.13.2, 12.18.2/12.16.2 and 10.15.3 in production).
+        // The base tags are the last releases of those lines, so the runtime is newer than
+        // the app was pinned to but the major -- the only thing Alchemy's native modules care
+        // about -- matches. node-12's and node-10's Dockerfiles carry the archive.debian.org
+        // rewrite buster needs.
         ctx.sync(images, ID_NODE_16, row -> image(row, "node-16",
             "Node.js 16 on Debian, for a legacy app that cannot run on a current release.",
             "code", "hohenheim/node-16:1", "images/node-16",
             "npm start", 3000, "npm ci && npm run build --if-present"));
 
         ctx.sync(images, ID_NODE_12, row -> image(row, "node-12",
-            "Node.js 12 on Debian buster, the oldest runtime still offered.",
+            "Node.js 12 on Debian buster, for a legacy app that cannot run on a current release.",
             "code", "hohenheim/node-12:1", "images/node-12",
+            "npm start", 3000, "npm ci && npm run build --if-present"));
+
+        ctx.sync(images, ID_NODE_10, row -> image(row, "node-10",
+            "Node.js 10 on Debian buster, the oldest runtime still offered.",
+            "code", "hohenheim/node-10:1", "images/node-10",
             "npm start", 3000, "npm ci && npm run build --if-present"));
 
         ctx.sync(images, ID_JAVA_21, row -> image(row, "java-21",
