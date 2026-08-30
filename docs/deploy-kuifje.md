@@ -1182,3 +1182,89 @@ them MOVES the delegation off Hetzner DNS onto these two boxes; the live site
 autoconfig/autodiscover records are already copied here, but paste the real
 konsoleH zone export into the Zone-file tab afterwards -- a probe reconstruction
 can always be missing a row nobody guessed.
+
+## elevenways.de bootstrap step 1 (mooo.com delegation), 2026-08-30
+
+The glue lines still cannot be entered at Hetzner. konsoleH's own acceptance
+check resolves the nameserver NAMES through public DNS before it will take them,
+and `ns1.elevenways.de` / `ns2.elevenways.de` are NXDOMAIN until the delegation
+moves -- a chicken-and-egg the DENIC pre-delegation check (which passed clean on
+2026-08-30, see the section above) cannot break, because it is the REGISTRAR
+refusing, not DENIC.
+
+So the cutover is TWO steps, and this section is step 1: delegate the domain to
+OUT-OF-BAILIWICK names that already resolve, then move the delegation back
+in-bailiwick once the zone we serve publishes the address rows.
+
+### Step 1, done here: apex NS + SOA MNAME on the mooo.com pair
+
+kuifje zone 4 `elevenways.de` ONLY. The two apex NS record VALUES were edited in
+place through the Records tab (inline value popover, records 111 and 112 in the
+UI order), and the zone form's Primary name server (the SOA MNAME) with them:
+
+    elevenways.de.  3600 IN NS  nskuifje.mooo.com.
+    elevenways.de.  3600 IN NS  nsrobbedoes.mooo.com.
+    elevenways.de.  3600 IN SOA nskuifje.mooo.com. hostmaster.elevenways.de. 10 7200 1800 1209600 300
+
+Serial 7 -> 10 (each save bumps), robbedoes zone 5 transferred within seconds.
+`dns.nameservers` was NOT touched on either box and still declares
+`ns1.elevenways.de`, `ns2.elevenways.de` -- that is the setting for zones created
+FROM NOW ON and it is right for step 2; wcag.be, tavernetomberg.be and
+elevenways.be keep the in-bailiwick pair and were not opened. The four `ns1`/`ns2`
+A+AAAA rows STAY in this zone: they are dead weight today (nothing resolves the
+names) and they are exactly the glue step 2 needs the moment the delegation
+lands.
+
+The mooo.com names resolve today and are what makes this work:
+
+    nskuifje.mooo.com     A 137.74.171.228   AAAA 2001:41d0:305:2100::1:4afe
+    nsrobbedoes.mooo.com  A 51.255.43.81     (no AAAA yet)
+
+### Verification
+
+`hoh-dns-diff compare elevenways.de --old 137.74.171.228 --new 51.255.43.81
+--strict --names @,ns1,ns2,www,autoconfig,_autodiscover._tcp` -> IDENTICAL on
+all 14 questions, apex NS and SOA included. Both boxes answer `rcode=0 aa=1`
+for the zone NS and SOA over UDP AND TCP, same serial 10, same pair of names.
+
+DENIC's own tool, `https://nast.denic.de/`, domain `elevenways.de`, nameservers
+`nskuifje.mooo.com` and `nsrobbedoes.mooo.com` with NO IP addresses (they are
+out of bailiwick, so the domain carries no glue for them), answers verbatim:
+
+    Check successful.
+    Domain checked: elevenways.de
+
+with zero messages, and the Nameserver Details table lists both names with an
+empty IPs column, which is the correct out-of-bailiwick shape.
+
+No service was restarted, no site or certificate touched, no registrar setting
+changed, and no record VALUE other than the two NS names and the MNAME moved --
+the apex still points at Phoenix (88.198.219.246 / 2a01:4f8:d0a:27bd::2) and the
+`www4.your-server.de` MX is unchanged.
+
+### For Jelle: step 1 at the registrar
+
+Enter `nskuifje.mooo.com` and `nsrobbedoes.mooo.com` as `elevenways.de`'s
+nameservers in konsoleH. No glue, no IP addresses -- Hetzner's check resolves
+both names today, so it has nothing to refuse. Accepting them MOVES the
+delegation off Hetzner DNS onto these two boxes; the live site, the MX and the
+autoconfig/autodiscover records are already served here (still a probe
+reconstruction -- paste the real konsoleH export into the Zone-file tab).
+
+### Step 2, AFTER the delegation has propagated
+
+1. Confirm the parent publishes the mooo pair:
+   `hoh-dns-diff delegation elevenways.de --expect-ns nskuifje.mooo.com,nsrobbedoes.mooo.com`
+   and that `ns1.elevenways.de` / `ns2.elevenways.de` now resolve at 1.1.1.1 --
+   they will, because WE answer for them and the parent now points at us.
+2. Edit the two apex NS rows and the SOA MNAME back to `ns1.elevenways.de` /
+   `ns2.elevenways.de` (the `ns1`/`ns2` address rows are already there), verify
+   `compare --strict` IDENTICAL and NAST again, this time WITH the four glue
+   addresses.
+3. Then enter the glue lines in konsoleH:
+   `ns1.elevenways.de 137.74.171.228 2001:41d0:305:2100::1:4afe` and
+   `ns2.elevenways.de 51.255.43.81 2001:41d0:305:2100::1:4b26`. Hetzner's check
+   accepts them now: the names resolve.
+4. Only after step 3 do the other zones (`wcag.be`, `tavernetomberg.be`,
+   `elevenways.be`), which already publish the in-bailiwick pair, get their own
+   registrar move.
