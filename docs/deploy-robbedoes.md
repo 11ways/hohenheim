@@ -1600,3 +1600,54 @@ only surfaces on media paths, and the media library is empty, so nothing a
 visitor sees is affected today. Fixing it means rebuilding `canvas` against
 Node 12 in the app volume, or dropping the dependency -- deliberately not done
 in this lane.
+
+## Deploy 2026-08-30 (second jar swap): 0782eb8b, no migration, node-10 row live
+
+Swapped the same jar starfleet and kuifje took -- sha256
+`b42c0ff25379876ea6f12d186b67402c9a8d5bfc7f5d3dd57d5c595173be4bbd`,
+267,615,488 bytes, stamp 13/13 `dirty=false`, no rebuild, uploaded behind the
+remote `grep -c false | grep -qx 13` gate. Preflight
+`/root/hohenheim-preflight-20260830-fourteenth/`: `.pre` and `.at-swap` both
+`integrity_check` ok, `settings/`, keyring sha256 EQUAL at `cd3a6ca0...`,
+`hohenheim-server.jar.rollback` = `605f5303...` (`e6d15bf1`).
+
+Migration diff NONE (top M007, pin 007); `--run-migrations` from an explicit
+`cd /opt/hohenheim` reported `0 applied`.
+
+Stop 03:45:58.5Z, start 03:46:01.6Z, healthy 03:46:10.6Z -- **12 s downtime**,
+the shortest of the three. Second restart 03:47:14.9Z, healthy 03:47:21.6Z
+(7 s). Both: 0 real journal errors, RSS 375 MB, listeners 53/80/443 plus 3000
+on loopback, roles `[databases, dns, firewall, instances, proxy]`,
+`CertificateStore: loaded 3 certificates, 4 hostname mappings`,
+`SiteDispatcher: loaded 10 exact routes`. Row counts identical across the swap:
+7 sites, 10 domains, 4 certificates, 13 instances, 6 managed databases. **All
+12 containers kept running with unchanged uptimes**, and
+`/opt/hohenheim/staging/phoenix/` is untouched at 1.6 GB / 12 files.
+
+THE POINT OF THE WAVE: `runtime_images` now carries row 7 `node-10` (the
+`7d718e15` seed row, applied by the seeder on boot), and
+`hohenheim/node-10:1` is on the box as `3e74aa99cbf9` (789 MB -- the id moved
+from the original build because `99b57bcf` rebuilt it with GraphicsMagick).
+Udesign Preview is therefore unblocked. Nothing was staged in this lane.
+
+THE FOUR LIVE HOSTNAMES, re-verified after the second restart with `--resolve`
+against 51.255.43.81 (a plain curl hits a cached answer and lies):
+
+    earl.wcag.be            200  1024 bytes  sha256 c994a6d8...  byte-IDENTICAL to the pre-deploy capture
+    invulassistent.wcag.be  /  401/8950   /login 200/9104   /chimera 401/8367   (exact match)
+    tavernetomberg.be       200  145413 bytes
+    www.tavernetomberg.be   200  145417 bytes
+
+all `ssl_verify_result 0`, all 301 from HTTP, and both Tomberg names also 200
+through public DNS with `remote_ip 51.255.43.81`. Certificates unchanged:
+`CN=earl.wcag.be` and `CN=invulassistent.wcag.be` and `CN=tavernetomberg.be`,
+all `notAfter Nov 28 2026`.
+
+Tomberg's page hash moves across a restart while its byte LENGTH does not, and
+that is not a content change: a normalised diff leaves exactly ONE differing
+line, the `window._initHawkejs` payload, whose `eval_<epoch-ms>` template names
+carry the render timestamp (`eval_1788061414498` -> `eval_1788061587110`).
+Media is healthy on the new jar -- real derivatives
+`/media/image/5898f37e9f3b0c780fc91145?width=50%&dpr=1|2` and
+`/media/image/5898f3899f3b0c780fc91148?width=50%&dpr=1` all return 200 JPEGs,
+not the 500s that the pre-GraphicsMagick images produced.

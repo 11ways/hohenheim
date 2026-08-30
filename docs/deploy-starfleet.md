@@ -1065,3 +1065,72 @@ not exist, so never probe a guessed database path on a live host.
 ROLLBACK IS JAR ONLY (no schema change): copy
 `/root/hohenheim-preflight-20260830-thirteenth/hohenheim-server.jar.rollback`
 back over `/opt/hohenheim/hohenheim-server.jar` and restart.
+
+## Deploy 2026-08-30 (fourteenth): the database resize + node-10 seed, all three boxes, no migration
+
+Shipped hohenheim `0782eb8b` (previous `e6d15bf1`) to starfleet, kuifje and
+robbedoes, one box at a time. ONE build, reused byte-identically everywhere:
+isolated workspace `build-worktrees/deploy-20260830-0782eb8b`, sha256
+`b42c0ff25379876ea6f12d186b67402c9a8d5bfc7f5d3dd57d5c595173be4bbd`,
+267,615,488 bytes, stamp **13/13 `dirty=false`**, the remote
+`unzip -p {} META-INF/blast/build-info.tsv | grep -c false | grep -qx 13` gate
+inside `upload_file` on every host before the move.
+
+16 commits carried (`e6d15bf1..0782eb8b`), of which THREE touch shipped code:
+`b73e35a1` (an operator can resize a managed database in place -- `updatable()`
+opened, container-describing fields frozen with a record-aware `FieldAccess`,
+the ceilings rebooked inline so `host_capacity_reached` refuses on the form),
+`7d718e15` (the node-10 runtime image SEED ROW) and `edf598fa`/`99b57bcf`
+(the node-10/12/16 Dockerfiles gaining graphicsmagick+imagemagick -- build
+context only, no jar effect). The other 12 are runbook commits. No upstream
+repo moved: all 12 were already `current` and clean at their pushed heads.
+
+Migration diff `e6d15bf1..0782eb8b`: NONE -- nothing under `migration/`, top is
+still M007, pin mark stays `DEPLOYED_THROUGH = "007"`. No rehearsal boot
+(no schema change); the jar was proved runnable locally with `--build-info`,
+which printed all 13 stamps clean. `--run-migrations` was run from an explicit
+`cd /opt/hohenheim` on every box and reported `0 applied` each time.
+
+THE WORKSPACE NEEDED FIFTEEN WORKTREES, NOT THIRTEEN. The build stamp has 13
+rows, but the dependency chain is
+`protoblast -> emberglyph -> hawkeye -> janeway -> zenit -> ...`: **emberglyph
+and janeway carry no build-info stamp and so appear in no stamp listing**, yet
+zenit does not resolve without them. A 13-worktree workspace with its own empty
+`./.m2` fails at zenit with `Could not find be.elevenways:janeway:0.1.0-SNAPSHOT`,
+and the surrounding "Daemon pool over its cap" lines are noise, not the cause --
+read the gradle log, not the pool chatter. Adding the two worktrees fixed it;
+the chain then built in 557 s with 0 errors (88 warnings, all pre-existing
+upstream a11y/reactive advisories).
+
+Live lane on starfleet: preflight `/root/hohenheim-preflight-20260830-fourteenth/`
+(`.pre` + `.at-swap`, both `integrity_check` ok, `settings/`, keyring sha256
+EQUAL at `414e9b13...`, `hohenheim-server.jar.rollback` = `605f5303...`).
+Stop 03:39:29.2Z, start 03:39:45.0Z, healthy 03:40:13.0Z -- 44 s downtime.
+Second restart 03:40:37.0Z, healthy 03:41:09.3Z (32 s). Both: 0 real journal
+errors, listeners 53/80/443/3000, roles `[databases, dns, firewall, instances,
+proxy]`, RSS 327 MB. Row counts identical (46 migrations, 9 sites, 6 domains,
+4 certificates, 1 zone, 8 records). Apex 200, `www` 200, `admin` 302,
+`comms` 200, HTTP 301, all `ssl_verify_result 0`; authoritative DNS at the host
+`aa=True` for SOA and NS, `google.com` REFUSED (rcode 5). Both instance
+containers kept their original start times (17:28:29Z, 16:51:19Z).
+
+TWO READING TRAPS THIS LANE HIT, both benign, both worth keeping:
+
+- **`journalctl -p err` counting non-errors.** Undertow's JDK logger emits its
+  INFO lines at `[ERR]` level, and a naive `| wc -l` also counts journalctl's
+  own `-- Journal begins --` header. `-p err` itself reported "No entries" the
+  whole time. Filter `JDKLogger` and the header before counting, or read the
+  count as zero.
+- **`skeleton.starfleet.life` answering 202 is the APP, not the proxy and not a
+  supervisor re-attach.** The container was never restarted (up 10 h), and a
+  probe straight at its port `127.0.0.1:49160` also returned 202/2114. The body
+  is the Alchemy skeleton's own `<title>Please Wait...</title>` queue page; the
+  very next request answered 200/5359 and stayed there. Earlier entries called
+  this "the supervisor re-attach" -- that was the symptom, this is the cause.
+
+`zenit-dev deployed starfleet` = `current`, 13/13, no RESTART PENDING.
+
+ROLLBACK IS JAR ONLY (no schema change): copy
+`/root/hohenheim-preflight-20260830-fourteenth/hohenheim-server.jar.rollback`
+(sha `605f5303...`, i.e. `e6d15bf1`) back into place and restart. Same path
+exists on kuifje and robbedoes.

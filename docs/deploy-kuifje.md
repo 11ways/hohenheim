@@ -1644,3 +1644,34 @@ calamity, which is the host that actually sends.
 workstation and phoenix kept answering the OLD address well past the 300 s TTL,
 because each had cached it while the TTL was still 7200; see the trap recorded
 in `deploy-robbedoes.md`.
+
+## Deploy 2026-08-30 (fifth jar swap): 0782eb8b, no migration
+
+Swapped the same jar the fourteenth starfleet deploy built and shipped -- sha256
+`b42c0ff25379876ea6f12d186b67402c9a8d5bfc7f5d3dd57d5c595173be4bbd`,
+267,615,488 bytes, stamp 13/13 `dirty=false`, no rebuild. Uploaded to `/tmp`
+behind the remote `grep -c false | grep -qx 13` gate, then
+`install -o hohenheim -g hohenheim -m 644` into place and the staged file
+removed. Previous jar `e6d15bf1` (sha `605f5303...`) kept as the rollback in
+`/root/hohenheim-preflight-20260830-fourteenth/`, beside `.pre` and `.at-swap`
+(both `integrity_check` ok), `settings/`, and the keyring sha256 EQUAL at
+`4ccf141b...`.
+
+Migration diff: NONE (top M007, pin mark stays 007); `--run-migrations` run
+from an explicit `cd /opt/hohenheim` reported `0 applied`.
+
+Stop 03:44:14.5Z, start 03:44:19.4Z, healthy 03:44:28.7Z -- **14 s downtime**.
+Second restart 03:44:51.6Z, healthy 03:45:01.0Z (9 s). Both: 0 real journal
+errors, RSS 342 MB, listeners 53 + 80 + 3000 on loopback only (no 443 here,
+which is correct for the DNS-primary role), roles `[dns, firewall, proxy]`.
+Row counts identical: 46 migrations, 5 zones, 68 records.
+
+KUIFJE AND ROBBEDOES WERE NEVER DOWN TOGETHER. They are now the only two
+nameservers for TWO live zones, one of which carries mail, so the wave went
+starfleet -> kuifje -> robbedoes with a full DNS verification between each.
+After both of kuifje's restarts: `wcag.be` (serial 15) and
+`tavernetomberg.be` (serial 11) both **IDENTICAL** between kuifje and
+robbedoes, apex NS and SOA included, both `DELEGATION OK`, and the mail
+surface answering straight from kuifje -- `MX 10 calamity.develry.be` plus
+`_autodiscover._tcp` 443, `_imaps._tcp` 993 and `_submission._tcp` 587, all
+`0 100` and all identical.
