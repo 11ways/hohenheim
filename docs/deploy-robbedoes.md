@@ -742,3 +742,53 @@ Traps and product findings:
    plugin config (unchanged, copied verbatim).
 4. Watch Phoenix's access log for `microcopy.elevenways.be` going quiet; Phoenix
    stays the rollback until then.
+
+## Earl LIVE (first hostname cutover), 2026-08-30
+
+The `.be` parent published the mooo pair at ~01:09Z (checked 01:04Z: still
+Hetzner; 01:09Z: `parent NS nskuifje.mooo.com., nsrobbedoes.mooo.com.`,
+`hoh-dns-diff delegation wcag.be` VERDICT DELEGATION OK, both servers
+authoritative at serial 8; the kuifje AAAA is unprobeable from the
+workstation, which has no IPv6 route -- not a server fault).
+
+Order of operations, all on kuifje zone 3 through the panel:
+
+1. `earl CNAME phoenix.develry.be` (TTL 700) deleted, then `earl A
+   51.255.43.81` and `earl AAAA 2001:41d0:305:2100::1:4b26` added, both TTL
+   700. (Adding A beside the CNAME is refused first: "A CNAME owner cannot
+   hold any other record" -- delete-then-add is the required order, the
+   authoritative gap lasted seconds and caches held the 700s CNAME.)
+2. `compare wcag.be --old 137.74.171.228 --new 51.255.43.81 --strict` ->
+   **IDENTICAL**, both sides serial 11 (robbedoes transferred within seconds).
+3. `propagate earl.wcag.be A --expect 51.255.43.81` -> **PROPAGATED** on
+   1.1.1.1 / 8.8.8.8 / 9.9.9.9 by round 3.
+4. Certificate 1 `Earl` requested ONCE from
+   `/admin/certificates-request?site=1` (HTTP-01, prefilled by `?site=1`).
+   Journal: `ACME: account ready (global, production)` 01:20:53Z,
+   `ACME: certificate issued for earl.wcag.be` 01:21:01Z, `Proxy HTTPS
+   listening on port 443 (1 certificates)`. Issuer Let's Encrypt YR1, valid
+   2026-08-30 00:22:30Z to 2026-11-28 00:22:29Z, auto-renew.
+
+Verification, byte-level:
+
+    curl --resolve earl.wcag.be:443:51.255.43.81 https://earl.wcag.be/
+      -> 200, 1024 bytes, ssl_verify_result 0
+    sha256 c994a6d8a87dd266724d84f209c90cd6a7295b1044ae189a8f3b7abc017c70c5
+      == the page Phoenix served BEFORE the flip (captured first): cmp equal
+    from phoenix (has IPv6): --resolve ...:[2001:41d0:305:2100::1:4b26]
+      -> 200, 1024 bytes; 1.1.1.1 answers A 51.255.43.81 + the AAAA
+    http://earl.wcag.be/ -> 302 https:// (force_ssl)
+
+TRAP: a plain `curl https://earl.wcag.be/` from the workstation right after
+the flip still hit Phoenix (`remote_ip 144.76.30.204`, resolver cache, TTL
+700) while presenting robbedoes' NEW certificate story is impossible -- the
+matching notBefore was the tell to re-check; always verify a cutover with
+`--resolve` against the new address, never through the resolver.
+
+Zone row action Check health on kuifje: `Delegation: apex_undeclared. 1
+secondaries probed, 0 behind.` -- correct while the apex NS is the interim
+mooo pair instead of the declared `ns1/ns2.elevenways.de`; it becomes
+`matches` when the zone moves to the final nameserver names.
+
+Rollback (not needed): put `earl` back to `CNAME phoenix.develry.be.`;
+Phoenix still serves the site and keeps its own certificate.
