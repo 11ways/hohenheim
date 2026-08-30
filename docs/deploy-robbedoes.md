@@ -1152,3 +1152,77 @@ database at creation, because it cannot be resized afterwards.
    `vlaamsoogfonds.be` for the second hostname.
 2. Certificate, then `force_ssl=true` on domains 9 and 10.
 3. Flip the hostnames to `51.255.43.81` / `2001:41d0:305:2100::1:4b26`.
+
+## Udesign Live staged, 2026-08-30
+
+`udesign.world` + `www.udesign.world` (47,131 + 23,454 requests/quarter on
+phoenix), staged on robbedoes WITHOUT a cutover. The largest of the four: 748 MB
+of `files/` uploads travel with the code.
+
+### What it is
+
+`/home/udesign/live` on phoenix (uid 4011, Node 16.13.2, `node server.js`,
+`environment: 'live'`, port 3000). EVERY dependency is a GitHub repo
+(`skerit/alchemy`, `skerit/alchemy-acl`, `skerit/alchemy-chimera`,
+`skerit/alchemy-ajatar-theme`, ... plus `nodemailer`), which is why the
+copy-phoenix's-`node_modules` rule above is not optional here: a fresh resolve
+cannot even be attempted meaningfully.
+
+### Rows on robbedoes
+
+| Object | Id | Notes |
+| --- | --- | --- |
+| managed database `udesign-live-mongo` | 7 | `mongo:7`, db `udesign_live`, user `udesign`, memory limit 512 MB set at creation; container `hohenheim-luguij0q-instance-12` |
+| instance `udesign-live` | 13 | `hohenheim:workspace` on runtime image `node-16` (id 5), `start_command = node server.js`, `container_port 3000`, `console_kind tty`, `memory_limit_mb 512`; container `hohenheim-luguij0q-instance-13`, volume `/opt/hohenheim/data/volumes/13/home` (1.1 GB incl. uploads), uid 200013 |
+| attachment `instance_databases` | 6 | instance 13 -> database 7, prefix `DB` (+ `DATABASE_URL`) |
+| site `Udesign Live` | 7 | `hohenheim:instance`, instance 13 |
+| domains | 11, 12 | `udesign.world`, `www.udesign.world`, exact, `force_ssl=false` |
+
+### Proof
+
+Restore: 15 collections, 2183 documents. `node_modules` from phoenix: **288
+modules on both sides**, no package needed rebuilding.
+
+| request | phoenix | robbedoes |
+| --- | --- | --- |
+| `/` direct from the container | 200, **209127 bytes**, `<title>Udesign.world</title>` | 200, **209128 bytes**, same title |
+| `/` through the proxy (`Host: udesign.world`) | - | 200, 209011 bytes |
+| `/` through the proxy (`Host: www.udesign.world`) | - | 200, 208994 bytes |
+| `/nl` | 404, 41 bytes | 404, 41 bytes |
+
+A normalised diff (hex runs, URLs, hydration ids and whitespace collapsed)
+leaves TWO differences: the `hawkejs/static.js` cache buster, and the
+`window._initHawkejs` payload, which embeds the request URL. One line the raw
+diff flagged -- the `arrow-green-floater2.svg` preload -- is **byte-identical**
+and only sits at a different line number (24 vs 26): the preload block ordering
+is non-deterministic across renders, which is a known SSR property and not a
+difference in content.
+
+`docker stats`: instance 13 78 MiB / 512 MiB, its Mongo 93 MiB / 512 MiB.
+
+## Phoenix staging wave complete, 2026-08-30
+
+Four apps staged in one wave, none cut over, no DNS value moved, no
+certificate issued, `force_ssl=false` everywhere.
+
+| app | instance | image | database | site | hostnames | proof |
+| --- | --- | --- | --- | --- | --- | --- |
+| WCAG-EM Auditexport | 6 | node-16 | 3 `diax_auditexport`, 10 collections | 4 | `auditexport.di-ax.be` | `/login` 8137 vs phoenix 8138; `/chimera` 401 exactly equal |
+| Invulassistent | 8 | node-12 | 4 `invulassistent`, 17 collections / 103,300 scanresults / 5089 MB | 5 | `invulassistent.wcag.be` | `/login` 9103 vs 9104; `/chimera` 401 exactly equal |
+| Vlaams Oogfonds - Staging | 11 | node-16 | 6 `oogfonds-staging`, 16 collections | 6 | `oogfonds.clients.11ways.be`, `test.vlaamsoogfonds.be` | 401 without credentials, 200 with; root 111389 bytes = phoenix exactly |
+| Udesign Live | 13 | node-16 | 7 `udesign_live`, 15 collections | 7 | `udesign.world`, `www.udesign.world` | root 209128 vs 209127 |
+
+Udesign Preview was deliberately EXCLUDED: it needs Node 10, and although
+`hohenheim/node-10:1` is built on this box its seeded runtime-image row only
+becomes visible after the next jar deploy.
+
+Disk on robbedoes: 16 GB -> 21 GB of 99 GB (the 5 GB Invulassistent dump was
+extracted and deleted again; peak was 23 GB). Memory: 3.1 GB used of 11.7 GB,
+every container far below its cap -- the largest is Invulassistent's Mongo at
+656 MiB.
+
+Ready to cut over as soon as their zones are ours: **Invulassistent only**
+(`wcag.be` is already delegated to kuifje and its record is at TTL 300). The
+other three wait on `di-ax.be`, `11ways.be`/`vlaamsoogfonds.be` and
+`udesign.world` respectively -- and `udesign.world` is at COMBELL with live
+Microsoft 365 mail, so that zone needs its real export before anything moves.
