@@ -1731,3 +1731,14 @@ KUIFJE AND ROBBEDOES WERE NEVER DOWN TOGETHER: robbedoes first, then kuifje,
 then starfleet. After kuifje's second restart `hoh-dns-diff compare` says
 IDENTICAL for `wcag.be` (serial 15) and `tavernetomberg.be` (serial 11)
 between the two, both `DELEGATION OK`, and `MX` answers `aa=True` from both.
+
+## Deploy 2026-08-30 (seventh jar swap): 5c3696b2, no migration
+
+Same jar as robbedoes' fourth swap (`a439c66a...`, 13/13 clean). Preflight
+`/root/hohenheim-preflight-20260830-seventeenth/` (integrity ok, rollback =
+`528e7bb7...`/`166180fe`). Stop 14:05:29Z, healthy 14:05:44Z (15 s), second
+restart 14:05:55Z -> 14:06:04Z (9 s), 0 journal errors, listeners 53/80/443 +
+3000 loopback, `0 applied`, row counts identical (1 site, 5 zones, 3 certs).
+After the wave `hoh-dns-diff compare` = IDENTICAL with robbedoes for `wcag.be`
+and `tavernetomberg.be`, `delegation` OK for both; kuifje and robbedoes were
+never down together.

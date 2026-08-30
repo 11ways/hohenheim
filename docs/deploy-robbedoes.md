@@ -2055,3 +2055,40 @@ click produced `Fetch API cannot load data:application/wasm...` and
 The pinned actions cell's hover fade (plumage `b06fde5a`) is in this jar too;
 `/admin/instances` renders unchanged, and the fade TIMING cannot be measured
 headlessly -- an eyeball on a hovered row is the proof.
+
+## Deploy 2026-08-30 (fourth jar swap): 5c3696b2, one admin CSP, same-origin wasm, soft-nav console
+
+Swapped to hohenheim `5c3696b2` (jar sha256 `a439c66a...`, 267,861,427 bytes,
+stamp 13/13 `dirty=false`: hawkeye `e0160bdf`, zenit `8130bcf4`, zenit-cms
+`ddcf03bb`, plumage `8afb1d94`). Migration diff NONE (top M007); `0 applied`.
+Preflight `/root/hohenheim-preflight-20260830-sixteenth/` (`.pre` + `.at-swap`
+integrity ok, settings, rollback jar = `528e7bb7...` i.e. `166180fe`).
+Stop 11:04:39Z, healthy 11:04:55.8Z (17 s; the swap script aborted once on a
+`stat` permission check between mv and start -- resumed within seconds).
+Second restart 11:05:09.4Z, healthy 11:05:17.1Z (7 s). 0 journal errors, RSS
+371 MB, listeners 53/80/443 + 3000 loopback, 4 certificates / 12 exact routes,
+row counts identical, all 14 containers kept their uptimes.
+
+THE POINT: the per-page terminal CSP variant is GONE (zenit-cms/hohenheim);
+STRICT_ADMIN carries `'wasm-unsafe-eval'` panel-wide, `connect-src` stays
+`'self'`, and ghostty-web 0.4.0 loads `/vendor/ghostty-vt.wasm` as a pinned
+same-origin asset (200, `application/wasm`, 423,045 bytes) -- no `data:` fetch
+exists. Proven live both ways:
+- Headless Chromium: `window.__probe` set on `/admin/instances/3` SURVIVED the
+  click into Console (same document, rev bump only; the tab navigation is the
+  `?__hawkeye=1` xhr in the network log), body policy stamp = the one
+  STRICT_ADMIN on every tab, `[pl-terminal] WebSocket connected`, wasm fetched
+  as same-origin xhr, zero console errors, zero "loading it as a full page";
+  clicking Overview kept the probe alive too.
+- Real Firefox 153 (the browser that surfaced both defects, cache disabled):
+  hard load of the console page -> `WebSocket connected`, no error lines (the
+  old bridge printed "script tag already settled without defining the global"
+  here on every fresh load); Edit -> Console soft navigation -> `[pl-terminal]
+  disposed` then `WebSocket connected` again, terminal canvas rendered.
+- Wire: the console page's CSP header = STRICT_ADMIN with `'wasm-unsafe-eval'`
+  and WITHOUT `data:`; `x-hawkeye-document-policy` announced on soft-nav
+  answers (the dormant boundary mechanism; nothing in the panel differs, so it
+  never fires here).
+Live hostnames re-verified via `--resolve`: earl 200/1024, invulassistent
+401/8950, tavernetomberg 200/145413, www 200/145417, ssl=0 everywhere.
+ROLLBACK IS JAR ONLY: the preflight `.rollback` back into place and restart.

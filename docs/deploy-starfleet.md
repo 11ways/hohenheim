@@ -1184,3 +1184,19 @@ use `YYYY-MM-DD HH:MM:SS` there.
 
 `zenit-dev deployed starfleet` = `current`, 13/13, no RESTART PENDING.
 ROLLBACK IS JAR ONLY: copy the `.rollback` back and restart. Workspace deleted.
+
+## Deploy 2026-08-30 (sixteenth): 5c3696b2, one admin CSP + same-origin wasm, all three boxes, no migration
+
+Same jar as robbedoes/kuifje (`a439c66a...`, 13/13 clean; chain hawkeye
+`e0160bdf`, zenit `8130bcf4`, zenit-cms `ddcf03bb`, plumage `8afb1d94`,
+carrying: one admin CSP with `'wasm-unsafe-eval'`, terminal CSP variant
+deleted, ghostty-web 0.4.0 with the wasm as a pinned same-origin asset, the
+event-based script-fate bridge, the re-landed dormant document-policy boundary
+mechanism, the pinned-cell hover fade). Preflight
+`/root/hohenheim-preflight-20260830-sixteenth/` (integrity ok, rollback =
+`528e7bb7...`/`166180fe`). Stop 14:07:01Z, healthy 14:07:44Z (43 s), listeners
+bound 14:07:52Z, second restart -> healthy2 14:08:14Z (21 s), 0 journal
+errors, `0 applied`, row counts identical, both containers kept 21 h uptimes.
+Apex/www 200, admin 302, comms 200, skeleton 202 (the app's own queue page),
+ssl=0 everywhere; `hoh-dns-diff delegation starfleet.life` OK.
+`zenit-dev deployed` = current 13/13 on all three targets.
