@@ -838,3 +838,119 @@ Neighbouring live sites unaffected, still served by their old homes:
 `zenit-dev deployed robbedoes` = the jar at `e6d15bf1`, all 12 upstream repos
 `current`. Rollback jar only:
 `/root/hohenheim-preflight-20260830-thirteenth/`.
+
+## Cutover TTLs lowered on kuifje, 2026-08-30
+
+Before any further hostname cutover, the records that will move got a 300s TTL
+so a flip (and a rollback) takes effect quickly. Only the TTL changed; no value
+was touched, and no traffic moved.
+
+| zone | record | TTL before | TTL after |
+| --- | --- | --- | --- |
+| wcag.be (kuifje zone 3) | `invulassistent` CNAME | 7200 | 300 |
+| tavernetomberg.be (zone 5) | `@` A | 7200 | 300 |
+| tavernetomberg.be | `@` AAAA | 7200 | 300 |
+| tavernetomberg.be | `www` CNAME | 7200 | 300 |
+
+Serials: wcag.be 11 -> 12, tavernetomberg.be 6 -> 9 (each save bumps).
+robbedoes transferred both within seconds. `hoh-dns-diff compare --strict`
+IDENTICAL on both zones, apex NS and SOA included. The mail rows are
+deliberately untouched and verified still at TTL 7200 on the wire:
+`tavernetomberg.be MX 10 calamity.develry.be` and
+`_imaps._tcp SRV 0 100 993 calamity.develry.be`. Both zones still report
+`Delegation: matches`.
+
+## WCAG-EM Auditexport staged, 2026-08-30
+
+`auditexport.di-ax.be` (20,673 requests/quarter on phoenix), staged on
+robbedoes WITHOUT a cutover: the hostname still resolves to phoenix, and
+robbedoes answers the same site when asked by `Host` header. The `di-ax.be`
+zone is not ours yet, so no certificate and no DNS change is possible here.
+
+### What it is
+
+`/home/diax/auditexport` on phoenix (uid 4016, Node 16.13.2, `node server.js`,
+`settings.port = 3000` in `app/config/default.js`, `environment: 'live'` in
+`app/config/local.js`). `alchemymvc ~1.2.0` with alchemy-acl/chimera/form/i18n/
+media/menu/styleboost/widget, `web-resource-inliner` and `jszip`. The app tree
+is 672 KB; the 602 MB on phoenix was `node_modules` + `node_modules_old`, both
+excluded from the tarball and reinstalled here.
+
+### Rows on robbedoes
+
+| Object | Id | Notes |
+| --- | --- | --- |
+| managed database `auditexport-mongo` | 3 | engine mongo, image default `mongo:7`, db `diax_auditexport`, user `auditexport`, host `local`; container `hohenheim-luguij0q-instance-5` |
+| instance `auditexport` | 6 | `hohenheim:workspace` on runtime image `node-16` (id 5), no git source, `start_command = node server.js`, `container_port 3000`, `console_kind tty`, `memory_limit_mb 1024`, `auto_deploy false`; container `hohenheim-luguij0q-instance-6`, volume `/opt/hohenheim/data/volumes/6/home` -> `/home/site`, uid 200006, published `127.0.0.1:32778->3000` |
+| attachment `instance_databases` | 3 | instance 6 -> database 3, prefix `DB`; first attachment, so `DATABASE_URL` is injected too |
+| instance variable | - | `LD_LIBRARY_PATH=/home/site/node_modules/canvas/build/Release` (set with `hoh vars instance 6 set`, NOT the dotted map spelling that silently drops) |
+| site `WCAG-EM Auditexport` | 4 | `hohenheim:instance`, instance 6 |
+| domain | 7 | `auditexport.di-ax.be`, exact, `force_ssl=false` (no certificate is possible until the zone moves) |
+
+### Exact lane
+
+1. Code and dump taken from the staged tarballs in
+   `/opt/hohenheim/staging/phoenix/` (nothing re-fetched from phoenix).
+2. `app/config/live/database.js` rewritten to
+   `Datasource.create('mongo', 'default', { uri: process.env.DATABASE_URL })` --
+   the single app edit, same as Tomberg and Microcopy. The managed user is the
+   engine's root user in `admin`, and the injected uri carries `authSource=admin`.
+3. Database created through the panel form (`/admin/databases/new`; there is
+   still no database API), then `docker cp` + `mongorestore --drop
+   --authenticationDatabase admin` inside the container.
+4. `hoh instance create auditexport hohenheim:workspace server_id=1
+   runtime_image_id=5 settings.start_command='node server.js'
+   settings.container_port=3000 settings.console_kind=tty
+   settings.memory_limit_mb=1024 settings.auto_deploy=false`, attachment through
+   `/admin/instance-databases/new`, `hoh vars instance 6 set LD_LIBRARY_PATH ...`.
+5. `hoh power 6 start` to create the volume (the container exits 1 on an empty
+   volume, as documented), code copied in as root and `chown -R 200006:200006`,
+   `npm ci --legacy-peer-deps --ignore-scripts` then `npm rebuild canvas bcrypt
+   mmmagic` in a helper container as uid 200006, `hoh power 6 restart`.
+6. `hoh site create "WCAG-EM Auditexport" hohenheim:instance instance_id=6`,
+   `hoh site domain add 4 auditexport.di-ax.be force_ssl=false`.
+
+### Proof
+
+Restore: 10 collections (`acl_groups`, `acl_persistent_cookies`, `acl_rules`,
+`media_files`, `menus`, `report_languages`, `report_types`, `reports`, `themes`,
+`users`), 265 documents, `reports=221 users=4`.
+
+Native modules in the container: `canvas ok`, `bcrypt ok`, `mmmagic ok`.
+
+Inside the container `node server.js` listens on `*:3000` as uid 200006.
+
+Through robbedoes' proxy from the workstation with the `Host` header, against
+phoenix fetched with `--resolve`:
+
+| path | phoenix | robbedoes |
+| --- | --- | --- |
+| `/` | 200, 0 bytes, `etag: S0-00`, `x-history-url: /` | 200, 0 bytes, same headers |
+| `/login` | 200, 8138 bytes, `<title>Login \| Auditexport</title>` | 200, 8137 bytes, same title |
+| `/chimera` | 401, 7579 bytes | 401, 7579 bytes (exactly equal) |
+| `/media` | 404, 41 bytes | 404, 41 bytes |
+
+The empty 200 at `/` is what phoenix serves too, not a fault. The `/login`
+byte difference is three render-time nonces and nothing else, proven by a diff
+with hex-like runs normalised: the `hawkejs/static.js?i=` cache buster (per
+boot), the `data-hid` timestamp id, and inside `window._initHawkejs` the request
+URL and the client's user-agent version (curl 8.21 on phoenix, 8.14.1 here).
+Every template, block and title is identical, so the restored database and the
+rendered app are the same.
+
+`docker stats`: instance 6 107 MiB / 1 GiB, its Mongo 165 MiB / 1.25 GiB.
+
+### What differs from phoenix
+
+Node 16.20.2 instead of 16.13.2 (same major); Mongo 7 instead of phoenix's
+engine; the database is reached over the link network by uri instead of
+`127.0.0.1` with a hardcoded login; `@11ways/exiv2` stays unbuilt (the runtime
+image ships no `libexiv2-dev`), so alchemy-media degrades to no EXIF
+extraction, exactly as Microcopy does here.
+
+### Cutover steps remaining (in order)
+
+1. The `di-ax.be` zone onto kuifje -- BLOCKED: Jelle does not have DNS access
+   for `di-ax.be` yet. Nothing else can proceed until then.
+2. Certificate for `auditexport.di-ax.be`, then `force_ssl=true` on domain 7.
+3. Flip the hostname to `51.255.43.81` / `2001:41d0:305:2100::1:4b26`.
