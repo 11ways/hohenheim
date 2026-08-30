@@ -1984,3 +1984,31 @@ Host after: disk 30 GB of 99 GB, memory 4.0 GB of 11.4 GB used.
 The Dockerfile change is build context only -- **no jar deploy is needed**. The
 images live per box, so kuifje and starfleet would need their own rebuild if
 they ever run these workloads; today neither does.
+
+## cwebp: every image was broken in a BROWSER only, 2026-08-30
+
+Jelle reported tavernetomberg.be serving no photos, with two errors from the
+instance log: "Could not find cwebp path" and the GraphicsMagick one. The second
+was STALE (from before the gm rebuild at 02:51); the first was live and was the
+whole defect.
+
+**alchemy-media negotiates WebP by USER-AGENT.** With a Chrome UA the media route
+answers `500: Error: Could not find cwebp path`; with curl's UA the same URL
+returns a perfectly good JPEG. That asymmetry is why the cutover's byte-for-byte
+comparison against Phoenix passed: every proof this migration made was a curl.
+
+    UA bisect on /media/image/5898f37e9f3b0c780fc91145?width=50%25&dpr=1
+      bare / accept-avif-webp / accept-encoding / referer / sec-fetch  -> 200 244587b
+      chrome-UA                                                        -> 500 38b
+
+`webp` (the package carrying `/usr/bin/cwebp`) added to node-10, node-12 and
+node-16 beside graphicsmagick; all three rebuilt on the box; all seven app
+containers recreated through `hoh power <id> restart`. After it, the four
+live hostnames answer unchanged and every derivative returns real WebP bytes
+(border-v2-bg.png 19074b, dots.png 908b, the four homepage figures 177590 /
+79040 / 70386 / 31498b), and the browser renders the photos.
+
+**The lesson worth keeping: verify a migrated site with a real browser UA, not
+curl.** A curl-only proof is blind to every content negotiation the app does,
+and this class of defect renders a page that looks perfect in HTML and carries
+no image.

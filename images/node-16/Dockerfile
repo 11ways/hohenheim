@@ -19,9 +19,14 @@ FROM node:16-bullseye-slim
 # node-10/node-12 images are where the module actually lives. An app that needs exiv2
 # on bullseye must have the module rebuilt against 0.27 (libexiv2-27 + libexiv2-dev),
 # which the copy-node_modules-from-Phoenix rule deliberately avoids.
+# webp (cwebp): alchemy-media negotiates WebP by USER-AGENT, so a real browser gets
+# "500: Error: Could not find cwebp path" on every image while curl -- whose UA asks
+# for no WebP -- gets a perfectly good JPEG from the same URL. That asymmetry is why
+# the gap survived a byte-for-byte cutover comparison (measured 2026-08-30 on the live
+# tavernetomberg.be).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends bash busybox ca-certificates iproute2 util-linux curl git tini \
-        python3 make g++ graphicsmagick imagemagick \
+        python3 make g++ graphicsmagick imagemagick webp \
  && rm -rf /var/lib/apt/lists/*
 
 # The Incus lane's PID 1 (see ../hohenheim-init): shared by every runtime image and
