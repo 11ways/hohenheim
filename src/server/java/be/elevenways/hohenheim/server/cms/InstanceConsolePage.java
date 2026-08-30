@@ -31,10 +31,10 @@ import java.util.Map;
 
 /**
  * Console tab on an instance: the live output terminal (fed by the instance-console
- * WebSocket) and the command form. Marked {@link TerminalCspPage} so ghostty's wasm
- * boot gets the widened admin CSP on exactly this route.
+ * WebSocket) and the command form. The admin CSP (zenit's STRICT_ADMIN) carries ghostty's
+ * wasm concessions panel-wide, so this tab is reached by soft navigation like every other.
  */
-public final class InstanceConsolePage implements RecordScopedPage<Row>, TerminalCspPage {
+public final class InstanceConsolePage implements RecordScopedPage<Row> {
 
     public static final String SLUG = "console";
 
