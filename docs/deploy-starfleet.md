@@ -989,3 +989,79 @@ this box was never removed by the tenth deploy; reclaim it with the next lane.
 
 ROLLBACK IS JAR ONLY this time (no schema change), but the at-swap copy is
 there regardless: `/root/hohenheim-preflight-20260830-twelfth/`.
+
+## Deploy 2026-08-30 (thirteenth): the DNS/hoh fix batch, no migration, STARFLEET ONLY
+
+Shipped hohenheim `e6d15bf1` (previous `17fa6993`) to starfleet ALONE. kuifje
+and robbedoes were deliberately NOT deployed in this wave: the registrar
+delegation of `tavernetomberg.be` had just moved to the mooo pair while
+kuifje's zone still published `ns1`/`ns2.elevenways.de`, and another lane was
+editing kuifje's panel to fix that -- a restart mid-edit would have collided,
+and kuifje + robbedoes are each other's only nameserver. The build workspace is
+kept alive so those two boxes swap the SAME jar without rebuilding.
+
+Isolated worktree `build-worktrees/deploy-20260830-e6d15bf1` (detached at the
+pushed HEAD, 109 s warm build), stamp 13/13 `dirty=false`, sha256
+`605f53038b182deb4e7bb5151bc31ccf8405a16fc39e9b165edb0398f13cf417`,
+267,611,836 bytes, `upload_file` with the remote
+`unzip -p {} META-INF/blast/build-info.tsv | grep -c false | grep -qx 13` gate.
+
+20 commits carried, of which FOUR touch shipped code -- `90f0e031` (a blank SOA
+MNAME defaults to the first declared nameserver), `b4e96035` (DNS-01 never
+publishes a challenge into a replicated zone: forward to the owning primary or
+refuse `zone_not_primary`), `d7b45842` (a nameserver-type peer keeps no
+edit-forwarding credentials), `b091de4c` (`hoh` help crash + per-invocation
+`--context`) -- plus `7f7a68ea` (map-setting wire doc + its refusal test) and
+15 runbook commits. Four UPSTREAM repos moved with it and were checked before
+shipping: zenit `ab6baa0a` and protoblast `c01a49bd` are documentation only,
+zenit-cms `c8753bfd` is a test only, and only zenit-forms `fa8378d1` (a
+key/value map refuses a shape it cannot store) is production code.
+
+Worth knowing: zenit-dev resolved zenit-forms as `stamp rewritten 0b2944b ->
+fa8378d, gradle skipped`. That is the stamp-only republish path and it is
+CORRECT -- the KeyValueField change had already been published before it was
+committed, so the commit moved provenance and not content.
+
+Migration diff `17fa6993..e6d15bf1`: NONE. Top migration is still M007, the pin
+mark stays `DEPLOYED_THROUGH = "007"`, and `--run-migrations` reported
+`Migrations complete 0 applied`. No rehearsal boot was run (no schema change);
+the jar was instead proved runnable locally with `--build-info`, which printed
+all 13 stamps clean.
+
+Preflight `/root/hohenheim-preflight-20260830-thirteenth/`: `hohenheim.db.pre`
+and a second `hohenheim.db.at-swap` (both `PRAGMA integrity_check` = ok),
+`settings/` (keyring `field-encryption.keys` sha256 EQUAL to the original,
+`414e9b13...`), and `hohenheim-server.jar.rollback` (sha256 `efbf9b35...`,
+i.e. exactly the twelfth deploy's jar).
+
+Live lane: stop 01:28:37Z, `mv`, `--run-migrations` as `hohenheim` (0 applied),
+start 01:28:50Z, healthy 01:29:19Z -- 42 s downtime. Second restart 01:30:43Z,
+healthy 01:31:11Z (28 s). Both restarts: 0 journal errors, listeners
+53/80/443/3000, `roles_captured [databases, dns, firewall, instances, proxy]`,
+RSS 336 MB. Row counts identical before and after (46 migrations, 9 sites,
+6 domains, 4 certificates, 1 DNS zone, 8 DNS records).
+
+Verified from outside (`--noproxy '*'`): apex and `www` 200, `admin` 302,
+`comms.starfleet.life` 200, `skeleton.starfleet.life` 200, HTTP 301. Authoritative
+DNS straight at the host: `starfleet.life` SOA and NS both `aa`, `google.com`
+REFUSED (rcode 5). `zenit-dev deployed starfleet` = `current`, 13/13, no
+RESTART PENDING.
+
+The Alchemy skeleton and its interactive console survived untouched: both
+containers kept their original start times across both restarts
+(`instance-3` 2026-08-29T17:28:31Z, `instance-4` 16:51:20Z) and
+`docker inspect` still reports `Config.Tty=true` on instance-3, which is the
+console's substrate. `skeleton.starfleet.life` answered 202 on the first probe
+after each restart and 200 seconds later -- the supervisor re-attach, exactly as
+the twelfth deploy recorded, not a defect.
+
+Housekeeping: `/opt/hohenheim-rehearsal-20260829-tenth` (flagged as a leftover
+by the twelfth deploy) is GONE -- nothing to reclaim. A zero-byte root-owned
+`/opt/hohenheim/data/hohenheim.db` was created by this lane's own first
+`sqlite3` probe (the configured path is `/opt/hohenheim/hohenheim.db`) and was
+removed again; `sqlite3` CREATES an empty database when handed a path that does
+not exist, so never probe a guessed database path on a live host.
+
+ROLLBACK IS JAR ONLY (no schema change): copy
+`/root/hohenheim-preflight-20260830-thirteenth/hohenheim-server.jar.rollback`
+back over `/opt/hohenheim/hohenheim-server.jar` and restart.
