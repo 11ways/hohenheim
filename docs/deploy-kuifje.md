@@ -1613,3 +1613,34 @@ the apex A/AAAA/TXT and both NS rows are untouched. `propagate` PROPAGATED on
 
 `wcag.be` and `www.wcag.be` still answer 200 from merlina (213.239.210.245);
 they were never part of this change.
+
+## Zone tavernetomberg.be: apex flipped to robbedoes, 2026-08-30
+
+Third hostname cutover, and the first on a zone that carries live mail. The site
+side is recorded in `deploy-robbedoes.md` ("Taverne Tomberg LIVE").
+
+| record | before | after |
+| --- | --- | --- |
+| `@` A (record 37) | `144.76.30.204` TTL 300 | `51.255.43.81` TTL 300 |
+| `@` AAAA (record 38) | `2a01:4f8:191:21cb::2` TTL 300 | `2001:41d0:305:2100::1:4b26` TTL 300 |
+
+Plain VALUE edits through each record's own form -- neither owner is a CNAME, so
+the delete-then-add dance the `earl` and `invulassistent` flips needed does not
+apply here. `www` is a CNAME to the apex and was deliberately left untouched: it
+follows automatically.
+
+Serial 9 -> 11, robbedoes zone 4 transferred within seconds. `compare --strict`
+**IDENTICAL** on all 10 questions, both sides serial 11.
+
+MAIL WAS NOT TOUCHED and was verified identical on both nameservers after the
+change: `MX 10 calamity.develry.be.`, `_autodiscover._tcp SRV 0 100 443`,
+`_imaps._tcp SRV 0 100 993`, `_submission._tcp SRV 0 100 587`, and the SPF
+`"v=spf1 +a +mx ?all"`. One consequence worth naming: that SPF's `+a` term
+authorises whatever the apex A points at, so it now authorises robbedoes rather
+than phoenix. That is correct -- it follows the app -- and `+mx` still covers
+calamity, which is the host that actually sends.
+
+`propagate` PROPAGATED on 1.1.1.1 / 8.8.8.8 / 9.9.9.9 by round 4. Both this
+workstation and phoenix kept answering the OLD address well past the 300 s TTL,
+because each had cached it while the TTL was still 7200; see the trap recorded
+in `deploy-robbedoes.md`.
