@@ -704,3 +704,144 @@ touched.
    and `propagate www.wcag.be CNAME --expect wcag.be.`, then `compare --strict`
    against a Hetzner server, and keep Hetzner's zone alive for its SOA expire
    (3600000 s = 41 days) afterwards.
+
+## Nameserver zone elevenways.de, 2026-08-30
+
+The domain that carries the nameserver NAMES. `elevenways.de` is registered at
+Hetzner (konsoleH); the registrar REFUSED the two glue lines
+(`ns1.elevenways.de 137.74.171.228 2001:41d0:305:2100::1:4afe`,
+`ns2.elevenways.de 51.255.43.81 2001:41d0:305:2100::1:4b26`) because DENIC's
+pre-delegation check (NAST) demands that both listed nameservers already answer
+the zone authoritatively over those glue addresses. Nothing served it. This wave
+makes both controllers serve it. No registrar setting was touched.
+
+### Declared nameservers, BOTH boxes
+
+`dns.nameservers` moved from the `mooo.com` pair to `ns1.elevenways.de`,
+`ns2.elevenways.de` through the settings editor on kuifje AND robbedoes, each
+verified in `/opt/hohenheim/settings/hohenheim.dry`:
+
+    "dns":{"nameservers":["ns1.elevenways.de","ns2.elevenways.de"], ...}
+
+Every primary zone created from now on seeds those two apex NS rows, and a
+zone-file import substitutes them.
+
+### The zones
+
+kuifje zone id 4, role primary, SOA MNAME `ns1.elevenways.de`, contact
+`hostmaster@elevenways.de`; the create seeded exactly the two declared apex NS
+rows. robbedoes zone id 5, role secondary, primary peer `kuifje`;
+`dns_zone_peers` id 4 on kuifje links zone 4 to peer `robbedoes`. The replica
+pulled within a minute of the save and has tracked every serial since.
+
+SOA retry was lowered 3600 -> 1800 on the zone form (Advanced): DENIC's own
+check WARNED `110 Retry value out of range, expected [900..2400], found 3600`.
+That was the only complaint of the first run and it is gone.
+
+### THE TRAP: this is NOT an empty nameserver-only domain
+
+`elevenways.de` is delegated at DENIC to Hetzner DNS today (`ns.second-ns.com`,
+`ns1.your-server.de`, `ns3.second-ns.de`, serial 2026082900) and that zone
+SERVES A LIVE SITE AND MAIL. Under `.de` there is no separate host object: glue
+for an in-bailiwick nameserver is carried in the domain's OWN nserver list, so
+entering those two glue lines IS a delegation change. Had this zone stayed the
+4 nameserver address rows the brief asked for, the site and the mail would have
+gone dark the moment the registrar accepted them.
+
+AXFR is REFUSED at Hetzner, so the zone was probed (40 candidate labels x 9
+types against 213.133.100.102). Found, and nothing else: apex `A
+88.198.219.246`, apex `AAAA 2a01:4f8:d0a:27bd::2`, apex `MX 10
+www4.your-server.de.`, apex `TXT "v=spf1 +a +mx ?all"`, `www A`/`www AAAA`
+(same addresses as the apex), `autoconfig CNAME mail.your-server.de.`,
+`_autodiscover._tcp SRV 0 100 443 mail.your-server.de.`. No CAA, no `_dmarc`,
+no `mail`/`smtp`/`imap`/`pop`, no DKIM selector among the guesses, no `ns1`/`ns2`
+address rows at Hetzner at all. All 7 data rows were imported into zone 4
+alongside the 4 nameserver address rows ("Imported 14 records.", serial 6 -> 7):
+
+    elevenways.de.        3600 IN SOA ns1.elevenways.de. hostmaster.elevenways.de. 7 7200 1800 1209600 300
+    elevenways.de.        3600 IN A 88.198.219.246
+    elevenways.de.        3600 IN AAAA 2a01:4f8:d0a:27bd:0:0:0:2
+    elevenways.de.        3600 IN MX 10 www4.your-server.de.
+    elevenways.de.        3600 IN TXT "v=spf1 +a +mx ?all"
+    elevenways.de.        3600 IN NS ns1.elevenways.de.
+    elevenways.de.        3600 IN NS ns2.elevenways.de.
+    _autodiscover._tcp.   3600 IN SRV 0 100 443 mail.your-server.de.
+    autoconfig.           3600 IN CNAME mail.your-server.de.
+    ns1.                  3600 IN A 137.74.171.228
+    ns1.                  3600 IN AAAA 2001:41d0:305:2100:0:0:1:4afe
+    ns2.                  3600 IN A 51.255.43.81
+    ns2.                  3600 IN AAAA 2001:41d0:305:2100:0:0:1:4b26
+    www.                  3600 IN A 88.198.219.246
+    www.                  3600 IN AAAA 2a01:4f8:d0a:27bd:0:0:0:2
+
+THIS COPY IS PROVISIONAL, exactly as `wcag.be` and `deloecker.eu` were: a probe
+cannot enumerate a zone. Paste the real konsoleH export into the Zone-file tab
+(the import REPLACES every operator row, so it heals this copy) before or right
+after the glue lines land.
+
+`compare --old 213.133.100.102 --new 137.74.171.228` (Hetzner vs kuifje) is
+DIFFERENT (5) and all five are the intended ones: the apex NS set, the SOA, and
+the four `ns1`/`ns2` address rows as `only-new`. Every data row is `identical`;
+the only warnings are the TTL (7200 -> 3600) and the serial.
+
+### wcag.be moved to the new names
+
+kuifje zone 3: both apex NS rows edited to `ns1.elevenways.de` /
+`ns2.elevenways.de` (records 29 and 30) and the zone form's Primary name server
+to `ns1.elevenways.de`; serial 2 -> 5, robbedoes transferred within 10 s.
+`compare wcag.be --old 137.74.171.228 --new 51.255.43.81 --strict` is IDENTICAL
+on all 5 questions, apex NS and SOA included.
+
+### Verification
+
+`compare elevenways.de --old 137.74.171.228 --new 51.255.43.81 --strict
+--names @,ns1,ns2,www,autoconfig,_autodiscover._tcp` is IDENTICAL on all 14
+questions.
+
+The DENIC-style matrix, run FROM each box (`dig +norec`, UDP and TCP, 6
+questions each: zone SOA, zone NS, ns1 A/AAAA, ns2 A/AAAA):
+
+    from      target                      v4 udp  v4 tcp  v6 udp  v6 tcp
+    kuifje    kuifje                      aa=1    aa=1    aa=1    aa=1
+    kuifje    robbedoes                   aa=1    aa=1    ---     ---
+    robbedoes robbedoes                   aa=1    aa=1    aa=1    aa=1
+    robbedoes kuifje                      aa=1    aa=1    ---     ---
+
+Every answered cell is `rcode=0 aa=1`, same serial, same two NS names, addresses
+matching the glue.
+
+IPv6 IS listening and IS NOT the blocker. `dns.bind_address` is `0.0.0.0` on
+both boxes, but `DnsServer.start` binds `InetAddress.getByName("0.0.0.0")`,
+which is the ANY address: on a dual-stack JVM that is one wildcard socket
+serving both families, and `ss -lunp`/`ss -ltnp` show `*:53` (not
+`0.0.0.0:53`) for UDP and TCP on both hosts. Each box answers authoritatively
+over its OWN global IPv6. `::` was NOT set and no service was restarted.
+
+The `---` cells are an OVH LINK fact, not a server fact: both boxes hold a /128
+out of `2001:41d0:305:2100::/64` with that /64 on-link, and neighbour discovery
+for the peer FAILS (`ip -6 neigh` = FAILED, `/dev/tcp` = "No route to host"),
+so box-to-box IPv6 is dead in both directions while both reach the wider IPv6
+internet fine (gateway `2001:41d0:305:2100::1` REACHABLE, Cloudflare v6 pings).
+A temporary host route via the gateway was added and removed on kuifje and did
+not help (same link, same NDP). It costs nothing operationally -- AXFR runs over
+IPv4 -- but it means a cross-box IPv6 probe times out and must not be read as
+"the nameserver is down".
+
+The authority is DENIC's own tool, `https://nast.denic.de/`, run with exactly
+the refused glue lines: **Check successful**, and after the SOA retry fix with
+ZERO messages. NAST probes from the outside over both families, so that is the
+external IPv6 proof this workstation (no IPv6 route) cannot give.
+
+`starfleet.life` is untouched and still served by both boxes (SOA serial 44,
+identical), 0 journal errors on either, and neither service was restarted
+(`ActiveEnterTimestamp` still 2026-08-29 22:56).
+
+### For Jelle
+
+RETRY THE KONSOLEH GLUE LINES NOW. DENIC's pre-delegation check passes clean
+against exactly those two names and four addresses. Be aware that accepting
+them MOVES the delegation off Hetzner DNS onto these two boxes; the live site
+(88.198.219.246 / 2a01:4f8:d0a:27bd::2), the `www4.your-server.de` MX and the
+autoconfig/autodiscover records are already copied here, but paste the real
+konsoleH zone export into the Zone-file tab afterwards -- a probe reconstruction
+can always be missing a row nobody guessed.
