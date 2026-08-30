@@ -1268,3 +1268,70 @@ reconstruction -- paste the real konsoleH export into the Zone-file tab).
 4. Only after step 3 do the other zones (`wcag.be`, `tavernetomberg.be`,
    `elevenways.be`), which already publish the in-bailiwick pair, get their own
    registrar move.
+
+## elevenways.de: back to ns1/ns2 (no mooo), 2026-08-30
+
+Jelle's decision: NO `mooo.com` names anywhere in `elevenways.de`. The step-1
+mooo delegation described in the previous section is REVERTED here -- it was
+never entered at the registrar, so nothing had to unwind. Instead of moving the
+delegation to out-of-bailiwick names, Jelle breaks the chicken-and-egg from the
+other side: he adds the four `ns1`/`ns2` A+AAAA rows to the CURRENT,
+Hetzner-hosted `elevenways.de` zone, which makes the names resolve publicly and
+lets konsoleH accept the glue lines.
+
+### What changed on the controllers
+
+kuifje zone 4 `elevenways.de` ONLY. The two apex NS record values were edited in
+place through the Records tab (inline value popover) and the zone form's Primary
+name server (the SOA MNAME) with them:
+
+    elevenways.de.  3600 IN NS  ns1.elevenways.de.
+    elevenways.de.  3600 IN NS  ns2.elevenways.de.
+    elevenways.de.  3600 IN SOA ns1.elevenways.de. hostmaster.elevenways.de. 13 7200 1800 1209600 300
+
+Serial 10 -> 13 (each save bumps), robbedoes zone 5 transferred within seconds.
+The four `ns1`/`ns2` A+AAAA rows were already present and were not touched; no
+other record value moved (apex still 88.198.219.246 / 2a01:4f8:d0a:27bd::2, MX
+still `www4.your-server.de`). `dns.nameservers` was not touched on either box
+and still declares the in-bailiwick pair. `wcag.be`, `tavernetomberg.be` and
+`elevenways.be` already publish that pair and were not opened.
+
+`starfleet.life` still carries `nssl.mooo.com` / `nssl2.mooo.com`: it is a
+SECONDARY zone here, owned elsewhere, out of scope for the no-mooo decision, and
+it was not touched (serial 44 on both boxes).
+
+### Verification
+
+`hoh-dns-diff compare elevenways.de --old 137.74.171.228 --new 51.255.43.81
+--strict --names @,ns1,ns2,www,autoconfig,_autodiscover._tcp` -> IDENTICAL on
+all 14 questions, apex NS and SOA included, both sides serial 13.
+
+`dig +norec` matrix run FROM each box, 6 questions each (zone NS, zone SOA,
+ns1 A/AAAA, ns2 A/AAAA), UDP and TCP, against both IPv4 addresses and the
+querying box's OWN IPv6: 36 answered cells, every one `rcode=NOERROR aa=1` with
+the same pair of NS names and addresses matching the glue. Cross-box IPv6 is not
+probed -- it is the known dead OVH link documented above, not a server fact.
+
+DENIC's own tool, `https://nast.denic.de/`, domain `elevenways.de`, with exactly
+the four glue lines Jelle will enter, answers verbatim:
+
+    Check successful.
+    Domain checked: elevenways.de
+
+with ZERO messages, and the Nameserver Details table lists
+
+    ns1.elevenways.de   137.74.171.228   2001:41d0:305:2100::1:4afe
+    ns2.elevenways.de   51.255.43.81     2001:41d0:305:2100::1:4b26
+
+No service was restarted (`ActiveEnterTimestamp` still 2026-08-29 22:56 on both
+boxes), 0 journal errors, no site, certificate or registrar setting touched.
+
+### Public DNS poll: the Hetzner records had NOT appeared
+
+`ns1.elevenways.de` and `ns2.elevenways.de`, A and AAAA, polled every 60 s at
+`1.1.1.1` and at `ns1.your-server.de` (the authoritative Hetzner server for the
+live zone) from 00:25:35Z to 00:45:43Z, 21 rounds: **NXDOMAIN in all 84
+answers**. The Hetzner zone's SOA serial stayed 2026082900 and the parent still
+delegates to `ns.second-ns.com` / `ns1.your-server.de` / `ns3.second-ns.de`, so
+the four records were not yet published when the window closed. Re-poll before
+retrying the glue lines -- konsoleH resolves the names before it will accept them.
