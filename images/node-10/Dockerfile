@@ -19,9 +19,14 @@ RUN rm -f /etc/apt/sources.list.d/*.list \
 # python2 as well, unlike the newer images: this line ships npm 6.14's node-gyp 5, whose
 # python3 support is recent enough that a gyp file from this era may still assume 2.7,
 # and buster is the last base that still carries it.
+# graphicsmagick/imagemagick: alchemy-media shells out to `gm` for every image
+# derivative, so without them EVERY /media/image/... request is a 500 while the
+# site's HTML still renders perfectly (measured 2026-08-30 on Taverne Tomberg and
+# Udesign). Phoenix carries both system-wide, which is why the apps never declared
+# the dependency.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends bash busybox ca-certificates iproute2 util-linux curl git tini \
-        python3 python make g++ \
+        python3 python make g++ graphicsmagick imagemagick \
  && rm -rf /var/lib/apt/lists/*
 
 # The Incus lane's PID 1 (see ../hohenheim-init): shared by every runtime image and

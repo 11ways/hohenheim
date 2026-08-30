@@ -17,9 +17,15 @@ RUN rm -f /etc/apt/sources.list.d/*.list \
 # python3/make/g++: node-gyp, so an npm install with a native module that ships no
 # prebuilt binary (measured 2026-08-29: alchemymvc's @picturae/mmmagic) builds
 # instead of failing -- a Node runtime that cannot install native modules is not one.
+# graphicsmagick/imagemagick: alchemy-media shells out to `gm` for every image
+# derivative, so without them EVERY /media/image/... request is a 500 ("Could not
+# execute GraphicsMagick/ImageMagick ... the gm/convert binaries can't be found")
+# while the site's HTML still renders perfectly -- measured 2026-08-30 on Taverne
+# Tomberg and Udesign. Phoenix carries GraphicsMagick 1.3.23 and ImageMagick
+# system-wide, which is why the apps never declared the dependency.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends bash busybox ca-certificates iproute2 util-linux curl git tini \
-        python3 make g++ \
+        python3 make g++ graphicsmagick imagemagick \
  && rm -rf /var/lib/apt/lists/*
 
 # The Incus lane's PID 1 (see ../hohenheim-init): shared by every runtime image and

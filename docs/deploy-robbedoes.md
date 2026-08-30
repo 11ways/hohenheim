@@ -1305,3 +1305,118 @@ the new one.
 Delete the two address records and re-add `invulassistent CNAME
 phoenix.develry.be.` (TTL 300), and switch `force_ssl` back off on domain 8.
 Phoenix still runs the app (pid 30519) and keeps its own certificate.
+
+## Taverne Tomberg LIVE (third hostname cutover), 2026-08-30
+
+`tavernetomberg.be` and `www.tavernetomberg.be` now answer from robbedoes
+(instance 3, database 1, site 2, domains 3 and 4). This is the first cutover of
+a zone that carries live mail, and the first of an apex.
+
+### The media gate caught a real defect: no GraphicsMagick in the runtime images
+
+The pre-cutover gate was to prove the site's uploaded media serves from
+robbedoes. It did not: EVERY `/media/image/...` request returned **500**, 212
+bytes, while the HTML rendered perfectly.
+
+    Error: Could not execute GraphicsMagick/ImageMagick: gm "identify" "-ping"
+    "-format" "%wx%h" "/home/site/files/2017/02/5898f3449f3b0c780fc9112e"
+    this most likely means the gm/convert binaries can't be found
+
+alchemy-media shells out to `gm` for every derivative. Phoenix carries
+GraphicsMagick 1.3.23 and ImageMagick system-wide, so the apps never declared
+the dependency and nothing in the migration surfaced it -- the HTML is
+byte-identical either way, and only an actual image fetch shows the failure.
+**Udesign Live was measured broken the same way** (`/media/image/...` 500), so
+this was never Tomberg-specific.
+
+Fixed in the images, not in the app: `graphicsmagick imagemagick` added to the
+apt line of `images/node-12`, `images/node-16` and `images/node-10`, all three
+rebuilt on robbedoes. Versions in the images: gm 1.3.35 (node-12, node-10),
+gm 1.4 snapshot (node-16), plus `convert` in each.
+
+The `files/` tree was NOT the problem and was never missing: it is 27 MB with a
+single `2017/` directory on BOTH phoenix and robbedoes. An earlier note that
+Tomberg carries "4.7 GB of uploads" was wrong -- that figure is `node_modules`
+(4.1 GB) plus `temp/` (492 MB), neither of which is site data.
+
+**A `hoh power <id> restart` RECREATES the container**, so it picks up a rebuilt
+image: instance 3's image id moved `0c94252f...` -> `d1533013...` across the
+restart and `gm` appeared inside it. That is how a runtime-image fix reaches a
+running workload; no redeploy is needed.
+
+After the rebuild, all four sampled derivatives are **byte-identical to
+phoenix**, same sha256, across two different GraphicsMagick versions:
+
+    5898f37e9f3b0c780fc91145  phoenix 57141/200  robbedoes 57141/200  IDENTICAL
+    5898f3899f3b0c780fc91148  phoenix 22991/200  robbedoes 22991/200  IDENTICAL
+    5898f3919f3b0c780fc9114c  phoenix 21544/200  robbedoes 21544/200  IDENTICAL
+    5898f3989f3b0c780fc91150  phoenix 17635/200  robbedoes 17635/200  IDENTICAL
+
+### The cutover
+
+1. Baseline captured from phoenix for both hostnames x `/`, `/menu`, `/contact`
+   (145413 / 461711 / 142557 bytes on the apex; the `www` twin is 4 bytes larger
+   on each, its own hostname being longer).
+2. kuifje zone 5, two plain VALUE edits through the record forms (no
+   delete-then-add: neither owner is a CNAME): apex `A 144.76.30.204` ->
+   `51.255.43.81`, apex `AAAA 2a01:4f8:191:21cb::2` ->
+   `2001:41d0:305:2100::1:4b26`, TTL 300 unchanged on both. `www` was left
+   alone: it is a CNAME to the apex and follows automatically. Serial 9 -> 11.
+3. **The MX, the three SRV rows and the SPF TXT were not touched**, and were
+   re-verified identical on both nameservers after the change: `MX 10
+   calamity.develry.be`, `_autodiscover._tcp 0 100 443`, `_imaps._tcp 0 100
+   993`, `_submission._tcp 0 100 587`, `"v=spf1 +a +mx ?all"`. Mail is intact.
+   Note the SPF's `+a` now authorises robbedoes instead of phoenix, which is
+   correct and follows the app automatically -- the `+mx` term still covers
+   calamity, which is what actually sends.
+4. `compare --strict` -> **IDENTICAL** on all 10 questions, both sides serial 11.
+   `propagate tavernetomberg.be A --expect 51.255.43.81` -> **PROPAGATED** on
+   1.1.1.1 / 8.8.8.8 / 9.9.9.9 by round 4.
+5. Certificate 3 `Taverne Tomberg` requested ONCE (HTTP-01, both hostnames
+   prefilled from `?site=2`). Journal `ACME: certificate issued for
+   tavernetomberg.be, www.tavernetomberg.be` 02:58:38Z; `CertificateStore:
+   loaded 3 certificates, 4 hostname mappings`. Issuer Let's Encrypt YR1, SAN
+   `DNS:tavernetomberg.be, DNS:www.tavernetomberg.be`, valid to 2026-11-28
+   02:00:05Z. `force_ssl` switched on for domains 3 and 4 only AFTER issuance.
+
+### Verification
+
+    https://tavernetomberg.be/         200, 145413 bytes, ssl_verify_result 0
+    https://www.tavernetomberg.be/     200, 145417 bytes, ssl 0
+    /menu, /contact                    200 on both hostnames
+    http://  -> 301 https:// on both
+    media over https                   200, 57141 bytes
+    from robbedoes through PUBLIC DNS  200 on both, remote_ip
+                                       2001:41d0:305:2100::1:4b26 (IPv6 path)
+
+Content equality: with the render nonces normalised (`eval_<ms>` hawkejs
+evaluation ids and the `hawkejs/static.js?i=` cache buster) **five of the six
+captures are byte-identical to phoenix, and the sixth resolves to a cold-render
+artifact**: the apex `/menu` fetched seconds after the container restart
+differed, while a second fetch of the same URL matched phoenix exactly (phoenix
+`/menu` vs robbedoes `/menu`, both warm: 0 differing lines). Byte sizes were
+identical throughout. Take a comparison capture only after the first request has
+warmed a freshly restarted instance.
+
+### TRAP repeated: two stale vantage points
+
+Neither this workstation nor phoenix could confirm the flip through normal DNS
+afterwards -- both kept answering 144.76.30.204 long past the 300 s TTL, because
+they had cached the record while it was still TTL **7200**, before the
+TTL-lowering pass an hour earlier. The public resolvers and robbedoes itself
+answer robbedoes. Lower a TTL a day ahead, not an hour, and verify from a
+resolver that was never warm on the old value.
+
+### Rollback (not needed)
+
+Set the apex `A` back to `144.76.30.204` and `AAAA` to `2a01:4f8:191:21cb::2`,
+and switch `force_ssl` off on domains 3 and 4. Phoenix still runs the app and
+keeps its own certificate; it served the site correctly throughout.
+
+### Still to do for the other staged apps
+
+Udesign Live, Oogfonds Staging and Auditexport run on `node-16`, whose image now
+has `gm` -- but their containers are still on the pre-fix image. One
+`hoh power <id> restart` each fixes their media. They were deliberately NOT
+restarted here: their zones are not ours yet, so they carry no traffic, and
+touching them was outside this lane.
