@@ -224,16 +224,39 @@ public final class DnsZoneStore {
         return best;
     }
 
-    /** @return the most specific enabled zone containing the fqdn (no trailing dot needed), or null */
+    /**
+     * @return the most specific enabled zone containing the fqdn (no trailing dot needed), or null
+     *
+     * AIDEV-NOTE: this answers over the SERVING view, which merges primaries AND
+     * secondaries, so it is a READ-path lookup only. A WRITE path must use
+     * {@link #findPrimaryZoneFor}: writing a record row against a secondary's zone id
+     * publishes nothing (reloadNow skips secondaries, the next AXFR overwrites it) while
+     * inflating the replica's stored serial, which then suppresses genuine transfers.
+     */
     public @Nullable DnsZoneSnapshot findZoneFor(@NonNull String fqdn) {
+        return mostSpecific(this.serving, fqdn);
+    }
+
+    /** @return the most specific enabled zone this controller is PRIMARY for containing the fqdn, or null */
+    public @Nullable DnsZoneSnapshot findPrimaryZoneFor(@NonNull String fqdn) {
+        return mostSpecific(this.primaryByOrigin, fqdn);
+    }
+
+    /** @return true when this controller owns the origin, rather than replicating it */
+    public boolean isPrimary(@NonNull String origin) {
+        return this.primaryByOrigin.containsKey(origin);
+    }
+
+    private static @Nullable DnsZoneSnapshot mostSpecific(@NonNull Map<String, DnsZoneSnapshot> zones,
+                                                          @NonNull String fqdn) {
         String best = null;
-        for (DnsZoneSnapshot zone : this.serving.values()) {
+        for (DnsZoneSnapshot zone : zones.values()) {
             String origin = zone.getOriginString();
             if (DnsNames.zoneContains(origin, fqdn) && (best == null || origin.length() > best.length())) {
                 best = origin;
             }
         }
-        return best != null ? this.serving.get(best) : null;
+        return best != null ? zones.get(best) : null;
     }
 
     private static @NonNull DnsZoneSnapshot buildSnapshot(@NonNull Row zone, @NonNull DnsRecordModel recordModel)

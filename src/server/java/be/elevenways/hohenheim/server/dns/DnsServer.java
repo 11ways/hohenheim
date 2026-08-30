@@ -163,6 +163,11 @@ public final class DnsServer {
         this.secondaryService = secondaryService;
     }
 
+    /** @return the replication service wired at boot, or null when this server runs without one */
+    public @Nullable SecondaryZoneService getSecondaryService() {
+        return this.secondaryService;
+    }
+
     /** @return the bind failure message from the last enabled start attempt, or null */
     public @Nullable String getStartupError() {
         return this.startupError;

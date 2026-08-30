@@ -21,6 +21,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -136,13 +137,34 @@ final class CertificateHandlers {
                     return requestError(conduit, certificateError("dns_server_disabled"));
                 }
                 InternalDnsTxtPublisher internal = new InternalDnsTxtPublisher();
-                List<String> unhosted = hostnames.stream()
-                    .map(name -> name.startsWith("*.") ? name.substring(2) : name)
-                    .filter(name -> !internal.canPublishFor("_acme-challenge." + name))
-                    .toList();
+                List<String> unhosted = new ArrayList<>();
+                List<String> replicated = new ArrayList<>();
+                String owningPeer = null;
+                for (String hostname : hostnames) {
+                    String base = hostname.startsWith("*.") ? hostname.substring(2) : hostname;
+                    InternalDnsTxtPublisher.Refusal refusal =
+                        internal.refusalFor("_acme-challenge." + base);
+                    if (refusal == null) {
+                        continue;
+                    }
+                    if (InternalDnsTxtPublisher.REFUSAL_NOT_PRIMARY.equals(refusal.key())) {
+                        replicated.add(base);
+                        if (owningPeer == null) {
+                            owningPeer = refusal.peer();
+                        }
+                    }
+                    else {
+                        unhosted.add(base);
+                    }
+                }
                 if (!unhosted.isEmpty()) {
                     return requestError(conduit, certificateError("zone_not_hosted")
                         .withArg("hostnames", String.join(", ", unhosted)));
+                }
+                if (!replicated.isEmpty()) {
+                    return requestError(conduit, certificateError("zone_not_primary")
+                        .withArg("hostnames", String.join(", ", replicated))
+                        .withArg("peer", String.valueOf(owningPeer)));
                 }
             }
             else if (dns && !CommandDnsTxtPublisher.ID.equals(dnsMode)) {

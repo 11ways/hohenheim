@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.dns.DnsRecordDto;
+import be.elevenways.hohenheim.dns.DnsRecordListResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -13,9 +15,14 @@ import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
+import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
+import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -29,16 +36,22 @@ import org.xbill.DNS.Record;
 import org.xbill.DNS.SOARecord;
 import org.xbill.DNS.Section;
 import org.xbill.DNS.TSIG;
+import org.xbill.DNS.TXTRecord;
 import org.xbill.DNS.Type;
 import org.xbill.DNS.ZoneTransferIn;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static be.elevenways.hohenheim.test.DnsFixtures.createZone;
 import static be.elevenways.hohenheim.test.DnsFixtures.linkZonePeer;
@@ -322,6 +335,255 @@ class DnsFederationTest {
         new TSIG(TSIG.HMAC_SHA256, KEY_NAME + ".", KEY_SECRET).apply(signed, null);
         byte[] signedWire = signed.toWire(Message.MAXLENGTH);
         assertThat(service.onNotify(new Message(signedWire), signedWire)).isTrue();
+    }
+
+    /**
+     * A DNS-01 challenge on a zone this instance only REPLICATES, with no admin channel
+     * to its primary: refused outright rather than written into the replica's row set.
+     *
+     * AIDEV-NOTE: the write used to land against the SECONDARY's zone id, which serves
+     * nothing (the primary rebuild skips secondaries) and inflated the replica's stored
+     * serial, after which the transfer check treated the replica as current.
+     */
+    @Test
+    void acmeChallengeOnASecondaryWithoutAnAdminChannelIsRefused() throws Exception {
+        String origin = "unowned.example";
+        int peerId = transferPeer("unowned-office", "127.0.0.1", 1, KEY_NAME, KEY_SECRET);
+        int zoneId = createZone(origin, DnsZoneModel.ROLE_SECONDARY, peerId);
+        DnsZoneStore.INSTANCE.putSecondarySnapshot(
+            DnsZoneStore.snapshotFromTransfer(zoneId, origin, replicaRecords(origin, 3)));
+        try {
+            InternalDnsTxtPublisher publisher = new InternalDnsTxtPublisher();
+            String challengeName = "_acme-challenge." + origin;
+            Integer serialBefore = Models.get(DnsZoneModel.class).findById(zoneId)
+                .get(DnsZoneModel.SERIAL);
+
+            // 1. The form check refuses it, naming the peer it is replicated from.
+            assertThat(publisher.canPublishFor(challengeName))
+                .describedAs("a replicated zone with no admin channel is not publishable")
+                .isFalse();
+            var refusal = publisher.refusalFor(challengeName);
+            assertThat(refusal).isNotNull();
+            assertThat(refusal.key()).isEqualTo(InternalDnsTxtPublisher.REFUSAL_NOT_PRIMARY);
+            assertThat(refusal.peer()).isEqualTo("unowned-office");
+
+            // 2. Publishing anyway is refused rather than silently written.
+            assertThatThrownBy(() -> publisher.publish(new DnsTxtRecord(challengeName, "token")))
+                .isInstanceOf(IllegalStateException.class);
+
+            // 3. Nothing was written and the replica's serial is untouched, so the next
+            //    genuine transfer is not suppressed by an inflated local serial.
+            assertThat(Models.get(DnsRecordModel.class).find()
+                .where(DnsRecordModel.ZONE_ID.eq(zoneId)).count())
+                .describedAs("no record row was written against the replica")
+                .isZero();
+            assertThat((Integer) Models.get(DnsZoneModel.class).findById(zoneId)
+                .get(DnsZoneModel.SERIAL)).isEqualTo(serialBefore);
+        }
+        finally {
+            DnsZoneStore.INSTANCE.removeSecondarySnapshot(origin);
+        }
+    }
+
+    /**
+     * A DNS-01 challenge on a replicated zone whose primary IS a Hohenheim peer with an
+     * admin key: created on the primary over the admin channel, transferred back here,
+     * and removed on both ends by cleanup.
+     */
+    @Test
+    void acmeChallengeOnASecondaryIsForwardedToTheOwningPrimary() throws Exception {
+        String origin = "forward.example";
+        RemotePrimary primary = new RemotePrimary(origin);
+        SecondaryZoneService replication = new SecondaryZoneService(DnsZoneStore.INSTANCE);
+        try {
+            int peerId = hohenheimPeer("forward-office", primary.baseUrl(), primary.dnsPort());
+            int zoneId = createZone(origin, DnsZoneModel.ROLE_SECONDARY, peerId);
+            assertThat(replication.transfer(zoneId, true))
+                .describedAs("the replica is established before the challenge").isTrue();
+
+            InternalDnsTxtPublisher publisher =
+                new InternalDnsTxtPublisher(DnsZoneStore.INSTANCE, replication);
+            String challengeName = "_acme-challenge." + origin;
+            DnsTxtRecord challenge = new DnsTxtRecord(challengeName, "forwarded-token");
+
+            // 1. A peer with an admin channel makes the replicated zone publishable.
+            assertThat(publisher.canPublishFor(challengeName)).isTrue();
+
+            publisher.publish(challenge);
+
+            // 2. The TXT landed on the PRIMARY, through the admin channel.
+            assertThat(primary.records()).anyMatch(record -> "_acme-challenge".equals(record.name())
+                && DnsRecordModel.TYPE_TXT.equals(record.type())
+                && "forwarded-token".equals(record.value()));
+
+            // 3. Our own replica transferred it and now serves it -- which is what proves
+            //    the CA will see it -- while our zone row still holds no local records.
+            assertThat(txtValues(origin, challengeName)).contains("forwarded-token");
+            assertThat(Models.get(DnsRecordModel.class).find()
+                .where(DnsRecordModel.ZONE_ID.eq(zoneId)).count())
+                .describedAs("a forwarded challenge writes no local row").isZero();
+
+            // 4. Cleanup removes it on the primary and the replica follows.
+            publisher.cleanup(challenge);
+            assertThat(primary.records()).noneMatch(record -> "forwarded-token".equals(record.value()));
+            assertThat(txtValues(origin, challengeName)).doesNotContain("forwarded-token");
+        }
+        finally {
+            replication.stop();
+            primary.stop();
+            DnsZoneStore.INSTANCE.removeSecondarySnapshot(origin);
+        }
+    }
+
+    /** The TXT values the serving snapshot of the origin answers for the name. */
+    private static List<String> txtValues(String origin, String name) throws Exception {
+        DnsZoneSnapshot snapshot = DnsZoneStore.INSTANCE.getZone(origin);
+        List<Record> rrset = snapshot != null
+            ? snapshot.getRrset(Name.fromString(name + "."), Type.TXT) : null;
+        List<String> values = new ArrayList<>();
+        for (Record record : rrset != null ? rrset : List.<Record>of()) {
+            values.add(String.join("", ((TXTRecord) record).getStrings()));
+        }
+        return values;
+    }
+
+    /** A Hohenheim peer reachable BOTH over the admin API and for zone transfers. */
+    private static int hohenheimPeer(String name, String baseUrl, int dnsPort) {
+        int peerId = DnsFixtures.apiPeer(name, baseUrl);
+        Row peer = Models.get(DnsPeerModel.class).findById(peerId);
+        peer.set(DnsPeerModel.TRANSFER_HOST, "127.0.0.1");
+        peer.set(DnsPeerModel.TRANSFER_PORT, dnsPort);
+        peer.set(DnsPeerModel.TSIG_KEY_NAME, KEY_NAME);
+        peer.set(DnsPeerModel.TSIG_ALGORITHM, "hmac-sha256");
+        peer.set(DnsPeerModel.TSIG_SECRET, KEY_SECRET);
+        Models.get(DnsPeerModel.class).save(peer);
+        return peerId;
+    }
+
+    /**
+     * The owning primary of a replicated zone: a detached zone store served over a real
+     * loopback nameserver, plus a stub of this app's own record API that edits it. Two
+     * Hohenheim instances cannot share one database, so the admin channel's SERVER half
+     * is stubbed while its client half, the AXFR and the serving store stay real.
+     */
+    private static final class RemotePrimary {
+
+        private final String origin;
+        private final Name originName;
+        private final DnsZoneStore store = DnsZoneStore.createDetached();
+        private final Map<Integer, DnsRecordDto> records = new LinkedHashMap<>();
+        private final DnsServer dns;
+        private final HttpServer http;
+        private int nextId = 1;
+        private long serial = 10;
+
+        RemotePrimary(String origin) throws Exception {
+            this.origin = origin;
+            this.originName = Name.fromString(origin + ".");
+            add(new DnsRecordDto(nextId++, "@", DnsRecordModel.TYPE_NS, 3600,
+                "ns1." + origin, null, null, null, true, null));
+            rebuild();
+
+            TSIG key = new TSIG(TSIG.HMAC_SHA256, KEY_NAME + ".", KEY_SECRET);
+            Name expectedKeyName = Name.fromString(KEY_NAME + ".");
+            this.dns = new DnsServer(new DnsResponder(this.store),
+                new AxfrResponder(this.store,
+                    (zoneId, requested) -> requested.equals(expectedKeyName) ? key : null));
+            this.dns.start("127.0.0.1", 0);
+
+            this.http = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            this.http.createContext("/", this::handle);
+            this.http.start();
+        }
+
+        String baseUrl() {
+            return "http://127.0.0.1:" + this.http.getAddress().getPort();
+        }
+
+        int dnsPort() {
+            return this.dns.getUdpPort();
+        }
+
+        synchronized List<DnsRecordDto> records() {
+            return List.copyOf(this.records.values());
+        }
+
+        void stop() {
+            this.http.stop(0);
+            this.dns.stop();
+        }
+
+        private synchronized void handle(HttpExchange exchange) throws IOException {
+            String path = exchange.getRequestURI().getPath();
+            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            String response;
+            try {
+                if ("GET".equals(exchange.getRequestMethod())) {
+                    response = Zenit.DRY.toJson(
+                        new DnsRecordListResponse(this.origin, (int) this.serial, records()));
+                }
+                else if (path.endsWith("/delete")) {
+                    String[] segments = path.split("/");
+                    this.records.remove(Integer.valueOf(segments[segments.length - 2]));
+                    rebuild();
+                    response = "{}";
+                }
+                else {
+                    Map<String, String> fields = form(body);
+                    add(new DnsRecordDto(nextId++, fields.get("name"), fields.get("type"),
+                        fields.get("ttl") != null ? Integer.valueOf(fields.get("ttl")) : null,
+                        fields.get("value"), null, null, null, true, null));
+                    rebuild();
+                    response = "{}";
+                }
+            }
+            catch (Exception e) {
+                exchange.sendResponseHeaders(500, 0);
+                exchange.close();
+                return;
+            }
+            byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        }
+
+        private void add(DnsRecordDto record) {
+            this.records.put(record.id(), record);
+        }
+
+        /** Recompiles the served zone, advancing the serial the way a real edit does. */
+        private void rebuild() throws Exception {
+            this.serial++;
+            List<Record> zone = new ArrayList<>();
+            zone.add(new SOARecord(this.originName, DClass.IN, 3600,
+                Name.fromString("ns1." + this.origin + "."),
+                Name.fromString("hostmaster." + this.origin + "."),
+                this.serial, 7200, 3600, 1209600, 300));
+            for (DnsRecordDto record : this.records.values()) {
+                Name owner = "@".equals(record.name())
+                    ? this.originName : Name.fromString(record.name(), this.originName);
+                long ttl = record.ttl() != null ? record.ttl() : 3600;
+                zone.add(DnsRecordModel.TYPE_TXT.equals(record.type())
+                    ? new TXTRecord(owner, DClass.IN, ttl, record.value())
+                    : new NSRecord(owner, DClass.IN, ttl, Name.fromString(record.value() + ".")));
+            }
+            this.store.injectPrimarySnapshot(
+                DnsZoneStore.snapshotFromTransfer(9002, this.origin, zone));
+        }
+
+        private static Map<String, String> form(String body) {
+            Map<String, String> fields = new LinkedHashMap<>();
+            for (String pair : body.split("&")) {
+                int split = pair.indexOf('=');
+                if (split > 0) {
+                    fields.put(URLDecoder.decode(pair.substring(0, split), StandardCharsets.UTF_8),
+                        URLDecoder.decode(pair.substring(split + 1), StandardCharsets.UTF_8));
+                }
+            }
+            return fields;
+        }
     }
 
     /** SOA + NS + www A record set for a synthetic replicated zone. */

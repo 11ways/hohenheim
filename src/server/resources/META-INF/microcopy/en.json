@@ -3481,6 +3481,10 @@
     "text": "No enabled hosted DNS zone covers: {$hostnames}",
     "scope": "certificate_request_error"
   },
+  "zone_not_primary": {
+    "text": "This instance only replicates the zone covering {$hostnames} from {$peer}; request the certificate there, give that peer an admin API key, or use HTTP-01",
+    "scope": "certificate_request_error"
+  },
   "dns_server_disabled": {
     "text": "The DNS server is not running; enable it in the settings first",
     "scope": "certificate_request_error"
