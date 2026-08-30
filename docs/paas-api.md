@@ -559,6 +559,17 @@ hoh --context staging login https://staging.example   # store a key UNDER that n
 host is unreachable. An unknown name is a named refusal naming the config file,
 never a crash.
 
+A context whose host is a loopback address means only as much as the ssh forward
+behind that port. Every panel binds `127.0.0.1:3000` on its own box, so a context
+pointed at `http://127.0.0.1:3000` names whichever box the forward happens to
+serve -- on 2026-08-30 the `robbedoes` context resolved to **kuifje** for exactly
+that reason. Nothing was written to the wrong controller (an API key is
+box-specific, so a misdirected call fails authentication rather than mutating a
+foreign box), but the failure mode is confusing rather than loud. Give each
+controller its own dedicated local port instead, and open the forward on that
+port: `robbedoes` is `127.0.0.1:13020`. A forward that is not open then refuses
+the connection, which is the honest answer.
+
 ### Commands
 
 ```
