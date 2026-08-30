@@ -23,9 +23,14 @@ RUN rm -f /etc/apt/sources.list.d/*.list \
 # while the site's HTML still renders perfectly -- measured 2026-08-30 on Taverne
 # Tomberg and Udesign. Phoenix carries GraphicsMagick 1.3.23 and ImageMagick
 # system-wide, which is why the apps never declared the dependency.
+# libexiv2-14: the `exiv2` native module of this era links against libexiv2.so.14, so
+# without it `require('exiv2')` throws "libexiv2.so.14: cannot open shared object file"
+# and alchemy-media loses image metadata (measured 2026-08-30 on Udesign Preview, which
+# runs on node-10; no node-12 app carries the module today, but they are the same
+# vintage and buster is the base that still ships the matching soname).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends bash busybox ca-certificates iproute2 util-linux curl git tini \
-        python3 make g++ graphicsmagick imagemagick \
+        python3 make g++ graphicsmagick imagemagick libexiv2-14 \
  && rm -rf /var/lib/apt/lists/*
 
 # The Incus lane's PID 1 (see ../hohenheim-init): shared by every runtime image and

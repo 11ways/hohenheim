@@ -1889,3 +1889,98 @@ Deleting a database or an attachment re-renders the record it just deleted
 instead of navigating to the list (the record IS gone -- a follow-up read
 returns 403). And the attachment delete dialog shows the raw catalog key
 `delete_confirm` where its confirmation sentence belongs.
+
+## NODE_ENV and libexiv2 across the migrated apps, 2026-08-30
+
+Two gaps left by the migration wave, closed together so each instance took one
+restart.
+
+### NODE_ENV=production was missing on every migrated instance
+
+Old Hohenheim exported `NODE_ENV=production` into every child; the Java lane
+does not, so six apps were running with it unset. Set as a plain instance
+variable (`hoh vars instance <id> set NODE_ENV production`) on 2 microcopy,
+3 taverne-tomberg, 6 auditexport, 8 invulassistent, 11 oogfonds-staging and
+13 udesign-live; 15 udesign-preview already carried it. Verified in each
+container's PID 1 environment, not just in the stored record.
+
+**It changed no rendered page.** Every app's byte size is identical before and
+after, and a normalised diff of the two live sites (stripping the per-boot
+`?v=...&i=<hex>` asset stamp) is EMPTY -- zero lines. That is consistent with
+the Alchemy environment being chosen by `app/config/local.js` (`environment:`),
+not by `NODE_ENV`; the variable is set for parity with Phoenix, and should not
+be expected to shrink a payload. The earlier "setting it cut the page by 17 KB"
+reading on Udesign Preview does not reproduce and is explained below.
+
+### libexiv2: buster yes, bullseye deliberately not
+
+`require('exiv2')` threw `libexiv2.so.14: cannot open shared object file` in
+instance 15. `ldd` on the module confirms it links `libexiv2.so.14`.
+
+| base | package available | soname | shipped |
+| --- | --- | --- | --- |
+| buster (node-10, node-12) | `libexiv2-14` 0.25-4+deb10u4 | `libexiv2.so.14` | YES |
+| bullseye (node-16) | `libexiv2-27` 0.27.3-3+deb11u2 | `libexiv2.so.27` | **NO** |
+
+Bullseye ships no `.so.14`, so installing `libexiv2-27` on node-16 would add
+weight and satisfy nothing. Measured: no node-16 app on this box carries an
+exiv2 module at all -- only instance 15 (node-10) does. An app needing exiv2 on
+bullseye must have the module rebuilt against 0.27, which the
+copy-`node_modules`-from-Phoenix rule deliberately avoids. The Dockerfile says
+this where a reader will hit it.
+
+After the rebuild: `require('exiv2')` -> `OK, keys:
+getImageTags,setImageTags,deleteImageTags,getImagePreviews,getDate`.
+
+Images rebuilt on the box: node-10 `3e74aa99cbf9` -> `a989f9341913` (792 MB),
+node-12 `d1533013b76a` -> `05c9d9ec1bde` (769 MB). node-16 unchanged
+(`8646597d5f54`), so instances 2/6/11/13 keep that image id across their
+restart -- an unmoved image id there is correct, not a failed recreate.
+
+### The ~62 KB payload gap does not exist
+
+It was measurement noise, and the noise has a name: `__debuglog`, a per-request
+timing block Alchemy embeds in the hydration payload. Its size tracks how many
+marks the render logged, and it varies request to request on BOTH boxes. Eight
+consecutive authenticated fetches of `staging.udesign.world/`:
+
+    robbedoes  230771/15  229640/13  233140/19  230805/15
+               230771/15  240053/31  229655/13  236534/25     (bytes / __debuglog)
+    phoenix    230772/15  229627/13  230772/15  230875/15
+               230772/15  230772/15  230772/15  230806/15
+
+Same mode on both (15 entries, ~230,77x bytes); robbedoes simply varies more.
+`MediaFile` occurrences are **75 on both** and EXIF-shaped mentions **34 on
+both** -- the earlier claim that one box shipped ~20 extra MediaFile records was
+a single cold render taken seconds after a restart (the same trap that produced
+the "sixth capture" anomaly during the Tomberg cutover). Adding libexiv2 did
+NOT change those counts either: the module now loads, which is worth having on
+its own, but it does not alter this page.
+
+Cold renders right after a restart are not comparable to warm ones. Take the
+mode of several fetches, never one.
+
+### Restarts and downtime (polled, 0.3 s interval)
+
+| instance | image before -> after | downtime | verification |
+| --- | --- | --- | --- |
+| 2 microcopy | 8646597d5f54 (unchanged) | staged, not measured | 200/6699 |
+| 6 auditexport | 8646597d5f54 (unchanged) | staged, not measured | 200/0 |
+| 11 oogfonds | 8646597d5f54 (unchanged) | staged, not measured | 401/12 |
+| 13 udesign-live | 8646597d5f54 (unchanged) | staged, not measured | 200/209082 |
+| 15 udesign-preview | 3e74aa99cbf9 -> a989f9341913 | staged, not measured | 401/12, exiv2 loads |
+| **3 taverne-tomberg (live)** | d1533013b76a -> 05c9d9ec1bde | **1.5 s** (04:29:40.182 -> 41.638; back 43.503) | 200/145413 + www 200/145417 |
+| **8 invulassistent (live)** | d1533013b76a -> 05c9d9ec1bde | **2.2 s** (04:30:48.961 -> 51.135; back 52.975) | 401/8950, 200/9104, 401/8367 |
+
+Every failure during both windows was a 503 from the proxy, never a timeout.
+`earl.wcag.be` (untouched) stayed 200/1024 sha `c994a6d8...`, and the Udesign
+media derivative still returns 200/43829 sha `e668f9e1f9f9e738...` -- the
+Phoenix-identical hash, so GraphicsMagick survived both image rebuilds.
+
+Host after: disk 30 GB of 99 GB, memory 4.0 GB of 11.4 GB used.
+
+### Deploy note
+
+The Dockerfile change is build context only -- **no jar deploy is needed**. The
+images live per box, so kuifje and starfleet would need their own rebuild if
+they ever run these workloads; today neither does.
