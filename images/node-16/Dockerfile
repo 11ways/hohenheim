@@ -12,6 +12,13 @@ FROM node:16-bullseye-slim
 # site's HTML still renders perfectly (measured 2026-08-30 on Taverne Tomberg and
 # Udesign). Phoenix carries both system-wide, which is why the apps never declared
 # the dependency.
+# Deliberately NO libexiv2 here: the Phoenix-era `exiv2` native module links against
+# libexiv2.so.14, and bullseye ships only libexiv2-27 (0.27, soname .so.27), which does
+# not satisfy it -- installing it would add weight and satisfy nothing. Measured
+# 2026-08-30: no node-16 app on robbedoes carries an exiv2 module at all, and buster's
+# node-10/node-12 images are where the module actually lives. An app that needs exiv2
+# on bullseye must have the module rebuilt against 0.27 (libexiv2-27 + libexiv2-dev),
+# which the copy-node_modules-from-Phoenix rule deliberately avoids.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends bash busybox ca-certificates iproute2 util-linux curl git tini \
         python3 make g++ graphicsmagick imagemagick \

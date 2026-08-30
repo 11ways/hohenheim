@@ -24,9 +24,14 @@ RUN rm -f /etc/apt/sources.list.d/*.list \
 # site's HTML still renders perfectly (measured 2026-08-30 on Taverne Tomberg and
 # Udesign). Phoenix carries both system-wide, which is why the apps never declared
 # the dependency.
+# libexiv2-14: the `exiv2` native module of this era links against libexiv2.so.14, so
+# without it `require('exiv2')` throws "libexiv2.so.14: cannot open shared object file"
+# and alchemy-media loses image metadata (measured 2026-08-30 on Udesign Preview).
+# Buster's libexiv2-14 (0.25) carries exactly that soname; bullseye's libexiv2-27 does
+# NOT, which is why node-16 deliberately ships none -- see that Dockerfile.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends bash busybox ca-certificates iproute2 util-linux curl git tini \
-        python3 python make g++ graphicsmagick imagemagick \
+        python3 python make g++ graphicsmagick imagemagick libexiv2-14 \
  && rm -rf /var/lib/apt/lists/*
 
 # The Incus lane's PID 1 (see ../hohenheim-init): shared by every runtime image and
