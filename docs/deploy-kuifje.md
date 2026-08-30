@@ -1431,3 +1431,14 @@ comparison against the `dns.nameservers` SETTING, which still declares the
 in-bailiwick pair for the elevenways.de plan. Left untouched deliberately: it
 governs zones created from now on, not this one. Secondaries tab: `robbedoes`
 **Current** at served serial 8.
+
+## wcag.be delegation live, earl flipped, 2026-08-30
+
+The `.be` parent published `nskuifje.mooo.com` / `nsrobbedoes.mooo.com` at
+~01:09Z; `hoh-dns-diff delegation wcag.be` = DELEGATION OK (parent == apex,
+serial agreed on both servers). Zone 3's `earl` row then moved from `CNAME
+phoenix.develry.be` to `A 51.255.43.81` + `AAAA 2001:41d0:305:2100::1:4b26`
+(TTL 700, delete-then-add: an A beside a CNAME is refused), serial 8 -> 11,
+robbedoes Current within seconds. Certificate + byte-level site verification
+in `deploy-robbedoes.md` ("Earl LIVE"). Check health verdict:
+`apex_undeclared` -- expected under the interim mooo pair.
