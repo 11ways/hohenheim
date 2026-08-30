@@ -256,4 +256,54 @@ class DnsZoneApiTest extends HohenheimTestBase {
         assertThat(onSecondary.statusCode()).isEqualTo(422);
         assertThat(codeOf(onSecondary.body())).isEqualTo("import_secondary_zone");
     }
+
+    /**
+     * The SOA MNAME of a created primary zone: a blank one lands inside the declared set
+     * the same create seeded at the apex, an explicit one is the operator's.
+     */
+    @Test
+    @Order(3)
+    void aBlankSoaPrimaryNsDefaultsToTheFirstDeclaredNameserver() throws Exception {
+        // 1. Blank: the MNAME becomes the first declared name, which is one of the apex
+        //    NS rows this very create wrote -- never a host nothing delegates to.
+        HttpResponse<String> blank = keyPost(keyAdmin, "/api/v1/dns/zones",
+            form("origin", "mname-blank-zone-api-a.test"));
+        assertThat(blank.statusCode()).as("step 1: the zone is created: " + blank.body())
+            .isEqualTo(200);
+        int blankId = idOf(blank.body());
+        assertThat((Object) zone(blankId).get(DnsZoneModel.SOA_PRIMARY_NS))
+            .as("step 1: the blank MNAME took the first declared nameserver")
+            .isEqualTo(DECLARED.get(0));
+        assertThat(apexNs(blankId)).as("step 1: and that name is one of the apex NS rows")
+            .contains(DECLARED.get(0));
+
+        // 2. An explicit MNAME is the operator's and stands, however unlisted it is.
+        HttpResponse<String> explicit = keyPost(keyAdmin, "/api/v1/dns/zones", form(
+            "origin", "mname-explicit-zone-api-a.test", "soa_primary_ns", "ns9.elsewhere.test"));
+        assertThat(explicit.statusCode()).as("step 2: created: " + explicit.body()).isEqualTo(200);
+        assertThat((Object) zone(idOf(explicit.body())).get(DnsZoneModel.SOA_PRIMARY_NS))
+            .as("step 2: the declared set never overwrites a named MNAME")
+            .isEqualTo("ns9.elsewhere.test");
+
+        // 3. With nothing declared there is nothing to default to: the column stays blank
+        //    and the served SOA keeps synthesizing ns1.<origin>, exactly as before.
+        HohenheimSettings.VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, List.of());
+        try {
+            String origin = "mname-undeclared-zone-api-a.test";
+            HttpResponse<String> undeclared = keyPost(keyAdmin, "/api/v1/dns/zones",
+                form("origin", origin));
+            assertThat(undeclared.statusCode()).as("step 3: created: " + undeclared.body())
+                .isEqualTo(200);
+            int undeclaredId = idOf(undeclared.body());
+            assertThat((Object) zone(undeclaredId).get(DnsZoneModel.SOA_PRIMARY_NS))
+                .as("step 3: nothing declared, nothing defaulted").isEqualTo("");
+            assertThat(apexNs(undeclaredId)).as("step 3: and no apex NS rows either").isEmpty();
+            assertThat(DnsZoneStore.INSTANCE.getZone(origin).getSoa().getHost().toString(true))
+                .as("step 3: the snapshot still synthesizes ns1.<origin>")
+                .isEqualTo("ns1." + origin);
+        } finally {
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, DECLARED);
+            DnsZoneStore.INSTANCE.reload();
+        }
+    }
 }

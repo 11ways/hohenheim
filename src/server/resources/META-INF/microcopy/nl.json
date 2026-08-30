@@ -11696,6 +11696,10 @@
     "text": "Apex-NS wijkt af van de gedeclareerde nameservers",
     "scope": "dns_delegation"
   },
+  "soa_mname_unlisted": {
+    "text": "SOA-hoofdnameserver staat niet in de apex-NS",
+    "scope": "dns_delegation"
+  },
   "import_done_notes": {
     "text": "{$count} records geïmporteerd. {$notes}",
     "scope": "dns_zone"

@@ -67,7 +67,8 @@ public final class DnsDelegationHealth {
         }
         Name origin = snapshot.getOrigin();
         DelegationCheck.Report report = check.check(origin, ours, snapshot.getSerial())
-            .with(DnsNameservers.compareWithDeclared(ours));
+            .with(DnsNameservers.compareWithDeclared(ours))
+            .with(mnameFindings(snapshot, ours));
 
         DelegationVerdict previous = DelegationVerdict.forToken(zone.get(DnsZoneModel.DELEGATION_STATUS));
         zone.set(DnsZoneModel.DELEGATION_STATUS, report.verdict().token());
@@ -84,5 +85,27 @@ public final class DnsDelegationHealth {
                 "previous", previous != null ? previous.token() : "none"));
         }
         return report;
+    }
+
+    /**
+     * The disagreement between the SOA MNAME this primary serves and its own apex NS set.
+     *
+     * AIDEV-NOTE: the MNAME is judged against what is SERVED, not against the stored
+     * column: a blank column is synthesized into {@code ns1.<origin>} by the snapshot
+     * builder, and that synthesized name is exactly the one that ends up naming a host
+     * with no address.
+     *
+     * @return one {@link DelegationVerdict#SOA_MNAME_UNLISTED} finding, or nothing
+     */
+    private static @NonNull List<DelegationCheck.Finding> mnameFindings(
+            @NonNull DnsZoneSnapshot snapshot, @NonNull List<String> apex) {
+        String mname = snapshot.getSoa().getHost().toString(true).toLowerCase(Locale.ROOT);
+        for (String name : apex) {
+            if (name.equalsIgnoreCase(mname)) {
+                return List.of();
+            }
+        }
+        return List.of(new DelegationCheck.Finding(DelegationVerdict.SOA_MNAME_UNLISTED,
+            mname + " not in apex NS set"));
     }
 }
