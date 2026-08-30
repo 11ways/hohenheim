@@ -108,12 +108,12 @@ public final class DnsPeerResource extends RowResource {
     }
 
     // AIDEV-NOTE: there is deliberately NO record-aware FieldAccess hiding base_url/api_key
-    // on a nameserver peer any more. It hid them from the STORED type while validate demanded
-    // them for the SUBMITTED one, so switching a peer to Hohenheim was a guaranteed dead end:
-    // the renderer skipped both inputs, enforceFieldAccess stripped them out of the submit,
-    // and validate then refused the save against the empty stored values. The type gate that
-    // actually matters is DnsPeerApi.forPeer, which keys on the TYPE and never on "has a base
-    // URL and a key" -- credentials on a nameserver peer are inert, not dangerous.
+    // on a nameserver peer. A binding was the wrong seam: it keys on the STORED record while
+    // validate keys on the SUBMITTED type, so switching a peer to Hohenheim was a guaranteed
+    // dead end -- the renderer skipped both inputs, enforceFieldAccess stripped them out of
+    // the submit, and validate then refused the save for lacking them. The type rule lives at
+    // WRITE time instead (see stripCredentialsOfNameserver), keyed on the type the submit
+    // declares, which is the only thing both halves can agree on.
 
     /**
      * Exchanges a fresh shared TSIG key with a Hohenheim peer, writing both sides.
@@ -246,15 +246,50 @@ public final class DnsPeerResource extends RowResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
-        validate(CmsSupport.mutable(coerced), null);
-        return super.persistRow(coerced, accessContext);
+        Map<String, Object> write = stripCredentialsOfNameserver(coerced, null);
+        validate(write, null);
+        return super.persistRow(write, accessContext);
     }
 
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        validate(CmsSupport.mutable(coerced), existing);
-        super.updateRow(existing, coerced, accessContext);
+        Map<String, Object> write = stripCredentialsOfNameserver(coerced, existing);
+        validate(write, existing);
+        super.updateRow(existing, write, accessContext);
+    }
+
+    /**
+     * Blanks the edit-forwarding credentials whenever the type this write DECLARES is a plain
+     * nameserver, so they can neither be smuggled in nor survive a demotion.
+     *
+     * AIDEV-NOTE: keyed on the SUBMITTED type, which is what lets the opposite direction work
+     * -- promoting a peer to Hohenheim carries base_url/api_key in the same submit and keeps
+     * them. Only a write that names peer_type or one of the two columns is touched, because a
+     * partial write (the inline cell lane hands exactly one entry) means LEAVE ALONE. The
+     * secret arm is safe here: FormSecrets.restore has already put the stored api_key back
+     * before this runs, so writing "" clears it rather than reading as "unchanged".
+     *
+     * @return the map to write: a blanked copy when the rule fires, the input itself otherwise
+     */
+    private static @NonNull Map<String, Object> stripCredentialsOfNameserver(
+            @NonNull Map<String, Object> coerced, @Nullable Row existing) {
+        boolean declaresType = coerced.containsKey(DnsPeerModel.PEER_TYPE.getName());
+        boolean carriesCredentials = coerced.containsKey(DnsPeerModel.BASE_URL.getName())
+            || coerced.containsKey(DnsPeerModel.API_KEY.getName());
+        if (!declaresType && !carriesCredentials) {
+            return coerced;
+        }
+        String type = declaresType
+            ? String.valueOf(coerced.get(DnsPeerModel.PEER_TYPE.getName()))
+            : (existing != null ? DnsPeerModel.typeOf(existing) : DnsPeerModel.TYPE_NAMESERVER);
+        if (DnsPeerModel.TYPE_HOHENHEIM.equals(type)) {
+            return coerced;
+        }
+        Map<String, Object> write = CmsSupport.mutable(coerced);
+        write.put(DnsPeerModel.BASE_URL.getName(), "");
+        write.put(DnsPeerModel.API_KEY.getName(), "");
+        return write;
     }
 
     /**
