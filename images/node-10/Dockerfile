@@ -29,9 +29,14 @@ RUN rm -f /etc/apt/sources.list.d/*.list \
 # and alchemy-media loses image metadata (measured 2026-08-30 on Udesign Preview).
 # Buster's libexiv2-14 (0.25) carries exactly that soname; bullseye's libexiv2-27 does
 # NOT, which is why node-16 deliberately ships none -- see that Dockerfile.
+# webp (cwebp): alchemy-media negotiates WebP by USER-AGENT, so a real browser gets
+# "500: Error: Could not find cwebp path" on every image while curl -- whose UA asks
+# for no WebP -- gets a perfectly good JPEG from the same URL. That asymmetry is why
+# the gap survived a byte-for-byte cutover comparison (measured 2026-08-30 on the live
+# tavernetomberg.be).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends bash busybox ca-certificates iproute2 util-linux curl git tini \
-        python3 python make g++ graphicsmagick imagemagick libexiv2-14 \
+        python3 python make g++ graphicsmagick imagemagick libexiv2-14 webp \
  && rm -rf /var/lib/apt/lists/*
 
 # The Incus lane's PID 1 (see ../hohenheim-init): shared by every runtime image and
