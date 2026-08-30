@@ -705,6 +705,343 @@ touched.
    against a Hetzner server, and keep Hetzner's zone alive for its SOA expire
    (3600000 s = 41 days) afterwards.
 
+## Zone tavernetomberg.be staged, 2026-08-30
+
+The third zone reconstructed onto these controllers. `tavernetomberg.be` is
+registered elsewhere and hosted on Hetzner DNS today; nothing at the registrar
+or at Hetzner was touched. This wave only makes kuifje and robbedoes serve a
+faithful copy.
+
+### THE DECLARED NAMESERVERS MOVED MID-WAVE -- read this first
+
+`dns.nameservers` was `nskuifje.mooo.com` / `nsrobbedoes.mooo.com` on both
+controllers when this wave started (verified in
+`/opt/hohenheim/settings/hohenheim.dry` at 23:55 UTC). ANOTHER SESSION changed
+it to `ns1.elevenways.de` / `ns2.elevenways.de` on kuifje at 23:57:21 UTC and on
+robbedoes at 23:58 UTC -- between that check and the first zone create -- and
+created kuifje zone id 4, `elevenways.de`, the zone those names will live in.
+So the two zones below carry `ns1/ns2.elevenways.de` as their apex NS set, and
+their SOA MNAME was set to `ns1.elevenways.de` to match. That is the DECLARED
+set doing exactly what it is for: a zone created now inherits the current names
+and a zone-file import substitutes them. That session then moved `wcag.be`
+(zone 3) onto the same pair -- verified here after the fact, `wcag.be` and
+`elevenways.de` both answer `ns1.elevenways.de. | ns2.elevenways.de.` from
+kuifje -- so all four zones staged on these controllers now publish ONE
+nameserver naming. (`starfleet.life`, zone 1, is a secondary of the starfleet
+federation and keeps its own `nssl/nssl2.mooo.com` pair; that is not ours.)
+
+Measured at the end of this wave, and it is the wrong way round today:
+
+    nskuifje.mooo.com     A 137.74.171.228  AAAA 2001:41d0:305:2100::1:4afe
+    nsrobbedoes.mooo.com  A 51.255.43.81    AAAA (no data)
+    ns1.elevenways.de     NXDOMAIN (A and AAAA)
+    ns2.elevenways.de     NXDOMAIN (A and AAAA)
+
+The mooo.com pair now RESOLVES (it did not an hour earlier, which is what the
+wcag.be section recorded), except that `nsrobbedoes.mooo.com` has no AAAA --
+confirmed NODATA at 1.1.1.1, 8.8.8.8 and 9.9.9.9. The pair these two zones
+publish does not resolve at all yet. Moving either delegation before its names
+resolve takes the domain offline, so step 2 below is genuinely blocking.
+
+### What public DNS held, 2026-08-30
+
+`hoh-dns-diff delegation tavernetomberg.be`: parent `be.` (answered by
+194.0.6.1) publishes `ns.second-ns.com`, `ns1.your-server.de`,
+`ns3.second-ns.de`, no glue (all out-of-bailiwick), all three authoritative at
+serial `2026011500`, parent set == apex set, no DS. VERDICT: DELEGATION OK. The
+IPv6 address of each of the three was not probed (no route from the
+workstation), which is a warning about the probe, not the zone.
+
+AXFR is REFUSED (rcode 5) by all three, so the zone was RECONSTRUCTED by probing
+226 candidate owners x 9 types = 2034 questions against 213.239.204.242,
+213.133.100.102, 193.47.99.4 and 1.1.1.1 -- 8136 answers, all four agreeing on
+every question (0 disagreements, after retrying what Hetzner rate-limited away).
+Draft: `scratchpad/zones/tavernetomberg.be.zone`.
+
+Found, and nothing else: apex `A 144.76.30.204` (Phoenix), apex `AAAA
+2a01:4f8:191:21cb::2`, apex `MX 10 calamity.develry.be.`, apex `TXT "v=spf1 +a
++mx ?all"`, `www` CNAME to the apex, and three client-autoconfig SRV records --
+`_autodiscover._tcp 0 100 443`, `_imaps._tcp 0 100 993`, `_submission._tcp
+0 100 587`, all to `calamity.develry.be.`. Everything is TTL 7200.
+
+This zone CARRIES MAIL, so the mail owners were probed exhaustively, and the
+absences are facts rather than omissions: `mail`, `smtp`, `imap`, `pop`,
+`webmail`, `mx`, `autoconfig` and `autodiscover` are all NXDOMAIN on all three
+authoritative servers, so the MX and the three SRV targets are the ONLY mail
+names this zone publishes. No `_dmarc` (NXDOMAIN), and no DKIM selector among 48
+guesses (`google`, `k1`, `k2`, `default`, `mail`, `selector1/2`, `dkim`,
+`s1/s2`, `pm`, `mailcoach`, `postmark`, the dated `YYYYMMDD...pm` shapes, ...).
+No `mta-sts`, `_mta-sts` or `_smtp._tls`. No CAA, no `google-site-verification`
+TXT at the apex (the apex TXT is SPF only), no AAAA below the apex, and no
+wildcard (`randomprobe-a7f3q9` and `zz-wildcard-test-4471` are both NXDOMAIN on
+all three servers).
+
+THIS COPY IS PROVISIONAL, exactly as `wcag.be` was: a probe cannot enumerate a
+zone. The real Hetzner export must be pasted into the Zone-file tab before the
+delegation moves; the import REPLACES every operator row, so it heals this copy
+rather than merging with it.
+
+### The zones
+
+kuifje zone id 5 (1 `starfleet.life`, 3 `wcag.be`, 4 the other session's
+`elevenways.de`), role primary, contact `hostmaster@tavernetomberg.be`. The
+create seeded exactly two apex NS rows from the declared set --
+`ns1.elevenways.de` and `ns2.elevenways.de` -- which the Records tab showed
+before anything was imported. Both names are OUT of bailiwick (a different
+domain from this zone), so this zone needs no glue rows and none were added.
+
+Then the Zone-file tab's import ("Imported 10 records.", serial 1 -> 2) with the
+8 data rows; the keep-nameservers checkbox was left unchecked and the pasted
+text deliberately carried no apex NS set. A first import attempt FAILED with
+`Import failed: <none>:1: expected EOL or EOF` -- the browser driver's
+set_value collapses newlines in a textarea, so the whole file arrived as one
+line; setting `textarea.value` directly and dispatching `input` is the way in.
+The SOA MNAME was then corrected from the create-form default to
+`ns1.elevenways.de` so the MNAME names a server the NS set actually lists
+(serial 2 -> 3). The served zone file:
+
+    tavernetomberg.be.                   3600 IN SOA ns1.elevenways.de. hostmaster.tavernetomberg.be. 3 7200 3600 1209600 300
+    tavernetomberg.be.                   7200 IN A 144.76.30.204
+    tavernetomberg.be.                   7200 IN AAAA 2a01:4f8:191:21cb:0:0:0:2
+    tavernetomberg.be.                   7200 IN MX 10 calamity.develry.be.
+    tavernetomberg.be.                   7200 IN TXT "v=spf1 +a +mx ?all"
+    tavernetomberg.be.                   3600 IN NS ns1.elevenways.de.
+    tavernetomberg.be.                   3600 IN NS ns2.elevenways.de.
+    _autodiscover._tcp.tavernetomberg.be. 7200 IN SRV 0 100 443 calamity.develry.be.
+    _imaps._tcp.tavernetomberg.be.       7200 IN SRV 0 100 993 calamity.develry.be.
+    _submission._tcp.tavernetomberg.be.  7200 IN SRV 0 100 587 calamity.develry.be.
+    www.tavernetomberg.be.               7200 IN CNAME tavernetomberg.be.
+
+`dns_zone_peers` id 3 on kuifje links the zone to peer `robbedoes` (transfer
+host 51.255.43.81). On robbedoes the same origin was created with role secondary
+and primary peer `kuifje` -- robbedoes zone id 4 -- and pulled within a minute.
+Its Records tab shows the replica read-only, the known asymmetry (kuifje's panel
+is loopback-only, so the peer has no admin base URL).
+
+### Compare
+
+`compare tavernetomberg.be --old 213.133.100.102 --new 137.74.171.228
+--zone-file <draft> --names @,www,mail,smtp,imap,pop,webmail,mx,autoconfig,
+autodiscover,_dmarc,mta-sts,_mta-sts,_smtp._tls,google._domainkey,
+k1._domainkey,default._domainkey,selector1._domainkey,_autodiscover._tcp,
+_imaps._tcp,_submission._tcp` is DIFFERENT (1) over 21 names, and both
+non-identical rows are expected:
+
+    tavernetomberg.be.  NS   apex-ns  ns.second-ns.com. | ns1.your-server.de. | ns3.second-ns.de.  ->  ns1.elevenways.de. | ns2.elevenways.de.
+    tavernetomberg.be.  SOA  differs  ns1.your-server.de. postmaster.your-server.de. 2026011500 ...  ->  ns1.elevenways.de. hostmaster.tavernetomberg.be. 3 ...
+
+Every other question is `identical` -- apex A/AAAA/MX/TXT, `www` CNAME and all
+three SRV rows, printed in full:
+
+    _autodiscover._tcp.tavernetomberg.be.  SRV  identical  0 100 443 calamity.develry.be.
+    _imaps._tcp.tavernetomberg.be.         SRV  identical  0 100 993 calamity.develry.be.
+    _submission._tcp.tavernetomberg.be.    SRV  identical  0 100 587 calamity.develry.be.
+    tavernetomberg.be.                     MX   identical  10 calamity.develry.be.
+    tavernetomberg.be.                     TXT  identical  "v=spf1 +a +mx ?all"
+
+Every mail owner in the `--names` list produced NO ROW at all, which is the
+proof they are absent on BOTH sides. The only warnings are the apex NS/SOA TTL
+(7200 vs 3600) and the serial, both reported and neither a difference.
+
+`compare --old 137.74.171.228 --new 51.255.43.81 --strict` is IDENTICAL on all
+10 questions, apex NS and SOA included. Both servers answer `rcode=0 aa=1` for
+the zone SOA over UDP AND TCP from the workstation.
+
+### Health
+
+The zone row action **Check health** on kuifje answers, verbatim:
+
+    Delegation: delegated_not_listed. 1 secondaries probed, 0 behind.
+
+with findings (zone form, Advanced, checked 2026-08-30 02:03):
+
+    listed_not_delegated ns1.elevenways.de
+    listed_not_delegated ns2.elevenways.de
+    delegated_not_listed ns.second-ns.com
+    delegated_not_listed ns1.your-server.de
+    delegated_not_listed ns3.second-ns.de
+
+That is the CORRECT pre-cutover verdict: the parent still names Hetzner's three
+servers and we publish only our two. It becomes `matches` at the registrar step
+and not before. The Secondaries tab shows `robbedoes` Current at served serial
+3, probed 38 seconds earlier, last AXFR served serial 3.
+
+No service was restarted anywhere; no site, certificate or registrar setting was
+touched, and no record VALUE was changed -- the apex still points at Phoenix.
+
+### Still pending (NOT done here)
+
+1. Paste the real Hetzner zone export into the Zone-file tab and re-run
+   `compare` -- until then this zone is a probe reconstruction.
+2. Make `ns1.elevenways.de` and `ns2.elevenways.de` resolve -- they were still
+   NXDOMAIN at 1.1.1.1 when this wave ended. That is the other session's
+   `elevenways.de` wave; see its own section above.
+3. Jelle sets the resolved pair as `tavernetomberg.be`'s nameservers at the
+   registrar (out-of-bailiwick, so no glue).
+4. `hoh-dns-diff delegation tavernetomberg.be --expect-ns <pair>` and
+   `propagate www.tavernetomberg.be CNAME --expect tavernetomberg.be.`, then
+   `compare --strict` against a Hetzner server, and keep Hetzner's zone alive
+   for its SOA expire (3600000 s = 41 days) afterwards.
+
+## Zone elevenways.be staged, 2026-08-30
+
+The company zone, and by far the richest reconstructed here. `elevenways.be` is
+hosted on Hetzner DNS today; nothing at the registrar or at Hetzner was touched.
+The declared-nameserver change described in the `tavernetomberg.be` section
+above applies to this zone identically -- it publishes `ns1/ns2.elevenways.de`,
+which do not resolve yet. NOTE that `elevenways.be` (this zone, a `.be`) and
+`elevenways.de` (kuifje zone 4, the other session's nameserver-hosting zone) are
+DIFFERENT domains; the nameserver names are therefore still out of bailiwick
+here and this zone needs no glue rows.
+
+### What public DNS held, 2026-08-30
+
+`hoh-dns-diff delegation elevenways.be`: parent `be.` (answered by 194.0.6.1)
+publishes `ns.second-ns.com`, `ns1.your-server.de`, `ns3.second-ns.de`, no glue,
+all three authoritative at serial `2026081300`, parent set == apex set, no DS.
+VERDICT: DELEGATION OK. IPv6 not probed (no route from the workstation).
+
+AXFR is REFUSED (rcode 5) by all three, so the zone was RECONSTRUCTED by probing
+in THREE passes -- 521 candidate owners x 9 types = 4689 questions against
+213.239.204.242, 213.133.100.102, 193.47.99.4 and 1.1.1.1, so 18756 answers,
+all four agreeing on every question (0 disagreements). Draft:
+`scratchpad/zones/elevenways.be.zone`.
+
+The passes were driven by what the previous one found, and that is the method
+worth reusing. Pass 1 (233 owners, the generic vocabulary plus the names in the
+brief) hit `merlina`, `alchemy`, `thoth`, `microcopy`, `spamservice`, `matrix`,
+`staging` and `clients` -- which says the zone names PROJECTS and HOSTS. Pass 2
+(174 owners: the develry host names and the whole workspace project vocabulary)
+added `protoblast`, `proteus`, `arcana` and the BIMI record. Pass 3 (114 owners,
+the remaining project names) found NOTHING new, which is the closest thing to
+convergence a probe can offer. A single generic pass would have missed four
+real records.
+
+Found, and nothing else -- everything TTL 600:
+
+    @              A     213.239.210.245        (merlina)
+    @              AAAA  2a01:4f8:a0:948c::2
+    @              MX    5 alt1.aspmx.l.google.com. / 5 alt2.aspmx.l.google.com. /
+                         10 aspmx.l.google.com. / 10 aspmx2.googlemail.com. /
+                         10 aspmx3.googlemail.com.
+    @              TXT   "v=spf1 mx a ptr include:my.billit.be include:_spf.google.com -all"
+    @              TXT   "MS=EFC28C80EE7E3B211078D4A9E0CC5D974460942E"
+    @              TXT   "apple-domain-verification=AnYtarspxURaWI04FuQBeYv1NbeVQjh_whfBFaB9iJ4"
+    @              TXT   "asv=781516fc186a8f448a767cc7019b7c60"
+    @              TXT   "google-site-verification=2ECHKyakip-Pm5sy9UPWgpi9P-gfIDfWx3zS-Epo9m8"
+    @              TXT   "google-site-verification=Cbf6qAArtUNlqealDb5Z2fGh8O4FY5nzT5S9JuqrOUA"
+    @              TXT   "mailcoach-verification=249ee053-ecea-498c-bc13-24ce458be37b"
+    @              TXT   "openai-domain-verification=dv-y2UVRFgAxCiU3yv2ywHJaHKh"
+    _dmarc         TXT   "v=DMARC1; p=quarantine; rua=mailto:jelle+dmarc@elevenways.be; ruf=mailto:jelle+dmarc@elevenways.be; pct=100"
+    default._bimi  TXT   "v=BIMI1;l=https://s3.wasabisys.com/elevenways-manual/bimi/elevenways.svg"
+    google._domainkey TXT  a two-string DKIM1 RSA key (2048-bit, split across two
+                           character-strings as the wire format requires)
+    matrix         A     213.239.210.245
+    matrix         AAAA  2a01:4f8:a0:948c::2
+    www            CNAME merlina.develry.be.
+    alchemy arcana clients merlina protoblast proteus spamservice staging thoth
+                   CNAME merlina.develry.be.
+    microcopy      CNAME phoenix.develry.be.
+
+This zone carries mail on Google Workspace and was probed exhaustively for it.
+The absences are facts: `mail`, `smtp`, `imap`, `pop`, `webmail`, `mx`,
+`autoconfig`, `autodiscover` are all NXDOMAIN on all three authoritative
+servers, and there is no `_autodiscover._tcp` SRV -- Workspace clients discover
+Google directly, so nothing is missing. No `mta-sts`, `_mta-sts`, `_smtp._tls`
+or `_tlsrpt`. `google` is the ONLY DKIM selector: 60+ others were asked,
+including `k1/k2/k3`, `default`, `mail`, `selector1/2`, `dkim`, `s1/s2`, `pm`,
+`mailcoach`, `postmark`, the dated `YYYYMMDD...pm` shapes and per-service
+guesses (`billit`, `spamservice`, `merlina`). No CAA anywhere and no SRV of any
+kind -- the `_matrix._tcp` family included, even though `matrix.elevenways.be`
+exists. Of the names named in the brief, `qr`, `herald`, `comms`, `api`, `app`,
+`admin`, `git`, `ci`, `vpn`, `ns1`, `ns2`, `calendar`, `docs`, `drive`, `cdn`
+and `preview` are all NXDOMAIN. No AAAA except at the apex and on `matrix`, and
+no wildcard (`randomprobe-a7f3q9`, `zz-wildcard-test-4471` and
+`zz-third-pass-55817` are all NXDOMAIN on all three servers).
+
+THIS COPY IS PROVISIONAL. Three converging passes raise the confidence; they do
+not make it an enumeration. The real Hetzner export must be pasted into the
+Zone-file tab before the delegation moves.
+
+### The zones
+
+kuifje zone id 6, role primary, SOA MNAME `ns1.elevenways.de`, contact
+`hostmaster@elevenways.be`. The create seeded the two declared apex NS rows.
+Then the Zone-file tab's import ("Imported 33 records.", serial 1 -> 2) with the
+31 data rows; the keep-nameservers checkbox was left unchecked and the pasted
+text carried no apex NS set. The two-string DKIM value survived the round trip
+byte-for-byte, which the compare below proves.
+
+`dns_zone_peers` id 5 on kuifje links the zone to peer `robbedoes`. On robbedoes
+the same origin was created with role secondary and primary peer `kuifje` --
+robbedoes zone id 6 -- and answered REFUSED for two polls before going
+authoritative at serial 2 roughly 25 seconds after the save.
+
+### Compare
+
+`compare elevenways.be --old 213.133.100.102 --new 137.74.171.228 --zone-file
+<draft>` over 52 names (the draft's owners plus every mail, DKIM and brief-named
+label) is DIFFERENT (1), and both non-identical rows are expected:
+
+    elevenways.be.  NS   apex-ns  ns.second-ns.com. | ns1.your-server.de. | ns3.second-ns.de.  ->  ns1.elevenways.de. | ns2.elevenways.de.
+    elevenways.be.  SOA  differs  ns1.your-server.de. postmaster.your-server.de. 2026081300 ...  ->  ns1.elevenways.de. hostmaster.elevenways.be. 2 ...
+
+Every other question is `identical`. The mail rows explicitly:
+
+    elevenways.be.                    MX   identical  10 aspmx.l.google.com. | 10 aspmx2.googlemail.com. | 10 aspmx3.googlemail.com. | 5 alt1.aspmx.l.google.com. | 5 alt2.aspmx.l.google.com.
+    elevenways.be.                    TXT  identical  "MS=EFC28C80EE7E3B211078D4A9E0CC5D974460942E" | "apple-domain-verification=AnYtarspxURaWI04FuQBeYv1NbeVQjh_whfBFaB9iJ4" | "asv=781516fc186a8f448a767cc7019b7c60" | "google-site-verification=2ECHKyakip-Pm5sy9UPWgpi9P-gfIDfWx3zS-Epo9m8" | "google-site-verification=Cbf6qAArtUNlqealDb5Z2fGh8O4FY5nzT5S9JuqrOUA" | "mailcoach-verification=249ee053-ecea-498c-bc13-24ce458be37b" | "openai-domain-verification=dv-y2UVRFgAxCiU3yv2ywHJaHKh" | "v=spf1 mx a ptr include:my.billit.be include:_spf.google.com -all"
+    _dmarc.elevenways.be.             TXT  identical  "v=DMARC1; p=quarantine; rua=mailto:jelle+dmarc@elevenways.be; ruf=mailto:jelle+dmarc@elevenways.be; pct=100"
+    default._bimi.elevenways.be.      TXT  identical  "v=BIMI1;l=https://s3.wasabisys.com/elevenways-manual/bimi/elevenways.svg"
+    google._domainkey.elevenways.be.  TXT  identical  "v=DKIM1; k=rsa; p=MIIBIjANBgkq..." "fJHG95/Nr1fthon4..."
+
+and the host rows: `www`, `alchemy`, `arcana`, `clients`, `merlina`, `proteus`,
+`protoblast`, `spamservice`, `staging`, `thoth` all `identical
+merlina.develry.be.`, `microcopy` `identical phoenix.develry.be.`, `matrix`
+`identical` on A and AAAA. Every absent label produced no row on either side.
+The only warnings are the apex NS/SOA TTL (600 vs 3600) and the serial.
+
+`compare --old 137.74.171.228 --new 51.255.43.81 --strict` is IDENTICAL on all
+22 questions, apex NS and SOA included -- the DKIM row included, so the split
+character-strings replicate intact. Both servers answer `rcode=0 aa=1` for the
+zone SOA over UDP AND TCP.
+
+### Health
+
+**Check health** on kuifje answers, verbatim:
+
+    Delegation: delegated_not_listed. 1 secondaries probed, 0 behind.
+
+with findings (zone form, Advanced, checked 2026-08-30 02:11):
+
+    listed_not_delegated ns1.elevenways.de
+    listed_not_delegated ns2.elevenways.de
+    delegated_not_listed ns.second-ns.com
+    delegated_not_listed ns1.your-server.de
+    delegated_not_listed ns3.second-ns.de
+
+The CORRECT pre-cutover verdict. The Secondaries tab shows `robbedoes` Current
+at served serial 2, probed just now, last AXFR served serial 2.
+
+No service was restarted anywhere; no site, certificate or registrar setting was
+touched, and no record VALUE was changed -- the apex and `www` still point at
+merlina and `microcopy` still points at Phoenix.
+
+### Still pending (NOT done here)
+
+1. Paste the real Hetzner zone export into the Zone-file tab and re-run
+   `compare` -- until then this zone is a probe reconstruction, however well the
+   three passes converged.
+2. Settle the nameserver names (see the `tavernetomberg.be` section): today this
+   zone publishes `ns1/ns2.elevenways.de` and neither resolves.
+3. Jelle sets the resolved pair as `elevenways.be`'s nameservers at the
+   registrar. This is the COMPANY zone and it carries Google Workspace mail, so
+   it should be the LAST of the three to move, after `wcag.be` and
+   `tavernetomberg.be` have proven the lane.
+4. `hoh-dns-diff delegation elevenways.be --expect-ns <pair>` and
+   `propagate www.elevenways.be CNAME --expect merlina.develry.be.`, then
+   `compare --strict` against a Hetzner server, and keep Hetzner's zone alive
+   for its SOA expire (3600000 s = 41 days) afterwards.
+
 ## Nameserver zone elevenways.de, 2026-08-30
 
 The domain that carries the nameserver NAMES. `elevenways.de` is registered at
