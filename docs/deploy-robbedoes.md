@@ -1420,3 +1420,87 @@ has `gm` -- but their containers are still on the pre-fix image. One
 `hoh power <id> restart` each fixes their media. They were deliberately NOT
 restarted here: their zones are not ours yet, so they carry no traffic, and
 touching them was outside this lane.
+
+## Staged apps recreated on the GraphicsMagick images, 2026-08-30
+
+The three staged apps left behind by the Tomberg cutover -- plus Microcopy,
+which turned out to be in the same state -- were recreated so their containers
+run the rebuilt runtime images that carry `gm`. None of them carries public
+traffic: their zones are not delegated to us. `earl.wcag.be`,
+`invulassistent.wcag.be` and `tavernetomberg.be` were not touched.
+
+### Image ids before and after
+
+`hoh power <id> restart` recreates the container, so the image id must move.
+It did, on all four:
+
+    id  instance          before        after         image
+    --  ----------------  ------------  ------------  -----------------
+    2   microcopy         eec8a2ad45e9  8646597d5f54  hohenheim/node-16:1
+    6   auditexport       eec8a2ad45e9  8646597d5f54  hohenheim/node-16:1
+    11  oogfonds-staging  eec8a2ad45e9  8646597d5f54  hohenheim/node-16:1
+    13  udesign-live      eec8a2ad45e9  8646597d5f54  hohenheim/node-16:1
+
+All four now answer `gm version` -> `GraphicsMagick 1.4 snapshot-20210721 Q16`;
+before the restart `/usr/bin/gm` and `/usr/bin/convert` were both absent.
+
+### Media proof
+
+Before the restart, every derivative (a `/media/image/...` with resize
+parameters) returned **500, 212 bytes, text/plain**; the unresized original
+returned 200, because alchemy-media only shells out to `gm` when it has to
+produce a derivative. After:
+
+    udesign  /media/image/5d89fee8e7acbf36becddbd8?width=400   200  43829  image/jpeg  JPEG 400x533
+    udesign  /media/image/5d89fee8e7acbf36becddbd8 (original)  200 302044  image/jpeg  JPEG 1224x1632
+    oogfonds /media/image/5c2f5592b37372369f8f0753?width=720   200  47739  JPEG 720x480
+    oogfonds /media/static/logo-vlaamsoogfonds.png?width=200   200  10238  PNG 199x73
+    oogfonds /media/image/5cd55ccabb8f1c4cc2ac2773?w=40&h=40   200    860  JPEG 40x40
+
+**Udesign's own pages reference no resized derivative at all** -- every
+`/media/image/...` in its markup, stylesheet and script is the unresized
+original, which answered 200 before the restart too. Its resize lane was
+nonetheless broken and is now proven working with `?width=400` on an image the
+homepage does reference. Oogfonds is where the defect was actually visible: its
+markup carries `?width=720`, `?width=1500&height=680` and a 40x40 avatar thumb.
+
+**Auditexport has an empty media library** (`db.media_files.countDocuments({})`
+= 0 in `diax_auditexport`), so no real derivative URL exists to fetch. Its
+resize path is proven instead by the media route itself: a request for a
+nonexistent id with `?width=100` returns alchemy-media's placeholder **scaled
+to 100px** (200, 1382 bytes, PNG), which only a working `gm` can produce.
+Microcopy answers that same probe identically.
+
+### Against phoenix
+
+Same derivative, fetched from phoenix (144.76.30.204) over https, sha256:
+
+    udesign  ?width=400                       IDENTICAL (43829 bytes both)
+    oogfonds ?width=720                       IDENTICAL (47739 bytes both)
+    oogfonds /media/static/...png?width=200   DIFFERENT (robbedoes 10238, phoenix 8403)
+
+The two `/media/image/` derivatives are byte-identical. The `/media/static/`
+PNG differs in size and hash; both are valid 199x73 PNGs. Recorded as a fact,
+not a verdict -- a different GraphicsMagick build can legitimately choose
+different PNG encoding parameters, and this is the static-file resize path
+rather than the media-library one.
+
+### Pages still answer
+
+    udesign.world  / /aanbod /ambassadeurs /vragen-en-contact   200
+    auditexport.di-ax.be  /  200 (empty body by design)  /login  200
+    oogfonds.clients.11ways.be  /  200
+    microcopy.elevenways.be  /  200
+    earl.wcag.be 200, invulassistent.wcag.be 401 (its basic auth),
+    tavernetomberg.be 200, www.tavernetomberg.be 200 -- all unchanged
+
+### DEFECT FOUND: invulassistent is still on a pre-fix image
+
+`invulassistent` (instance 8) runs `hohenheim/node-12:1` image id
+`0c94252f7f05`, created 02:21:06Z -- but node-12 was rebuilt with `gm` at
+02:51:32Z and is now `d1533013b76a`. The container has no `/usr/bin/gm`. It was
+restarted BEFORE the image rebuild, so the earlier note that it is on the fixed
+image is wrong. It was deliberately NOT restarted here: it carries live traffic
+and that was outside this lane. It needs one `hoh power 8 restart` in a lane
+that owns live traffic. Taverne Tomberg (instance 3) IS correctly on the
+rebuilt `hohenheim/node-12:1` `d1533013b76a` and has `gm`.
