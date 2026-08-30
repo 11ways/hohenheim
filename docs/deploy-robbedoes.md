@@ -1226,3 +1226,82 @@ Ready to cut over as soon as their zones are ours: **Invulassistent only**
 other three wait on `di-ax.be`, `11ways.be`/`vlaamsoogfonds.be` and
 `udesign.world` respectively -- and `udesign.world` is at COMBELL with live
 Microsoft 365 mail, so that zone needs its real export before anything moves.
+
+## Invulassistent LIVE (second hostname cutover), 2026-08-30
+
+`invulassistent.wcag.be` now answers from robbedoes (instance 8, database 4,
+site 5, domain 8). Phoenix keeps serving the same site untouched and remains the
+rollback.
+
+### Order of operations
+
+The certificate was requested BEFORE `force_ssl` was turned on, deliberately:
+with `force_ssl` on and no certificate, port 80 redirects to a 443 that has no
+certificate for the hostname, which takes the site down. Earl tolerated the
+other order because it was flipped and certified within the same minute; the
+safe general order is DNS -> certificate -> force_ssl.
+
+1. Phoenix baseline captured FIRST, over `--resolve ...:443:144.76.30.204`:
+   `/` 401 / 8950 / sha256 `1881b5db...`, `/login` 200 / 9104 / `119ca912...`,
+   `/chimera` 401 / 8367 / `b9168d74...`.
+2. kuifje zone 3: record 28 `invulassistent CNAME phoenix.develry.be` (TTL 300)
+   DELETED, then `invulassistent A 51.255.43.81` and `invulassistent AAAA
+   2001:41d0:305:2100::1:4b26` added, both TTL 300 (delete-then-add: a CNAME
+   owner cannot hold any other record). Serial 12 -> 15, robbedoes transferred
+   within seconds. `earl` and every other row untouched.
+3. `compare wcag.be --old 137.74.171.228 --new 51.255.43.81 --strict --names
+   @,www,api,earl,invulassistent` -> **IDENTICAL**, all 11 questions, apex NS and
+   SOA included, both sides serial 15.
+4. `propagate invulassistent.wcag.be A --expect 51.255.43.81` -> **PROPAGATED**
+   on 1.1.1.1 / 8.8.8.8 / 9.9.9.9 in round 1.
+5. Certificate 2 `Invulassistent` requested ONCE from
+   `/admin/certificates-request?site=5` (HTTP-01; the form is prefilled by
+   `?site=5` with the name and the hostname). Journal: `ACME: account ready
+   (global, production)` 02:43:44Z, `ACME: certificate issued for
+   invulassistent.wcag.be` 02:43:52Z, `CertificateStore: loaded 2 certificates,
+   2 hostname mappings`. Issuer Let's Encrypt **YR2**, valid 2026-08-30
+   01:45:20Z to 2026-11-28 01:45:19Z.
+6. `force_ssl` switched on for domain 8 and saved. The domain's Certificate
+   field is deliberately left blank, exactly as Earl's is: the store maps by
+   hostname, and HTTPS already verified before the field was ever touched.
+
+### Verification, byte-level
+
+    curl --resolve invulassistent.wcag.be:443:51.255.43.81
+      /        -> 401, 8950 bytes, ssl_verify_result 0
+      /login   -> 200, 9104 bytes, ssl_verify_result 0
+      /chimera -> 401, 8367 bytes, ssl_verify_result 0
+    all three EXACTLY the byte size phoenix served, and a diff against the
+    captured baseline leaves exactly ONE differing line per page:
+      < <script src="/hawkejs/static.js?v=0.2.0&i=99211c">   (phoenix)
+      > <script src="/hawkejs/static.js?v=0.2.0&i=01db5a">   (robbedoes)
+    i.e. the per-process hawkejs cache buster. Nothing else differs.
+
+    http://invulassistent.wcag.be/  -> 301 https://invulassistent.wcag.be/
+    through PUBLIC DNS, no --resolve -> 200, remote_ip 51.255.43.81 (the real
+      path, not a pinned probe)
+    openssl s_client -servername invulassistent.wcag.be
+      -> subject CN=invulassistent.wcag.be, issuer Let's Encrypt YR2
+    IPv6: --resolve ...:443:[2001:41d0:305:2100::1:4b26] -> 200, 9104, ssl 0
+    listeners `*:80` and `*:443` (one dual-stack socket each)
+    in-container: `tini -- bash -lc node server.js`; direct
+      `http://127.0.0.1:32781/login` -> 200, 9095 bytes
+
+### TRAP: phoenix is not a valid vantage point yet
+
+An IPv6 probe run FROM phoenix answered `remote_ip 2a01:4f8:191:21cb::2` --
+phoenix's own address -- and `getent ahostsv6` there still returned canonical
+name `phoenix.develry.be`. Phoenix's resolver had cached the CNAME while it was
+still TTL **7200**, before the TTL-lowering pass, so it keeps answering the old
+chain for up to two hours no matter what the record says now. Nothing was wrong
+with the cutover. Phoenix's `curl` is 7.47.0 (2016) and supports neither
+bracketed IPv6 `--resolve` nor `--connect-to`, so it silently fell through to
+normal DNS instead of failing loudly. Lower a TTL well BEFORE the day of a
+cutover, and never use a box whose resolver is warm on the old value to verify
+the new one.
+
+### Rollback (not needed)
+
+Delete the two address records and re-add `invulassistent CNAME
+phoenix.develry.be.` (TTL 300), and switch `force_ssl` back off on domain 8.
+Phoenix still runs the app (pid 30519) and keeps its own certificate.
