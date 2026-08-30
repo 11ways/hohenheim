@@ -333,6 +333,35 @@ Settings per kind (every key optional unless said otherwise):
   (secret), `previews_enabled`, `preview_branches`,
   `preview_environment_variables` (secret).
 
+Map-shaped settings (`volumes`, `environment_variables`, `build_arguments`,
+`build_environment_variables`, `preview_environment_variables`) ride the INDEXED ROW
+transport the panel's editor posts, never a dotted sub-key: one `key`/`value` pair per
+integer row scope. Row numbers only have to be UNIQUE, not contiguous.
+
+```
+settings.volumes.0.key=app
+settings.volumes.0.value=/home/site
+settings.environment_variables.0.key=ALCHEMY_ENV
+settings.environment_variables.0.value=live
+settings.environment_variables.1.key=LOG_LEVEL
+settings.environment_variables.1.value=info
+```
+
+```
+hoh instance create microcopy docker_container \
+  settings.image=alpine settings.tag=latest \
+  settings.volumes.0.key=app settings.volumes.0.value=/home/site \
+  settings.environment_variables.0.key=ALCHEMY_ENV \
+  settings.environment_variables.0.value=live
+```
+
+A row scope that is not an integer (`settings.volumes.app=/home/site`), a row that is
+not a key/value pair, or a stranger sub-key inside one is refused
+`zenit.coercion.unknown_field` naming the offending key, and nothing is written. Until
+2026-08-30 the dotted spelling answered **200 with the record created and the map
+EMPTY**, which is why the wire shape is documented here now. A submitted empty string
+CLEARS the map; omitting the key entirely leaves the stored map alone.
+
 Answer: the instance projection (as `GET /api/v1/instances/{id}`):
 
 ```
