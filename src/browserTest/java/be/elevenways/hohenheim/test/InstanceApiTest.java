@@ -36,7 +36,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The instance write lane of the PaaS API is the admin create form's own pipeline reached
  * without a browser: a workload lands in {@code created} with its per-kind settings coerced,
- * a stranger key is refused by name, a body naming a template still rides the tenant's
+ * a map-shaped setting rides the indexed row transport and a mis-shaped one is refused
+ * as loudly as a stranger key, a body naming a template still rides the tenant's
  * template funnel, and the doors are the panels' (create admin-only, destroy behind the
  * {@code destroy} capability the teardown service itself demands).
  */
@@ -196,6 +197,46 @@ class InstanceApiTest extends HohenheimTestBase {
         assertThat(template.statusCode()).isEqualTo(422);
         assertThat(codeOf(template.body())).as("step 4: refused as an unknown template")
             .isEqualTo("unknown_template");
+
+        // 5. A kind's MAP-shaped settings ride the INDEXED row transport the panel's
+        //    editor posts: {map}.{n}.key / {map}.{n}.value, gaps allowed.
+        HttpResponse<String> mapped = keyPost(keyAdmin, "/api/v1/instances", form(
+            "name", PREFIX + "mapped", "kind", "hohenheim:docker_container",
+            "server_id", String.valueOf(hostId),
+            "settings.image", "alpine", "settings.tag", "latest",
+            "settings.volumes.0.key", "app",
+            "settings.volumes.0.value", "/home/site",
+            "settings.environment_variables.0.key", "ALCHEMY_ENV",
+            "settings.environment_variables.0.value", "live"));
+        assertThat(mapped.statusCode()).as("step 5: the maps are stored: " + mapped.body())
+            .isEqualTo(200);
+        Row mappedRow = Models.get(InstanceModel.class).findById(idOf(mapped.body()));
+        Object stored = mappedRow.get(InstanceModel.SETTINGS);
+        assertThat(stored).as("step 5: the settings survive as a map").isInstanceOf(Map.class);
+        Map<?, ?> settings = (Map<?, ?>) stored;
+        assertThat(settings.get("volumes"))
+            .as("step 5: the volume row landed under its own key")
+            .isEqualTo(Map.of("app", "/home/site"));
+        assertThat(settings.get("environment_variables"))
+            .as("step 5: and so did the (secret) environment row")
+            .isEqualTo(Map.of("ALCHEMY_ENV", "live"));
+
+        // 6. The hand-written spelling of the same intent -- `settings.volumes.app=...`,
+        //    what a caller reaches for when nothing documents the row transport -- is
+        //    REFUSED by name. Until 2026-08-30 it answered 200 with the record created
+        //    and BOTH maps silently EMPTY: the coercer walked integer row scopes and
+        //    dropped everything else as "transport noise".
+        HttpResponse<String> flat = keyPost(keyAdmin, "/api/v1/instances", form(
+            "name", PREFIX + "flat", "kind", "hohenheim:docker_container",
+            "server_id", String.valueOf(hostId),
+            "settings.image", "alpine",
+            "settings.volumes.app", "/home/site"));
+        assertThat(flat.statusCode()).as("step 6: a shape the map cannot store is refused")
+            .isEqualTo(422);
+        assertThat(codeOf(flat.body())).isEqualTo("zenit.coercion.unknown_field");
+        assertThat(Models.get(InstanceModel.class).find()
+                .where(InstanceModel.NAME.eq(PREFIX + "flat")).first())
+            .as("step 6: and no row was written").isNull();
     }
 
     /** The doors are the panels': create is admin-only, destroy asks the record. */
