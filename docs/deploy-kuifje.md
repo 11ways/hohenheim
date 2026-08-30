@@ -1675,3 +1675,34 @@ robbedoes, apex NS and SOA included, both `DELEGATION OK`, and the mail
 surface answering straight from kuifje -- `MX 10 calamity.develry.be` plus
 `_autodiscover._tcp` 443, `_imaps._tcp` 993 and `_submission._tcp` 587, all
 `0 100` and all identical.
+
+## The panel is a normal site now, 2026-08-30
+
+Both panels were loopback-only and needed `ssh -L` to reach. They are now sites
+like any other, on the two hostnames that already resolve to the boxes:
+
+| box | site | hostname | certificate |
+| --- | --- | --- | --- |
+| kuifje | 1 `hohenheim-panel` -> 127.0.0.1:3000 | `nskuifje.mooo.com` | HTTP-01, LE |
+| robbedoes | 9 `hohenheim-panel` -> 127.0.0.1:3000 | `nsrobbedoes.mooo.com` | HTTP-01, LE |
+
+**Why HTTP-01 and not DNS-01, which we prefer:** DNS-01 needs the zone HOSTED
+here, and `mooo.com` is afraid.org's -- we cannot publish its `_acme-challenge`
+TXT. The zones we do host (`wcag.be`, `tavernetomberg.be`) are client domains,
+and `elevenways.de` is served by both boxes but still DELEGATED to Hetzner, so
+Let's Encrypt would ask Hetzner's servers and never see our challenge. When a
+domain we own is delegated here, both panels move to it with ONE wildcard
+DNS-01 certificate and this per-name issuance goes away.
+
+**Trap that cost the first attempt.** kuifje's ACME request failed with
+`Error validating contact(s) :: contact email has invalid domain: Domain name
+does not end with a valid public suffix (TLD)`. It had been installed with
+`--admin-email hostmaster@panel.invalid`, a placeholder, which the installer
+faithfully wrote to `ssl.letsencrypt_email` and which Let's Encrypt refuses.
+robbedoes was installed with a real address and never hit it. The symptom is
+badly placed in time: the install succeeds and the box has no HTTPS listener at
+all, and the first certificate request months later blames the contact.
+`tools/install-host.sh` now REFUSES a reserved/placeholder address up front
+(`.invalid`, `.local`, `.localhost`, `.test`, `.example`, `example.{com,org,net}`)
+and anything that is not an address; omitting the flag is still fine and
+registers the account with no contact, which is what robbedoes effectively did.

@@ -395,6 +395,21 @@ seed_settings() {
     write_file "$path" "$mode" "$SERVICE_USER:$SERVICE_USER" "$content"
 }
 
+# A placeholder address does not merely look untidy: Let's Encrypt REFUSES an
+# account contact whose domain has no valid public suffix ("contact email has
+# invalid domain"), so every certificate request on the host fails, months after
+# the install, with an error that names the contact rather than the install.
+# Measured 2026-08-30 on kuifje, installed with hostmaster@panel.invalid: the
+# first certificate request failed and the box had no HTTPS listener at all.
+# Refuse here instead, where the operator can still supply a real address.
+case "$ADMIN_EMAIL" in
+    "") : ;;
+    *@*.invalid|*@*.local|*@*.localhost|*@*.test|*@*.example|*@example.com|*@example.org|*@example.net)
+        fail "--admin-email $ADMIN_EMAIL is a reserved/placeholder domain; Let's Encrypt refuses it as an account contact. Give a real address, or omit the flag to register with no contact." ;;
+    *@*.*) : ;;
+    *) fail "--admin-email $ADMIN_EMAIL is not an email address" ;;
+esac
+
 LE_ENABLED="false"
 [ -n "$ADMIN_EMAIL" ] && [ "$role_proxy" = "true" ] && LE_ENABLED="true"
 
