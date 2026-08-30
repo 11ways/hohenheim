@@ -11696,6 +11696,10 @@
     "text": "Apex NS differs from the declared nameservers",
     "scope": "dns_delegation"
   },
+  "soa_mname_unlisted": {
+    "text": "SOA primary nameserver is not an apex NS",
+    "scope": "dns_delegation"
+  },
   "import_done_notes": {
     "text": "Imported {$count} records. {$notes}",
     "scope": "dns_zone"

@@ -452,13 +452,38 @@ class DnsFederationHealthTest {
             assertThat(delegationItems()).as("step 6: a matching delegation raises nothing").isEmpty();
             assertThat(deliveries()).as("step 6: recovery is not an alert").isEqualTo(4);
 
-            // 7. A zone this instance does not serve cannot be judged.
+            // 7. The SOA MNAME is judged against our own apex NS set: a primary named
+            //    outside it (the pasted-from-another-zone shape) is a finding on an
+            //    otherwise matching delegation, and naming an apex NS again clears it.
+            Row named = zone();
+            named.set(DnsZoneModel.SOA_PRIMARY_NS, "ns9.elsewhere.test");
+            Models.get(DnsZoneModel.class).save(named);
+            DnsZoneStore.INSTANCE.reload();
+            report = DnsDelegationHealth.check(zone(), check);
+            assertThat(report.findings()).extracting(DelegationCheck.Finding::verdict)
+                .as("step 7: an unlisted MNAME is the only complaint")
+                .containsExactly(DelegationVerdict.SOA_MNAME_UNLISTED);
+            assertThat(report.verdict()).isEqualTo(DelegationVerdict.SOA_MNAME_UNLISTED);
+            assertThat(zone().get(DnsZoneModel.DELEGATION_DETAIL))
+                .as("step 7: the detail names the MNAME")
+                .isEqualTo("soa_mname_unlisted ns9.elsewhere.test not in apex NS set");
+            assertThat(deliveries()).as("step 7: the transition alerts once").isEqualTo(5);
+            named = zone();
+            named.set(DnsZoneModel.SOA_PRIMARY_NS, "ns1." + ORIGIN);
+            Models.get(DnsZoneModel.class).save(named);
+            DnsZoneStore.INSTANCE.reload();
+            report = DnsDelegationHealth.check(zone(), check);
+            assertThat(report.verdict()).as("step 7: an MNAME inside the set is silent")
+                .isEqualTo(DelegationVerdict.MATCHES);
+            assertThat(report.findings()).isEmpty();
+
+            // 8. A zone this instance does not serve cannot be judged.
             int unservedId = createZone("unserved.example", DnsZoneModel.ROLE_PRIMARY, null);
             Row unserved = Models.get(DnsZoneModel.class).findById(unservedId);
             unserved.set(DnsZoneModel.ENABLED, false);
             Models.get(DnsZoneModel.class).save(unserved);
             DnsZoneStore.INSTANCE.reload();
-            assertThat(DnsDelegationHealth.check(unserved, check)).as("step 7: unserved").isNull();
+            assertThat(DnsDelegationHealth.check(unserved, check)).as("step 8: unserved").isNull();
         }
         finally {
             parent.stop();

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +32,21 @@ public final class DnsNameservers {
     public static @NonNull List<String> declared() {
         List<String> names = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.NAMESERVERS);
         return names == null ? List.of() : names;
+    }
+
+    /**
+     * The SOA MNAME a new primary zone falls back to when the operator named none.
+     *
+     * AIDEV-NOTE: an MNAME taken from another zone's nameserver (the form left it to the
+     * operator, who pasted a name from the previous zone) names a primary the delegation
+     * does not point at, and usually a host with no address; defaulting it to the first
+     * declared name keeps it inside the very set the apex NS rows are seeded from.
+     *
+     * @return the first declared nameserver, or null when nothing is declared
+     */
+    public static @Nullable String defaultPrimaryNs() {
+        List<String> names = declared();
+        return names.isEmpty() ? null : names.get(0);
     }
 
     /**

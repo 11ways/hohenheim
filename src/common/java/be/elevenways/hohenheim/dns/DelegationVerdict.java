@@ -31,6 +31,13 @@ public enum DelegationVerdict {
      */
     APEX_UNDECLARED("apex_undeclared", "warning", "code-branch", "orange"),
 
+    /**
+     * The SOA MNAME we serve is not one of the apex NS names: the zone names a primary
+     * nobody delegates to, and often one with no address at all. A local configuration
+     * fact like {@link #APEX_UNDECLARED}, judged before the parent is.
+     */
+    SOA_MNAME_UNLISTED("soa_mname_unlisted", "warning", "code-branch", "orange"),
+
     /** The parent's nameservers could not be reached, so nothing could be judged. */
     PARENT_UNREACHABLE("parent_unreachable", "warning", "question", "gray"),
 

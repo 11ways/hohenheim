@@ -372,11 +372,22 @@ public final class DnsZoneResource extends RowResource {
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
         validate(values, null, this.model());
+        boolean primary = !DnsZoneModel.ROLE_SECONDARY.equals(values.get(DnsZoneModel.ROLE.getName()));
+        // A primary zone whose SOA MNAME was left blank names the first declared nameserver,
+        // so the MNAME is one of the apex NS rows seeded below instead of a stray host; an
+        // explicit value is the operator's and stands. A secondary's SOA comes from the
+        // transfer, so nothing is defaulted there.
+        if (primary) {
+            Object named = values.get(DnsZoneModel.SOA_PRIMARY_NS.getName());
+            String declared = DnsNameservers.defaultPrimaryNs();
+            if (declared != null && (named == null || String.valueOf(named).isBlank())) {
+                values.put(DnsZoneModel.SOA_PRIMARY_NS.getName(), declared);
+            }
+        }
         Object id = super.persistRow(values, accessContext);
         // A new primary zone starts with the controller's declared nameservers at its apex;
         // a secondary's rows come from its primary. Seeded once, never re-asserted.
-        if (id instanceof Integer zoneId
-                && !DnsZoneModel.ROLE_SECONDARY.equals(values.get(DnsZoneModel.ROLE.getName()))) {
+        if (id instanceof Integer zoneId && primary) {
             DnsNameservers.seedApexRows(zoneId);
         }
         DnsZoneStore.INSTANCE.reload();
