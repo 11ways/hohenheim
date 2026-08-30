@@ -2012,3 +2012,46 @@ live hostnames answer unchanged and every derivative returns real WebP bytes
 curl.** A curl-only proof is blind to every content negotiation the app does,
 and this class of defect renders a page that looks perfect in HTML and carries
 no image.
+
+## Deploy 2026-08-30 (third jar swap): 166180fe, the console tab works by soft navigation
+
+Swapped the fifteenth-wave jar (sha256 `528e7bb7...`, 267,619,547 bytes, stamp
+13/13 `dirty=false`, `grep -c false | grep -qx 13` gate on upload). Preflight
+`/root/hohenheim-preflight-20260830-fifteenth/`: `.pre` and `.at-swap` both
+`integrity_check` ok, `settings/`, keyring sha256 EQUAL at `cd3a6ca0...`,
+`hohenheim-server.jar.rollback` = `b42c0ff2...` (`0782eb8b`). Migration diff
+NONE (top M007); `--run-migrations` from `cd /opt/hohenheim`: `0 applied`.
+
+Stop 08:49:31.2Z, start 08:49:35.8Z, healthy 08:49:43.1Z -- **12 s downtime**.
+Second restart 08:49:56.4Z, healthy 08:50:03.1Z (7 s). Both: 0 real journal
+errors, RSS 350 MB, listeners 53/80/443 + 3000 loopback, roles `[databases,
+dns, firewall, instances, proxy]`, `CertificateStore: loaded 4 certificates, 5
+hostname mappings`, `SiteDispatcher: loaded 12 exact routes`. Row counts
+identical: 9 sites, 12 domains, 5 certificates, 16 instances, 7 managed
+databases, 46 migrations, 5 zones. **All 14 containers kept running with
+unchanged uptimes.** The four live hostnames re-verified with `--resolve`
+against 51.255.43.81: `earl.wcag.be` 200/1024, `invulassistent.wcag.be`
+401/8950, `tavernetomberg.be` 200/145413, `www.tavernetomberg.be` 200/145417,
+all `ssl_verify_result 0`; panel login 200.
+
+THE POINT OF THE WAVE, proven live in a headless Chromium (profile
+`robbedoes-admin`): hard-load `/admin/instances/3` -> `document.body`'s
+`data-he-document-policy` = the STRICT_ADMIN string (`connect-src 'self'`);
+click the Console tab -> the console logs `Hawkeye: /admin/instances/3/page/
+console is served under '...'wasm-unsafe-eval'; connect-src 'self' data:...'
+but this document is under '...connect-src 'self'...'` (the mirror's line cap
+ate the "loading it as a full page" tail), the snapshot reports `previous
+document dropped` (a real page load), NO `Fetch API cannot load data:`, NO
+`WASM init failed`, then `[pl-terminal] WebSocket connected`, and the stamp
+now equals the terminal policy. Click Overview -> the mirror log line, another
+document load, and the STRICT_ADMIN stamp is back. Wire evidence:
+`curl -sI -H 'x-hawkeye-request: true' .../page/console` answers
+`content-type: text/event-stream` with `content-security-policy` AND
+`x-hawkeye-document-policy` both = STRICT_ADMIN_TERMINAL; the same probe on
+`/admin/instances/3` carries STRICT_ADMIN in both. Before this wave the same
+click produced `Fetch API cannot load data:application/wasm...` and
+`ghostty-web unavailable: WASM init failed (...): Failed to fetch WASM: 404`.
+
+The pinned actions cell's hover fade (plumage `b06fde5a`) is in this jar too;
+`/admin/instances` renders unchanged, and the fade TIMING cannot be measured
+headlessly -- an eyeball on a hovered row is the proof.

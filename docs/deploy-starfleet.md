@@ -1134,3 +1134,53 @@ ROLLBACK IS JAR ONLY (no schema change): copy
 `/root/hohenheim-preflight-20260830-fourteenth/hohenheim-server.jar.rollback`
 (sha `605f5303...`, i.e. `e6d15bf1`) back into place and restart. Same path
 exists on kuifje and robbedoes.
+
+## Deploy 2026-08-30 (fifteenth): the CSP-boundary soft-nav fix + the pinned-cell hover fade, all three boxes, no migration
+
+Shipped hohenheim `166180fe` (previous `0782eb8b`) to robbedoes, kuifje and
+starfleet, in that order, one box at a time. ONE build, reused byte-identically:
+isolated workspace `build-worktrees/deploy-20260830-166180fe` (15 detached
+worktrees incl. emberglyph + janeway, per the fourteenth entry), sha256
+`528e7bb7759f46712ebcdb9ebb94223f72128bdd1046d2f73300b513b0d05957`,
+267,619,547 bytes, stamp **13/13 `dirty=false`**, `--build-info` printed all 13
+clean, the remote `unzip -p {} META-INF/blast/build-info.tsv | grep -c false |
+grep -qx 13` gate inside `upload_file` on every host. Chain build 598 s.
+
+Hohenheim's own 6 commits since `0782eb8b` are runbook, Dockerfiles and the
+installer -- no jar effect. THE POINT OF THE WAVE is upstream: hawkeye
+`01848811` + zenit `461d31d9` + zenit-cms `1c04255` (a soft navigation whose
+target carries a different Content-Security-Policy than the live document
+degrades to a full page load, both directions -- the Janeway console tab was
+unreachable by soft navigation because the document kept the STRICT_ADMIN
+policy and ghostty's `fetch(data:application/wasm...)` was refused) and plumage
+`b06fde5a` (the pinned `[data-sticky="end"]` actions cell now fades its hover
+tint on the same transition as the row instead of snapping ahead of it).
+
+Migration diff `0782eb8b..166180fe`: NONE (top M007, pin mark stays 007);
+`--run-migrations` from an explicit `cd /opt/hohenheim` reported `0 applied`
+on every box. No rehearsal boot (no schema change).
+
+Starfleet lane: preflight `/root/hohenheim-preflight-20260830-fifteenth/`
+(`.pre` + `.at-swap`, both `integrity_check` ok, `settings/`, keyring sha256
+EQUAL at `414e9b13...`, `hohenheim-server.jar.rollback` = `b42c0ff2...`, i.e.
+`0782eb8b`). Stop 08:52:40.6Z, start 08:52:57.4Z, `/api/health` 200 at
+08:53:23.7Z (26 s), proxy + DNS listeners bound at 08:54:12Z. Second restart
+08:53:38Z, healthy 08:54:09Z (30 s). Both: 0 real journal errors, RSS 324 MB,
+listeners 53/80/443/3000, roles `[databases, dns, firewall, instances, proxy]`,
+`CertificateStore: loaded 3 certificates`, `SiteDispatcher: loaded 5 exact
+routes, 1 wildcard`. Row counts identical (46 migrations, 9 sites, 6 domains,
+4 certificates, 1 zone, 8 records, 4 instances). Apex 200, `www` 200, `admin`
+302, `comms` 200, `skeleton` 202 (the app's own queue page, see the fourteenth
+entry), all `ssl_verify_result 0`; DNS `aa=True` for the SOA, `google.com`
+REFUSED. Both containers kept their uptimes (15 h, 16 h).
+
+TWO READING TRAPS: (1) `/api/health` answers 200 up to ~15 s BEFORE the proxy
+and DNS listeners bind (`ProxyServer: listening` came 49 s after start here), so
+a curl fired the moment health turns green reports `000` on 443 -- wait for the
+`ProxyServer`/`DnsServer` journal lines or re-probe. (2) starfleet's Debian 11
+journalctl cannot parse a fractional-second `--since` (`Failed to parse
+timestamp: ...T08:52:40.6Z`) and then prints a count of 0 that means nothing;
+use `YYYY-MM-DD HH:MM:SS` there.
+
+`zenit-dev deployed starfleet` = `current`, 13/13, no RESTART PENDING.
+ROLLBACK IS JAR ONLY: copy the `.rollback` back and restart. Workspace deleted.

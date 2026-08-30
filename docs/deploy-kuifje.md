@@ -1706,3 +1706,28 @@ all, and the first certificate request months later blames the contact.
 (`.invalid`, `.local`, `.localhost`, `.test`, `.example`, `example.{com,org,net}`)
 and anything that is not an address; omitting the flag is still fine and
 registers the account with no contact, which is what robbedoes effectively did.
+
+## Deploy 2026-08-30 (sixth jar swap): 166180fe, no migration
+
+Swapped the jar the fifteenth starfleet deploy built -- sha256 `528e7bb7...`,
+267,619,547 bytes, stamp 13/13 `dirty=false`, uploaded to `/tmp` behind the
+`grep -c false | grep -qx 13` gate, `install -o hohenheim -g hohenheim -m 644`
+into place, staged file removed. Previous jar `0782eb8b` (`b42c0ff2...`) is the
+rollback in `/root/hohenheim-preflight-20260830-fifteenth/` beside `.pre` and
+`.at-swap` (both `integrity_check` ok), `settings/`, keyring sha256 EQUAL at
+`4ccf141b...`.
+
+Migration diff NONE (top M007, pin 007); `--run-migrations` from
+`cd /opt/hohenheim` reported `0 applied`.
+
+Stop 08:51:27.2Z, start 08:51:33.7Z, healthy 08:51:44.0Z -- 17 s downtime.
+Second restart 08:51:56.0Z, healthy 08:52:06.4Z (10 s). Both: 0 real journal
+errors, RSS 336 MB, listeners 53/80/443 + 3000 on loopback, roles
+`[dns, firewall, proxy]`, `SiteDispatcher: loaded 1 exact routes`. Row counts
+identical: 46 migrations, 5 zones, 68 records, 1 site, 1 domain. Panel login
+200 over `https://nskuifje.mooo.com`.
+
+KUIFJE AND ROBBEDOES WERE NEVER DOWN TOGETHER: robbedoes first, then kuifje,
+then starfleet. After kuifje's second restart `hoh-dns-diff compare` says
+IDENTICAL for `wcag.be` (serial 15) and `tavernetomberg.be` (serial 11)
+between the two, both `DELEGATION OK`, and `MX` answers `aa=True` from both.
