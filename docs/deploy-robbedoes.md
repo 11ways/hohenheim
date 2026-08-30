@@ -1046,3 +1046,109 @@ runs did not rewrite it, md5 `ca0122e7d8f3b9de1f45af576f867167`).
    CNAME owner cannot hold other records). TTL is already 300.
 3. Verify with `curl --resolve` against the NEW address, never through the
    resolver; watch phoenix's access log go quiet. Phoenix stays the rollback.
+
+## Standing rule: copy phoenix's `node_modules`, never resolve fresh
+
+Established 2026-08-30 after it bit two apps in a row. These apps are six to
+ten years old. Their `package.json` ranges no longer resolve to the tree that
+actually runs: Invulassistent's lock file predates its own manifest and its
+`scaffold` dependency is a PRIVATE GitHub repo npm cannot reach, and Oogfonds
+resolved to a plugin set that refuses to boot (`The alchemy-form plugin has to
+be loaded AFTER alchemy-widget`). The tree on phoenix is the one serving
+production today, so it is the only faithful input.
+
+The lane, per app: `sudo tar --numeric-owner -czf` the `node_modules` on
+phoenix (never `node_modules_old`), stream `ssh phoenix 'cat' | ssh robbedoes
+'cat >'` from the workstation with NO local copy (the workstation disk is at
+98%), unpack into the instance volume, `chown` to the instance uid. Verify by
+module COUNT and size against phoenix -- NOT by comparing a re-tarred sha256,
+because `tar czf` stamps the gzip header with the time and a second tar of the
+same tree is a different byte stream.
+
+Native modules survive the move: a tree built on phoenix's Ubuntu 16.04 loads
+on the buster/bullseye images for the same Node major (buster's glibc is
+newer). Measured this wave: Oogfonds' `mmmagic`, `bcrypt` and `canvas` all
+loaded untouched, and NO package needed `npm rebuild`. Where a `.node` binary
+does refuse, rebuild ONLY that package in a helper container; never reinstall
+the tree.
+
+## Vlaams Oogfonds - Staging staged, 2026-08-30
+
+`oogfonds.clients.11ways.be` + `test.vlaamsoogfonds.be` (22,543 requests/quarter
+on phoenix, all 401 -- it is behind basic auth), staged on robbedoes WITHOUT a
+cutover.
+
+### What it is
+
+`/home/oogfonds/oogfonds-staging` on phoenix (uid 4006, Node 16.13.2,
+`node server.js`, `environment: 'preview'`, port 3000). `alchemymvc ~1.2.1`
+with the alchemy plugin family plus `nodemailer`. No lock file. 147 MB of
+`files/` uploads, included. On phoenix it has `min_processes: 0`, so it was not
+even running when the tarball was taken.
+
+### Rows on robbedoes
+
+| Object | Id | Notes |
+| --- | --- | --- |
+| managed database `oogfonds-staging-mongo` | 6 | `mongo:7`, db `oogfonds-staging`, user `oogfonds`, host `local`, **memory limit 512 MB set explicitly**; container `hohenheim-luguij0q-instance-10` |
+| instance `oogfonds-staging` | 11 | `hohenheim:workspace` on runtime image `node-16` (id 5), `start_command = node server.js`, `container_port 3000`, `console_kind tty`, `memory_limit_mb 512`, `auto_deploy false`; container `hohenheim-luguij0q-instance-11`, volume `/opt/hohenheim/data/volumes/11/home`, uid 200011 |
+| attachment `instance_databases` | 5 | instance 11 -> database 6, prefix `DB` (+ `DATABASE_URL`) |
+| instance variables | - | `MAILER_PASSWORD` and `MICROCOPY_KEY`, both stored as SECRET (write-only) |
+| access list `Oogfonds staging` | 1 | one `basic_auth` rule, satisfy `any`; attached SITE-WIDE on the site's Advanced -> Access list, which is the faithful mapping of phoenix's site-level `basic_auth` (a protected path would only cover a prefix) |
+| site `Vlaams Oogfonds - Staging` | 6 | `hohenheim:instance`, instance 11 |
+| domains | 9, 10 | `oogfonds.clients.11ways.be`, `test.vlaamsoogfonds.be`, exact, `force_ssl=false` |
+
+### Secrets moved out of the source tree
+
+`app/config/local.js` on phoenix carries an inline SMTP password
+(`calamity.develry.be:587`, user `output@develry.be`) and a `microcopy_key`.
+Both now come from instance variables: the file reads
+`password : process.env.MAILER_PASSWORD` and
+`microcopy_key: process.env.MICROCOPY_KEY`, and the values were transferred
+without ever being printed -- read off the host into a 0600 file, piped into
+`hoh vars instance 11 set ... --secret`, then the file was shredded.
+
+**Not fixed, worth a decision:** `app/config/default.js:78` still contains a
+different inline mailer password committed in the source tree. It is overridden
+by `local.js` at runtime. It was left alone (out of this lane's scope), but it
+is a credential sitting in a repository.
+
+### Proof
+
+Restore: 16 collections, 1418 documents.
+
+Native modules from phoenix's tree, loaded untouched in the node-16 container:
+`mmmagic ok`, `bcrypt ok`, `canvas ok`. `@11ways/exiv2` fails on
+`libexiv2.so.14`, which the runtime image does not ship -- the same degradation
+Microcopy and Auditexport have here.
+
+| request | phoenix | robbedoes (proxy, Host header) |
+| --- | --- | --- |
+| `/` with no credentials | 401 | **401** |
+| `/` with `test:secret` | 200, **111389 bytes** | 200, **111380 bytes** |
+| `/login` with credentials | 200, 14043 bytes | 200, 14064 bytes (direct) |
+
+Fetched directly from the container before the site existed, `/` was
+**111389 bytes -- byte-for-byte equal to phoenix**. The 9-byte difference
+through the proxy is the request URL and user-agent embedded in the rendered
+`window._initHawkejs`, the same nonce family as the other apps.
+
+`docker stats`: instance 11 113 MiB / 512 MiB, its Mongo 119 MiB / 512 MiB.
+
+### Host memory budget, and what it forced
+
+`hoh instance create` refused with `host_capacity_reached`: a managed database
+reserves **1280 MB by default** and five of them had eaten the budget. The
+database detail page is READ-ONLY after creation (only Delete is offered), so
+an existing database's limit cannot be lowered -- database 5 was deleted while
+still empty and recreated as database 6 with an explicit 512 MB limit through
+the new-database form's Advanced section. Worth remembering: size a managed
+database at creation, because it cannot be resized afterwards.
+
+### Cutover steps remaining (in order)
+
+1. The `11ways.be` zone onto kuifje (it is at afraid.org today, with a
+   `* CNAME apex` wildcard, so it needs the FreeDNS web UI export) and
+   `vlaamsoogfonds.be` for the second hostname.
+2. Certificate, then `force_ssl=true` on domains 9 and 10.
+3. Flip the hostnames to `51.255.43.81` / `2001:41d0:305:2100::1:4b26`.
