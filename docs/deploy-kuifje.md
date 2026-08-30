@@ -1589,3 +1589,27 @@ servers. `hoh-dns-diff delegation` = DELEGATION OK for both zones.
 Rollback is jar only: `/root/hohenheim-preflight-20260830-thirteenth/`
 (`hohenheim.db.pre` + `.at-swap`, both `integrity_check` ok, `settings/` with
 the keyring sha256-equal, `hohenheim-server.jar.rollback`).
+
+## Zone wcag.be: invulassistent flipped to robbedoes, 2026-08-30
+
+Second hostname cutover (after `earl`). Only that owner changed; the site cut
+over is recorded in `deploy-robbedoes.md` ("Invulassistent LIVE").
+
+| record | before | after |
+| --- | --- | --- |
+| `invulassistent` | CNAME `phoenix.develry.be.` TTL 300 (record 28) | A `51.255.43.81` + AAAA `2001:41d0:305:2100::1:4b26`, both TTL 300 |
+
+Deleting first is required, not a preference: adding an address record beside a
+CNAME is refused ("A CNAME owner cannot hold any other record"). The delete
+confirmation names the consequence in full -- "Authoritative answers change
+immediately. This cannot be undone." -- and the authoritative gap lasted seconds
+under a 300 s cache.
+
+Serial 12 -> 15 (each save bumps; three saves: delete, A, AAAA). robbedoes
+zone 3 transferred within seconds. `compare --strict` **IDENTICAL** on all 11
+questions, apex NS and SOA included, both sides serial 15; `earl`, `api`, `www`,
+the apex A/AAAA/TXT and both NS rows are untouched. `propagate` PROPAGATED on
+1.1.1.1 / 8.8.8.8 / 9.9.9.9 in round 1.
+
+`wcag.be` and `www.wcag.be` still answer 200 from merlina (213.239.210.245);
+they were never part of this change.
