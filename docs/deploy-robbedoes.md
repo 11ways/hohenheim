@@ -954,3 +954,95 @@ extraction, exactly as Microcopy does here.
    for `di-ax.be` yet. Nothing else can proceed until then.
 2. Certificate for `auditexport.di-ax.be`, then `force_ssl=true` on domain 7.
 3. Flip the hostname to `51.255.43.81` / `2001:41d0:305:2100::1:4b26`.
+
+## Invulassistent staged, 2026-08-30
+
+`invulassistent.wcag.be` (31,322 requests/quarter on phoenix), staged on
+robbedoes WITHOUT a cutover. Unlike Auditexport this one is CUTOVER-READY: the
+`wcag.be` zone is already ours on kuifje and its record is already at TTL 300.
+
+### What it is
+
+`/home/invulassistent/invulassistent` on phoenix (uid 4015, `node server.js`,
+`environment: 'live'`, port 3000). `alchemymvc ~1.3.15` with the alchemy-acl/
+chimera/form/i18n/media/menu/styleboost/widget family, `csv-parser`, and
+`scaffold` from the PRIVATE GitHub repo `11ways/scaffold`. The app tree is
+118 KB; the 725 MB on phoenix is `node_modules`. It has NO basic auth of its
+own -- the 401 the audit recorded is the app's own login gate, so no access
+list is needed.
+
+### Rows on robbedoes
+
+| Object | Id | Notes |
+| --- | --- | --- |
+| managed database `invulassistent-mongo` | 4 | `mongo:7`, db `invulassistent`, user `invulassistent`, host `local`; container `hohenheim-luguij0q-instance-7` |
+| instance `invulassistent` | 8 | `hohenheim:workspace` on runtime image `node-12` (id 6), no git source, `start_command = node server.js`, `container_port 3000`, `console_kind tty`, `memory_limit_mb 1024`, `auto_deploy false`; container `hohenheim-luguij0q-instance-8`, volume `/opt/hohenheim/data/volumes/8/home`, uid 200008, published `127.0.0.1:32781->3000` |
+| attachment `instance_databases` | 4 | instance 8 -> database 4, prefix `DB` (+ `DATABASE_URL`) |
+| site `Invulassistent` | 5 | `hohenheim:instance`, instance 8 |
+| domain | 8 | `invulassistent.wcag.be`, exact, `force_ssl=false` until a certificate exists |
+
+### The dependency problem, and why phoenix's `node_modules` was copied
+
+`npm ci` refuses: the committed `package-lock.json` (2022) predates its own
+`package.json` (2026) -- the lock pins alchemy-media 0.6.1, alchemy-menu 0.6.1,
+alchemy-styleboost 0.4.4 and alchemy-widget 0.1.4 against ranges `~0.7.5`,
+`~0.6.4`, `~0.4.6` and `~0.2.8`. `npm install` then fails at
+`scaffold: 11ways/scaffold`, which is a PRIVATE repository: npm resolves it as
+`ssh://git@github.com/11ways/scaffold.git`, the runtime image ships no ssh
+client, and rewriting the URL to https only gets `Password authentication is
+not supported`. No credential for it exists here and none was invented.
+
+So the Tomberg route was taken instead: phoenix's own `node_modules` (266
+modules, 210 MB compressed) streamed phoenix -> workstation -> robbedoes with
+no local copy, unpacked into the volume. That is more faithful than resolving
+fresh, because it is the exact tree phoenix runs.
+
+### A finding about phoenix, worth keeping
+
+Phoenix's native modules in that tree are compiled for **NODE_MODULE_VERSION
+93 (Node 16)** while the live phoenix process is
+`/usr/local/n/versions/node/12.16.2/bin/node` (pid 30519, ABI 72). So
+`mmmagic` and `canvas` ALREADY fail to load on phoenix and the app tolerates
+it -- alchemy-media degrades. They were deliberately NOT rebuilt here: doing so
+would make robbedoes behave differently from the site being replaced.
+`bcrypt` loads (it is the one that matters for the login gate).
+
+### Proof
+
+Restore: 17 collections, 104,681 documents, `scanresults=103300`, `scans=206`,
+`users=83`, dataSize 5089 MB / storageSize 937 MB compressed. `mongorestore`
+ran from a helper `mongo:7` container on the database's own link network with
+the dump bind-mounted read-only, so the 5 GB was never copied into the
+container's writable layer.
+
+Inside the container `node server.js` listens on `*:3000` as uid 200008.
+
+| path | phoenix | robbedoes (direct) | robbedoes (proxy, Host header) |
+| --- | --- | --- | --- |
+| `/` | 401, 8950 bytes | 401, 8941 | 401, 8949 |
+| `/login` | 200, 9104, `<title>Login \| Invulassistent</title>` | 200, 9095, same title | 200, 9103, same title |
+| `/chimera` | 401, 8367 | 401, 8367 (exactly equal) | - |
+
+A normalised diff of `/login` (hex-like runs and URLs collapsed) leaves exactly
+TWO differing lines: the `hawkejs/static.js?i=` cache buster and the request
+URL plus client user-agent inside `window._initHawkejs`. Everything else,
+including the `nl` locale and every template, is identical.
+
+`docker stats`: instance 8 99 MiB / 1 GiB, its Mongo 656 MiB / 1.25 GiB.
+
+### What differs from phoenix
+
+Node 12.22.12 instead of 12.16.2 (same major, same ABI 72); Mongo 7; the
+database is reached by injected uri over the link network; TCP 3000 instead of
+the hohenchild unix socket. `package-lock.json` is untouched (the failed npm
+runs did not rewrite it, md5 `ca0122e7d8f3b9de1f45af576f867167`).
+
+### Cutover steps remaining (in order)
+
+1. Certificate for `invulassistent.wcag.be` on robbedoes (HTTP-01, right after
+   the flip, the way Earl was done), then `force_ssl=true` on domain 8.
+2. Flip `invulassistent` in kuifje zone 3 from `CNAME phoenix.develry.be` to
+   A `51.255.43.81` + AAAA `2001:41d0:305:2100::1:4b26` (delete-then-add: a
+   CNAME owner cannot hold other records). TTL is already 300.
+3. Verify with `curl --resolve` against the NEW address, never through the
+   resolver; watch phoenix's access log go quiet. Phoenix stays the rollback.
