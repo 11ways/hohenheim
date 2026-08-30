@@ -1388,3 +1388,46 @@ servers; it becomes `matches` once `.be` publishes the mooo pair.
 The site is unaffected -- only the nameservers moved, every A/CNAME value is
 unchanged -- and `curl -sI` from the workstation gets HTTP 200 from
 `https://wcag.be/`, `https://www.wcag.be/` and `https://earl.wcag.be/`.
+
+### The parent moved, 01:07:55Z
+
+Polled `hoh-dns-diff delegation wcag.be` every ~55 s from 00:54:24Z. The parent
+`be.` (194.0.6.1) published Hetzner's three servers through 01:07:04Z and the
+mooo pair at 01:07:55Z. After the move:
+
+    parent NS nskuifje.mooo.com., nsrobbedoes.mooo.com.
+    glue      (none)
+    nskuifje.mooo.com.     137.74.171.228  authoritative  8
+    nsrobbedoes.mooo.com.  51.255.43.81    authoritative  8
+    sets      parent == apex
+    VERDICT: DELEGATION OK
+
+(`--expect-ns nskuifje.mooo.com,nsrobbedoes.mooo.com` matches. The IPv6 address
+of `nskuifje.mooo.com` is unprobed -- no route from this workstation, a probe
+fact, not a zone fact.)
+
+`propagate` at 1.1.1.1 / 8.8.8.8 / 9.9.9.9, all PROPAGATED on round 1:
+`www.wcag.be CNAME wcag.be.`, `earl.wcag.be CNAME phoenix.develry.be.`,
+`wcag.be A 213.239.210.245`. TRAP: `propagate www.wcag.be A` reports **absent
+NOERROR** on all three resolvers even though every one of them answers the full
+`www -> wcag.be -> 213.239.210.245` chain -- the tool matches records at the
+QUERIED owner name and does not follow a CNAME. Ask a CNAME name for its CNAME.
+
+`curl --noproxy '*' -sI` from the workstation: HTTP 200 from `https://wcag.be/`,
+`https://www.wcag.be/` and `https://earl.wcag.be/`, before and after the move.
+
+### Health after the cutover: NOT `matches`, and correctly so
+
+**Check health** now reports `Apex NS differs from the declared nameservers`,
+with findings:
+
+    apex_undeclared nskuifje.mooo.com     served but not declared
+    apex_undeclared nsrobbedoes.mooo.com  served but not declared
+    apex_undeclared ns1.elevenways.de     declared but not served
+    apex_undeclared ns2.elevenways.de     declared but not served
+
+Every parent-vs-apex finding is GONE -- that half now agrees. What remains is a
+comparison against the `dns.nameservers` SETTING, which still declares the
+in-bailiwick pair for the elevenways.de plan. Left untouched deliberately: it
+governs zones created from now on, not this one. Secondaries tab: `robbedoes`
+**Current** at served serial 8.
