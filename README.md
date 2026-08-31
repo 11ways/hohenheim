@@ -2,15 +2,19 @@
 
 Hohenheim is a reverse proxy and site dispatcher. It routes incoming HTTP/HTTPS
 requests to backends based on hostname, and manages the lifecycle of those
-backends — node.js child processes, static files, arbitrary proxied upstreams,
-or git-provisioned apps.
+backends: containers and virtual machines it manages, static files, arbitrary
+proxied upstreams, or git-sourced apps it builds and deploys itself.
 
 This is the **Java/Zenit rewrite** of the original Node.js/AlchemyMVC Hohenheim.
 It has feature parity with the Node version and goes well beyond it:
 
-- **Reverse proxy + site dispatcher** — node/alchemy/command/proxy/static/redirect
-  site types, per-site process management, git-backed provisioning.
-- **Docker** site type and **managed databases** (create, back up, attach to sites).
+- **Reverse proxy + site dispatcher**: a site has one typed **upstream**
+  (`static`, `redirect`, `address`, `instance`, `tls_passthrough`,
+  `dev-namespace`) and no opinion about how the thing upstream is run.
+- **Instances** are the workloads: Docker containers, Incus system containers,
+  KVM virtual machines, persistent workspaces and git-sourced applications with
+  sandboxed image builds and health-gated releases.
+- **Managed databases** (create, back up, attach to an instance).
 - **Automatic HTTPS** via Let's Encrypt, including **wildcard certificates**
   through DNS-01.
 - **Authoritative DNS server** (optional) — host your own zones, with **DNSSEC**,
@@ -49,13 +53,14 @@ Each subsystem has a deeper design doc under [`docs/`](docs/).
 
 ### Git
 
-- `git` on `PATH` if you plan to use the git-backed site types.
+- `git` on `PATH` if you plan to use git-sourced applications or workspaces.
 
-### Node.js (only for Node/Alchemy site types)
+### Docker
 
-- Any node version reachable on `PATH`, or per-site versions managed via
-  [`n`](https://github.com/tj/n) — all globally-installed `n` versions are
-  auto-discovered by the `UpdateNodeVersions` scheduled task.
+- Required for the `instances`, `databases` and `stacks` roles: application
+  releases, managed database engines and stack services all run as containers.
+  `tools/install-host.sh` installs Docker CE from Docker's apt repo whenever one
+  of those roles is requested.
 
 ## Privileged ports
 
@@ -119,59 +124,60 @@ sudo iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-ports 844
 ```
 
 Set `proxy.http_port = 8080` and `proxy.https_port = 8443` in
-`settings/local.dry`. Clients see port 80/443 unchanged.
+`settings/hohenheim.dry` (the `proxy.*` group is Hohenheim's own, not Zenit's;
+putting it in `local.dry` is ignored). Clients see port 80/443 unchanged.
 
 ### Option 4: `authbind`
 
 Legacy fallback: `authbind --deep java -jar hohenheim-server.jar`. Only helps
 with `bind()`, nothing else. Option 1 supersedes it.
 
-## uid/gid switching for spawned processes
+## Root grants
 
-Hohenheim can run site processes as a different unix user (per-site
-`system_user_id`). It uses `sudo` as the privilege broker and util-linux
-`setsid` to give each launched runtime, build, and git command its own session
-and process group.
+Hohenheim runs as an unprivileged service user and reaches for root through
+`sudo -n` in exactly three places. `tools/install-host.sh` writes the matching
+sudoers files and validates each with `visudo -cf`; the grants are narrow, not
+the blanket `NOPASSWD: ALL` earlier versions of this document described.
 
-- The JVM itself does **not** need `cap_setuid`/`cap_setgid`/`cap_kill`.
-- `/usr/bin/sudo` must be owned by root, have its setuid bit intact, and reside
-  on a filesystem mounted without `nosuid`.
-- systemd must use `NoNewPrivileges=false`. Do not narrow
-  `CapabilityBoundingSet` to only `CAP_NET_BIND_SERVICE`: that also constrains
-  the setuid `sudo` child and prevents the uid/gid switch. The example unit
-  leaves the bounding set at systemd's default.
-- The explicit child environment is cleared before launch and carried through
-  `sudo --preserve-env`; values are never serialized into process arguments.
-- The daemon invokes arbitrary configured site commands as numeric users and
-  groups, and invokes `chown` for deployment slots. The matching sudoers rule is:
+- **nftables** (`proxy` or `firewall` role). `NftRunner` executes
+  `sudo -n -- nft ...`; that is the one root-command seam of the ban enforcer.
 
-```
-# /etc/sudoers.d/hohenheim
-Defaults:hohenheim !use_pty, !log_input, !log_output
-hohenheim ALL=(ALL:ALL) NOPASSWD:SETENV: ALL
-```
+  ```
+  # /etc/sudoers.d/hohenheim-nft
+  hohenheim ALL=(root) NOPASSWD: /usr/sbin/nft
+  ```
 
-Validate it with `visudo -cf /etc/sudoers.d/hohenheim`. The host must provide
-`/usr/bin/sudo`, util-linux `/usr/bin/setsid` with `--wait`, and
-`/usr/bin/kill`. A narrower sudoers policy is only equivalent if it permits
-every configured target uid/gid, runtime/build/git command, process-group
-signal, and deployment-slot `chown` invocation.
+  The installer substitutes whatever `command -v nft` reports, falling back to
+  `/usr/sbin/nft`.
 
-The three `Defaults` flags are part of the process-group contract, not optional
-hardening. Hohenheim starts `/usr/bin/setsid` before `sudo`, then treats that
-`setsid` process PID as the session and process-group ID for cleanup. A sudo
-PTY or I/O-logging session can place the target command in a new session outside
-that group, so `use_pty`, `log_input`, and `log_output` must remain disabled for
-the `hohenheim` user. `SETENV` and `NOPASSWD` remain required for the explicit
-child environment and unattended uid/gid switch.
+- **Volume root** (`instances` role, or `--volume-root-size`). Btrfs subvolume
+  and quota operations plus the ownership fixes that go with them:
 
-On shutdown or cancellation Hohenheim sends TERM to the original process
-group, checks whether that group still exists, and sends KILL only when it
-does. This cleans up ordinary descendants, including children reparented after
-their leader exits. It is lifecycle cleanup, not a security sandbox: a hostile
-program can create another session or process group and escape this boundary.
-The systemd unit's `KillMode=control-group` separately asks systemd to reap all
-remaining processes in the service cgroup when the service stops.
+  ```
+  # /etc/sudoers.d/hohenheim-volumes
+  hohenheim ALL=(root) NOPASSWD: /usr/bin/btrfs, /usr/bin/chown, /usr/bin/chmod, /usr/bin/mkdir, /usr/bin/rm
+  ```
+
+- **The managed spamservice child.** This is the only process Hohenheim still
+  spawns under a different unix uid, and the setsid + `sudo --preserve-env -u
+  #<uid>` + `prlimit` + `setpriv --no-new-privs` chain in `SystemUsers`
+  (`server/SystemUsers.java`) is built for it alone. The uid comes from the
+  Spamservice installation singleton's `system_user_id`; there is no per-site
+  or per-instance uid switching any more. Containerised workloads are isolated
+  by their runtime (Docker or Incus), not by a uid drop on the host.
+
+If you configure that child, `/usr/bin/sudo` must be owned by root with its
+setuid bit intact on a filesystem mounted without `nosuid`, the host must
+provide util-linux `/usr/bin/setsid` with `--wait`, and the unit must keep
+`NoNewPrivileges=false`, because systemd otherwise blocks `sudo` from raising
+privileges. Do not narrow `CapabilityBoundingSet` to only
+`CAP_NET_BIND_SERVICE`: that also constrains the setuid `sudo` child. The
+child's environment is reduced to an explicit map and carried through
+`--preserve-env`, so secrets never appear in the inspectable argument vector.
+
+The unit's `KillMode=control-group` asks systemd to reap everything left in the
+service cgroup when the service stops. That is lifecycle cleanup, not a
+security sandbox.
 
 ## File descriptor limits
 
@@ -188,8 +194,15 @@ per-process limit (usually 1024) is not enough under load. Raise it.
 
 ## Installation
 
+### 1. Get the source
+
+The Java rewrite lives on the **`java-rewrite`** branch. GitHub's default branch
+for this repository is still `master`, which holds the original
+Node.js/AlchemyMVC Hohenheim, so a plain `git clone` checks out the wrong
+project:
+
 ```bash
-git clone https://github.com/11ways/hohenheim.git
+git clone -b java-rewrite https://github.com/11ways/hohenheim.git
 cd hohenheim
 
 # Build (uses zenit-dev; do not invoke ./gradlew directly)
@@ -197,6 +210,35 @@ zenit-dev build
 ```
 
 The build produces `build/libs/hohenheim-<version>-server.jar`.
+
+### 2. Install the host
+
+`tools/install-host.sh` turns a fresh Debian host into a Hohenheim node and is
+THE install procedure: it does the host preflight, base packages, JDK, optional
+Docker CE, the service user, the directory layout, the narrow sudoers grants,
+the btrfs volume root, the seeded settings files, port 53 handling, the systemd
+unit (heap sized from `MemTotal`), the migration run, and the service start plus
+a `/api/health` wait. Every step checks its own precondition and skips when it is
+already satisfied, so re-running it on a live host is a no-op that prints what it
+found.
+
+```bash
+sudo ./tools/install-host.sh \
+    --jar build/libs/hohenheim-<version>-server.jar \
+    --roles proxy,dns,firewall,instances \
+    --main-url https://panel.example.com \
+    --admin-email ops@example.com
+```
+
+Run `./tools/install-host.sh --help` for the full option list, and
+`--dry-run` (which does not need root) to print the plan without executing
+anything. The roles are `proxy`, `dns`, `firewall`, `stacks`, `databases` and
+`instances`; an unknown role name is refused rather than ignored. The admin
+listener defaults to `127.0.0.1:3000` because the panel is meant to be published
+through the proxy, and the first administrator is created afterwards through the
+panel's own `/setup` page. The rest of this README documents what the script
+automates; [`docs/deploy-native.md`](docs/deploy-native.md) is the long-form
+version of the same procedure.
 
 ### Directory layout for a production install
 
@@ -208,8 +250,9 @@ The build produces `build/libs/hohenheim-<version>-server.jar`.
 │   ├── local.dry                 # Zenit server overrides (not tracked)
 │   ├── local.dry.example         # Zenit reference
 │   ├── hohenheim.dry             # Hohenheim proxy/app settings (not tracked)
-│   └── hohenheim.dry.example     # Hohenheim reference
-├── data/                         # git-provisioned site checkouts
+│   ├── hohenheim.dry.example     # Hohenheim reference
+│   └── auth.dry                  # zenit-auth overrides (external_base_url)
+├── data/                         # instance volumes, backups, build contexts
 ├── hohenheim.db                  # SQLite database (auto-created)
 └── logs/                         # access + domain-miss logs
 ```
@@ -244,6 +287,17 @@ trust decisions can never trigger DNS.
 
 ```
 {
+    // Which subsystems this installation runs. A disabled role does not start,
+    // declares no scheduled tasks and removes its admin surfaces. All default
+    // to true; every one of them requires a restart to change.
+    "roles": {
+        "proxy":     true,   // public listeners, sites, domains, certificates, access lists
+        "dns":       true,   // zone store, federation, authoritative server (dns.enabled still gates the listener)
+        "firewall":  true,   // ban enforcement and spamservice reputation
+        "stacks":    true,   // managed Docker stacks (needs a reachable Docker daemon)
+        "databases": true,   // managed database provisioning and backups
+        "instances": true    // the instance tier (needs a reachable Docker daemon)
+    },
 
     // Reverse proxy
     "proxy": {
@@ -322,7 +376,7 @@ stored and edited as DRY arrays.
 
 ### TLS passthrough and PROXY v2
 
-The `hohenheim:tls_passthrough` site type routes an encrypted TCP stream by the
+The `hohenheim:tls_passthrough` upstream kind routes an encrypted TCP stream by the
 SNI hostname in its TLS ClientHello. Hohenheim does not terminate, inspect, or
 modify the backend TLS session. Its settings are `forward_host`, `forward_port`,
 `connect_timeout`, and `proxy_protocol_v2`. The backend owns its
@@ -369,12 +423,15 @@ Once running, the admin UI is at:
 http://<host>:3000/
 ```
 
-(or whatever you set `network.port` to). Site creation, domain mapping,
-certificate management, process table, per-site terminal viewer, audit log and
-access-list editor all live here.
+(or whatever you set `network.port` to). The nav has four groups: **Deploy**
+(projects, sites, instances, stacks, databases, templates, git providers),
+**Networking** (DNS zones and records, certificates, access rules, protected
+paths, auth providers), **Security** (users, roles, IP bans, spamservice) and
+**System**. The per-instance console and shell live on the instance record,
+not on a site.
 
-The first time Hohenheim starts against an empty database it runs a setup
-wizard to create the initial admin user.
+While no user exists the panel redirects to `/setup`, where the first
+administrator is created.
 
 ## HTTPS & certificates
 
@@ -419,48 +476,71 @@ Per-domain options:
 - `exclude_from_letsencrypt` — exclude from ACME enrollment (useful for `localhost`
   or internal hostnames).
 
-## Site types
+## Upstream kinds
 
-Built-in types, registered via `SiteTypeRegistry`:
+A site answers exactly one question: what its hostnames resolve to. The
+built-in upstream kinds live in
+`src/server/java/be/elevenways/hohenheim/server/upstream/kinds/` and are
+discovered at compile time, never registered by hand:
 
-| Type       | Purpose                                                    |
-|------------|------------------------------------------------------------|
-| `node`     | Managed Node.js child process. Hohenheim handles port/socket allocation, restart, scaling, logs. |
-| `alchemy`  | Extends `node` with `--stream-janeway` and a fork-wrapper that gives older alchemy installs a native `process.on('message')` IPC channel. |
-| `command`  | Managed arbitrary process (shell command).                 |
-| `docker`   | Managed Docker container on a local or remote engine; Hohenheim maps a container port and proxies to it. |
-| `dev-namespace` | A wildcard namespace (`*.dev.example.com`) that remote dev servers register into over the [dev tunnel](#dev-tunnel). |
-| `proxy`    | Transparent reverse proxy to a TCP address or unix socket. Regex host captures can be substituted into the socket path, e.g. `/run/{project}.sock`. |
-| `static`   | Static-file server, optionally git-provisioned. Directory listings (autoindex) are ON by default since 0.1.0, matching the Node original; untick "Show directory listing" to disable. |
-| `redirect` | 30x redirect, with an optional per-request delay.          |
-| `dead`     | Returns an error page; for sites temporarily disabled.     |
+| Kind               | Purpose                                                |
+|--------------------|--------------------------------------------------------|
+| `static`           | Serves static files from a directory.                  |
+| `redirect`         | Sends an HTTP redirect to a target URL.                |
+| `address`          | Forwards to an upstream HTTP/HTTPS server (TCP address or unix socket). |
+| `instance`         | Serves the hostname from an instance this deployment manages; the site names it through `sites.instance_id` and the routing build resolves that instance's published loopback port. |
+| `tls_passthrough`  | Passes the original TLS stream to a backend selected by SNI (see below). |
+| `dev-namespace`    | A wildcard namespace (`*.dev.example.com`) that remote dev servers register into over the [dev tunnel](#dev-tunnel). |
 
-See `docs/architecture-site-types.md` for the plugin contract.
+See [`docs/architecture-upstream-kinds.md`](docs/architecture-upstream-kinds.md)
+for the plugin contract.
+
+The older `node`, `alchemy`, `java`, `command`, `docker` and `dead` site types
+are gone: what a site RUNS is no longer a site question. The `proxy` type is now
+`address`.
+
+## Instance kinds
+
+What runs is an **instance**. Instance kinds are discovered the same way
+(`InstanceKinds` + `InstanceKindHandler`):
+
+| Kind                 | Purpose                                                |
+|----------------------|--------------------------------------------------------|
+| `application`        | The authored half of a deployed app: source, build, runtime image, variables, volumes, declared port, retention. Each deploy generates a `release` instance. |
+| `release`            | One immutable per-deploy container. Health-gated swap, one retired release kept for rollback. |
+| `docker_container`   | A Docker container on an inventoried host.             |
+| `system_container`   | A system container on an inventoried Incus host.       |
+| `vm`                 | A KVM virtual machine on an Incus host, provisioned through cloud-init user-data. |
+| `workspace`          | A persistent development box: one container per workspace, on Docker or Incus. |
+| `database_container` | The engine container a managed database lowers onto. Written only by the database record that owns it. |
+| `stack_service`      | One service of a compose-style stack.                  |
 
 ## Git-backed provisioning
 
-Any site type can source its working tree from git. Configure under the
-**Source** tab of the site editor:
+A git source is a property of the **application** or **workspace** instance, not
+of the site. An application builds its source into an image in a sandbox on the
+control plane (nixpacks or a Dockerfile) and deploys the result as a release; a
+workspace checks the source out and builds it inside its own container, as its
+own uid.
 
-- repo URL (HTTPS or SSH)
-- branch
-- build command (run after each pull; e.g. `bash generate-site.sh`)
-- build directory / root path (served from there)
-
-Dual-slot deployment: Hohenheim clones into `<data_path>/git-repos/<id>/a` or
-`/b`, runs the build, then atomically flips an `active` symlink. Failed
-builds don't take the site down.
-
-Webhooks: `POST /webhook/git/<site-id>` triggers a pull-and-rebuild.
+Webhooks: `POST /api/webhooks/git/<segment>` (`GitWebhookHandler.PREFIX`)
+triggers a deploy. The handler is intercepted on the proxy port before
+hostname routing, so the forge signature IS the authentication; every refusal
+short of a verified signature is the same 404. A push relayed by a forge carries
+the `webhook` deploy trigger, which is the one trigger that may not start a
+workload an operator stopped.
 
 ## Managed databases
 
-Hohenheim can create and manage databases (PostgreSQL, MySQL/MariaDB) on a
-local or remote **server**, attach them to sites (their credentials are
-injected into the site's environment), back them up on a schedule
+Hohenheim can create and manage databases (PostgreSQL, MySQL/MariaDB) on an
+inventoried **server**, attach them to an **instance** (their credentials are
+resolved at deploy time and injected into that workload's environment, never
+baked into stored settings), back them up on a schedule
 (`database.backup_path`, `database.backup_retention`), and restore from an
-uploaded dump. Managed database records are immutable after creation — destroy
-and recreate rather than editing in place.
+uploaded dump. A record describes a provisioned container, so name, engine, db
+name/user/password, image, ephemeral flag and server are frozen once it exists;
+only the resource ceilings can be corrected afterwards. Anything else means
+destroy and recreate.
 
 ## DNS server
 
@@ -470,7 +550,8 @@ control panel. It is **off by default**. Full design notes:
 [`docs/authoritative-dns.md`](docs/authoritative-dns.md) and
 [`docs/dns-federation.md`](docs/dns-federation.md).
 
-Enable it in `settings/local.dry`:
+Enable it in `settings/hohenheim.dry` (the `dns.*` group is Hohenheim's own; a
+`dns` block in `local.dry` is ignored):
 
 ```
 "dns": {
@@ -485,7 +566,7 @@ Binding port 53 needs the same `CAP_NET_BIND_SERVICE`
 [described above](#privileged-ports). Changing `dns.*` requires a restart; zone
 and record edits do not.
 
-In the admin UI (Infrastructure → DNS Zones) you create a zone (origin, SOA
+In the admin UI (Networking -> DNS Zones) you create a zone (origin, SOA
 contact, TTLs), then manage A/AAAA/CNAME/NS/MX/TXT/CAA/SRV records on its
 **Records** tab. A **Zone file** tab imports and exports standard master-file
 text, so you can migrate an existing zone from another provider by pasting its
@@ -651,8 +732,8 @@ timeouts, so the kernel expires them on its own; the bans table stays the
 source of truth and is resynced into the kernel at boot.
 
 **Sudoers requirement.** nftables enforcement shells `sudo -n -- nft ...` as
-root, so the Hohenheim user needs passwordless sudo for `nft` (or the broad
-`NOPASSWD:SETENV: ALL` rule already used for per-site privilege drops). All
+root, so the Hohenheim user needs passwordless sudo for `nft`
+(`/etc/sudoers.d/hohenheim-nft`, see [Root grants](#root-grants)). All
 nft failures are logged, never fatal: dev machines without sudo/nft run fine
 with `nftables_enabled` off (the default).
 
@@ -665,17 +746,17 @@ by the child. Hohenheim extracts the embedded distribution by content hash, runs
 its migrations, and supervises that one local runtime. Its controller key is
 generated automatically and delivered once over stdin, never through argv or the
 environment. No external URL, manually-created client, or framework report token
-is required. Managed zenit sites then automatically receive
-`ZENIT_SECURITY_REPORT_URL` (`http://127.0.0.1:<port>/v1/events`) and
-`ZENIT_SECURITY_REPORT_TOKEN` env vars on every spawn: the per-site key is
-minted lazily, kept on the site row, and idempotently provisioned into
-spamservice under the stable external id `hohenheim:site:<id>` (a runtime that lost
-the client self-heals on the next spawn; temporary provisioning failures keep
-the child configured and retry in the background, so retained event batches
-deliver after recovery without blocking site startup). Hohenheim's own events use
-a separate installation reporter provisioned by the same manager; the manager
-installs zenit's remote sink directly. Those events still feed the local threat
-scorer for immediate banning regardless of remote reporting.
+is required. Hohenheim's own events use an installation reporter provisioned by
+that manager, which installs zenit's remote sink directly. Those events also
+feed the local threat scorer for immediate banning regardless of remote
+reporting.
+
+Per-workload reporting (`ZENIT_SECURITY_REPORT_URL` /
+`ZENIT_SECURITY_REPORT_TOKEN` injected into a managed zenit app, provisioned
+into spamservice under the external id `hohenheim:site:<id>`) is built in
+`server/security/SecurityReportEnv` but is **not wired to a spawner today**:
+`SecurityReportEnv.forSite` has no caller outside its own test since the
+per-site process lane was deleted. Only `reconcilePersistedReporters` runs.
 
 **Migrating from fail2ban.** Remove the old jail so stale bans do not linger:
 delete `/etc/fail2ban/jail.d/hohenheim.conf` and
@@ -699,6 +780,10 @@ logrotate. Then add your operator IPs as separate `security.never_ban` items and
 ```
 
 ## Systemd
+
+`tools/install-host.sh` writes this unit for you and sizes the heap from
+`MemTotal` (40%, rounded to a 64 MB step, clamped to 512-2048 MB). The example
+below is for a host the installer does not cover.
 
 `/etc/systemd/system/hohenheim.service`:
 
@@ -749,8 +834,9 @@ sudo journalctl -u hohenheim -f
 
 Tune:
 
-- `User=` / `Group=`: the unix user Hohenheim runs as (make sure it has
-  `sudo` permission if you use per-site uid switching).
+- `User=` / `Group=`: the unix user Hohenheim runs as (it is the subject of the
+  sudoers files under [Root grants](#root-grants), and needs the `docker` group
+  when Docker workloads run here).
 - `WorkingDirectory=`: where `hohenheim.db`, `settings/`, `data/` live.
 - `ExecStart=`: swap in `/opt/hohenheim-jdk/bin/java` if you picked option 2
   for privileged ports.
@@ -759,22 +845,8 @@ Tune:
 ### Keep `NoNewPrivileges` in mind
 
 If you enable `NoNewPrivileges=true` systemd will block `sudo` from raising
-privileges, breaking per-site uid switching. Either leave it `false`, or
-don't use the `system_user_id` feature.
-
-## Node versions
-
-Per-site Node version selection:
-
-- System `node` on `PATH` (always available).
-- `/usr/bin/node`, `/usr/local/bin/node` if present.
-- Any version installed via [`n`](https://github.com/tj/n).
-
-Discovery is handled by the `UpdateNodeVersions` scheduled task; re-run it from
-the admin UI after installing a new version.
-
-If a referenced version disappears (uninstalled after a site was configured),
-Hohenheim falls back to `node` on `PATH` rather than crashing the spawn.
+privileges. That breaks the `nft` and btrfs grants and the managed spamservice
+child's uid drop. Leave it `false`.
 
 ## Troubleshooting
 
@@ -782,16 +854,19 @@ Hohenheim falls back to `node` on `PATH` rather than crashing the spawn.
   strategy. Re-read that section.
 - **`libjli.so: cannot open shared object file`.** You copied only the `java`
   binary. Copy the whole JDK directory (option 2).
-- **Spawns run as the wrong user.** Either the `sudo` NOPASSWD/SETENV rule is missing, or
-  `NoNewPrivileges=true` is set in the unit.
+- **`sudo: a password is required` in the log.** A sudoers file under
+  `/etc/sudoers.d/` is missing or does not cover the binary being run, or
+  `NoNewPrivileges=true` is set in the unit. Re-run `tools/install-host.sh`,
+  which writes and validates them.
 - **`EMFILE: too many open files`.** Raise `LimitNOFILE`.
 - **Let's Encrypt fails with rate-limit errors in testing.** Enable
   `ssl.letsencrypt_staging = true`.
-- **Site returns "Deployment in progress" for several minutes.** First git
-  clone + build is running in the background; wait for the `active` symlink
-  to appear under `<data_path>/git-repos/<id>/`.
+- **Site returns 503 for several minutes after a deploy.** The application's
+  first build is running in the sandbox; the site starts answering once the
+  release container passes its health gate. Watch the build operation on the
+  instance record.
 - **Admin UI works but proxy doesn't.** Check `proxy.http_port` in
-  `settings/local.dry` — if it's `80` and you didn't grant
+  `settings/hohenheim.dry` — if it's `80` and you didn't grant
   `CAP_NET_BIND_SERVICE`, the listener never came up. `journalctl -u hohenheim`
   will show the `bind` error.
 
