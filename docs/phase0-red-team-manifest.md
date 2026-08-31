@@ -466,6 +466,12 @@ Rests on **(c)** for the proclog ingress claim itself and **(b)** for the policy
   (E7) resolves the registered panel/peer/subpage instead of matching a URL
   suffix. Fresh counterfactual: a 404 under a registered panel was served
   `STRICT_ADMIN_TERMINAL` (`phase0-evidence/reports/e3-e7-e10.md`).
+  [PRESENT TRUTH, 2026-08-31: this boundary no longer exists to get wrong. The
+  terminal CSP variant (`SiteTerminalCsp`, `STRICT_ADMIN_TERMINAL`) was deleted
+  in hohenheim `5c3696b2`; the panel has ONE policy,
+  `ContentSecurityPolicies.STRICT_ADMIN`, which carries `'wasm-unsafe-eval'`
+  panel-wide with `connect-src 'self'`, and the ghostty wasm is the pinned
+  same-origin file `/vendor/ghostty-vt.wasm` rather than a `data:` URL.]
 - The compile-time rules the row's "no inline `onload=`" assertion leans on were
   widened: hawkeye `01c63dec` (F2) makes `attr:onclick` the same
   `inline-event-attribute` ERROR as the plain spelling, and `4d05e77f` (F4) makes

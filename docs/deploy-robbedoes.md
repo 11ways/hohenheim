@@ -2052,6 +2052,18 @@ document load, and the STRICT_ADMIN stamp is back. Wire evidence:
 click produced `Fetch API cannot load data:application/wasm...` and
 `ghostty-web unavailable: WASM init failed (...): Failed to fetch WASM: 404`.
 
+[PRESENT TRUTH, 2026-08-31: nothing above this line describes current
+mechanism. The per-page terminal CSP variant recorded here -- `SiteTerminalCsp`
+and the `STRICT_ADMIN_TERMINAL` policy -- was deleted in hohenheim `5c3696b2`
+and zenit-cms, exactly because the variant made every terminal tab a document
+boundary no soft navigation could cross. There is now ONE admin policy:
+zenit's `ContentSecurityPolicies.STRICT_ADMIN`, which carries
+`'wasm-unsafe-eval'` panel-wide while `connect-src` stays `'self'`. The wasm is
+no longer a `data:` URL: ghostty-web loads `/vendor/ghostty-vt.wasm`, a
+same-origin file whose sha256 is pinned in
+`plumage/gradle/vendor-assets.properties`. The next section is the deploy that
+proved it.]
+
 The pinned actions cell's hover fade (plumage `b06fde5a`) is in this jar too;
 `/admin/instances` renders unchanged, and the fade TIMING cannot be measured
 headlessly -- an eyeball on a hovered row is the proof.

@@ -1,6 +1,6 @@
 # Hohenheim
 
-Reverse proxy / app manager. Starts and supervises backend processes (node, static sites, proxied upstreams), assigns ports/sockets, handles Let's Encrypt TLS, shared caching, auth, and a web admin UI. This is the Zenit-based rewrite of the original Node.js/AlchemyMVC Hohenheim.
+Reverse proxy / app manager. Routes hostnames to typed upstreams, supervises the containers and virtual machines behind them, handles Let's Encrypt TLS, auth, and a web admin UI. This is the Zenit-based rewrite of the original Node.js/AlchemyMVC Hohenheim; it lives on the `java-rewrite` branch (`master` is the Node original).
 
 ## Stack
 
@@ -21,7 +21,10 @@ Reverse proxy / app manager. Starts and supervises backend processes (node, stat
 - `src/client/java` browser code (TeaVM-compiled)
 - `src/server/java` Undertow-backed server, entry point `be.elevenways.hohenheim.server.ServerMain`
 - `src/browserTest/java` Playwright end-to-end tests
-- `docs/` design notes (see `architecture-site-types.md` for the site-type registry)
+- `docs/` design notes (see `architecture-upstream-kinds.md` for the upstream-kind registry)
+- `tools/install-host.sh` THE host install procedure (idempotent, `--help`, `--dry-run`);
+  `docs/deploy-native.md` is its long-form companion. Never hand-write an install step the
+  script already performs -- fix the script.
 
 ## Build and run
 

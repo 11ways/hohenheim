@@ -121,6 +121,14 @@ already has `instance_databases` + `InstanceDatabaseLinks`; two link tables over
 the same relation is duplication), `SiteProcessesPage`, `SiteTerminalCsp`. Site
 revisions keep working (the column set shrinks).
 
+[PRESENT TRUTH, 2026-08-31: `SiteTerminalCsp` was not re-homed, it was DELETED
+outright (hohenheim `5c3696b2`), and the per-page `STRICT_ADMIN_TERMINAL`
+variant with it. The admin panel has ONE policy, zenit's
+`ContentSecurityPolicies.STRICT_ADMIN`, which carries `'wasm-unsafe-eval'`
+panel-wide with `connect-src 'self'`; ghostty-web loads the pinned same-origin
+file `/vendor/ghostty-vt.wasm` instead of a `data:` URL. Nothing installs a CSP
+variant for a terminal any more.]
+
 Readers of `site_type` to rewrite (from the map): `HohenheimHandlers:82`,
 `api/PaasApi:182,252`, `auth/TenantWrites:514-522`, `process/ReservedEnv`
 (deleted), `WorkloadIdentity:113` (deleted), `cms/SiteResource` (:71-557),
@@ -356,6 +364,17 @@ checkout now lives in the workspace volume or the build context),
 `SiteVolumes`, `site_databases` + its resource/page, settings groups `Process`
 and `Node`, `Roles.processes`, tables `system_users`, `node_versions`,
 `proclogs`, `site_databases`.
+
+[PRESENT TRUTH, 2026-08-31: this list is a PLAN and was executed only in part.
+`SiteTerminalCsp` is genuinely gone (hohenheim `5c3696b2`), together with the
+per-page `STRICT_ADMIN_TERMINAL` policy it installed; the panel now has one
+policy, `ContentSecurityPolicies.STRICT_ADMIN` with `'wasm-unsafe-eval'`, and
+the ghostty wasm is the pinned same-origin `/vendor/ghostty-vt.wasm`. Still
+present in the tree, contrary to this list, are `SystemUserModel` (common
+`model/`), `SystemUsers`, `ProcessConfinement`, `ProcessGroupSupport` (server
+root and `server/process/`) and `UpdateSystemUsers` (`server/task/`) -- the
+setsid+sudo uid-drop chain survives because the
+managed spamservice child still uses it. Nothing per-site does.]
 
 Kept and re-homed: `GitDeployment`'s clone/fetch/build-queue/deployment-record
 logic (to instance keying), `DeployStatuses`, `GitWebhookHandler`, the build
