@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.edit.InputType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -107,9 +108,18 @@ public class DnsZoneModel extends Model {
         DelegationVerdict.fieldBuilder("delegation_status")
             .label(HohenheimFormCopy.label("delegation_status"))
             .help(HohenheimFormCopy.help("delegation_status")).build());
-    /** One line per finding of the last check, diagnostic text like {@link #TRANSFER_MESSAGE}. */
+    /**
+     * One line per finding of the last check, diagnostic text like {@link #TRANSFER_MESSAGE}.
+     *
+     * AIDEV-NOTE: MULTILINE because the column IS several lines -- a single-line input
+     * collapsed them into one run-on string, which is the opposite of what the help text
+     * promises. The stored lines stay {@code token subject} (the alert body and the zone API
+     * read them); the panel localizes the token at render time
+     * ({@code DnsZoneResource.valuesFromRow}).
+     */
     public static final StringField DELEGATION_DETAIL = SCHEMA.addField(
         StringField.builder().name("delegation_detail")
+            .inputHint(InputType.MULTILINE)
             .label(HohenheimFormCopy.label("delegation_detail"))
             .help(HohenheimFormCopy.help("delegation_detail")).build());
     public static final DateTimeField DELEGATION_CHECKED_AT = SCHEMA.addField(

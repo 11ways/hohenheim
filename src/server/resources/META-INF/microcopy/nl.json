@@ -11743,7 +11743,7 @@
     "scope": "violations"
   },
   "last_axfr": {
-    "text": "Laatste AXFR geleverd",
+    "text": "Laatste AXFR",
     "scope": "dns_secondaries"
   },
   "last_notify": {
@@ -11791,5 +11791,33 @@
       "text": "Postvakpagina's",
       "scope": "admin_inbox"
     }
-  ]
+  ],
+  "last_axfr_serial": {
+    "text": "AXFR-serienummer",
+    "scope": "dns_secondaries"
+  },
+  "last_notify_result": {
+    "text": "NOTIFY-resultaat",
+    "scope": "dns_secondaries"
+  },
+  "secondaries_none": {
+    "text": "Geen gekoppeld",
+    "scope": "dns_zone"
+  },
+  "secondaries_current": {
+    "text": "{$current} van {$total} actueel",
+    "scope": "dns_zone"
+  },
+  "import_replica_title": {
+    "text": "Deze zone is een replica",
+    "scope": "dns_zone"
+  },
+  "import_replica": {
+    "text": "De records zijn eigendom van de primary waarvan deze zone overdraagt en komen binnen via AXFR, dus hier kan geen zonebestand geimporteerd worden. Importeer het op de instantie die primary is voor deze zone.",
+    "scope": "dns_zone"
+  },
+  "import_replica_named": {
+    "text": "De records zijn eigendom van {$peer}, de primary waarvan deze zone overdraagt, en komen binnen via AXFR, dus hier kan geen zonebestand geimporteerd worden. Importeer het op {$peer}.",
+    "scope": "dns_zone"
+  }
 }

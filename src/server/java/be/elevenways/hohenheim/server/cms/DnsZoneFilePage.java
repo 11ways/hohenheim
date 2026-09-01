@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsSecMaterial;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
@@ -10,6 +11,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -42,6 +44,16 @@ public final class DnsZoneFilePage implements RecordScopedPage<Row> {
         vars.put("zoneText", DnsZoneFiles.export(zone));
         vars.put("importTarget", HohenheimEndpoints.DNS_ZONE_IMPORT
             .with(HohenheimEndpoints.ZONE_ID, zone.get(DnsZoneModel.ID)));
+
+        // A replica's records belong to its primary: DnsZoneFiles.importText REFUSES a
+        // secondary zone outright, so offering the form here could only ever produce a
+        // destructive-looking button that fails. The tab says so instead of showing it.
+        boolean replica = DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone));
+        vars.put("importable", !replica);
+        Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
+        Row peer = replica && peerId != null
+            ? Models.get(DnsPeerModel.class).findById(peerId) : null;
+        vars.put("primaryPeer", peer != null ? String.valueOf(peer.get(DnsPeerModel.NAME)) : "");
 
         // DNSSEC: the DS record the operator lodges with the registrar.
         DSRecord ds = Boolean.TRUE.equals(zone.get(DnsZoneModel.DNSSEC_ENABLED))

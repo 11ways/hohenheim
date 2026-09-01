@@ -1,13 +1,16 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.server.dns.DelegationCheck;
 import be.elevenways.hohenheim.server.dns.DnsDelegationHealth;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsNameservers;
 import be.elevenways.hohenheim.server.dns.DnsSecondaryFreshness;
+import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.SystemDelegationLookup;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -119,6 +122,11 @@ public final class DnsZoneResource extends RowResource {
         .column(ColumnSpec.fromField(DnsZoneModel.ROLE).build())
         .column(ColumnSpec.fromField(DnsZoneModel.SERIAL).build())
         .column(ColumnSpec.fromField(DnsZoneModel.TRANSFER_STATUS).build())
+        // The outbound half of replication: TRANSFER_STATUS answers only for a zone this
+        // instance PULLS, so a primary's column was blank and its replication state was
+        // readable nowhere on the list. This one is its mirror image, per role.
+        .column(ColumnSpec.virtual("secondaries", Microcopy.of("secondaries")
+            .withFilter("scope", "dns_zone")).build())
         .column(ColumnSpec.fromField(DnsZoneModel.DELEGATION_STATUS).build())
         .column(ColumnSpec.virtual("record_count", Microcopy.of("record_count")
             .withFilter("scope", "dns_zone")).build())
@@ -243,6 +251,10 @@ public final class DnsZoneResource extends RowResource {
     private static final IdentifierKey<Map<Integer, Long>> RECORD_COUNTS =
         IdentifierKey.of("hohenheim", "dns_zone_record_counts");
 
+    /** The same memo for the outbound secondary links of the zones on the page. */
+    private static final IdentifierKey<Map<Integer, int[]>> SECONDARY_COUNTS =
+        IdentifierKey.of("hohenheim", "dns_zone_secondary_counts");
+
     /**
      * The page's rows, with every zone's record count resolved in ONE grouped aggregate.
      *
@@ -258,6 +270,7 @@ public final class DnsZoneResource extends RowResource {
         if (conduit != null) {
             try {
                 conduit.setAttribute(RECORD_COUNTS, countRecordsPerZone(rows));
+                conduit.setAttribute(SECONDARY_COUNTS, countSecondariesPerZone(rows));
             } catch (UnsupportedOperationException attributeless) {
                 // An attribute-less conduit degrades to the per-row count below.
             }
@@ -290,6 +303,67 @@ public final class DnsZoneResource extends RowResource {
             }
         }
         return counts;
+    }
+
+    /** @return zone id -> {linked secondaries, of which currently serving our serial} */
+    private static @NonNull Map<Integer, int[]> countSecondariesPerZone(@NonNull List<Row> zones) {
+        Map<Integer, int[]> counts = new HashMap<>();
+        List<Integer> ids = new ArrayList<>();
+        for (Row zone : zones) {
+            Integer id = zone.get(DnsZoneModel.ID);
+            if (id != null && !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
+                ids.add(id);
+                counts.put(id, new int[] {0, 0});
+            }
+        }
+        if (ids.isEmpty()) {
+            return counts;
+        }
+        for (Row link : Models.get(DnsZonePeerModel.class).find()
+                .where(DnsZonePeerModel.ZONE_ID.in(ids)).all()) {
+            int[] tally = counts.get(link.get(DnsZonePeerModel.ZONE_ID));
+            if (tally != null) {
+                tally[0]++;
+                if (isCurrent(link)) {
+                    tally[1]++;
+                }
+            }
+        }
+        return counts;
+    }
+
+    /**
+     * A link is CURRENT when the probe reached it and found nothing to lag about; a link
+     * nobody has probed yet is not counted as healthy (fail closed -- an unprobed
+     * secondary is exactly the one that silently stopped pulling).
+     */
+    private static boolean isCurrent(@NonNull Row link) {
+        return link.get(DnsZonePeerModel.PROBED_AT) != null
+            && link.get(DnsZonePeerModel.BEHIND_SINCE) == null;
+    }
+
+    /**
+     * What this PRIMARY replicates outward, off the freshness the probe task persists.
+     *
+     * @return the summary, or null on a secondary (its inbound status column answers instead)
+     */
+    private static @Nullable Object secondarySummary(@NonNull Row zone) {
+        if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
+            return null;
+        }
+        Integer zoneId = zone.get(DnsZoneModel.ID);
+        Conduit conduit = RouteScope.currentConduit();
+        Map<Integer, int[]> memo = conduit == null ? null : conduit.getAttribute(SECONDARY_COUNTS);
+        int[] tally = memo != null ? memo.get(zoneId) : null;
+        if (tally == null) {
+            tally = countSecondariesPerZone(List.of(zone)).get(zoneId);
+        }
+        if (tally == null || tally[0] == 0) {
+            return Microcopy.of("secondaries_none").withFilter("scope", "dns_zone");
+        }
+        return Microcopy.of("secondaries_current").withFilter("scope", "dns_zone")
+            .withArg("current", tally[1])
+            .withArg("total", tally[0]);
     }
 
     /**
@@ -329,10 +403,44 @@ public final class DnsZoneResource extends RowResource {
             && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(row))) {
             return null;
         }
+        if ("secondaries".equals(column.name())) {
+            return secondarySummary(row);
+        }
         if ("record_count".equals(column.name())) {
-            return recordCount(row.get(DnsZoneModel.ID));
+            return recordCount(row);
         }
         return super.cellValue(row, column);
+    }
+
+    /**
+     * How many records the zone actually holds, PER ROLE.
+     *
+     * A secondary authors nothing locally -- its records arrive over AXFR and live in the
+     * served snapshot -- so counting {@code dns_records} rows reported 0 for a replica
+     * serving a full zone, which is the one reading that must never be wrong here.
+     *
+     * @return the stored rows for a primary, the served snapshot's records for a replica
+     */
+    private static long recordCount(@NonNull Row zone) {
+        if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
+            return servedRecordCount(zone);
+        }
+        return recordCount(zone.get(DnsZoneModel.ID));
+    }
+
+    /**
+     * @return the records the replica currently SERVES, excluding the SOA (which is not a
+     *         stored row on a primary either, so the two counts stay comparable); zero when
+     *         the zone has never transferred or its snapshot expired
+     */
+    private static long servedRecordCount(@NonNull Row zone) {
+        String origin = zone.get(DnsZoneModel.ORIGIN);
+        Integer zoneId = zone.get(DnsZoneModel.ID);
+        DnsZoneSnapshot snapshot = origin != null ? DnsZoneStore.INSTANCE.getZone(origin) : null;
+        if (snapshot == null || zoneId == null || snapshot.getZoneId() != zoneId) {
+            return 0;
+        }
+        return snapshot.allRecordsExceptSoa().size();
     }
 
     /** @return the zone's stored record count, off the page memo when this row is on it */
@@ -346,6 +454,58 @@ public final class DnsZoneResource extends RowResource {
         return Models.get(DnsRecordModel.class).find()
             .where(DnsRecordModel.ZONE_ID.eq(zoneId))
             .count();
+    }
+
+    /**
+     * The detail column read by a human: one LINE per finding, each named by the verdict's
+     * own {@link DelegationVerdict#label()} rather than by its stored token.
+     *
+     * The column stores {@code token subject} lines -- the shape the alert body and the zone
+     * API read -- and the form used to hand those straight to a single-line input, which
+     * collapsed several findings into one run-on string of snake_case words. The field is
+     * MULTILINE now and this is its localization: the vocabulary's labels are Microcopy, so
+     * the same rows read as Dutch sentences for a Dutch operator.
+     *
+     * AIDEV-NOTE: safe to substitute because the entry is READONLY on every surface that
+     * offers it (see {@link #fieldBindings}), so this value is never submitted back; and a
+     * line whose token this build does not declare is passed through verbatim rather than
+     * dropped. The locale comes off the request scope, the same seam {@link #recordCount}
+     * documents -- {@code valuesFromRow} takes no context.
+     */
+    @Override
+    public @NonNull Map<String, Object> valuesFromRow(@NonNull Row row) {
+        Map<String, Object> values = new HashMap<>(super.valuesFromRow(row));
+        Object detail = values.get(DnsZoneModel.DELEGATION_DETAIL.getName());
+        if (detail instanceof String text && !text.isBlank()) {
+            values.put(DnsZoneModel.DELEGATION_DETAIL.getName(), readableFindings(text));
+        }
+        return values;
+    }
+
+    /** @return the stored finding lines with each verdict token replaced by its label */
+    private static @NonNull String readableFindings(@NonNull String stored) {
+        Conduit conduit = RouteScope.currentConduit();
+        StringBuilder text = new StringBuilder();
+        for (String line : stored.split("\n")) {
+            if (line.isBlank()) {
+                continue;
+            }
+            if (!text.isEmpty()) {
+                text.append('\n');
+            }
+            DelegationCheck.Finding finding = DelegationCheck.Finding.parse(line);
+            if (finding == null || conduit == null) {
+                text.append(line.trim());
+                continue;
+            }
+            String label = finding.verdict().label()
+                .resolve(conduit.getLocales(), conduit.getMessageResolver());
+            text.append(label);
+            if (!finding.subject().isEmpty()) {
+                text.append(": ").append(finding.subject());
+            }
+        }
+        return text.toString();
     }
 
     @Override
@@ -447,7 +607,7 @@ public final class DnsZoneResource extends RowResource {
     @Override
     public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
         String origin = record.get(DnsZoneModel.ORIGIN);
-        long records = recordCount(record.get(DnsZoneModel.ID));
+        long records = recordCount(record);
         String dependents = DeleteImpact.join(DeleteImpact.dependentsOfZone(origin));
         String adminHost = DeleteImpact.adminHostnameInZone(origin);
 

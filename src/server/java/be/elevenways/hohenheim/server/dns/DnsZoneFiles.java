@@ -29,6 +29,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -87,8 +88,26 @@ public final class DnsZoneFiles {
 
         Integer zoneId = zone.get(DnsZoneModel.ID);
         DnsZoneSnapshot snapshot = DnsZoneStore.INSTANCE.getZone(origin);
-        if (snapshot != null && zoneId != null && snapshot.getZoneId() == zoneId) {
+        boolean served = snapshot != null && zoneId != null && snapshot.getZoneId() == zoneId;
+        if (served) {
             text.append(snapshot.getSoa()).append("\n");
+        }
+
+        // A SECONDARY authors no rows: everything it answers with came over AXFR and lives
+        // in the served snapshot, so reading dns_records here exported an SOA and nothing
+        // else for a replica serving a full zone.
+        if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
+            if (!served) {
+                text.append("; this zone is a replica and is not being served\n");
+                return text.toString();
+            }
+            List<Record> replicated = new ArrayList<>(snapshot.allRecordsExceptSoa());
+            replicated.sort(Comparator.comparing((Record record) -> record.getName().toString())
+                .thenComparingInt(Record::getType));
+            for (Record record : replicated) {
+                text.append(record).append("\n");
+            }
+            return text.toString();
         }
 
         List<Row> rows = Models.get(DnsRecordModel.class).find()
