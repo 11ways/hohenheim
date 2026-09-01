@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -207,6 +208,22 @@ public final class InstanceStatusReconciler {
         }
 
         boolean changed = !settled.equals(stored);
+        // A correction here is CRASH-SHAPED by construction: only live-claiming records
+        // are swept, and every operator-driven stop stamps `stopped` synchronously, so a
+        // record still claiming a live workload the daemon says is gone died with nobody
+        // watching. The crash policy decides what that becomes -- the SAME vocabulary the
+        // console watch enforces for supervised workloads, one lane later.
+        boolean restart = changed && InstanceModel.CRASH_RESTART
+            .equals(fresh.get(InstanceModel.CRASH_POLICY));
+        boolean flapping = restart && InstanceConsoles.flapExceeded(instanceId);
+        if (changed && (!restart || flapping)) {
+            // AIDEV-NOTE: `error`, not `stopped` -- an operator stop and an unobserved
+            // death must never render as the same pill, and the crashedInstances
+            // attention item reads exactly this status. The console lane can additionally
+            // see the exit CODE and lets a clean exit settle to `stopped`; the driver
+            // seam exposes no exit code, so this lane names what it actually knows.
+            settled = InstanceModel.STATUS_ERROR;
+        }
         long fence = this.instances.leases().requireFence(serverId);
         InstanceOperationGuard.stampObserved(this.instances.leases(), instanceId, serverId,
             fence, settled, changed, String.valueOf((Object) fresh.get(InstanceModel.NAME)));
@@ -224,11 +241,41 @@ public final class InstanceStatusReconciler {
         // itself and the operator must be able to see when, and on whose evidence.
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
             ACTIVITY_RECONCILE_ACTION,
-            stored + " -> " + settled + " (the daemon reports the workload "
-                + (state == ContainerState.ABSENT ? "absent" : "stopped") + ")");
+            stored + " -> " + settled + " (died without an observed stop; the daemon"
+                + " reports the workload "
+                + (state == ContainerState.ABSENT ? "absent" : "stopped")
+                + (flapping ? "; crash loop, automatic restarts suspended" : "") + ")");
         Blast.log("INSTANCE RECONCILE:", fresh.get(InstanceModel.NAME), stored, "->",
             settled, "- daemon says", state);
+        if (flapping) {
+            InstanceConsoles.alertCrashLoop(instanceId, fresh.get(InstanceModel.NAME));
+        } else if (restart) {
+            redeployCrashed(instanceId, fresh.get(InstanceModel.NAME));
+        }
         return new Outcome(instanceId, Verdict.CORRECTED, stored, state);
+    }
+
+    /**
+     * The restart half of {@code crash_policy = restart} for UNWATCHED workloads: the
+     * console watch restarts a supervised crash the moment it exits, and this is the same
+     * decision taken at sweep cadence for a workload nothing was watching -- which is
+     * also what brings restart-policy workloads back after a host reboot (their records
+     * still claim {@code running}, the daemon says gone, the correction lands here).
+     */
+    private void redeployCrashed(int instanceId, Object name) {
+        Blast.log("INSTANCE RECONCILE: instance", instanceId,
+            "died without an observed stop; crash policy restart -> redeploying");
+        // The datasource context does not cross threads on its own (the console watch
+        // captures it the same way).
+        var datasource = Db.currentOrDefault();
+        Thread.startVirtualThread(() -> Db.run(datasource, () -> {
+            try {
+                this.instances.deploy(instanceId);
+            } catch (RuntimeException refused) {
+                Blast.log("INSTANCE RECONCILE: crash restart of instance", name,
+                    "refused:", refused.getMessage());
+            }
+        }));
     }
 
     /**
@@ -238,7 +285,10 @@ public final class InstanceStatusReconciler {
      * AIDEV-NOTE: {@code ABSENT} and {@code STOPPED} both settle to {@code stopped}, the
      * same fold {@code InstanceService.settleInterrupted} makes -- the status vocabulary
      * has no "the container does not exist" member, and both answers mean the same thing
-     * to every reader: nothing is serving and a deploy will bring it back.
+     * to every reader: nothing is serving and a deploy will bring it back. This is the
+     * BASE fold; the caller overlays the crash policy on it (a correction is an
+     * unobserved death, so policy none becomes {@code error} and policy restart
+     * redeploys).
      */
     private static String settledStatusFor(@NonNull String stored,
                                            @NonNull ContainerState state) {

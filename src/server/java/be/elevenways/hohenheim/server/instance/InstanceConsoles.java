@@ -592,7 +592,10 @@ public final class InstanceConsoles {
             InstanceModel.STATUS_STARTING, status, why);
     }
 
-    private static boolean flapExceeded(int instanceId) {
+    /** Shared crash-flap clock: the console watch AND the status reconciler both count
+     * their observed crashes here, so a workload flapping across BOTH lanes still trips
+     * one threshold instead of two half-full ones. */
+    static boolean flapExceeded(int instanceId) {
         long now = System.currentTimeMillis();
         Deque<Long> log = CRASH_LOG.computeIfAbsent(instanceId, id -> new ArrayDeque<>());
         synchronized (log) {
@@ -604,7 +607,7 @@ public final class InstanceConsoles {
         }
     }
 
-    private static void alertCrashLoop(int instanceId, @NonNull Object name) {
+    static void alertCrashLoop(int instanceId, @NonNull Object name) {
         try {
             Alerts.send(NotificationEvents.INSTANCE_CRASH_LOOP,
                 "Crash loop: instance " + name,

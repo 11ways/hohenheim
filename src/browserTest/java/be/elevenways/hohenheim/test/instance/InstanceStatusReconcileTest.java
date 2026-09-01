@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -103,8 +106,10 @@ class InstanceStatusReconcileTest {
                 .as("step 3: on the daemon's own answer, named")
                 .isEqualTo(ContainerState.STOPPED);
             assertThat((String) statusOf(id))
-                .as("step 3: the stored column now says what is actually true")
-                .isEqualTo(InstanceModel.STATUS_STOPPED);
+                .as("step 3: the stored column now says what is actually true -- error,"
+                    + " never plain stopped: an operator stop and an unobserved death"
+                    + " must not render as the same pill")
+                .isEqualTo(InstanceModel.STATUS_ERROR);
 
             // 4. The correction is ACCOUNTABLE: an operator can find out when their box
             //    stopped and on whose evidence, without reading a log file.
@@ -114,10 +119,19 @@ class InstanceStatusReconcileTest {
                 .as("step 4: the correction is recorded on the record's own activity")
                 .hasSize(1);
             assertThat((String) reconciled.get(0).get(ActivityModel.DETAIL))
-                .as("step 4: naming both statuses and the evidence")
+                .as("step 4: naming both statuses, the crash shape and the evidence")
                 .contains(InstanceModel.STATUS_RUNNING)
-                .contains(InstanceModel.STATUS_STOPPED)
-                .contains("daemon");
+                .contains(InstanceModel.STATUS_ERROR)
+                .contains("died without an observed stop");
+
+            // 4b. And the dashboard SEES it: the crashedInstances attention item reads
+            //     exactly the status this correction stamped, and links to this record.
+            List<AttentionItem> attention = new ArrayList<>();
+            AttentionCollector.crashedInstances(attention);
+            assertThat(attention)
+                .as("step 4b: the crashed workload is a dashboard attention item")
+                .anySatisfy(item -> assertThat(item.target().toUrl())
+                    .contains("/instances/" + id + "/"));
 
             // 5. THE HONESTY RULE, falsified against the very same disagreement: put the
             //    record back to running and make the daemon UNANSWERABLE rather than
@@ -147,8 +161,8 @@ class InstanceStatusReconcileTest {
                 .as("step 6: the daemon answers again and the correction lands")
                 .isEqualTo(Verdict.CORRECTED);
             assertThat((String) statusOf(id))
-                .as("step 6: stopped, because that is what the daemon says")
-                .isEqualTo(InstanceModel.STATUS_STOPPED);
+                .as("step 6: error again, because the daemon says the workload died")
+                .isEqualTo(InstanceModel.STATUS_ERROR);
         });
     }
 
@@ -195,8 +209,8 @@ class InstanceStatusReconcileTest {
                 .as("step 3: once the operation is done the same state is corrected")
                 .isEqualTo(Verdict.CORRECTED);
             assertThat((String) statusOf(id))
-                .as("step 3: to what the daemon actually reports")
-                .isEqualTo(InstanceModel.STATUS_STOPPED);
+                .as("step 3: to the crash shape the daemon's answer implies")
+                .isEqualTo(InstanceModel.STATUS_ERROR);
 
             // 4. A PROTECTED status (a capture or restore holding the record) is never
             //    swept: it is another operation's to settle, and overwriting it would
@@ -236,6 +250,76 @@ class InstanceStatusReconcileTest {
                 .as("step 6: an installed record is reconciled normally")
                 .isEqualTo(Verdict.CORRECTED);
         });
+    }
+
+    /**
+     * The restart half: an UNWATCHED workload under {@code crash_policy restart} comes
+     * back from an unobserved death (which is also what recovers it after a host
+     * reboot), and a crash LOOP suspends the restarts with a named error instead of
+     * spinning the daemon forever.
+     */
+    @Test
+    void aCrashedWorkloadWithRestartPolicyComesBackUntilItFlaps() {
+        Db.run(datasource, () -> {
+            InstanceStatusReconciler reconciler = new InstanceStatusReconciler();
+            int id = BackupLaneFixture.instanceRecord("reconcile-restart", hostId);
+            Models.get(InstanceModel.class).find()
+                .where(InstanceModel.ID.eq(id))
+                .assign(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_RESTART)
+                .updateAll();
+            new InstanceService().deploy(id);
+
+            // 1. First unobserved death: the correction lands AND the workload is
+            //    redeployed -- the record settles back to running on its own.
+            FakeNativeDaemons.daemonOf(hostId)
+                .get(FakeNativeDaemons.handleOf(id)).running = false;
+            assertThat(reconciler.reconcile(id).verdict())
+                .as("step 1: the death is corrected")
+                .isEqualTo(Verdict.CORRECTED);
+            awaitStatus(id, InstanceModel.STATUS_RUNNING,
+                "step 1: and crash policy restart brings the workload back");
+
+            // 2. Second death inside the flap window: still restarted.
+            FakeNativeDaemons.daemonOf(hostId)
+                .get(FakeNativeDaemons.handleOf(id)).running = false;
+            assertThat(reconciler.reconcile(id).verdict())
+                .as("step 2: corrected again")
+                .isEqualTo(Verdict.CORRECTED);
+            awaitStatus(id, InstanceModel.STATUS_RUNNING,
+                "step 2: and restarted again");
+
+            // 3. Third death inside the window trips flap protection: the record settles
+            //    to ERROR, restarts are suspended, and the loop is named in the activity.
+            FakeNativeDaemons.daemonOf(hostId)
+                .get(FakeNativeDaemons.handleOf(id)).running = false;
+            assertThat(reconciler.reconcile(id).verdict())
+                .as("step 3: the third crash is still a correction")
+                .isEqualTo(Verdict.CORRECTED);
+            awaitStatus(id, InstanceModel.STATUS_ERROR,
+                "step 3: but flap protection suspends the restarts");
+            List<Row> reconciled = activity(id,
+                InstanceStatusReconciler.ACTIVITY_RECONCILE_ACTION);
+            assertThat((String) reconciled.get(0).get(ActivityModel.DETAIL))
+                .as("step 3: and the suspension is named where the operator looks")
+                .contains("crash loop");
+        });
+    }
+
+    /** Bounded wait for an async redeploy (or an error settle) to stamp the column. */
+    private static void awaitStatus(int instanceId, String expected, String what) {
+        long deadline = System.currentTimeMillis() + 15_000;
+        while (System.currentTimeMillis() < deadline) {
+            if (expected.equals(statusOf(instanceId))) {
+                return;
+            }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        assertThat((String) statusOf(instanceId)).as(what).isEqualTo(expected);
     }
 
     private static String statusOf(int instanceId) {
