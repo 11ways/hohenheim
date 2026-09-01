@@ -55,8 +55,9 @@ const server = http.createServer((req, res) => {
             return respond(200, { id: 7, status: 'rolled_back' });
         }
         if (req.url === '/api/v1/sites/9/deploy') {
-            return respond(422, { error: { code: 'deploy_not_available',
-                message: 'This site has no on-demand deploy' } });
+            // The REAL /api/v1 refusal envelope: flat, and naming the refused field.
+            return respond(422, { status: 422, code: 'deploy_not_available',
+                message: 'This site has no on-demand deploy', field: 'site_id' });
         }
         if (req.url === '/api/v1/projects' && req.method === 'GET') {
             return respond(200, { projects: [] });
@@ -197,6 +198,8 @@ server.listen(0, '127.0.0.1', async () => {
         r = await run(['deploy', '9']);
         check('typed refusal surfaces its code',
             r.status === 1 && r.stderr.includes('deploy_not_available'), r.stderr);
+        check('and the field the envelope names',
+            r.stderr.includes('[site_id]'), r.stderr);
 
         // 8. site create: name, kind and VERBATIM dotted fields travel form-encoded to
         //    the create lane -- the CLI learns no field vocabulary of its own.

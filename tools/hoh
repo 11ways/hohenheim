@@ -113,10 +113,13 @@ async function api(method, apiPath, form) {
         data = null;
     }
     if (!response.ok) {
-        if (data && data.error) {
-            const code = data.error.code || data.error;
-            const message = data.error.message || '';
-            die(`Refused (${response.status}) ${code}${message ? ': ' + message : ''}`);
+        // The refusal envelope is FLAT ({status, code, message, field, violations}), which
+        // is what /api/v1 has always sent; reading a nested `error` object made every typed
+        // refusal fall through to the raw-body branch. `field` names WHICH value was refused.
+        if (data && data.code) {
+            const detail = data.message ? ': ' + data.message : '';
+            const where = data.field ? ` [${data.field}]` : '';
+            die(`Refused (${response.status}) ${data.code}${where}${detail}`);
         }
         if (response.status === 404) die('Not found (or not yours).');
         if (response.status === 403) die('Refused (403): this credential is not an API key.');
