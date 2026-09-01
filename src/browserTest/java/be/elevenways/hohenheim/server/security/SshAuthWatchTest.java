@@ -85,6 +85,13 @@ class SshAuthWatchTest {
         assertSignal("Connection closed by invalid user oracle 203.0.113.9 port 40222"
                 + " [preauth]",
             SecurityEventTypes.SSH_INVALID_USER, "203.0.113.9");
+        //    OpenSSH 10 also spells the abort as a reset (measured on robbedoes: 46 of them
+        //    in six hours, all scanners).
+        assertSignal("Connection reset by authenticating user root 203.0.113.13 port 40222"
+                + " [preauth]",
+            SecurityEventTypes.SSH_PREAUTH_ABORT, "203.0.113.13");
+        assertSignal("Connection reset by invalid user test 203.0.113.14 port 40222 [preauth]",
+            SecurityEventTypes.SSH_INVALID_USER, "203.0.113.14");
 
         // 5. sshd counted the failures itself, and a handshake that is not SSH at all.
         assertSignal("error: maximum authentication attempts exceeded for root from"
@@ -122,6 +129,28 @@ class SshAuthWatchTest {
     // -----------------------------------------------------------------------
     // The watcher
     // -----------------------------------------------------------------------
+
+    /**
+     * The journal filter names every identifier sshd has logged under since OpenSSH 9.8
+     * split the daemon. Deployed with {@code -t sshd} alone on Debian 13, the watcher read
+     * 12 listener lines a day while 24,598 authentication failures went by under
+     * {@code sshd-session}: started, healthy, and banning nobody.
+     */
+    @Test
+    void theJournalFilterCoversEveryIdentifierSshdLogsUnder() {
+        assertThat(SshAuthWatcher.IDENTIFIERS)
+            .as("the pre-9.8 daemon, the per-connection session process, the 10.0 auth process")
+            .containsExactly("sshd", "sshd-session", "sshd-auth");
+        for (String identifier : SshAuthWatcher.IDENTIFIERS) {
+            int at = SshAuthWatcher.COMMAND.indexOf(identifier);
+            assertThat(at).as("identifier %s is on the command line", identifier).isPositive();
+            assertThat(SshAuthWatcher.COMMAND.get(at - 1))
+                .as("and is passed as a -t filter").isEqualTo("-t");
+        }
+        assertThat(SshAuthWatcher.COMMAND.subList(0, 6))
+            .as("the follow still starts at now and prints bare messages")
+            .containsExactly("journalctl", "-f", "-n", "0", "-o", "cat");
+    }
 
     /** Recognized lines score, unrecognized ones do not, and health follows. */
     @Test
