@@ -261,12 +261,25 @@ public final class NotificationChannelResource extends RowResource {
                         .resolve(locales, Zenit.getMessageResolver()));
                 ActivityLog.record(this.model(), row.get(NotificationChannelModel.ID), "tested", name);
                 return outcome.sent()
-                    ? CmsActionResult.refreshWithToast(Microcopy.of("test_ok").withFilter("scope", "notification_channel"))
+                    ? CmsActionResult.refreshWithToast(testSucceeded(outcome))
                     : CmsActionResult.errorToast(Microcopy.of("test_failed").withFilter("scope", "notification_channel")
                         .withArg("reason", outcome.reasonOr(
                             Microcopy.of("test_failed_unknown").withFilter("scope", "notification_channel"))));
             })
             .build());
         return actions;
+    }
+
+    /**
+     * The toast for a test send that went out, saying which of the two things happened.
+     *
+     * AIDEV-NOTE: {@code sent()} covers a relay HANDOFF too, and the delivery row already
+     * says so ({@code DeliveryStatus.ACCEPTED}) -- "Test delivered" over a chain that only
+     * handed the message to the comms hub told the operator their channel works while the
+     * hub's own row could still say it had no transport for it.
+     */
+    static @NonNull Microcopy testSucceeded(@NonNull NotifyOutcome outcome) {
+        return Microcopy.of(outcome.delivered() ? "test_ok" : "test_accepted")
+            .withFilter("scope", "notification_channel");
     }
 }
