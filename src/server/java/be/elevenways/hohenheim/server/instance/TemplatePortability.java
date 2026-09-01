@@ -7,7 +7,9 @@ import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
+import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.instance.InstanceTemplates.VolumeDeclaration;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypes;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -118,6 +120,22 @@ public final class TemplatePortability {
             databases.add(entry);
         }
         body.put("databases", databases);
+
+        // The VOLUMES ride the document for the same reason the databases do: a template
+        // whose declarations stay behind re-imports as one that creates instances with no
+        // volumes at all, and every surface calls that export a success.
+        List<Map<String, Object>> volumes = new ArrayList<>();
+        for (Row declared : Models.get(InstanceTemplateVolumeModel.class)
+                .findByTemplateId(templateId)) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("name", declared.get(InstanceTemplateVolumeModel.NAME));
+            entry.put("container_path", declared.get(InstanceTemplateVolumeModel.CONTAINER_PATH));
+            entry.put("quota_bytes", declared.get(InstanceTemplateVolumeModel.QUOTA_BYTES));
+            entry.put("exclusive",
+                Boolean.TRUE.equals(declared.get(InstanceTemplateVolumeModel.EXCLUSIVE)));
+            volumes.add(entry);
+        }
+        body.put("volumes", volumes);
         return body;
     }
 
@@ -259,6 +277,12 @@ public final class TemplatePortability {
                 throw Violations.ofField("env_prefix", prefix, violationText("prefix_format"));
             }
         }
+        // A declared volume is judged by the SAME rules the create-from-template copy
+        // asks, so an unhonourable declaration is refused HERE rather than becoming a
+        // template whose every create refuses -- or worse, one whose instances come up
+        // with the volumes silently missing.
+        List<VolumeDeclaration> volumes = volumeDeclarations(entryList(body.get("volumes")));
+        InstanceTemplates.requireVolumesDeclarable(InstanceKinds.getHandler(kind), volumes);
 
         InstanceTemplateModel templates = Models.get(InstanceTemplateModel.class);
         Row template = templates.createEmptyRow();
@@ -328,10 +352,49 @@ public final class TemplatePortability {
             row.set(InstanceTemplateDatabaseModel.IMAGE, image.isEmpty() ? null : image);
             databaseModel.save(row);
         }
+
+        InstanceTemplateVolumeModel volumeModel = Models.get(InstanceTemplateVolumeModel.class);
+        for (VolumeDeclaration volume : volumes) {
+            Row row = volumeModel.createEmptyRow();
+            row.set(InstanceTemplateVolumeModel.TEMPLATE_ID, templateId);
+            row.set(InstanceTemplateVolumeModel.NAME, volume.name());
+            row.set(InstanceTemplateVolumeModel.CONTAINER_PATH, volume.containerPath());
+            row.set(InstanceTemplateVolumeModel.QUOTA_BYTES, volume.quotaBytes());
+            row.set(InstanceTemplateVolumeModel.EXCLUSIVE, volume.exclusive());
+            volumeModel.save(row);
+        }
         return templateId;
     }
 
     // -- plumbing -------------------------------------------------------------
+
+    /**
+     * The parsed volume entries as declarations.
+     *
+     * AIDEV-NOTE: a quota that is present but not a number is REFUSED rather than read as
+     * absent -- folding it to null would import the volume with its cap silently dropped,
+     * which is the shape of defect this whole document exists to make impossible.
+     *
+     * @throws Violations {@code volume_quota_invalid} for an unreadable quota
+     */
+    private static @NonNull List<VolumeDeclaration> volumeDeclarations(
+            @NonNull List<Map<String, Object>> entries) {
+
+        List<VolumeDeclaration> declared = new ArrayList<>(entries.size());
+
+        for (Map<String, Object> entry : entries) {
+            Object quota = entry.get("quota_bytes");
+            if (quota != null && !(quota instanceof Number)) {
+                throw Violations.ofField("quota_bytes", quota,
+                    violationText("volume_quota_invalid"));
+            }
+            declared.add(new VolumeDeclaration(str(entry.get("name")),
+                str(entry.get("container_path")),
+                quota == null ? null : ((Number) quota).longValue(),
+                Boolean.TRUE.equals(entry.get("exclusive"))));
+        }
+        return declared;
+    }
 
     @SuppressWarnings("unchecked")
     private static @NonNull Map<String, Object> castMap(Map<?, ?> map) {

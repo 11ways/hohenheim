@@ -26,6 +26,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -290,6 +291,42 @@ public final class InstanceTemplates {
      * Refuse a template volume declaration this create could not honour, BEFORE the
      * instance row exists -- the {@code TemplateDatabases.precheck} precedent.
      *
+     * @throws Violations see {@link #requireVolumesDeclarable}
+     */
+    private static void requireVolumesCopyable(@Nullable InstanceKindHandler kindHandler,
+                                               @NonNull List<Row> declared) {
+        requireVolumesDeclarable(kindHandler, VolumeDeclaration.ofRows(declared));
+    }
+
+    /**
+     * One template volume declaration, in the shape every surface that can author one
+     * speaks: a stored row, a submitted admin form, an imported document.
+     */
+    public record VolumeDeclaration(@NonNull String name, @Nullable String containerPath,
+                                    @Nullable Long quotaBytes, boolean exclusive) {
+
+        /** @return the declaration a stored {@code instance_template_volumes} row carries */
+        public static @NonNull VolumeDeclaration of(@NonNull Row volume) {
+            return new VolumeDeclaration(
+                String.valueOf((Object) volume.get(InstanceTemplateVolumeModel.NAME)),
+                volume.get(InstanceTemplateVolumeModel.CONTAINER_PATH),
+                volume.get(InstanceTemplateVolumeModel.QUOTA_BYTES),
+                Boolean.TRUE.equals(volume.get(InstanceTemplateVolumeModel.EXCLUSIVE)));
+        }
+
+        public static @NonNull List<VolumeDeclaration> ofRows(@NonNull List<Row> volumes) {
+            List<VolumeDeclaration> declared = new ArrayList<>(volumes.size());
+            for (Row volume : volumes) {
+                declared.add(of(volume));
+            }
+            return declared;
+        }
+    }
+
+    /**
+     * THE template-volume rule set, for every surface that can produce one: the admin
+     * resource authoring a declaration, an import carrying one, the create copying one.
+     *
      * AIDEV-NOTE: every rule here is asked of the DECLARING home rather than re-stated:
      * the name of {@link InstanceVolumes#requirePlainName}, the one-container-path-one-
      * directory rule of {@link InstanceVolumes#addMount}. The mount map is keyed by the
@@ -301,8 +338,8 @@ public final class InstanceTemplates {
      *         directory name, a missing container path, two volumes at one path, or a
      *         quota no backend could apply
      */
-    private static void requireVolumesCopyable(@Nullable InstanceKindHandler kindHandler,
-                                               @NonNull List<Row> declared) {
+    public static void requireVolumesDeclarable(@Nullable InstanceKindHandler kindHandler,
+                                                @NonNull List<VolumeDeclaration> declared) {
 
         if (declared.isEmpty()) {
             return;
@@ -310,9 +347,9 @@ public final class InstanceTemplates {
 
         Map<String, String> paths = new LinkedHashMap<>();
 
-        for (Row volume : declared) {
+        for (VolumeDeclaration volume : declared) {
 
-            String name = String.valueOf((Object) volume.get(InstanceTemplateVolumeModel.NAME));
+            String name = volume.name();
 
             if (kindHandler == null || !kindHandler.supportsVolumes()) {
                 throw Violations.ofField(InstanceTemplateVolumeModel.NAME.getName(), name,
@@ -320,7 +357,7 @@ public final class InstanceTemplates {
             }
 
             InstanceVolumes.requirePlainName(name);
-            String containerPath = volume.get(InstanceTemplateVolumeModel.CONTAINER_PATH);
+            String containerPath = volume.containerPath();
 
             // AIDEV-NOTE: the model's own required-ness closes the authoring path, so this
             // arm is a fail-closed backstop rather than a reachable refusal today. It
@@ -334,12 +371,22 @@ public final class InstanceTemplates {
                         .withArg("name", name));
             }
 
-            Long quota = volume.get(InstanceTemplateVolumeModel.QUOTA_BYTES);
+            Long quota = volume.quotaBytes();
 
             if (quota != null && quota <= 0) {
                 throw Violations.ofField(
                     InstanceTemplateVolumeModel.QUOTA_BYTES.getName(), quota,
                     violationText("volume_quota_invalid"));
+            }
+
+            // AIDEV-NOTE: the collision the mount map cannot see. It is keyed by the volume
+            // NAME here, so a second declaration of one name overwrites the first instead
+            // of conflicting -- and the copy funnels through InstanceVolumes.declare, which
+            // re-declares that one name. Two rows would become ONE instance volume and the
+            // create would report success, so the duplicate is refused by name.
+            if (paths.containsKey(name)) {
+                throw Violations.ofField(InstanceTemplateVolumeModel.NAME.getName(), name,
+                    violationText("template_volume_name_taken").withArg("name", name));
             }
 
             InstanceVolumes.addMount(paths, name, containerPath);
