@@ -10507,6 +10507,14 @@
     "text": "Volume name '{$name}' is not a plain directory name",
     "scope": "violations"
   },
+  "template_volume_kind_unsupported": {
+    "text": "This template declares the volume '{$name}', but instances of its kind do not mount volumes. Remove the volume, or give the template a kind that mounts them.",
+    "scope": "violations"
+  },
+  "template_volume_container_path_required": {
+    "text": "Template volume '{$name}' declares no container path, so the instance would never mount it. Give it the path it must appear at inside the workload.",
+    "scope": "violations"
+  },
   "volume_container_path_conflict": {
     "text": "Volumes '{$first}' and '{$second}' both mount at '{$path}', so the workload would get two directories at one path. Give one of them a different container path.",
     "scope": "violations"

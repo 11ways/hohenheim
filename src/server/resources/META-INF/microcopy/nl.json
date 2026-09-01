@@ -10507,6 +10507,14 @@
     "text": "Volumenaam '{$name}' is geen gewone mapnaam",
     "scope": "violations"
   },
+  "template_volume_kind_unsupported": {
+    "text": "Deze sjabloon declareert het volume '{$name}', maar instanties van deze soort monteren geen volumes. Verwijder het volume, of geef de sjabloon een soort die ze wel monteert.",
+    "scope": "violations"
+  },
+  "template_volume_container_path_required": {
+    "text": "Sjabloonvolume '{$name}' declareert geen containerpad, dus de instantie zou het nooit monteren. Geef het pad op waar het in de workload moet verschijnen.",
+    "scope": "violations"
+  },
   "volume_container_path_conflict": {
     "text": "Volumes '{$first}' en '{$second}' koppelen allebei op '{$path}', dus de workload zou twee mappen op een pad krijgen. Geef er één een ander containerpad.",
     "scope": "violations"
