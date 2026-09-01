@@ -3,20 +3,28 @@ package be.elevenways.hohenheim.test.database;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.zenit.auth.model.GrantModel;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.CommsRecipient;
 import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.comms.server.CommsDeliveryModel;
 import be.elevenways.zenit.comms.server.CommsDispatcher;
+import be.elevenways.zenit.comms.server.CommsInboxModel;
+import be.elevenways.zenit.comms.server.CommsInboxOwners;
 import be.elevenways.zenit.comms.server.transport.TransportTypes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.sun.net.httpserver.HttpServer;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -50,6 +59,11 @@ class AlertsTest {
     void cleanSlate() {
         Models.get(NotificationChannelModel.class).find().delete();
         Models.get(CommsDeliveryModel.class).find().delete();
+        Models.get(CommsInboxModel.class).find().delete();
+        // The inbox fanout is driven by who holds the admin permission, so every
+        // method decides that for itself instead of inheriting the previous one's.
+        AuthModels.grants().find().delete();
+        AuthModels.users().find().delete();
         // Inline webhook-only dispatcher: assertions run right after send().
         Comms.install(new CommsDispatcher(Map.of(
             CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
@@ -179,6 +193,81 @@ class AlertsTest {
         } finally {
             receiver.stopQuietly();
         }
+    }
+
+    /**
+     * An alert reaches every administrator's panel inbox with NOTHING configured.
+     *
+     * AIDEV-NOTE: this is the production defect. All three installations had zero
+     * notification_channels rows, so every alert took the "reached nobody" branch and
+     * was discarded -- silently, for months. The inbox is a LOCAL channel: no
+     * transport, no DSN, no credential, so it is the one lane that cannot be off.
+     */
+    @Test
+    void alertsAlwaysReachEveryAdministratorsInbox() {
+        // 1. One enabled administrator and one disabled one, and NOT ONE channel row.
+        int admin = seedUser("inbox-admin@hohenheim.local", true, true);
+        int disabled = seedUser("inbox-disabled@hohenheim.local", false, true);
+        int bystander = seedUser("inbox-bystander@hohenheim.local", true, false);
+
+        assertThat(Alerts.administrators())
+            .as("only the enabled holder of the admin permission is an alert recipient")
+            .hasSize(1);
+        assertThat(Alerts.administrators().get(0).routeFor(CommsChannel.INBOX))
+            .isEqualTo(CommsInboxOwners.userKey(admin));
+
+        // 2. The alert is queued for that inbox, and reports it as reached.
+        assertThat(Alerts.send(NotificationEvents.BACKUP_FAILED, "Backup failed", "disk full"))
+            .as("an alert with no configured channel still reaches the administrator")
+            .isEqualTo(1);
+
+        // 3. The delivery row is a real, local, terminal delivery.
+        Row delivery = Models.get(CommsDeliveryModel.class).find().first();
+        assertThat(delivery).isNotNull();
+        assertThat((String) delivery.get(CommsDeliveryModel.CHANNEL))
+            .isEqualTo(CommsChannel.INBOX.getDbValue());
+        assertThat((String) delivery.get(CommsDeliveryModel.STATUS))
+            .as("a local channel is delivered here, so it really is sent")
+            .isEqualTo("sent");
+        assertThat((String) delivery.get(CommsDeliveryModel.RECIPIENT))
+            .isEqualTo(CommsInboxOwners.userKey(admin));
+
+        // 4. And the item the administrator will actually read exists, badged.
+        List<Row> items = Models.get(CommsInboxModel.class).find().all();
+        assertThat(items).hasSize(1);
+        assertThat((String) items.get(0).get(CommsInboxModel.RECIPIENT))
+            .as("neither the disabled account (" + disabled + ") nor the bystander ("
+                + bystander + ") receives one")
+            .isEqualTo(CommsInboxOwners.userKey(admin));
+        assertThat((String) items.get(0).get(CommsInboxModel.TITLE)).isEqualTo("Backup failed");
+        assertThat((String) items.get(0).get(CommsInboxModel.IMPORTANCE)).isEqualTo("high");
+    }
+
+    /**
+     * Creates a user and, when asked, grants it the panel admin permission.
+     *
+     * @return the new user's id
+     */
+    private static int seedUser(@NonNull String email, boolean enabled, boolean administrator) {
+        Row user = AuthModels.users().createEmptyRow();
+        user.set(UserModel.EMAIL, email);
+        user.set(UserModel.DISPLAY_NAME, email);
+        user.set(UserModel.ENABLED, enabled);
+        user.set(UserModel.CREATED_AT, Instant.now());
+        user.set(UserModel.UPDATED_AT, Instant.now());
+        AuthModels.users().save(user);
+
+        Integer id = user.get(UserModel.ID);
+
+        if (administrator) {
+            Row grant = AuthModels.grants().createEmptyRow();
+            grant.set(GrantModel.SUBJECT_TYPE, GrantSubjectType.USER.key());
+            grant.set(GrantModel.SUBJECT_ID, id);
+            grant.set(GrantModel.PERMISSION, HohenheimSources.ADMIN_ACCESS.value());
+            grant.set(GrantModel.VALUE, true);
+            AuthModels.grants().save(grant);
+        }
+        return id;
     }
 
     /** Tiny loopback HTTP server that records the last POST. */

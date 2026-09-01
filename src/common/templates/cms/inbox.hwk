@@ -1,0 +1,38 @@
+{#- The operator's own notification inbox. The list, the unread styling, the
+    importance badges and both read forms are the shipped zenit-comms surface;
+    this page owns only the route, the heading and the page window. -#}
+{% declare title: String %}
+{% declare items: List<CommsInboxItemView> %}
+{% declare markAllTarget: RouteTarget %}
+{% declare page: Integer = 1 %}
+{% declare pageCount: Integer = 1 %}
+{% declare previousPage: RouteTarget = null %}
+{% declare nextPage: RouteTarget = null %}
+{% declare flashMessage: Microcopy = null %}
+{% declare flashVariant: String = "default" %}
+{% declare flashDuration: Integer = 0 %}
+{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+
+{% block "main" %}
+<section class="cms-resource-form-page" data-admin-inbox>
+    <header class="cms-resource-list-header">
+        <h1>{{ title }}</h1>
+        <p>{{ t("nav_hint", scope: "admin_inbox") }}</p>
+    </header>
+
+    <zc-inbox items={% items %} markAllTarget={% markAllTarget %}></zc-inbox>
+
+    {% if pageCount > 1 %}
+    <pl-pagination label={% t("pagination", scope: "admin_inbox") %} data-admin-inbox-pagination>
+        {% if previousPage != null %}
+        <pl-button variant="ghost" size="sm" data-admin-inbox-previous
+                   use:Zenit.route={% previousPage %}>{{ t("previous", scope: "pagination") }}</pl-button>
+        {% /if %}
+        {% if nextPage != null %}
+        <pl-button variant="ghost" size="sm" data-admin-inbox-next
+                   use:Zenit.route={% nextPage %}>{{ t("next", scope: "pagination") }}</pl-button>
+        {% /if %}
+    </pl-pagination>
+    {% /if %}
+</section>
+{% /block %}

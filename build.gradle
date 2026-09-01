@@ -116,6 +116,9 @@ dependencies {
     commonCompileOnly ('be.elevenways:zenit-auth-common:0.1.0-SNAPSHOT') { changing = true }
     commonCompileOnly ('be.elevenways:zenit-cms-common:0.1.0-SNAPSHOT') { changing = true }
     commonCompileOnly ('be.elevenways:zenit-widget-common:0.1.0-SNAPSHOT') { changing = true }
+    // The admin inbox page mounts zenit-comms' own <zc-inbox> surface, so the template
+    // compiler needs that module's compiled templates and item view type.
+    commonCompileOnly ('be.elevenways:zenit-comms-common:0.1.0-SNAPSHOT') { changing = true }
 
     // Client (TeaVM-compiled browser code)
     clientCompileOnly sourceSets.common.output
@@ -131,6 +134,8 @@ dependencies {
     // must hydrate: the client bundle needs zenit-auth's compiled templates
     // (carried by the self-sufficient client platform jar).
     clientImplementation ('be.elevenways:zenit-auth-client:0.1.0-SNAPSHOT') { changing = true }
+    // Same reason for <zc-inbox>: the admin inbox page's list must hydrate.
+    clientImplementation ('be.elevenways:zenit-comms-client:0.1.0-SNAPSHOT') { changing = true }
 
     // Server
     serverCompileOnly sourceSets.common.output

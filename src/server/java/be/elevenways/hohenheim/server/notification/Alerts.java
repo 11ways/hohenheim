@@ -1,17 +1,21 @@
 package be.elevenways.hohenheim.server.notification;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.auth.server.PermissionHolders;
 import be.elevenways.zenit.comms.AdHocRecipient;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.CommsRecipient;
 import be.elevenways.zenit.comms.server.Comms;
+import be.elevenways.zenit.comms.server.CommsInboxOwners;
 import be.elevenways.zenit.comms.server.NotifyOutcome;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -34,14 +38,26 @@ public final class Alerts {
     }
 
     /**
-     * Queue an alert for every channel subscribed to the event.
+     * Queue an alert for every administrator's panel inbox and every channel
+     * subscribed to the event.
      *
-     * @return the number of channels the alert was queued for
+     * AIDEV-NOTE: the inbox fanout is UNCONDITIONAL and needs no configured row. Every
+     * production installation had zero notification_channels, so every alert took the
+     * "reached nobody" branch and was discarded -- an alerting system that is silent
+     * until an operator configures an external endpoint is an alerting system nobody
+     * knows is off. The inbox is a LOCAL channel: no transport, no DSN, no credential.
+     *
+     * @return the number of deliveries the alert was queued for, inbox included
      */
     public static int send(@NonNull NotificationEvents event, @NonNull String subject,
                            @Nullable String message) {
         AlertNotification notification = new AlertNotification(event.token(), subject, message);
         int queued = 0;
+
+        for (CommsRecipient administrator : administrators()) {
+            Comms.notify(notification, administrator);
+            queued++;
+        }
 
         for (Row row : Models.get(NotificationChannelModel.class).find().all()) {
             if (!subscribes(row, event.token())) {
@@ -63,9 +79,34 @@ public final class Alerts {
             Blast.slog("hohenheim.notification.undelivered", Map.of(
                 "event", event.token(),
                 "subject", subject,
-                "reason", "no_subscribed_channels"));
+                "reason", "no_recipients"));
         }
         return queued;
+    }
+
+    /**
+     * The panel inbox of every enabled administrator, as comms recipients.
+     *
+     * A revoked or disabled account drops out on the next alert because the holder list
+     * is read fresh; a boot without the auth tables degrades to no inbox recipients
+     * rather than dropping the alert on the external channels too.
+     *
+     * @return one INBOX-routed recipient per administrator, never null
+     */
+    public static @NonNull List<CommsRecipient> administrators() {
+        List<CommsRecipient> recipients = new ArrayList<>();
+
+        try {
+            for (Integer id : PermissionHolders.userIdsHolding(HohenheimSources.ADMIN_ACCESS)) {
+                recipients.add(new AdHocRecipient()
+                    .route(CommsChannel.INBOX, CommsInboxOwners.userKey(id)));
+            }
+        } catch (Exception unavailable) {
+            Blast.slog("hohenheim.notification.inbox_unavailable", Map.of(
+                "reason", String.valueOf(unavailable.getMessage())));
+            return List.of();
+        }
+        return recipients;
     }
 
     /**
