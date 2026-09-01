@@ -26,27 +26,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The Stats tab PLOTS the hub's ring: whatever samples the server holds when the page is
  * rendered reach the four sparklines as a drawn path.
  *
- * Pinned defect (QA 2026-09-01): four empty sparklines. The template binds its charts to
- * what {@code InstanceStats.series} returns, and the hawkeye {@code {% let %}} lane
- * silently UNWRAPPED that live ref and re-wrapped a dead snapshot of it, so every listener
- * the chart attached subscribed to a copy nobody ever writes to. That half is fixed in the
- * compiler and proven by hawkeye's own {@code LetBoundLiveReferenceTest}, which pushes into
- * a returned ref after the render and watches the binding repaint.
- *
- * AIDEV-NOTE: this suite deliberately stops at the SEEDED plot, because the live half has a
- * SECOND, still-open defect that no assertion here can honestly cover. Driving it from a
- * real browser (see the QA notes) showed: hydration completes
- * ({@code window.__hawkeye_reactive_idle} goes true), the four sparklines stand, the console
- * carries no error -- and the page never creates a WebSocket at all
- * ({@code page.onWebSocket} records nothing in 15s). So {@code HohenheimStatsFunctions.follow}
- * never runs in the browser even though the bundle contains it (both {@code instance_stats}
- * and {@code /zenit/channel} are present in public/cms.js, so it is not tree-shaken and
- * {@code Blast.IS_TEAVM} folded true), and {@code ClientMain} did run ("Starting Client-Size
- * Zenit"). An empty socket list rules out the gateway, the handshake and the record
- * capability walk -- nothing client-side ever called {@code ChannelClient.open}. No hohenheim
- * browser test has ever exercised a zenit channel, so this lane was never proven. Whoever
- * picks that up: the question is why the client render does not execute the
- * {@code {% if running %}} body of hohenheim:cms/instance-stats.
+ * Pinned defects (QA 2026-09-01), both fixed: (a) the hawkeye {@code {% let %}} lane
+ * unwrapped a returned live ref into a dead snapshot (fixed in the compiler,
+ * {@code LetBoundLiveReferenceTest}); (b) the channel subscription lived inside a render
+ * expression, and hydration revives values without re-running {@code {% let %}} calls, so
+ * after a hard load no browser ever opened the socket at all. The subscription now belongs
+ * to the mounted {@code hh-instance-stats} element ({@code @mount} + {@code Cleanup.on},
+ * the QQChatFunctions shape), which step 4 proves end to end: a sample pushed AFTER the
+ * page rendered repaints the chart, which is only possible through a live channel link.
  */
 class InstanceStatsChartPlotTest extends HohenheimTestBase {
 
@@ -122,6 +109,14 @@ class InstanceStatsChartPlotTest extends HohenheimTestBase {
                 .as("step 3: and transmitted")
                 .isNotNull()
                 .isNotEmpty();
+
+            // 4. THE LIVE HALF: a sample arriving AFTER the render reaches the chart. This
+            //    can only happen through the channel link the mounted element opened, so a
+            //    changed path proves socket, admission, fold and repaint in one assertion.
+            String before = lineOf(0);
+            stream.push(sample(2_000_000_000L, 12_000_000_000L, 900, 1000) + "\n");
+            await("step 4: the pushed sample repainted the cpu series",
+                () -> !before.equals(lineOf(0)));
         } finally {
             viewer.close();
         }
