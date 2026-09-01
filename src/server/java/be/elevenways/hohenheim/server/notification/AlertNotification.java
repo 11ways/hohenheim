@@ -3,8 +3,10 @@ package be.elevenways.hohenheim.server.notification;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.CommsRecipient;
+import be.elevenways.zenit.comms.Importance;
 import be.elevenways.zenit.comms.Notification;
 import be.elevenways.zenit.comms.message.ChatMessage;
+import be.elevenways.zenit.comms.message.InboxMessage;
 import be.elevenways.zenit.comms.message.WebhookMessage;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -36,9 +38,20 @@ public final class AlertNotification extends Notification {
         return Identifier.of("hohenheim", this.event);
     }
 
+    /** A platform alert is what an operator is meant to act on, so it badges in the inbox. */
+    @Override
+    public @NonNull Importance getImportance() {
+        return Importance.HIGH;
+    }
+
     /** Only the channels this recipient actually routes: a chat-only endpoint must never produce webhook rows. */
     @Override
     public @NonNull List<CommsChannel> via(@NonNull CommsRecipient recipient) {
+        // The panel inbox is LOCAL: it needs no transport and no operator configuration,
+        // which is what makes it the lane an alert can always be seen on.
+        if (recipient.routeFor(CommsChannel.INBOX) != null) {
+            return List.of(CommsChannel.INBOX);
+        }
         if (recipient.routeFor(CommsChannel.CHAT) != null) {
             return List.of(CommsChannel.CHAT);
         }
@@ -46,6 +59,14 @@ public final class AlertNotification extends Notification {
             return List.of(CommsChannel.WEBHOOK);
         }
         return List.of();
+    }
+
+    @Override
+    public @Nullable InboxMessage toInbox(@NonNull CommsRecipient recipient) {
+        return new InboxMessage()
+            .setTitle(this.subject)
+            .setBody(this.message)
+            .setIcon("bell");
     }
 
     @Override

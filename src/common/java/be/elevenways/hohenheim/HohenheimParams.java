@@ -114,4 +114,12 @@ public final class HohenheimParams {
     public static final ParameterDefinition<String> MANUAL_CHALLENGE =
         ParameterDefinition.builder(String.class).name("manual")
             .stringResolver(value -> value).build();
+
+    /** The query name of {@link #INBOX_PAGE}, which the inbox page READS by name. */
+    public static final String INBOX_PAGE_NAME = "page";
+
+    /** The page of notification-inbox items being read. */
+    public static final ParameterDefinition<Integer> INBOX_PAGE =
+        ParameterDefinition.builder(Integer.class).name(INBOX_PAGE_NAME)
+            .stringResolver(Integer::parseInt).build();
 }

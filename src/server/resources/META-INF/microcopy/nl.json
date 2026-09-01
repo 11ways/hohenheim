@@ -2469,6 +2469,10 @@
       "text": "sjabloondatabanken",
       "scope": "template_database",
       "case": "sentence"
+    },
+    {
+      "text": "Postvak",
+      "scope": "admin_inbox"
     }
   ],
   "dashboard": [
@@ -9892,6 +9896,10 @@
     {
       "text": "De basisimages waarin workspaces en applicaties draaien; ingebouwde worden door Hohenheim beheerd",
       "scope": "runtime_image"
+    },
+    {
+      "text": "Platformmeldingen die in je eigen postvak in het paneel toekomen.",
+      "scope": "admin_inbox"
     }
   ],
   "slug": {
@@ -11773,5 +11781,11 @@
   "database_resize_failed": {
     "text": "De nieuwe resourcelimieten konden niet toegepast worden: {$reason}. Er is niets gewijzigd.",
     "scope": "violations"
-  }
+  },
+  "pagination": [
+    {
+      "text": "Postvakpagina's",
+      "scope": "admin_inbox"
+    }
+  ]
 }

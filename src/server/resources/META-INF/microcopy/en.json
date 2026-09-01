@@ -2469,6 +2469,10 @@
       "text": "template databases",
       "scope": "template_database",
       "case": "sentence"
+    },
+    {
+      "text": "Inbox",
+      "scope": "admin_inbox"
     }
   ],
   "dashboard": [
@@ -9892,6 +9896,10 @@
     {
       "text": "The base images workspaces and applications run inside; built-in ones are managed by Hohenheim",
       "scope": "runtime_image"
+    },
+    {
+      "text": "Platform alerts delivered to your own panel inbox.",
+      "scope": "admin_inbox"
     }
   ],
   "slug": {
@@ -11773,5 +11781,11 @@
   "database_resize_failed": {
     "text": "The new resource ceilings could not be applied: {$reason}. Nothing was changed.",
     "scope": "violations"
-  }
+  },
+  "pagination": [
+    {
+      "text": "Inbox pages",
+      "scope": "admin_inbox"
+    }
+  ]
 }
