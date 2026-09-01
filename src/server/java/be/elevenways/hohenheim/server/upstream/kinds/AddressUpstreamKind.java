@@ -62,10 +62,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
             .build());
 
     public static final IntegerField REQUEST_TIMEOUT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("request_timeout").suffix("s")
-            .label(HohenheimFormCopy.label("request_timeout"))
-            .help(HohenheimFormCopy.help("request_timeout"))
-            .build());
+        UpstreamSettings.requestTimeout());
 
     public static final BooleanField WEBSOCKET_UPGRADE = SETTINGS_SCHEMA.addField(
         BooleanField.builder("websocket_upgrade").defaultValue(true)
