@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -24,6 +25,11 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -238,6 +244,67 @@ class OfflineCommandLaneTest {
         assertThat(ServerMain.runCommandLineOnly(new String[0]))
             .as("step 8: the entry point must fall through to a normal boot without flags")
             .isFalse();
+    }
+
+    /**
+     * The rehearsal lane exists because the hand-rolled scratch-cwd rehearsal migrated the
+     * LIVE database (absolute {@code database.path} in the copied settings, 2026-09-01):
+     * the copy must be migrated, the live file must be refused by identity.
+     */
+    @Test
+    void aMigrationRehearsalMigratesTheCopyAndRefusesTheLiveFile() throws Exception {
+        // 1. Pointing the rehearsal at the LIVE file is an error, never a run -- this is
+        //    the exact invocation the broken lane effectively performed.
+        Path live = ControlPlaneBackups.databaseFile();
+        assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
+                RehearseMigrationsCommand.FLAG, live.toString()}, line -> { }))
+            .as("step 1: the live database is refused by file identity")
+            .isInstanceOf(OfflineCommandException.class)
+            .hasMessageContaining("LIVE");
+
+        // 2. A byte copy REGRESSED by one migration -- the state a pre-M008 production
+        //    copy is in: no scope column, no ledger row.
+        Path copy = Files.createTempFile("hohenheim-rehearsal", ".db");
+        Files.copy(live, copy, StandardCopyOption.REPLACE_EXISTING);
+        try (Connection surgery = DriverManager.getConnection("jdbc:sqlite:" + copy);
+             Statement statement = surgery.createStatement()) {
+            statement.executeUpdate("ALTER TABLE bans DROP COLUMN scope");
+            statement.executeUpdate(
+                "DELETE FROM zenit_migrations WHERE name = 'Ban enforcement scope'");
+        }
+
+        // 3. The rehearsal migrates THE COPY and reports exactly that.
+        List<String> out = new ArrayList<>();
+        assertThat(OfflineBoot.runIfRequested(new String[] {
+                RehearseMigrationsCommand.FLAG, copy.toString()}, out::add))
+            .as("step 3: the rehearsal claims the run")
+            .isTrue();
+        assertThat(String.join("\n", out))
+            .as("step 3: naming the applied count and the copy it ran against")
+            .contains("1 applied")
+            .contains(copy.toString());
+        assertThat(scalar(copy,
+                "SELECT COUNT(*) FROM pragma_table_info('bans') WHERE name = 'scope'"))
+            .as("step 3: the copy gained the migrated column")
+            .isEqualTo(1);
+
+        // 4. The live file was never touched: its ledger still carries the row the copy
+        //    had to regain, so nothing regressed or re-migrated it.
+        assertThat(scalar(live,
+                "SELECT COUNT(*) FROM zenit_migrations WHERE name = 'Ban enforcement scope'"))
+            .as("step 4: the live ledger is untouched")
+            .isEqualTo(1);
+        Files.deleteIfExists(copy);
+    }
+
+    /** One integer scalar straight off a sqlite file, outside any pool. */
+    private static int scalar(Path file, String sql) throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + file);
+             Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery(sql)) {
+            result.next();
+            return result.getInt(1);
+        }
     }
 
     private static int createUser() {
