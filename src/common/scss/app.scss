@@ -464,14 +464,6 @@
         font-size: var(--pl-font-size-xs);
     }
 
-    // The absolute reading leads and the relative one trails it on one baseline;
-    // without this the two readings wrap apart at narrow widths.
-    .hh-cell-datetime {
-        display: inline-flex;
-        align-items: baseline;
-        gap: var(--pl-space-2xs);
-    }
-
     .hh-state-badges {
         display: flex;
         flex-wrap: wrap;

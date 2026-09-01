@@ -17,8 +17,6 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
-import be.elevenways.zenit.cms.common.render.table.AbsentCellState;
-import be.elevenways.zenit.cms.common.render.table.DateTimeCellState;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -62,9 +60,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * TLS certificates: manual PEM uploads plus Let's Encrypt requests (via the
@@ -99,21 +94,6 @@ public class CertificateResource extends RowResource {
 
     /** Wall-clock shape of {@code Dates.wallText}, which needs a RenderContext this hook has not. */
     private static final DateTimeFormatter WALL_CLOCK = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-
-    /** The cell partial reading a stamp absolute-first, relative second. */
-    private static final String DATE_RENDERER = "hohenheim:cms/cell/absolute-datetime";
-
-    /**
-     * THE date columns of this list, named once: {@link #dateColumn} refuses any other
-     * field and {@link #cellValue} builds the render state for exactly these, so a column
-     * can never carry the partial without the state that partial declares.
-     */
-    private static final Set<String> DATE_COLUMN_NAMES = Stream.of(
-            CertificateModel.ISSUED_ON,
-            CertificateModel.EXPIRES_ON,
-            CertificateModel.NEXT_ATTEMPT_AT,
-            CertificateModel.CREATED_AT)
-        .map(Field::getName).collect(Collectors.toUnmodifiableSet());
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(CertificateModel.NICE_NAME)
@@ -153,10 +133,10 @@ public class CertificateResource extends RowResource {
         .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).filterable().hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.CHALLENGE_TYPE).filterable().hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.DNS_PUBLISHER).hidden().build())
-        // AIDEV-NOTE: expiry USED to carry next_attempt_at as its subtext, which a renderer
-        // may not do (ColumnSpec refuses renderer + subtext -- both compose the cell). The
-        // next attempt became a column of its own instead, which is what makes it sortable:
-        // "which renewal runs next" was previously unaskable.
+        // AIDEV-NOTE: expiry once carried next_attempt_at as its subtext; the next
+        // attempt became a column of its own instead, which is what makes it sortable:
+        // "which renewal runs next" was previously unaskable. (The date cells ride the
+        // shared datetime cell with dateStyle(ABSOLUTE) now, not a renderer partial.)
         .column(dateColumn(CertificateModel.ISSUED_ON).hidden().build())
         .column(dateColumn(CertificateModel.EXPIRES_ON).filterable().build())
         .column(dateColumn(CertificateModel.NEXT_ATTEMPT_AT).build())
@@ -178,32 +158,12 @@ public class CertificateResource extends RowResource {
         .build();
 
     /**
-     * A sortable date column whose cell reads absolute-first.
-     *
-     * @throws IllegalArgumentException when the field is not one of {@link #DATE_COLUMN_NAMES}
+     * A sortable date column reading absolute-first: the framework's own
+     * datetime cell with {@code ColumnSpec.dateStyle(ABSOLUTE)} -- these
+     * columns are planned against the calendar, not against "how long ago".
      */
     private static ColumnSpec.@NonNull Builder dateColumn(@NonNull DateTimeField field) {
-        if (!DATE_COLUMN_NAMES.contains(field.getName())) {
-            throw new IllegalArgumentException("date column " + field.getName()
-                + " is not declared in DATE_COLUMN_NAMES, so its cell state is never built");
-        }
-        return ColumnSpec.fromField(field).sortable().renderer(DATE_RENDERER);
-    }
-
-    /**
-     * The date columns hand their whole cell to a renderer, so the generic typed-cell swap
-     * skips them -- absence included -- and both states are built here instead.
-     */
-    @Override
-    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
-        Object value = super.cellValue(row, column);
-        if (!DATE_COLUMN_NAMES.contains(column.name())) {
-            return value;
-        }
-        if (value instanceof Instant instant) {
-            return new DateTimeCellState(instant.toString(), wording());
-        }
-        return AbsentCellState.isAbsent(value) ? AbsentCellState.NONE : value;
+        return ColumnSpec.fromField(field).sortable().dateStyle(ColumnSpec.DateStyle.ABSOLUTE);
     }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "certificate"); }

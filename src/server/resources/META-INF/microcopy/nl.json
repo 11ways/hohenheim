@@ -12162,5 +12162,9 @@
     "text": "App bijgewerkt",
     "scope": "cms",
     "target": "activity_action"
+  },
+  "people_only": {
+    "text": "Alleen personen",
+    "scope": "activity"
   }
 }

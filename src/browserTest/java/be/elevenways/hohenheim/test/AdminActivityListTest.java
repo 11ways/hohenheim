@@ -79,6 +79,33 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 3: background activity is hidden by default")
             .doesNotContain(BACKGROUND_TITLE);
 
+        // 3b. The default scope is VISIBLE: an ordinary removable chip, marked as a
+        //     default, reading the declared sentence -- never an invisible withholding.
+        assertThat(defaultList.body())
+            .as("step 3b: the default renders as a marked chip")
+            .contains("data-chip-default");
+        assertThat(defaultList.body())
+            .as("step 3b: the chip reads the declared description, not the expression")
+            .contains("People only");
+
+        // 3c. Its remove link carries the persistence marker, so removing it survives
+        //     the next navigation instead of re-triggering on a bare URL.
+        assertThat(defaultList.body())
+            .as("step 3c: the chip removes through the cleared marker")
+            .contains("filter.origin.__cleared=1");
+
+        // 3d. The cleared marker genuinely suppresses it: background rows appear
+        //     beside operator rows, and the chip is gone.
+        HttpResponse<String> clearedList = adminGet("/admin/activity?filter.origin.__cleared=1");
+        assertThat(clearedList.statusCode()).as("step 3d: the cleared list renders").isEqualTo(200);
+        assertThat(clearedList.body())
+            .as("step 3d: clearing the default shows background activity")
+            .contains(BACKGROUND_TITLE)
+            .contains(OPERATOR_TITLE);
+        assertThat(clearedList.body())
+            .as("step 3d: no default chip while cleared")
+            .doesNotContain("data-chip-default");
+
         // 4. The origin filter genuinely flips it: naming the system origin shows the
         //    sweeps, so the default is a starting point and never a cage.
         HttpResponse<String> systemList = adminGet("/admin/activity?filter.origin="
