@@ -153,6 +153,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, new InstanceTemplateResource(), Role.INSTANCES);
         addIf(peers, new InstanceTemplateVariableResource(), Role.INSTANCES);
         addIf(peers, new InstanceTemplateFileResource(), Role.INSTANCES);
+        addIf(peers, new InstanceTemplateVolumeResource(), Role.INSTANCES);
         // A declared database is created through the managed-database tier at
         // instance create, so the declaration form needs both tiers like the attachment.
         if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {

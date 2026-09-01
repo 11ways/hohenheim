@@ -848,6 +848,10 @@
     {
       "text": "Containerkoppelingen in de vorm hostpad:containerpad.",
       "scope": "help"
+    },
+    {
+      "text": "Gedeclareerde volumes",
+      "scope": "template_contents"
     }
   ],
   "wait_for_ready": [
@@ -1869,6 +1873,10 @@
     {
       "text": "Naam",
       "scope": "instance_files"
+    },
+    {
+      "text": "Naam",
+      "scope": "template_contents"
     }
   ],
   "name_placeholder": {
@@ -2485,6 +2493,20 @@
     {
       "text": "Postvak",
       "scope": "admin_inbox"
+    },
+    {
+      "text": "postvak",
+      "scope": "admin_inbox",
+      "case": "sentence"
+    },
+    {
+      "text": "Sjabloonvolumes",
+      "scope": "template_volume"
+    },
+    {
+      "text": "sjabloonvolumes",
+      "scope": "template_volume",
+      "case": "sentence"
     }
   ],
   "dashboard": [
@@ -8853,6 +8875,15 @@
       "text": "sjabloondatabank",
       "scope": "template_database",
       "case": "sentence"
+    },
+    {
+      "text": "sjabloonvolume",
+      "scope": "template_volume"
+    },
+    {
+      "text": "sjabloonvolume",
+      "scope": "template_volume",
+      "case": "sentence"
     }
   ],
   "member": {
@@ -10919,10 +10950,16 @@
     "text": "Groottelimiet",
     "scope": "instance_volume"
   },
-  "exclusive": {
-    "text": "Exclusief",
-    "scope": "instance_volume"
-  },
+  "exclusive": [
+    {
+      "text": "Exclusief",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "Exclusief",
+      "scope": "template_contents"
+    }
+  ],
   "never_measured": {
     "text": "nog niet gemeten",
     "scope": "instance_volume"
@@ -11846,6 +11883,22 @@
   "no_databases_description": {
     "text": "Dit sjabloon declareert geen beheerde databanken; een instantie uit dit sjabloon moet er zelf een koppelen.",
     "scope": "template_contents"
+  },
+  "add_volume": {
+    "text": "Volume toevoegen",
+    "scope": "template_contents"
+  },
+  "no_volumes": {
+    "text": "Geen gedeclareerde volumes",
+    "scope": "template_contents"
+  },
+  "no_volumes_description": {
+    "text": "Dit sjabloon declareert geen volumes; een instantie uit dit sjabloon bewaart niets wanneer haar container vervangen wordt.",
+    "scope": "template_contents"
+  },
+  "template_volume_name_taken": {
+    "text": "Dit sjabloon declareert al een volume met de naam '{$name}'. Twee declaraties van een naam worden een enkel volume op elke instantie, dus een ervan zou verloren gaan.",
+    "scope": "violations"
   },
   "prefix": {
     "text": "Env-voorvoegsel",

@@ -5,9 +5,11 @@
 {% declare variables: List %}
 {% declare files: List %}
 {% declare databases: List %}
+{% declare volumes: List %}
 {% declare addVariableTarget: RouteTarget %}
 {% declare addFileTarget: RouteTarget %}
 {% declare addDatabaseTarget: RouteTarget %}
+{% declare addVolumeTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% declare flashVariant: String = "default" %}
@@ -22,6 +24,7 @@
             <pl-button variant="primary" use:Zenit.route={% addVariableTarget %} id="add-variable-link">{{ t("add_variable", scope: "template_contents") }}</pl-button>
             <pl-button variant="secondary" use:Zenit.route={% addFileTarget %} id="add-file-link">{{ t("add_file", scope: "template_contents") }}</pl-button>
             <pl-button variant="secondary" use:Zenit.route={% addDatabaseTarget %} id="add-database-link">{{ t("add_database", scope: "template_contents") }}</pl-button>
+            <pl-button variant="secondary" use:Zenit.route={% addVolumeTarget %} id="add-volume-link">{{ t("add_volume", scope: "template_contents") }}</pl-button>
         </div>
     </header>
 
@@ -102,6 +105,31 @@
     <pl-empty-state icon="database">
         <pl-empty-state-title>{{ t("no_databases", scope: "template_contents") }}</pl-empty-state-title>
         <pl-empty-state-description>{{ t("no_databases_description", scope: "template_contents") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+
+    <h2>{{ t("volumes", scope: "template_contents") }}</h2>
+    {% if volumes %}
+    <pl-table striped={% true %}>
+        <pl-table-header><pl-table-row>
+            <pl-table-head>{{ t("name", scope: "template_contents") }}</pl-table-head>
+            <pl-table-head>{{ t("path", scope: "template_contents") }}</pl-table-head>
+            <pl-table-head>{{ t("exclusive", scope: "template_contents") }}</pl-table-head>
+        </pl-table-row></pl-table-header>
+        <pl-table-body>
+            {% each volumes as index, volume %}
+            <pl-table-row>
+                <pl-table-cell><a use:Zenit.route={% volume.get("editTarget") %}><code>{{ volume.get("name") }}</code></a></pl-table-cell>
+                <pl-table-cell><code>{{ volume.get("path") }}</code></pl-table-cell>
+                <pl-table-cell>{% if volume.get("exclusive") %}{{ t("yes", scope: "template_contents") }}{% /if %}</pl-table-cell>
+            </pl-table-row>
+            {% /each %}
+        </pl-table-body>
+    </pl-table>
+    {% else %}
+    <pl-empty-state icon="database">
+        <pl-empty-state-title>{{ t("no_volumes", scope: "template_contents") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("no_volumes_description", scope: "template_contents") }}</pl-empty-state-description>
     </pl-empty-state>
     {% /if %}
 </section>

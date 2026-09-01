@@ -848,6 +848,10 @@
     {
       "text": "Container bind mounts in host-path:container-path form.",
       "scope": "help"
+    },
+    {
+      "text": "Declared volumes",
+      "scope": "template_contents"
     }
   ],
   "wait_for_ready": [
@@ -1869,6 +1873,10 @@
     {
       "text": "Name",
       "scope": "instance_files"
+    },
+    {
+      "text": "Name",
+      "scope": "template_contents"
     }
   ],
   "name_placeholder": {
@@ -2485,6 +2493,20 @@
     {
       "text": "Inbox",
       "scope": "admin_inbox"
+    },
+    {
+      "text": "inbox",
+      "scope": "admin_inbox",
+      "case": "sentence"
+    },
+    {
+      "text": "Template volumes",
+      "scope": "template_volume"
+    },
+    {
+      "text": "template volumes",
+      "scope": "template_volume",
+      "case": "sentence"
     }
   ],
   "dashboard": [
@@ -8853,6 +8875,15 @@
       "text": "template database",
       "scope": "template_database",
       "case": "sentence"
+    },
+    {
+      "text": "template volume",
+      "scope": "template_volume"
+    },
+    {
+      "text": "template volume",
+      "scope": "template_volume",
+      "case": "sentence"
     }
   ],
   "member": {
@@ -10919,10 +10950,16 @@
     "text": "Size limit",
     "scope": "instance_volume"
   },
-  "exclusive": {
-    "text": "Exclusive",
-    "scope": "instance_volume"
-  },
+  "exclusive": [
+    {
+      "text": "Exclusive",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "Exclusive",
+      "scope": "template_contents"
+    }
+  ],
   "never_measured": {
     "text": "not measured yet",
     "scope": "instance_volume"
@@ -11846,6 +11883,22 @@
   "no_databases_description": {
     "text": "This template declares no managed databases; an instance created from it has to attach one by hand.",
     "scope": "template_contents"
+  },
+  "add_volume": {
+    "text": "Add volume",
+    "scope": "template_contents"
+  },
+  "no_volumes": {
+    "text": "No declared volumes",
+    "scope": "template_contents"
+  },
+  "no_volumes_description": {
+    "text": "This template declares no volumes; an instance created from it keeps nothing when its container is replaced.",
+    "scope": "template_contents"
+  },
+  "template_volume_name_taken": {
+    "text": "This template already declares a volume named '{$name}'. Two declarations of one name become a single volume on every instance, so one of them would be lost.",
+    "scope": "violations"
   },
   "prefix": {
     "text": "Env prefix",
