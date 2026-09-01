@@ -21,7 +21,12 @@
     {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
+    {#- Every fact gets its own column. The AXFR serial and the time it was served used to
+        share one cell, which read as a single sentence ("2026083001 3 hours ago") in which
+        the serial looked like part of the wording; the NOTIFY rcode and its time did the
+        same. A serial is not a duration and must never be read as one. -#}
     {% if links %}
+    <pl-scroll-area>
     <pl-table>
         <pl-table-header><pl-table-row>
             <pl-table-head>{{ t("peer", scope: "dns_secondaries") }}</pl-table-head>
@@ -29,7 +34,9 @@
             <pl-table-head>{{ t("freshness", scope: "dns_secondaries") }}</pl-table-head>
             <pl-table-head>{{ t("served_serial", scope: "dns_secondaries") }}</pl-table-head>
             <pl-table-head>{{ t("probed_at", scope: "dns_secondaries") }}</pl-table-head>
+            <pl-table-head>{{ t("last_axfr_serial", scope: "dns_secondaries") }}</pl-table-head>
             <pl-table-head>{{ t("last_axfr", scope: "dns_secondaries") }}</pl-table-head>
+            <pl-table-head>{{ t("last_notify_result", scope: "dns_secondaries") }}</pl-table-head>
             <pl-table-head>{{ t("last_notify", scope: "dns_secondaries") }}</pl-table-head>
         </pl-table-row></pl-table-header>
         <pl-table-body>
@@ -47,15 +54,15 @@
                     <pl-relative-time datetime={% link.get("probedAtIso") %} wording={% timeWording %} title={% link.get("probedAtIso") %}></pl-relative-time>
                     {% /if %}
                 </pl-table-cell>
+                <pl-table-cell><code>{{ link.get("axfrSerial") }}</code></pl-table-cell>
                 <pl-table-cell>
                     {% if link.get("axfrAtIso") != "" %}
-                    <code>{{ link.get("axfrSerial") }}</code>
                     <pl-relative-time datetime={% link.get("axfrAtIso") %} wording={% timeWording %} title={% link.get("axfrAtIso") %}></pl-relative-time>
                     {% /if %}
                 </pl-table-cell>
+                <pl-table-cell><code>{{ link.get("notifyOutcome") }}</code></pl-table-cell>
                 <pl-table-cell>
                     {% if link.get("notifyAtIso") != "" %}
-                    <code>{{ link.get("notifyOutcome") }}</code>
                     <pl-relative-time datetime={% link.get("notifyAtIso") %} wording={% timeWording %} title={% link.get("notifyAtIso") %}></pl-relative-time>
                     {% /if %}
                 </pl-table-cell>
@@ -63,6 +70,7 @@
             {% /each %}
         </pl-table-body>
     </pl-table>
+    </pl-scroll-area>
     {% else %}
     <pl-empty-state icon="handshake">
         <pl-empty-state-title>{{ t("empty", scope: "dns_secondaries") }}</pl-empty-state-title>

@@ -48,6 +48,23 @@ public final class DelegationCheck {
         public @NonNull String line() {
             return this.verdict.token() + " " + this.subject;
         }
+
+        /**
+         * The reader of {@link #line()}, beside its writer so the two cannot drift.
+         *
+         * @return the finding a stored detail line carries, or null for a line whose first
+         *         word this build does not declare (never a guess about what it meant)
+         */
+        public static @Nullable Finding parse(@NonNull String line) {
+            String trimmed = line.trim();
+            int space = trimmed.indexOf(' ');
+            String token = space < 0 ? trimmed : trimmed.substring(0, space);
+            DelegationVerdict verdict = DelegationVerdict.forToken(token);
+            if (verdict == null) {
+                return null;
+            }
+            return new Finding(verdict, space < 0 ? "" : trimmed.substring(space + 1).trim());
+        }
     }
 
     /** The worst verdict plus every finding behind it; a clean check carries no findings. */

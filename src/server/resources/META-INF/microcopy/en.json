@@ -11743,7 +11743,7 @@
     "scope": "violations"
   },
   "last_axfr": {
-    "text": "Last AXFR served",
+    "text": "Last AXFR",
     "scope": "dns_secondaries"
   },
   "last_notify": {
@@ -11791,5 +11791,33 @@
       "text": "Inbox pages",
       "scope": "admin_inbox"
     }
-  ]
+  ],
+  "last_axfr_serial": {
+    "text": "AXFR serial",
+    "scope": "dns_secondaries"
+  },
+  "last_notify_result": {
+    "text": "NOTIFY result",
+    "scope": "dns_secondaries"
+  },
+  "secondaries_none": {
+    "text": "None linked",
+    "scope": "dns_zone"
+  },
+  "secondaries_current": {
+    "text": "{$current} of {$total} current",
+    "scope": "dns_zone"
+  },
+  "import_replica_title": {
+    "text": "This zone is a replica",
+    "scope": "dns_zone"
+  },
+  "import_replica": {
+    "text": "Its records are owned by the primary this zone transfers from and arrive over AXFR, so a zone file cannot be imported here. Import it on the instance that is primary for this zone.",
+    "scope": "dns_zone"
+  },
+  "import_replica_named": {
+    "text": "Its records are owned by {$peer}, the primary this zone transfers from, and arrive over AXFR, so a zone file cannot be imported here. Import it on {$peer} instead.",
+    "scope": "dns_zone"
+  }
 }

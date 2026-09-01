@@ -6,6 +6,8 @@
 {% declare zoneText: String %}
 {% declare dsRecord: String = "" %}
 {% declare importTarget: RouteTarget %}
+{% declare importable: Boolean = true %}
+{% declare primaryPeer: String = "" %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare flashMessage: Microcopy = null %}
 {% declare flashVariant: String = "default" %}
@@ -53,6 +55,16 @@
         destructive dialog that would then be refused server-side anyway. The reactive
         pl-field error carries our own copy (the same key the server refusal uses) once
         the operator has interacted with the control. -#}
+    {#- A REPLICA holds nobody's records but its primary's, and DnsZoneFiles.importText
+        refuses one outright, so the form is not offered here at all: a destructive button
+        whose only outcome is a refusal is worse than no button. -#}
+    {% if !importable %}
+    <pl-alert variant="info">
+        <pl-alert-title>{{ t("import_replica_title", scope: "dns_zone") }}</pl-alert-title>
+        {{ primaryPeer != "" ? t("import_replica_named", scope: "dns_zone", peer: primaryPeer)
+            : t("import_replica", scope: "dns_zone") }}
+    </pl-alert>
+    {% else %}
     {% let zoneTextValue = "" %}
     <form use:Zenit.form={% importTarget %}
           use:CmsConfirm.destructive={% t("import_confirm", scope: "dns_zone") %}>
@@ -88,5 +100,6 @@
             <pl-button variant="destructive" type="submit">{{ t("import_action", scope: "dns_zone") }}</pl-button>
         </div>
     </form>
+    {% /if %}
 </section>
 {% /block %}
