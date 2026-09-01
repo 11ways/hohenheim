@@ -2178,3 +2178,31 @@ ACCESS NOTE: skerit on phoenix has no passwordless sudo, but IS in the `docker`
 group -- a read-only bind mount (`docker run --rm -v <dir>:/mnt:ro --entrypoint
 sh <image> -c 'base64 /mnt/<file>'`) is the sanctioned read path for another
 user's home there.
+
+## Deploy 2026-09-01 (sixth jar swap): c817760a, the deferred-ledger wave
+
+Swapped to hohenheim `c817760a` (jar sha256 `567fbc26...`, 268,147,196 bytes,
+stamp 13/13 `dirty=false`: protoblast `68ca411d`, plumage `f378488d`,
+zenit-forms `797e77cd`, zenit-comms `aea74567`, zenit-cms `b111b65c`, rest
+unchanged). Clean secondary workspace `~/projects/javaweb-deploy` (17 detached
+worktrees -- the chain also needs emberglyph and janeway; a workspace without
+them fails resolving `be.elevenways:janeway`), deleted afterwards. No new
+migration (`0 applied`); preflight `/root/hohenheim-preflight-20260901-wave2/`
+(db `.pre` integrity ok/47 rows, settings, rollback jar = `111e8cd5...` i.e.
+`a7d65f01`). Stop 15:23:46Z, healthy, second restart healthy, 0 journal errors.
+
+Live: earl 200, tavernetomberg + www 200, invulassistent 401 (its gate),
+udesign via Host 200, panel 302, both nameservers serial-matched (wcag.be 15).
+Browser proofs (headless Chromium, fresh profile): activity list's default
+"Origin: People only" chip rendered with `data-chip-default`, removing it put
+`filter.origin.__cleared=1` in the URL and revealed system rows; required
+markers live on the template-volume form (`data-required` labels, `"*"` glyph,
+`aria-required` on name + container_path; the databases form declares no
+Required validators, so its unmarked fields are correct, not a regression);
+Inbox renders; template Contents tab shows Declared volumes + Add volume;
+Console tab by SOFT navigation (`window.__probe` survived, `[pl-terminal]
+WebSocket connected`).
+
+Migration pin raised to `DEPLOYED_THROUGH = "008"` + M008 digest in
+migration-pins.txt (the fifth wave's forgotten step 8), red-then-green runs
+22/23. ROLLBACK: preflight jar + restart (no migration in the delta).

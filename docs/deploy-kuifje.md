@@ -1755,3 +1755,11 @@ Unit gained `SupplementaryGroups=systemd-journal` (backup
 sets + rules live beside the 80/443 set. DNS serving wcag.be /
 tavernetomberg.be / starfleet.life replicas after both restarts; panel 302,
 health 200, `zd_deployed` current 13/13.
+
+## Deploy 2026-09-01 (wave 6): c817760a
+
+Same jar as robbedoes (`567fbc26...`, 13/13 clean). Preflight
+`/root/hohenheim-preflight-20260901-wave2/` (db ok/47, rollback jar
+`a7d65f01`). `0 applied`; stop 15:27:28Z, healthy, second restart healthy,
+0 journal errors. DNS: wcag.be SOA serial 15, starfleet.life replica serial
+44; panel 302; wcag.be 200. ROLLBACK: preflight jar + restart.

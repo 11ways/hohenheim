@@ -1214,3 +1214,13 @@ guards sshd on this box, and two ban authorities on one port is the
 duplication the watcher exists to avoid elsewhere.
 Sites: apex 200, admin 302, comms hub 200; DNS SOA serving; `zd_deployed`
 current 13/13.
+
+## Deploy 2026-09-01 (wave 6): c817760a
+
+Same jar as robbedoes/kuifje (`567fbc26...`, 13/13 clean). Preflight
+`/root/hohenheim-preflight-20260901-wave2/` (db ok/47, rollback jar
+`a7d65f01`). `0 applied`; healthy after both restarts (first probe green at
+try 9 -- the ~25 s boot), 0 journal errors. Live: admin login 200, apex 200,
+skeleton 202 (its own answer), herald active (its /api/health 302 -> /login is
+herald's standing behaviour, untouched). Site 1 untouched. ROLLBACK:
+preflight jar + restart.
