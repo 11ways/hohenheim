@@ -1778,3 +1778,12 @@ Same jar as robbedoes (`167b0e58...`, 13/13 clean), preflight
 10 s after start, second restart healthy 11 s, no warnings. Watcher child runs
 with the three identifiers. wcag.be SOA 15, tavernetomberg.be SOA 11,
 starfleet.life replica SOA 44, panel 302. `zd_deployed` current 13/13.
+
+LIVE PROOF of the watcher, 21:51Z: 15 paced `ssh nosuchuserN@kuifje` attempts from
+starfleet (104.223.42.142, not in never_ban). Attempts 1-4 reached sshd
+("Permission denied (publickey)"), attempt 5 onwards timed out: ban row 33
+(`auto`, `ssh.invalid_user`, "score 28 over threshold", scope `ssh`), nft
+`banned_ssh_v4 = { 104.223.42.142 timeout 1d }`, NOT in `banned_v4`; from
+starfleet kuifje's HTTPS (302) and DNS (SOA 15) still answer. First ssh-scoped
+ban in the estate; the 24 h ban on starfleet's address is harmless (starfleet
+never uses SSH to kuifje) and expires by itself.
