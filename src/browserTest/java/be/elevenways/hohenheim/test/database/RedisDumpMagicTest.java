@@ -40,9 +40,10 @@ class RedisDumpMagicTest {
             }
 
             @Override
-            public byte[] getArchiveFile(String containerId, String path, long maxBytes)
-                    throws IOException {
-                return dumpBytes;
+            public long getArchiveFileTo(String containerId, String path,
+                                         Path outFile, long maxBytes) throws IOException {
+                Files.write(outFile, dumpBytes);
+                return dumpBytes.length;
             }
         };
     }

@@ -6,12 +6,14 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
+import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -383,8 +385,9 @@ public class ManagedDatabase {
 
     /**
      * Back up a running database by running the engine's dump tool inside its container,
-     * returning the dump as text (SQL for Postgres/MySQL). The whole dump is held in memory;
-     * a streaming-to-file variant is a follow-up for large databases.
+     * returning the dump as text (SQL for Postgres/MySQL). The whole dump is held in memory,
+     * so this is a small-payload convenience -- every production lane goes through
+     * {@link #backupToFile}, which streams.
      *
      * @param handle the engine container's handle (the instance handle)
      * @throws IOException                   if the dump command exits non-zero
@@ -401,57 +404,82 @@ public class ManagedDatabase {
         return result.stdout();
     }
 
-    /**
-     * The heap guard on a binary dump fetch: the archive API buffers the whole response
-     * through controller memory, so an unbounded read here is an OOM waiting for a big
-     * enough database.
-     */
+    /** The declared transfer bound on any single dump, enforced ON the stream by the client. */
     private static long maxDumpBytes() {
         Integer megabytes = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.MAX_DUMP_MB);
         return (megabytes == null || megabytes <= 0 ? 2048L : megabytes.longValue()) * 1024 * 1024;
     }
 
+    /** The cap refusal, translated to name the setting an operator would raise. */
+    private static IOException capRefusal(String handle, Http11.BodyCapExceededException cause) {
+        return new IOException("Dump of '" + handle + "' exceeds the configured cap of "
+            + (maxDumpBytes() / (1024 * 1024)) + " MB (setting database.max_dump_mb);"
+            + " the partial file was deleted", cause);
+    }
+
     /**
-     * Back up any engine to a file: SQL text for Postgres/MySQL, the engine's native binary dump
-     * for Redis (RDB snapshot) and Mongo (mongodump archive). Binary dumps are produced inside
-     * the container, then fetched out via the archive API.
+     * Back up any engine to a file, STREAMED end to end: SQL text dumps go exec-stdout to
+     * disk, binary dumps (Redis RDB, mongodump archive) go archive-API to disk -- controller
+     * heap never holds a dump (the 2026-08-31 nightly OOM class). The write lands in a
+     * {@code .part} sibling moved into place on success, so a failed or over-cap dump never
+     * leaves a file that could pass for a backup.
+     *
+     * @throws IOException naming {@code database.max_dump_mb} when the dump exceeds the cap
      */
     // AIDEV-NOTE: Binary dumps must land in the container's writable layer (/tmp), not on a
-    // mount: the Docker archive API (getArchiveFile) cannot read files inside a tmpfs (or
+    // mount: the Docker archive API (getArchiveFileTo) cannot read files inside a tmpfs (or
     // volume) mount. So redis dumps via `--rdb /tmp/...` (not SAVE, which writes to the /data
     // mount) and mongodump targets /tmp.
     public void backupToFile(String handle, Engine engine, String user, String password,
                              String database, Path target) throws IOException {
-        switch (engine) {
-            case POSTGRES, MYSQL ->
-                Files.writeString(target, backup(handle, engine, user, password, database),
-                    StandardCharsets.UTF_8);
-            case REDIS -> {
-                String rdbPath = "/tmp/hohenheim-dump.rdb";
-                DockerClient.ExecResult save = docker.exec(handle,
-                    List.of("redis-cli", "--rdb", rdbPath), engine.readyEnv(password));
-                if (save.exitCode() != 0) {
-                    throw new IOException("redis dump failed for '" + handle + "': " + save.stderr().trim());
+        Path partial = target.resolveSibling(target.getFileName() + ".part");
+        try {
+            switch (engine) {
+                case POSTGRES, MYSQL -> {
+                    DockerClient.ExecStreamResult result;
+                    try (var out = Files.newOutputStream(partial)) {
+                        result = docker.execStreamed(handle, engine.dumpCommand(user, database),
+                            engine.dumpEnv(password), out, maxDumpBytes());
+                    }
+                    if (result.exitCode() != 0) {
+                        throw new IOException("Database backup of '" + handle + "' failed (exit "
+                            + result.exitCode() + "): " + result.stderr().trim());
+                    }
                 }
-                Files.write(target, docker.getArchiveFile(handle, rdbPath, maxDumpBytes()));
-                // The exit code alone is a liar: redis-cli has shipped exit 0 while
-                // writing an error line (NOAUTH) into the dump file. The restore path
-                // checks the RDB magic; a backup that would fail that check is not a
-                // backup and must fail NOW, at capture, not months later at restore.
-                requireRdbMagic(target, "redis dump of '" + handle
-                    + "' (redis-cli exited 0 but produced no RDB; an error reply such as"
-                    + " NOAUTH may have landed in the dump file)");
-            }
-            case MONGO -> {
-                String archivePath = "/tmp/hohenheim-dump.archive";
-                DockerClient.ExecResult dump = docker.exec(handle, List.of("mongodump",
-                    "--username", user, "--password", password, "--authenticationDatabase", "admin",
-                    "--db", database, "--archive=" + archivePath));
-                if (dump.exitCode() != 0) {
-                    throw new IOException("mongodump failed for '" + handle + "': " + dump.stderr().trim());
+                case REDIS -> {
+                    String rdbPath = "/tmp/hohenheim-dump.rdb";
+                    DockerClient.ExecResult save = docker.exec(handle,
+                        List.of("redis-cli", "--rdb", rdbPath), engine.readyEnv(password));
+                    if (save.exitCode() != 0) {
+                        throw new IOException("redis dump failed for '" + handle + "': "
+                            + save.stderr().trim());
+                    }
+                    docker.getArchiveFileTo(handle, rdbPath, partial, maxDumpBytes());
+                    // The exit code alone is a liar: redis-cli has shipped exit 0 while
+                    // writing an error line (NOAUTH) into the dump file. The restore path
+                    // checks the RDB magic; a backup that would fail that check is not a
+                    // backup and must fail NOW, at capture, not months later at restore.
+                    requireRdbMagic(partial, "redis dump of '" + handle
+                        + "' (redis-cli exited 0 but produced no RDB; an error reply such as"
+                        + " NOAUTH may have landed in the dump file)");
                 }
-                Files.write(target, docker.getArchiveFile(handle, archivePath, maxDumpBytes()));
+                case MONGO -> {
+                    String archivePath = "/tmp/hohenheim-dump.archive";
+                    DockerClient.ExecResult dump = docker.exec(handle, List.of("mongodump",
+                        "--username", user, "--password", password, "--authenticationDatabase", "admin",
+                        "--db", database, "--archive=" + archivePath));
+                    if (dump.exitCode() != 0) {
+                        throw new IOException("mongodump failed for '" + handle + "': "
+                            + dump.stderr().trim());
+                    }
+                    docker.getArchiveFileTo(handle, archivePath, partial, maxDumpBytes());
+                }
             }
+            Files.move(partial, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (Http11.BodyCapExceededException overCap) {
+            throw capRefusal(handle, overCap);
+        } finally {
+            Files.deleteIfExists(partial);
         }
     }
 

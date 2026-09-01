@@ -26,6 +26,17 @@ import java.util.Map;
  */
 public final class Http11 {
 
+    /**
+     * A body exceeded its caller-declared byte cap DURING the read. Typed so a caller can
+     * translate the refusal (e.g. name the setting that owns the cap) without string-matching.
+     */
+    public static final class BodyCapExceededException extends IOException {
+
+        public BodyCapExceededException(@NonNull String message) {
+            super(message);
+        }
+    }
+
     /** One parsed response: status, lower-cased header names, exact body bytes. */
     public record Raw(int status, @NonNull Map<String, String> headers, byte @NonNull [] body) {
 
@@ -193,8 +204,8 @@ public final class Http11 {
                 throw new IOException("Bad Content-Length from " + peer + ": " + declared);
             }
             if (remaining > limit) {
-                throw new IOException("Response body from " + peer + " (" + remaining
-                    + " bytes) exceeds the " + limit + "-byte cap");
+                throw new BodyCapExceededException("Response body from " + peer + " ("
+                    + remaining + " bytes) exceeds the " + limit + "-byte cap");
             }
         }
         byte[] buffer = new byte[64 * 1024];
@@ -211,8 +222,8 @@ public final class Http11 {
             }
             written += read;
             if (written > limit) {
-                throw new IOException("Response body from " + peer + " exceeds the "
-                    + limit + "-byte cap");
+                throw new BodyCapExceededException("Response body from " + peer
+                    + " exceeds the " + limit + "-byte cap");
             }
             out.write(buffer, 0, read);
             if (!toEof) {
@@ -255,8 +266,8 @@ public final class Http11 {
                 }
                 written += read;
                 if (written > maxBytes) {
-                    throw new IOException("Response body from " + peer + " exceeds the "
-                        + maxBytes + "-byte cap");
+                    throw new BodyCapExceededException("Response body from " + peer
+                        + " exceeds the " + maxBytes + "-byte cap");
                 }
                 out.write(buffer, 0, read);
                 remaining -= read;

@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
@@ -50,17 +51,31 @@ public class BackupDatabases extends ScheduledTask {
         return STATIC_DESCRIPTION;
     }
 
+    /** One run's honest tally: what was dumped, and every database that was not, with why. */
+    public record Outcome(int backedUp, @NonNull List<String> failures) {}
+
     @Override
     public void executor(TaskContext ctx) {
-        backupAll(new DatabaseService());
+        Outcome outcome = backupAll(new DatabaseService());
+        for (String failure : outcome.failures()) {
+            ctx.report(failure);
+        }
+        if (!outcome.failures().isEmpty()) {
+            // A partial run must not read as a green run: the throw marks the history
+            // row FAILED while every database that could be dumped already was.
+            throw new IllegalStateException("Backed up " + outcome.backedUp()
+                + " databases; " + outcome.failures().size() + " failed: "
+                + String.join("; ", outcome.failures()));
+        }
     }
 
     /** Dump every running, text-dumpable managed database, then prune old dumps. */
-    public static void backupAll(DatabaseService databaseService) {
+    public static Outcome backupAll(DatabaseService databaseService) {
         Path backupRoot = Path.of(HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.BACKUP_PATH));
         int retention = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION);
 
         int backedUp = 0;
+        List<String> failures = new ArrayList<>();
         for (DatabaseService.Summary db : databaseService.summaries()) {
             if (!db.running()) {
                 continue;   // can't dump a stopped container
@@ -70,12 +85,18 @@ public class BackupDatabases extends ScheduledTask {
                 // space and a dump failure would fire a false BACKUP_FAILED alert.
                 continue;
             }
+            // AIDEV-NOTE: the catch is Exception, not IOException: one database's failure
+            // must never cost the others their backup. The 2026-08-31 incident was an
+            // OutOfMemoryError from the then-buffered dump aborting the whole loop; the
+            // dump now streams (ManagedDatabase.backupToFile), so no Error is expected
+            // here, and an Error that still occurs should fail the run loudly.
             try {
                 Path dbDir = backupRoot.resolve(db.name());
                 databaseService.backupToFile(db.name(), dbDir, STAMP.format(Instant.now()));
                 pruneOldBackups(dbDir, retention);
                 backedUp++;
-            } catch (IOException e) {
+            } catch (Exception e) {
+                failures.add(db.name() + ": " + e.getMessage());
                 Blast.log("TASK: BackupDatabases failed for", db.name(), ":", e.getMessage());
                 try {
                     Alerts.send(NotificationEvents.BACKUP_FAILED,
@@ -87,6 +108,7 @@ public class BackupDatabases extends ScheduledTask {
             }
         }
         Blast.log("TASK: BackupDatabases backed up", backedUp, "databases");
+        return new Outcome(backedUp, failures);
     }
 
     /**

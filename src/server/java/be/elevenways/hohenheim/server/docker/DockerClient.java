@@ -8,6 +8,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.concurrent.ScheduledFuture;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -747,6 +750,219 @@ public class DockerClient {
             new String(stderr.toByteArray(), StandardCharsets.UTF_8));
     }
 
+    /** Result of a {@link #execStreamed} run: stdout went to the caller's stream, not the heap. */
+    public record ExecStreamResult(int exitCode, String stderr, long stdoutBytes) {}
+
+    /**
+     * {@link #exec(String, List, List)} with stdout STREAMED to {@code out} instead of held
+     * in memory -- the database-dump lane, where stdout is the whole dump. Stderr is kept
+     * (bounded) for the error report; the stdout byte cap is enforced on the wire.
+     *
+     * @param maxStdoutBytes breaching it throws {@link Http11.BodyCapExceededException};
+     *                       {@code out} then holds a partial write the CALLER must discard
+     */
+    @SuppressWarnings("unchecked")
+    public ExecStreamResult execStreamed(String containerId, List<String> command,
+                                         List<String> env, OutputStream out,
+                                         long maxStdoutBytes) throws IOException {
+        Map<String, Object> createSpec = new LinkedHashMap<>();
+        createSpec.put("AttachStdout", true);
+        createSpec.put("AttachStderr", true);
+        createSpec.put("Cmd", command);
+        if (!env.isEmpty()) {
+            createSpec.put("Env", env);
+        }
+        Map<String, Object> created = (Map<String, Object>) parseJson(request("POST",
+            "/containers/" + containerId + "/exec", toJson(createSpec)).body());
+        String execId = (String) created.get("Id");
+
+        byte[] startBody = toJson(Map.of("Detach", false, "Tty", false))
+            .getBytes(StandardCharsets.UTF_8);
+        byte[] request = buildRequest("POST", "/exec/" + execId + "/start",
+            startBody, "application/json", null);
+        DockerStreamConnection connection = streamTransport().openStream(request, timeoutMillis);
+        ScheduledFuture<?> watchdog = STREAM_WATCHDOG.schedule(
+            connection::close, LONG_OP_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        FrameDemuxStream demux = new FrameDemuxStream(out, maxStdoutBytes);
+        try (InputStream in = new ConnectionInputStream(connection)) {
+            Http11.Head head = Http11.readHead(in, "Docker daemon");
+            if (head.status() < 200 || head.status() >= 300) {
+                ByteArrayOutputStream error = new ByteArrayOutputStream();
+                try {
+                    Http11.copyBody(in, head, error, 64 * 1024, "Docker daemon");
+                } catch (IOException partial) {
+                    // whatever was read is the evidence
+                }
+                throw new ApiException(head.status(), "Docker API returned HTTP "
+                    + head.status() + ": " + error.toString(StandardCharsets.UTF_8).trim());
+            }
+            Http11.copyBody(in, head, demux, Long.MAX_VALUE, "Docker daemon");
+            demux.finish();
+        } catch (IOException e) {
+            if (watchdog.isDone()) {
+                throw new IOException("Docker exec stream timed out after "
+                    + LONG_OP_TIMEOUT_MS + "ms", e);
+            }
+            throw e;
+        } finally {
+            watchdog.cancel(false);
+            connection.close();
+        }
+
+        Map<String, Object> info = (Map<String, Object>) parseJson(get("/exec/" + execId + "/json").body());
+        int exitCode = info.get("ExitCode") instanceof Number n ? n.intValue() : -1;
+        return new ExecStreamResult(exitCode, demux.stderrText(), demux.stdoutBytes());
+    }
+
+    /**
+     * Incremental stdout/stderr frame demultiplexer AS an OutputStream, so
+     * {@link Http11#copyBody} feeds it whatever body shape the daemon chose (raw hijack or
+     * chunked). Stdout payload goes to the target stream under its own byte cap; stderr is
+     * kept up to 64KiB for the error report and counted beyond it. Exec streams are created
+     * {@code Tty: false}, so an unframed byte sequence here is a protocol violation, not a
+     * TTY fallback.
+     */
+    private static final class FrameDemuxStream extends OutputStream {
+
+        private final OutputStream stdout;
+        private final long maxStdoutBytes;
+        private final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+
+        private final byte[] header = new byte[8];
+        private int headerFilled;
+        private int payloadRemaining;
+        private boolean currentStderr;
+        private long stdoutWritten;
+
+        FrameDemuxStream(OutputStream stdout, long maxStdoutBytes) {
+            this.stdout = stdout;
+            this.maxStdoutBytes = maxStdoutBytes;
+        }
+
+        @Override
+        public void write(int value) throws IOException {
+            this.write(new byte[] { (byte) value }, 0, 1);
+        }
+
+        @Override
+        public void write(byte[] data, int offset, int length) throws IOException {
+            int pos = offset;
+            int end = offset + length;
+            while (pos < end) {
+                if (this.payloadRemaining > 0) {
+                    int take = Math.min(end - pos, this.payloadRemaining);
+                    if (this.currentStderr) {
+                        if (this.stderr.size() < 64 * 1024) {
+                            this.stderr.write(data, pos,
+                                Math.min(take, 64 * 1024 - this.stderr.size()));
+                        }
+                    } else {
+                        this.stdoutWritten += take;
+                        if (this.stdoutWritten > this.maxStdoutBytes) {
+                            throw new Http11.BodyCapExceededException("Exec stdout exceeds the "
+                                + this.maxStdoutBytes + "-byte cap");
+                        }
+                        this.stdout.write(data, pos, take);
+                    }
+                    this.payloadRemaining -= take;
+                    pos += take;
+                    continue;
+                }
+                this.header[this.headerFilled++] = data[pos++];
+                if (this.headerFilled < 8) {
+                    continue;
+                }
+                this.headerFilled = 0;
+                int streamType = this.header[0] & 0xFF;
+                if (streamType > 2 || this.header[1] != 0 || this.header[2] != 0
+                        || this.header[3] != 0) {
+                    throw new IOException("Docker exec stream is not frame-multiplexed"
+                        + " (first header byte " + streamType + "); a Tty:false exec"
+                        + " must be framed");
+                }
+                this.currentStderr = streamType == 2;
+                this.payloadRemaining = ((this.header[4] & 0xFF) << 24)
+                    | ((this.header[5] & 0xFF) << 16)
+                    | ((this.header[6] & 0xFF) << 8)
+                    | (this.header[7] & 0xFF);
+                if (this.payloadRemaining < 0) {
+                    throw new IOException("Docker exec stream frame declares a negative size");
+                }
+            }
+        }
+
+        /** @throws IOException when the stream ended inside a frame (truncated dump) */
+        void finish() throws IOException {
+            if (this.headerFilled != 0 || this.payloadRemaining != 0) {
+                throw new IOException("Docker exec stream ended mid-frame ("
+                    + this.payloadRemaining + " payload bytes missing): truncated output");
+            }
+            this.stdout.flush();
+        }
+
+        String stderrText() {
+            return this.stderr.toString(StandardCharsets.UTF_8);
+        }
+
+        long stdoutBytes() {
+            return this.stdoutWritten;
+        }
+    }
+
+    /** Whole-exchange deadline for the streamed lanes, mirroring the transports' watchdogs. */
+    private static final java.util.concurrent.ScheduledExecutorService STREAM_WATCHDOG =
+        java.util.concurrent.Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "docker-stream-lane-watchdog");
+            thread.setDaemon(true);
+            return thread;
+        });
+
+    /**
+     * Blocking InputStream over a {@link DockerStreamConnection}. A connection may answer a
+     * read with 0 bytes ("nothing yet"); InputStream's contract forbids returning 0 for a
+     * positive length, so this retries with a 1ms pause -- bounded in CPU, unbounded in time
+     * (the lane watchdog owns the deadline by closing the connection).
+     */
+    private static final class ConnectionInputStream extends InputStream {
+
+        private final DockerStreamConnection connection;
+
+        ConnectionInputStream(DockerStreamConnection connection) {
+            this.connection = connection;
+        }
+
+        @Override
+        public int read() throws IOException {
+            byte[] one = new byte[1];
+            int n = this.read(one, 0, 1);
+            return n < 0 ? -1 : one[0] & 0xFF;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            if (length == 0) {
+                return 0;
+            }
+            while (true) {
+                int n = this.connection.read(buffer, offset, length);
+                if (n != 0) {
+                    return n;
+                }
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Docker stream read interrupted");
+                }
+            }
+        }
+
+        @Override
+        public void close() {
+            this.connection.close();
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Streaming (the SECOND transport contract; see DockerStreamTransport)
     // -----------------------------------------------------------------------
@@ -902,20 +1118,19 @@ public class DockerClient {
 
     /**
      * Download a directory from a container ({@code GET /containers/{id}/archive}) as a raw
-     * tar, written to {@code outFile}. Works on stopped containers -- the volume-snapshot
-     * mechanism's read primitive. The tar's entries are rooted at the directory's basename
-     * (Docker's envelope), which {@link #putArchiveTar} relies on for the restore side.
+     * tar, STREAMED to {@code outFile} (never buffered through the heap). Works on stopped
+     * containers -- the volume-snapshot mechanism's read primitive. The tar's entries are
+     * rooted at the directory's basename (Docker's envelope), which {@link #putArchiveTar}
+     * relies on for the restore side.
      *
-     * @param maxBytes response cap enforced DURING the read (see DockerTransport); the
-     *                 whole tar is buffered through memory, so the cap is the heap guard
+     * @param maxBytes cap enforced DURING the read; breaching it throws
+     *                 {@link Http11.BodyCapExceededException} and deletes the partial file
      * @return the number of bytes written to {@code outFile}
      */
     public long getArchiveTar(String containerId, String path, Path outFile, long maxBytes)
             throws IOException {
-        RawResponse response = exchangeBounded("GET",
-            "/containers/" + containerId + "/archive?path=" + enc(path), maxBytes);
-        Files.write(outFile, response.body());
-        return response.body().length;
+        return streamResponseToFile(
+            "/containers/" + containerId + "/archive?path=" + enc(path), outFile, maxBytes);
     }
 
     /**
@@ -938,8 +1153,9 @@ public class DockerClient {
 
     /**
      * Download a single file from a container ({@code GET /containers/{id}/archive}) and return
-     * its raw bytes, unwrapping Docker's tar envelope. Binary-safe (used for RDB / mongodump
-     * archives). {@code path} must point at a single file, not a directory.
+     * its raw bytes, unwrapping Docker's tar envelope. Binary-safe. {@code path} must point at
+     * a single file, not a directory. Small-payload convenience over
+     * {@link #getArchiveFileTo}; anything dump-sized goes to a file, never through here.
      *
      * @param maxBytes cap on the TRANSFER, enforced during the read: over-size throws and
      *                 yields nothing, so a truncated read can never pass for the file. The
@@ -947,9 +1163,82 @@ public class DockerClient {
      *                 a data-dependent endpoint is an OOM waiting for the right file.
      */
     public byte[] getArchiveFile(String containerId, String path, long maxBytes) throws IOException {
-        byte[] tar = exchangeBounded("GET",
-            "/containers/" + containerId + "/archive?path=" + enc(path), maxBytes).body();
-        return extractSingleFile(tar);
+        Path tmpDir = Files.createTempDirectory("hohenheim-getarchive");
+        Path outFile = tmpDir.resolve("payload.bin");
+        try {
+            getArchiveFileTo(containerId, path, outFile, maxBytes);
+            return Files.readAllBytes(outFile);
+        } finally {
+            deleteRecursively(tmpDir);
+        }
+    }
+
+    /**
+     * {@link #getArchiveFile} STREAMED to {@code outFile}: the tar body goes socket-to-disk
+     * and the single file is extracted on disk, so controller heap never holds the payload
+     * -- the lane database dumps ride ({@code ManagedDatabase.backupToFile}).
+     *
+     * @param maxBytes cap enforced DURING the read; breaching it throws
+     *                 {@link Http11.BodyCapExceededException} and leaves no partial
+     *                 {@code outFile}
+     * @return the extracted file's size in bytes
+     */
+    public long getArchiveFileTo(String containerId, String path, Path outFile, long maxBytes)
+            throws IOException {
+        Path tmpDir = Files.createTempDirectory("hohenheim-getarchive");
+        Path tarFile = tmpDir.resolve("archive.tar");
+        try {
+            streamResponseToFile("/containers/" + containerId + "/archive?path=" + enc(path),
+                tarFile, maxBytes);
+            Path extracted = extractSingleFile(tmpDir, tarFile);
+            Files.move(extracted, outFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return Files.size(outFile);
+        } finally {
+            deleteRecursively(tmpDir);
+        }
+    }
+
+    /**
+     * Stream one GET response's body straight to {@code outFile} over the transport's
+     * streaming lane, with the cap enforced on the wire. A failed or over-cap read deletes
+     * the partial file before rethrowing, so a truncated download can never pass for the
+     * payload. The whole exchange rides one {@link #LONG_OP_TIMEOUT_MS} watchdog, exactly
+     * like the buffered lane it replaces.
+     */
+    private long streamResponseToFile(String path, Path outFile, long maxBytes)
+            throws IOException {
+        byte[] request = buildRequest("GET", path, null, null, null);
+        DockerStreamConnection connection = streamTransport().openStream(request, timeoutMillis);
+        ScheduledFuture<?> watchdog = STREAM_WATCHDOG.schedule(
+            connection::close, LONG_OP_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        try (InputStream in = new ConnectionInputStream(connection)) {
+            Http11.Head head = Http11.readHead(in, "Docker daemon");
+            if ((head.status() < 200 || head.status() >= 300) && head.status() != 304) {
+                ByteArrayOutputStream error = new ByteArrayOutputStream();
+                try {
+                    Http11.copyBody(in, head, error, 64 * 1024, "Docker daemon");
+                } catch (IOException partial) {
+                    // whatever was read is the evidence
+                }
+                throw new ApiException(head.status(), "Docker API returned HTTP "
+                    + head.status() + ": " + error.toString(StandardCharsets.UTF_8).trim());
+            }
+            try (OutputStream file = Files.newOutputStream(outFile,
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.TRUNCATE_EXISTING)) {
+                return Http11.copyBody(in, head, file, maxBytes, "Docker daemon");
+            } catch (IOException e) {
+                Files.deleteIfExists(outFile);
+                if (watchdog.isDone()) {
+                    throw new IOException("Docker archive download timed out after "
+                        + LONG_OP_TIMEOUT_MS + "ms", e);
+                }
+                throw e;
+            }
+        } finally {
+            watchdog.cancel(false);
+            connection.close();
+        }
     }
 
     /**
@@ -1039,32 +1328,25 @@ public class DockerClient {
         return ContainerStream.open(streamTransport(), request, timeoutMillis, false);
     }
 
-    // Extract the one file from a tar via the system `tar` (symmetry with tarDirectory).
-    private static byte[] extractSingleFile(byte[] tar) throws IOException {
-        Path tmpDir = Files.createTempDirectory("hohenheim-getarchive");
-        Path tarFile = tmpDir.resolve("archive.tar");
+    // Extract the one file from an on-disk tar via the system `tar` (symmetry with
+    // tarDirectory); returns the extracted file's path inside {@code tmpDir}.
+    private static Path extractSingleFile(Path tmpDir, Path tarFile) throws IOException {
+        Process process = new ProcessBuilder("tar", "-xf", tarFile.toString(), "-C", tmpDir.toString()).start();
         try {
-            Files.write(tarFile, tar);
-            Process process = new ProcessBuilder("tar", "-xf", tarFile.toString(), "-C", tmpDir.toString()).start();
-            try {
-                if (!process.waitFor(60, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    throw new IOException("tar extract of archive timed out");
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("tar extract of archive interrupted");
+            if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IOException("tar extract of archive timed out");
             }
-            if (process.exitValue() != 0) {
-                throw new IOException("tar extract of archive failed (exit " + process.exitValue() + ")");
-            }
-            try (Stream<Path> files = Files.list(tmpDir)) {
-                Path extracted = files.filter(file -> !file.equals(tarFile)).findFirst()
-                    .orElseThrow(() -> new IOException("Docker archive contained no file"));
-                return Files.readAllBytes(extracted);
-            }
-        } finally {
-            deleteRecursively(tmpDir);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("tar extract of archive interrupted");
+        }
+        if (process.exitValue() != 0) {
+            throw new IOException("tar extract of archive failed (exit " + process.exitValue() + ")");
+        }
+        try (Stream<Path> files = Files.list(tmpDir)) {
+            return files.filter(file -> !file.equals(tarFile)).findFirst()
+                .orElseThrow(() -> new IOException("Docker archive contained no file"));
         }
     }
 
