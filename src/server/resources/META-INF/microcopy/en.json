@@ -11778,10 +11778,16 @@
     "text": "A secondary zone takes its records from its primary; import on the primary",
     "scope": "violations"
   },
-  "resize_notice": {
-    "text": "Only the memory and CPU ceilings can be changed here; every other field describes the container that was provisioned. Saving a new ceiling recreates the engine on the same data volume, so open connections drop until it is back.",
-    "scope": "database"
-  },
+  "resize_notice": [
+    {
+      "text": "Only the memory and CPU ceilings can be changed here; every other field describes the container that was provisioned. Saving a new ceiling recreates the engine on the same data volume, so open connections drop until it is back.",
+      "scope": "database"
+    },
+    {
+      "text": "Saving a new memory or CPU ceiling recreates a running workload's container, so it is briefly down and its published port may change.",
+      "scope": "instance"
+    }
+  ],
   "database_resize_failed": {
     "text": "The new resource ceilings could not be applied: {$reason}. Nothing was changed.",
     "scope": "violations"
