@@ -28,6 +28,7 @@ import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
@@ -286,6 +287,8 @@ public class ServerMain {
             if (dnsServer != null) dnsServer.stop();
             if (secondaryZoneService != null) secondaryZoneService.stop();
             SpamserviceManager.get().shutdown();
+            // Destroy the journalctl child; a leaked follow survives the JVM.
+            SshAuthWatcher.INSTANCE.stop();
             // Hand the host leases back so a successor controller does not have to
             // wait out the TTL; a crash still recovers through expiry.
             HostLeases.production().releaseAll();
