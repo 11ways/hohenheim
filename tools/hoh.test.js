@@ -58,6 +58,9 @@ const server = http.createServer((req, res) => {
             return respond(422, { error: { code: 'deploy_not_available',
                 message: 'This site has no on-demand deploy' } });
         }
+        if (req.url === '/api/v1/projects' && req.method === 'GET') {
+            return respond(200, { projects: [] });
+        }
         if (req.url === '/api/v1/sites/9') {
             return respond(404, {});
         }
@@ -410,6 +413,53 @@ server.listen(0, '127.0.0.1', async () => {
             r = await run(['context', 'use', 'nope'], onFile);
             check('context use refuses an unknown name and keeps the default',
                 r.status === 1 && readCurrent() === 'alpha', r.stderr);
+
+            // 15. login stores into the ACTIVE context, resolved exactly like every other
+            //     verb resolves it. It used to write "default" unconditionally, so a
+            //     workstation driving two boxes authenticated the wrong one -- silently,
+            //     because the write itself succeeded.
+            const contextsOf = () => JSON.parse(fs.readFileSync(configPath, 'utf8')).contexts;
+            r = await run(['context', 'use', 'bravo'], onFile);
+            check('setup: bravo is the stored default again',
+                r.status === 0 && readCurrent() === 'bravo', r.stderr);
+
+            r = await run(['login', stubHost], { ...onFile, HOH_TOKEN: 'znit_relogin' });
+            check('login lands in the stored default context', r.status === 0
+                && contextsOf().bravo.token === 'znit_relogin'
+                && contextsOf().bravo.host === stubHost, r.stdout + r.stderr);
+            check('and leaves the other context untouched',
+                contextsOf().alpha.token === 'znit_alpha', JSON.stringify(contextsOf().alpha));
+            check('and writes no "default" context nobody asked for',
+                contextsOf().default === undefined, JSON.stringify(contextsOf()));
+            check('and does not move the stored default', readCurrent() === 'bravo', readCurrent());
+
+            r = await run(['login', stubHost, '--context', 'alpha'],
+                { ...onFile, HOH_TOKEN: 'znit_flagged' });
+            check('--context aims login at that context', r.status === 0
+                && contextsOf().alpha.token === 'znit_flagged'
+                && contextsOf().bravo.token === 'znit_relogin', r.stdout + r.stderr);
+            check('and says the default is still elsewhere',
+                r.stdout.includes('still "bravo"'), r.stdout);
+
+            r = await run(['login', stubHost],
+                { ...onFile, HOH_CONTEXT: 'alpha', HOH_TOKEN: 'znit_ambient' });
+            check('HOH_CONTEXT aims it the same way', r.status === 0
+                && contextsOf().alpha.token === 'znit_ambient'
+                && contextsOf().bravo.token === 'znit_relogin', r.stdout + r.stderr);
+
+            // A first login on a virgin machine still names the context "default".
+            const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'hoh-fresh-'));
+            try {
+                r = await run(['login', stubHost],
+                    { HOME: fresh, HOH_HOST: undefined, HOH_TOKEN: 'znit_first' });
+                const config = JSON.parse(fs.readFileSync(
+                    path.join(fresh, '.config', 'hoh', 'config.json'), 'utf8'));
+                check('a first login creates and selects "default"', r.status === 0
+                    && config.current === 'default'
+                    && config.contexts.default.token === 'znit_first', r.stdout + r.stderr);
+            } finally {
+                fs.rmSync(fresh, { recursive: true, force: true });
+            }
         } finally {
             fs.rmSync(home, { recursive: true, force: true });
         }
