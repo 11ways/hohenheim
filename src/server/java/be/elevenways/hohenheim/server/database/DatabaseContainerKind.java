@@ -160,14 +160,12 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
         String command = str(settings.get("command"));
         List<String> cmd = command.isEmpty() ? null : List.of(command.split("\\s+"));
 
-        boolean ephemeral = Boolean.TRUE.equals(settings.get("ephemeral"));
-        String dataVolume = str(settings.get("data_volume"));
         Map<String, String> volumes = new LinkedHashMap<>();
         Map<String, Long> tmpfs = new LinkedHashMap<>();
-        if (ephemeral || dataVolume.isEmpty()) {
+        if (isEphemeral(settings)) {
             tmpfs.put(engine.dataPath, EPHEMERAL_DATA_SIZE_BYTES);
         } else {
-            volumes.put(dataVolume, engine.dataPath);
+            volumes.put(str(settings.get("data_volume")), engine.dataPath);
         }
 
         // Loopback/tcp/no-fixed-port: the record-after shape. Host processes dial the
@@ -188,7 +186,7 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
 
     /**
      * A database engine's admitted memory, PER ENGINE
-     * ({@link ManagedDatabase.Engine#footprintMb()}, which carries the measurements and
+     * ({@link ManagedDatabase.Engine#footprintMb(boolean)}, which carries the measurements and
      * the rule behind them) -- charge == cap, so this is also the cgroup ceiling the
      * engine actually gets when the operator declares no {@code memory_limit_mb}.
      *
@@ -197,14 +195,30 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
      * hook where a throw would refuse the write outright, so an unrecognised engine books
      * the LARGEST declared footprint instead: over-booking costs a little host budget,
      * under-booking hands a workload a cgroup ceiling below its own startup peak.
+     *
+     * AIDEV-NOTE: the PERSISTENCE SHAPE is read through {@link #isEphemeral}, the same
+     * predicate {@link #specFor} mounts the data directory by -- one declaring home, so
+     * the number booked can never describe a shape the container does not run in.
      */
     @Override
     public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
         try {
-            return engineOf(settings).footprintMb();
+            return engineOf(settings).footprintMb(isEphemeral(settings));
         } catch (Violations unknownEngine) {
             return ManagedDatabase.Engine.maxFootprintMb();
         }
+    }
+
+    /**
+     * THE persistence decision for a database container: its data directory is a tmpfs
+     * (charged to the container's own cgroup) rather than a named volume.
+     *
+     * A record declaring no {@code data_volume} is ephemeral whatever the flag says --
+     * there is nothing to mount -- which is why this is one predicate and not two reads.
+     */
+    static boolean isEphemeral(@NonNull Map<String, Object> settings) {
+        return Boolean.TRUE.equals(settings.get("ephemeral"))
+            || str(settings.get("data_volume")).isEmpty();
     }
 
     /**
