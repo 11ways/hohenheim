@@ -2222,3 +2222,30 @@ together), `volumes.btrfs` 0644 -> 0600 (root-owned image of every tenant volume
 `/opt/hohenheim/staging` 0755 -> 0700 (Phoenix app + mongo dumps, 1.6 GB). Loop
 mount and sites unaffected (tavernetomberg 301 via loopback after the change).
 Installer now applies both modes itself (same commit).
+
+## Deploy 2026-09-01 (seventh jar swap): 1cbc83a1, the review-pass wave
+
+Swapped to hohenheim `1cbc83a1` (jar sha256 `167b0e58...`, 268,148,442 bytes,
+stamp 13/13 `dirty=false`: zenit-cms `0e158045`, rest as wave 6). Clean secondary
+workspace `~/projects/javaweb-deploy` (16 detached worktrees incl. emberglyph +
+janeway, deleted afterwards), chain build 639 s. No new migration (`0 applied`).
+Preflight `/root/hohenheim-preflight-20260901-wave3/` (db `.pre` integrity ok /
+47 migrations, `.at-swap`, settings, rollback jar = `567fbc26...` i.e.
+`c817760a`). Stop 21:44:40Z, healthy 7 s after start; second restart healthy
+7 s; 0 warnings beyond the JDK's Unsafe/native-access notices.
+
+Carried: the SSH watcher identifier fix -- the child is now
+`journalctl -f -n 0 -o cat -t sshd -t sshd-session -t sshd-auth` (verified in
+`ps`); the DNS zones list (Serial + Enabled to the picker, Records action to the
+row menu) and the two-line absolute datetime cell. Live: earl 200, tavernetomberg
++ www 200, invulassistent 401 (its gate), udesign + microcopy 200 over HTTP (no
+certificates yet, by design), panel 302, wcag.be SOA serial 15. `zd_deployed`
+current 13/13.
+
+Browser (headless Chromium 1440x900): DNS zones table 1134/1134 px, no
+`data-overflow-inline-end`, all seven columns visible. Certificates table
+1207/1134 px -- still 73 px over because of Created at; the date cells render
+correctly on two lines. Follow-up committed for the NEXT wave: Created at hidden
+by default, default sort = expires_on ascending.
+
+ROLLBACK: preflight jar back into place + restart (no migration in the delta).

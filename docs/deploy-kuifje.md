@@ -1770,3 +1770,11 @@ Same finding as robbedoes (see its runbook): 6 `sshd` vs 2,173 `sshd-session`
 lines in 24h, watcher blind, 32 bans all scope `web`. Fix `c6713cf5` rides the
 next jar. `hohenheim.db` + `-wal` + `-shm` 0664 -> 0640 on the box; SOA answers
 unchanged after the change (wcag.be serial 15).
+
+## Deploy 2026-09-01 (seventh jar swap): 1cbc83a1
+
+Same jar as robbedoes (`167b0e58...`, 13/13 clean), preflight
+`/root/hohenheim-preflight-20260901-wave3/`, `0 applied`. Stop 21:45:14Z, healthy
+10 s after start, second restart healthy 11 s, no warnings. Watcher child runs
+with the three identifiers. wcag.be SOA 15, tavernetomberg.be SOA 11,
+starfleet.life replica SOA 44, panel 302. `zd_deployed` current 13/13.

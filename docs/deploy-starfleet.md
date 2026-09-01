@@ -1230,3 +1230,11 @@ preflight jar + restart.
 `/opt/hohenheim/volumes.btrfs` 0644 -> 0600 (the database was already 0640 here,
 created under the unit's UMask). Mount unaffected. The SSH watcher fix in
 `c6713cf5` does not apply here (`ssh_watch` is off by design; fail2ban guards sshd).
+
+## Deploy 2026-09-01 (seventh jar swap): 1cbc83a1
+
+Same jar as robbedoes (`167b0e58...`, 13/13 clean), preflight
+`/root/hohenheim-preflight-20260901-wave3/`, `0 applied`. Stop 21:46:03Z, healthy
+23 s after start, second restart healthy 20 s, no warnings. apex 200, admin 302,
+comms 200, skeleton 202, SOA 44. `zd_deployed` current 13/13. `ssh_watch` stays
+off here by design.
