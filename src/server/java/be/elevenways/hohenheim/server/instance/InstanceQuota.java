@@ -321,11 +321,20 @@ public final class InstanceQuota {
      * the row -- usage is counted even when no cap is configured, so enabling a cap later
      * starts from honest numbers.
      *
-     * AIDEV-NOTE: the count is reserved first on purpose. A refusal in either reservation
-     * throws out of the write, and every write path that reaches this hook unwinds the
-     * whole save (the ledger rides the caller's transaction when there is one, and the
-     * create funnels throw before save() returns when there is not), so a count spent
-     * without its memory cannot outlive the refusal.
+     * AIDEV-NOTE: the count is reserved first, and the memory reservation is UNWOUND onto
+     * it -- corrected 2026-09-01, and the note that stood here was the bug. It claimed a
+     * count spent without its memory "cannot outlive the refusal" because the ledger rides
+     * the caller's transaction; an instance save opens NO transaction (Model.save opens one
+     * only for a revisionable schema, and this model is not one), so a memory refusal left
+     * the slot spent forever. Every such refusal cost the owner one instance from their cap
+     * with no record to release it, which is a lockout that only ever grows -- measured on
+     * production robbedoes, whose {@code instances} bucket read 15 against 14 live rows.
+     *
+     * The compensation is LOCAL to this method and cannot reach further: a refusal in a
+     * LATER hook (the host budget's {@code host_capacity_reached} is the reachable one,
+     * since InstanceCapacity installs after this) still leaves both owner reservations
+     * spent, because a before-write hook cannot see a sibling throw. That residue is what
+     * {@link be.elevenways.hohenheim.server.quota.QuotaReconciler} exists for.
      */
     private static void reserveIntoBucket(@NonNull Row row, @NonNull String bucket,
                                           @Nullable Row stored) {
@@ -340,7 +349,12 @@ public final class InstanceQuota {
                 .withArg("limit", full.getLimit()));
         }
         row.set(InstanceModel.QUOTA_BUCKET, bucket);
-        reserveMemory(row, packed, InstanceCapacity.effectiveFootprintMb(row, stored));
+        try {
+            reserveMemory(row, packed, InstanceCapacity.effectiveFootprintMb(row, stored));
+        } catch (RuntimeException | Error refused) {
+            Quotas.release(bucket, 1);
+            throw refused;
+        }
     }
 
     /** Book {@code amountMb} against the owner's memory budget and stamp what was taken. */
@@ -403,8 +417,14 @@ public final class InstanceQuota {
     }
 
 
-    /** The bucket a stored row was charged to; pre-quota rows fall to the operator bucket. */
-    private static @NonNull String chargedBucketOf(@NonNull Row stored) {
+    /**
+     * The bucket a stored row was charged to; pre-quota rows fall to the operator bucket.
+     *
+     * Public because the reconcile lane must ask the SAME question the release paths ask:
+     * a second spelling of "which bucket is this row's" is how a recompute corrects a
+     * bucket the row was never charged to.
+     */
+    public static @NonNull String chargedBucketOf(@NonNull Row stored) {
         String bucket = stored.get(InstanceModel.QUOTA_BUCKET);
         if (bucket != null && !bucket.isBlank()) {
             return bucket;

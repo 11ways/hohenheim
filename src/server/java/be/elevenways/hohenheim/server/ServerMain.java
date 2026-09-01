@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
+import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.ProteusRealmSuggestions;
@@ -158,6 +159,13 @@ public class ServerMain {
             // settles to error because the payload may be half-written. Virtual thread:
             // it asks the daemon per record.
             JobRunner.startVirtualThread(InstanceService::recoverInterrupted);
+            // The reservation ledger drifts whenever an instance write is refused AFTER
+            // the owner buckets were spent (the host-budget refusal is the reachable
+            // shape): a before-write hook cannot compensate a sibling hook's throw, and
+            // an instance save carries no transaction to roll one back. Recomputed from
+            // the live rows here, so a drifted control plane heals on the next boot
+            // instead of locking an owner out one refusal at a time.
+            JobRunner.startVirtualThread(QuotaReconciler::reconcile);
         } else {
             roleSkip(HohenheimRoles.Role.INSTANCES,
                 "interrupted-migration settle skipped, no instances run here");
