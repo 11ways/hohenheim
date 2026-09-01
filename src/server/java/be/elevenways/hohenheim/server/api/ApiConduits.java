@@ -6,8 +6,6 @@ import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.result.ActionResult;
-import be.elevenways.zenit.common.result.ErrorResponse;
-import be.elevenways.zenit.common.result.ErrorResult;
 import be.elevenways.zenit.common.result.JsonResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violation;
@@ -16,6 +14,8 @@ import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -49,20 +49,51 @@ public final class ApiConduits {
      * Map a typed refusal onto 422 carrying the violation's MACHINE KEY as the error
      * code, so an API caller and an HTML caller are told the same named thing (the
      * HTML surface renders the same Microcopy).
+     *
+     * The envelope is {@code {status, code, message, field, violations}}: the first three
+     * describe the FIRST violation (as they always did), {@code field} is its path and
+     * {@code violations} carries every refusal with its own path, key and sentence. Without
+     * the path a caller submitting twenty form fields was told a value was refused and never
+     * which one -- {@code zenit.coercion.unknown_field} in particular is useless without it.
+     *
+     * A form-level violation has no path, so {@code field} is absent rather than empty: an
+     * API client must be able to tell "this field" from "this submission".
      */
-    @SuppressWarnings("unchecked")
     public static @NonNull ActionResult<Object> refusal(@NonNull Conduit conduit,
                                                         @NonNull Violations violations) {
         List<Violation> all = violations.all();
-        String code = "REFUSED";
-        String message = violations.getMessage();
-        if (!all.isEmpty()) {
-            code = all.get(0).message().key();
-            message = all.get(0).message()
-                .resolve(conduit.getLocales(), conduit.getMessageResolver());
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("status", 422);
+        if (all.isEmpty()) {
+            body.put("code", "REFUSED");
+            body.put("message", violations.getMessage());
         }
-        return (ActionResult<Object>) (ActionResult<?>) new ErrorResult(
-            ErrorResponse.of(422, code, message));
+        else {
+            List<Map<String, Object>> rows = new ArrayList<>();
+            for (Violation violation : all) {
+                rows.add(violationMap(conduit, violation));
+            }
+            body.putAll(rows.get(0));
+            body.put("violations", rows);
+        }
+        conduit.setResponseStatus(422);
+        return json(body);
+    }
+
+    /** One violation on the wire: its path (absent when form-level), machine key and sentence. */
+    private static @NonNull Map<String, Object> violationMap(@NonNull Conduit conduit,
+                                                             @NonNull Violation violation) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("code", violation.message().key());
+        row.put("message", violation.message()
+            .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        // The PATH, never the field name: it carries nesting, indices and locale prefixes
+        // (settings.forward_port), which is what a caller needs to find its own input. A
+        // form-level violation has none, and then there is no field key at all.
+        if (!violation.path().isBlank()) {
+            row.put("field", violation.path());
+        }
+        return row;
     }
 
     @SuppressWarnings("unchecked")

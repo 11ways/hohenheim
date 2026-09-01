@@ -17,6 +17,7 @@ final class ApiSupport {
 
     private static final Pattern ID = Pattern.compile("\"id\"\\s*:\\s*(\\d+)");
     private static final Pattern CODE = Pattern.compile("\"code\"\\s*:\\s*\"([^\"]+)\"");
+    private static final Pattern FIELD = Pattern.compile("\"field\"\\s*:\\s*\"([^\"]+)\"");
 
     private ApiSupport() {
     }
@@ -46,6 +47,12 @@ final class ApiSupport {
         Matcher matcher = CODE.matcher(json);
         assertThat(matcher.find()).as("the refusal carries a code: " + json).isTrue();
         return matcher.group(1);
+    }
+
+    /** The path of the value the refusal names, or null when it names none. */
+    static String fieldOf(String json) {
+        Matcher matcher = FIELD.matcher(json);
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     /** An enabled user row; returns its id. */

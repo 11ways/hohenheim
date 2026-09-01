@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 import static be.elevenways.hohenheim.test.ApiSupport.codeOf;
+import static be.elevenways.hohenheim.test.ApiSupport.fieldOf;
 import static be.elevenways.hohenheim.test.ApiSupport.form;
 import static be.elevenways.hohenheim.test.ApiSupport.idOf;
 import static be.elevenways.hohenheim.test.ApiSupport.user;
@@ -229,12 +230,21 @@ class SiteApiTest extends HohenheimTestBase {
             .isEqualTo(422);
         assertThat(codeOf(stranger.body())).as("step 4: named as an unknown field")
             .isEqualTo("zenit.coercion.unknown_field");
+        // The refusal must say WHICH field: "an unknown field" over a twenty-field form
+        // is not actionable, and the envelope used to carry only the code and the sentence.
+        assertThat(fieldOf(stranger.body())).as("step 4: and the envelope names its path")
+            .isEqualTo("colour");
         HttpResponse<String> misspelled = keyPost(keyAdmin, "/api/v1/sites", form(
             "name", PREFIX + "stranger", "upstream_kind", "hohenheim:static",
             "settings.root_paht", "/tmp/x"));
         assertThat(misspelled.statusCode()).as("step 4: a misspelled setting is refused too")
             .isEqualTo(422);
         assertThat(codeOf(misspelled.body())).isEqualTo("zenit.coercion.unknown_field");
+        assertThat(fieldOf(misspelled.body()))
+            .as("step 4: a nested setting is named by its DOTTED path")
+            .isEqualTo("settings.root_paht");
+        assertThat(misspelled.body()).as("step 4: every violation travels, not only the first")
+            .contains("\"violations\"");
         assertThat(Models.get(SiteModel.class).find()
                 .where(SiteModel.NAME.eq(PREFIX + "stranger")).first())
             .as("step 4: neither refused create wrote a row").isNull();

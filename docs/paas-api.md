@@ -45,8 +45,28 @@ returned). Say so when delegating; the grant UI does not.
 - Reads are GET; mutations are form-encoded POST.
 - "Absent", "trashed" and "not yours" are ONE byte-identical 404. The API is
   never an existence oracle.
-- Typed refusals are `422` with `{"error":{"code":"<machine key>","message":"..."}}`;
-  the code is the same microcopy key the HTML surface renders for the same act.
+- Typed refusals are `422` with a FLAT envelope:
+
+  ```json
+  {
+    "status": 422,
+    "code": "zenit.coercion.unknown_field",
+    "message": "This field is not part of the form",
+    "field": "settings.root_paht",
+    "violations": [
+      { "code": "zenit.coercion.unknown_field",
+        "message": "This field is not part of the form",
+        "field": "settings.root_paht" }
+    ]
+  }
+  ```
+
+  `code` is the same microcopy key the HTML surface renders for the same act, and
+  `message` is resolved in the caller's locale chain. `field` is the path of the
+  refused value -- dotted for nested settings, indexed for rows -- and is ABSENT
+  when the refusal is about the submission rather than one value. `code`,
+  `message` and `field` restate the FIRST entry of `violations`, which lists every
+  refusal; a client that only reads the top three keeps working.
 - Responses are enumerated whitelists, never row dumps. Site settings
   (environment maps, webhook secrets, api keys) never appear.
 - Rate limits: reads 120/min, variable writes 30/min, deploy/rollback 10/min,
