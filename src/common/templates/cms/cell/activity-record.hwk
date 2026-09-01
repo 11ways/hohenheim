@@ -1,0 +1,12 @@
+{#- The subject of an activity row: the stored record title, linked to its admin
+    detail page when a registered resource serves the model. An unlinkable record
+    (no resource, or a model this panel does not expose) stays plain text -- an
+    audit trail names what was touched even when nothing can show it any more. -#}
+{% declare value: ActivityRecordCell %}
+{% if value != null %}
+{% if value.url != null %}
+<a class="hh-activity-record" href={% value.url %}>{{ value.label }}</a>
+{% else %}
+<span class="hh-activity-record">{{ value.label }}</span>
+{% /if %}
+{% /if %}
