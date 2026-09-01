@@ -39,7 +39,12 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.rules.Rule;
+import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
+import be.elevenways.zenit.common.orm.query.rules.RuleOperator;
+import be.elevenways.zenit.common.orm.query.rules.RuleText;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
+import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.task.TaskCatalog;
 import be.elevenways.zenit.common.task.TaskDescriptor;
@@ -143,21 +148,57 @@ public final class AttentionCollector {
      *
      * AIDEV-NOTE: the orphan and collision buckets are warnings and stay the
      * reconciler's; this row exists because a host carrying twenty foreign volumes
-     * showed "All clear" while the Reconcile findings list said otherwise. It is
+     * showed "All clear" while the findings list said otherwise. It is
      * information, never a warning: the reconciler leaves foreign resources alone.
      */
     public static void dockerForeignResources(List<AttentionItem> items) {
         Map<String, Integer> countByServer = new LinkedHashMap<>();
         for (Row row : Models.get(ReconcileFindingModel.class).find()
-                .where(ReconcileFindingModel.BUCKET.in(
-                    ReconcileFindingModel.BUCKET_FOREIGN_KNOWN, ReconcileFindingModel.BUCKET_FOREIGN_UNRELATED))
+                .where(ReconcileFindingModel.BUCKET.in(FOREIGN_BUCKETS))
                 .all()) {
             countByServer.merge(row.get(ReconcileFindingModel.SERVER_NAME), 1, Integer::sum);
         }
         countByServer.forEach((server, count) -> items.add(item("info", "cubes",
             copy("docker_foreign", "attention_title", "server", server),
-            copy("docker_foreign", "attention_detail", "count", count),
-            CmsRoutes.list(ADMIN, "reconcile-findings"))));
+            copy("docker_foreign", "attention_detail",
+                "count", count, "page", ReconcileFindingResource.LABEL),
+            foreignFindingsOf(server))));
+    }
+
+    /**
+     * The buckets the row above counts: the two that mean "not ours, and left alone".
+     * {@code foreign_colliding} is deliberately absent -- it is the reconciler's own warning.
+     */
+    private static final List<String> FOREIGN_BUCKETS = List.of(
+        ReconcileFindingModel.BUCKET_FOREIGN_KNOWN, ReconcileFindingModel.BUCKET_FOREIGN_UNRELATED);
+
+    /**
+     * The list page's TEXTUAL filter parameter (zenit-cms's {@code q} tier).
+     *
+     * AIDEV-NOTE: the tier is chosen for what it can EXPRESS. A chip param carries one
+     * value per select filter, so two buckets are inexpressible there; {@code adv} carries
+     * a whole tree but as opaque base64 the operator cannot read or edit. {@code q} carries
+     * the tree as the query builder's own text, which the list page then shows in its query
+     * box -- which is why the resource offers that box (see its listChrome).
+     */
+    private static final ParameterDefinition<String> LIST_QUERY = ParameterDefinition
+        .builder(String.class).name("q").stringResolver(value -> value).build();
+
+    /**
+     * The findings list narrowed to exactly the rows the item counted.
+     *
+     * AIDEV-NOTE: the link used to be the bare list, which shows EVERY bucket of EVERY
+     * host -- including the owned rows the detail sentence says are not there, and the
+     * orphaned ones carrying a DESTRUCTIVE remove action -- so the number on the dashboard
+     * was never the number the operator landed on. The tree is built TYPED and printed by
+     * RuleText, so the expression is the framework's own grammar rather than a
+     * hand-spelled string, and nothing here concatenates a URL.
+     */
+    private static @NonNull RouteTarget foreignFindingsOf(String server) {
+        RuleGroup tree = RuleGroup.and(
+            Rule.of(ReconcileFindingModel.SERVER_NAME.getName(), RuleOperator.EQUALS, server),
+            Rule.list(ReconcileFindingModel.BUCKET.getName(), RuleOperator.IN, FOREIGN_BUCKETS));
+        return CmsRoutes.list(ADMIN, "reconcile-findings").with(LIST_QUERY, RuleText.print(tree));
     }
 
     /**
