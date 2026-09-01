@@ -118,9 +118,16 @@ public final class DnsZoneResource extends RowResource {
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
         // The origin is pasted straight into dig/whois far more often than it is read.
         .column(ColumnSpec.fromField(DnsZoneModel.ORIGIN).filterable().copyable().build())
-        .column(ColumnSpec.fromField(DnsZoneModel.ENABLED).filterable().build())
+        // AIDEV-NOTE: table cells never wrap, so this list's width is the sum of its
+        // columns' content. With Enabled, Serial and a second inline row button the
+        // table measured 1344px against the 1134px a 1440px viewport leaves beside the
+        // sidebar, and the pinned Actions column hid Delegation and Records -- the two
+        // columns an operator opens this list for. Enabled (almost always yes; still a
+        // filter) and Serial (a diagnostic the transfer status already summarizes) are
+        // offered in the column picker instead of shown by default.
+        .column(ColumnSpec.fromField(DnsZoneModel.ENABLED).filterable().hidden().build())
         .column(ColumnSpec.fromField(DnsZoneModel.ROLE).build())
-        .column(ColumnSpec.fromField(DnsZoneModel.SERIAL).build())
+        .column(ColumnSpec.fromField(DnsZoneModel.SERIAL).hidden().build())
         .column(ColumnSpec.fromField(DnsZoneModel.TRANSFER_STATUS).build())
         // The outbound half of replication: TRANSFER_STATUS answers only for a zone this
         // instance PULLS, so a primary's column was blank and its replication state was
@@ -197,6 +204,9 @@ public final class DnsZoneResource extends RowResource {
             .description(Microcopy.of("records_hint").withFilter("scope", "dns_zone"))
             .icon(Icon.of("list-ul"))
             .url(row -> new Uri(recordsUrl(row)))
+            // The zone's title link already opens the records workspace (rowUrl), so
+            // an inline button beside Edit repeated it for 120px of every row.
+            .inlineInRow(false)
             .build());
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "check_dns_health"))
             .label(Microcopy.of("check_health").withFilter("scope", "dns_zone"))
