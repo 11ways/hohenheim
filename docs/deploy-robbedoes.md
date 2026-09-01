@@ -2249,3 +2249,61 @@ correctly on two lines. Follow-up committed for the NEXT wave: Created at hidden
 by default, default sort = expires_on ascending.
 
 ROLLBACK: preflight jar back into place + restart (no migration in the delta).
+
+## The two Phoenix WordPress sites staged, 2026-09-02 (~22:10-22:30Z)
+
+Both `WordPress (PHP x.y)` templates approved (panel row action). Lane exactly as
+`docs/wordpress.md` describes, with one deviation named below.
+
+| | Anymedia / ConnectedPrint | Diax |
+| --- | --- | --- |
+| phoenix | `/home/anymedia/any-media.be`, PHP 8.1 FastCGI, db `anymediawp`, WP 7.1, 252 MB (uploads 42 MB), 19 tables / 2.8 MB, placeholder salts in wp-config | `/home/diax/diax.be`, PHP 7.4 FastCGI, db `diaxwp`, WP 7.0.2, 677 MB of which `.git` 160 MB (NOT copied) and uploads 130 MB, 229 tables / 110 MB; compromise remediation 2026-08-07 (forensic tarballs in `/home/diax`, hardened `.htaccess` copied along) |
+| template | 3, WordPress (PHP 8.1) | 4, WordPress (PHP 7.4) |
+| instance | 17 `anymedia`, container `instance-17`, port 32827 | 19 `diax`, container `instance-19`, port 32828 |
+| database | 11 `anymedia-wordpress-db` (instance 18, mysql:8.0, 1024 MB) | 12 `diax-wordpress-db` (instance 20, mysql:8.0, 1024 MB; 524 MiB RSS after import, so 512 would not have fit) |
+| CONFIG_EXTRA | seeded HTTPS fix + `WP_HOME`/`WP_SITEURL` https://any-media.be + `FORCE_SSL_ADMIN` | seeded fix + `WP_HOME`/`WP_SITEURL` https://www.di-ax.be + `DISALLOW_FILE_EDIT` + `WP_AUTO_UPDATE_CORE minor` + the cookie path defines |
+| site | 10 `Anymedia WordPress`, domains 15-22: any-media.be, www, connectedprint.org/.be/.eu + www (all `force_ssl=false`, no certificate possible before the DNS flip) | 11 `Diax WordPress` (domain 23 www.di-ax.be) + 12 `Diax redirect` (hohenheim:redirect -> https://www.di-ax.be, 301, preserve_path; domains 24-26 di-ax.be, diax-centre.be, www.diax-centre.be) |
+
+Read path on phoenix: `/home/anymedia` is world-readable; `/home/diax` (0750) was read
+through `docker run --rm --user 0 -v /home/diax:/mnt:ro` (skerit is in the docker
+group; `--user 0` is what the earlier ACCESS NOTE lacked -- the image's default user
+gets Permission denied). Dumps: `mysqldump --single-transaction
+--default-character-set=utf8mb4` against 127.0.0.1 with the wp-config credentials
+(MariaDB 10.5 dumps restored into mysql:8.0 without a single error). Files streamed
+phoenix -> workstation -> robbedoes (`ssh cat | ssh cat`), sha256 equal on both ends;
+phoenix's staging copy deleted, robbedoes keeps `/home/debian/wp-stage/` (0700) for
+the cutover's delta.
+
+DEVIATION: the dumps were restored with `docker exec -i <db container> mysql` using
+the instance's injected `WORDPRESS_DB_*` env (the same client command
+`ManagedDatabase.restoreCommand` runs), not through the panel's Restore upload: the
+headless browser cannot hand a local file to a file input, and there is no API
+restore verb. Docroots went straight into the volume dir
+(`/var/lib/docker/volumes/<handle>-vol-html/_data`) while the container ran:
+everything except the image-generated `wp-config.php` removed, tar extracted,
+`chown -R 33:33`. Reason for not stopping the container as the doc says:
+`crash_policy=restart` treats an unobserved stop as a crash and would redeploy under
+the copy. The image's wp-config.php reads every `WORDPRESS_*` value via
+`getenv_docker()` at request time (`eval` for CONFIG_EXTRA), so a CONFIG_EXTRA edit
+needs only a restart, never a regenerated file.
+
+Proof (browser UA, `X-Forwarded-Proto: https` at the published port so WordPress
+believes it is behind TLS): any-media.be 200 / 58,504 B on BOTH boxes, identical
+href/src inventory (0 diff lines), an upload 200 image/png, wp-login 200; www.di-ax.be
+200 / 32,710 B on both, 0 diff lines, uploads svg 200, wp-login 200. Through the proxy
+(port 80): every hostname 301s to its https canonical, di-ax.be/over-ons/ ->
+https://www.di-ax.be/over-ons/ (preserve_path), connectedprint.org -> any-media.be
+(WordPress' own canonical redirect, as on phoenix).
+
+Booking after this: 9,984 / 10,915 MB (WP 512 x2 + mysql 1024 x2 = 3,072 added).
+Smell: the panel's Deploy POST blocks while the image pulls and the panel proxy gave
+up first (`UT005028: Proxy request to /admin/instances/17/action/deploy_instance
+failed`) although the deploy completed -- a long deploy should answer and progress
+out of band.
+
+CUTOVER (Combell, not ours): lower TTLs, point any-media.be + www + connectedprint.*
+and www.di-ax.be / di-ax.be / diax-centre.be (Hetzner NS, so this one can move to our
+nameservers first) at 51.255.43.81 / 2001:41d0:305:2100::1:4b26, request HTTP-01
+certificates, set `force_ssl=true`, and BEFORE flipping re-sync the delta: fresh
+mysqldump into the managed db + rsync of `wp-content/uploads`. The diax `.git`
+stays on phoenix (repo, not runtime).
