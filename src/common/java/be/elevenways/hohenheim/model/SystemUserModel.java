@@ -10,9 +10,9 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import java.util.List;
 
 /**
- * System user discovered from /etc/passwd — referenced by NodeSiteType to run
- * child processes as a specific uid/gid. Stale entries are kept with obsolete=true
- * so that existing site references don't silently break when a user is removed.
+ * A uid/gid on this host, discovered from /etc/passwd by the UpdateSystemUsers reconciler
+ * or provisioned by Hohenheim itself, kept with obsolete=true rather than deleted when the
+ * user disappears so nothing still pointing at it breaks silently.
  */
 public class SystemUserModel extends Model {
 

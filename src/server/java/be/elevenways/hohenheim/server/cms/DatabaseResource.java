@@ -328,7 +328,8 @@ public class DatabaseResource extends RowResource {
      * is offered on exactly that answer -- the {@link InstanceDeviceResource} shape:
      * {@link ManageDatabaseResource} reads by the wider {@code view}, and without this
      * a view-only delegate was shown a destroy button the pipeline could only refuse.
-     * No updatableBy twin: {@link #updatable()} is false, the record is immutable.
+     * No updatableBy twin: {@link #updatable()} is true only for the operator resize, which
+     * no tenant-originated write can reach ({@code DATABASE_TENANT_WRITABLE} is empty).
      */
     @Override
     public boolean deletableBy(@NonNull Row record, @NonNull AccessContext accessContext) {
