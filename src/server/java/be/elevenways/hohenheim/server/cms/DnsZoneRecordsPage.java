@@ -393,15 +393,8 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
     }
 
     private static @NonNull String remoteDisplayValue(@NonNull DnsRecordDto remote) {
-        String value = text(remote.value());
-        if (DnsRecordModel.TYPE_MX.equals(remote.type()) && remote.priority() != null) {
-            return remote.priority() + " " + value;
-        }
-        if (DnsRecordModel.TYPE_SRV.equals(remote.type())) {
-            return zeroIfNull(remote.priority()) + " " + zeroIfNull(remote.weight())
-                + " " + zeroIfNull(remote.port()) + " " + value;
-        }
-        return value;
+        return DnsRecordModel.presentationValue(remote.type(), text(remote.value()),
+            remote.priority(), remote.weight(), remote.port());
     }
 
     private static @NonNull String text(@Nullable String value) {
@@ -410,10 +403,6 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
 
     private static @NonNull String text(@Nullable Integer value) {
         return value != null ? String.valueOf(value) : "";
-    }
-
-    private static int zeroIfNull(@Nullable Integer value) {
-        return value != null ? value : 0;
     }
 
 }

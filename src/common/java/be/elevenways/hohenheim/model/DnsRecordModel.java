@@ -204,6 +204,45 @@ public class DnsRecordModel extends Model {
         return dataInt(row.get(DATA), "port");
     }
 
+    /**
+     * The record's rdata as a resolver prints it: the extras the type's sub-schema
+     * declares lead the value, so five MX rows pointing at Google are told apart in a
+     * listing instead of reading as five identical lines.
+     *
+     * AIDEV-NOTE: THE one home of that presentation. The local zone list (DnsRecordResource
+     * cell) and a secondary's remote listing (DnsZoneRecordsPage) both render through it --
+     * the remote lane used to carry its own copy of the MX/SRV spelling. It is presentation
+     * ONLY: the stored VALUE column keeps the bare target, which is what the codec, the
+     * filters and the inline editor speak.
+     *
+     * @return the value with its type's extras ahead of it, never null
+     */
+    public static @NonNull String presentationValue(@Nullable String type, @Nullable String value,
+                                                    @Nullable Integer priority,
+                                                    @Nullable Integer weight,
+                                                    @Nullable Integer port) {
+        String target = value != null ? value : "";
+        if (TYPE_MX.equals(type)) {
+            return priority != null ? priority + " " + target : target;
+        }
+        if (TYPE_SRV.equals(type)) {
+            // A missing SRV number is a zero to every resolver, so it prints as one.
+            return zeroIfNull(priority) + " " + zeroIfNull(weight) + " " + zeroIfNull(port)
+                + " " + target;
+        }
+        return target;
+    }
+
+    /** @return {@link #presentationValue} for a stored row */
+    public static @NonNull String presentationValue(@NonNull Row row) {
+        return presentationValue(row.get(TYPE), row.get(VALUE),
+            priorityOf(row), weightOf(row), portOf(row));
+    }
+
+    private static int zeroIfNull(@Nullable Integer value) {
+        return value != null ? value : 0;
+    }
+
     /** @return the integer under {@code key} when {@code data} is a map carrying one, else null */
     public static @Nullable Integer dataInt(@Nullable Object data, @NonNull String key) {
         if (!(data instanceof Map<?, ?> map)) {

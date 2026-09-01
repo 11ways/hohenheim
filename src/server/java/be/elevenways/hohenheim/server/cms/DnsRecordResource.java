@@ -203,6 +203,15 @@ public class DnsRecordResource extends RowResource {
      */
     @Override
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        // The value cell prints the rdata the way a resolver does: MX priority and the SRV
+        // priority/weight/port live in the type's sub-schema, so without them five MX rows
+        // to one target render as five identical lines. Presentation only -- the stored
+        // column keeps the bare target, which is what the ORM filter and the inline editor
+        // read (the TTL cell below is the same shape, for the same reason).
+        if (column.source() != null
+                && DnsRecordModel.VALUE.getName().equals(column.source().getName())) {
+            return DnsRecordModel.presentationValue(row);
+        }
         Object value = super.cellValue(row, column);
         if (value != null || column.source() == null
                 || !DnsRecordModel.TTL.getName().equals(column.source().getName())) {
