@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
+import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -80,12 +81,26 @@ public final class TemplateContentsPage implements RecordScopedPage<Row> {
             databases.add(entry);
         }
 
+        List<Map<String, Object>> volumes = new ArrayList<>();
+        for (Row volume : Models.get(InstanceTemplateVolumeModel.class)
+                .findByTemplateId(templateId)) {
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("name", volume.get(InstanceTemplateVolumeModel.NAME));
+            entry.put("path", volume.get(InstanceTemplateVolumeModel.CONTAINER_PATH));
+            entry.put("exclusive", Boolean.TRUE.equals(
+                volume.get(InstanceTemplateVolumeModel.EXCLUSIVE)));
+            entry.put("editTarget", CmsRoutes.detail(panel, "instance-template-volumes",
+                volume.get(InstanceTemplateVolumeModel.ID)));
+            volumes.add(entry);
+        }
+
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", template.get(InstanceTemplateModel.NAME));
         vars.put("templateName", template.get(InstanceTemplateModel.NAME));
         vars.put("variables", variables);
         vars.put("files", files);
         vars.put("databases", databases);
+        vars.put("volumes", volumes);
         // AIDEV-NOTE: create form + prefill query parameter, so this composes off
         // CmsEndpoints: CmsRoutes.create returns the RouteTarget interface, which has
         // no with(...) to hang an extra parameter on.
@@ -100,6 +115,10 @@ public final class TemplateContentsPage implements RecordScopedPage<Row> {
         vars.put("addDatabaseTarget", CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, "instance-template-databases")
+            .with(HohenheimParams.TEMPLATE_ID_PREFILL, templateId));
+        vars.put("addVolumeTarget", CmsEndpoints.CREATE_FORM
+            .with(CmsEndpoints.PANEL_PARAM, panel)
+            .with(CmsEndpoints.RESOURCE_PARAM, "instance-template-volumes")
             .with(HohenheimParams.TEMPLATE_ID_PREFILL, templateId));
         vars.put("recordTabs", recordTabs(conduit));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/template-contents"), vars);
