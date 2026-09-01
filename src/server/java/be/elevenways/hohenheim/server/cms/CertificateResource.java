@@ -139,7 +139,10 @@ public class CertificateResource extends RowResource {
         // shared datetime cell with dateStyle(ABSOLUTE) now, not a renderer partial.)
         .column(dateColumn(CertificateModel.ISSUED_ON).hidden().build())
         .column(dateColumn(CertificateModel.EXPIRES_ON).filterable().build())
-        .column(dateColumn(CertificateModel.NEXT_ATTEMPT_AT).build())
+        // Hidden by default since the date cells became two-line (stamp over relative):
+        // the list still ran past a 1440px viewport, and the next attempt only carries
+        // information while a renewal is failing, which Status already says.
+        .column(dateColumn(CertificateModel.NEXT_ATTEMPT_AT).hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.ERROR_COUNT).hidden().build())
         .column(dateColumn(CertificateModel.CREATED_AT).filterable().build())
         .filter(FilterSpec.forField(CertificateModel.NICE_NAME, FilterSpec.Kind.TEXT)

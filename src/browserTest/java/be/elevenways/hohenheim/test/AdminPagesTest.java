@@ -82,7 +82,13 @@ class AdminPagesTest extends HohenheimTestBase {
     @Test
     @Order(1)
     void settingsPageRendersSavesResetsAndRefusesInvalidValues() throws Exception {
-        navigateToApp("/admin/settings");
+        // Sections are LAZY since zenit-cms 380f48f: a bare load renders only the first
+        // group's rows, so every group this journey touches is named in ?section=
+        // (the JS-free expansion lane; the save's PRG redirect re-expands the same set).
+        // This assertion set went red unnoticed when that landed -- nobody re-ran it.
+        navigateToApp("/admin/settings?section=setting-app-proxy,setting-app-security,"
+            + "setting-app-ssl,setting-app-storage,setting-app-auth_proteus,"
+            + "setting-framework-network,setting-framework-compression");
         waitForHydration();
 
         String content = page.content();
