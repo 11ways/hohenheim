@@ -2124,6 +2124,13 @@ was serving (risk-free here: additive nullable column, transactional) and the
 real run reported `0 applied`. Until the rehearsal lane gets an explicit
 db-path override, a byte-copy rehearsal proves nothing; kuifje and starfleet
 skipped it and applied M008 directly (`1 applied` each).
+[Fixed the same day: `--rehearse-migrations <db-copy>` is now the rehearsal
+lane -- an offline command that migrates the named copy through its own
+unregistered datasource and REFUSES a target that is the configured live file
+(by file identity, symlinks included). Usage:
+`sqlite3 /opt/hohenheim/hohenheim.db ".backup /tmp/rehearse.db" &&
+sudo -u hohenheim java -jar <new jar> --rehearse-migrations /tmp/rehearse.db`.
+Pinned by `OfflineCommandLaneTest.aMigrationRehearsalMigratesTheCopyAndRefusesTheLiveFile`.]
 
 Unit changes (backup `/root/hohenheim.service.bak-20260901`):
 `SupplementaryGroups=docker systemd-journal` (the SSH watcher reads journald),
