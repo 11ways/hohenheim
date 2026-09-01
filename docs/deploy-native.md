@@ -259,12 +259,21 @@ design. The admin listener defaults to `127.0.0.1:3000` (`network.port` and
 ### SSH brute-force bans (the fail2ban replacement)
 
 `security.ssh_watch_enabled` (firewall role only) makes the controller follow
-`journalctl -f -n 0 -o cat -t sshd` and feed every recognised authentication
-failure -- invalid users, refused passwords and keys, preauth aborts, exhausted
-attempt counters, malformed banners -- into the SAME threat scorer that bans
-hostname scanners. Crossing `security.domain_miss_ban_threshold` therefore
-creates an ordinary ban row, with `never_ban`, the own-address guard and the
-auto-ban budget all applying, and no fail2ban jail anywhere.
+`journalctl -f -n 0 -o cat -t sshd -t sshd-session -t sshd-auth` and feed every
+recognised authentication failure -- invalid users, refused passwords and keys,
+preauth aborts and resets, exhausted attempt counters, malformed banners -- into
+the SAME threat scorer that bans hostname scanners. Crossing
+`security.domain_miss_ban_threshold` therefore creates an ordinary ban row, with
+`never_ban`, the own-address guard and the auto-ban budget all applying, and no
+fail2ban jail anywhere.
+
+All three identifiers matter: OpenSSH 9.8 moved per-connection logging (and with
+it every authentication failure) from `sshd` to `sshd-session`, and 10.0 added
+`sshd-auth`. The first deployment tailed `-t sshd` alone and, on Debian 13, saw
+12 listener lines a day while 24,598 failures went past -- started, healthy on
+the dashboard, banning nobody. `journalctl -u ssh -o json | grep -o
+'"SYSLOG_IDENTIFIER":"[^"]*"' | sort | uniq -c` is the check when an sshd
+upgrade lands.
 
 Two prerequisites, both handled by the installer:
 

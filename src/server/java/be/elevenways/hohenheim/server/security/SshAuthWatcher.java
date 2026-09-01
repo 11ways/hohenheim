@@ -23,7 +23,7 @@ import java.util.function.BiConsumer;
  * that funnel). This is what replaces fail2ban.
  *
  * AIDEV-NOTE: the CHILD-PROCESS LIFECYCLE is the whole risk here, so it is stated once.
- * We spawn {@code journalctl -f -n 0 -o cat -t sshd} and read its stdout line by line on
+ * We spawn {@code journalctl -f -n 0 -o cat -t sshd -t sshd-session -t sshd-auth} and read its stdout line by line on
  * one platform thread. {@code -n 0} means the follow starts at NOW: replaying the journal's
  * backlog at every boot would re-score attacks that are hours old and mass-ban on a
  * restart loop. The child is a long-lived pipe, so three failure modes are handled
@@ -44,9 +44,26 @@ public final class SshAuthWatcher {
     /** THE process-wide watcher; boot decides whether it ever starts. */
     public static final SshAuthWatcher INSTANCE = new SshAuthWatcher();
 
+    /**
+     * The syslog identifiers sshd logs under. OpenSSH 9.8 split the daemon into
+     * {@code sshd} (the listener), {@code sshd-session} (one per connection, where every
+     * authentication failure is logged since then) and {@code sshd-auth} (10.0+). Tailing
+     * only {@code sshd} on such a host watches the listener's dozen lines a day and bans
+     * nobody, which is exactly what happened on Debian 13 (see SshAuthWatchTest).
+     */
+    static final List<String> IDENTIFIERS = List.of("sshd", "sshd-session", "sshd-auth");
+
     /** The follow starts at NOW: a backlog replay would mass-ban on every restart. */
-    static final List<String> COMMAND = List.of(
-        "journalctl", "-f", "-n", "0", "-o", "cat", "-t", "sshd");
+    static final List<String> COMMAND = buildCommand();
+
+    private static @NonNull List<String> buildCommand() {
+        List<String> command = new java.util.ArrayList<>(List.of("journalctl", "-f", "-n", "0", "-o", "cat"));
+        for (String identifier : IDENTIFIERS) {
+            command.add("-t");
+            command.add(identifier);
+        }
+        return List.copyOf(command);
+    }
 
     private static final long BACKOFF_MIN_MS = 1_000;
     private static final long BACKOFF_MAX_MS = 60_000;

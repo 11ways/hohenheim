@@ -365,6 +365,9 @@ else
         run truncate -s "${VOLUME_ROOT_GB}G" "$VOLUME_IMAGE"
         run mkfs.btrfs -q "$VOLUME_IMAGE"
     fi
+    # The image holds every tenant volume; a 0644 image lets any local user read all of
+    # them past the 0750 on the mounted subvolumes.
+    run chmod 0600 "$VOLUME_IMAGE"
     if [ -d "$VOLUME_MOUNT" ]; then
         skip "$VOLUME_MOUNT exists"
     else
@@ -674,6 +677,14 @@ if [ ! -f "$DB_PATH" ] || [ "$CHANGED_JAR" = "yes" ] || [ "$DRY_RUN" = "yes" ]; 
 else
     skip "database exists and the jar did not change"
 fi
+# The migration above runs under THIS shell's umask, not the unit's UMask=0027, so a
+# first install leaves a 0664 database (certificate keys, TSIG secrets, sessions) that
+# every local user can read; SQLite copies the main file's mode onto -wal and -shm.
+for db_file in "$DB_PATH" "$DB_PATH-wal" "$DB_PATH-shm"; do
+    if [ -f "$db_file" ]; then
+        run chmod 0640 "$db_file"
+    fi
+done
 
 # --- 15. service ------------------------------------------------------------
 

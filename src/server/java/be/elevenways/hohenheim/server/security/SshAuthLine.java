@@ -57,10 +57,12 @@ public final class SshAuthLine {
         if (line.contains("Failed publickey")) {
             return SecurityEventTypes.SSH_PUBLICKEY_FAILED;
         }
-        if (line.contains("Invalid user ") || line.contains("Connection closed by invalid user")) {
+        if (line.contains("Invalid user ") || line.contains("Connection closed by invalid user")
+                || line.contains("Connection reset by invalid user")) {
             return SecurityEventTypes.SSH_INVALID_USER;
         }
-        if (line.contains("Connection closed by authenticating user")) {
+        if (line.contains("Connection closed by authenticating user")
+                || line.contains("Connection reset by authenticating user")) {
             return SecurityEventTypes.SSH_PREAUTH_ABORT;
         }
         if (line.contains("banner exchange") && line.contains("invalid format")) {
