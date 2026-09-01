@@ -261,7 +261,8 @@ public final class HohenheimPanel extends Panel {
             SettingsEditor frameworkEditor = SettingsEditor.forFile(
                 ServerSettings.VALUES, ServerZenitRuntime.PATH_ROOT.resolve("settings/local.dry"));
             mounts.add(new SettingsPage.Mount("framework",
-                Microcopy.of("framework").withFallback("Framework"), frameworkEditor));
+                Microcopy.of("framework").withFilter("scope", "settings_mount")
+                    .withFallback("Framework"), frameworkEditor));
         } catch (IllegalArgumentException notLoaded) {
             // Boot without the standard zenit chain: app settings only.
         }

@@ -692,7 +692,7 @@
       "scope": "field"
     },
     {
-      "text": "Maximum request lifetime in seconds. 0 removes the limit for streaming, gRPC and WebSocket backends.",
+      "text": "Maximum request lifetime in seconds, from 0 to {$max}. 0 removes the limit for streaming, gRPC and WebSocket backends.",
       "scope": "help"
     }
   ],
@@ -1348,6 +1348,10 @@
       "scope": "help"
     }
   ],
+  "create_hostname": {
+    "text": "Optional. The first hostname this site answers on; you can add more, and set TLS, on the Domains tab.",
+    "scope": "help"
+  },
   "last_run_failed": {
     "text": "Last run failed",
     "scope": "attention_detail"
@@ -1646,6 +1650,10 @@
     {
       "text": "Status",
       "scope": "instance_artifacts"
+    },
+    {
+      "text": "Status",
+      "scope": "field"
     }
   ],
   "stored_log": {
@@ -1738,6 +1746,10 @@
       "scope": "instance_shell"
     }
   ],
+  "framework": {
+    "text": "Framework",
+    "scope": "settings_mount"
+  },
   "description": [
     {
       "text": "Choose how the application runs, add a domain, then request a certificate. Hohenheim guides each step from the site page.",
@@ -2523,6 +2535,11 @@
     {
       "text": "Backup",
       "scope": "schedule_action"
+    },
+    {
+      "text": "Backup made",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "networking": {
@@ -2549,7 +2566,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "{$count} container(s), volume(s) or network(s) on this host were not created by Hohenheim. They are left alone; review them under Reconcile findings.",
+      "text": "{$count} container(s), volume(s) or network(s) on this host were not created by Hohenheim. They are left alone; open {$page} to review exactly these.",
       "scope": "attention_detail"
     }
   ],
@@ -2733,6 +2750,11 @@
     {
       "text": "Enabled",
       "scope": "spamservice"
+    },
+    {
+      "text": "Enabled",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "settings": {
@@ -3744,6 +3766,10 @@
     "scope": "dns_remote"
   },
   "delete_confirm": [
+    {
+      "text": "Detach database '{$database}' from instance '{$instance}'? Reachability is revoked at the daemon as soon as you confirm, and the injected {$prefix} variables disappear at the instance's next deploy. The database itself and its data are kept.",
+      "scope": "instance_database"
+    },
     {
       "text": "Delete this record on the owning peer?",
       "scope": "dns_remote"
@@ -4803,10 +4829,16 @@
     "text": "External volume name",
     "scope": "field"
   },
-  "host_port": {
-    "text": "Host port",
-    "scope": "field"
-  },
+  "host_port": [
+    {
+      "text": "Host port",
+      "scope": "field"
+    },
+    {
+      "text": "Optional fixed host port; leave blank to auto-allocate one from the configured window. Declaring one always pre-allocates it",
+      "scope": "help"
+    }
+  ],
   "host_ip": {
     "text": "Host address",
     "scope": "field"
@@ -5085,6 +5117,11 @@
     {
       "text": "Disabled",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Disabled",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "deploy_log": {
@@ -5203,6 +5240,11 @@
     {
       "text": "Stopped",
       "scope": "instance_status"
+    },
+    {
+      "text": "Stopped",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "missing": {
@@ -5393,6 +5435,11 @@
     {
       "text": "Created",
       "scope": "instance_artifacts"
+    },
+    {
+      "text": "Created",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "error": [
@@ -5409,10 +5456,17 @@
       "scope": "cert_status"
     }
   ],
-  "deployed": {
-    "text": "Instance {$name} is running",
-    "scope": "instance"
-  },
+  "deployed": [
+    {
+      "text": "Instance {$name} is running",
+      "scope": "instance"
+    },
+    {
+      "text": "Deployed",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "stopped_toast": {
     "text": "Instance {$name} stopped",
     "scope": "instance"
@@ -5943,6 +5997,11 @@
     {
       "text": "Snapshot",
       "scope": "schedule_action"
+    },
+    {
+      "text": "Snapshot made",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "snapshot_confirm": {
@@ -6872,10 +6931,17 @@
       "scope": "restart_policy"
     }
   ],
-  "console_command": {
-    "text": "Send console command",
-    "scope": "schedule_action"
-  },
+  "console_command": [
+    {
+      "text": "Send console command",
+      "scope": "schedule_action"
+    },
+    {
+      "text": "Console command sent",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "expire_preview": {
     "text": "Expire preview",
     "scope": "schedule_action"
@@ -6960,10 +7026,6 @@
       "scope": "help"
     }
   ],
-  "instance_host_port": {
-    "text": "Optional fixed host port; leave blank to auto-allocate one from the configured window. Declaring one always pre-allocates it",
-    "scope": "help"
-  },
   "public_ipv4": [
     {
       "text": "Public IPv4 address",
@@ -7104,10 +7166,17 @@
     "text": "Read files",
     "scope": "capability"
   },
-  "files_write": {
-    "text": "Write files",
-    "scope": "capability"
-  },
+  "files_write": [
+    {
+      "text": "Write files",
+      "scope": "capability"
+    },
+    {
+      "text": "File written",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "stats": {
     "text": "Stats",
     "scope": "instance"
@@ -7829,10 +7898,17 @@
     "text": "Instance {$name} must be running for an in-place app update",
     "scope": "violations"
   },
-  "app_update_failed": {
-    "text": "The app update of instance {$name} failed: {$reason}",
-    "scope": "violations"
-  },
+  "app_update_failed": [
+    {
+      "text": "The app update of instance {$name} failed: {$reason}",
+      "scope": "violations"
+    },
+    {
+      "text": "App update failed",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "app_update": [
     {
       "text": "Update app",
@@ -8183,14 +8259,28 @@
     "text": "Fetch",
     "scope": "server_media"
   },
-  "media_fetched": {
-    "text": "Media '{$name}' is now available on this host",
-    "scope": "server_media"
-  },
-  "media_uploaded": {
-    "text": "Media '{$name}' was uploaded to this host",
-    "scope": "server_media"
-  },
+  "media_fetched": [
+    {
+      "text": "Media '{$name}' is now available on this host",
+      "scope": "server_media"
+    },
+    {
+      "text": "Media fetched",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
+  "media_uploaded": [
+    {
+      "text": "Media '{$name}' was uploaded to this host",
+      "scope": "server_media"
+    },
+    {
+      "text": "Media uploaded",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "upload_title": {
     "text": "Upload an ISO",
     "scope": "server_media"
@@ -8211,10 +8301,17 @@
     "text": "The upload of '{$name}' carried no data",
     "scope": "server_media"
   },
-  "media_deleted": {
-    "text": "Media '{$name}' was deleted",
-    "scope": "server_media"
-  },
+  "media_deleted": [
+    {
+      "text": "Media '{$name}' was deleted",
+      "scope": "server_media"
+    },
+    {
+      "text": "Media deleted",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "add_disk": {
     "text": "Attach disk",
     "scope": "instance_device"
@@ -8784,6 +8881,11 @@
     {
       "text": "Exec",
       "scope": "instance"
+    },
+    {
+      "text": "Command executed",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "run": [
@@ -10074,10 +10176,17 @@
     "text": "Remove this rule, and everything nested inside it.",
     "scope": "access_rule"
   },
-  "deleted": {
-    "text": "Rule deleted",
-    "scope": "access_rule"
-  },
+  "deleted": [
+    {
+      "text": "Rule deleted",
+      "scope": "access_rule"
+    },
+    {
+      "text": "Deleted",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "summary_group_any": {
     "text": "One of the rules inside must pass",
     "scope": "access_rule"
@@ -10306,6 +10415,10 @@
     {
       "text": "Build from a repository and deploy it with health-gated releases",
       "scope": "instance_kind_description"
+    },
+    {
+      "text": "Application",
+      "scope": "field"
     }
   ],
   "btrfs": {
@@ -11825,5 +11938,225 @@
   "import_replica_named": {
     "text": "Its records are owned by {$peer}, the primary this zone transfers from, and arrive over AXFR, so a zone file cannot be imported here. Import it on {$peer} instead.",
     "scope": "dns_zone"
+  },
+  "updated": {
+    "text": "Updated",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "reaped_controller_objects": {
+    "text": "Controller objects cleaned up",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "removed_orphan": {
+    "text": "Orphan removed",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "backup_downloaded": {
+    "text": "Backup downloaded",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "dyndns_update": {
+    "text": "Dynamic DNS updated",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "released_hostname_disabled": {
+    "text": "Released hostname disabled",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "imported": {
+    "text": "Imported",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "rolled_back": {
+    "text": "Rolled back",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "volumes_purged": {
+    "text": "Volumes purged",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "variable_set": {
+    "text": "Variable set",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "variable_deleted": {
+    "text": "Variable deleted",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "domain_added": {
+    "text": "Domain added",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "domain_removed": {
+    "text": "Domain removed",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "cloned": {
+    "text": "Cloned",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "preview_triggered": {
+    "text": "Preview triggered",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "dyndns_token_minted": {
+    "text": "Dynamic DNS token created",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "dyndns_token_revoked": {
+    "text": "Dynamic DNS token revoked",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "tested": {
+    "text": "Tested",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "device_attached": {
+    "text": "Device attached",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "device_resized": {
+    "text": "Device resized",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "device_detached": {
+    "text": "Device detached",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "approved": {
+    "text": "Approved",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "unapproved": {
+    "text": "Approval withdrawn",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "volume_declared": {
+    "text": "Volume declared",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "volume_redeclared": {
+    "text": "Volume redeclared",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "quarantine_lifted": {
+    "text": "Quarantine lifted",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "requested": {
+    "text": "Requested",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "reissued": {
+    "text": "Reissued",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "files_save": {
+    "text": "File saved",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "files_upload": {
+    "text": "File uploaded",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "files_mkdir": {
+    "text": "Folder created",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "files_rename": {
+    "text": "File renamed",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "files_delete": {
+    "text": "File deleted",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "restored_backup": {
+    "text": "Backup restored",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "restored_snapshot": {
+    "text": "Snapshot restored",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "settled_interrupted": {
+    "text": "Interrupted run settled",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "deleted_data": {
+    "text": "Data deleted",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "template_captured": {
+    "text": "Template captured",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "reconciled": {
+    "text": "Reconciled",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "drained": {
+    "text": "Drained",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "migrated": {
+    "text": "Migrated",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "shell_open": {
+    "text": "Shell opened",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "shell_close": {
+    "text": "Shell closed",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "app_updated": {
+    "text": "App updated",
+    "scope": "cms",
+    "target": "activity_action"
   }
 }
