@@ -1763,3 +1763,10 @@ Same jar as robbedoes (`567fbc26...`, 13/13 clean). Preflight
 `a7d65f01`). `0 applied`; stop 15:27:28Z, healthy, second restart healthy,
 0 journal errors. DNS: wcag.be SOA serial 15, starfleet.life replica serial
 44; panel 302; wcag.be 200. ROLLBACK: preflight jar + restart.
+
+## Review pass 2026-09-01 evening: SSH watcher identifiers; database mode
+
+Same finding as robbedoes (see its runbook): 6 `sshd` vs 2,173 `sshd-session`
+lines in 24h, watcher blind, 32 bans all scope `web`. Fix `c6713cf5` rides the
+next jar. `hohenheim.db` + `-wal` + `-shm` 0664 -> 0640 on the box; SOA answers
+unchanged after the change (wcag.be serial 15).

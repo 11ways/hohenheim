@@ -2206,3 +2206,19 @@ WebSocket connected`).
 Migration pin raised to `DEPLOYED_THROUGH = "008"` + M008 digest in
 migration-pins.txt (the fifth wave's forgotten step 8), red-then-green runs
 22/23. ROLLBACK: preflight jar + restart (no migration in the delta).
+
+## Review pass 2026-09-01 evening: the SSH watcher was banning nobody; file modes
+
+`journalctl -u ssh -o json | grep -o '"SYSLOG_IDENTIFIER":"[^"]*"' | sort | uniq -c`
+over 24h: 12 `sshd`, 24,598 `sshd-session`, 63 `unix_chkpwd`. The watcher tailed
+`-t sshd` only, so `ssh_watch_started` was true and `bans` held 33 rows, all scope
+`web`, none `ssh`. Fixed in `c6713cf5` (`-t sshd -t sshd-session -t sshd-auth`);
+rides the next jar. Until then the port-22 sets stay empty by construction.
+
+Modes fixed on the box (no restart): `hohenheim.db` + `-wal` + `-shm` 0664 -> 0640
+(the installer's `--run-migrations` created it under root's umask, not the unit's
+`UMask=0027`; SQLite copies the main file's mode onto -wal/-shm, so all three moved
+together), `volumes.btrfs` 0644 -> 0600 (root-owned image of every tenant volume),
+`/opt/hohenheim/staging` 0755 -> 0700 (Phoenix app + mongo dumps, 1.6 GB). Loop
+mount and sites unaffected (tavernetomberg 301 via loopback after the change).
+Installer now applies both modes itself (same commit).

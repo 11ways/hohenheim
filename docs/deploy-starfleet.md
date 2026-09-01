@@ -1224,3 +1224,9 @@ try 9 -- the ~25 s boot), 0 journal errors. Live: admin login 200, apex 200,
 skeleton 202 (its own answer), herald active (its /api/health 302 -> /login is
 herald's standing behaviour, untouched). Site 1 untouched. ROLLBACK:
 preflight jar + restart.
+
+## Review pass 2026-09-01 evening: volume image mode
+
+`/opt/hohenheim/volumes.btrfs` 0644 -> 0600 (the database was already 0640 here,
+created under the unit's UMask). Mount unaffected. The SSH watcher fix in
+`c6713cf5` does not apply here (`ssh_watch` is off by design; fail2ban guards sshd).
