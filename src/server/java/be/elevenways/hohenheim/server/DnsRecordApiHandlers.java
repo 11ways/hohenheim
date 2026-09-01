@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.dns.DnsRecordMutationResponse;
 import be.elevenways.hohenheim.dns.DnsValidationErrorResponse;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.DnsRecordEdits;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -38,7 +39,9 @@ final class DnsRecordApiHandlers {
 
     /**
      * The row columns the peer wire carries FLAT: a deliberate SUBSET of the model (no
-     * zone_id, no managed_by, no generated_* -- those are the server's, not a caller's).
+     * zone_id, no generated_* -- those are the server's, not a caller's). {@code managed_by}
+     * is handled apart: it is settable on CREATE only, and only to a value
+     * {@link DnsRecordModel#MANAGED_BY_VALUES} declares.
      */
     private static final List<String> COLUMN_FIELDS = List.of(
         DnsRecordModel.NAME.getName(), DnsRecordModel.TYPE.getName(),
@@ -91,9 +94,12 @@ final class DnsRecordApiHandlers {
                 return null;
             }
             int zoneId = zone.get(DnsZoneModel.ID);
-            Map<String, Object> values = recordValues(HandlerSupport.formMap(conduit));
+            Map<String, String> form = HandlerSupport.formMap(conduit);
+            Map<String, Object> values = recordValues(form);
             values.put("zone_id", zoneId);
+            String managedBy;
             try {
+                managedBy = declaredManagedBy(form);
                 DnsRecordEdits.validate(values, null, model);
             }
             catch (Violations violations) {
@@ -101,6 +107,9 @@ final class DnsRecordApiHandlers {
             }
             Row row = model.createEmptyRow();
             row.set(DnsRecordModel.ZONE_ID, zoneId);
+            if (managedBy != null) {
+                row.set(DnsRecordModel.MANAGED_BY, managedBy);
+            }
             applyRecordValues(row, values);
             model.save(row);
             ActivityLog.record(model, row.get(DnsRecordModel.ID), "created", recordDetail(row));
@@ -151,6 +160,32 @@ final class DnsRecordApiHandlers {
             DnsZoneStore.INSTANCE.bumpSerialAndReload(zone.get(DnsZoneModel.ID));
             return new JsonResult<Object>(new DnsRecordDeleteResponse("deleted"));
         });
+    }
+
+    /**
+     * The machine ownership a CREATE may claim, or null when it claims none.
+     *
+     * AIDEV-NOTE: the ONE caller that claims any is a peer forwarding an ACME DNS-01
+     * challenge ({@code InternalDnsTxtPublisher}) -- the row it writes here IS
+     * machine-owned, and without the stamp a zone-file import on this primary would
+     * replace it as if an operator had typed it. It stays a CLOSED vocabulary and fails
+     * closed: an unknown token is refused, never stored, so managed_by cannot become a
+     * free-text field a caller invents meanings in.
+     *
+     * @throws Violations when the submitted value is outside {@link DnsRecordModel#MANAGED_BY_VALUES}
+     */
+    private static @org.checkerframework.checker.nullness.qual.Nullable String declaredManagedBy(
+            Map<String, String> form) {
+        String submitted = form.get(DnsRecordModel.MANAGED_BY.getName());
+        if (submitted == null || submitted.isBlank()) {
+            return null;
+        }
+        String value = submitted.trim();
+        if (!DnsRecordModel.MANAGED_BY_VALUES.contains(value)) {
+            throw Violations.ofField(DnsRecordModel.MANAGED_BY.getName(), value,
+                CmsSupport.violationText("dns_managed_by_unknown"));
+        }
+        return value;
     }
 
     /** Activity detail naming the record an operator would recognise it by. */

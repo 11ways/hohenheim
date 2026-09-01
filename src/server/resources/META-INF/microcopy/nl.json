@@ -3225,6 +3225,10 @@
     "text": "Gebruik @ voor de zone zelf, of labels zoals www, *.dev of _acme-challenge",
     "scope": "violations"
   },
+  "dns_managed_by_unknown": {
+    "text": "Dat is geen systeem waaraan deze instantie een record kan overdragen",
+    "scope": "violations"
+  },
   "dns_value_required": {
     "text": "Het record heeft een waarde nodig",
     "scope": "violations"

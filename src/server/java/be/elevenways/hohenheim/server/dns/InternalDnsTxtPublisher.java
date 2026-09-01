@@ -133,6 +133,11 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
             fields.put(DnsRecordModel.TTL.getName(), String.valueOf(ACME_TXT_TTL));
             fields.put(DnsRecordModel.VALUE.getName(), record.value());
             fields.put(DnsRecordModel.ENABLED.getName(), "true");
+            // The same stamp the local write below applies. Without it the row landed on
+            // the primary looking hand-authored: a zone-file import there replaces exactly
+            // the unstamped rows, so the challenge the CA is about to read could be deleted
+            // by an unrelated import, and nothing on the primary could tell whose row it was.
+            fields.put(DnsRecordModel.MANAGED_BY.getName(), DnsRecordModel.MANAGED_BY_ACME);
             api.createRecord(zone.getOriginString(), fields);
             awaitReplica(zone, record);
             return;

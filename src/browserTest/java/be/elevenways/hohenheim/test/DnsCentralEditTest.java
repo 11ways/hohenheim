@@ -161,6 +161,29 @@ class DnsCentralEditTest extends HohenheimTestBase {
         assertThat(deleted.body()).isEqualTo("{\"status\":\"deleted\"}");
         assertThat(Models.get(DnsRecordModel.class).findById(recordId)).isNull();
 
+        // A forwarded ACME challenge claims machine ownership, and the claim is a CLOSED
+        // vocabulary: the stamp is what keeps a zone-file import here from replacing the
+        // very TXT the peer's CA is about to read, and a stranger token is refused outright.
+        var stamped = apiPost("/api/dns/zones/owned.example/records",
+            "name=_acme-challenge&type=TXT&value=forwarded-token&ttl=60&managed_by=acme");
+        assertThat(stamped.statusCode()).as("the stamped create is accepted: " + stamped.body())
+            .isEqualTo(200);
+        int stampedId = recordIdOf("owned.example", "_acme-challenge");
+        assertThat((String) Models.get(DnsRecordModel.class).findById(stampedId)
+                .get(DnsRecordModel.MANAGED_BY))
+            .as("the forwarded challenge is stamped machine-owned")
+            .isEqualTo(DnsRecordModel.MANAGED_BY_ACME);
+
+        var forged = apiPost("/api/dns/zones/owned.example/records",
+            "name=forged&type=TXT&value=x&managed_by=totally-not-acme");
+        assertThat(forged.statusCode()).as("an undeclared owner is refused").isEqualTo(422);
+        assertThat(forged.body()).contains("\"field\":\"managed_by\"");
+        assertThat(Models.get(DnsRecordModel.class).find()
+                .where(DnsRecordModel.NAME.eq("forged")).first())
+            .as("and nothing was written").isNull();
+
+        apiPost("/api/dns/zones/owned.example/records/" + stampedId + "/delete", "");
+
         // Secondary zones are not writable through the API, unknown zones 404.
         int peerId = apiPeer("api-refusal-peer", null);
         createZone("replica.example", DnsZoneModel.ROLE_SECONDARY, peerId);
