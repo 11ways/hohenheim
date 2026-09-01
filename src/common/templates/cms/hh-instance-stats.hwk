@@ -1,0 +1,77 @@
+{% tag HhInstanceStats {
+    {#- Live charts for one running instance: renders the server-seeded history, opens the
+        instance-stats channel on mount, and folds every arriving sample into the series.
+        The subscription belongs to THIS element (opened in @mount, closed by Cleanup.on),
+        never to a render expression -- hydration revives values without re-running lets,
+        so a render-time subscription simply does not exist after a hard load. -#}
+    public required instanceId: Integer
+    public cpuSeed: List = null
+    public memorySeed: List = null
+    public rxSeed: List = null
+    public txSeed: List = null
+
+    private transient cpu: List = null
+    private transient memory: List = null
+    private transient rx: List = null
+    private transient tx: List = null
+
+    style {
+        display: contents;
+    }
+
+    @mount
+    function connect() {
+        InstanceStats.connect(this, instanceId, (sample) => { apply(sample) })
+        Cleanup.on(this, () => InstanceStats.disconnect(this))
+    }
+
+    function apply(sample: Map) {
+        let nextCpu = InstanceStats.appended(cpu, cpuSeed, sample, "cpu")
+        if nextCpu != null { cpu = nextCpu }
+        let nextMemory = InstanceStats.appended(memory, memorySeed, sample, "memory")
+        if nextMemory != null { memory = nextMemory }
+        let nextRx = InstanceStats.appended(rx, rxSeed, sample, "rx")
+        if nextRx != null { rx = nextRx }
+        let nextTx = InstanceStats.appended(tx, txSeed, sample, "tx")
+        if nextTx != null { tx = nextTx }
+    }
+
+    template {
+        <pl-card>
+            <pl-card-header>
+                <pl-card-title>{{ t("cpu", scope: "instance_stats") }}</pl-card-title>
+                <pl-card-description>{{ t("cpu_description", scope: "instance_stats") }}</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <pl-sparkline area={% true %}
+                              label={% t("cpu", scope: "instance_stats") %}
+                              points={% cpu{:} ?? cpuSeed %}></pl-sparkline>
+            </pl-card-content>
+        </pl-card>
+
+        <pl-card>
+            <pl-card-header>
+                <pl-card-title>{{ t("memory", scope: "instance_stats") }}</pl-card-title>
+                <pl-card-description>{{ t("memory_description", scope: "instance_stats") }}</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <pl-sparkline area={% true %}
+                              label={% t("memory", scope: "instance_stats") %}
+                              points={% memory{:} ?? memorySeed %}></pl-sparkline>
+            </pl-card-content>
+        </pl-card>
+
+        <pl-card>
+            <pl-card-header>
+                <pl-card-title>{{ t("network", scope: "instance_stats") }}</pl-card-title>
+                <pl-card-description>{{ t("network_description", scope: "instance_stats") }}</pl-card-description>
+            </pl-card-header>
+            <pl-card-content>
+                <pl-sparkline label={% t("received", scope: "instance_stats") %}
+                              points={% rx{:} ?? rxSeed %}></pl-sparkline>
+                <pl-sparkline label={% t("transmitted", scope: "instance_stats") %}
+                              points={% tx{:} ?? txSeed %}></pl-sparkline>
+            </pl-card-content>
+        </pl-card>
+    }
+} %}

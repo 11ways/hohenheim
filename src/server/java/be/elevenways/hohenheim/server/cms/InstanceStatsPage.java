@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimStatsFunctions.Metric;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -51,10 +52,16 @@ public final class InstanceStatsPage implements RecordScopedPage<Row> {
         vars.put("instanceId", instanceId);
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status)
             || InstanceModel.STATUS_STARTING.equals(status));
-        vars.put("cpuSeed", seriesOf(history, InstanceStats.Sample::cpuPercent));
-        vars.put("memorySeed", seriesOf(history, sample -> sample.memoryBytes() / 1048576d));
-        vars.put("rxSeed", seriesOf(history, sample -> sample.rxBytes() / 1024d));
-        vars.put("txSeed", seriesOf(history, sample -> sample.txBytes() / 1024d));
+        // Scaled through the SAME Metric divisors the browser folds live samples with, so
+        // the seeded half of a series can never drift from the live half.
+        vars.put("cpuSeed", seriesOf(history,
+            sample -> Metric.CPU.scaled(sample.cpuPercent())));
+        vars.put("memorySeed", seriesOf(history,
+            sample -> Metric.MEMORY.scaled(sample.memoryBytes())));
+        vars.put("rxSeed", seriesOf(history,
+            sample -> Metric.RX.scaled(sample.rxBytes())));
+        vars.put("txSeed", seriesOf(history,
+            sample -> Metric.TX.scaled(sample.txBytes())));
         // The PERSISTED half, beside the live ring: the disk sweeper's stored observation
         // is the only number on this page that survives a restart, and on a runtime that
         // enforces no root quota there is deliberately none. Stating both is the point --
