@@ -2560,6 +2560,10 @@
     "text": "the transport gave no reason",
     "scope": "notification_channel"
   },
+  "test_accepted": {
+    "text": "Test handed to the relay; it has not confirmed delivery",
+    "scope": "notification_channel"
+  },
   "docker_foreign": [
     {
       "text": "Unmanaged Docker resources on {$server}",

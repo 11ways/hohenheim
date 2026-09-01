@@ -2560,6 +2560,10 @@
     "text": "het transport gaf geen reden",
     "scope": "notification_channel"
   },
+  "test_accepted": {
+    "text": "Test doorgegeven aan de relay; die heeft de bezorging niet bevestigd",
+    "scope": "notification_channel"
+  },
   "docker_foreign": [
     {
       "text": "Onbeheerde Docker-bronnen op {$server}",
