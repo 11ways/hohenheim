@@ -65,9 +65,13 @@ class UpstreamKindTest extends HohenheimTestBase {
             .doesNotContain("Node.js", "Java / Zenit", "Alchemy", "Dead");
 
         // 2. Each upstream swaps in its own settings sub-form, client-side.
+        // AIDEV-NOTE: a numeric entry is a pl-number-input, never a pl-input -- every field
+        // carrying a NumberShape (which is every Integer/Long/Double field, bounds or not)
+        // takes that branch of form/plain.hwk. Asking for pl-input by port name matched
+        // nothing and the count assertions below simply read 0.
         selectUpstreamKind("hohenheim:address");
         page.waitForSelector("pl-input[name='settings.forward_host']");
-        assertThat(page.locator("pl-input[name='settings.forward_port']").count())
+        assertThat(page.locator("pl-number-input[name='settings.forward_port']").count())
             .as("step 2: the address upstream asks for host and port").isEqualTo(1);
 
         selectUpstreamKind("hohenheim:redirect");
@@ -83,9 +87,9 @@ class UpstreamKindTest extends HohenheimTestBase {
 
         selectUpstreamKind("hohenheim:tls_passthrough");
         page.waitForSelector("pl-input[name='settings.forward_host']");
-        assertThat(page.locator("pl-input[name='settings.forward_port']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-number-input[name='settings.forward_port']").count()).isEqualTo(1);
         assertThat(page.locator("pl-switch[name='settings.proxy_protocol_v2']").count()).isEqualTo(1);
-        assertThat(page.locator("pl-input[name='settings.connect_timeout']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-number-input[name='settings.connect_timeout']").count()).isEqualTo(1);
 
         // 3. The source is NOT on this form any more: it moved to the instance the site
         //    exposes, so no upstream may offer a repository field here.

@@ -15,7 +15,6 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.common.validation.validator.Range;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Map;
@@ -67,11 +66,7 @@ public final class InstanceUpstreamKind implements UpstreamKindHandler {
             .help(HohenheimFormCopy.help("websocket_upgrade")).build());
 
     public static final IntegerField REQUEST_TIMEOUT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("request_timeout").suffix("s")
-            .validator(Range.of(1, 3600))
-            .label(HohenheimFormCopy.label("request_timeout"))
-            .help(HohenheimFormCopy.help("request_timeout"))
-            .build());
+        UpstreamSettings.requestTimeout());
 
     @Override public Identifier typeId() { return ID; }
 
