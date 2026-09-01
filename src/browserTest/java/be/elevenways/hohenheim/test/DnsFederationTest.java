@@ -411,10 +411,14 @@ class DnsFederationTest {
 
             publisher.publish(challenge);
 
-            // 2. The TXT landed on the PRIMARY, through the admin channel.
+            // 2. The TXT landed on the PRIMARY, through the admin channel, carrying the same
+            //    machine-ownership stamp a locally issued challenge gets. Unstamped it reads
+            //    as hand-authored there, and the primary's zone-file import replaces exactly
+            //    the unstamped rows -- it would delete the challenge the CA is about to read.
             assertThat(primary.records()).anyMatch(record -> "_acme-challenge".equals(record.name())
                 && DnsRecordModel.TYPE_TXT.equals(record.type())
-                && "forwarded-token".equals(record.value()));
+                && "forwarded-token".equals(record.value())
+                && DnsRecordModel.MANAGED_BY_ACME.equals(record.managed_by()));
 
             // 3. Our own replica transferred it and now serves it -- which is what proves
             //    the CA will see it -- while our zone row still holds no local records.
@@ -532,7 +536,8 @@ class DnsFederationTest {
                     Map<String, String> fields = form(body);
                     add(new DnsRecordDto(nextId++, fields.get("name"), fields.get("type"),
                         fields.get("ttl") != null ? Integer.valueOf(fields.get("ttl")) : null,
-                        fields.get("value"), null, null, null, true, null));
+                        fields.get("value"), null, null, null, true,
+                        fields.get(DnsRecordModel.MANAGED_BY.getName())));
                     rebuild();
                     response = "{}";
                 }

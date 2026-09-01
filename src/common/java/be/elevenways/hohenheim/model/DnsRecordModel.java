@@ -45,6 +45,13 @@ public class DnsRecordModel extends Model {
     /** {@link #MANAGED_BY} value for records the ACME DNS-01 flow owns. */
     public static final String MANAGED_BY_ACME = "acme";
 
+    /**
+     * The closed set of {@link #MANAGED_BY} values a machine may claim; null (an operator
+     * authored the row) is the only other legal state. THE declaring home: the peer API
+     * refuses anything outside it, so a stranger token can never be written over the wire.
+     */
+    public static final List<String> MANAGED_BY_VALUES = List.of(MANAGED_BY_ACME);
+
     // --- Per-type sub-schemas (the ONLY home for type-specific fields) ---
 
     public static final Schema MX_DATA_SCHEMA = new Schema();

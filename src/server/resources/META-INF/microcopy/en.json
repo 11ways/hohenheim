@@ -3225,6 +3225,10 @@
     "text": "Use @ for the zone itself, or labels like www, *.dev or _acme-challenge",
     "scope": "violations"
   },
+  "dns_managed_by_unknown": {
+    "text": "That is not a system this instance knows how to hand a record to",
+    "scope": "violations"
+  },
   "dns_value_required": {
     "text": "The record needs a value",
     "scope": "violations"
