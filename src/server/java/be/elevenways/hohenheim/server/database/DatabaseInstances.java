@@ -195,6 +195,10 @@ public final class DatabaseInstances {
             instance.set(InstanceModel.NAME, instanceNameOf(name));
             instance.set(InstanceModel.KIND, DatabaseContainerKind.ID.toString());
             instance.set(InstanceModel.SERVER_ID, serverId);
+            // A managed database that dies unobserved must come back: the sites attached
+            // to it are down until it does, and there is no operator "stop" story where
+            // keeping a crashed engine down is the wanted outcome.
+            instance.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_RESTART);
             instance.set(InstanceModel.SETTINGS, desiredSettings(database, engine,
                 database.get(DatabaseModel.DB_USER), database.get(DatabaseModel.DB_NAME),
                 limits));
