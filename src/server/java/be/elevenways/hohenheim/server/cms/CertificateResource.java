@@ -144,7 +144,10 @@ public class CertificateResource extends RowResource {
         // information while a renewal is failing, which Status already says.
         .column(dateColumn(CertificateModel.NEXT_ATTEMPT_AT).hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.ERROR_COUNT).hidden().build())
-        .column(dateColumn(CertificateModel.CREATED_AT).filterable().build())
+        // Created at is in the picker, not the default view: measured on robbedoes after
+        // the two-line date cells, the list still ran 73px past a 1440px viewport with it,
+        // and a certificate list is read by "what expires next", so that is the sort.
+        .column(dateColumn(CertificateModel.CREATED_AT).filterable().hidden().build())
         .filter(FilterSpec.forField(CertificateModel.NICE_NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(CertificateModel.NICE_NAME)).build())
         .filter(FilterSpec.forField(CertificateModel.PROVIDER, FilterSpec.Kind.SELECT)
@@ -157,7 +160,7 @@ public class CertificateResource extends RowResource {
             .label(FieldLabels.labelFor(CertificateModel.EXPIRES_ON)).build())
         .filter(FilterSpec.forField(CertificateModel.CREATED_AT, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(CertificateModel.CREATED_AT)).build())
-        .defaultSort(SortSpec.desc(CertificateModel.CREATED_AT.getName()))
+        .defaultSort(SortSpec.asc(CertificateModel.EXPIRES_ON.getName()))
         .build();
 
     /**
