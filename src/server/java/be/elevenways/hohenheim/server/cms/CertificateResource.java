@@ -17,6 +17,8 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.render.table.AbsentCellState;
+import be.elevenways.zenit.cms.common.render.table.DateTimeCellState;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -32,6 +34,7 @@ import be.elevenways.zenit.common.edit.FieldGroup;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
@@ -59,6 +62,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * TLS certificates: manual PEM uploads plus Let's Encrypt requests (via the
@@ -94,6 +100,21 @@ public class CertificateResource extends RowResource {
     /** Wall-clock shape of {@code Dates.wallText}, which needs a RenderContext this hook has not. */
     private static final DateTimeFormatter WALL_CLOCK = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
+    /** The cell partial reading a stamp absolute-first, relative second. */
+    private static final String DATE_RENDERER = "hohenheim:cms/cell/absolute-datetime";
+
+    /**
+     * THE date columns of this list, named once: {@link #dateColumn} refuses any other
+     * field and {@link #cellValue} builds the render state for exactly these, so a column
+     * can never carry the partial without the state that partial declares.
+     */
+    private static final Set<String> DATE_COLUMN_NAMES = Stream.of(
+            CertificateModel.ISSUED_ON,
+            CertificateModel.EXPIRES_ON,
+            CertificateModel.NEXT_ATTEMPT_AT,
+            CertificateModel.CREATED_AT)
+        .map(Field::getName).collect(Collectors.toUnmodifiableSet());
+
     private final FormSpec formSpec = FormSpec.builder()
         .add(CertificateModel.NICE_NAME)
         .add(CertificateModel.CERTIFICATE_PEM)
@@ -121,9 +142,9 @@ public class CertificateResource extends RowResource {
     }
 
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
-        // AIDEV-NOTE: eight visible columns down to five. Each pair below answers ONE
-        // question in one cell: what does it cover, why is it in this state, and when is
-        // the next thing going to happen to it.
+        // AIDEV-NOTE: eight visible columns down to six. The first pairs answer ONE
+        // question in one cell -- what does it cover, why is it in this state -- while
+        // every date stands alone, because a subtext line is not sortable.
         .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).filterable()
             .subtext("domain_names_text").build())
         .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).filterable().hidden().build())
@@ -132,11 +153,15 @@ public class CertificateResource extends RowResource {
         .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).filterable().hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.CHALLENGE_TYPE).filterable().hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.DNS_PUBLISHER).hidden().build())
-        .column(ColumnSpec.fromField(CertificateModel.EXPIRES_ON).filterable()
-            .subtext("next_attempt_at").build())
-        .column(ColumnSpec.fromField(CertificateModel.NEXT_ATTEMPT_AT).hidden().build())
+        // AIDEV-NOTE: expiry USED to carry next_attempt_at as its subtext, which a renderer
+        // may not do (ColumnSpec refuses renderer + subtext -- both compose the cell). The
+        // next attempt became a column of its own instead, which is what makes it sortable:
+        // "which renewal runs next" was previously unaskable.
+        .column(dateColumn(CertificateModel.ISSUED_ON).hidden().build())
+        .column(dateColumn(CertificateModel.EXPIRES_ON).filterable().build())
+        .column(dateColumn(CertificateModel.NEXT_ATTEMPT_AT).build())
         .column(ColumnSpec.fromField(CertificateModel.ERROR_COUNT).hidden().build())
-        .column(ColumnSpec.fromField(CertificateModel.CREATED_AT).filterable().build())
+        .column(dateColumn(CertificateModel.CREATED_AT).filterable().build())
         .filter(FilterSpec.forField(CertificateModel.NICE_NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(CertificateModel.NICE_NAME)).build())
         .filter(FilterSpec.forField(CertificateModel.PROVIDER, FilterSpec.Kind.SELECT)
@@ -151,6 +176,35 @@ public class CertificateResource extends RowResource {
             .label(FieldLabels.labelFor(CertificateModel.CREATED_AT)).build())
         .defaultSort(SortSpec.desc(CertificateModel.CREATED_AT.getName()))
         .build();
+
+    /**
+     * A sortable date column whose cell reads absolute-first.
+     *
+     * @throws IllegalArgumentException when the field is not one of {@link #DATE_COLUMN_NAMES}
+     */
+    private static ColumnSpec.@NonNull Builder dateColumn(@NonNull DateTimeField field) {
+        if (!DATE_COLUMN_NAMES.contains(field.getName())) {
+            throw new IllegalArgumentException("date column " + field.getName()
+                + " is not declared in DATE_COLUMN_NAMES, so its cell state is never built");
+        }
+        return ColumnSpec.fromField(field).sortable().renderer(DATE_RENDERER);
+    }
+
+    /**
+     * The date columns hand their whole cell to a renderer, so the generic typed-cell swap
+     * skips them -- absence included -- and both states are built here instead.
+     */
+    @Override
+    public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
+        Object value = super.cellValue(row, column);
+        if (!DATE_COLUMN_NAMES.contains(column.name())) {
+            return value;
+        }
+        if (value instanceof Instant instant) {
+            return new DateTimeCellState(instant.toString(), wording());
+        }
+        return AbsentCellState.isAbsent(value) ? AbsentCellState.NONE : value;
+    }
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "certificate"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "certificate"); }
