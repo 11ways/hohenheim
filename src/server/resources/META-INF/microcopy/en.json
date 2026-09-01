@@ -9944,7 +9944,7 @@
       "scope": "release_operation"
     },
     {
-      "text": "Workloads found on a host that this installation does not know about.",
+      "text": "Every container, volume and network the reconciler found on a host, and how it was attributed: owned, orphaned or foreign.",
       "scope": "reconcile_finding"
     },
     {
