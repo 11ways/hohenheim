@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
+import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -130,6 +131,11 @@ public final class InstanceTemplates {
         return Models.get(InstanceTemplateVariableModel.class).findByTemplateId(templateId);
     }
 
+    /** The volume declarations this template hands to every instance created from it. */
+    public @NonNull List<Row> declaredVolumes(int templateId) {
+        return Models.get(InstanceTemplateVolumeModel.class).findByTemplateId(templateId);
+    }
+
     /**
      * THE instance-creation funnel, for every surface: the admin page, the /manage page
      * and the automation API all land here, so "what the UI refuses" and "what the API
@@ -238,7 +244,11 @@ public final class InstanceTemplates {
         FormValidator.validateCoercedFormOrThrow(spec, coerced);
         // The declared databases' cheap refusals (engine, injectability, label taken)
         // come BEFORE the instance row exists, so the common failures never need the
-        // compensation below.
+        // compensation below. The declared VOLUMES answer the same way, for the same
+        // reason -- and because a volume declaration that cannot be honoured must never
+        // become an instance whose Volumes tab is empty.
+        List<Row> templateVolumes = declaredVolumes(templateId);
+        requireVolumesCopyable(kindHandler, templateVolumes);
         TemplateDatabases.precheck(template, name.trim(), ctx);
 
         InstanceModel instances = Models.get(InstanceModel.class);
@@ -269,8 +279,113 @@ public final class InstanceTemplates {
         grantCreatorManage(instanceId, ctx);
         this.variables.writeForInstance(instanceId, declaredVariables(templateId), coerced);
         copyFiles(templateId, instanceId);
-        attachDeclaredDatabases(template, instance, placement, ctx);
+        completeOrDestroy(instanceId, () -> {
+            copyVolumes(instanceId, templateVolumes);
+            attachDeclaredDatabases(template, instance, placement, ctx);
+        });
         return instanceId;
+    }
+
+    /**
+     * Refuse a template volume declaration this create could not honour, BEFORE the
+     * instance row exists -- the {@code TemplateDatabases.precheck} precedent.
+     *
+     * AIDEV-NOTE: every rule here is asked of the DECLARING home rather than re-stated:
+     * the name of {@link InstanceVolumes#requirePlainName}, the one-container-path-one-
+     * directory rule of {@link InstanceVolumes#addMount}. The mount map is keyed by the
+     * volume NAME instead of its host path, because the instance id the host path is
+     * derived from does not exist yet -- and that refusal names its map keys, so it names
+     * the two volumes either way.
+     *
+     * @throws Violations naming the volume: a kind that mounts none, a name that is not a
+     *         directory name, a missing container path, two volumes at one path, or a
+     *         quota no backend could apply
+     */
+    private static void requireVolumesCopyable(@Nullable InstanceKindHandler kindHandler,
+                                               @NonNull List<Row> declared) {
+
+        if (declared.isEmpty()) {
+            return;
+        }
+
+        Map<String, String> paths = new LinkedHashMap<>();
+
+        for (Row volume : declared) {
+
+            String name = String.valueOf((Object) volume.get(InstanceTemplateVolumeModel.NAME));
+
+            if (kindHandler == null || !kindHandler.supportsVolumes()) {
+                throw Violations.ofField(InstanceTemplateVolumeModel.NAME.getName(), name,
+                    violationText("template_volume_kind_unsupported").withArg("name", name));
+            }
+
+            InstanceVolumes.requirePlainName(name);
+            String containerPath = volume.get(InstanceTemplateVolumeModel.CONTAINER_PATH);
+
+            // AIDEV-NOTE: the model's own required-ness closes the authoring path, so this
+            // arm is a fail-closed backstop rather than a reachable refusal today. It
+            // stays because a declaration with no container path is SKIPPED by the mount
+            // derivation -- an instance would carry a volume nothing ever mounts, which is
+            // the silent-empty shape this whole precheck exists to prevent.
+            if (containerPath == null || containerPath.isBlank()) {
+                throw Violations.ofField(
+                    InstanceTemplateVolumeModel.CONTAINER_PATH.getName(), containerPath,
+                    violationText("template_volume_container_path_required")
+                        .withArg("name", name));
+            }
+
+            Long quota = volume.get(InstanceTemplateVolumeModel.QUOTA_BYTES);
+
+            if (quota != null && quota <= 0) {
+                throw Violations.ofField(
+                    InstanceTemplateVolumeModel.QUOTA_BYTES.getName(), quota,
+                    violationText("volume_quota_invalid"));
+            }
+
+            InstanceVolumes.addMount(paths, name, containerPath);
+        }
+    }
+
+    /**
+     * Copy the template's volume declarations onto the instance.
+     *
+     * AIDEV-NOTE: the DECLARATIONS, which is the whole contract (phase-0 design 4.6). The
+     * host directories behind them are minted by the first deploy through
+     * {@link InstanceVolumes#mountsFor}, on the backend that host actually has -- a create
+     * never touches a filesystem, and there is no template-side content to carry over
+     * (a template's authored content is its {@code instance_template_files}).
+     */
+    private static void copyVolumes(int instanceId, @NonNull List<Row> declared) {
+        for (Row volume : declared) {
+            InstanceVolumes.declare(instanceId,
+                volume.get(InstanceTemplateVolumeModel.NAME),
+                volume.get(InstanceTemplateVolumeModel.CONTAINER_PATH),
+                volume.get(InstanceTemplateVolumeModel.QUOTA_BYTES),
+                Boolean.TRUE.equals(volume.get(InstanceTemplateVolumeModel.EXCLUSIVE)));
+        }
+    }
+
+    /**
+     * Run the post-write half of a create, destroying the instance when it refuses.
+     *
+     * AIDEV-NOTE: the residual lane only. Everything cheaply refusable is prechecked
+     * above, so what lands here is a write that failed for its own reasons; a create that
+     * kept a half-built record would be the silent-success shape this whole funnel exists
+     * to avoid. A destroy that itself fails is logged BESIDE the original refusal rather
+     * than replacing it -- the operator must read what the create refused.
+     */
+    private static void completeOrDestroy(int instanceId, @NonNull Runnable work) {
+        try {
+            work.run();
+        } catch (RuntimeException | Error refused) {
+            try {
+                new InstanceService().destroy(instanceId);
+            } catch (RuntimeException | Error compensation) {
+                Blast.log("TEMPLATE: instance", instanceId, "kept after a refused create"
+                    + " step; destroy failed:", compensation.getMessage());
+            }
+            throw refused;
+        }
     }
 
     /**
@@ -281,24 +396,13 @@ public final class InstanceTemplates {
      * not: compensating a refused allocation is a destroy of a never-deployed record,
      * compensating a refused instance save would race a background provision. Inside the
      * panel's mutation transaction the rollback covers both anyway; the explicit destroy
-     * is for the in-process lane, and a destroy that itself fails is logged beside the
-     * original refusal rather than replacing it.
+     * is {@link #completeOrDestroy}'s, for the in-process lane.
      */
     private static void attachDeclaredDatabases(@NonNull Row template, @NonNull Row instance,
                                                 int serverId, @Nullable AccessContext ctx) {
         int instanceId = instance.get(InstanceModel.ID);
-        try {
-            TemplateDatabases.link(instanceId, TemplateDatabases.allocate(template,
-                instance.get(InstanceModel.NAME), serverId, ctx));
-        } catch (RuntimeException | Error refused) {
-            try {
-                new InstanceService().destroy(instanceId);
-            } catch (RuntimeException | Error compensation) {
-                Blast.log("TEMPLATE: instance", instanceId, "kept after its declared database"
-                    + " was refused; destroy failed:", compensation.getMessage());
-            }
-            throw refused;
-        }
+        TemplateDatabases.link(instanceId, TemplateDatabases.allocate(template,
+            instance.get(InstanceModel.NAME), serverId, ctx));
     }
 
     /**

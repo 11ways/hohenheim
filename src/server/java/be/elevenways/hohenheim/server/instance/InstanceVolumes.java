@@ -506,9 +506,13 @@ public final class InstanceVolumes {
     /**
      * A volume name is a single path segment, and nothing else.
      *
+     * AIDEV-NOTE: public because the create-from-template copy
+     * ({@code InstanceTemplates}) asks this BEFORE the instance row exists, and a second
+     * spelling of "what a volume name may be" is exactly the drift this class refuses.
+     *
      * @throws Violations {@code volume_name_invalid}
      */
-    private static void requirePlainName(@NonNull String name) {
+    public static void requirePlainName(@NonNull String name) {
         if (name.isBlank() || name.contains("/") || name.contains("\\")
                 || name.equals(".") || name.equals("..") || name.startsWith("-")) {
             throw Violations.ofField(InstanceVolumeModel.NAME.getName(), name,
