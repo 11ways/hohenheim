@@ -12162,5 +12162,9 @@
     "text": "App updated",
     "scope": "cms",
     "target": "activity_action"
+  },
+  "people_only": {
+    "text": "People only",
+    "scope": "activity"
   }
 }

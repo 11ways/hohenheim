@@ -2,33 +2,22 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.zenit.cms.common.page.CmsRecordLinks;
+import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelPeer;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.activity.ActivityPresentation;
 import be.elevenways.zenit.cms.common.resource.ActivityResource;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
-import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.query.rules.Rule;
-import be.elevenways.zenit.common.orm.query.rules.RuleGroup;
-import be.elevenways.zenit.common.orm.query.rules.RuleOperator;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Accountability;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
-
-import java.util.List;
 
 /**
  * The framework activity log with a hohenheim-authored sidebar description, a readable
@@ -44,20 +33,21 @@ public final class AdminActivityResource extends ActivityResource {
     private static final String RECORD_RENDERER = "hohenheim:cms/cell/activity-record";
 
     /**
-     * The default scope: everything a PERSON did, background writes excluded.
+     * The default scope: everything a PERSON did, background writes excluded --
+     * declared through {@code Resource.defaultFilterState()} as a RuleText
+     * expression on the origin TEXT filter, so the panel renders it as a
+     * removable chip and the framework owns every override/clear rule.
      *
      * AIDEV-NOTE: the discriminator is the ORIGIN, never the verb. Several verbs
      * ("deployed", "stopped", "reaped_controller_objects", "restored_backup",
      * "app_updated") are written by BOTH the operator lane and a sweeper, so a verb
-     * denylist would hide real operator actions. The IS_EMPTY arm keeps a row whose
+     * denylist would hide real operator actions. The "is empty" arm keeps a row whose
      * origin was never stamped visible: unknown provenance is not background
      * provenance, and IS_EMPTY on a TEXT variable matches null as well as "".
      */
-    private static final RuleGroup HIDE_BACKGROUND = RuleGroup.and(
-        RuleGroup.or(
-            Rule.of(ActivityModel.ORIGIN.getName(), RuleOperator.NOT_EQUALS,
-                Accountability.ORIGIN_SYSTEM),
-            Rule.of(ActivityModel.ORIGIN.getName(), RuleOperator.IS_EMPTY)));
+    private static final String HIDE_BACKGROUND_EXPRESSION =
+        ActivityModel.ORIGIN.getName() + " != \"" + Accountability.ORIGIN_SYSTEM + "\" or "
+            + ActivityModel.ORIGIN.getName() + " is empty";
 
     /**
      * The framework's own columns, with the two that were unreadable given a renderer:
@@ -154,25 +144,24 @@ public final class AdminActivityResource extends ActivityResource {
     }
 
     /**
-     * The list opens on operator activity: background writes are excluded UNLESS the
-     * request names an origin itself, so the origin filter genuinely flips the scope.
-     *
-     * AIDEV-NOTE: the exclusion rides the ADVANCED filter tier rather than a base criteria,
-     * because a base criteria is a scope the operator cannot escape and this one must be
-     * escapable -- typing "system" into the origin filter has to show the sweepers. It
-     * stands down for the rule and query tiers too: those can name the origin column
-     * themselves, and two disagreeing origin constraints would AND to nothing.
+     * The list opens on operator activity: the framework applies this while the
+     * origin filter is unset, chips it, lets an explicit origin value (or the
+     * rule/query tiers) replace it, and persists the chip's removal -- typing
+     * "system" into the origin filter has to show the sweepers, so this is a
+     * DEFAULT, never a base criteria the operator cannot escape.
      */
     @Override
-    public @NonNull List<Row> listRows(TableView.Applied<Row> applied,
-                                       @NonNull AccessContext accessContext) {
-        return super.listRows(scopedToOperators(applied), accessContext);
+    public @NonNull FilterState defaultFilterState() {
+        return FilterState.empty().with(ActivityModel.ORIGIN.getName(), HIDE_BACKGROUND_EXPRESSION);
     }
 
-    /** The count under the same scope as {@link #listRows}, or the pager lies. */
+    /** The chip reads a sentence, not the RuleText expression behind it. */
     @Override
-    public long countRows(TableView.Applied<Row> applied, @NonNull AccessContext accessContext) {
-        return super.countRows(scopedToOperators(applied), accessContext);
+    public @Nullable Microcopy defaultFilterDescription(@NonNull String filterName) {
+        if (!ActivityModel.ORIGIN.getName().equals(filterName)) {
+            return null;
+        }
+        return Microcopy.of("people_only").withFilter("scope", "activity");
     }
 
     /**
@@ -184,21 +173,6 @@ public final class AdminActivityResource extends ActivityResource {
         return CmsSupport.WIDE_LIST;
     }
 
-    /**
-     * The applied state with the background exclusion folded in, or the state untouched
-     * when the request already says which origins it wants.
-     */
-    private static TableView.@NonNull Applied<Row> scopedToOperators(
-            TableView.@NonNull Applied<Row> applied) {
-
-        FilterState filter = applied.filter();
-        if (filter.get(ActivityModel.ORIGIN.getName()) != null
-                || filter.advanced() != null || filter.query() != null) {
-            return applied;
-        }
-        return applied.withFilter(filter.withAdvanced(HIDE_BACKGROUND));
-    }
-
     /** The record column's cell: the stored title, linked when a resource serves the model. */
     private static @Nullable ActivityRecordCell recordCellOf(@NonNull Row row) {
 
@@ -208,37 +182,10 @@ public final class AdminActivityResource extends ActivityResource {
         }
         String title = row.get(ActivityModel.RECORD_TITLE);
         String label = title != null && !title.isBlank() ? title : recordId;
-        return new ActivityRecordCell(label, recordUrl(row.get(ActivityModel.MODEL), recordId));
-    }
-
-    /**
-     * The admin detail URL of the record an activity row names, or null when no registered
-     * resource serves that model.
-     *
-     * AIDEV-NOTE: a COPY of the private {@code ActivityDetailPageRenderer.resolveRecordUrl}
-     * walk in zenit-cms -- same panel/peer iteration, same ActivityResource skip, same
-     * model-id match. It is copied because the upstream helper is private; it should
-     * collapse into a zenit-cms API (a public "record url for (model token, id)") the
-     * moment a second consumer needs it, and this copy deleted then.
-     */
-    private static @Nullable String recordUrl(@Nullable String modelToken,
-                                              @NonNull String recordId) {
-
-        Identifier modelId = modelToken == null || modelToken.isBlank()
-            ? null : Identifier.tryParse(modelToken);
-        if (modelId == null) {
-            return null;
-        }
-        for (Panel panel : PanelRegistry.all()) {
-            for (PanelPeer peer : panel.peers()) {
-                if (peer instanceof ActivityResource || !(peer instanceof RowResource resource)) {
-                    continue;
-                }
-                if (modelId.equals(resource.model().getModelId())) {
-                    return CmsRoutes.detail(panel.slug(), resource.slug(), recordId).toUrl();
-                }
-            }
-        }
-        return null;
+        // The shared walk (CmsRecordLinks): first registered resource over the
+        // model wins, activity resources skipped, absence answers null.
+        BoundEndpoint<?> target = CmsRecordLinks.detailForToken(
+            row.get(ActivityModel.MODEL), recordId);
+        return new ActivityRecordCell(label, target != null ? target.toUrl() : null);
     }
 }
