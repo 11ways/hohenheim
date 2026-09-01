@@ -52,23 +52,26 @@ public class ManagedDatabase {
      */
     public enum Engine {
         POSTGRES(DatabaseModel.ENGINE_POSTGRES, "postgres:17-alpine", 5432,
-            "/var/lib/postgresql/data", 512),
-        MYSQL(DatabaseModel.ENGINE_MYSQL, "mysql:8.0", 3306, "/var/lib/mysql", 1024),
-        REDIS(DatabaseModel.ENGINE_REDIS, "redis:7-alpine", 6379, "/data", 512),
-        MONGO(DatabaseModel.ENGINE_MONGO, "mongo:7", 27017, "/data/db", 1280);
+            "/var/lib/postgresql/data", 512, 512),
+        MYSQL(DatabaseModel.ENGINE_MYSQL, "mysql:8.0", 3306, "/var/lib/mysql", 1024, 1024),
+        REDIS(DatabaseModel.ENGINE_REDIS, "redis:7-alpine", 6379, "/data", 512, 512),
+        MONGO(DatabaseModel.ENGINE_MONGO, "mongo:7", 27017, "/data/db", 1280, 512);
 
         final String token;
         final String defaultImage;
         final int port;
         final String dataPath;
-        final int footprintMb;
+        final int ephemeralFootprintMb;
+        final int persistentFootprintMb;
 
-        Engine(String token, String defaultImage, int port, String dataPath, int footprintMb) {
+        Engine(String token, String defaultImage, int port, String dataPath,
+               int ephemeralFootprintMb, int persistentFootprintMb) {
             this.token = token;
             this.defaultImage = defaultImage;
             this.port = port;
             this.dataPath = dataPath;
-            this.footprintMb = footprintMb;
+            this.ephemeralFootprintMb = ephemeralFootprintMb;
+            this.persistentFootprintMb = persistentFootprintMb;
         }
 
         /**
@@ -86,9 +89,12 @@ public class ManagedDatabase {
         }
 
         /**
-         * This engine's DECLARED memory footprint (MB): both what the capacity ledger
-         * books and, because charge == cap, the cgroup ceiling the daemon applies when
-         * the operator declares no {@code memory_limit_mb}.
+         * This engine's DECLARED memory footprint (MB) for the PERSISTENCE SHAPE it runs
+         * in: both what the capacity ledger books and, because charge == cap, the cgroup
+         * ceiling the daemon applies when the operator declares no
+         * {@code memory_limit_mb}. The shape is the same stored fact that decides the
+         * data directory's mode ({@link DatabaseContainerKind#isEphemeral}), so the
+         * number booked and the volume mounted can never disagree.
          *
          * Re-measured 2026-08-07 through the product's own funnel, reading the engine
          * cgroup's {@code memory.peak} at several caps each: redis 18 MiB, postgres
@@ -110,22 +116,47 @@ public class ManagedDatabase {
          * These are measurements with a date, not assumptions; an operator who knows better
          * has the {@code memory_limit_mb} setting as the escape hatch.
          *
-         * AIDEV-NOTE: the ephemeral (tmpfs) shape is what these numbers cover, and its
-         * data directory is charged to the SAME cgroup -- ~300 MiB of mongo's 835 is the
-         * tmpfs itself. So is the readiness probe: {@code awaitReady} execs a client at
-         * 2 Hz INSIDE the container, and a mongosh is a Node process. A persistent
-         * database keeps its data in page cache the kernel can drop, so booking the
-         * ephemeral shape is the conservative direction.
+         * AIDEV-NOTE: the ephemeral (tmpfs) shape is what the 2026-08-07 numbers cover,
+         * and its data directory is charged to the SAME cgroup -- ~300 MiB of mongo's 835
+         * is the tmpfs itself. So is the readiness probe: {@code awaitReady} execs a
+         * client at 2 Hz INSIDE the container, and a mongosh is a Node process. A
+         * persistent database keeps its data in page cache the kernel can drop, so
+         * booking the ephemeral shape was the conservative direction while ONE number had
+         * to cover both.
+         *
+         * AIDEV-NOTE: 2026-09-01, the persistent column. Measured on production robbedoes
+         * across all SEVEN persistent (volume-backed) mongos: 112-513 MiB anonymous each,
+         * with WiredTiger's cache floored at 256 MiB whatever the cap says -- its formula
+         * is max(0.5 * (cap - 1 GiB), 256 MiB), which floors for every cap below 1.5 GiB,
+         * so raising the cap between 512 and 1280 buys the engine nothing at all. The
+         * 1280 that column declared came from an EPHEMERAL measurement (~300 MiB of it
+         * the tmpfs, which a volume-backed database does not have) and operators had
+         * hand-declared 512 on five of the seven, which is the shape of a default that is
+         * wrong. Persistent mongo therefore books 512 like postgres and redis; the
+         * ephemeral column keeps its 1280 because the tmpfs is still charged there. The
+         * OTHER three engines keep one number for both shapes: nothing has measured their
+         * persistent peak, and the rule below forbids LOWERING a cap on anything less.
+         *
+         * AIDEV-NOTE (unchanged, and it governs both columns): a peak read at a cap the
+         * workload is PINNED AGAINST is not a peak -- it IS the cap. A measured peak can
+         * PROVE a cap is too small; it can never justify lowering a cap that must also
+         * survive QUERY load, which no startup measurement observes.
+         *
+         * @param ephemeral whether the data directory is a tmpfs charged to this cgroup
          */
-        public int footprintMb() {
-            return this.footprintMb;
+        public int footprintMb(boolean ephemeral) {
+            return ephemeral ? this.ephemeralFootprintMb : this.persistentFootprintMb;
         }
 
-        /** The largest footprint any engine declares: what an UNRECOGNISED engine books. */
+        /**
+         * The largest footprint any engine declares in EITHER shape: what an UNRECOGNISED
+         * engine books, where the shape is as unknown as the engine.
+         */
         public static int maxFootprintMb() {
             int max = 0;
             for (Engine engine : values()) {
-                max = Math.max(max, engine.footprintMb);
+                max = Math.max(max, Math.max(engine.ephemeralFootprintMb,
+                    engine.persistentFootprintMb));
             }
             return max;
         }

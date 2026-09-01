@@ -159,12 +159,12 @@ class EngineMemoryCeilingTest {
 
             // 1. The DAEMON's own view of the cgroup cap is this engine's declared
             //    footprint, not a flat number every kind shares.
-            long cap = (long) engine.footprintMb() * 1024 * 1024;
+            long cap = (long) engine.footprintMb(true) * 1024 * 1024;
             Map<?, ?> hostConfig = (Map<?, ?>) docker.inspectContainer(container).get("HostConfig");
             assertThat(((Number) hostConfig.get("Memory")).longValue())
                 .withFailMessage("step 1 (%s): HostConfig.Memory is %s, expected the engine's"
                     + " declared footprint of %s MB (%s bytes)", engine, hostConfig.get("Memory"),
-                    engine.footprintMb(), cap)
+                    engine.footprintMb(true), cap)
                 .isEqualTo(cap);
 
             // 2. The product's readiness gate has already returned, so the whole of the
@@ -175,7 +175,7 @@ class EngineMemoryCeilingTest {
             assertThat(events.get("oom_kill"))
                 .withFailMessage("step 2 (%s): the engine's cgroup OOM-killed %s process(es) at"
                     + " its %s MB cap -- memory.events was %s", engine, events.get("oom_kill"),
-                    engine.footprintMb(), events)
+                    engine.footprintMb(true), events)
                 .isZero();
 
             // 3. And it got there with headroom. memory.peak cannot exceed the cap, so a
@@ -186,7 +186,7 @@ class EngineMemoryCeilingTest {
                     + " footprint (%s%%) -- a cap it runs flush against at rest has nothing"
                     + " left for query load, and is the ECONNREFUSED flake; declare a bigger"
                     + " footprint or prove the engine needs less", engine, peak / 1024 / 1024,
-                    engine.footprintMb(), peak * 100 / cap)
+                    engine.footprintMb(true), peak * 100 / cap)
                 .isLessThanOrEqualTo(cap * HEADROOM_NUMERATOR / HEADROOM_DENOMINATOR);
 
             // 4. The engine SERVES under that cap: assert the returned VALUE, never an exit
