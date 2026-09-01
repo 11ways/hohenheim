@@ -2158,3 +2158,23 @@ Live checks: earl 200, invulassistent 401 (its gate), tavernetomberg + www
 200, panel 302, health 200, `zd_deployed` current 13/13.
 ROLLBACK: preflight jar back into place + unit backup line + restart (M008 is
 additive; the pre-migration db copy is `.pre`).
+
+## Udesign Preview retired; Udesign Live synced with phoenix, 2026-09-01
+
+Jelle: the preview/staging site is no longer required. Deleted, in order: site 8
+(`udesign-preview`, soft-delete), instance 15 (container + volume
+`/opt/hohenheim/data/volumes/15/home` destroyed), access list 2 (`Udesign
+preview`), database 10 (`udesign-preview-mongo`, container `instance-16`, via
+the panel -- databases have no API delete verb). Frees 1024 MB of booking.
+Verified: no `instance-(15|16)` containers, volume dir gone, udesign-live 200.
+
+Same day Jelle edited `app/view/partials/ontwer_block.hwk` on phoenix (new
+SurveyMonkey CTA) and restarted the app there. Synced to instance 13's volume
+byte-identically (md5 `5ba49356cced3e32bb7e6e9cc8f69248`, owner 200013, backup
+`/tmp/ontwer_block.hwk.bak-20260901` on the box), `hoh power 13 restart`,
+rendered proof on both sides (`nl.surveymonkey.com/r/LG59W3V` present).
+
+ACCESS NOTE: skerit on phoenix has no passwordless sudo, but IS in the `docker`
+group -- a read-only bind mount (`docker run --rm -v <dir>:/mnt:ro --entrypoint
+sh <image> -c 'base64 /mnt/<file>'`) is the sanctioned read path for another
+user's home there.
