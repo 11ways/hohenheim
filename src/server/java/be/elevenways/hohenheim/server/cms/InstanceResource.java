@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.instance.InstanceDeclarations;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
+import be.elevenways.hohenheim.server.instance.InstanceResize;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateCapture;
@@ -302,6 +303,45 @@ public class InstanceResource extends RowResource {
             }
             return null;
         }
+    }
+
+    /**
+     * THE resize: a save that moves {@code memory_limit_mb} or {@code cpu_limit} on a LIVE
+     * workload recreates its container, because a cgroup ceiling is stamped at create.
+     *
+     * AIDEV-NOTE: the DATABASE tier already did this ({@code DatabaseResource.updateRow}),
+     * and the instance tier did not -- so an instance resize moved BOTH ledgers (host and
+     * owner, through the write hooks) while the daemon kept the old cap, and charge == cap
+     * held only after somebody pressed Restart. {@link InstanceResize} owns the decision so
+     * a second writer (the automation API, a future bulk edit) can adopt it in one line
+     * rather than re-spelling "did the ceilings move".
+     *
+     * Everything is read off {@code existing} BEFORE super applies the submitted values:
+     * afterwards the row IS the new state and the comparison has nothing to compare to.
+     */
+    @Override
+    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
+                          @NonNull AccessContext accessContext) {
+        Integer instanceId = existing.get(InstanceModel.ID);
+        Map<String, Object> before = InstanceResize.settingsOf(existing);
+        String storedStatus = existing.get(InstanceModel.STATUS);
+        super.updateRow(existing, coerced, accessContext);
+        if (instanceId != null) {
+            InstanceResize.recreateAfterCommit(instanceId, before,
+                InstanceResize.settingsOf(existing), storedStatus);
+        }
+    }
+
+    /**
+     * States the consequence the fields cannot: saving a new memory or CPU ceiling
+     * RECREATES the workload's container, so it is briefly down. Rendered only on a stored
+     * record -- on the create form there is nothing to recreate.
+     */
+    @Override
+    public @Nullable Microcopy formNotice(@NonNull Row record,
+                                          @NonNull AccessContext accessContext) {
+        return record.get(InstanceModel.ID) == null ? super.formNotice(record, accessContext)
+            : Microcopy.of("resize_notice").withFilter("scope", "instance");
     }
 
     /** The submitted per-kind settings, which price the workload; a SchemaField answers Object. */

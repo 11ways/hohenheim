@@ -11778,10 +11778,16 @@
     "text": "Een secundaire zone haalt haar records bij haar primaire; importeer op de primaire",
     "scope": "violations"
   },
-  "resize_notice": {
-    "text": "Alleen de geheugen- en CPU-limieten kunnen hier gewijzigd worden; elk ander veld beschrijft de container die aangemaakt werd. Een nieuwe limiet opslaan hermaakt de engine op hetzelfde datavolume, dus open verbindingen vallen weg tot ze terug is.",
-    "scope": "database"
-  },
+  "resize_notice": [
+    {
+      "text": "Alleen de geheugen- en CPU-limieten kunnen hier gewijzigd worden; elk ander veld beschrijft de container die aangemaakt werd. Een nieuwe limiet opslaan hermaakt de engine op hetzelfde datavolume, dus open verbindingen vallen weg tot ze terug is.",
+      "scope": "database"
+    },
+    {
+      "text": "Een nieuwe geheugen- of CPU-limiet opslaan hermaakt de container van een draaiende workload, dus die is even offline en de gepubliceerde poort kan wijzigen.",
+      "scope": "instance"
+    }
+  ],
   "database_resize_failed": {
     "text": "De nieuwe resourcelimieten konden niet toegepast worden: {$reason}. Er is niets gewijzigd.",
     "scope": "violations"
