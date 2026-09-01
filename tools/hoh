@@ -54,7 +54,17 @@ function requestedContext() {
     return flags.context || process.env.HOH_CONTEXT || '';
 }
 
+/**
+ * Set by `hoh login` while it verifies the credentials it is ABOUT to store: they are
+ * not in the file yet, and under --context the stored lookup would answer with the OLD
+ * key for that context (or refuse a context that does not exist yet).
+ */
+let pendingContext = null;
+
 function activeContext() {
+    if (pendingContext) {
+        return pendingContext;
+    }
     // A named context is a deliberate selection: it reads its OWN token, never the
     // ambient HOH_TOKEN, so a shell pointed at one box cannot leak a key to another.
     if (!flags.context && process.env.HOH_HOST) {
@@ -397,14 +407,20 @@ const commands = {
             || await ask('API key (znit_...): ', { hidden: true });
         if (!token) die('An API key is required (mint one under /account/api-keys).');
         // Verify before storing: one harmless read proves host + key together.
-        process.env.HOH_HOST = host;
-        process.env.HOH_TOKEN = token;
-        await get('/api/v1/projects');
-        delete process.env.HOH_HOST;
-        delete process.env.HOH_TOKEN;
+        pendingContext = { host, token };
+        try {
+            await get('/api/v1/projects');
+        }
+        finally {
+            pendingContext = null;
+        }
         const config = loadConfig();
         config.contexts = config.contexts || {};
-        const name = requestedContext() || 'default';
+        // The ACTIVE context, resolved exactly like every other verb resolves it
+        // (--context > HOH_CONTEXT > the stored default > "default"). Writing to
+        // "default" regardless is how `hoh context use bravo; hoh login <bravo>`
+        // stored bravo's key under alpha and left bravo unauthenticated.
+        const name = contextName(config);
         config.contexts[name] = { host, token };
         config.current = config.current || name;
         saveConfig(config);
@@ -634,7 +650,8 @@ const commands = {
 
 Usage: hoh [--context <name>] <command> [args] [--json] [--yes]
 
-  login <host>                       Store host + API key (verified first)
+  login <host>                       Store host + API key (verified first) in the
+                                     ACTIVE context (--context / HOH_CONTEXT / default)
   context list                       Stored contexts (host, key, default, selected)
   context use <name>                 Make <name> the stored default context
   projects [<id>]                    Projects and environments you belong to
