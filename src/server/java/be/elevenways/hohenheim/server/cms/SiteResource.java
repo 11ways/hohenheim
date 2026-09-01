@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimPickRules;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -44,6 +45,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldAccess;
+import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSection;
 import be.elevenways.zenit.common.edit.FormSpec;
@@ -52,6 +54,7 @@ import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
+import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -84,6 +87,28 @@ public class SiteResource extends RowResource {
     static final String TLS_COLUMN = "tls";
 
     /**
+     * The first hostname the new site answers on, stored as a {@code site_domains} child
+     * row by {@link #persistRow} rather than as a column of the site.
+     *
+     * AIDEV-NOTE: the backing field belongs to NO Schema on purpose (the orcono
+     * PropertyFormEntries shape): a hostname is a child ROW, and a column here would be a
+     * second home for a fact the route invariant judges. Three consequences the code
+     * depends on. It is {@code visibleIn(CREATE)}, so the EDIT form neither renders nor
+     * coerces it -- the Domains tab is the editor once the site exists. {@link #persistRow}
+     * REMOVES it from the coerced map before the row is staged, because the sites table has
+     * no such column. And it is NAMED "hostname" because the write pipeline's refusals are
+     * pathed on that name ({@code Violations.ofField("hostname", ...)} in
+     * SiteDomainResource's route invariant), so a claimed name lands on this very input.
+     */
+    public static final StringField CREATE_HOSTNAME = StringField.builder()
+        .name(SiteDomainModel.HOSTNAME.getName())
+        .label(HohenheimFormCopy.label("hostname"))
+        .help(HohenheimFormCopy.help("create_hostname"))
+        .placeholder("example.com")
+        .visibleIn(EditView.CREATE)
+        .build();
+
+    /**
      * The site form: choice cards decide the upstream kind (each card names what it
      * does in one sentence), the per-kind settings switch under it without a round
      * trip, and the instance pick only wakes up for the {@code instance} kind --
@@ -91,6 +116,9 @@ public class SiteResource extends RowResource {
      */
     private final FormSpec formSpec = FormSpec.builder()
         .add(SiteModel.NAME)
+        // Optional, CREATE only: a blank one still creates a hostname-less site and lands
+        // on the Domains tab (createdRecordUrl), which is where the second one goes anyway.
+        .add(CREATE_HOSTNAME)
         .add(Select.of(SiteModel.UPSTREAM_KIND)
             .options(FieldFormEntryDefaults.enumOptionSource(SiteModel.UPSTREAM_KIND))
             .presentation(Select.Presentation.CARDS)
@@ -186,13 +214,15 @@ public class SiteResource extends RowResource {
      * therefore serves nothing.
      *
      * AIDEV-NOTE: this closes the Expose journey. The instance page's Expose action
-     * prefills this form, the operator saves, and the site then answers 503 to nobody --
-     * hostnames are {@code site_domains} child rows and the create form carries no
-     * hostname field, so the one screen that finishes the job was an undirected
-     * discovery. The Domains tab's own empty state already says what to do there
-     * ("Add a hostname so traffic routes to this site"); all that was missing was
-     * arriving at it. CREATE only: after an ordinary Save the operator stays on the
-     * form, which is the framework's own rule.
+     * prefills this form, the operator saves, and a site with no hostname answers 503 to
+     * nobody -- hostnames are {@code site_domains} child rows, so the one screen that
+     * finishes the job was an undirected discovery. The create form now offers the FIRST
+     * hostname ({@link #CREATE_HOSTNAME}), and this redirect stays right either way: blank
+     * means the site still has nothing to answer on, and a filled one still leads to where
+     * the second hostname, the certificate and the TLS switches live. The Domains tab's own
+     * empty state already says what to do there ("Add a hostname so traffic routes to this
+     * site"); all that was missing was arriving at it. CREATE only: after an ordinary Save
+     * the operator stays on the form, which is the framework's own rule.
      *
      * AIDEV-NOTE: the panel slug is spelled because {@code createdRecordUrl} is declared
      * as a String and never sees the Panel -- the framework's own escape-hatch note. It
@@ -386,10 +416,25 @@ public class SiteResource extends RowResource {
         return ctx -> AccessDecision.allow(QueryPredicate.of(SiteModel.DELETED_AT.isNull()));
     }
 
+    /**
+     * Create the site and, when the create form carried one, its first hostname -- in the
+     * ONE transaction the CMS create submit already wraps this call in.
+     *
+     * AIDEV-NOTE: the hostname is REMOVED from the coerced map first, because
+     * {@link #CREATE_HOSTNAME} backs no column and staging it would ask the sites table for
+     * one it has not got. The domain row then goes through the ordinary
+     * {@code SiteDomainModel.save}, which is the whole point: the claim checks (hostname
+     * required, route overlap, route taken, quarantine) live in that model's write pipeline
+     * (SiteDomainResource.installRouteInvariant), so this create is refused by exactly the
+     * refusal a hand-made domain gets, pathed on "hostname" -- and because
+     * {@code Resource.inMutationTransaction} wraps the whole mutation, the thrown Violations
+     * rolls the site back too. Do NOT copy any part of that check up here.
+     */
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         Map<String, Object> values = CmsSupport.mutable(coerced);
+        String hostname = trimmed(values.remove(CREATE_HOSTNAME.getName()));
         String name = trimmed(values.get("name"));
         if (name.isEmpty()) {
             throw Violations.ofField("name", name, CmsSupport.violationText("name_required"));
@@ -397,7 +442,25 @@ public class SiteResource extends RowResource {
         values.put("slug", slugify(name));
         values.put("status", SiteModel.STATUS_ACTIVE);
         normalizeDevNamespace(values, null);
-        return super.persistRow(values, accessContext);
+        Object primaryKey = super.persistRow(values, accessContext);
+        if (!hostname.isEmpty() && primaryKey instanceof Integer siteId) {
+            createFirstDomain(siteId, hostname);
+        }
+        return primaryKey;
+    }
+
+    /**
+     * The minimal hostname row an operator creates by hand on the Domains tab
+     * ({@code SiteDomainResource.QUICK_CREATE}: the hostname, the site, and the force-SSL
+     * default); the match type is derived by the model's own canonicalization hook.
+     */
+    private static void createFirstDomain(int siteId, @NonNull String hostname) {
+        SiteDomainModel domainModel = Models.get(SiteDomainModel.class);
+        Row domain = domainModel.createEmptyRow();
+        domain.set(SiteDomainModel.SITE_ID, siteId);
+        domain.set(SiteDomainModel.HOSTNAME, hostname);
+        domain.set(SiteDomainModel.FORCE_SSL, SiteDomainModel.FORCE_SSL.getDefaultValue());
+        domainModel.save(domain);
     }
 
     @Override

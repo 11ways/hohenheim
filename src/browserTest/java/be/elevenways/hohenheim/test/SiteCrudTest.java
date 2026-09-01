@@ -70,9 +70,9 @@ class SiteCrudTest extends HohenheimTestBase {
         assertThat((String) site.get(SiteModel.STATUS)).isEqualTo(SiteModel.STATUS_ACTIVE);
         Integer siteId = site.get(SiteModel.ID);
 
-        // A saved site has NO hostname yet -- the create form carries no hostname field
-        // and hostnames are site_domains child rows -- so it serves 503 to nobody until
-        // one is added on the Domains tab. The create therefore LANDS there, which is
+        // This create left the create form's optional hostname blank, so the site has NO
+        // hostname yet -- hostnames are site_domains child rows -- and it serves 503 to
+        // nobody until one is added on the Domains tab. The create therefore LANDS there, which is
         // what closes the instance page's Expose journey; without it the last screen was
         // an undirected discovery.
         assertThat(response.headers().firstValue("Location"))
