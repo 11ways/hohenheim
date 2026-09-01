@@ -692,7 +692,7 @@
       "scope": "field"
     },
     {
-      "text": "Maximale levensduur van een aanvraag in seconden. 0 verwijdert de limiet voor streaming, gRPC en WebSockets.",
+      "text": "Maximale levensduur van een aanvraag in seconden, van 0 tot {$max}. 0 verwijdert de limiet voor streaming, gRPC en WebSockets.",
       "scope": "help"
     }
   ],
@@ -1348,6 +1348,10 @@
       "scope": "help"
     }
   ],
+  "create_hostname": {
+    "text": "Optioneel. De eerste hostnaam waarop deze site antwoordt; meer hostnamen en TLS stel je in op het tabblad Domeinen.",
+    "scope": "help"
+  },
   "last_run_failed": {
     "text": "Laatste uitvoering mislukt",
     "scope": "attention_detail"
@@ -1646,6 +1650,10 @@
     {
       "text": "Status",
       "scope": "instance_artifacts"
+    },
+    {
+      "text": "Status",
+      "scope": "field"
     }
   ],
   "stored_log": {
@@ -1738,6 +1746,10 @@
       "scope": "instance_shell"
     }
   ],
+  "framework": {
+    "text": "Framework",
+    "scope": "settings_mount"
+  },
   "description": [
     {
       "text": "Kies hoe de applicatie draait, voeg een domein toe en vraag daarna een certificaat aan. Hohenheim begeleidt elke stap vanaf de sitepagina.",
@@ -2523,6 +2535,11 @@
     {
       "text": "Back-up",
       "scope": "schedule_action"
+    },
+    {
+      "text": "Back-up gemaakt",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "networking": {
@@ -2549,7 +2566,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "{$count} container(s), volume(s) of netwerk(en) op deze host zijn niet door Hohenheim aangemaakt. Ze blijven ongemoeid; bekijk ze onder Afstemmingsbevindingen.",
+      "text": "{$count} container(s), volume(s) of netwerk(en) op deze host zijn niet door Hohenheim aangemaakt. Ze blijven ongemoeid; open {$page} om precies deze te bekijken.",
       "scope": "attention_detail"
     }
   ],
@@ -2733,6 +2750,11 @@
     {
       "text": "Ingeschakeld",
       "scope": "spamservice"
+    },
+    {
+      "text": "Ingeschakeld",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "settings": {
@@ -3744,6 +3766,10 @@
     "scope": "dns_remote"
   },
   "delete_confirm": [
+    {
+      "text": "Database '{$database}' loskoppelen van instantie '{$instance}'? De bereikbaarheid wordt bij het bevestigen meteen ingetrokken bij de daemon, en de geinjecteerde {$prefix}-variabelen verdwijnen bij de volgende uitrol van de instantie. De database zelf en de gegevens blijven behouden.",
+      "scope": "instance_database"
+    },
     {
       "text": "Dit record op de eigenaar-peer verwijderen?",
       "scope": "dns_remote"
@@ -4803,10 +4829,16 @@
     "text": "Externe volumenaam",
     "scope": "field"
   },
-  "host_port": {
-    "text": "Hostpoort",
-    "scope": "field"
-  },
+  "host_port": [
+    {
+      "text": "Hostpoort",
+      "scope": "field"
+    },
+    {
+      "text": "Optionele vaste hostpoort; laat leeg om er automatisch een uit het geconfigureerde venster te kiezen. Een opgegeven poort wordt altijd vooraf geclaimd",
+      "scope": "help"
+    }
+  ],
   "host_ip": {
     "text": "Hostadres",
     "scope": "field"
@@ -5085,6 +5117,11 @@
     {
       "text": "Uitgeschakeld",
       "scope": "instance_schedule"
+    },
+    {
+      "text": "Uitgeschakeld",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "deploy_log": {
@@ -5203,6 +5240,11 @@
     {
       "text": "Gestopt",
       "scope": "instance_status"
+    },
+    {
+      "text": "Gestopt",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "missing": {
@@ -5393,6 +5435,11 @@
     {
       "text": "Gemaakt",
       "scope": "instance_artifacts"
+    },
+    {
+      "text": "Aangemaakt",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "error": [
@@ -5409,10 +5456,17 @@
       "scope": "cert_status"
     }
   ],
-  "deployed": {
-    "text": "Instantie {$name} draait",
-    "scope": "instance"
-  },
+  "deployed": [
+    {
+      "text": "Instantie {$name} draait",
+      "scope": "instance"
+    },
+    {
+      "text": "Uitgerold",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "stopped_toast": {
     "text": "Instantie {$name} gestopt",
     "scope": "instance"
@@ -5943,6 +5997,11 @@
     {
       "text": "Snapshot",
       "scope": "schedule_action"
+    },
+    {
+      "text": "Momentopname gemaakt",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "snapshot_confirm": {
@@ -6872,10 +6931,17 @@
       "scope": "restart_policy"
     }
   ],
-  "console_command": {
-    "text": "Consolecommando sturen",
-    "scope": "schedule_action"
-  },
+  "console_command": [
+    {
+      "text": "Consolecommando sturen",
+      "scope": "schedule_action"
+    },
+    {
+      "text": "Consoleopdracht verstuurd",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "expire_preview": {
     "text": "Preview laten vervallen",
     "scope": "schedule_action"
@@ -6960,10 +7026,6 @@
       "scope": "help"
     }
   ],
-  "instance_host_port": {
-    "text": "Optionele vaste hostpoort; laat leeg om er automatisch een uit het geconfigureerde venster te kiezen. Een opgegeven poort wordt altijd vooraf geclaimd",
-    "scope": "help"
-  },
   "public_ipv4": [
     {
       "text": "Publiek IPv4-adres",
@@ -7104,10 +7166,17 @@
     "text": "Bestanden lezen",
     "scope": "capability"
   },
-  "files_write": {
-    "text": "Bestanden schrijven",
-    "scope": "capability"
-  },
+  "files_write": [
+    {
+      "text": "Bestanden schrijven",
+      "scope": "capability"
+    },
+    {
+      "text": "Bestand geschreven",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "stats": {
     "text": "Statistieken",
     "scope": "instance"
@@ -7829,10 +7898,17 @@
     "text": "Instantie {$name} moet draaien voor een in-place app-update",
     "scope": "violations"
   },
-  "app_update_failed": {
-    "text": "De app-update van instantie {$name} is mislukt: {$reason}",
-    "scope": "violations"
-  },
+  "app_update_failed": [
+    {
+      "text": "De app-update van instantie {$name} is mislukt: {$reason}",
+      "scope": "violations"
+    },
+    {
+      "text": "App-update mislukt",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "app_update": [
     {
       "text": "App bijwerken",
@@ -8183,14 +8259,28 @@
     "text": "Ophalen",
     "scope": "server_media"
   },
-  "media_fetched": {
-    "text": "Media '{$name}' is nu beschikbaar op deze host",
-    "scope": "server_media"
-  },
-  "media_uploaded": {
-    "text": "Media '{$name}' is naar deze host geüpload",
-    "scope": "server_media"
-  },
+  "media_fetched": [
+    {
+      "text": "Media '{$name}' is nu beschikbaar op deze host",
+      "scope": "server_media"
+    },
+    {
+      "text": "Media opgehaald",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
+  "media_uploaded": [
+    {
+      "text": "Media '{$name}' is naar deze host geüpload",
+      "scope": "server_media"
+    },
+    {
+      "text": "Media opgeladen",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "upload_title": {
     "text": "Een ISO uploaden",
     "scope": "server_media"
@@ -8211,10 +8301,17 @@
     "text": "De upload van '{$name}' bevatte geen data",
     "scope": "server_media"
   },
-  "media_deleted": {
-    "text": "Media '{$name}' is verwijderd",
-    "scope": "server_media"
-  },
+  "media_deleted": [
+    {
+      "text": "Media '{$name}' is verwijderd",
+      "scope": "server_media"
+    },
+    {
+      "text": "Media verwijderd",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "add_disk": {
     "text": "Schijf aankoppelen",
     "scope": "instance_device"
@@ -8784,6 +8881,11 @@
     {
       "text": "Exec",
       "scope": "instance"
+    },
+    {
+      "text": "Opdracht uitgevoerd",
+      "scope": "cms",
+      "target": "activity_action"
     }
   ],
   "run": [
@@ -10074,10 +10176,17 @@
     "text": "Verwijder deze regel, en alles wat erin genest zit.",
     "scope": "access_rule"
   },
-  "deleted": {
-    "text": "Regel verwijderd",
-    "scope": "access_rule"
-  },
+  "deleted": [
+    {
+      "text": "Regel verwijderd",
+      "scope": "access_rule"
+    },
+    {
+      "text": "Verwijderd",
+      "scope": "cms",
+      "target": "activity_action"
+    }
+  ],
   "summary_group_any": {
     "text": "Één van de regels hierin moet slagen",
     "scope": "access_rule"
@@ -10306,6 +10415,10 @@
     {
       "text": "Bouwen vanaf een repository en uitrollen met releases achter een gezondheidscontrole",
       "scope": "instance_kind_description"
+    },
+    {
+      "text": "Applicatie",
+      "scope": "field"
     }
   ],
   "btrfs": {
@@ -11825,5 +11938,225 @@
   "import_replica_named": {
     "text": "De records zijn eigendom van {$peer}, de primary waarvan deze zone overdraagt, en komen binnen via AXFR, dus hier kan geen zonebestand geimporteerd worden. Importeer het op {$peer}.",
     "scope": "dns_zone"
+  },
+  "updated": {
+    "text": "Bijgewerkt",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "reaped_controller_objects": {
+    "text": "Controllerobjecten opgeruimd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "removed_orphan": {
+    "text": "Verweesd object verwijderd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "backup_downloaded": {
+    "text": "Back-up gedownload",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "dyndns_update": {
+    "text": "Dynamische DNS bijgewerkt",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "released_hostname_disabled": {
+    "text": "Vrijgegeven hostnaam uitgeschakeld",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "imported": {
+    "text": "Geïmporteerd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "rolled_back": {
+    "text": "Teruggerold",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "volumes_purged": {
+    "text": "Volumes gewist",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "variable_set": {
+    "text": "Variabele ingesteld",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "variable_deleted": {
+    "text": "Variabele verwijderd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "domain_added": {
+    "text": "Domein toegevoegd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "domain_removed": {
+    "text": "Domein verwijderd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "cloned": {
+    "text": "Gekloond",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "preview_triggered": {
+    "text": "Preview gestart",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "dyndns_token_minted": {
+    "text": "Dynamische-DNS-token aangemaakt",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "dyndns_token_revoked": {
+    "text": "Dynamische-DNS-token ingetrokken",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "tested": {
+    "text": "Getest",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "device_attached": {
+    "text": "Apparaat gekoppeld",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "device_resized": {
+    "text": "Apparaatgrootte aangepast",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "device_detached": {
+    "text": "Apparaat losgekoppeld",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "approved": {
+    "text": "Goedgekeurd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "unapproved": {
+    "text": "Goedkeuring ingetrokken",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "volume_declared": {
+    "text": "Volume vastgelegd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "volume_redeclared": {
+    "text": "Volume opnieuw vastgelegd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "quarantine_lifted": {
+    "text": "Quarantaine opgeheven",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "requested": {
+    "text": "Aangevraagd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "reissued": {
+    "text": "Opnieuw uitgegeven",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "files_save": {
+    "text": "Bestand opgeslagen",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "files_upload": {
+    "text": "Bestand opgeladen",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "files_mkdir": {
+    "text": "Map aangemaakt",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "files_rename": {
+    "text": "Bestand hernoemd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "files_delete": {
+    "text": "Bestand verwijderd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "restored_backup": {
+    "text": "Back-up teruggezet",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "restored_snapshot": {
+    "text": "Momentopname teruggezet",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "settled_interrupted": {
+    "text": "Onderbroken run afgehandeld",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "deleted_data": {
+    "text": "Gegevens verwijderd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "template_captured": {
+    "text": "Sjabloon vastgelegd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "reconciled": {
+    "text": "Afgestemd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "drained": {
+    "text": "Leeggehaald",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "migrated": {
+    "text": "Gemigreerd",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "shell_open": {
+    "text": "Shell geopend",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "shell_close": {
+    "text": "Shell gesloten",
+    "scope": "cms",
+    "target": "activity_action"
+  },
+  "app_updated": {
+    "text": "App bijgewerkt",
+    "scope": "cms",
+    "target": "activity_action"
   }
 }

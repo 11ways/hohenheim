@@ -120,7 +120,7 @@ public final class ServerResource extends RowResource {
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.POSTURE))
         .add(ServerModel.PUBLIC_IPV4)
         .add(ServerModel.PUBLIC_IPV6)
-        .add(Computed.of(TRUST_NOTICE, values -> hostCopy(Microcopy.of(
+        .add(Computed.of(TRUST_NOTICE, values -> hostCopy(serverCopy(
                 ServerModel.RUNTIME_INCUS.equals(values.get("runtime"))
                     ? "trust_notice_body_incus" : "trust_notice_body")))
             .dependsOn("runtime")
@@ -330,10 +330,10 @@ public final class ServerResource extends RowResource {
             operatingSystem += " (" + platform + ")";
         }
         if (operatingSystem.isBlank()) {
-            operatingSystem = hostCopy(Microcopy.of("host_unknown_platform"));
+            operatingSystem = hostCopy(serverCopy("host_unknown_platform"));
         }
         double memoryGib = Math.round(summary.memoryBytes() / 1_073_741_824.0 * 10) / 10.0;
-        return hostCopy(Microcopy.of("host_summary")
+        return hostCopy(serverCopy("host_summary")
             .withArg("docker", docker)
             .withArg("os", operatingSystem)
             .withArg("cpus", String.valueOf(summary.cpus()))
@@ -348,9 +348,8 @@ public final class ServerResource extends RowResource {
      * server's default locale.
      */
     private static @NonNull String hostCopy(@NonNull Microcopy microcopy) {
-        return microcopy.withFilter("scope", "server")
-            .resolve(LocaleChain.of(RouteLocales.get().getDefaultLocale()),
-                Zenit.getMessageResolver());
+        return microcopy.resolve(LocaleChain.of(RouteLocales.get().getDefaultLocale()),
+            Zenit.getMessageResolver());
     }
 
     @Override
@@ -469,6 +468,15 @@ public final class ServerResource extends RowResource {
             .build();
     }
 
+    /**
+     * A host-scoped catalog key.
+     *
+     * AIDEV-NOTE: the scope is stamped HERE, beside the key. {@link #hostCopy} used to add
+     * it while resolving, and a filter added by a wrapper that takes an already-built
+     * Microcopy is invisible to the Java key scan, so {@code DeclaredMicrocopyKeysTest}
+     * judged host_summary and host_unknown_platform unfiltered and called two perfectly
+     * good entries missing.
+     */
     private static @NonNull Microcopy serverCopy(@NonNull String key) {
         return Microcopy.of(key).withFilter("scope", "server");
     }
