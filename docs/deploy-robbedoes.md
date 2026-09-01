@@ -2104,3 +2104,50 @@ exists. Proven live both ways:
 Live hostnames re-verified via `--resolve`: earl 200/1024, invulassistent
 401/8950, tavernetomberg 200/145413, www 200/145417, ssl=0 everywhere.
 ROLLBACK IS JAR ONLY: the preflight `.rollback` back into place and restart.
+
+## Deploy 2026-09-01 (fifth jar swap): a7d65f01, the audit fix wave
+
+Swapped to hohenheim `a7d65f01` (jar sha256 `111e8cd5...`, 268,096,840 bytes,
+stamp 13/13 `dirty=false`: hawkeye `1218defa`, zenit `9fd78ec7`, zenit-cms
+`380f48f9`, zenit-microcopy `6f32289e`, plumage `5adb654b`, zenit-forms
+`abcc2118`, zenit-comms `1f0725f2`). Built from a clean secondary workspace
+(`~/projects/javaweb-deploy`, 15 detached worktrees, deleted afterwards).
+Migration diff: M008 (bans.scope). Preflight
+`/root/hohenheim-preflight-20260901-wave/` (.pre + .at-swap, settings,
+rollback jar = `a439c66a...` i.e. `5c3696b2`). Stop 10:49:03Z, healthy
+10:49:15Z; second restart 10:53:55Z, healthy 10:54:08Z. 0 journal errors.
+
+REHEARSAL-LANE DEFECT, recorded: `--run-migrations` from a scratch cwd holding
+a db byte copy still migrated the LIVE database (the jar resolves its db path
+independent of cwd), so the "rehearsal" applied M008 for real while the old jar
+was serving (risk-free here: additive nullable column, transactional) and the
+real run reported `0 applied`. Until the rehearsal lane gets an explicit
+db-path override, a byte-copy rehearsal proves nothing; kuifje and starfleet
+skipped it and applied M008 directly (`1 applied` each).
+
+Unit changes (backup `/root/hohenheim.service.bak-20260901`):
+`SupplementaryGroups=docker systemd-journal` (the SSH watcher reads journald),
+`-Xmx2048m -> -Xmx1024m` + `-Xlog:gc:file=/opt/hohenheim/logs/gc.log` (RSS
+after restart 388 MB vs 2.29 GB before; jcmd is unavailable on the JRE, the gc
+log is what makes the live set measurable from now on; rollback = restore the
+backup line + restart).
+
+Settings: `security.ssh_watch_enabled=true` via the panel
+(`nftables_ssh_ports` stays default 22). Proven live at the second restart:
+`hohenheim.ssh_watch_started`, `banned_ssh_v4`/`banned_ssh_v6` sets + port-22
+drop rules programmed beside the untouched 80/443 set.
+
+Crash policy: instances 2, 3, 6, 8, 11, 13, 15 (all app workloads) flipped to
+`restart` via the panel; DB-generated instances pick it up from code at their
+next reprovision and are covered by the crash->error attention item meanwhile.
+
+Boot self-heal observed: `QUOTA: reconciled bucket hohenheim:instances: from
+15 to 14` and `owner_mem_mb: from 8448 to 7936` -- the refused-create leak
+corrected itself as designed. Dashboard now shows the previously-dead
+failed-task attention items (BackupControlPlane, BackupDatabases) and the
+Inbox surface; alerts fan out to admin inboxes with no channel rows.
+
+Live checks: earl 200, invulassistent 401 (its gate), tavernetomberg + www
+200, panel 302, health 200, `zd_deployed` current 13/13.
+ROLLBACK: preflight jar back into place + unit backup line + restart (M008 is
+additive; the pre-migration db copy is `.pre`).

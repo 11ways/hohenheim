@@ -1200,3 +1200,17 @@ errors, `0 applied`, row counts identical, both containers kept 21 h uptimes.
 Apex/www 200, admin 302, comms 200, skeleton 202 (the app's own queue page),
 ssl=0 everywhere; `hoh-dns-diff delegation starfleet.life` OK.
 `zenit-dev deployed` = current 13/13 on all three targets.
+
+## Deploy 2026-09-01: a7d65f01, the audit fix wave
+
+Same jar as robbedoes/kuifje (`111e8cd5...`, 13/13 clean). Preflight
+`/root/hohenheim-preflight-20260901-wave/`. M008 applied directly
+(`1 applied`). Healthy after both restarts (~25s boot on this 2 GB box;
+first health probe at 12s answers 000, that is boot time, not failure).
+Unit gained `SupplementaryGroups=docker systemd-journal` (backup
+`/root/hohenheim.service.bak-20260901`); heap stays `-Xmx768m`.
+`security.ssh_watch_enabled` deliberately left OFF here: fail2ban already
+guards sshd on this box, and two ban authorities on one port is the
+duplication the watcher exists to avoid elsewhere.
+Sites: apex 200, admin 302, comms hub 200; DNS SOA serving; `zd_deployed`
+current 13/13.

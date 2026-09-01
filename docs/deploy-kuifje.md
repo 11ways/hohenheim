@@ -1742,3 +1742,16 @@ restart 14:05:55Z -> 14:06:04Z (9 s), 0 journal errors, listeners 53/80/443 +
 After the wave `hoh-dns-diff compare` = IDENTICAL with robbedoes for `wcag.be`
 and `tavernetomberg.be`, `delegation` OK for both; kuifje and robbedoes were
 never down together.
+
+## Deploy 2026-09-01: a7d65f01, the audit fix wave
+
+Same jar as robbedoes (`111e8cd5...`, 13/13 clean). Preflight
+`/root/hohenheim-preflight-20260901-wave/`. M008 applied directly
+(`1 applied`; the byte-copy rehearsal lane is broken, see deploy-robbedoes.md
+2026-09-01). Stop 10:54:40Z, healthy 10:54:55Z; second restart 10:55:48Z.
+Unit gained `SupplementaryGroups=systemd-journal` (backup
+`/root/hohenheim.service.bak-20260901`); heap stays `-Xmx1472m`.
+`security.ssh_watch_enabled=true` via panel; watcher started, port-22 ban
+sets + rules live beside the 80/443 set. DNS serving wcag.be /
+tavernetomberg.be / starfleet.life replicas after both restarts; panel 302,
+health 200, `zd_deployed` current 13/13.
