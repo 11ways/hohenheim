@@ -9944,7 +9944,7 @@
       "scope": "release_operation"
     },
     {
-      "text": "Workloads die op een host gevonden zijn maar niet bij deze installatie bekend zijn.",
+      "text": "Elke container, elk volume en elk netwerk dat de reconciler op een host vond, en hoe die toegewezen werden: in beheer, verweesd of extern.",
       "scope": "reconcile_finding"
     },
     {
