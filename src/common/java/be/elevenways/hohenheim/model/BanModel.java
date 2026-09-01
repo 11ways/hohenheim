@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.BooleanField;
@@ -40,6 +41,20 @@ public class BanModel extends Model {
             .label(Microcopy.of("manual").withFilter("scope", "ban_source"))
             .icon("pen").color("blue"))
         .label(HohenheimFormCopy.label("ban_source"))
+        .build());
+    /**
+     * WHICH traffic this ban refuses; the vocabulary lives on {@link BanScope}, never as a
+     * second list of tokens here.
+     */
+    public static final EnumField SCOPE = SCHEMA.addField(EnumField.builder("scope")
+        .value(BanScope.WEB.token(), v -> v.displayName("Web")
+            .label(BanScope.WEB.label())
+            .icon("globe").color("blue"))
+        .value(BanScope.SSH.token(), v -> v.displayName("SSH")
+            .label(BanScope.SSH.label())
+            .icon("terminal").color("purple"))
+        .defaultValue(BanScope.WEB.token())
+        .label(HohenheimFormCopy.label("ban_scope"))
         .build());
     public static final StringField EVENT_TYPE = SCHEMA.addField(StringField.builder().name("event_type")
         .label(HohenheimFormCopy.label("event_type"))

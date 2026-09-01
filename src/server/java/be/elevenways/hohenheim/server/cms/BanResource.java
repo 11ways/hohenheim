@@ -153,6 +153,9 @@ public final class BanResource extends RowResource {
         .column(ColumnSpec.fromField(BanModel.IP).filterable().subtext("reason").copyable().build())
         .column(ColumnSpec.fromField(BanModel.REASON).hidden().build())
         .column(ColumnSpec.fromField(BanModel.SOURCE).filterable().build())
+        // WHICH traffic the ban refuses: without it the list showed an SSH ban and a web
+        // ban as the same row, and only one of them is in the 80/443 nftables set.
+        .column(ColumnSpec.fromField(BanModel.SCOPE).filterable().build())
         // ONE state badge (active / lifted / expired) instead of a yes-no on `active`,
         // which read "No" for a lifted ban and an expired one alike. The `active` filter
         // below keeps answering "still enforced?" from the filter bar.
@@ -166,6 +169,8 @@ public final class BanResource extends RowResource {
             .label(FieldLabels.labelFor(BanModel.IP)).build())
         .filter(FilterSpec.forField(BanModel.SOURCE, FilterSpec.Kind.SELECT)
             .label(FieldLabels.labelFor(BanModel.SOURCE)).build())
+        .filter(FilterSpec.forField(BanModel.SCOPE, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(BanModel.SCOPE)).build())
         .filter(FilterSpec.forField(BanModel.ACTIVE, FilterSpec.Kind.BOOLEAN)
             .label(FieldLabels.labelFor(BanModel.ACTIVE)).build())
         .filter(FilterSpec.forField(BanModel.EVENT_TYPE, FilterSpec.Kind.TEXT)

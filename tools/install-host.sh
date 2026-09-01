@@ -291,6 +291,15 @@ if [ "$WITH_DOCKER" = "yes" ] && getent group docker >/dev/null 2>&1; then
         run usermod -aG docker "$SERVICE_USER"
     fi
 fi
+# The SSH brute-force watcher tails sshd's journal; without this group journalctl
+# shows the service user nothing and security.ssh_watch_enabled bans nobody.
+if [ "$role_firewall" = "true" ] && getent group systemd-journal >/dev/null 2>&1; then
+    if id -nG "$SERVICE_USER" 2>/dev/null | tr ' ' '\n' | grep -qx systemd-journal; then
+        skip "$SERVICE_USER already in the systemd-journal group"
+    else
+        run usermod -aG systemd-journal "$SERVICE_USER"
+    fi
+fi
 
 # --- 6. directory layout ----------------------------------------------------
 
@@ -455,6 +464,8 @@ seed_settings "$SETTINGS_DIR/hohenheim.dry" 0640 "{
         \"bans_enabled\": $role_firewall,
         \"nftables_enabled\": $role_firewall,
         \"nftables_ports\": \"80,443\",
+        \"nftables_ssh_ports\": \"22\",
+        \"ssh_watch_enabled\": $role_firewall,
         \"auto_ban_ttl_hours\": 24
     }
 }
@@ -603,6 +614,13 @@ if [ "$WITH_DOCKER" = "yes" ]; then
     DOCKER_GROUP="SupplementaryGroups=docker
 "
 fi
+# Declared on the unit as well as through usermod: systemd resolves supplementary
+# groups itself, so the sshd-journal read survives a service user re-creation.
+JOURNAL_GROUP=""
+if [ "$role_firewall" = "true" ]; then
+    JOURNAL_GROUP="SupplementaryGroups=systemd-journal
+"
+fi
 
 UNIT_BODY="[Unit]
 Description=Hohenheim controller
@@ -613,7 +631,7 @@ Wants=network-online.target
 Type=simple
 User=$SERVICE_USER
 Group=$SERVICE_USER
-${DOCKER_GROUP}WorkingDirectory=$PREFIX
+${DOCKER_GROUP}${JOURNAL_GROUP}WorkingDirectory=$PREFIX
 ExecStart=$JAVA_BIN -jar $JAR_TARGET
 Restart=always
 RestartSec=5

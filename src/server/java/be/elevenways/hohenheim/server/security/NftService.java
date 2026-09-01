@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -54,6 +55,19 @@ public class NftService {
     static final String SET_V4 = "banned_v4";
     static final String SET_V6 = "banned_v6";
 
+    /**
+     * The SSH-scoped sets, programmed by the port-22 rule pair.
+     *
+     * AIDEV-NOTE: a SECOND set rather than more ports on the first, and that is the
+     * design, not an implementation detail. {@code security.nftables_ports} exists to keep
+     * the web drop rule off ports other services depend on, so an SSH brute-forcer cannot
+     * be added to it without locking every one of ITS members out of port 22 as well.
+     * Which set a ban lands in is the {@code bans.scope} column, decided once at creation
+     * and switched on exhaustively here -- see {@link BanScope}.
+     */
+    static final String SET_SSH_V4 = "banned_ssh_v4";
+    static final String SET_SSH_V6 = "banned_ssh_v6";
+
     private final NftRunner runner;
     private final BooleanSupplier enabled;
 
@@ -77,11 +91,12 @@ public class NftService {
      * Idempotent boot setup: create the owned table, chain and timeout sets,
      * then flush the chain and re-add the two port-scoped drop rules.
      */
-    public synchronized void setup(@NonNull List<Integer> ports) {
+    public synchronized void setup(@NonNull List<Integer> ports, @NonNull List<Integer> sshPorts) {
         if (!isEnabled()) {
             return;
         }
         String portSet = portSetLiteral(ports);
+        String sshPortSet = portSetLiteral(sshPorts, List.of(SSH_PORT));
         run(List.of("add", "table", "inet", table()));
         run(List.of("add", "chain", "inet", table(), CHAIN,
             "{ type filter hook input priority -10 ; policy accept ; }"));
@@ -90,52 +105,69 @@ public class NftService {
         // interval: v6 bans are /64 prefixes, and prefix elements need it.
         run(List.of("add", "set", "inet", table(), SET_V6,
             "{ type ipv6_addr ; flags interval, timeout ; }"));
+        run(List.of("add", "set", "inet", table(), SET_SSH_V4,
+            "{ type ipv4_addr ; flags timeout ; }"));
+        run(List.of("add", "set", "inet", table(), SET_SSH_V6,
+            "{ type ipv6_addr ; flags interval, timeout ; }"));
         run(List.of("flush", "chain", "inet", table(), CHAIN));
         run(List.of("add", "rule", "inet", table(), CHAIN,
             "tcp", "dport", portSet, "ip", "saddr", "@" + SET_V4, "drop"));
         run(List.of("add", "rule", "inet", table(), CHAIN,
             "tcp", "dport", portSet, "ip6", "saddr", "@" + SET_V6, "drop"));
+        run(List.of("add", "rule", "inet", table(), CHAIN,
+            "tcp", "dport", sshPortSet, "ip", "saddr", "@" + SET_SSH_V4, "drop"));
+        run(List.of("add", "rule", "inet", table(), CHAIN,
+            "tcp", "dport", sshPortSet, "ip6", "saddr", "@" + SET_SSH_V6, "drop"));
     }
 
     /** Add a banned IP element; a null ttl means permanent (no kernel timeout).
      * @return true when disabled or the kernel accepted the element
      */
-    public synchronized boolean addBan(@NonNull String ip, @Nullable Long ttlSeconds) {
+    public synchronized boolean addBan(@NonNull BanScope scope, @NonNull String ip,
+                                       @Nullable Long ttlSeconds) {
         if (!isEnabled()) {
             return true;
         }
-        return run(List.of("add", "element", "inet", table(), setFor(ip), elementLiteral(ip, ttlSeconds)));
+        return run(List.of("add", "element", "inet", table(), setFor(scope, ip),
+            elementLiteral(ip, ttlSeconds)));
     }
 
     /** Remove a banned IP element (a missing element only logs). */
-    public synchronized void removeBan(@NonNull String ip) {
+    public synchronized void removeBan(@NonNull BanScope scope, @NonNull String ip) {
         if (!isEnabled()) {
             return;
         }
-        run(List.of("delete", "element", "inet", table(), setFor(ip), "{ " + ip + " }"));
+        run(List.of("delete", "element", "inet", table(), setFor(scope, ip), "{ " + ip + " }"));
     }
 
-    /** One active ban for {@link #resync}: ip plus remaining ttl (null = permanent). */
-    public record ActiveBan(@NonNull String ip, @Nullable Long ttlSeconds) {}
+    /** One active ban for {@link #resync}: scope, ip and remaining ttl (null = permanent). */
+    public record ActiveBan(@NonNull BanScope scope, @NonNull String ip, @Nullable Long ttlSeconds) {}
 
     /**
-     * Full resync (used at boot): flush both sets and re-add every active DB
-     * ban, so the database stays the source of truth over kernel state.
+     * Full resync (used at boot): flush all four sets and re-add every active DB
+     * ban into the set its scope names, so the database stays the source of truth
+     * over kernel state.
      */
     public synchronized void resync(@NonNull List<ActiveBan> active) {
         if (!isEnabled()) {
             return;
         }
-        run(List.of("flush", "set", "inet", table(), SET_V4));
-        run(List.of("flush", "set", "inet", table(), SET_V6));
+        for (String set : List.of(SET_V4, SET_V6, SET_SSH_V4, SET_SSH_V6)) {
+            run(List.of("flush", "set", "inet", table(), set));
+        }
         for (ActiveBan ban : active) {
-            run(List.of("add", "element", "inet", table(), setFor(ban.ip()),
+            run(List.of("add", "element", "inet", table(), setFor(ban.scope(), ban.ip()),
                 elementLiteral(ban.ip(), ban.ttlSeconds())));
         }
     }
 
-    static @NonNull String setFor(@NonNull String ip) {
-        return ip.indexOf(':') >= 0 ? SET_V6 : SET_V4;
+    /** The set a ban belongs in: its scope picks the rule pair, its family the address type. */
+    static @NonNull String setFor(@NonNull BanScope scope, @NonNull String ip) {
+        boolean v6 = ip.indexOf(':') >= 0;
+        return switch (scope) {
+            case WEB -> v6 ? SET_V6 : SET_V4;
+            case SSH -> v6 ? SET_SSH_V6 : SET_SSH_V4;
+        };
     }
 
     static @NonNull String elementLiteral(@NonNull String ip, @Nullable Long ttlSeconds) {
@@ -146,7 +178,12 @@ public class NftService {
     }
 
     static @NonNull String portSetLiteral(@NonNull List<Integer> ports) {
-        List<Integer> effective = ports.isEmpty() ? List.of(80, 443) : ports;
+        return portSetLiteral(ports, List.of(80, 443));
+    }
+
+    static @NonNull String portSetLiteral(@NonNull List<Integer> ports,
+                                          @NonNull List<Integer> fallback) {
+        List<Integer> effective = ports.isEmpty() ? fallback : ports;
         StringBuilder literal = new StringBuilder("{ ");
         for (int i = 0; i < effective.size(); i++) {
             if (i > 0) {
@@ -157,9 +194,25 @@ public class NftService {
         return literal.append(" }").toString();
     }
 
+    /** The default SSH port, and the fallback when the ssh port setting parses to nothing. */
+    static final int SSH_PORT = 22;
+
     /** Parse the security.nftables_ports setting; blank or garbage falls back to 80,443. */
     public static @NonNull List<Integer> configuredPorts() {
-        String raw = HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NFTABLES_PORTS);
+        return parsePorts(
+            HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NFTABLES_PORTS),
+            List.of(80, 443));
+    }
+
+    /** Parse the security.nftables_ssh_ports setting; blank or garbage falls back to 22. */
+    public static @NonNull List<Integer> configuredSshPorts() {
+        return parsePorts(
+            HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.NFTABLES_SSH_PORTS),
+            List.of(SSH_PORT));
+    }
+
+    private static @NonNull List<Integer> parsePorts(@Nullable String raw,
+                                                     @NonNull List<Integer> fallback) {
         List<Integer> ports = new ArrayList<>();
         if (raw != null) {
             for (String part : raw.split("[,\\s]+")) {
@@ -176,7 +229,7 @@ public class NftService {
                 }
             }
         }
-        return ports.isEmpty() ? List.of(80, 443) : List.copyOf(ports);
+        return ports.isEmpty() ? fallback : List.copyOf(ports);
     }
 
     private boolean run(@NonNull List<String> nftArgs) {

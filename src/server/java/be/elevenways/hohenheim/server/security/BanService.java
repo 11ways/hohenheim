@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
+import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
@@ -96,7 +97,7 @@ public final class BanService {
         if (nft.isEnabled() && this.nftBootStarted.compareAndSet(false, true)) {
             this.nftBootThread = Thread.ofPlatform().daemon().name("nft-resync").start(() -> {
                 Blast.log("NFT: background boot reconciliation started");
-                nft.setup(NftService.configuredPorts());
+                nft.setup(NftService.configuredPorts(), NftService.configuredSshPorts());
                 resyncNftables();
                 Blast.log("NFT: background boot reconciliation finished");
             });
@@ -180,7 +181,8 @@ public final class BanService {
                     int ttlHours = HohenheimSettings.VALUES.getValue(
                         HohenheimSettings.Security.AUTO_BAN_TTL_HOURS);
                     createBanNormalized(bans, normalized, reason, BanModel.SOURCE_AUTO,
-                        eventType, Duration.ofHours(Math.max(1, ttlHours)), true);
+                        eventType, BanScope.forEventType(eventType),
+                        Duration.ofHours(Math.max(1, ttlHours)), true);
                     this.completedAutoBans.addLast(now);
                 } catch (RuntimeException e) {
                     Blast.log("BANS: auto-ban failed for", ip, "-", e.getMessage());
@@ -242,6 +244,21 @@ public final class BanService {
                                                @NonNull String source,
                                                @Nullable String eventType,
                                                @Nullable Duration ttl) {
+        return createBan(ip, reason, source, eventType, BanScope.WEB, ttl);
+    }
+
+    /**
+     * Create a ban in an explicit enforcement scope (null ttl = permanent). Returns the
+     * existing active row when the IP is already banned, whatever scope that row carries:
+     * one address is one actor, and two rows for it would be two lifting decisions.
+     *
+     * @throws IllegalArgumentException when the IP is unparseable or protected
+     */
+    public synchronized @NonNull Row createBan(@NonNull String ip, @Nullable String reason,
+                                               @NonNull String source,
+                                               @Nullable String eventType,
+                                               @NonNull BanScope scope,
+                                               @Nullable Duration ttl) {
         String trimmed = ip.trim();
         String problem = protectionProblem(trimmed);
         if (problem != null) {
@@ -256,12 +273,13 @@ public final class BanService {
             return existing;
         }
 
-        return createBanNormalized(bans, normalized, reason, source, eventType, ttl, false);
+        return createBanNormalized(bans, normalized, reason, source, eventType, scope, ttl, false);
     }
 
     private @NonNull Row createBanNormalized(@NonNull BanModel bans, @NonNull String normalized,
                                              @Nullable String reason, @NonNull String source,
-                                             @Nullable String eventType, @Nullable Duration ttl,
+                                             @Nullable String eventType, @NonNull BanScope scope,
+                                             @Nullable Duration ttl,
                                              boolean rollbackOnNftFailure) {
         Instant now = Instant.now();
         Row row = bans.createEmptyRow();
@@ -269,11 +287,12 @@ public final class BanService {
         row.set(BanModel.REASON, truncate(reason, 255));
         row.set(BanModel.SOURCE, source);
         row.set(BanModel.EVENT_TYPE, eventType);
+        row.set(BanModel.SCOPE, scope.token());
         row.set(BanModel.EXPIRES_AT, ttl != null ? now.plus(ttl) : null);
         row.set(BanModel.ACTIVE, true);
         bans.save(row);
 
-        boolean nftApplied = nft.addBan(normalized, ttl != null ? ttl.toSeconds() : null);
+        boolean nftApplied = nft.addBan(scope, normalized, ttl != null ? ttl.toSeconds() : null);
         if (!nftApplied && rollbackOnNftFailure) {
             if (!bans.delete(row)) {
                 throw new IllegalStateException("Could not roll back ban after nftables failure");
@@ -282,7 +301,7 @@ public final class BanService {
             throw new IllegalStateException("nftables rejected the automatic ban");
         }
         refreshCache();
-        Blast.log("BANS: banned", normalized, "(" + source + ")",
+        Blast.log("BANS: banned", normalized, "(" + source + "/" + scope.token() + ")",
             ttl != null ? "for " + ttl : "permanently");
         return row;
     }
@@ -317,8 +336,9 @@ public final class BanService {
             .updateAll();
 
         String ip = ban.get(BanModel.IP);
-        if (ip != null && !stillActivelyBanned(ip)) {
-            nft.removeBan(ip);
+        BanScope scope = scopeOf(ban);
+        if (ip != null && scope != null && !stillActivelyBanned(ip)) {
+            nft.removeBan(scope, ip);
         }
         refreshCache();
     }
@@ -361,14 +381,33 @@ public final class BanService {
         Instant now = Instant.now();
         for (Row row : listActive()) {
             String ip = row.get(BanModel.IP);
-            if (ip == null) {
+            BanScope scope = scopeOf(row);
+            if (ip == null || scope == null) {
                 continue;
             }
             Instant expires = row.get(BanModel.EXPIRES_AT);
             Long ttl = expires != null ? Math.max(1, Duration.between(now, expires).toSeconds()) : null;
-            active.add(new NftService.ActiveBan(ip, ttl));
+            active.add(new NftService.ActiveBan(scope, ip, ttl));
         }
         nft.resync(active);
+    }
+
+    /**
+     * The enforcement scope of a stored ban row, FAIL-CLOSED: a token this build does not
+     * know is programmed nowhere and says so, because there is no safe superset -- guessing
+     * WEB would silently drop an unknown-scoped actor off customer websites, and guessing
+     * SSH would silently stop refusing it there.
+     *
+     * @return the scope, or null when the stored token is unknown
+     */
+    private static @Nullable BanScope scopeOf(@NonNull Row ban) {
+        String token = ban.get(BanModel.SCOPE);
+        BanScope scope = BanScope.fromToken(token);
+        if (scope == null) {
+            Blast.log("BANS: ban", ban.get(BanModel.IP), "carries an unknown scope",
+                "'" + token + "' and is enforced NOWHERE; lift it or upgrade the controller");
+        }
+        return scope;
     }
 
     /** Test seam: wait for the one background boot reconciliation. */
@@ -389,10 +428,12 @@ public final class BanService {
     /** Rebuild the in-memory active-IP set from the database. */
     public synchronized void refreshCache() {
         try {
+            // WEB scope only: this cache IS the proxy's HTTP/TLS refusal, and an SSH
+            // brute-forcer was never declared unwelcome on a customer's website.
             Set<String> ips = new java.util.HashSet<>();
             for (Row row : listActive()) {
                 String ip = row.get(BanModel.IP);
-                if (ip != null) {
+                if (ip != null && BanScope.WEB == BanScope.fromToken(row.get(BanModel.SCOPE))) {
                     ips.add(ip);
                 }
             }

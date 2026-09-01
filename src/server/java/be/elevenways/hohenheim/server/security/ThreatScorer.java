@@ -43,12 +43,25 @@ public final class ThreatScorer {
     // weight, which is a scoring change nobody would see. {@link #isClassified} plus
     // ThreatScorerTest's coverage journey close the other half -- a NEW zenit event type
     // now fails the build until somebody decides what it is worth.
-    private static final Map<String, Integer> EVENT_WEIGHTS = Map.of(
-        SecurityEventTypes.AUTH_LOGIN_FAILED, 3,
-        SecurityEventTypes.AUTH_LOCKOUT, 10,
-        SecurityEventTypes.RATE_LIMITED, 1,
-        SecurityEventTypes.CSRF_FAILURE, 2,
-        SecurityEventTypes.DOMAIN_MISS, 1);
+    //
+    // AIDEV-NOTE: the ssh.* family is weighted so an ordinary human fumble stays far
+    // from the default threshold of 25 while a sweep crosses it in seconds. A wrong KEY
+    // is the cheapest signal on purpose (an agent offering three stale keys is routine
+    // and must never ban the owner); an invalid USERNAME and a protocol abuse are what
+    // only a scanner does, and "maximum authentication attempts exceeded" already means
+    // sshd counted several failures itself.
+    private static final Map<String, Integer> EVENT_WEIGHTS = Map.ofEntries(
+        Map.entry(SecurityEventTypes.AUTH_LOGIN_FAILED, 3),
+        Map.entry(SecurityEventTypes.AUTH_LOCKOUT, 10),
+        Map.entry(SecurityEventTypes.RATE_LIMITED, 1),
+        Map.entry(SecurityEventTypes.CSRF_FAILURE, 2),
+        Map.entry(SecurityEventTypes.DOMAIN_MISS, 1),
+        Map.entry(SecurityEventTypes.SSH_INVALID_USER, 4),
+        Map.entry(SecurityEventTypes.SSH_PASSWORD_FAILED, 3),
+        Map.entry(SecurityEventTypes.SSH_PUBLICKEY_FAILED, 1),
+        Map.entry(SecurityEventTypes.SSH_PREAUTH_ABORT, 2),
+        Map.entry(SecurityEventTypes.SSH_MAX_ATTEMPTS, 6),
+        Map.entry(SecurityEventTypes.SSH_PROTOCOL_ABUSE, 4));
     private static final int WS_EVENT_WEIGHT = 2;
 
     /** Every {@code ws.*} handshake refusal shares {@link #WS_EVENT_WEIGHT}. */

@@ -61,6 +61,11 @@ public final class HohenheimSecurity {
         ensureLocalAddresses();
         if (HohenheimRoles.enabled(HohenheimRoles.Role.FIREWALL)) {
             BanService.INSTANCE.boot();
+            // The sshd tail is ENFORCEMENT-tier too: it exists to produce bans, and a
+            // node that does not enforce them has no reason to read another daemon's log.
+            if (SshAuthWatcher.isConfigured()) {
+                SshAuthWatcher.INSTANCE.start();
+            }
         } else {
             Blast.slog("hohenheim.role_disabled", java.util.Map.of(
                 "role", HohenheimRoles.Role.FIREWALL.token(),
@@ -114,6 +119,12 @@ public final class HohenheimSecurity {
         labels.put(SecurityEventTypes.CSRF_FAILURE, label("csrf_failure"));
         labels.put(SecurityEventTypes.WS_ORIGIN_REFUSED, label("ws_origin_refused"));
         labels.put(SecurityEventTypes.WS_AUTH_REFUSED, label("ws_auth_refused"));
+        labels.put(SecurityEventTypes.SSH_INVALID_USER, label("ssh_invalid_user"));
+        labels.put(SecurityEventTypes.SSH_PASSWORD_FAILED, label("ssh_password_failed"));
+        labels.put(SecurityEventTypes.SSH_PUBLICKEY_FAILED, label("ssh_publickey_failed"));
+        labels.put(SecurityEventTypes.SSH_PREAUTH_ABORT, label("ssh_preauth_abort"));
+        labels.put(SecurityEventTypes.SSH_MAX_ATTEMPTS, label("ssh_max_attempts"));
+        labels.put(SecurityEventTypes.SSH_PROTOCOL_ABUSE, label("ssh_protocol_abuse"));
         return Map.copyOf(labels);
     }
 

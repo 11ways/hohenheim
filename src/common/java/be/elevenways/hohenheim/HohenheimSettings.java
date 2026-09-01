@@ -688,6 +688,24 @@ public class HohenheimSettings {
                 + "never widen this to ports like 22 or 53 that other services depend on")
             .build();
 
+        public static final SettingDefinition<String> NFTABLES_SSH_PORTS = GROUP.buildSetting("nftables_ssh_ports", String.class)
+            .defaultValue("22")
+            .description("Comma-separated TCP ports the SECOND nftables ban rule is scoped to, "
+                + "the one SSH brute-force bans land in. It is a separate set from "
+                + "nftables_ports on purpose: an IP that hammered sshd must not be dropped "
+                + "off a customer's website, and a web scanner must not be locked out of SSH")
+            .build();
+
+        public static final SettingDefinition<Boolean> SSH_WATCH_ENABLED = GROUP.buildSetting("ssh_watch_enabled", Boolean.class)
+            .defaultValue(false)
+            .description("Watch the local sshd journal for brute-force patterns (invalid users, "
+                + "failed passwords and keys, preauth aborts) and feed them to the same threat "
+                + "scorer that bans hostname scanners, replacing fail2ban. The service user must "
+                + "be in the systemd-journal group; without it the watcher reports itself "
+                + "unavailable on the dashboard instead of banning anybody")
+            .restartRequired()
+            .build();
+
         public static final SettingDefinition<Integer> AUTO_BAN_TTL_HOURS = GROUP.buildSetting("auto_ban_ttl_hours", Integer.class)
             .defaultValue(24)
             .suffix("h")

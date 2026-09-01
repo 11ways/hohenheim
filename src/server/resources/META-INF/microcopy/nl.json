@@ -4183,6 +4183,44 @@
     "text": "WebSocket-authenticatie geweigerd",
     "scope": "security_event_type"
   },
+  "ssh_invalid_user": {
+    "text": "SSH-aanmelding als onbestaande gebruiker",
+    "scope": "security_event_type"
+  },
+  "ssh_password_failed": {
+    "text": "SSH-wachtwoord geweigerd",
+    "scope": "security_event_type"
+  },
+  "ssh_publickey_failed": {
+    "text": "SSH-sleutel geweigerd",
+    "scope": "security_event_type"
+  },
+  "ssh_preauth_abort": {
+    "text": "SSH-verbinding verbroken voor authenticatie",
+    "scope": "security_event_type"
+  },
+  "ssh_max_attempts": {
+    "text": "SSH-authenticatiepogingen uitgeput",
+    "scope": "security_event_type"
+  },
+  "ssh_protocol_abuse": {
+    "text": "Ongeldige SSH-handshake",
+    "scope": "security_event_type"
+  },
+  "ban_scope": {
+    "text": "Bereik",
+    "scope": "field"
+  },
+  "ssh_watch": [
+    {
+      "text": "SSH-bewaking staat aan maar draait niet",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Het sshd-journaal kan niet gevolgd worden, dus SSH-brute-force wordt niet gescoord of verbannen. De servicegebruiker moet in de groep systemd-journal zitten.",
+      "scope": "attention_detail"
+    }
+  ],
   "overview": [
     {
       "text": "Misbruikbescherming",
@@ -6001,8 +6039,16 @@
     {
       "text": "SSH",
       "scope": "host_mode"
+    },
+    {
+      "text": "SSH",
+      "scope": "ban_scope"
     }
   ],
+  "web": {
+    "text": "Web",
+    "scope": "ban_scope"
+  },
   "snapshots": {
     "text": "Snapshots",
     "scope": "capability"

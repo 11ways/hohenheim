@@ -55,7 +55,10 @@ What each step does, in order:
    `instances`/`databases`/`stacks` roles; Docker's own apt repo, same codename
    fallback.
 5. **Service user** -- system user `hohenheim`, home `/opt/hohenheim`, nologin;
-   added to `docker` when Docker is installed.
+   added to `docker` when Docker is installed, and to `systemd-journal` for the
+   firewall role (the SSH brute-force watcher tails sshd's journal; the unit
+   also declares `SupplementaryGroups=systemd-journal` so the membership
+   survives a service-user re-creation).
 6. **Layout** -- `settings/ data/ public/ logs/ tmp/` plus
    `/var/log/hohenheim`, `0750` and owned by the service user; the prefix is
    `0711` and `settings/` is `0700`.
@@ -252,6 +255,31 @@ always required.
 without it the Docker isolation sweep reports every workload unverifiable by
 design. The admin listener defaults to `127.0.0.1:3000` (`network.port` and
 `network.bind_address` in `settings/local.dry` to change either).
+
+### SSH brute-force bans (the fail2ban replacement)
+
+`security.ssh_watch_enabled` (firewall role only) makes the controller follow
+`journalctl -f -n 0 -o cat -t sshd` and feed every recognised authentication
+failure -- invalid users, refused passwords and keys, preauth aborts, exhausted
+attempt counters, malformed banners -- into the SAME threat scorer that bans
+hostname scanners. Crossing `security.domain_miss_ban_threshold` therefore
+creates an ordinary ban row, with `never_ban`, the own-address guard and the
+auto-ban budget all applying, and no fail2ban jail anywhere.
+
+Two prerequisites, both handled by the installer:
+
+- The service user must be in the `systemd-journal` group. Without it the
+  watcher reports itself unavailable on the dashboard's attention list and in
+  the log, and bans nobody -- it never fails silently, but it also never works.
+  By hand: `usermod -aG systemd-journal hohenheim && systemctl restart hohenheim`.
+- SSH bans land in a SECOND nftables set scoped to `security.nftables_ssh_ports`
+  (default `22`), never in the `security.nftables_ports` rule. That separation
+  is the point: a web ban must not start refusing SSH, and an SSH brute-forcer
+  must not be dropped off a customer's website. Which set a ban is in is the
+  `scope` column on the ban row, shown as a column and a filter on the Bans list.
+
+The setting is `restartRequired`: the watcher starts at boot, behind the
+firewall role.
 
 ## systemd unit (written by the installer; this is the by-hand equivalent)
 

@@ -4183,6 +4183,44 @@
     "text": "WebSocket authentication refused",
     "scope": "security_event_type"
   },
+  "ssh_invalid_user": {
+    "text": "SSH login as a non-existent user",
+    "scope": "security_event_type"
+  },
+  "ssh_password_failed": {
+    "text": "SSH password refused",
+    "scope": "security_event_type"
+  },
+  "ssh_publickey_failed": {
+    "text": "SSH key refused",
+    "scope": "security_event_type"
+  },
+  "ssh_preauth_abort": {
+    "text": "SSH connection dropped before authenticating",
+    "scope": "security_event_type"
+  },
+  "ssh_max_attempts": {
+    "text": "SSH authentication attempts exhausted",
+    "scope": "security_event_type"
+  },
+  "ssh_protocol_abuse": {
+    "text": "Malformed SSH handshake",
+    "scope": "security_event_type"
+  },
+  "ban_scope": {
+    "text": "Scope",
+    "scope": "field"
+  },
+  "ssh_watch": [
+    {
+      "text": "SSH watching is on but not running",
+      "scope": "attention_title"
+    },
+    {
+      "text": "The sshd journal cannot be followed, so no SSH brute force is being scored or banned. The service user needs to be in the systemd-journal group.",
+      "scope": "attention_detail"
+    }
+  ],
   "overview": [
     {
       "text": "Abuse protection",
@@ -6001,8 +6039,16 @@
     {
       "text": "SSH",
       "scope": "host_mode"
+    },
+    {
+      "text": "SSH",
+      "scope": "ban_scope"
     }
   ],
+  "web": {
+    "text": "Web",
+    "scope": "ban_scope"
+  },
   "snapshots": {
     "text": "Snapshots",
     "scope": "capability"

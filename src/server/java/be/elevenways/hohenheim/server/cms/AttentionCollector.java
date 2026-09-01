@@ -32,6 +32,7 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
+import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -120,6 +121,10 @@ public final class AttentionCollector {
         }
         if (HohenheimRoles.enabled(Role.FIREWALL)) {
             spamserviceIssue(items);
+            AttentionItem sshWatch = sshWatchIssue(SshAuthWatcher.INSTANCE.snapshot());
+            if (sshWatch != null) {
+                items.add(sshWatch);
+            }
         }
         if (HohenheimRoles.hostWorkloadsEnabled()) {
             hostsNotAdmitted(items);
@@ -463,6 +468,29 @@ public final class AttentionCollector {
             : copy("spamservice_not_ready", "attention_detail", "state", snapshot.state());
         return item("warning", "shield",
             copy("not_ready", "spamservice"), detail,
+            CmsRoutes.list(ADMIN, "settings"));
+    }
+
+    /**
+     * The SSH watcher's own health, on a snapshot so it is testable.
+     *
+     * AIDEV-NOTE: a watcher that cannot read the journal bans NOBODY while every surface
+     * still says SSH watching is on -- the silent-success shape. It reports itself here
+     * (and once in the log) instead. An install that never asked for it is a CHOICE and
+     * gets no row, exactly like the spamservice item beside it.
+     */
+    public static @Nullable AttentionItem sshWatchIssue(SshAuthWatcher.Snapshot snapshot) {
+        if (!snapshot.configured()) {
+            return null;
+        }
+        if (snapshot.running() && snapshot.lastError() == null) {
+            return null;
+        }
+        Microcopy detail = snapshot.lastError() != null
+            ? literal(snapshot.lastError())
+            : copy("ssh_watch", "attention_detail");
+        return item("warning", "shield",
+            copy("ssh_watch", "attention_title"), detail,
             CmsRoutes.list(ADMIN, "settings"));
     }
 
