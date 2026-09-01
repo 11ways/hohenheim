@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
+import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -44,14 +45,26 @@ public final class DnsZonePeerResource extends RowResource {
         .of(DnsZonePeerModel.PEER_ID.getName())
         .presets(DnsZonePeerModel.ZONE_ID.getName());
 
+    /**
+     * The zone is a RELATION, not a number. It used to render as the raw {@code zone_id}
+     * IntegerField, i.e. a numeric stepper an operator had to know the primary key for --
+     * the {@link EnvironmentResource} shape is the one every other foreign key here uses.
+     */
     private final FormSpec formSpec = FormSpec.builder()
-        .add(DnsZonePeerModel.ZONE_ID)
+        .add(RelationPick.of(DnsZonePeerModel.ZONE_ID, DnsZoneModel.MODEL_ID).build())
         .add(Select.of(DnsZonePeerModel.PEER_ID)
             .options(OptionSource.dynamic(ctx -> peerOptions()))
             .build())
         .build();
 
+    /**
+     * A link is a PAIR, so the list names both halves: every row used to be titled by its
+     * peer alone, which made a peer that secondaries four zones read as four identical rows.
+     */
     private final TableSpec<Row> tableSpec = TableSpec.<Row>builder()
+        .column(ColumnSpec.fromField(DnsZonePeerModel.ZONE_ID)
+            .relation(RelationPick.of(DnsZonePeerModel.ZONE_ID, DnsZoneModel.MODEL_ID).build())
+            .build())
         .column(ColumnSpec.virtual("peer_name", Microcopy.of("peer_name").withFilter("scope", "field")).build())
         .build();
 
