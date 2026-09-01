@@ -27,6 +27,15 @@ import java.util.function.Supplier;
  * that is still starting supplies its desired endpoint so provisioning failures
  * keep the child configured while a
  * single retry chain per site repairs the remote registration.
+ *
+ * AIDEV-NOTE: this whole lane is INERT since c6bfab02 deleted the host-user process lane.
+ * Nothing calls {@link #forSite} any more (only its own test does), and its private
+ * key-minting is the ONLY writer of {@code sites.security_report_token}, so the still-wired
+ * boot hook {@link #reconcilePersistedReporters} (SpamserviceManager) can only ever iterate
+ * zero rows. Do not read the class as live plumbing: either a new spawner calls forSite, or
+ * the lane is removed WHOLE -- this class, its test, SpamserviceManager's ReporterReconciler
+ * seam, SiteModel.SECURITY_REPORT_TOKEN and its InitialMigration column, which is a schema
+ * change on deployed installations and therefore a decision, not a cleanup.
  */
 public final class SecurityReportEnv {
 
