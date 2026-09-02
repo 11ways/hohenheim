@@ -3,7 +3,6 @@ package be.elevenways.hohenheim;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceLogModel;
@@ -123,11 +122,11 @@ public final class HohenheimSources implements ZenitModule {
             .permission(ADMIN_ACCESS)
             .build());
 
-        // Feeds the shared-engine pick on a database's create form and the engine column.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(DatabaseEngineModel.class)
-            .search(DatabaseEngineModel.NAME)
-            .permission(ADMIN_ACCESS)
-            .build());
+        // No explicit source for DatabaseEngineModel: the shared-engine pick on a
+        // database's create form and the engine column ride the zenit-cms-derived default
+        // of DatabaseEngineResource (its declared NAME search, the admin permission, the
+        // edit link and inline create). An explicit copy here replaced that default
+        // WITHOUT the edit/inline-create facets (source_capability_dropped at boot).
 
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(SiteAuthProviderModel.class)
             .search(SiteAuthProviderModel.NAME)
