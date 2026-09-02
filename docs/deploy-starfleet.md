@@ -1397,3 +1397,8 @@ ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim
 
 Swapped to hohenheim `ab89d70a` (jar sha256 `4ebfcec7cc5f3839...`, stamp 13/13 `dirty=false`, same chain as wave 5) with `tools/deploy-host.sh starfleet <jar>` in one run, exit 0; preflight `/root/hohenheim-preflight-20260902-110231/`, rollback jar `78e6cfac`; no migration (top M009). Healthy after both restarts, `/health` 200 from outside. Ships the shared-engine credential fix (taken logical name/user refused, move renames, tenant names namespaced).
 ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20260902-110231`.
+
+## Deploy 2026-09-02 (wave 7): 739c16d7 on zenit 67dee77c, the last JDK warning gone
+
+Swapped to hohenheim `739c16d7` (jar sha256 `a8a24d2166cce3c2...`, stamp 13/13 `dirty=false`; chain zenit `67dee77c` = jboss-threads 3.9.2 pinned over undertow's 3.5.0, plus the other session's zenit `da62f42` value-index feature with its zenit-forms `c7912e9` and zenit-cms `d9ab4b4` counterparts) with `tools/deploy-host.sh starfleet <jar>` in one run, exit 0; preflight `/root/hohenheim-preflight-20260902-115218/`, rollback jar `ab89d70a`; no migration (top M009). Healthy after both restarts; the boot journal carries ZERO JDK Unsafe/native-access/slf4j lines and zero `source_capability_dropped` lines.
+ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20260902-115218`.
