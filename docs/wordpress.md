@@ -51,6 +51,15 @@ reads, so there is no mapping layer. The database is named
 `<instance-slug>-<prefix-slug>` (`anymedia-wordpress-db`), inside the funnel's 32-character
 label ceiling.
 
+Since 2026-09-02 the allocated database lands on the host's SHARED MySQL engine by
+default: one engine process per host holds every template-declared MySQL database as a
+logical database of its own, with its own user and a grant on that database only. The
+engine is created on demand by the same funnel, so nothing about the recipe changes. The
+WordPress image reads exactly the same `WORDPRESS_DB_HOST/PORT/USER/PASSWORD/NAME/URL`
+family; only the host it is pointed at differs (the engine's container handle instead of
+the database's own). A record may still be created `dedicated` from the Placement select
+on the Databases create form. See `docs/shared-database-engines.md`.
+
 The cheap refusals (unknown engine, a kind without link networks, a database label
 already taken) run BEFORE the instance row is written. A refusal after it (quota,
 capacity) destroys the never-deployed instance and rethrows; inside the panel's mutation
@@ -97,7 +106,12 @@ Two moves, both through existing lanes; nothing WordPress-specific was added for
    contract). The dump lands in the database the template allocated, whatever the old
    database was called; the WordPress table prefix inside the dump is whatever the old
    site used, so set the instance's `WORDPRESS_TABLE_PREFIX` variable to match BEFORE
-   the first deploy (the image writes it into `wp-config.php` once).
+   the first deploy (the image writes it into `wp-config.php` once). A shared database
+   is dumped and restored exactly the same way from the panel: the client runs inside the
+   shared engine's container with the engine's root credentials, scoped to that one
+   logical database. The two WordPress records staged on robbedoes
+   (`anymedia-wordpress-db`, `diax-wordpress-db`) stay DEDICATED until an operator moves
+   them with the "Move to shared engine" row action.
 2. **Docroot.** Deploy the instance once so the volume exists, stop it, then copy the old
    docroot INTO the volume with the archive lane the instance tier already uses
    (`docker cp old-docroot/. <handle>:/var/www/html/` against a stopped container works

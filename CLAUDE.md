@@ -21,7 +21,8 @@ Reverse proxy / app manager. Routes hostnames to typed upstreams, supervises the
 - `src/client/java` browser code (TeaVM-compiled)
 - `src/server/java` Undertow-backed server, entry point `be.elevenways.hohenheim.server.ServerMain`
 - `src/browserTest/java` Playwright end-to-end tests
-- `docs/` design notes (see `architecture-upstream-kinds.md` for the upstream-kind registry)
+- `docs/` design notes (see `architecture-upstream-kinds.md` for the upstream-kind registry
+  and `shared-database-engines.md` for managed-database placement)
 - `tools/install-host.sh` THE host install procedure (idempotent, `--help`, `--dry-run`);
   `docs/deploy-native.md` is its long-form companion. Never hand-write an install step the
   script already performs -- fix the script.
@@ -126,6 +127,12 @@ silently aborts used to make a run of nothing look green.
   env prefix. The seeded WordPress templates are the reference consumer
   (`docs/wordpress.md`); never a hand-attached database in a seeder or a second
   allocation lane.
+- A managed database has a PLACEMENT (`DatabaseModel.PLACEMENT`): `dedicated` owns its own
+  `hohenheim:database_container` instance, `shared` (the default where the engine supports
+  logical databases) is a logical database with its own user on a `DatabaseEngineModel`
+  engine, one per (host, engine kind). Server-side there is ONE resolution --
+  `EngineHost.serving(row)` / `DatabaseInstances.handleOf(databaseId)` -- and no operation
+  reads the placement itself. See `docs/shared-database-engines.md`.
 - Handlers are long-lived: created when a site loads, updated on config change, destroyed on removal. Not per-request.
 - ClientMain MUST call `HohenheimModels.registerAll()` + `HohenheimSources.register()` before `ClientZenitRuntime.main` (the browser has no MODELS/MODULES boot stage).
 

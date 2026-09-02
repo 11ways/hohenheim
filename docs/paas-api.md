@@ -115,6 +115,9 @@ returned). Say so when delegating; the grant UI does not.
 | POST | `/api/v1/instances/{id}/variables/delete` | `key=...` |
 | GET/POST | `/api/v1/environments/{id}/variables[/delete]` | Same shape, but ADMIN-ONLY (`hohenheim.admin.access`, as narrowed by the key's scopes) -- see Environment variables below |
 
+Managed databases and database engines have NO API verbs at all: both are panel
+only (there were none before the shared-engine work either).
+
 Also present (older lanes, admin-permission-gated): `/api/sites`,
 `/api/sites/{id}/deploy`, `/api/dns/...`, and the instance file API under
 `/api/v1/instances/{id}/files`.

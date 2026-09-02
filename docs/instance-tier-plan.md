@@ -4314,6 +4314,15 @@ network, quota, ownership, secret and durable-operation mechanisms.
   placement, the reconciler, `InstanceService`'s verified destroy, and
   `InstanceOperationGuard`.
 
+  ADDED 2026-09-02 (shared database engines): the sentence above holds for a
+  `dedicated` record only. A `shared` record owns NO instance at all; the
+  `DatabaseEngineModel` row (`database_engines`) serving it owns the
+  `hohenheim:database_container` instance, and holds many logical databases on
+  it. Nothing reads the placement itself: every operation resolves the serving
+  engine through `EngineHost.serving(row)` (and its instance through
+  `DatabaseInstances.handleOf/owned/liveStatus(databaseId)`). See
+  `docs/shared-database-engines.md`.
+
   The four named obstacles, resolved: (1) the engine READINESS probe stayed a
   PRODUCT-tier concern rather than becoming a kind/driver one -- the site
   precedent puts the HTTP health gate in `SiteReleases`, not in
