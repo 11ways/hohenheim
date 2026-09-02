@@ -1287,3 +1287,12 @@ replaced the zenit-cms-derived default without its edit/inline-create facets;
 deleted, the derived default carries the same NAME search and admin permission).
 ROLLBACK: preflight jar + restart, plus the `.pre` db copy (M009 is additive and
 the old jar ignores the two columns, but the ledger row would be unknown to it).
+
+## Deploy 2026-09-02 (wave 4b): 7b0ed91d, the streaming restore + move compensation fixes
+
+Same jar as robbedoes (`c05ea944...`, 268,195,785 bytes, 13/13 clean; only
+hohenheim moved). No migration (`0 applied`); `.at-swap2` db copy and
+`rollback2.jar` (= `4551de29`) added to `/root/hohenheim-preflight-20260902-wave4/`.
+Healthy after both restarts, no warnings; sites and SOA unchanged. `zd_deployed`
+current. Migration pin raised to `DEPLOYED_THROUGH = "009"` (M009 digest pinned,
+runs 93 red / 94 green). ROLLBACK: rollback2.jar + restart.

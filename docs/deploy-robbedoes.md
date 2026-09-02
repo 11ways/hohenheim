@@ -2377,3 +2377,31 @@ Placement "None" (a null column now READS as dedicated at load), the boot line
 controller memory" text on `database.max_dump_mb`.
 ROLLBACK: preflight jar + `.pre` copy + restart; every moved record keeps its
 dump and its old data volume.
+
+## Deploy 2026-09-02 (wave 4b): 7b0ed91d, the streaming restore; invulassistent moved
+
+Swapped to hohenheim `7b0ed91d` (jar `c05ea944...`, 268,195,785 bytes, 13/13
+clean; carries `2f05a1dd` restore-over-exec-stdin + Error-safe compensation,
+`6eb28b0b` placement read rule + engine source, the M009 pin). No migration
+(`0 applied`); `.at-swap2` + `rollback2.jar` (= `4551de29`) in the wave-4
+preflight dir. Stop 07:40:37Z, healthy at try 2; second restart at try 3; no
+warnings. The `source_capability_dropped` line for the engine source is gone
+(five pre-existing ones remain: ban, dns_zone, runtime_image, server,
+site_auth_provider -- same shape, on the ledger).
+
+invulassistent-mongo moved on this jar, 07:41:43Z -> 07:45:10Z: the 5.3 GB dump
+streamed to `data/backups/moves/invulassistent-mongo/20260902-074143.archive`,
+the restore ran as `sh -c 'head -c "$1" | mongorestore ...' hohenheim-restore
+5336385232 invulassistent invulassistent` INSIDE the engine container (visible in
+`docker top`), and the controller heap never left its 96M->47M young-GC rhythm
+(RSS 443 MB) while it ran. Fingerprint matched, instance 7 destroyed (volume
+kept), instance 8 redeployed: `DATABASE_URL=mongodb://invulassistent:***@
+hohenheim-luguij0q-instance-21:27017/invulassistent?authSource=invulassistent`,
+invulassistent.wcag.be 401 (its gate). Engine `listDatabases`: all six
+(invulassistent 942 MB on disk), 17 collections.
+
+Final picture: ONE Mongo container on the box (was six), booking 7,168 / 10,915
+MB (was 9,984), instances bucket 11, engine at 490 MiB of its 1 GiB, host 8.2 GB
+available. `capacity.memory_overcommit_ratio` back at the default. Every moved
+record keeps its dump under `data/backups/moves/` and its old data volume.
+Deploy workspace `~/projects/javaweb-deploy` deleted afterwards.
