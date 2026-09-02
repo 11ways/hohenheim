@@ -213,6 +213,28 @@ class SharedDatabaseEngineTest {
             assertThat(DatabaseEngines.databasesOn(engineA))
                 .as("step 4: the engine knows both of its logical databases").hasSize(2);
 
+            // 4b. A THIRD record may not reuse a logical NAME the engine already holds
+            //     (that is the other record's data), nor a logical USER (engine-global
+            //     on MySQL and Postgres: the second create re-credentialed the first and
+            //     one credential reached both databases, 2026-09-02 on robbedoes). Both
+            //     are refused by name BEFORE any row is written.
+            assertThat(refusalOf(() -> service.insertRecord("sharedc",
+                    ManagedDatabase.Engine.MONGO, null, "userc", "passwordc", "dba", false,
+                    ServerService.LOCAL, ResourceLimits.none(),
+                    DatabaseService.STATUS_PROVISIONING)))
+                .as("step 4b: a taken logical database name is refused by name")
+                .isEqualTo("database_logical_name_taken");
+            assertThat(refusalOf(() -> service.insertRecord("sharedc",
+                    ManagedDatabase.Engine.MONGO, null, "usera", "passwordc", "dbc", false,
+                    ServerService.LOCAL, ResourceLimits.none(),
+                    DatabaseService.STATUS_PROVISIONING)))
+                .as("step 4b: a taken logical user is refused by name")
+                .isEqualTo("database_logical_user_taken");
+            assertThat(Models.get(DatabaseModel.class).findByName("sharedc"))
+                .as("step 4b: and neither refusal left a record behind").isNull();
+            assertThat(DatabaseEngines.databasesOn(engineA))
+                .as("step 4b: the engine still holds exactly its two").hasSize(2);
+
             // 5. A DEDICATED record beside them is unaffected: it owns nothing on the
             //    engine and the engine's own instance is still the only one.
             service.insertRecord("dedicatedc", ManagedDatabase.Engine.MONGO, null,
@@ -337,9 +359,11 @@ class SharedDatabaseEngineTest {
                     null)))
                 .as("step 8: a differing image is refused")
                 .isEqualTo("database_image_engine_mismatch");
+            // (Its own user: "user" already lives on this engine as refuseanchor's, and a
+            // taken user is a refusal of its own, step 4b of the previous journey.)
             Row matching = service.insertRecord("matchingimage",
                 ManagedDatabase.Engine.MONGO, MONGO_DEFAULT_IMAGE,
-                "user", "password", "dbm", false, REFUSAL_HOST,
+                "usermatch", "password", "dbm", false, REFUSAL_HOST,
                 ResourceLimits.none(), DatabaseService.STATUS_PROVISIONING,
                 DatabaseModel.PLACEMENT_SHARED, null);
             assertThat((Integer) matching.get(DatabaseModel.ENGINE_ID))

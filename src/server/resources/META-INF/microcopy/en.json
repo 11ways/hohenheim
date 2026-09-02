@@ -12406,6 +12406,14 @@
     "text": "Engine '{$name}' runs on {$server} while the database runs on {$database_server}; a link network only exists on the daemon both share",
     "scope": "violations"
   },
+  "database_logical_name_taken": {
+    "text": "Logical database '{$database}' already exists on engine '{$engine}' (record '{$record}'); two records must never share one database",
+    "scope": "violations"
+  },
+  "database_logical_user_taken": {
+    "text": "User '{$user}' already exists on engine '{$engine}' (record '{$record}'); on a shared engine every database needs its own user",
+    "scope": "violations"
+  },
   "database_logical_identifier": {
     "text": "Use only letters, digits, dot, underscore and dash, at most 64 characters: the value is spelled into the engine's own shell",
     "scope": "violations"

@@ -362,6 +362,11 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             .isEqualTo(DatabaseModel.PLACEMENT_SHARED);
         assertThat(OwnedInstances.soleOwnedBy(DatabaseModel.MODEL_ID, databaseAId))
             .as("step 6: a shared record owns NO instance row of its own").isNull();
+        assertThat((String) database.get(DatabaseModel.DB_USER))
+            .as("step 6: its logical user IS its database name, unique on the engine by"
+                + " construction -- a fixed \"app\" re-credentialed the neighbour tenant")
+            .isEqualTo(database.get(DatabaseModel.DB_NAME))
+            .isNotEqualTo("app");
         sharedEngineId = database.get(DatabaseModel.ENGINE_ID);
         assertThat(sharedEngineId).as("step 6: it names its engine").isNotNull();
         Row engine = Models.get(DatabaseEngineModel.class).findById(sharedEngineId);
@@ -393,6 +398,14 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         assertThat(databaseB).as("step 7: under ITS OWN namespaced name").isNotNull();
         assertThat((Integer) databaseB.get(DatabaseModel.ENGINE_ID))
             .as("step 7: on the very same shared engine").isEqualTo(sharedEngineId);
+        assertThat((String) databaseB.get(DatabaseModel.DB_NAME))
+            .as("step 7: as its OWN logical database -- the bare label used to make both"
+                + " tenants' \"blog\" one database on that engine")
+            .isEqualTo("u" + tenantBId + "_blog")
+            .isNotEqualTo(database.get(DatabaseModel.DB_NAME));
+        assertThat((String) databaseB.get(DatabaseModel.DB_USER))
+            .as("step 7: with its own engine-unique user")
+            .isEqualTo("u" + tenantBId + "_blog");
         assertThat((String) databaseB.get(DatabaseModel.QUOTA_BUCKET))
             .as("step 7: charged to tenant B's own database bucket")
             .isEqualTo(databaseBucketOf(tenantBId));

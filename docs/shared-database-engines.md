@@ -62,6 +62,20 @@ on that database only:
 | MySQL    | `CREATE USER 'u'@'%'` + `GRANT ALL ON name.*`                   | `mysql://.../name` |
 | Postgres | `CREATE ROLE u LOGIN` + `CREATE DATABASE name OWNER u`          | `postgres://.../name` |
 
+The user is ENGINE-UNIQUE, never a fixed spelling. MySQL and Postgres users are
+engine-global (only Mongo scopes them per database), so two records both called
+`app` on one engine re-credential each other on every create and one credential
+reaches both databases -- observed 2026-09-02 on robbedoes when the second
+WordPress record moved beside the first. Three rules keep that impossible:
+`DatabaseService.requireLogicalFree` refuses a create whose logical name or user
+another record on the engine already holds (`database_logical_name_taken`,
+`database_logical_user_taken`); a tenant allocation names its user after its
+database (`sqlIdentifier(label)`), never `app`; and the move lane renames a
+dedicated record's user to its database name when the target engine already has
+that user (logged as `DB-MOVE: ... renames its user`), while a taken logical
+NAME is a move refusal by the same key (`moveRefusal`), so the restore can never
+land inside another record's database.
+
 The engine's root credentials live on the engine row (`root_user`, encrypted
 `root_password`) and are used only by the controller: engine readiness, creating and
 dropping logical databases, dumps and restores. A workload never sees them. A dedicated
