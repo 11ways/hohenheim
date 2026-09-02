@@ -129,7 +129,12 @@ instance slot.
 - Database engines list (Deploy group, beside Databases): name, engine, host, status,
   the databases it hosts, memory; create (engine, host, image, ceilings), resize (same
   recreate lane as a dedicated database), delete (refused while used).
-- No REST verbs exist for databases (there were none before either).
+- REST verbs (added 2026-09-02, `DatabaseApi`): `GET /api/v1/databases`,
+  `POST /api/v1/databases/{id}/move-shared` (admin), `POST /api/v1/databases/{id}/delete`
+  and `GET /api/v1/engines` (admin), plus `hoh database list|move|delete` and
+  `hoh engine list`. Same gates as the panel -- the move's eligibility IS
+  `DatabaseService.moveRefusal`, which the row action's visibility reads too. See
+  `docs/paas-api.md`.
 
 ## Decisions taken without Jelle (2026-09-02)
 

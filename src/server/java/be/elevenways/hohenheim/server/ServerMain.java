@@ -308,6 +308,7 @@ public class ServerMain {
     // served by the PROXY listener (SiteDispatcher), not this server, so they stay reachable.
     public static void installAuthBaselines() {
         AuthRegistry.registerPublicPrefix("/api/health");
+        AuthRegistry.registerPublicPrefix("/health");
         // The dyndns endpoint authenticates by update token in the request itself,
         // not a session; the handler refuses anything the token does not unlock.
         AuthRegistry.registerPublicPrefix("/nic/update");

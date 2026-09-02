@@ -343,6 +343,58 @@ const instanceVerbs = {
     },
 };
 
+// -- managed database verbs (hoh database list|move|delete, hoh engine list) --
+//
+// The move and the delete both carry the NAME interlock the rollback note above
+// describes: the server demands no phrase (the product's ConfirmationSpec is a
+// client interlock), so this prompt is the CLI's half of the panel's dialog.
+// `move` is queued server-side exactly as the row action is, so the answer says
+// where to watch it rather than pretending the move is done.
+
+const databaseColumns = ['id', 'name', 'engine', 'placement', 'engine_id', 'server',
+    'memory_limit_mb', 'status', 'attached'];
+
+/** The database with this id, plus the typed-name interlock the panel dialog is. */
+async function confirmDatabaseName(id, sentence) {
+    const list = await get('/api/v1/databases');
+    const database = (list.databases || []).find(d => String(d.id) === String(id));
+    if (!database) die('Not found (or not yours).');
+    if (flags.yes) return database;
+    const typed = await ask(`${sentence} Type the database name to confirm: `);
+    if (typed === null) {
+        die('Refusing to act without confirmation (pass --yes in scripts).');
+    }
+    if (typed.trim() !== database.name) die('Name mismatch; nothing was done.');
+    return database;
+}
+
+const databaseVerbs = {
+
+    async list() {
+        emit(await get('/api/v1/databases'), 'databases', databaseColumns);
+    },
+
+    async move([id]) {
+        if (!id) die('Usage: hoh database move <database-id> [--yes]');
+        await confirmDatabaseName(id,
+            'Move this database onto its host\'s shared engine.');
+        const result = await post(`/api/v1/databases/${id}/move-shared`);
+        if (flags.json) return emit(result);
+        console.log(`Move ${result.status} for database ${result.id} "${result.name}".`);
+        console.log('Watch its status with: hoh database list');
+    },
+
+    async delete([id]) {
+        if (!id) die('Usage: hoh database delete <database-id> [--yes]');
+        await confirmDatabaseName(id, 'Destroy this database and its data.');
+        const result = await post(`/api/v1/databases/${id}/delete`);
+        console.log(`Database ${result.id} ${result.status}.`);
+    },
+};
+
+const engineColumns = ['id', 'name', 'engine', 'image', 'server', 'memory_limit_mb',
+    'databases', 'status'];
+
 // -- commands -----------------------------------------------------------------
 
 // -- dns verbs (hoh dns zones | dns zone create|import) ------------------------
@@ -588,6 +640,16 @@ const commands = {
         emit(await get(`/api/v1/instances/${first}`));
     },
 
+    async database([first, ...rest]) {
+        if (databaseVerbs[first]) return databaseVerbs[first](rest);
+        die('Usage: hoh database list | hoh database move <id> | hoh database delete <id>');
+    },
+
+    async engine([first]) {
+        if (first !== 'list') die('Usage: hoh engine list');
+        emit(await get('/api/v1/engines'), 'engines', engineColumns);
+    },
+
     async 'access-list'([first, ...rest]) {
         if (accessListVerbs[first]) return accessListVerbs[first](rest);
         if (!first) die('Usage: hoh access-list create|list|delete|rule ...');
@@ -686,6 +748,13 @@ Usage: hoh [--context <name>] <command> [args] [--json] [--yes]
   access-list create <name> [f=v..]  Create a list (name, satisfy, shared for admins)
   access-list delete <id> [--yes]    Delete a list and its rules (asks for the name)
   access-list rule add <id> <type> [f=v]  Add a rule (data.username=..., enabled=true)
+  database list                      Managed databases you hold view on
+  database move <id> [--yes]         Move a dedicated database onto its host's shared
+                                     engine (admin; asks for the name; runs in the
+                                     background -- watch it with "database list")
+  database delete <id> [--yes]       Destroy a managed database (asks for the name;
+                                     refused while a workload still holds it)
+  engine list                        Shared database engines (admin)
   logs <instance-id> [-n <lines>]    Tail an instance's console output
   power <instance-id> <action>       start | stop | restart
   vars instance|env <id> ...         List / set / unset variables (--secret for secrets;

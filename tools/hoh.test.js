@@ -114,6 +114,33 @@ const server = http.createServer((req, res) => {
         if (req.url === '/api/v1/instances/51') {
             return respond(200, { id: 51, name: 'earl-app', status: 'created' });
         }
+        if (req.url === '/api/v1/databases' && req.method === 'GET') {
+            return respond(200, { databases: [
+                { id: 61, name: 'earl-db', engine: 'postgres', db_name: 'appdb',
+                    placement: 'dedicated', status: 'active', attached: 1,
+                    engine_id: null, server: 'local', ephemeral: false,
+                    memory_limit_mb: 512, cpu_limit: null, failure_reason: '' },
+                { id: 62, name: 'earl-shared', engine: 'postgres', db_name: 'appdb',
+                    placement: 'shared', status: 'active', attached: 0,
+                    engine_id: 71, server: 'local', ephemeral: false,
+                    memory_limit_mb: null, cpu_limit: null, failure_reason: '' }] });
+        }
+        if (req.url === '/api/v1/databases/61/move-shared') {
+            return respond(200, { id: 61, name: 'earl-db', status: 'queued', watch: 'status' });
+        }
+        if (req.url === '/api/v1/databases/62/move-shared') {
+            return respond(422, { status: 422, code: 'database_already_shared',
+                message: "Database 'earl-shared' already lives on a shared engine" });
+        }
+        if (req.url === '/api/v1/databases/61/delete') {
+            return respond(200, { id: 61, name: 'earl-db', status: 'deleted' });
+        }
+        if (req.url === '/api/v1/engines' && req.method === 'GET') {
+            return respond(200, { engines: [{ id: 71, name: 'postgres-local',
+                engine: 'postgres', image: 'postgres:16', server: 'local',
+                memory_limit_mb: 1024, cpu_limit: null, databases: 3, status: 'active',
+                failure_reason: '' }] });
+        }
         if (req.url === '/api/v1/instances/3/variables') {
             return req.method === 'POST'
                 ? respond(200, { id: 3, status: 'set', key: 'TOKEN' })
@@ -328,6 +355,46 @@ server.listen(0, '127.0.0.1', async () => {
         r = await run(['dns', 'zones']);
         check('dns zones lists', r.status === 0 && r.stdout.includes('example.test')
             && r.stdout.includes('matches'), r.stdout + r.stderr);
+
+        // 12b. managed databases and engines: the two verbs that had no API at all.
+        //      The move and the delete carry the SAME name interlock as the destroy
+        //      verbs above, and the counterfactual half matters most here -- a move
+        //      that slips past the prompt would already be streaming a dump.
+        r = await run(['database', 'list']);
+        check('database list renders', r.status === 0 && r.stdout.includes('earl-db')
+            && r.stdout.includes('shared'), r.stdout + r.stderr);
+        check('database list hit the documented lane',
+            requests.at(-1).method === 'GET' && requests.at(-1).url === '/api/v1/databases');
+        const beforeMove = requests.length;
+        r = await run(['database', 'move', '61']);
+        check('database move refuses without confirmation', r.status === 1,
+            r.stdout + r.stderr);
+        check('and never sent the move',
+            !requests.slice(beforeMove).some(q => q.url.endsWith('/move-shared')),
+            JSON.stringify(requests.slice(beforeMove)));
+        r = await run(['database', 'move', '61', '--yes']);
+        check('database move --yes acts', r.status === 0
+            && requests.at(-1).url === '/api/v1/databases/61/move-shared'
+            && requests.at(-1).method === 'POST', r.stdout + r.stderr);
+        check('and says where to watch it',
+            r.stdout.includes('queued') && r.stdout.includes('hoh database list'), r.stdout);
+        r = await run(['database', 'move', '62', '--yes']);
+        check('a refused move surfaces the server\'s own code', r.status === 1
+            && r.stderr.includes('database_already_shared'), r.stderr);
+        const beforeDbDelete = requests.length;
+        r = await run(['database', 'delete', '61']);
+        check('database delete refuses without confirmation', r.status === 1,
+            r.stdout + r.stderr);
+        check('and never sent the destroy',
+            !requests.slice(beforeDbDelete).some(q => q.url.endsWith('/delete')));
+        r = await run(['database', 'delete', '61', '--yes']);
+        check('database delete --yes acts', r.status === 0
+            && requests.at(-1).url === '/api/v1/databases/61/delete', r.stderr);
+        r = await run(['engine', 'list']);
+        check('engine list renders', r.status === 0 && r.stdout.includes('postgres-local')
+            && r.stdout.includes('postgres:16'), r.stdout + r.stderr);
+        check('engine list hit the documented lane',
+            requests.at(-1).method === 'GET' && requests.at(-1).url === '/api/v1/engines');
 
         // 13. help: prints AND exits clean. It used to print the whole page and then
         //     die on `.catch` of undefined, because the handler is synchronous -- so

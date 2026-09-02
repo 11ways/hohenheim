@@ -34,6 +34,12 @@ public class HohenheimEndpoints {
         .stringResolver(value -> value)
         .build();
 
+    /** The managed-database record id; the automation API addresses records by id, never by name. */
+    public static final ParameterDefinition<Integer> DATABASE_ID = ParameterDefinition.builder(Integer.class)
+        .name("databaseId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     public static final ParameterDefinition<Integer> ZONE_ID = ParameterDefinition.builder(Integer.class)
         .name("zoneId")
         .stringResolver(Integer::parseInt)
@@ -1057,6 +1063,72 @@ public class HohenheimEndpoints {
         .rateLimit(PAAS_WRITE_LIMIT)
         .build();
 
+    // --- Managed database API v1 (znit_ bearer keys via zenit-auth) ---
+    //
+    // The tier that had NO automation surface at all until 2026-09-02: teardown and the
+    // move onto a shared engine were browser-only, so an operator scripting a migration
+    // had to drive the panel by hand. Same three rules as the instance lane (no
+    // authorization decision in a handler beyond the shared visibility walk, no existence
+    // oracle, no field that was not enumerated), and the DOORS are the panels' own:
+    //
+    // - the list is scoped by the `view` capability, exactly like ManageDatabaseResource,
+    //   and projects the DELEGATED columns for a non-admin (a shared engine's name is
+    //   another tenant's neighbour list);
+    // - the move is ADMIN-ONLY, because only the admin panel offers the row action
+    //   (ManageDatabaseResource drops it), and its eligibility is DatabaseService's own
+    //   moveRefusal -- the single declaration the row action reads too;
+    // - the delete rides DatabaseResource's delete pipeline, so `destroy` on the record
+    //   and the in-use refusal are the service's and the resource's, never this file's;
+    // - the engine list is ADMIN-ONLY: an engine row exists on the admin panel alone.
+
+    public static final Endpoint<Object> API_DATABASES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_databases"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("databases").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /**
+     * Move one dedicated database onto its host's shared engine, in the background.
+     *
+     * csrfExempt is safe: the handler refuses non-API-key principals. The dump and
+     * restore stream a whole database, so it rides the database I/O bucket rather than
+     * the ordinary write one.
+     */
+    public static final Endpoint<Object> API_DATABASE_MOVE_SHARED = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_database_move_shared"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("databases").addDelimiter().addParameter(DATABASE_ID)
+            .addDelimiter().addStatic("move-shared").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(DATABASE_IO_LIMIT)
+        .build();
+
+    /** csrfExempt is safe: the handler refuses non-API-key principals. */
+    public static final Endpoint<Object> API_DATABASE_DELETE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_database_delete"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("databases").addDelimiter().addParameter(DATABASE_ID)
+            .addDelimiter().addStatic("delete").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(PAAS_WRITE_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_DATABASE_ENGINES = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_database_engines"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("engines").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
     // --- Instance file manager, HTML lane (the Files tab posts here) ---
 
     /** Download one file from an instance volume; bounded by hohenheim.files.max_file_kb. */
@@ -1161,8 +1233,16 @@ public class HohenheimEndpoints {
         .build();
 
     // --- Health check ---
+    /**
+     * Unauthenticated liveness: the process booted and routing resolves. Served at the
+     * conventional {@code /health} (what an uptime monitor and the deploy probes ask) AND at
+     * {@code /api/health}; both are public prefixes in ServerMain.installAuthBaselines, so
+     * neither can ever answer with the login redirect a probe cannot tell from a hang.
+     */
     public static final Endpoint<Object> HEALTH = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "health"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("health").build())
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("health").build())
         .build();
