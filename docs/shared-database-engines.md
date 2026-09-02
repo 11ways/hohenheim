@@ -141,3 +141,30 @@ instance slot.
 - Generic mechanism, Mongo-only production migration.
 - A shared record may not declare an image that differs from its engine's
   (`database_image_engine_mismatch`); blank means the engine's.
+
+## Rollout record and what the first production moves taught (2026-09-02)
+
+Deployed as hohenheim `4551de29` (M009) to starfleet, kuifje and robbedoes; the
+runbooks carry the per-box entries. Five of robbedoes' six Mongo records and
+starfleet's `skeleton-mongo` moved through the panel action.
+
+- The restore half streams: `ManagedDatabase.restoreFromFile` pipes the dump
+  into the engine's own client over an exec's stdin
+  (`DockerClient.execWithStdin`), and because the exec pipe has no half-close
+  the client is spelled `head -c <size> | client` -- the byte count is the EOF.
+  The first spelling read the whole archive into the heap; a 5.3 GB mongodump
+  archive (1.3 GB on disk) killed the move thread with an OutOfMemoryError.
+- A move's compensation catches `Error` too, and resets the record to `active`
+  BEFORE it redeploys the consumers it stopped: a deploy refuses a database
+  that is not active (`database_not_ready`), so the other order left the
+  workload stopped after a refused move.
+- `database.max_dump_mb` bounds the ARCHIVE, which for Mongo is uncompressed
+  BSON (roughly four times the WiredTiger footprint). Size it accordingly
+  before moving a large record.
+- On a host with no headroom the engine cannot be booked beside the dedicated
+  containers it will absorb. The lever is `capacity.memory_overcommit_ratio`
+  for the move window, or an explicit engine row with a smaller ceiling
+  (starfleet: mongo:4.4 at 512 MB, because a 2 GB box cannot carry 1024 beside
+  its dedicated 512). Put the ratio back afterwards.
+- A row written before M009 reads as `dedicated` at load (afterFind); the
+  stored column stays null.

@@ -1238,3 +1238,52 @@ Same jar as robbedoes (`167b0e58...`, 13/13 clean), preflight
 23 s after start, second restart healthy 20 s, no warnings. apex 200, admin 302,
 comms 200, skeleton 202, SOA 44. `zd_deployed` current 13/13. `ssh_watch` stays
 off here by design.
+
+## Deploy 2026-09-02 (wave 4): 4551de29, shared database engines, M009
+
+Swapped to hohenheim `4551de29` (jar sha256 `9f8eb1a8...`, 268,192,262 bytes,
+stamp 13/13 `dirty=false`; the chain as wave 3, only hohenheim moved). Built in
+the clean secondary workspace `~/projects/javaweb-deploy` (16 detached chain
+worktrees plus hohenheim detached at the pushed commit). Migration diff: M009
+(`database_engines` + `managed_databases.placement/engine_id`, both nullable).
+REHEARSED for the first time through `--rehearse-migrations` on a byte copy
+(`1 applied against /tmp/rehearse.db; the live database was not touched`, copy 48
+rows / live 47) on all three boxes before any swap. Preflight
+`/root/hohenheim-preflight-20260902-wave4/` (db `.pre` integrity ok / 47,
+settings, rollback jar = `167b0e58...` i.e. `1cbc83a1`). Stop 06:41:07Z, M009
+applied for real (`1 applied`, 48), healthy; second restart 06:43:36Z up at try 8
+(the ~25 s boot); 0 journal warnings. apex 200, admin 302, comms 200, skeleton
+200 then 202, SOA 44.
+
+THE LIVE PROOF of the mechanism ran here first. `skeleton-mongo` (id 2, mongo:4.4
+because this CPU has no AVX) moved onto a shared engine:
+
+- Capacity trap on a 2 GB box: budget ~1203 MB (1971 minus the 768 reserve), the
+  host bucket held 1024 (workspace 512 + dedicated mongo 512), so the default
+  1024 MB engine could not be booked beside the dedicated one. Honest route,
+  not a cap cut on the databases: `capacity.memory_overcommit_ratio` 1.0 -> 1.5
+  for the duration, an EXPLICIT engine row `mongo-local` created on the
+  Database engines page (mongo, host local, image `mongo:4.4`, 512 MB -- the
+  same ceiling the dedicated record had), then the ratio back to 1.0 (the
+  `capacity` key is gone from `hohenheim.dry` again).
+- "Move to shared engine" row action on the Databases list, confirmed. Journal:
+  `INSTANCE: destroyed hohenheim-ebwuo83l-instance-4 - container removed,
+  volumes kept, record soft-deleted`, `DB-MOVE: moved skeleton-mongo onto shared
+  engine mongo-local - dump kept at
+  /opt/hohenheim/data/backups/moves/skeleton-mongo/20260902-064711.archive`.
+  Record: `active|shared|engine 1`; instance 4 soft-deleted (volume kept);
+  engine instance 5 `dbengine-mongo-local` running; booking 1536 during the move,
+  1024 after.
+- Proof beyond the record: instance 3's env reads
+  `DATABASE_URL=mongodb://skeleton:***@hohenheim-ebwuo83l-instance-5:27017/skeleton?authSource=skeleton`
+  (the engine's container, the record's OWN user, authSource = its own
+  database); the engine's `listDatabases` holds `skeleton` (1 collection, user
+  `skeleton`); `https://skeleton.starfleet.life/` answers 202 (its own answer)
+  five seconds after the workload container came back.
+
+Noted at this boot, fixed in code for the next jar: `zenit.data.source_capability_dropped
+RecordSource 'hohenheim:database_engine'` (the explicit source in HohenheimSources
+replaced the zenit-cms-derived default without its edit/inline-create facets;
+deleted, the derived default carries the same NAME search and admin permission).
+ROLLBACK: preflight jar + restart, plus the `.pre` db copy (M009 is additive and
+the old jar ignores the two columns, but the ledger row would be unknown to it).

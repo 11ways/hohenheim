@@ -1787,3 +1787,14 @@ starfleet (104.223.42.142, not in never_ban). Attempts 1-4 reached sshd
 starfleet kuifje's HTTPS (302) and DNS (SOA 15) still answer. First ssh-scoped
 ban in the estate; the 24 h ban on starfleet's address is harmless (starfleet
 never uses SSH to kuifje) and expires by itself.
+
+## Deploy 2026-09-02 (wave 4): 4551de29, shared database engines, M009
+
+Same jar as starfleet/robbedoes (`9f8eb1a8...`, 13/13 clean), jar-only here (no
+databases role). Preflight `/root/hohenheim-preflight-20260902-wave4/` (db `.pre`
+ok / 47, settings, rollback jar `167b0e58...` = `1cbc83a1`). M009 rehearsed on a
+byte copy through `--rehearse-migrations` (1 applied against the copy, live
+untouched), then applied for real: stop 06:44:26Z, `1 applied` (48), healthy at
+try 4 (06:44:44Z); second restart healthy at try 4; no journal warnings. Panel
+302, wcag.be 200, www.tavernetomberg.be 200; SOA wcag.be 15, tavernetomberg.be 11
+before and after. ROLLBACK: preflight jar + `.pre` copy + restart.

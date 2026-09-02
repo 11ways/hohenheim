@@ -2307,3 +2307,73 @@ nameservers first) at 51.255.43.81 / 2001:41d0:305:2100::1:4b26, request HTTP-01
 certificates, set `force_ssl=true`, and BEFORE flipping re-sync the delta: fresh
 mysqldump into the managed db + rsync of `wp-content/uploads`. The diax `.git`
 stays on phoenix (repo, not runtime).
+
+## Deploy 2026-09-02 (wave 4): 4551de29, shared database engines, M009, five of six Mongo records moved
+
+Swapped to hohenheim `4551de29` (jar sha256 `9f8eb1a8...`, 268,192,262 bytes,
+stamp 13/13 `dirty=false`; chain as wave 3). Built in `~/projects/javaweb-deploy`
+(16 chain worktrees + hohenheim detached). Preflight
+`/root/hohenheim-preflight-20260902-wave4/` (db `.pre` ok / 47, settings,
+rollback jar `167b0e58...` = `1cbc83a1`). M009 rehearsed on a byte copy via
+`--rehearse-migrations` (1 applied against the copy, live untouched), then: stop
+06:47:50Z, `1 applied` (48), healthy at try 2 (06:47:59Z); second restart healthy
+at try 2; no warnings. Live after each: panel 302, earl 200, invulassistent 401
+(its gate), tavernetomberg + www 200, udesign / microcopy / any-media (301) /
+www.di-ax.be (301) over HTTP, wcag.be SOA 15.
+
+### The migration onto one shared Mongo engine (panel, one record at a time)
+
+Booking before: 9,984 / 10,915 MB. A 1024 MB engine beside the six dedicated
+containers did not fit by 93 MB, so `capacity.memory_overcommit_ratio` went
+1.0 -> 1.5 for the duration (back to 1.0 at the end; the key is gone from
+`hohenheim.dry`). Every move: Databases list -> row menu -> "Move to shared
+engine" -> confirm; each dump kept under `data/backups/moves/<name>/`, each old
+data volume kept, each site checked with a browser UA afterwards.
+
+| record | moved (Z) | proof |
+| --- | --- | --- |
+| tomberg-mongo (1) | 06:49:37 | engine `mongo-local` minted on demand (mongo:7, 1024 MB, instance 21); tavernetomberg.be 200 `<title>Taverne Tomberg` |
+| microcopy-mongo (2) | 06:50:14 | microcopy.elevenways.be 200 `Microcopy | Eleven Ways` |
+| auditexport-mongo (3) | 06:50:51 | auditexport.di-ax.be 200 |
+| oogfonds-staging-mongo (6) | 07:07:06 | oogfonds.clients.11ways.be 401 (its gate) |
+| udesign-live-mongo (7) | 07:09:36 | udesign.world 200 `<title>Udesign.world` |
+
+Booking after: 8,448 MB (engine 1024 + `invulassistent-mongo` still dedicated at
+1280); it lands at 7,168 once invulassistent moves. Two Mongo containers remain
+on the box (the engine and invulassistent's).
+
+### invulassistent-mongo (4): two refusals, two product defects, NOT moved yet
+
+1. First attempt 06:52: refused honestly -- `Dump of 'hohenheim-luguij0q-instance-7'
+   exceeds the configured cap of 2048 MB (setting database.max_dump_mb)` (1.3 GB on
+   disk in WiredTiger is a 5.3 GB uncompressed BSON archive). DEFECT: the failure
+   path redeployed the stopped consumers BEFORE resetting the record to active,
+   so the deploy refused with `database_not_ready {state=provisioning}` and
+   instance 8 stayed stopped: invulassistent.wcag.be 503 for ~2.5 minutes until
+   `hoh power 8 start`. `database.max_dump_mb` raised to 8192 via the panel.
+2. Second attempt 06:54: the dump succeeded (5.3 GB, streamed to
+   `data/backups/moves/invulassistent-mongo/20260902-065400.archive`, KEPT), then
+   the RESTORE loaded the whole archive into the controller heap
+   (`restoreFromFile` -> `Files.readAllBytes`): gc.log shows back-to-back full GCs
+   at 955M->955M at 06:55:49 and a drop to 23M at 06:55:58 -- an
+   `OutOfMemoryError` on the move thread. The move's compensation caught only
+   exceptions, so the Error skipped it: record stuck `provisioning`, instance 8
+   stopped, NO log line anywhere. Recovered by hand at ~07:05 (`UPDATE
+   managed_databases SET status='active', failure_reason=... WHERE id=4 AND
+   status='provisioning' AND placement IS NULL`, then `hoh power 8 start`;
+   invulassistent 401 again). Total site outage of the second incident ~13 min.
+
+Both fixed in code for the next jar: the restore streams the file into the
+engine's own client over an exec's stdin with a byte-counted EOF (`head -c
+<size> | mongorestore --archive`; no copy in the heap, none in the container's
+writable layer), the compensation catches `Error` and resets the record BEFORE
+redeploying the consumers; `SharedDatabaseEngineLiveTest` step 2b pins the
+refusal ordering (workload running again after a refused move). invulassistent
+moves with that jar.
+
+Also fixed in code from this wave's observations: pre-M009 rows rendered
+Placement "None" (a null column now READS as dedicated at load), the boot line
+`source_capability_dropped` for the engine source, and the stale "buffered through
+controller memory" text on `database.max_dump_mb`.
+ROLLBACK: preflight jar + `.pre` copy + restart; every moved record keeps its
+dump and its old data volume.
