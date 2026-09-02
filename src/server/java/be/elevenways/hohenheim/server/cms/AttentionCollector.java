@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -727,6 +728,42 @@ public final class AttentionCollector {
                     ? copy("provisioning_failed", "attention_detail")
                     : copy("provisioning_failed_reason", "attention_detail", "reason", reason),
                 CmsRoutes.detail(ADMIN, "databases", row.get(DatabaseModel.ID))));
+        }
+        // An ACTIVE record carrying a reason is the one shape a status alone cannot show:
+        // a failed move rolled the record back onto its untouched dedicated engine and
+        // stamped WHY there, so without this the operator learns nothing happened only by
+        // opening the record.
+        for (Row row : Models.get(DatabaseModel.class).find()
+                .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_ACTIVE))
+                .where(DatabaseModel.FAILURE_REASON.isNotNull())
+                .all()) {
+            String reason = row.get(DatabaseModel.FAILURE_REASON);
+            if (reason == null || reason.isBlank()) {
+                continue;
+            }
+            items.add(item("warning", "database",
+                copy("database", "attention_title", "name", row.get(DatabaseModel.NAME)),
+                copy("database_operation_failed", "attention_detail", "reason", reason),
+                CmsRoutes.detail(ADMIN, "databases", row.get(DatabaseModel.ID))));
+        }
+        failedDatabaseEngines(items);
+    }
+
+    /** A shared engine that could not be brought up serves every database on it nothing. */
+    private static void failedDatabaseEngines(List<AttentionItem> items) {
+        for (Row row : Models.get(DatabaseEngineModel.class).find()
+                .where(DatabaseEngineModel.STATUS.eq(DatabaseModel.STATUS_FAILED))
+                .all()) {
+            String reason = row.get(DatabaseEngineModel.FAILURE_REASON);
+            items.add(item("error", "server",
+                copy("database_engine", "attention_title",
+                    "name", row.get(DatabaseEngineModel.NAME)),
+                reason == null || reason.isBlank()
+                    ? copy("provisioning_failed", "attention_detail")
+                    : copy("engine_provisioning_failed_reason", "attention_detail",
+                        "reason", reason),
+                CmsRoutes.detail(ADMIN, DatabaseEngineResource.SLUG,
+                    row.get(DatabaseEngineModel.ID))));
         }
     }
 

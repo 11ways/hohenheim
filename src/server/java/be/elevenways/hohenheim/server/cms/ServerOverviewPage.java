@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.host.TrustLaneView;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.host.WorkloadView;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -480,6 +481,19 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
                 badgeOf(DatabaseModel.STATUS, database.get(DatabaseModel.STATUS)),
                 database.get(DatabaseModel.MEMORY_LIMIT_MB),
                 CmsRoutes.detail(panel, "databases", database.get(DatabaseModel.ID))));
+        }
+        // A shared engine holds the host's memory the same way a database used to: it owns
+        // its own instance and is booked once, so a host page that listed only the records
+        // would under-report exactly the container that carries them all.
+        for (Row engine : Models.get(DatabaseEngineModel.class).find()
+                .where(DatabaseEngineModel.SERVER_ID.eq(serverId)).all()) {
+            workloads.add(new WorkloadView(
+                String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)),
+                "database_engine",
+                badgeOf(DatabaseEngineModel.STATUS, engine.get(DatabaseEngineModel.STATUS)),
+                engine.get(DatabaseEngineModel.MEMORY_LIMIT_MB),
+                CmsRoutes.detail(panel, DatabaseEngineResource.SLUG,
+                    engine.get(DatabaseEngineModel.ID))));
         }
         return workloads;
     }
