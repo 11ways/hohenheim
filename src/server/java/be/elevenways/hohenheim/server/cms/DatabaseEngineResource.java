@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -20,6 +21,7 @@ import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -32,6 +34,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.aggregate.Aggregate;
+import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
@@ -40,6 +44,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -415,9 +420,70 @@ public class DatabaseEngineResource extends RowResource {
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
         if (DATABASES_COLUMN.equals(column.name())) {
             Integer engineId = row.get(DatabaseEngineModel.ID);
-            return engineId == null ? 0 : DatabaseEngines.databasesOn(engineId).size();
+            return engineId == null ? 0 : databaseCount(engineId);
         }
         return super.cellValue(row, column);
+    }
+
+    /**
+     * Request-scoped memo of the database counts of the engines on the page being rendered:
+     * ONE grouped aggregate per page instead of one query per row (the DnsZoneResource
+     * shape; {@code cellValue} takes no context, so the memo rides the request conduit).
+     */
+    private static final IdentifierKey<Map<Integer, Long>> DATABASE_COUNTS =
+        IdentifierKey.of("hohenheim", "database_engine_database_counts");
+
+    @Override
+    public @NonNull List<Row> listRows(TableView.Applied<Row> applied,
+                                       @NonNull AccessContext accessContext) {
+        List<Row> rows = super.listRows(applied, accessContext);
+        Conduit conduit = accessContext.conduit();
+        if (conduit != null) {
+            try {
+                conduit.setAttribute(DATABASE_COUNTS, countDatabasesPerEngine(rows));
+            } catch (UnsupportedOperationException attributeless) {
+                // An attribute-less conduit degrades to the per-row count below.
+            }
+        }
+        return rows;
+    }
+
+    /** @return engine id -> managed database count, for exactly the engines handed in */
+    private static @NonNull Map<Integer, Long> countDatabasesPerEngine(@NonNull List<Row> engines) {
+        Map<Integer, Long> counts = new HashMap<>();
+        List<Integer> ids = new ArrayList<>();
+        for (Row engine : engines) {
+            Integer id = engine.get(DatabaseEngineModel.ID);
+            if (id != null) {
+                ids.add(id);
+                counts.put(id, 0L);
+            }
+        }
+        if (ids.isEmpty()) {
+            return counts;
+        }
+        for (Row group : Models.get(DatabaseModel.class).find()
+                .where(DatabaseModel.ENGINE_ID.in(ids))
+                .groupBy(DatabaseModel.ENGINE_ID)
+                .aggregateAll(Aggregate.count().as("database_count"))) {
+            Object engineId = group.get(DatabaseModel.ENGINE_ID.getName());
+            Object counted = group.get("database_count");
+            if (engineId instanceof Number id && counted instanceof Number number) {
+                counts.put(id.intValue(), number.longValue());
+            }
+        }
+        return counts;
+    }
+
+    /** @return the engine's database count, off the page memo when this row is on it */
+    private static long databaseCount(int engineId) {
+        Conduit conduit = RouteScope.currentConduit();
+        Map<Integer, Long> counted = conduit == null ? null : conduit.getAttribute(DATABASE_COUNTS);
+        if (counted != null && counted.containsKey(engineId)) {
+            return counted.get(engineId);
+        }
+        // A row outside the memoized page (a detail render, a conduit-less caller).
+        return DatabaseEngines.databasesOn(engineId).size();
     }
 
     private static boolean hasText(@Nullable Object value) {

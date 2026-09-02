@@ -247,6 +247,15 @@ def serverJar = blastServerJar(
 )
 
 serverJar.configure {
+    // sqlite-jdbc loads its native library through System.load; JDK 24+ prints a
+    // four-line "restricted method" warning for that on EVERY offline command
+    // (--rehearse-migrations, --run-migrations, --build-info) unless native access is
+    // granted, and the executable-jar manifest is the one place that grants it for a
+    // plain `java -jar` with no flags to remember on the boxes.
+    manifest {
+        attributes 'Enable-Native-Access': 'ALL-UNNAMED'
+    }
+
     from({ project.configurations.spamserviceDistribution.singleFile }) {
         into 'managed-services'
         rename { 'spamservice-server.jar' }
@@ -264,6 +273,10 @@ serverJar.configure {
                 if (jar.getEntry(asset) == null) {
                     throw new GradleException("${jarFile.name} is missing ${asset} -- a jar-only deploy would strand the front-end")
                 }
+            }
+            def nativeAccess = jar.manifest?.mainAttributes?.getValue('Enable-Native-Access')
+            if (nativeAccess != 'ALL-UNNAMED') {
+                throw new GradleException("${jarFile.name} manifest lacks Enable-Native-Access: ALL-UNNAMED -- every offline command would print the JDK native-access warning again")
             }
             def resolver = 'META-INF/versions/18/org/xbill/DNS/spi/DnsjavaInetAddressResolverProvider.class'
             if (jar.getEntry(resolver) == null) {
