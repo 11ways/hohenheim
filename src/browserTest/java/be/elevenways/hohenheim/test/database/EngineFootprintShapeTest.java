@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * A managed database's DEFAULT memory footprint is read for the persistence shape it
@@ -46,6 +47,12 @@ class EngineFootprintShapeTest {
         settings.put("engine", engine);
         settings.put("ephemeral", ephemeral);
         settings.put("data_volume", dataVolume);
+        return settings;
+    }
+
+    private static Map<String, Object> sharedSettings(String engine) {
+        Map<String, Object> settings = settings(engine, false, "dbengine-data");
+        settings.put("shared", true);
         return settings;
     }
 
@@ -109,6 +116,65 @@ class EngineFootprintShapeTest {
                 .containsKey("/data/db");
             assertThat(ephemeral.volumes())
                 .as("step 4: and mounts no volume").isEmpty();
+        });
+    }
+
+    /**
+     * A SHARED engine container books ONE number for the many logical databases it hosts,
+     * and the engines that cannot share are unaffected by the flag.
+     *
+     * AIDEV-NOTE: the redis arm is the falsification. {@code shared} is a settings
+     * boolean, and a container kind that read it without asking whether the engine can
+     * share would hand a redis engine a footprint no redis engine has -- so this asserts
+     * that the flag alone changes nothing for it, and that the engine itself refuses to
+     * name a shared footprint at all.
+     */
+    @Test
+    void aSharedEngineBooksOneFootprintForAllItsLogicalDatabases() {
+        DatabaseContainerKind kind = new DatabaseContainerKind();
+
+        // 1. Every sharing engine declares the same chosen 1024: unmeasured for a
+        //    multi-database load, and the docblock beside it says so.
+        for (ManagedDatabase.Engine engine : ManagedDatabase.Engine.values()) {
+            if (!engine.supportsLogicalDatabases()) {
+                continue;
+            }
+            assertThat(engine.sharedFootprintMb())
+                .as("step 1 (%s): the declared shared footprint", engine)
+                .isEqualTo(1024);
+            assertThat(kind.defaultFootprintMb(sharedSettings(engine.token())))
+                .as("step 1 (%s): and the kind books it off the settings flag", engine)
+                .isEqualTo(1024);
+        }
+
+        // 2. Without the flag the SAME settings book one database's own footprint, so the
+        //    flag is what moves the number and nothing else is.
+        assertThat(kind.defaultFootprintMb(settings("mongo", false, "dbengine-data")))
+            .as("step 2: an unflagged mongo container books the dedicated persistent shape")
+            .isEqualTo(ManagedDatabase.Engine.MONGO.footprintMb(false));
+        assertThat(kind.defaultFootprintMb(settings("postgres", false, "dbengine-data")))
+            .as("step 2: and so does postgres")
+            .isEqualTo(ManagedDatabase.Engine.POSTGRES.footprintMb(false));
+
+        // 3. Redis cannot host logical databases, so the flag buys it nothing: it keeps
+        //    its own dedicated footprint rather than a shared number it has no shape for.
+        assertThat(kind.defaultFootprintMb(sharedSettings("redis")))
+            .as("step 3: a redis container ignores the shared flag")
+            .isEqualTo(ManagedDatabase.Engine.REDIS.footprintMb(false));
+        assertThatThrownBy(ManagedDatabase.Engine.REDIS::sharedFootprintMb)
+            .as("step 3: and the engine refuses to name a shared footprint at all")
+            .isInstanceOf(UnsupportedOperationException.class)
+            .hasMessageContaining("no shared shape");
+
+        // 4. The shared container is volume-backed like any persistent one: the number
+        //    booked and the directory mounted still come from the one predicate.
+        Db.run(datasource, () -> {
+            InstanceSpec shared = kind.specFor(43, sharedSettings("mongo"));
+            assertThat(shared.volumes())
+                .as("step 4: the shared engine mounts its own data volume")
+                .containsEntry("dbengine-data", "/data/db");
+            assertThat(shared.tmpfs())
+                .as("step 4: and carries no tmpfs to charge for").isEmpty();
         });
     }
 }

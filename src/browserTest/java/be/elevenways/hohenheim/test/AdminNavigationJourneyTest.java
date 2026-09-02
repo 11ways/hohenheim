@@ -51,7 +51,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         // The ungrouped top block: what you look at, and what everything runs on.
         Map.entry("default", List.of("dashboard", "servers")),
         Map.entry("deploy", List.of("projects", "sites", "instances", "runtime-images",
-            "stacks", "databases", "instance-templates", "git-providers")),
+            "stacks", "databases", "database-engines", "instance-templates", "git-providers")),
         Map.entry("networking", List.of("dns-zones", "certificates", "access-lists",
             "released-claims")),
         Map.entry("security", List.of("users", "roles", "spamservice", "bans")),
@@ -104,7 +104,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         int visible = sections.stream().mapToInt(section -> section.peers().size()).sum();
         assertThat(visible)
             .as("step 1: the whole sidebar stays scannable (it was 39)")
-            .isEqualTo(23);
+            .isEqualTo(24);
 
         // 2. Every visible entry explains itself, and no two entries of one group share a
         //    navOrder -- a tie makes the rendered order depend on declaration order, which is

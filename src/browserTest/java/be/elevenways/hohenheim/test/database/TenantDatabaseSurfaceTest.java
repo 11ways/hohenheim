@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
@@ -7,13 +8,19 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.DatabaseResource;
+import be.elevenways.hohenheim.server.cms.ManageDatabaseResource;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.server.quota.DatabaseQuota;
+import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -89,6 +96,8 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
     private static Integer databaseAId;
     private static String databaseAName;
+    /** The operator's shared engine every tenant record of this class lands on. */
+    private static Integer sharedEngineId;
 
     @BeforeAll
     static void seed() {
@@ -133,10 +142,12 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         // carry the class prefix.
         Model databases = Models.get(DatabaseModel.class);
         Model instances = Models.get(InstanceModel.class);
+        Model engines = Models.get(DatabaseEngineModel.class);
         if (admittedHostId != null) {
             // Instance rows carry generated attribution: read-only, and undeletable,
             // outside their owning tier's system scope. Soft-deleted ones count too --
-            // a host refuses removal while any row still points at it.
+            // a host refuses removal while any row still points at it. The shared
+            // engine's own instance rides the same sweep: it sits on this host too.
             GeneratedRows.sweeping("database", () -> {
                 for (Row instance : instances.find()
                         .where(InstanceModel.SERVER_ID.eq(admittedHostId)).all()) {
@@ -151,6 +162,11 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
                     links.delete(link.get(InstanceDatabaseModel.ID));
                 }
                 databases.delete(id);
+            }
+            // Engines go LAST: an engine refuses to go while a record still names it.
+            for (Row engine : engines.find()
+                    .where(DatabaseEngineModel.SERVER_ID.eq(admittedHostId)).all()) {
+                engines.delete(engine.get(DatabaseEngineModel.ID));
             }
         }
         Model sites = Models.get(SiteModel.class);
@@ -257,8 +273,27 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         return keys.toString();
     }
 
-    private static String bucketOf(int userId) {
-        return InstanceQuota.bucketKeyOf(HohenheimAccess.packSubjects(Set.of("user:" + userId)));
+    private static String packedOf(int userId) {
+        return HohenheimAccess.packSubjects(Set.of("user:" + userId));
+    }
+
+    /** The tenant's INSTANCE (workload) bucket, which a shared database never spends. */
+    private static String instanceBucketOf(int userId) {
+        return InstanceQuota.bucketKeyOf(packedOf(userId));
+    }
+
+    /** The tenant's DATABASE bucket, the one a shared record is charged to. */
+    private static String databaseBucketOf(int userId) {
+        return DatabaseQuota.bucketKeyOf(packedOf(userId));
+    }
+
+    private static boolean offersAction(List<RowAction<Row>> actions, String actionName) {
+        for (RowAction<Row> action : actions) {
+            if (action.id().getPath().equals(actionName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // -- the journeys ---------------------------------------------------------
@@ -317,23 +352,50 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             .as("step 5: and it shows up in the tenant's own list")
             .contains(databaseAName);
 
-        // 6. THE QUOTA. The engine IS an instance, and it is charged to the ALLOCATING
-        //    TENANT's bucket -- the reason tenant databases need no second dimension.
-        Row engine = OwnedInstances.soleOwnedBy(DatabaseModel.MODEL_ID, databaseAId);
-        assertThat(engine).as("step 6: the record owns an engine instance row").isNotNull();
-        assertThat((String) engine.get(InstanceModel.QUOTA_BUCKET))
-            .as("step 6: charged to the allocating tenant, never the shared operator bucket")
-            .isEqualTo(bucketOf(tenantAId))
-            .isNotEqualTo(InstanceQuota.bucketKeyOf(""));
+        // 6. THE PLACEMENT AND THE QUOTA. A tenant's postgres is a LOGICAL database on the
+        //    operator's shared engine: the record owns no instance of its own, it names the
+        //    engine row, and that row's instance is booked ONCE against the OPERATOR's
+        //    bucket (the operator chose to share one process). The tenant is charged in
+        //    the DATABASE dimension only; its INSTANCE quota does not move.
+        assertThat((String) database.get(DatabaseModel.PLACEMENT))
+            .as("step 6: a persistent postgres allocation lands shared")
+            .isEqualTo(DatabaseModel.PLACEMENT_SHARED);
+        assertThat(OwnedInstances.soleOwnedBy(DatabaseModel.MODEL_ID, databaseAId))
+            .as("step 6: a shared record owns NO instance row of its own").isNull();
+        sharedEngineId = database.get(DatabaseModel.ENGINE_ID);
+        assertThat(sharedEngineId).as("step 6: it names its engine").isNotNull();
+        Row engine = Models.get(DatabaseEngineModel.class).findById(sharedEngineId);
+        assertThat(engine).as("step 6: and that engine row exists").isNotNull();
+        assertThat((Integer) engine.get(DatabaseEngineModel.SERVER_ID))
+            .as("step 6: on the same admitted host").isEqualTo(admittedHostId);
+        Row engineInstance = DatabaseInstances.ownedBy(EngineHost.ofEngine(engine));
+        assertThat(engineInstance).as("step 6: the engine owns the instance row").isNotNull();
+        assertThat((String) engineInstance.get(InstanceModel.QUOTA_BUCKET))
+            .as("step 6: booked against the OPERATOR bucket, never the tenant's")
+            .isEqualTo(InstanceQuota.bucketKeyOf(""))
+            .isNotEqualTo(instanceBucketOf(tenantAId));
+        assertThat((String) database.get(DatabaseModel.QUOTA_BUCKET))
+            .as("step 6: while the record itself is charged to the tenant's DATABASE bucket")
+            .isEqualTo(databaseBucketOf(tenantAId));
+        assertThat(Quotas.usedOf(instanceBucketOf(tenantAId)))
+            .as("step 6: and the tenant's instance quota was not spent").isZero();
+        assertThat(Quotas.usedOf(databaseBucketOf(tenantAId)))
+            .as("step 6: one database slot is").isEqualTo(1);
 
         // 7. A SECOND TENANT may use the SAME label: namespacing is what keeps one
         //    tenant's choice from denying it to everyone else (and from answering
-        //    "taken", which is an oracle over another tenant's names).
+        //    "taken", which is an oracle over another tenant's names). It lands on the
+        //    SAME engine: one process per host is the entire point of sharing.
         HttpResponse<String> other = post(sessionB, csrfB, createUrl, "name=blog&engine=postgres");
         assertThat(other.statusCode())
             .as("step 7: tenant B allocates the same label successfully").isIn(302, 303);
-        assertThat(databaseNamed("u" + tenantBId + "-blog"))
-            .as("step 7: under ITS OWN namespaced name").isNotNull();
+        Row databaseB = databaseNamed("u" + tenantBId + "-blog");
+        assertThat(databaseB).as("step 7: under ITS OWN namespaced name").isNotNull();
+        assertThat((Integer) databaseB.get(DatabaseModel.ENGINE_ID))
+            .as("step 7: on the very same shared engine").isEqualTo(sharedEngineId);
+        assertThat((String) databaseB.get(DatabaseModel.QUOTA_BUCKET))
+            .as("step 7: charged to tenant B's own database bucket")
+            .isEqualTo(databaseBucketOf(tenantBId));
     }
 
     /** Cross-tenant reads: absence and denial are one answer, on every surface. */
@@ -476,13 +538,19 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         Row stored = databases.findById(databaseAId);
         int storedServer = stored.get(DatabaseModel.SERVER_ID);
 
-        // 1..4 THE ATTACKS, one per column, each straight at the MODEL -- no form, no
+        // 1..6 THE ATTACKS, one per column, each straight at the MODEL -- no form, no
         //      resource, exactly the shape a direct POST or a revision restore takes.
+        //      The placement pair is the shared-tier addition: flipping to dedicated or
+        //      repointing at another engine would each trip a placement invariant, and
+        //      the refusal a tenant sees must still be the FROZEN one (hook order), never
+        //      an invariant that reads as "your engine choice is wrong".
         for (Map.Entry<String, Object> attack : new java.util.LinkedHashMap<String, Object>() {{
                 put(DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId());
                 put(DatabaseModel.IMAGE.getName(), "attacker/postgres:evil");
                 put(DatabaseModel.MEMORY_LIMIT_MB.getName(), 65536);
                 put(DatabaseModel.EPHEMERAL.getName(), true);
+                put(DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_DEDICATED);
+                put(DatabaseModel.ENGINE_ID.getName(), 900_000_000);
             }}.entrySet()) {
             Throwable refused = catchThrowable(() -> TenantConduits.as(principalA, () -> {
                 Row write = databases.findById(databaseAId);
@@ -515,6 +583,14 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             .contains("tenant_database_not_allocatable");
         assertThat(databaseNamed(PREFIX + "smuggled"))
             .as("step 3: and nothing landed").isNull();
+
+        // 4. The operator's "move to shared engine" action is NOT a tenant verb: a tenant
+        //    never sees, let alone drives, where the operator's data lives. The positive
+        //    anchor is the operator resource declaring it, so this is not a typo test.
+        assertThat(offersAction(new DatabaseResource().rowActions(), "move_database_shared"))
+            .as("step 4 anchor: the operator resource offers the move").isTrue();
+        assertThat(offersAction(new ManageDatabaseResource().rowActions(), "move_database_shared"))
+            .as("step 4: the tenant resource does not").isFalse();
     }
 
     /** Attaching a database to an application needs authority over BOTH sides. */
@@ -577,12 +653,17 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             .as("step 4: the link survived the attempt").hasSize(1);
     }
 
-    /** The cap binds under CONCURRENCY, because the reservation rides the engine write. */
+    /**
+     * The cap binds under CONCURRENCY, because the reservation rides the record write.
+     * It is the DATABASE cap: a shared record spends no instance slot, so the instance
+     * cap could not bind a tenant's database count even in principle.
+     */
     @Test
     @Order(7)
     void racingAllocationsCannotOverspendTheTenantsLastSlot() throws Exception {
-        String packed = HohenheimAccess.packSubjects(Set.of("user:" + tenantAId));
-        long used = Quotas.usedOf(bucketOf(tenantAId));
+        String packed = packedOf(tenantAId);
+        long used = Quotas.usedOf(databaseBucketOf(tenantAId));
+        long instancesUsed = Quotas.usedOf(instanceBucketOf(tenantAId));
         capTenantAt(tenantAId, (int) used + 1);   // EXACTLY one remaining slot
 
         CyclicBarrier barrier = new CyclicBarrier(2);
@@ -617,20 +698,27 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             }
         }
         assertThat(raced).as("step 2: exactly one racing allocation landed").hasSize(1);
-        assertThat(Quotas.usedOf(bucketOf(tenantAId)))
+        assertThat(Quotas.usedOf(databaseBucketOf(tenantAId)))
             .as("step 2: used == limit, not limit + 1")
             .isEqualTo(used + 1);
-        assertThat(InstanceQuota.limitFor(packed))
+        assertThat(DatabaseQuota.limitFor(packed))
             .as("step 2: against the tenant's OWN cap, not a shared one")
             .isEqualTo((int) used + 1);
+        assertThat(Quotas.usedOf(instanceBucketOf(tenantAId)))
+            .as("step 2: and the tenant's INSTANCE quota did not move -- a shared "
+                + "database is not a workload slot")
+            .isEqualTo(instancesUsed);
 
-        // 3. The loser left nothing behind: no orphan "provisioning" record, and no engine
-        //    row charged to a database that does not exist.
+        // 3. The loser left nothing behind: no orphan "provisioning" record, and the
+        //    winner joined the existing engine rather than minting a second one.
         assertThat(Models.get(DatabaseModel.class).find().all().stream()
                 .filter(row -> String.valueOf((Object) row.get(DatabaseModel.NAME))
                     .startsWith("u" + tenantAId + "-race"))
                 .count())
             .as("step 3: the refused allocation rolled its record back").isEqualTo(1);
+        assertThat((Integer) raced.get(0).get(DatabaseModel.ENGINE_ID))
+            .as("step 3: the winner lives on the host's one shared engine")
+            .isEqualTo(sharedEngineId);
     }
 
     /** Destroy is the tenant's own verb, and only over their own database. */
@@ -660,8 +748,10 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
                 + "would pass a status-only test").isNotNull();
 
         // 2. THE POSITIVE ANCHOR: the owner destroys their own, the record is gone, and
-        //    the quota slot comes back so the cap is not a one-way ratchet.
-        long before = Quotas.usedOf(bucketOf(tenantAId));
+        //    the quota slot comes back so the cap is not a one-way ratchet. No engine
+        //    container ever ran in this suite, so the logical drop has nothing to drop
+        //    and the destroy confirms "observed absent" exactly like a dedicated one.
+        long before = Quotas.usedOf(databaseBucketOf(tenantAId));
         TenantConduits.as(principalA, () -> {
             try {
                 new DatabaseService().destroy(databaseAName, true);
@@ -671,9 +761,17 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         });
         assertThat(databaseNamed(databaseAName)).as("step 2: the owner's destroy lands")
             .isNull();
-        assertThat(Quotas.usedOf(bucketOf(tenantAId)))
+        assertThat(Quotas.usedOf(databaseBucketOf(tenantAId)))
             .as("step 2: and hands the tenant's own slot back")
             .isEqualTo(before - 1);
+
+        // 3. THE ENGINE SURVIVES its tenant: it is the operator's process, still serving
+        //    tenant B's database, and even the last database's destroy leaves it standing
+        //    (deleting an engine is an explicit operator act, by design).
+        Row engine = Models.get(DatabaseEngineModel.class).findById(sharedEngineId);
+        assertThat(engine).as("step 3: the shared engine row outlives the record").isNotNull();
+        assertThat(DatabaseInstances.ownedBy(EngineHost.ofEngine(engine)))
+            .as("step 3: and so does its instance row").isNotNull();
     }
 
     private static void capTenantAt(int userId, int maximum) {
@@ -684,7 +782,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
             row = quotas.createEmptyRow();
             row.set(InstanceQuotaModel.SUBJECTS, packed);
         }
-        row.set(InstanceQuotaModel.MAX_INSTANCES, maximum);
+        row.set(InstanceQuotaModel.MAX_DATABASES, maximum);
         quotas.save(row);
         capRowId = row.get(InstanceQuotaModel.ID);
     }

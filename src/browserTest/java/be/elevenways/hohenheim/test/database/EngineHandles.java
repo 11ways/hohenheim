@@ -1,15 +1,19 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.database.DatabaseContainerKind;
+import be.elevenways.hohenheim.server.database.DatabaseEngines;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
+import be.elevenways.hohenheim.server.database.EngineHost;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -73,5 +77,51 @@ public final class EngineHandles {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * The {@link #plant} sibling for a SHARED engine: the owned instance of a
+     * {@link DatabaseEngineModel} row, planted with no daemon.
+     *
+     * The attribution is the ENGINE's ({@link DatabaseEngines#SOURCE} +
+     * {@code DatabaseEngineModel.MODEL_ID}), which is what makes every shared record
+     * bound to this engine resolve its serving container through it.
+     *
+     * @param status one of the {@link InstanceModel} status words
+     * @return the engine container handle the instance runs under
+     */
+    public static String plantEngine(int engineId, String name, String engineToken,
+                                     String status) {
+        try {
+            return OwnedInstances.inScope(DatabaseEngines.SOURCE, DatabaseEngineModel.MODEL_ID,
+                engineId, () -> {
+                    Map<String, Object> settings = new LinkedHashMap<>();
+                    settings.put("engine", engineToken);
+                    settings.put("shared", true);
+                    settings.put("ephemeral", false);
+                    settings.put("data_volume", "hohenheim-test-dbengine-" + name + "-data");
+                    Row row = Models.get(InstanceModel.class).createEmptyRow();
+                    row.set(InstanceModel.NAME, "dbengine-" + name);
+                    row.set(InstanceModel.KIND, DatabaseContainerKind.ID.toString());
+                    row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+                    row.set(InstanceModel.STATUS, status);
+                    row.set(InstanceModel.SETTINGS, settings);
+                    Models.get(InstanceModel.class).save(row);
+                    return ControllerScope.handle(ControllerScope.KIND_INSTANCE,
+                        row.get(InstanceModel.ID));
+                });
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** The engine container handle serving a shared engine row, or an AssertionError. */
+    public static String ofEngine(Row engineRow) {
+        String handle = DatabaseInstances.handleOf(EngineHost.ofEngine(engineRow));
+        if (handle == null) {
+            throw new AssertionError("shared engine '"
+                + engineRow.get(DatabaseEngineModel.NAME) + "' owns no engine instance");
+        }
+        return handle;
     }
 }
