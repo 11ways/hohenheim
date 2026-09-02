@@ -3,10 +3,12 @@ package be.elevenways.hohenheim.server.database;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseResource;
+import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
@@ -72,6 +74,18 @@ public final class DatabaseApi {
             return ApiConduits.json(Map.of("databases", databases));
         });
 
+        HohenheimEndpoints.API_DATABASE.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row row = visibleDatabase(conduit, ctx);
+            if (row == null) {
+                return null;
+            }
+            return ApiConduits.json(projection(row, HohenheimAccess.isAdmin(ctx)));
+        });
+
         HohenheimEndpoints.API_DATABASE_MOVE_SHARED.setHandler(conduit -> {
             AccessContext ctx = requireAdminKey(conduit);
             if (ctx == null) {
@@ -132,6 +146,35 @@ public final class DatabaseApi {
                 engines.add(engineProjection(row));
             }
             return ApiConduits.json(Map.of("engines", engines));
+        });
+
+        HohenheimEndpoints.API_DATABASE_ENGINE.setHandler(conduit -> {
+            AccessContext ctx = requireAdminKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Integer engineId = conduit.getParameter(HohenheimEndpoints.DB_ENGINE_ID);
+            Row engine = engineId == null ? null
+                : Models.get(DatabaseEngineModel.class).findById(engineId);
+            if (engine == null) {
+                conduit.notFound();
+                return null;
+            }
+            Map<String, Object> body = new LinkedHashMap<>(engineProjection(engine));
+            List<Map<String, Object>> logical = new ArrayList<>();
+            for (Row database : DatabaseEngines.databasesOn(engineId)) {
+                logical.add(logicalProjection(database));
+            }
+            body.put("logical_databases", logical);
+            // The engine's own container, when somebody is watching it: the stats hub's
+            // last sample, never a stream this read would have to open (see lastMemoryMb).
+            Row instance = DatabaseInstances.ownedBy(EngineHost.ofEngine(engine));
+            Long usage = instance == null ? null
+                : InstanceStats.lastMemoryMb(instance.get(InstanceModel.ID));
+            if (usage != null) {
+                body.put("usage_mb", usage);
+            }
+            return ApiConduits.json(body);
         });
     }
 
@@ -208,6 +251,9 @@ public final class DatabaseApi {
         entry.put("db_name", database.get(DatabaseModel.DB_NAME));
         entry.put("placement", DatabaseService.placementOf(database));
         entry.put("status", String.valueOf((Object) database.get(DatabaseModel.STATUS)));
+        // The status's own declared fact, so a poller never carries a list of statuses:
+        // pending means keep waiting, and an unrecognised status reads pending too.
+        entry.put("outcome", DatabaseModel.outcomeOf(database.get(DatabaseModel.STATUS)));
         entry.put("attached", databaseId == null ? 0
             : InstanceDatabaseLinks.liveInstances(databaseId).size());
         if (admin) {
@@ -217,10 +263,45 @@ public final class DatabaseApi {
             entry.put("server", ServerModel.nameOf(database.get(DatabaseModel.SERVER_ID)));
             entry.put("ephemeral", Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL)));
             entry.put("memory_limit_mb", database.get(DatabaseModel.MEMORY_LIMIT_MB));
+            // The ceiling the record RUNS under, which memory_limit_mb alone never told:
+            // a record on the defaults declares nothing, and a shared record's ceiling is
+            // its engine's. The CLI prints this rather than deriving it.
+            putMemoryCeiling(entry, database);
             entry.put("cpu_limit", database.get(DatabaseModel.CPU_LIMIT));
             entry.put("failure_reason", stringOrEmpty(database.get(DatabaseModel.FAILURE_REASON)));
         }
         return entry;
+    }
+
+    /**
+     * One logical database as its ENGINE's detail page lists it: who it is, how it landed
+     * and what it runs under. Operator surface (the engine list's own door), so the
+     * logical user is named; the password has no representation here either.
+     */
+    static @NonNull Map<String, Object> logicalProjection(@NonNull Row database) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("id", database.get(DatabaseModel.ID));
+        entry.put("name", database.get(DatabaseModel.NAME));
+        entry.put("db_name", database.get(DatabaseModel.DB_NAME));
+        entry.put("db_user", stringOrEmpty(database.get(DatabaseModel.DB_USER)));
+        entry.put("status", String.valueOf((Object) database.get(DatabaseModel.STATUS)));
+        entry.put("outcome", DatabaseModel.outcomeOf(database.get(DatabaseModel.STATUS)));
+        putMemoryCeiling(entry, database);
+        return entry;
+    }
+
+    /**
+     * The effective ceiling and where it came from, both absent when the record's engine
+     * host cannot be resolved -- an absent field is the honest answer, a guessed number
+     * is not.
+     */
+    private static void putMemoryCeiling(@NonNull Map<String, Object> entry,
+                                         @NonNull Row database) {
+        DatabaseService.MemoryCeiling ceiling = DatabaseService.memoryCeilingOf(database);
+        if (ceiling != null) {
+            entry.put("effective_memory_mb", ceiling.megabytes());
+            entry.put("memory_source", ceiling.source());
+        }
     }
 
     /** The enumerated engine view; the superuser credentials are absent BY NAME. */

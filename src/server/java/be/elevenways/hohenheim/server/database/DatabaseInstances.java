@@ -427,8 +427,14 @@ public final class DatabaseInstances {
         return ControllerScope.handle(ControllerScope.KIND_DB, databaseName) + "-data";
     }
 
-    /** Map the host onto the database_container kind settings. */
-    private static @NonNull Map<String, Object> desiredSettings(@NonNull EngineHost host) {
+    /**
+     * Map the host onto the database_container kind settings.
+     *
+     * AIDEV-NOTE: package-visible so {@code DatabaseService.memoryCeilingOf} can price a
+     * record through the SAME settings the deploy writes. Asking the kind handler what it
+     * would book for these settings is the only answer that cannot drift from the booking.
+     */
+    static @NonNull Map<String, Object> desiredSettings(@NonNull EngineHost host) {
         ManagedDatabase.Engine engine = host.engine();
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("engine", engine.token());

@@ -1,20 +1,64 @@
 {
     "reuse": {
-        "lanes": { "hohenheim": { "unit": false, "browser": true } },
+        "lanes": {
+            "hohenheim": {
+                "unit": false,
+                "browser": true
+            }
+        },
         "nonHermeticClasses": [
-            "*Incus*", "*Live*",
-            "BackupDatabasesTaskTest", "BackupTargetsTest", "BinaryBackupTest",
-            "ContainerHardeningTest", "DatabaseNetworkIsolationTest",
-            "DatabaseRestoreUploadTest", "DatabaseServiceTest", "DockerClientTest",
-            "DockerReclaimTest", "DockerReconcilerTest",
-            "DockerStreamingTest", "EngineMemoryCeilingTest", "EnvInjectionFlowTest",
-            "HostFencingTest", "HostKeyPinningTest", "HostPreflightTest",
-            "InstanceBackupRetentionRefusalTest", "InstanceNetworkIsolationTest",
-            "InstanceSnapshotRetentionTest", "ManagedDatabaseTest",
-            "OrphanActionsTest", "ProcessCapacityTest",
-            "ProcessConfinementTest", "ProcessNetworkIsolationTest",
-            "ProclogProxyIngressTest", "StackInstancesTest", "StackNetworkIsolationTest",
-            "StackRuntimeFlowTest", "VerifyWorkloadIsolationTest", "WorkloadNetworkPolicyTest"
+            "*Incus*",
+            "*Live*",
+            "BackupDatabasesTaskTest",
+            "BackupTargetsTest",
+            "BinaryBackupTest",
+            "ContainerHardeningTest",
+            "DatabaseNetworkIsolationTest",
+            "DatabaseRestoreUploadTest",
+            "DatabaseServiceTest",
+            "DockerClientTest",
+            "DockerReclaimTest",
+            "DockerReconcilerTest",
+            "DockerStreamingTest",
+            "EngineMemoryCeilingTest",
+            "EnvInjectionFlowTest",
+            "HostFencingTest",
+            "HostKeyPinningTest",
+            "HostPreflightTest",
+            "InstanceBackupRetentionRefusalTest",
+            "InstanceNetworkIsolationTest",
+            "InstanceSnapshotRetentionTest",
+            "ManagedDatabaseTest",
+            "OrphanActionsTest",
+            "ProcessCapacityTest",
+            "ProcessConfinementTest",
+            "ProcessNetworkIsolationTest",
+            "ProclogProxyIngressTest",
+            "StackInstancesTest",
+            "StackNetworkIsolationTest",
+            "StackRuntimeFlowTest",
+            "VerifyWorkloadIsolationTest",
+            "WorkloadNetworkPolicyTest"
         ]
+    },
+    "deployments": {
+        "starfleet": {
+            "ssh": "root@starfleet.life",
+            "jar": "/opt/hohenheim/hohenheim-server.jar",
+            "service": "hohenheim",
+            "deploy": "tools/deploy-host.sh {target} {jar}"
+        },
+        "kuifje": {
+            "ssh": "debian@137.74.171.228",
+            "jar": "/opt/hohenheim/hohenheim-server.jar",
+            "service": "hohenheim",
+            "deploy": "tools/deploy-host.sh {target} {jar}"
+        },
+        "robbedoes": {
+            "ssh": "debian@51.255.43.81",
+            "jar": "/opt/hohenheim/hohenheim-server.jar",
+            "service": "hohenheim",
+            "deploy": "tools/deploy-host.sh {target} {jar}"
+        }
     }
 }
