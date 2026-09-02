@@ -12370,6 +12370,14 @@
     "text": "A tmpfs database is its own container by definition, so it cannot live on a shared engine",
     "scope": "violations"
   },
+  "database_already_shared": {
+    "text": "Database '{$name}' already lives on a shared engine",
+    "scope": "violations"
+  },
+  "database_not_active": {
+    "text": "Database '{$name}' is {$status}; only an active database can move onto a shared engine",
+    "scope": "violations"
+  },
   "database_placement_unsupported": {
     "text": "{$engine} has no logical databases, so it cannot be shared; pick the dedicated placement",
     "scope": "violations"

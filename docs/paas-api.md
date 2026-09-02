@@ -115,8 +115,10 @@ returned). Say so when delegating; the grant UI does not.
 | POST | `/api/v1/instances/{id}/variables/delete` | `key=...` |
 | GET/POST | `/api/v1/environments/{id}/variables[/delete]` | Same shape, but ADMIN-ONLY (`hohenheim.admin.access`, as narrowed by the key's scopes) -- see Environment variables below |
 
-Managed databases and database engines have NO API verbs at all: both are panel
-only (there were none before the shared-engine work either).
+| GET | `/api/v1/databases` | Managed databases the key holds `view` on -- see Managed databases below |
+| POST | `/api/v1/databases/{id}/move-shared` | Move a dedicated database onto its host's shared engine (ADMIN-ONLY, 403 otherwise); accepted/queued, the record's `status` carries the outcome |
+| POST | `/api/v1/databases/{id}/delete` | Destroy a managed database exactly as the panel's delete does (the `destroy` capability, asked by the teardown service itself); 422 `delete_in_use` while a workload holds it |
+| GET | `/api/v1/engines` | Shared database engines with their database counts (ADMIN-ONLY) |
 
 Also present (older lanes, admin-permission-gated): `/api/sites`,
 `/api/sites/{id}/deploy`, `/api/dns/...`, and the instance file API under
@@ -408,6 +410,61 @@ enough to destroy it: a caller holding only `view` gets a **422**
 no capability oracle) while an unrelated id gets the uniform 404. A failed teardown is
 also a 422 (`instance_destroy_failed`) and leaves the record alive.
 
+## Managed databases
+
+Added 2026-09-02. Until then this tier had **no API verbs at all** -- a teardown
+and a move onto a shared engine were browser-only, so an operator scripting a
+migration had to drive the panel by hand. The verbs are the panel's own lanes
+reached without a browser (`DatabaseApi`), and their doors are the panels':
+
+- `GET /api/v1/databases` -- the `view` scope `ManageDatabaseResource` renders.
+  An admin key gets the operator columns (`engine_id`, `server`, `ephemeral`,
+  `memory_limit_mb`, `cpu_limit`, `failure_reason`) beside the shared ones (`id`,
+  `name`, `engine`, `db_name`, `placement`, `status`, `attached`); a delegated key
+  gets the shared ones only. That is not tidiness: a shared engine's name is
+  another tenant's neighbour list, which is why the /manage table drops it too.
+  The stored CREDENTIALS have no representation on this surface at all -- the
+  Credentials tab answers to its own capability.
+- `POST /api/v1/databases/{id}/move-shared` -- **ADMIN-ONLY** (403 otherwise),
+  because only the admin panel offers the row action; `ManageDatabaseResource`
+  drops it. Eligibility is `DatabaseService.moveRefusal`, the one declaration the
+  row action's visibility reads as well, so the API refuses exactly what the panel
+  would not offer: `database_already_shared`, `database_not_active` (naming the
+  status), `database_placement_unsupported` (an engine with no logical databases)
+  and `database_ephemeral_shared` (a tmpfs database is its own container by
+  definition). Those refusals are made SYNCHRONOUSLY and by name; everything past
+  them runs in the BACKGROUND exactly as the row action does, so the answer is
+  `{"id", "name", "status": "queued", "watch": "status"}` and the outcome shows up
+  on the record's own `status` (provisioning while it works, active when it
+  settles, with `failure_reason` filled on a failed move). Poll `GET
+  /api/v1/databases`. Rate limit: the database I/O bucket (5 per
+  minute, `hh_db_io`) -- the move dumps and restores a whole database.
+- `POST /api/v1/databases/{id}/delete` -- rides `DatabaseResource`'s own delete
+  pipeline. Seeing a database (`view`) is not enough to destroy it: the resource
+  demands `destroy` on the record and `DatabaseService.destroy` asks the same gate
+  again, so a `view`-only key gets **403**. A database a live workload still holds
+  is a **422** `delete_in_use` naming the workloads and the page each is detached
+  on -- literally the reason the panel's dead Delete button renders, because the
+  pipeline asks `deleteUnavailableReason` before it acts. (`deleteRow` refuses the
+  same fact as `database_in_use`; the dead-affordance reason is what a caller sees
+  first, and the two never disagree.) An
+  unverifiable teardown is a 422 `database_destroy_failed` and keeps the record
+  (status `destroy_failed`); the force-destroy escape hatch stays panel-only, as
+  an operator decision about the operator's own machine.
+- `GET /api/v1/engines` -- **ADMIN-ONLY**, because a `DatabaseEngineModel` row
+  exists on the admin panel alone. `id`, `name`, `engine`, `image`, `server`,
+  `memory_limit_mb`, `cpu_limit`, `databases` (the count living on it), `status`,
+  `failure_reason`. The engine's superuser credentials are absent BY NAME.
+
+An unknown or out-of-scope id answers the uniform **404** on every verb, exactly
+as the instance lane does: absence and denial are one answer.
+
+The CLI mirrors the panel's dialogs: `hoh database move` and `hoh database delete`
+both prompt for the database NAME before they act (`--yes` skips it in scripts),
+the same client interlock `hoh rollback` carries. The server demands no phrase --
+a ConfirmationSpec is a client interlock by design -- so the prompt lives where
+the dialog does.
+
 ## DNS zones
 
 The DNS half of the migration lane (`docs/dns-migration.md`): a primary zone created
@@ -619,6 +676,10 @@ hoh access-list create Staff satisfy=all shared=true   # shared is admin-only
 hoh access-list rule add 31 basic_auth data.username=earl data.password=hunter2 enabled=true
 hoh access-list rule add 31 ip_allow data.network=10.0.0.0/8 enabled=true
 hoh access-list delete 31 [--yes]     # takes its rules; asks for the name
+hoh database list                     # id, name, engine, placement, engine, host, status, attached
+hoh database move 61 [--yes]          # admin; onto the shared engine, in the background
+hoh database delete 61 [--yes]        # asks for the name; refused while attached
+hoh engine list                       # admin; shared engines and their database counts
 hoh logs 3 -n 500
 hoh power 3 restart
 hoh vars instance 3                   # secrets show "(set)", never the value

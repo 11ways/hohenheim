@@ -73,6 +73,8 @@ class BootWiringWindowTest {
 
         AtomicReference<String> healthStatus = new AtomicReference<>("<probe never ran>");
         AtomicReference<String> healthBody = new AtomicReference<>("<probe never ran>");
+        AtomicReference<String> plainHealthStatus = new AtomicReference<>("<probe never ran>");
+        AtomicReference<String> plainHealthBody = new AtomicReference<>("<probe never ran>");
         AtomicReference<String> adminPanel = new AtomicReference<>("<probe never ran>");
         AtomicReference<String> devTunnelHandler = new AtomicReference<>("<probe never ran>");
         AtomicReference<String> managePanel = new AtomicReference<>("<probe never ran>");
@@ -89,6 +91,15 @@ class BootWiringWindowTest {
                     HttpResponse.BodyHandlers.ofString());
                 healthStatus.set(String.valueOf(health.statusCode()));
                 healthBody.set(health.body());
+                // The conventional path a monitor and the deploy probes ask, which must be
+                // public too: a 302 to /login here is what every swap script used to read
+                // as "not 000, so alive".
+                HttpResponse<String> plain = client.send(
+                    HttpRequest.newBuilder().uri(URI.create("http://127.0.0.1:" + port + "/health"))
+                        .GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+                plainHealthStatus.set(String.valueOf(plain.statusCode()));
+                plainHealthBody.set(plain.body());
 
                 adminPanel.set(String.valueOf(PanelRegistry.getBySlug("admin")));
                 managePanel.set(String.valueOf(PanelRegistry.getBySlug("manage")));
@@ -117,6 +128,14 @@ class BootWiringWindowTest {
             assertThat(healthBody.get())
                 .as("step 3: GET /api/health at bind time must answer the real payload")
                 .contains("\"status\"");
+            //    The conventional /health alias is the same public handler, never the
+            //    login redirect an unauthenticated probe used to get there.
+            assertThat(plainHealthStatus.get())
+                .as("step 3: GET /health must be public and handled, not a 302 to /login")
+                .isEqualTo("200");
+            assertThat(plainHealthBody.get())
+                .as("step 3: GET /health answers the same payload as /api/health")
+                .isEqualTo(healthBody.get());
 
             // 4. Both CMS panels are registered, so every /{panel}/... route can
             //    resolve to something instead of 404ing.

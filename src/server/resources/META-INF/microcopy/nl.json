@@ -12370,6 +12370,14 @@
     "text": "Een tmpfs-database is per definitie een eigen container en kan dus niet op een gedeelde engine draaien",
     "scope": "violations"
   },
+  "database_already_shared": {
+    "text": "Database '{$name}' draait al op een gedeelde engine",
+    "scope": "violations"
+  },
+  "database_not_active": {
+    "text": "Database '{$name}' is {$status}; alleen een actieve database kan naar een gedeelde engine verhuizen",
+    "scope": "violations"
+  },
   "database_placement_unsupported": {
     "text": "{$engine} kent geen logische databases en kan dus niet gedeeld worden; kies de toegewijde plaatsing",
     "scope": "violations"

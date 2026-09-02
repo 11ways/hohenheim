@@ -855,22 +855,15 @@ public class DatabaseService extends DatasourceScoped {
             throw new IOException("No managed database named '" + name + "'");
         }
         int recordId = row.get(DatabaseModel.ID);
-        if (DatabaseModel.isShared(row)) {
-            throw new IOException("Database '" + name + "' already lives on a shared engine");
-        }
-        if (!STATUS_ACTIVE.equals(statusOf(row))) {
-            throw new IOException("Database '" + name + "' is " + statusOf(row)
-                + "; only an active database can move");
+        Microcopy refusal = moveRefusal(row);
+        if (refusal != null) {
+            // The KEY, not a re-spelled sentence: this is the last-line guard on a
+            // background thread, and the surfaces that face a human (the row action's
+            // visibility, the API's typed refusal) render the same key's Microcopy.
+            throw new IOException("Database '" + name + "' cannot move onto a shared engine ("
+                + refusal.key() + ")");
         }
         ManagedDatabase.Engine engine = engineOf(row);
-        if (!engine.supportsLogicalDatabases()) {
-            throw new IOException(engine.token() + " has no logical databases; '" + name
-                + "' stays dedicated");
-        }
-        if (Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL))) {
-            throw new IOException("Database '" + name + "' is ephemeral; a tmpfs database is"
-                + " its own container by definition");
-        }
         String user = row.get(DatabaseModel.DB_USER);
         String password = row.get(DatabaseModel.DB_PASSWORD);
         String database = row.get(DatabaseModel.DB_NAME);
@@ -982,6 +975,37 @@ public class DatabaseService extends DatasourceScoped {
             }
             throw failed instanceof IOException io ? io : new IOException(reason, failed);
         }
+    }
+
+    /**
+     * THE declaration of whether a record may move onto a shared engine, and why not.
+     *
+     * One home for four facts three surfaces need: the row action's visibility, the
+     * automation API's typed refusal and {@link #moveToSharedEngine}'s own last-line
+     * guard. A second copy is how a panel offers a button the lane can only refuse.
+     *
+     * @return null when the move would be accepted, else the named reason it is not
+     */
+    public static @Nullable Microcopy moveRefusal(@NonNull Row row) {
+        if (DatabaseModel.isShared(row)) {
+            return CmsSupport.violationText("database_already_shared")
+                .withArg("name", row.get(DatabaseModel.NAME));
+        }
+        if (!STATUS_ACTIVE.equals(row.get(DatabaseModel.STATUS))) {
+            return CmsSupport.violationText("database_not_active")
+                .withArg("name", row.get(DatabaseModel.NAME))
+                .withArg("status", String.valueOf((Object) row.get(DatabaseModel.STATUS)));
+        }
+        ManagedDatabase.Engine engine =
+            ManagedDatabase.Engine.forToken(row.get(DatabaseModel.ENGINE));
+        if (engine == null || !engine.supportsLogicalDatabases()) {
+            return CmsSupport.violationText("database_placement_unsupported")
+                .withArg("engine", String.valueOf((Object) row.get(DatabaseModel.ENGINE)));
+        }
+        if (Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL))) {
+            return CmsSupport.violationText("database_ephemeral_shared");
+        }
+        return null;
     }
 
     /** {@link #moveToSharedEngine} on the provisioning pool, for the panel action. */

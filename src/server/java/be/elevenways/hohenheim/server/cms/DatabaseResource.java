@@ -554,16 +554,9 @@ public class DatabaseResource extends RowResource {
         return action.build();
     }
 
-    /** Whether the move lane would accept this record; the same facts it checks itself. */
+    /** Whether the move lane would accept this record, asked of the lane's own declaration. */
     private static boolean movable(@NonNull Row row) {
-        if (DatabaseModel.isShared(row)
-                || !DatabaseModel.STATUS_ACTIVE.equals(row.get(DatabaseModel.STATUS))
-                || Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL))) {
-            return false;
-        }
-        ManagedDatabase.Engine engine =
-            ManagedDatabase.Engine.forToken(row.get(DatabaseModel.ENGINE));
-        return engine != null && engine.supportsLogicalDatabases();
+        return DatabaseService.moveRefusal(row) == null;
     }
 
     /**
