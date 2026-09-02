@@ -950,9 +950,18 @@ public class DatabaseService extends DatasourceScoped {
             }
             Blast.log("DB-MOVE: moved", name, "onto shared engine", target.name(),
                 "- dump kept at", dump);
-        } catch (IOException | RuntimeException failed) {
+        } catch (IOException | RuntimeException | Error failed) {
+            // Error is caught ON PURPOSE: an OutOfMemoryError in the restore (2026-09-02,
+            // a 5.3 GB archive) skipped this block entirely and left the record
+            // "provisioning" and its workload stopped, with no line in any log. The
+            // compensation runs for every failure; the Error is rethrown as itself.
             String reason = failed.getMessage() != null ? failed.getMessage() : failed.toString();
             Blast.log("DB-MOVE: moving", name, "failed -", reason);
+            // The record goes back to ACTIVE before its consumers are redeployed: a deploy
+            // resolves the injected credentials off the record and REFUSES a database that
+            // is not active (database_not_ready), so the other order left every workload
+            // stopped after a refused move -- observed live on 2026-09-02 (invulassistent).
+            setStatus(recordId, STATUS_ACTIVE, "Move to a shared engine failed: " + reason);
             for (int instanceId : stopped) {
                 try {
                     exec(() -> new InstanceService().deploy(instanceId));
@@ -961,7 +970,9 @@ public class DatabaseService extends DatasourceScoped {
                         "after the failed move -", e.getMessage());
                 }
             }
-            setStatus(recordId, STATUS_ACTIVE, "Move to a shared engine failed: " + reason);
+            if (failed instanceof Error error) {
+                throw error;
+            }
             throw failed instanceof IOException io ? io : new IOException(reason, failed);
         }
     }
@@ -973,6 +984,10 @@ public class DatabaseService extends DatasourceScoped {
                 moveToSharedEngine(name);
             } catch (IOException e) {
                 // Already stamped on the record by the move itself.
+            } catch (RuntimeException | Error e) {
+                // An executor swallows what a task throws; the move already compensated,
+                // but a controller-level failure must reach the journal by name.
+                Blast.log("DB-MOVE: moving", name, "died with", e.toString());
             }
         });
     }

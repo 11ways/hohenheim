@@ -815,6 +815,105 @@ public class DockerClient {
     }
 
     /**
+     * {@link #exec(String, List, List)} with the process's STDIN fed from {@code in},
+     * STREAMED -- the database-restore lane, where stdin is the whole dump and the heap
+     * must never hold it (the 5.3 GB mongo archive that OOM-killed a move on 2026-09-02
+     * went through {@code Files.readAllBytes} here before).
+     *
+     * AIDEV-NOTE: the exec pipe has NO half-close, so the command must consume EXACTLY
+     * the bytes it is handed and exit on its own ({@code ManagedDatabase.Engine
+     * .restoreFromStdinCommand} spells that as {@code head -c <size> | client}); a
+     * command that keeps reading after the input ends hangs until the long-op watchdog
+     * cuts the connection. Stdin is fed from a helper thread while this thread drains
+     * the output frames, because a client that fills its stderr while we are still
+     * writing would otherwise deadlock on the daemon's socket buffer.
+     *
+     * @return the exit code, with stdout and stderr each kept to 64 KiB of text
+     */
+    @SuppressWarnings("unchecked")
+    public ExecResult execWithStdin(String containerId, List<String> command, List<String> env,
+                                    InputStream in) throws IOException {
+        Map<String, Object> createSpec = new LinkedHashMap<>();
+        createSpec.put("AttachStdin", true);
+        createSpec.put("AttachStdout", true);
+        createSpec.put("AttachStderr", true);
+        createSpec.put("Cmd", command);
+        if (!env.isEmpty()) {
+            createSpec.put("Env", env);
+        }
+        Map<String, Object> created = (Map<String, Object>) parseJson(request("POST",
+            "/containers/" + containerId + "/exec", toJson(createSpec)).body());
+        String execId = (String) created.get("Id");
+
+        byte[] startBody = toJson(Map.of("Detach", false, "Tty", false))
+            .getBytes(StandardCharsets.UTF_8);
+        byte[] request = buildRequest("POST", "/exec/" + execId + "/start",
+            startBody, "application/json", null);
+        ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+        IOException[] feedFailure = new IOException[1];
+        try (ContainerStream stream = ContainerStream.open(streamTransport(), request,
+                timeoutMillis, true, false)) {
+            ScheduledFuture<?> watchdog = STREAM_WATCHDOG.schedule(
+                stream::close, LONG_OP_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            Thread feeder = new Thread(() -> {
+                byte[] chunk = new byte[64 * 1024];
+                try {
+                    int read;
+                    while ((read = in.read(chunk)) != -1) {
+                        if (read == chunk.length) {
+                            stream.writeStdin(chunk);
+                        } else if (read > 0) {
+                            stream.writeStdin(java.util.Arrays.copyOf(chunk, read));
+                        }
+                    }
+                } catch (IOException e) {
+                    feedFailure[0] = e;
+                }
+            }, "docker-exec-stdin");
+            feeder.setDaemon(true);
+            feeder.start();
+            try {
+                ContainerStream.Chunk chunk;
+                while ((chunk = stream.next()) != null) {
+                    appendBounded(chunk.stderr() ? stderr : stdout, chunk.data(), 64 * 1024);
+                }
+                if (watchdog.isDone()) {
+                    throw new IOException("Docker exec stream timed out after "
+                        + LONG_OP_TIMEOUT_MS + "ms");
+                }
+            } finally {
+                watchdog.cancel(false);
+                stream.close();
+                try {
+                    feeder.join(10_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+
+        Map<String, Object> info = (Map<String, Object>) parseJson(get("/exec/" + execId + "/json").body());
+        int exitCode = info.get("ExitCode") instanceof Number n ? n.intValue() : -1;
+        if (exitCode == 0 && feedFailure[0] != null) {
+            // The process claims success while the input never fully arrived: a truncated
+            // restore that exited 0 is the one shape this lane must never report as done.
+            throw new IOException("Docker exec stdin feed failed before the input ended: "
+                + feedFailure[0].getMessage(), feedFailure[0]);
+        }
+        return new ExecResult(exitCode,
+            new String(stdout.toByteArray(), StandardCharsets.UTF_8),
+            new String(stderr.toByteArray(), StandardCharsets.UTF_8));
+    }
+
+    private static void appendBounded(ByteArrayOutputStream target, byte[] data, int cap) {
+        int room = cap - target.size();
+        if (room > 0) {
+            target.write(data, 0, Math.min(room, data.length));
+        }
+    }
+
+    /**
      * Incremental stdout/stderr frame demultiplexer AS an OutputStream, so
      * {@link Http11#copyBody} feeds it whatever body shape the daemon chose (raw hijack or
      * chunked). Stdout payload goes to the target stream under its own byte cap; stderr is

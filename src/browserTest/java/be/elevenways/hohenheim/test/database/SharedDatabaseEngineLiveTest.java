@@ -342,6 +342,42 @@ class SharedDatabaseEngineLiveTest {
                 .as("step 2: three documents exist on the dedicated engine")
                 .contains("count=3");
 
+            // 2b. A REFUSED move leaves everything as it found it -- the record active and
+            //     dedicated, with the reason on it, and the WORKLOAD RUNNING AGAIN. The
+            //     dump cap is the one refusal that fires after the consumers were stopped,
+            //     which is exactly where the 2026-09-02 defect lived: the consumers were
+            //     redeployed while the record still read provisioning, the deploy refused
+            //     with database_not_ready, and the site stayed down after a failed move.
+            Integer capBefore = HohenheimSettings.VALUES.getValue(
+                HohenheimSettings.Database.MAX_DUMP_MB);
+            try {
+                // 1 MiB: the archive of three tiny documents clears it, so one 1.5 MB
+                // document pushes the dump over the cap; it is dropped again below.
+                HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB, 1);
+                mongo(docker, dedicatedHandle, user, password, "admin", "admin",
+                    "db.getSiblingDB('" + database + "').filler.insertOne("
+                        + "{pad: 'x'.repeat(1500000)});");
+                assertThatThrownBy(() -> service.moveToSharedEngine(name))
+                    .as("step 2b: a dump over the cap refuses the move by name")
+                    .isInstanceOf(IOException.class)
+                    .hasMessageContaining("max_dump_mb");
+                DatabaseService.Detail refused = service.detail(name);
+                assertThat(refused.status()).as("step 2b: the record is active again")
+                    .isEqualTo("active");
+                assertThat(refused.placement()).as("step 2b: and still dedicated")
+                    .isEqualTo(DatabaseModel.PLACEMENT_DEDICATED);
+                assertThat(refused.failureReason())
+                    .as("step 2b: carrying the reason").contains("max_dump_mb");
+                assertThat(running(docker, workloadHandle))
+                    .as("step 2b: the stopped workload was deployed AGAIN after the refusal")
+                    .isTrue();
+                mongo(docker, dedicatedHandle, user, password, "admin", "admin",
+                    "db.getSiblingDB('" + database + "').filler.drop();");
+            } finally {
+                HohenheimSettings.VALUES.setValue(HohenheimSettings.Database.MAX_DUMP_MB,
+                    capBefore);
+            }
+
             // 3. THE MOVE, synchronously.
             service.moveToSharedEngine(name);
             DatabaseService.Detail moved = service.detail(name);
