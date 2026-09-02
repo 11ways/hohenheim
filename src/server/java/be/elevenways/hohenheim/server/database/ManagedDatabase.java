@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -353,23 +354,42 @@ public class ManagedDatabase {
             };
         }
 
-        /** The tool + args that load a dump file (already inside the container) back in. */
-        List<String> restoreCommand(String user, String password, String database, String filePath) {
-            return switch (this) {
+        /** The env var the stdin restore script reads the password from (mongo only). */
+        static final String RESTORE_PASSWORD = "HOHENHEIM_RESTORE_PASSWORD";
+
+        /**
+         * The client that loads a dump arriving on STDIN, handed EXACTLY {@code bytes}
+         * bytes: the exec pipe has no half-close, so {@code head -c} is what gives the
+         * client its EOF and lets it exit. User and database travel as positional
+         * arguments (never interpolated into the body); the password rides
+         * {@link #restoreEnv}. Consumed by {@code DockerClient.execWithStdin}.
+         *
+         * @throws UnsupportedOperationException for redis, whose restore is an RDB swap
+         */
+        List<String> restoreFromStdinCommand(String user, String database, long bytes) {
+            String body = switch (this) {
                 // ON_ERROR_STOP makes a failed statement abort with non-zero (no silent half-restore).
-                case POSTGRES -> List.of("psql", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", database,
-                    "-f", filePath);
-                // mysql's `source` builtin reads the file -- avoids a shell redirect.
-                case MYSQL -> List.of("mysql", "-u", user, database, "-e", "source " + filePath);
+                case POSTGRES -> "head -c \"$1\" | psql -v ON_ERROR_STOP=1 -U \"$2\" -d \"$3\"";
+                case MYSQL -> "head -c \"$1\" | mysql -u \"$2\" \"$3\"";
                 // --drop replaces existing collections; the archive carries its own db name,
                 // and --nsInclude keeps a restore on a SHARED engine inside this one
-                // database whatever else an uploaded archive may carry.
-                case MONGO -> List.of("mongorestore", "--username", user, "--password", password,
-                    "--authenticationDatabase", "admin", "--drop",
-                    "--nsInclude=" + database + ".*", "--archive=" + filePath);
+                // database whatever else an uploaded archive may carry. A bare --archive
+                // reads stdin.
+                case MONGO -> "head -c \"$1\" | mongorestore --username \"$2\" --password \"$"
+                    + RESTORE_PASSWORD + "\" --authenticationDatabase admin --drop"
+                    + " --nsInclude=\"$3.*\" --archive";
                 case REDIS -> throw new UnsupportedOperationException(
                     "redis restore goes through restoreFromFile (RDB swap + restart), not a client command");
             };
+            return List.of("sh", "-c", body, "hohenheim-restore", Long.toString(bytes), user, database);
+        }
+
+        /** Env for {@link #restoreFromStdinCommand}: the password, never in argv of the exec. */
+        List<String> restoreEnv(String password) {
+            if (this == MONGO) {
+                return List.of(RESTORE_PASSWORD + "=" + password);
+            }
+            return dumpEnv(password);
         }
 
         // AIDEV-NOTE: Probe over TCP (-h 127.0.0.1), not the unix socket. Postgres/MySQL run a
@@ -817,9 +837,12 @@ public class ManagedDatabase {
     }
 
     /**
-     * Restore a dump file into a running database: push it into the container and load it with
-     * the engine's client (binary-safe, so it handles SQL text and the Mongo archive alike).
-     * Redis is restored by swapping its RDB and restarting the container.
+     * Restore a dump file into a running database, STREAMED: the file is piped into the
+     * engine's own client over an exec's stdin (binary-safe, so it handles SQL text and
+     * the Mongo archive alike), so neither the controller heap nor the container's
+     * writable layer ever holds a copy of the dump. Redis is restored by swapping its RDB
+     * and restarting the container -- that lane still pushes the file through the archive
+     * API and buffers it, which an RDB's size has never made a problem.
      *
      * @throws UnsupportedOperationException for an ephemeral Redis (its tmpfs data dir is wiped
      *                                       by the restart the restore requires)
@@ -830,23 +853,15 @@ public class ManagedDatabase {
             restoreRedis(handle, user, password, database, source);
             return;
         }
-        String fileName = "hohenheim-restore." + engine.dumpExtension();
-        // Resolve the restore command first so an unsupported engine fails before any upload.
-        List<String> command = engine.restoreCommand(user, password, database, "/tmp/" + fileName);
-
-        Path tempDir = Files.createTempDirectory("hohenheim-restore");
-        try {
-            Files.copy(source, tempDir.resolve(fileName));
-            docker.putArchiveFromDirectory(handle, "/tmp", tempDir);
-
-            DockerClient.ExecResult result = docker.exec(handle, command, engine.dumpEnv(password));
-            if (result.exitCode() != 0) {
-                throw new IOException("Database restore of '" + handle + "' failed (exit "
-                    + result.exitCode() + "): " + result.stderr().trim());
-            }
-        } finally {
-            Files.deleteIfExists(tempDir.resolve(fileName));
-            Files.deleteIfExists(tempDir);
+        // Resolve the command first so an unsupported engine fails before any byte moves.
+        List<String> command = engine.restoreFromStdinCommand(user, database, Files.size(source));
+        DockerClient.ExecResult result;
+        try (InputStream in = Files.newInputStream(source)) {
+            result = docker.execWithStdin(handle, command, engine.restoreEnv(password), in);
+        }
+        if (result.exitCode() != 0) {
+            throw new IOException("Database restore of '" + handle + "' failed (exit "
+                + result.exitCode() + "): " + result.stderr().trim());
         }
     }
 
