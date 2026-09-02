@@ -55,6 +55,23 @@ loop file or fstab line was ever created.
 The proxy role IS enabled and is not optional: the admin panel route and the
 ACME HTTP-01 lane both live in it.
 
+## Deploys: `tools/deploy-host.sh kuifje <jar>`
+
+Every jar swap on this box is ONE invocation of `tools/deploy-host.sh`, whose
+numbered lane is documented once in `deploy-starfleet.md` ("Deploy procedure").
+It reads this host out of the same `deployments` config `zenit-dev deployed`
+uses, and because the ssh identity here is `debian@` rather than `root@` it
+runs the whole lane through `sudo -n` by itself -- the hand-typed `sudo -n`
+transcription the earlier entries below describe is retired. It refuses a jar
+whose build stamp is DIRTY or unstamped, a `--rehearse-migrations` run that
+does not succeed against a byte copy, and a `/api/health` probe that never
+turns green (it then prints the journal lines and the exact rollback commands
+and stops, rather than rolling back on its own). The second restart is
+mandatory and has no skip flag. `--rollback kuifje --preflight <dir>` swaps
+`rollback.jar` back in; restoring the database stays a deliberate manual step,
+because a migration applied by the newer jar makes the older one refuse to
+boot.
+
 ## Install transcript (2026-08-29)
 
     tools/install-host.sh --jar hohenheim-server.jar \

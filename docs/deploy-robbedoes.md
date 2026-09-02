@@ -229,6 +229,21 @@ checkout has one commit past `b486427f` -- correct, and the same answer
 `deployed starfleet` gives. `unzip -p` and `systemctl show` both work
 unprivileged, so the read needs no sudo.
 
+Every jar swap on this box is ONE invocation of
+`tools/deploy-host.sh robbedoes <jar>`, whose numbered lane is documented once
+in `deploy-starfleet.md` ("Deploy procedure"). It reads this host out of the
+`deployments` entry above, and because the ssh identity is `debian@` rather
+than `root@` it runs the whole lane through `sudo -n` by itself -- the
+hand-typed transcription the deploy entries below describe is retired. It
+refuses a jar whose build stamp is DIRTY or unstamped, a
+`--rehearse-migrations` run that does not succeed against a byte copy, and a
+`/api/health` probe that never turns green (it then prints the journal lines
+and the exact rollback commands and stops, rather than rolling back on its
+own). The second restart is mandatory and has no skip flag.
+`--rollback robbedoes --preflight <dir>` swaps `rollback.jar` back in;
+restoring the database stays a deliberate manual step, because a migration
+applied by the newer jar makes the older one refuse to boot.
+
 ## Rollback
 
 There is nothing to roll back TO -- this was a fresh install, not an upgrade.

@@ -165,37 +165,100 @@ host running something local HEAD does not have?) and AFTER the restart (does th
 host now report `current` for every repo?). A `dirty` stamp on a deployed build is
 a process failure: deploy from a committed worktree, always.
 
-## Deploy procedure (as exercised 2026-08-11)
+## Deploy procedure: `tools/deploy-host.sh` IS the lane
 
-0. `zenit-dev deployed starfleet` -- know what runs before touching it.
-1. Build in an ISOLATED worktree (`git worktree add --detach <path> HEAD`),
-   never the main one, via `zenit-dev build`. The jar lands in
-   `build/libs/hohenheim-0.1.0-SNAPSHOT-server.jar` and contains the whole
-   app, front-end included (see the 2026-08-15 incident above).
-2. Back up FIRST, into `/root/hohenheim-preflight-<stamp>/`: the database via
+    zenit-dev build                                     # in an ISOLATED worktree
+    tools/deploy-host.sh starfleet <path/to/server.jar>
+
+ONE invocation per box performs the whole lane. Everything below is what it
+does, in order, and every step prints itself; the hand-typed transcription of
+these commands is retired, because three near-identical scripts per wave is
+three chances to lose a step (a `stat` under `set -e` once aborted a wave
+between the `mv` and the `systemctl start`). Fix the script, never re-type the
+lane. Flags: `--dry-run` prints the plan and executes nothing,
+`--health-timeout <s>` retunes the probe budget, `--preflight <dir>` names the
+preflight directory, `--rollback <target> --preflight <dir>` swaps
+`rollback.jar` back in and restarts. There is deliberately NO flag that skips
+the second restart. `tools/deploy-host.test.sh` drives the script against fake
+ssh/scp/java/zenit-dev shims and is the regression net around it.
+
+The host, jar path and unit come from the SAME `deployments` config
+`zenit-dev deployed` reads (`~/.config/zenit-dev/config.json`), so the two
+tools can never disagree about which box a name means. Everything on
+starfleet runs as root over ssh; kuifje and robbedoes are `debian@` and the
+whole lane goes through `sudo -n`, which the script decides from the ssh
+identity alone.
+
+It REFUSES, before anything is irreversible, on exactly three things: a build
+stamp that is DIRTY, unstamped or inconsistent; a migration rehearsal that does
+not succeed against a byte copy; a health probe that never turns green.
+
+0. Build in an ISOLATED worktree (`git worktree add --detach <path> HEAD`) or a
+   clean secondary workspace, never the main checkout, via `zenit-dev build`.
+   The jar lands in `build/libs/hohenheim-0.1.0-SNAPSHOT-server.jar` and
+   contains the whole app, front-end included (see the 2026-08-15 incident).
+1. `java -jar <jar> --build-info` LOCALLY. Every row must read `clean` (13 of
+   13 today, one per chain repo). A `DIRTY` row, an `unstamped` jar or an
+   `INCONSISTENT` repo is REFUSED: a build whose sha describes nothing is never
+   deployed. This is the first refusal and it costs no ssh connection.
+2. `zenit-dev deployed <target>` -- know what runs before touching it, and
+   record it. `local-ahead` is what a pending deploy looks like.
+3. Upload the jar to the host and verify its sha256 there; a corrupt transfer
+   is caught before anything is moved.
+4. Back up FIRST, into `/root/hohenheim-preflight-<stamp>/`: the database via
    `sqlite3 .backup` plus `PRAGMA integrity_check`, the whole settings
-   directory, and the keyring with a sha256 comparison against the original.
-   Copy the running jar aside as the rollback: that is the whole rollback, and
+   directory, and the keyring with a sha256 comparison against the original
+   (a mismatch is fatal: the keyring and the database are a PAIR). The running
+   jar is copied aside as `rollback.jar` -- that is the whole jar rollback, and
    it recovers in ~90 seconds.
-3. Compare the repo's migration versions against `zenit_migrations` BEFORE
-   deciding anything. A deploy that adds no migrations cannot damage the
-   database, and that is worth knowing up front.
-4. REHEARSE against a byte copy, never the live file. Two lanes, both cheap:
-   `java -jar <newjar> --run-migrations` from a scratch directory whose
-   `settings/hohenheim.dry` repoints `database.path`, `storage.data_path` and
-   `database.backup_path` at the copy; then a full inert boot of the same
-   directory with every `roles.*` false, `dns.enabled` false,
-   `ssl.letsencrypt_enabled` false, nftables/bans off and the ports moved
-   (13999/18080/18443). The inert boot binds nothing the live process owns and
-   proves the jar boots and routes resolve. Kill it before deploying -- RAM.
-5. Swap the jar (`install -o hohenheim -g hohenheim -m 644`, then `mv` into
-   place) and `systemctl restart hohenheim`.
-6. Verify from OUTSIDE, then restart AGAIN and verify again.
-7. `zenit-dev deployed starfleet` must now answer `current` for every repo with
-   no RESTART PENDING warning; anything else is the deploy not being finished.
-8. If the deploy APPLIED migrations, raise `MigrationIntegrityTest.DEPLOYED_THROUGH`
-   to the highest applied version and paste the pin lines the test prints into
-   `src/browserTest/resources/migration-pins.txt`; those migrations are frozen now.
+5. REHEARSE against a byte copy, never the live file:
+   `sudo -u hohenheim java -jar <newjar> --rehearse-migrations <copy>`. The
+   copy lives under `/opt/hohenheim-rehearse-<stamp>/`, NOT under `/root`: the
+   service user cannot traverse `/root`, and `Unable to access jarfile` there
+   reads like a jar problem while it is a permission one. A non-zero exit is
+   the second refusal, and the live database has not been touched at that
+   point. (The command exists BECAUSE the old "copy the tree and run
+   `--run-migrations` from it" rehearsal migrated the LIVE file: the jar
+   resolves `database.path` independently of cwd. `--rehearse-migrations`
+   opens the copy through its own unregistered datasource and refuses a target
+   that is the configured live file, symlinks included.)
+6. Swap: `install -o hohenheim -g hohenheim -m 644` beside the live jar,
+   `systemctl stop`, an at-swap `.backup` of the database, `mv` into place,
+   then `systemctl start`. Everything up to the `mv` aborts on error; from the
+   `mv` on NOTHING may abort the shell -- the verification (`stat`, `sha256sum`)
+   is reported and judged by the caller, and the start happens whatever it
+   said.
+7. Health probe: `GET http://127.0.0.1:3000/api/health` every 2s until it
+   answers 200, giving up after `--health-timeout` seconds (default 120; a cold
+   boot is ~20-30s, so a probe at 12s legitimately refuses -- poll, never
+   sleep a fixed interval). On give-up the lane prints the last journal lines,
+   prints the exact rollback commands and STOPS. It never rolls back by
+   itself: an automatic rollback of a migrated database is a second unattended
+   write on a box that just proved it cannot boot.
+8. There is no `--run-migrations` step: the service migrates at boot. What the
+   lane owes is proof of WHAT it applied, so it reads `zenit_migrations` before
+   and after and names the versions. When the deploy APPLIED migrations, run
+   `java -jar <new jar> --migration-checksums` (no database needed) and paste
+   the `<Class><TAB><digest>` lines of every migration at or below the new mark
+   into `src/browserTest/resources/migration-pins.txt`, then raise
+   `MigrationIntegrityTest.DEPLOYED_THROUGH`. Those migrations are frozen now;
+   a pin is never regenerated to make a red build green.
+9. Second restart, MANDATORY, and a second health probe. A jar that survives
+   one restart and not the next is exactly what this catches.
+10. `zenit-dev deployed <target>` must answer `current` for every repo with no
+    RESTART PENDING warning; anything else is the deploy not being finished,
+    and the lane exits non-zero saying which repo.
+11. The staged jar and the rehearsal directory are removed, and a runbook-entry
+    skeleton (stamp, jar sha, preflight dir, rollback jar, migrations applied)
+    is printed for pasting into this file.
+
+The visual pass is still owed after any deploy touching plumage/zenit-cms
+chrome: a green suite is not a live check (2026-08-27).
+
+`/api/health` is public on every deployed jar today, which is why the script
+probes it. `/health` is an alias of the same endpoint and is public from the
+NEXT deployed jar onward; until every box carries that jar, do not point a
+monitor at it.
 
 ## Verification commands
 
