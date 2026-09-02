@@ -512,7 +512,7 @@ What runs is an **instance**. Instance kinds are discovered the same way
 | `system_container`   | A system container on an inventoried Incus host.       |
 | `vm`                 | A KVM virtual machine on an Incus host, provisioned through cloud-init user-data. |
 | `workspace`          | A persistent development box: one container per workspace, on Docker or Incus. |
-| `database_container` | The engine container a managed database lowers onto. Written only by the database record that owns it. |
+| `database_container` | The engine container a managed database lowers onto. Written only by the record that owns it: a `dedicated` database, or the shared **database engine** serving many logical databases. |
 | `stack_service`      | One service of a compose-style stack.                  |
 
 ## Git-backed provisioning
@@ -532,7 +532,7 @@ workload an operator stopped.
 
 ## Managed databases
 
-Hohenheim can create and manage databases (PostgreSQL, MySQL/MariaDB) on an
+Hohenheim can create and manage databases (PostgreSQL, MySQL, Redis, MongoDB) on an
 inventoried **server**, attach them to an **instance** (their credentials are
 resolved at deploy time and injected into that workload's environment, never
 baked into stored settings), back them up on a schedule
@@ -541,6 +541,12 @@ uploaded dump. A record describes a provisioned container, so name, engine, db
 name/user/password, image, ephemeral flag and server are frozen once it exists;
 only the resource ceilings can be corrected afterwards. Anything else means
 destroy and recreate.
+
+Each record has a **placement**: `dedicated` gives it an engine container of its
+own, while `shared` (the default where the engine supports logical databases)
+makes it a logical database with its own user on one shared engine process per
+host, so ten small databases cost one engine footprint instead of ten. See
+[`docs/shared-database-engines.md`](docs/shared-database-engines.md).
 
 ## DNS server
 
