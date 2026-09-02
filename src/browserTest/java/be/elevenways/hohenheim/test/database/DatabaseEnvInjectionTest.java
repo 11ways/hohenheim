@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.database;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -52,6 +53,8 @@ class DatabaseEnvInjectionTest {
         GeneratedRows.sweeping("test", () -> Models.get(InstanceModel.class).find().delete());
         Models.get(InstanceDatabaseModel.class).find().delete();
         Models.get(DatabaseModel.class).find().delete();
+        // Engines last: the write funnel refuses an engine that still hosts a record.
+        Models.get(DatabaseEngineModel.class).find().delete();
     }
 
     /** The workload whose links are injected: an application, the release-managed kind. */
@@ -236,6 +239,102 @@ class DatabaseEnvInjectionTest {
         String mongo = DatabaseEnvInjection.connectionUrl(ManagedDatabase.Engine.MONGO,
             "127.0.0.1", 27017, "root", "secret", "appdb");
         assertThat(mongo).isEqualTo("mongodb://root:secret@127.0.0.1:27017/appdb?authSource=admin");
+    }
+
+    /**
+     * A SHARED record's injected address is its ENGINE's container, and its Mongo user
+     * authenticates against its OWN logical database -- the credential was created there,
+     * so {@code authSource=admin} (the dedicated shape) would refuse every login.
+     */
+    @Test
+    void aSharedRecordIsInjectedWithTheEnginesHostAndItsOwnAuthSource() {
+        // 1. The derivation itself, at the seam every consumer reads: a dedicated record
+        //    authenticates in admin (its user IS the engine root), a shared one on its own
+        //    logical database.
+        Integer applicationId = application("inject-shared");
+        Integer dedicatedId = database("sharedded", "mongo", DatabaseModel.STATUS_ACTIVE);
+        Row dedicated = Models.get(DatabaseModel.class).findById(dedicatedId);
+        assertThat(DatabaseEnvInjection.authDatabaseOf(dedicated))
+            .as("step 1: a dedicated record's root user lives in admin")
+            .isEqualTo(DatabaseEnvInjection.MONGO_ROOT_AUTH_DATABASE);
+
+        Row engineRow = engine("mongo-inject", "mongo");
+        int engineId = engineRow.get(DatabaseEngineModel.ID);
+        String engineHandle = EngineHandles.plantEngine(engineId, "mongo-inject", "mongo",
+            InstanceModel.STATUS_RUNNING);
+        Integer sharedId = sharedDatabase("sharedlogical", "mongo", engineId, "tenantdb");
+        Row shared = Models.get(DatabaseModel.class).findById(sharedId);
+        assertThat(DatabaseEnvInjection.authDatabaseOf(shared))
+            .as("step 1: a shared record's user lives on its own logical database")
+            .isEqualTo("tenantdb");
+
+        // 2. The URL builder carries it, and the two shapes really differ.
+        String sharedUrl = DatabaseEnvInjection.connectionUrl(ManagedDatabase.Engine.MONGO,
+            engineHandle, 27017, "appuser", "s3cret", "tenantdb", "tenantdb");
+        assertThat(sharedUrl)
+            .as("step 2: the shared URL names its own database as the auth source")
+            .isEqualTo("mongodb://appuser:s3cret@" + engineHandle
+                + ":27017/tenantdb?authSource=tenantdb");
+        assertThat(DatabaseEnvInjection.connectionUrl(ManagedDatabase.Engine.MONGO,
+                engineHandle, 27017, "appuser", "s3cret", "tenantdb"))
+            .as("step 2: while the default overload keeps the dedicated admin shape")
+            .endsWith("?authSource=admin");
+
+        // 3. End to end through the injection lane: DB_HOST is the ENGINE's container --
+        //    the shared record owns none of its own -- and DATABASE_URL carries the
+        //    per-database auth source.
+        link(applicationId, sharedId, "DB");
+        Map<String, String> env = DatabaseEnvInjection.envForInstance(applicationId,
+            row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, 27018));
+        assertThat(env).as("step 3: the address is the ENGINE's container handle")
+            .containsEntry("DB_HOST", engineHandle);
+        assertThat(env).as("step 3: on the engine's own port, never the published one")
+            .containsEntry("DB_PORT", "27017");
+        assertThat(env).as("step 3: and the primary URL is the shared shape")
+            .containsEntry("DATABASE_URL", sharedUrl)
+            .containsEntry("DB_URL", sharedUrl);
+
+        // 4. NEGATIVE CONTROL: the same record with its engine's instance gone resolves to
+        //    nothing at all -- an address is never guessed from the record's name.
+        GeneratedRows.sweeping("test", () -> Models.get(InstanceModel.class).find()
+            .where(InstanceModel.GENERATED_FOR_MODEL.eq(DatabaseEngineModel.MODEL_ID.toString()))
+            .delete());
+        assertThat(DatabaseEnvInjection.envForInstance(applicationId,
+                row -> new ManagedDatabase.LiveStatus(ContainerState.RUNNING, 27018)))
+            .as("step 4: with no engine instance the shared record contributes nothing")
+            .isEmpty();
+    }
+
+    /** A shared engine row, planted the way the allocation funnel writes one. */
+    private static Row engine(String name, String engineToken) {
+        DatabaseEngineModel engines = Models.get(DatabaseEngineModel.class);
+        Row row = engines.createEmptyRow();
+        row.set(DatabaseEngineModel.NAME, name);
+        row.set(DatabaseEngineModel.ENGINE, engineToken);
+        row.set(DatabaseEngineModel.ROOT_USER, "root");
+        row.set(DatabaseEngineModel.ROOT_PASSWORD, "rootsecret");
+        row.set(DatabaseEngineModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+        engines.save(row);
+        return row;
+    }
+
+    /** A shared database record bound to an engine; it owns no instance of its own. */
+    private static Integer sharedDatabase(String name, String engineToken, int engineId,
+                                          String databaseName) {
+        DatabaseModel databases = Models.get(DatabaseModel.class);
+        Row row = databases.createEmptyRow();
+        row.set(DatabaseModel.NAME, name);
+        row.set(DatabaseModel.ENGINE, engineToken);
+        row.set(DatabaseModel.DB_USER, "appuser");
+        row.set(DatabaseModel.DB_PASSWORD, "s3cret");
+        row.set(DatabaseModel.DB_NAME, databaseName);
+        row.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
+        row.set(DatabaseModel.SERVER_ID, ServerModel.localServerId());
+        row.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED);
+        row.set(DatabaseModel.ENGINE_ID, engineId);
+        databases.save(row);
+        return row.get(DatabaseModel.ID);
     }
 
     /** A serving release row generated FOR the application, authored in its system scope. */

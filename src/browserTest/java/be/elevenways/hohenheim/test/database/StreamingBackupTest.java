@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -351,9 +352,11 @@ class StreamingBackupTest {
     }
 
     private static DatabaseService.Summary summary(String name) {
+        // A DEDICATED summary: placement dedicated, no engine name -- the shape every
+        // record had before shared engines, which is what this fixture stands for.
         return new DatabaseService.Summary(name, "postgres", "postgres:17-alpine", "appdb",
             "appuser", false, "local", "active", true, ContainerState.RUNNING, 5432,
-            WorkloadLiveness.SERVING);
+            WorkloadLiveness.SERVING, DatabaseModel.PLACEMENT_DEDICATED, null);
     }
 
     private static SqliteDatasource freshDatasource() throws IOException {
