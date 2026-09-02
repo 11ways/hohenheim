@@ -21,6 +21,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -397,6 +398,7 @@ public class DatabaseService extends DatasourceScoped {
                 }
                 engineRow = engineId != null ? explicitEngine(engineId, serverId, engine, image)
                     : DatabaseEngines.findOrCreateShared(serverId, engine, image);
+                requireLogicalFree(engineRow.get(DatabaseEngineModel.ID), database, user, null);
             } else if (!DatabaseModel.PLACEMENT_DEDICATED.equals(resolvedPlacement)) {
                 throw Violations.ofField(DatabaseModel.PLACEMENT.getName(), resolvedPlacement,
                     CmsSupport.violationText("database_placement_unknown")
@@ -864,11 +866,11 @@ public class DatabaseService extends DatasourceScoped {
                 + refusal.key() + ")");
         }
         ManagedDatabase.Engine engine = engineOf(row);
-        String user = row.get(DatabaseModel.DB_USER);
+        String storedUser = row.get(DatabaseModel.DB_USER);
         String password = row.get(DatabaseModel.DB_PASSWORD);
         String database = row.get(DatabaseModel.DB_NAME);
         query(() -> {
-            requireLogicalIdentifiers(user, password, database);
+            requireLogicalIdentifiers(storedUser, password, database);
             return null;
         });
         int serverId = ServerModel.canonicalServerId(row.get(DatabaseModel.SERVER_ID));
@@ -902,6 +904,17 @@ public class DatabaseService extends DatasourceScoped {
                 () -> query(() -> DatabaseEngines.findOrCreateShared(serverId, engine,
                     row.get(DatabaseModel.IMAGE))));
             int engineId = engineRow.get(DatabaseEngineModel.ID);
+            // The logical USER must be unique on the engine: MySQL and Postgres users are
+            // engine-global, so a dedicated record's "app" landing beside another
+            // record's "app" would re-credential that record and reach both databases
+            // (observed 2026-09-02, the two WordPress records on robbedoes). A taken user
+            // is renamed to the database name, which the name check above keeps unique.
+            String user = query(() -> isLogicalUserTaken(engineId, storedUser, recordId))
+                ? database : storedUser;
+            if (!user.equals(storedUser)) {
+                Blast.log("DB-MOVE:", name, "renames its user", storedUser, "to", user,
+                    "- another record on the engine already owns that user");
+            }
             scoped(() -> {
                 DatabaseEngines.ensureRunning(engineId);
                 return null;
@@ -927,6 +940,7 @@ public class DatabaseService extends DatasourceScoped {
                 Row fresh = model().findById(recordId);
                 fresh.set(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED);
                 fresh.set(DatabaseModel.ENGINE_ID, engineId);
+                fresh.set(DatabaseModel.DB_USER, user);
                 fresh.set(DatabaseModel.MEMORY_LIMIT_MB, null);
                 fresh.set(DatabaseModel.CPU_LIMIT, null);
                 fresh.set(DatabaseModel.STATUS, STATUS_ACTIVE);
@@ -1004,6 +1018,75 @@ public class DatabaseService extends DatasourceScoped {
         }
         if (Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL))) {
             return CmsSupport.violationText("database_ephemeral_shared");
+        }
+        // The host's shared engine, if one exists yet, must not already hold a logical
+        // database of this name: that is another record's data, and the restore would
+        // land inside it.
+        int serverId = ServerModel.canonicalServerId(row.get(DatabaseModel.SERVER_ID));
+        Row existing = Models.get(DatabaseEngineModel.class).findOnHost(serverId, engine.token());
+        if (existing != null) {
+            Integer recordId = row.get(DatabaseModel.ID);
+            Row holder = holderOf(existing.get(DatabaseEngineModel.ID), DatabaseModel.DB_NAME,
+                row.get(DatabaseModel.DB_NAME), recordId);
+            if (holder != null) {
+                return CmsSupport.violationText("database_logical_name_taken")
+                    .withArg("database", row.get(DatabaseModel.DB_NAME))
+                    .withArg("engine", existing.get(DatabaseEngineModel.NAME))
+                    .withArg("record", holder.get(DatabaseModel.NAME));
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Refuse a logical database name or user another record on the same engine already
+     * holds: a shared name would restore one record's data into another's, and a shared
+     * user (engine-global on MySQL and Postgres) re-credentials the other record and
+     * reaches both databases.
+     *
+     * @param excludeRecordId the record being placed, when it already exists
+     * @throws Violations {@code database_logical_name_taken}, {@code database_logical_user_taken}
+     */
+    static void requireLogicalFree(int engineId, @NonNull String database, @NonNull String user,
+                                   @Nullable Integer excludeRecordId) {
+        Row engineRow = Models.get(DatabaseEngineModel.class).findById(engineId);
+        String engineName = engineRow == null ? String.valueOf(engineId)
+            : engineRow.get(DatabaseEngineModel.NAME);
+        Row nameHolder = holderOf(engineId, DatabaseModel.DB_NAME, database, excludeRecordId);
+        if (nameHolder != null) {
+            throw Violations.ofField(DatabaseModel.DB_NAME.getName(), database,
+                CmsSupport.violationText("database_logical_name_taken")
+                    .withArg("database", database).withArg("engine", engineName)
+                    .withArg("record", nameHolder.get(DatabaseModel.NAME)));
+        }
+        Row userHolder = holderOf(engineId, DatabaseModel.DB_USER, user, excludeRecordId);
+        if (userHolder != null) {
+            throw Violations.ofField(DatabaseModel.DB_USER.getName(), user,
+                CmsSupport.violationText("database_logical_user_taken")
+                    .withArg("user", user).withArg("engine", engineName)
+                    .withArg("record", userHolder.get(DatabaseModel.NAME)));
+        }
+    }
+
+    /** @return whether another record on the engine already owns this logical user */
+    static boolean isLogicalUserTaken(int engineId, @NonNull String user, @Nullable Integer excludeRecordId) {
+        return holderOf(engineId, DatabaseModel.DB_USER, user, excludeRecordId) != null;
+    }
+
+    /** @return the other record on the engine whose {@code field} equals {@code value}, or null */
+    private static @Nullable Row holderOf(int engineId, @NonNull StringField field,
+                                          @Nullable String value, @Nullable Integer excludeRecordId) {
+        if (value == null) {
+            return null;
+        }
+        for (Row other : DatabaseEngines.databasesOn(engineId)) {
+            Integer otherId = other.get(DatabaseModel.ID);
+            if (excludeRecordId != null && excludeRecordId.equals(otherId)) {
+                continue;
+            }
+            if (value.equals(other.get(field))) {
+                return other;
+            }
         }
         return null;
     }

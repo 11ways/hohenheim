@@ -305,6 +305,7 @@ class SharedDatabaseEngineLiveTest {
         String database = "moved";
         String user = "moveuser";
         String password = "movepw1234";
+        String squatterName = "squat" + System.nanoTime();
         Integer instanceId = null;
         Integer engineId = null;
         String engineVolume = null;
@@ -332,6 +333,13 @@ class SharedDatabaseEngineLiveTest {
             assertThat(containerEnv(docker, workloadHandle).get("DB_HOST"))
                 .as("step 1: the workload is injected with the DEDICATED container")
                 .isEqualTo(dedicatedHandle);
+
+            // 1b. A SQUATTER: a shared record on the host's engine that already owns the
+            //     very user name the dedicated record carries. The move must not
+            //     re-credential it; the dedicated record's user is renamed instead.
+            service.create(squatterName, ManagedDatabase.Engine.MONGO, MONGO_IMAGE, user,
+                "squatpw1234", "squat", false, ServerService.LOCAL, ResourceLimits.none(),
+                DatabaseModel.PLACEMENT_SHARED);
 
             // 2. Three documents through the dedicated container, as its own root user.
             mongo(docker, dedicatedHandle, user, password, "admin", "admin",
@@ -406,6 +414,15 @@ class SharedDatabaseEngineLiveTest {
             assertThat(moved.status()).as("step 3: and active").isEqualTo("active");
             assertThat(moved.failureReason()).as("step 3: with no failure recorded").isNull();
             assertThat(moved.engineName()).as("step 3: naming its engine").isNotBlank();
+            // 3b. The record's user was RENAMED to its database name, because the
+            //     squatter already owned "moveuser" on that engine; the squatter's own
+            //     credential is untouched.
+            String movedUser = Models.get(DatabaseModel.class).findByName(name)
+                .get(DatabaseModel.DB_USER);
+            assertThat(movedUser)
+                .as("step 3b: a taken user is renamed to the database name")
+                .isEqualTo(database)
+                .isNotEqualTo(user);
 
             Row engineRow = Models.get(DatabaseEngineModel.class)
                 .findOnHost(ServerModel.localServerId(), "mongo");
@@ -420,10 +437,14 @@ class SharedDatabaseEngineLiveTest {
                     "print('count=' + db.getSiblingDB('" + database
                         + "').moved.countDocuments({}));"))
                 .as("step 4: the engine holds the three documents").contains("count=3");
-            assertThat(mongo(docker, engine, user, password, database, database,
+            assertThat(mongo(docker, engine, movedUser, password, database, database,
                     "print('count=' + db.moved.countDocuments({}));"))
-                .as("step 4: and the record's own user reads them on its own database")
+                .as("step 4: and the record's own (renamed) user reads them on its own database")
                 .contains("count=3");
+            assertThat(mongo(docker, engine, user, "squatpw1234", "squat", "squat",
+                    "print('squat=' + db.getName());"))
+                .as("step 4: the squatter's credential still works, untouched by the move")
+                .contains("squat=squat");
 
             // 5. The WORKLOAD followed: it was redeployed and now dials the ENGINE, on
             //    the engine's port, authenticating against its own logical database.
@@ -463,7 +484,7 @@ class SharedDatabaseEngineLiveTest {
             assertThatThrownBy(() -> service.moveToSharedEngine(name))
                 .as("step 8: a record already on an engine cannot move again")
                 .isInstanceOf(IOException.class)
-                .hasMessageContaining("already lives on a shared engine");
+                .hasMessageContaining("database_already_shared");
         } finally {
             // Step 2c shrinks the host reading; a failed move must not leave it shrunk.
             HostFixtures.makeLocalPlaceable(16384);
@@ -474,7 +495,7 @@ class SharedDatabaseEngineLiveTest {
                     // best effort
                 }
             }
-            cleanUpDatabases(service, name);
+            cleanUpDatabases(service, name, squatterName);
             cleanUpEngine(docker, engineId, engineVolume);
             if (dedicatedVolume != null) {
                 removeVolume(docker, dedicatedVolume);
@@ -528,6 +549,18 @@ class SharedDatabaseEngineLiveTest {
             assertThat(service.detail(postgresName).placement())
                 .as("step 1: and so is the postgres one")
                 .isEqualTo(DatabaseModel.PLACEMENT_SHARED);
+            // 1b. A second mysql record spelling the SAME user is refused by name before
+            //     anything runs on the engine: MySQL users are engine-global, and the
+            //     create script would have re-credentialed the first record's user.
+            assertThatThrownBy(() -> service.create(mysqlName + "b",
+                    ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "myuser", "otherpw1234",
+                    "mysharedb", false, ServerService.LOCAL, ResourceLimits.none(),
+                    DatabaseModel.PLACEMENT_SHARED))
+                .as("step 1b: the same logical user on one engine is refused")
+                .isInstanceOf(Violations.class)
+                .hasMessageContaining("database_logical_user_taken");
+            assertThat(Models.get(DatabaseModel.class).findByName(mysqlName + "b"))
+                .as("step 1b: and no record was written").isNull();
 
             Row mysqlEngine = Models.get(DatabaseEngineModel.class)
                 .findOnHost(ServerModel.localServerId(), "mysql");

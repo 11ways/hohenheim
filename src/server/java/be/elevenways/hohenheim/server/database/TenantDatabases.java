@@ -162,8 +162,15 @@ public final class TenantDatabases {
         DatabaseService service = new DatabaseService();
         Row[] created = new Row[1];
         TenantWrites.inDatabaseAllocation(() -> created[0] = service.insertRecord(storedName,
-            engine, image == null || image.isBlank() ? null : image, "app",
-            Secrets.generatePassword(), sqlIdentifier(label), false,
+            // The logical database NAME and USER are the NAMESPACED stored name, never
+            // the bare label and never a fixed "app": on one shared engine two tenants'
+            // "blog" used to be ONE logical database (the label is what CREATE DATABASE
+            // saw), and MySQL/Postgres users are engine-global, so a second "app"
+            // re-credentialed the first tenant and reached both databases (2026-09-02).
+            // The stored name is unique per owner and DatabaseService refuses a taken
+            // logical name or user on the engine, so both are unique by construction.
+            engine, image == null || image.isBlank() ? null : image, sqlIdentifier(storedName),
+            Secrets.generatePassword(), sqlIdentifier(storedName), false,
             ServerModel.nameOf(serverId), ResourceLimits.none(),
             DatabaseService.STATUS_PROVISIONING));
         Row record = created[0];

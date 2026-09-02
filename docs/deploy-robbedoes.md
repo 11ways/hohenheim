@@ -2439,3 +2439,40 @@ lines in the boot journal. udesign.world and microcopy.elevenways.be still
 resolve to Phoenix (144.76.30.204, 200 there), untouched by this wave.
 `zenit-dev deployed robbedoes` = hohenheim current, no restart pending.
 ROLLBACK: `tools/deploy-host.sh --rollback robbedoes --preflight /root/hohenheim-preflight-20260902-092645`.
+
+## 2026-09-02: the two WordPress MySQL records moved onto one shared engine; the `app` user collision
+
+Both dedicated MySQL records moved through the new API verb (`hoh database move
+11 --yes`, then `12`), each landing `active shared` on engine 2 `mysql-local`
+(mysql:8.0, 1024 MB) in about 20 s: anymedia-wordpress-db at 10:07:08Z, then
+diax-wordpress-db at 10:07:42Z. Dumps kept under
+`/opt/hohenheim/data/backups/moves/<name>/`, old data volumes kept. Containers
+11 -> 10; booking: two dedicated MySQLs at the 1 GiB default gave way to one
+engine at 1024 MB (net -1024 MB); the engine sits at ~548 MiB with both
+databases. Both sites were verified before and after through their containers
+with a browser UA and `X-Forwarded-Proto: https` (the staged hostnames have no
+certificate on robbedoes yet, so a public HTTPS probe cannot be used): 200 with
+the real titles.
+
+INCIDENT (no visitor impact, staged sites): after the SECOND move
+any-media.be answered "Database Error". Both records carried the same logical
+user `app` (each dedicated container had its own), and MySQL users are
+ENGINE-GLOBAL: the second create script's `ALTER USER 'app'@'%' IDENTIFIED BY`
+re-credentialed Anymedia's user with DiAX's password, and `app` then held
+grants on BOTH databases. Hand recovery (10:15Z): one user per logical database
+on the engine (`anymedia_wordpress_db`, `diax_wordpress_db`, each with its
+record's own stored password read from the container env, `GRANT ALL` on its
+own database only), `managed_databases.db_user = db_name` for 11 and 12 by
+SQL, `hoh power 17|19 restart` so the env re-injects, both sites 200 again,
+then `DROP USER 'app'@'%'`. Verified: `select user,host from mysql.user` lists
+exactly the two record users plus root.
+
+The mechanism fix that followed (same day): shared placement refuses a logical
+name or user another record on the engine holds
+(`database_logical_name_taken` / `database_logical_user_taken`), the move lane
+renames a taken user to the database name, and a TENANT allocation names both
+its logical database and its user after the NAMESPACED stored name -- the bare
+label used to make two tenants' "blog" ONE database on the shared engine.
+Pinned by `SharedDatabaseEngineTest` step 4b, `TenantDatabaseSurfaceTest` steps
+6/7 and `SharedDatabaseEngineLiveTest` (squatter + same-user refusal), runs
+126 and 131.

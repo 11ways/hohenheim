@@ -12406,6 +12406,14 @@
     "text": "Engine '{$name}' draait op {$server} terwijl de database op {$database_server} draait; een koppelnetwerk bestaat alleen op de daemon die ze delen",
     "scope": "violations"
   },
+  "database_logical_name_taken": {
+    "text": "Logische database '{$database}' bestaat al op engine '{$engine}' (record '{$record}'); twee records mogen nooit één database delen",
+    "scope": "violations"
+  },
+  "database_logical_user_taken": {
+    "text": "Gebruiker '{$user}' bestaat al op engine '{$engine}' (record '{$record}'); op een gedeelde engine heeft elke database een eigen gebruiker nodig",
+    "scope": "violations"
+  },
   "database_logical_identifier": {
     "text": "Gebruik alleen letters, cijfers, punt, liggend streepje en koppelteken, hoogstens 64 tekens: de waarde wordt in de shell van de engine zelf geschreven",
     "scope": "violations"
