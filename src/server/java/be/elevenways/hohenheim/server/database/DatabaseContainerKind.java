@@ -78,6 +78,15 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
         BooleanField.builder("ephemeral").defaultValue(false)
             .label(HohenheimFormCopy.label("ephemeral")).build());
 
+    /**
+     * Whether the container is a SHARED engine (a {@code DatabaseEngineModel} row's)
+     * hosting many logical databases, which books the engine's shared footprint
+     * ({@link ManagedDatabase.Engine#sharedFootprintMb()}) rather than one database's.
+     */
+    public static final BooleanField SHARED = SETTINGS_SCHEMA.addField(
+        BooleanField.builder("shared").defaultValue(false)
+            .label(HohenheimFormCopy.label("placement")).build());
+
     public static final StringField COMMAND = SETTINGS_SCHEMA.addField(
         StringField.builder().name("command")
             .label(HohenheimFormCopy.label("container_command")).build());
@@ -105,8 +114,8 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
     // the rest is what DatabaseService writes for you.
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME,
-            List.of(DATA_VOLUME.getName(), COMMAND.getName(), ENVIRONMENT_VARIABLES.getName(),
-                MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
+            List.of(DATA_VOLUME.getName(), SHARED.getName(), COMMAND.getName(),
+                ENVIRONMENT_VARIABLES.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
     }
 
     @Override
@@ -203,10 +212,19 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
     @Override
     public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
         try {
-            return engineOf(settings).footprintMb(isEphemeral(settings));
+            ManagedDatabase.Engine engine = engineOf(settings);
+            if (isShared(settings) && engine.supportsLogicalDatabases()) {
+                return engine.sharedFootprintMb();
+            }
+            return engine.footprintMb(isEphemeral(settings));
         } catch (Violations unknownEngine) {
             return ManagedDatabase.Engine.maxFootprintMb();
         }
+    }
+
+    /** Whether this container is a SHARED engine hosting many logical databases. */
+    static boolean isShared(@NonNull Map<String, Object> settings) {
+        return Boolean.TRUE.equals(settings.get(SHARED.getName()));
     }
 
     /**

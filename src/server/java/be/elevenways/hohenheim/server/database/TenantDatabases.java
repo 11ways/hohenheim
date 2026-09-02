@@ -181,7 +181,12 @@ public final class TenantDatabases {
         // allocation as a "provisioning" record that never provisions. Removing it here is
         // correct with or without one.
         try {
-            DatabaseInstances.reserveEngineRow(record, ResourceLimits.none());
+            // A shared record owns no engine row: its engine's reservation was taken (or
+            // already stood) when insertRecord resolved the engine, inside this same
+            // transaction, so a full host refused there.
+            if (!DatabaseModel.isShared(record)) {
+                DatabaseInstances.reserveEngineRow(record, ResourceLimits.none());
+            }
         } catch (RuntimeException | Error refused) {
             abandon(recordId, ctx);
             throw refused;

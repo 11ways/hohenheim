@@ -115,6 +115,9 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // URL may not carry a credential -- both refused on the form the operator typed
         // them on rather than on a deploy hours later.
         InstanceDeclarations.install();
+        // A shared database engine still hosting a managed database refuses to go, and a
+        // shared database row can only bind to an engine of its own kind on its own host.
+        be.elevenways.hohenheim.server.database.DatabaseEngineGuards.install();
         // Concurrent instance creates cannot both spend the last quota slot, and the
         // soft-delete transition hands the slot back (the remove hooks never fire on
         // the destroy path -- it soft-deletes through save()).

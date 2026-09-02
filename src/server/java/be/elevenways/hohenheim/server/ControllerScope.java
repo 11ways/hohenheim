@@ -33,6 +33,8 @@ public final class ControllerScope {
     public static final String KIND_INSTANCE = "instance";
     public static final String KIND_SITE = "site";
     public static final String KIND_DB = "db";
+    /** A SHARED database engine's name-keyed data volume ({@code dbengine-<name>-data}). */
+    public static final String KIND_DB_ENGINE = "dbengine";
     public static final String KIND_STACK = "stack";
     public static final String KIND_BUILD = "build";
     public static final String KIND_PREVIEW = "preview";

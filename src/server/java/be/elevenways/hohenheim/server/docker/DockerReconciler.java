@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -239,6 +240,18 @@ public final class DockerReconciler {
             return null;
         }
 
+        // {scope}dbengine-{name}-data volumes: a SHARED engine's data, keyed to the
+        // engine record's name for the same outlives-the-runtime-row reason.
+        if (name.startsWith(scheme + ControllerScope.KIND_DB_ENGINE + "-")) {
+            String rest = name.substring((scheme + ControllerScope.KIND_DB_ENGINE + "-").length());
+            if (KIND_VOLUME.equals(kind) && rest.endsWith("-data")) {
+                String engineName = rest.substring(0, rest.length() - "-data".length());
+                return nameFinding(kind, name,
+                    records.liveByName(DatabaseEngineModel.MODEL_ID, engineName), null);
+            }
+            return null;
+        }
+
         // {scope}stack-{name} networks, {scope}stack-{name}-{suffix} containers
         // and volumes. The stack name may itself contain dashes, so containers and
         // volumes probe every split point (longest candidate first).
@@ -386,6 +399,9 @@ public final class DockerReconciler {
         public boolean liveByName(@NonNull Identifier model, @NonNull String name) {
             if (DatabaseModel.MODEL_ID.equals(model)) {
                 return Models.get(DatabaseModel.class).findByName(name) != null;
+            }
+            if (DatabaseEngineModel.MODEL_ID.equals(model)) {
+                return Models.get(DatabaseEngineModel.class).findByName(name) != null;
             }
             if (StackModel.MODEL_ID.equals(model)) {
                 return Models.get(StackModel.class).find()
