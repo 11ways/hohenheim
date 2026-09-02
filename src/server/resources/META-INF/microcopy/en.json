@@ -2507,6 +2507,15 @@
       "text": "template volumes",
       "scope": "template_volume",
       "case": "sentence"
+    },
+    {
+      "text": "Database engines",
+      "scope": "database_engine"
+    },
+    {
+      "text": "database engines",
+      "scope": "database_engine",
+      "case": "sentence"
     }
   ],
   "dashboard": [
@@ -2682,6 +2691,10 @@
     {
       "text": "Declared databases",
       "scope": "template_contents"
+    },
+    {
+      "text": "Databases",
+      "scope": "database_engine"
     }
   ],
   "clone_confirm": {
@@ -3859,6 +3872,14 @@
     {
       "text": "Delete this certificate? Its private key is destroyed and the names it covers stop serving HTTPS until another certificate covers them.",
       "scope": "certificate"
+    },
+    {
+      "text": "Delete '{$name}'? Its container and its data volume are destroyed, and the credentials are lost.",
+      "scope": "database"
+    },
+    {
+      "text": "Delete engine '{$name}'? Its container and its data volume are destroyed. It is refused while any database still lives on it.",
+      "scope": "database_engine"
     }
   ],
   "priority": {
@@ -5375,30 +5396,66 @@
     "text": "Destroy of '{$name}' could not verify its teardown: {$reason}. The record and its credentials are kept; retry, or use Force delete for an unreachable host.",
     "scope": "violations"
   },
-  "force_delete": {
-    "text": "Force delete",
-    "scope": "database"
-  },
-  "force_delete_hint": {
-    "text": "Delete the record without verifying teardown (unreachable host). Container and volume may survive; the reconciler will report them.",
-    "scope": "database"
-  },
-  "force_delete_confirm_generic": {
-    "text": "Delete this database record WITHOUT verifying its container was removed? Whatever still runs on the host survives, and the credentials are lost.",
-    "scope": "database"
-  },
-  "force_delete_confirm": {
-    "text": "Delete the record of '{$name}' WITHOUT verifying its container was removed? Whatever still runs on the host survives, and the credentials are lost. Type the database name to confirm.",
-    "scope": "database"
-  },
-  "force_delete_ok": {
-    "text": "Force delete",
-    "scope": "database"
-  },
-  "force_delete_done": {
-    "text": "Record of '{$name}' deleted; its host resources were NOT verified removed",
-    "scope": "database"
-  },
+  "force_delete": [
+    {
+      "text": "Force delete",
+      "scope": "database"
+    },
+    {
+      "text": "Force delete",
+      "scope": "database_engine"
+    }
+  ],
+  "force_delete_hint": [
+    {
+      "text": "Delete the record without verifying teardown (unreachable host). Container and volume may survive; the reconciler will report them.",
+      "scope": "database"
+    },
+    {
+      "text": "Delete the record without verifying teardown (unreachable host). Container and volume may survive; the reconciler will report them.",
+      "scope": "database_engine"
+    }
+  ],
+  "force_delete_confirm_generic": [
+    {
+      "text": "Delete this database record WITHOUT verifying its container was removed? Whatever still runs on the host survives, and the credentials are lost.",
+      "scope": "database"
+    },
+    {
+      "text": "Delete this engine record WITHOUT verifying its container was removed? Whatever still runs on the host survives, and the root credentials are lost.",
+      "scope": "database_engine"
+    }
+  ],
+  "force_delete_confirm": [
+    {
+      "text": "Delete the record of '{$name}' WITHOUT verifying its container was removed? Whatever still runs on the host survives, and the credentials are lost. Type the database name to confirm.",
+      "scope": "database"
+    },
+    {
+      "text": "Delete the record of engine '{$name}' WITHOUT verifying its container was removed? Whatever still runs on the host survives, and the root credentials are lost. Type the engine name to confirm.",
+      "scope": "database_engine"
+    }
+  ],
+  "force_delete_ok": [
+    {
+      "text": "Force delete",
+      "scope": "database"
+    },
+    {
+      "text": "Force delete",
+      "scope": "database_engine"
+    }
+  ],
+  "force_delete_done": [
+    {
+      "text": "Record of '{$name}' deleted; its host resources were NOT verified removed",
+      "scope": "database"
+    },
+    {
+      "text": "Record of engine '{$name}' deleted; its host resources were NOT verified removed",
+      "scope": "database_engine"
+    }
+  ],
   "released_at": {
     "text": "Released",
     "scope": "field"
@@ -5667,10 +5724,16 @@
     "text": "Trusted only",
     "scope": "host_posture"
   },
-  "dedicated": {
-    "text": "Dedicated to one tenant",
-    "scope": "host_posture"
-  },
+  "dedicated": [
+    {
+      "text": "Dedicated to one tenant",
+      "scope": "host_posture"
+    },
+    {
+      "text": "Dedicated",
+      "scope": "database_placement"
+    }
+  ],
   "shared_container": {
     "text": "Shared containers (operator risk)",
     "scope": "host_posture"
@@ -8884,6 +8947,15 @@
       "text": "template volume",
       "scope": "template_volume",
       "case": "sentence"
+    },
+    {
+      "text": "database engine",
+      "scope": "database_engine"
+    },
+    {
+      "text": "database engine",
+      "scope": "database_engine",
+      "case": "sentence"
     }
   ],
   "member": {
@@ -10041,6 +10113,10 @@
     {
       "text": "Platform alerts delivered to your own panel inbox.",
       "scope": "admin_inbox"
+    },
+    {
+      "text": "Shared engine processes that host many managed databases on one host.",
+      "scope": "database_engine"
     }
   ],
   "slug": {
@@ -11326,6 +11402,10 @@
     {
       "text": "These sites use this provider as their login gate: {$sites} ({$rules} access rules name it too). Assign them another provider first, or they refuse every request from the next route load on.",
       "scope": "auth_provider"
+    },
+    {
+      "text": "Engine '{$name}' still hosts {$databases}. Move or delete those databases first.",
+      "scope": "database_engine"
     }
   ],
   "delete_in_use_rules": {
@@ -11964,6 +12044,10 @@
     {
       "text": "Saving a new memory or CPU ceiling recreates a running workload's container, so it is briefly down and its published port may change.",
       "scope": "instance"
+    },
+    {
+      "text": "Only the memory and CPU ceilings can be changed here; every other field describes the container that was provisioned. Saving a new ceiling recreates the engine, so every database on it loses its connections until it is back.",
+      "scope": "database_engine"
     }
   ],
   "database_resize_failed": {
@@ -12227,5 +12311,143 @@
   "people_only": {
     "text": "People only",
     "scope": "activity"
+  },
+  "placement": {
+    "text": "Placement",
+    "scope": "field"
+  },
+  "database_engine": [
+    {
+      "text": "Shared engine",
+      "scope": "field"
+    },
+    {
+      "text": "Leave blank for this host's engine of that kind, which is created on demand.",
+      "scope": "help"
+    },
+    {
+      "text": "Database engine {$name}",
+      "scope": "attention_title"
+    }
+  ],
+  "root_user": {
+    "text": "Root user",
+    "scope": "field"
+  },
+  "root_password": {
+    "text": "Root password",
+    "scope": "field"
+  },
+  "database_placement": {
+    "text": "Its own engine container, or a logical database on an engine this host shares. Redis and tmpfs databases are always dedicated.",
+    "scope": "help"
+  },
+  "database_engine_name": {
+    "text": "Names the engine container and its data volume: lowercase letters, digits and dashes.",
+    "scope": "help"
+  },
+  "database_engine_root_user": {
+    "text": "The superuser the controller drives this engine with. A workload never sees it.",
+    "scope": "help"
+  },
+  "database_engine_root_password": {
+    "text": "Leave blank to generate one. It is stored encrypted and used only by the controller.",
+    "scope": "help"
+  },
+  "shared": {
+    "text": "Shared",
+    "scope": "database_placement"
+  },
+  "database_shared_without_engine": {
+    "text": "A shared database must name the engine it lives on",
+    "scope": "violations"
+  },
+  "database_engine_on_dedicated": {
+    "text": "A dedicated database owns its own engine container, so it names no shared engine",
+    "scope": "violations"
+  },
+  "database_ephemeral_shared": {
+    "text": "A tmpfs database is its own container by definition, so it cannot live on a shared engine",
+    "scope": "violations"
+  },
+  "database_placement_unsupported": {
+    "text": "{$engine} has no logical databases, so it cannot be shared; pick the dedicated placement",
+    "scope": "violations"
+  },
+  "database_placement_unknown": {
+    "text": "Unknown placement: {$placement}",
+    "scope": "violations"
+  },
+  "database_image_engine_mismatch": {
+    "text": "Engine '{$engine}' runs {$running}, not {$image}; leave the image blank to use the engine's, or pick another engine",
+    "scope": "violations"
+  },
+  "database_engine_in_use": {
+    "text": "Engine '{$name}' still hosts {$databases}; move or delete those databases first",
+    "scope": "violations"
+  },
+  "database_shared_limits": {
+    "text": "A shared database has no ceilings of its own: the memory and CPU limits live on the engine that serves it",
+    "scope": "violations"
+  },
+  "database_engine_kind_mismatch": {
+    "text": "That engine does not run {$engine}",
+    "scope": "violations"
+  },
+  "database_engine_host_mismatch": {
+    "text": "Engine '{$name}' runs on {$server} while the database runs on {$database_server}; a link network only exists on the daemon both share",
+    "scope": "violations"
+  },
+  "database_logical_identifier": {
+    "text": "Use only letters, digits, dot, underscore and dash, at most 64 characters: the value is spelled into the engine's own shell",
+    "scope": "violations"
+  },
+  "database_engine_destroy_failed": {
+    "text": "Destroy of engine '{$name}' could not verify its teardown: {$reason}. The record is kept; force delete it once the host is reachable again.",
+    "scope": "violations"
+  },
+  "move_shared": {
+    "text": "Move to shared engine",
+    "scope": "database"
+  },
+  "move_shared_hint": {
+    "text": "Move this database onto the host's shared engine, as a logical database with its own user.",
+    "scope": "database"
+  },
+  "move_shared_confirm": {
+    "text": "Move '{$name}' onto this host's shared engine? Every attached workload is stopped while the dump and the restore run, the record reads Provisioning meanwhile, and the dump is kept under the backup path as a rollback.",
+    "scope": "database"
+  },
+  "move_shared_ok": {
+    "text": "Move",
+    "scope": "database"
+  },
+  "move_started": {
+    "text": "Moving '{$name}' onto a shared engine; the record reads Provisioning until it is done",
+    "scope": "database"
+  },
+  "shared_notice": {
+    "text": "This is a logical database on a shared engine, so it has no ceilings of its own: resize the engine on the Database engines list. Every other field describes what was provisioned.",
+    "scope": "database"
+  },
+  "delete_confirm_shared": {
+    "text": "Delete '{$name}'? Its logical database and its user are dropped on the shared engine and the data is lost; the engine itself stays up, serving the other databases on it.",
+    "scope": "database"
+  },
+  "engine_provisioning_failed_reason": {
+    "text": "The engine could not be brought up: {$reason}",
+    "scope": "attention_detail"
+  },
+  "database_operation_failed": {
+    "text": "The last operation on this database failed: {$reason}",
+    "scope": "attention_detail"
+  },
+  "tier_database_engine": {
+    "text": "Database engine",
+    "scope": "server_overview"
+  },
+  "move_shared_confirm_generic": {
+    "text": "Move this database onto the host's shared engine? Every attached workload is stopped while the dump and the restore run, the record reads Provisioning meanwhile, and the dump is kept under the backup path as a rollback.",
+    "scope": "database"
   }
 }

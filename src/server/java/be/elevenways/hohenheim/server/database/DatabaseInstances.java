@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -16,6 +17,7 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -29,10 +31,12 @@ import java.util.Map;
 
 /**
  * The wiring between the managed-DATABASE tier and the canonical runtime-resource
- * contract: every database's engine IS an owned {@code hohenheim:database_container}
- * instance, deployed and destroyed through {@link InstanceService}. The database record
- * keeps the product half -- name, credentials, engine vocabulary, backups, restore and
- * site attachments -- and no longer talks to the daemon about its own container.
+ * contract: every engine PROCESS ({@link EngineHost}: a dedicated database record's own
+ * container, or a shared {@link DatabaseEngineModel}) IS an owned
+ * {@code hohenheim:database_container} instance, deployed and destroyed through
+ * {@link InstanceService}. The product records keep their halves -- name, credentials,
+ * engine vocabulary, backups, restore, attachments -- and never talk to the daemon
+ * about their own container.
  *
  * What the tier GAINED by lowering, none of which it had before: the fenced outcome
  * write (a stale controller's provision cannot stick), the host lease, the port ledger's
@@ -54,6 +58,12 @@ import java.util.Map;
  * the password straight into the container spec at provision time; putting it into the
  * settings JSON instead would have been a second PLAINTEXT copy of a credential the
  * database record itself stores encrypted.
+ *
+ * AIDEV-NOTE (2026-09-02): the database-id entry points ({@link #owned(int)},
+ * {@link #handleOf(int)}, {@link #liveStatus(int)}) answer for the instance SERVING that
+ * database: its own for a dedicated record, the shared engine's for a shared one. That
+ * is the one resolution every consumer (injection, link networks, port refresh, the
+ * admin list) needs, and none of them branch on the placement themselves.
  */
 public final class DatabaseInstances {
 
@@ -70,29 +80,54 @@ public final class DatabaseInstances {
 
     // -- lookups --------------------------------------------------------------
 
-    /** The database record's owned engine instance, or null before it has one. */
-    public static @Nullable Row owned(int databaseId) {
-        return OwnedInstances.soleOwnedBy(DatabaseModel.MODEL_ID, databaseId);
+    /** The engine instance owned by one host record, or null before it has one. */
+    public static @Nullable Row ownedBy(@NonNull EngineHost host) {
+        return OwnedInstances.soleOwnedBy(host.ownerModel(), host.ownerId());
     }
 
     /**
-     * THE container handle of a managed database's engine, and (via Docker's embedded
-     * DNS on any shared user-defined network) the hostname a joined container reaches it
+     * The instance SERVING a managed database (its own, or its shared engine's), or null
+     * when there is none yet.
+     */
+    public static @Nullable Row owned(int databaseId) {
+        Row database = Models.get(DatabaseModel.class).findById(databaseId);
+        return database == null ? null : ownedBy(EngineHost.serving(database));
+    }
+
+    /**
+     * THE container handle serving a managed database, and (via Docker's embedded DNS
+     * on any shared user-defined network) the hostname a joined container reaches it
      * under.
      *
-     * @return null when the database owns no instance yet -- callers must treat that as
+     * @return null when nothing serves the database yet -- callers must treat that as
      *         "no engine to reach", never as a name to guess
      */
     public static @Nullable String handleOf(int databaseId) {
-        Row instance = owned(databaseId);
+        return handleOf(owned(databaseId));
+    }
+
+    /** {@link #handleOf(int)} for a host record. */
+    public static @Nullable String handleOf(@NonNull EngineHost host) {
+        return handleOf(ownedBy(host));
+    }
+
+    private static @Nullable String handleOf(@Nullable Row instance) {
         return instance == null ? null
             : ControllerScope.handle(ControllerScope.KIND_INSTANCE,
                 instance.get(InstanceModel.ID));
     }
 
-    /** Live engine state off the daemon; never throws (see {@link ContainerState}). */
+    /** Live state of the instance serving a database; never throws (see {@link ContainerState}). */
     public static ManagedDatabase.@NonNull LiveStatus liveStatus(int databaseId) {
-        Row instance = owned(databaseId);
+        return liveStatus(owned(databaseId));
+    }
+
+    /** {@link #liveStatus(int)} for a host record. */
+    public static ManagedDatabase.@NonNull LiveStatus liveStatus(@NonNull EngineHost host) {
+        return liveStatus(ownedBy(host));
+    }
+
+    private static ManagedDatabase.@NonNull LiveStatus liveStatus(@Nullable Row instance) {
         if (instance == null) {
             return new ManagedDatabase.LiveStatus(ContainerState.ABSENT, null);
         }
@@ -111,52 +146,46 @@ public final class DatabaseInstances {
     // -- convergence ----------------------------------------------------------
 
     /**
-     * Converge the database's owned engine instance onto the record and deploy it,
-     * retiring the pre-lowering {@code hohenheim-{token}-db-{name}} container once.
+     * Converge the host's owned engine instance and deploy it, retiring a dedicated
+     * record's pre-lowering {@code hohenheim-{token}-db-{name}} container once.
      *
      * @return the published loopback host port the daemon handed the engine
      * @throws IOException when the deploy is refused (quota, capacity, fence, daemon) or
      *         the engine never reports ready; the caller flips the record to failed
      */
-    public static int deploy(@NonNull Row database, @NonNull ResourceLimits limits)
-            throws IOException {
-        int recordId = database.get(DatabaseModel.ID);
-        String name = database.get(DatabaseModel.NAME);
-        int serverId = ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID));
-        String serverName = ServerModel.nameOf(serverId);
-        ManagedDatabase.Engine engine = ManagedDatabase.engineOf(database);
-        String user = database.get(DatabaseModel.DB_USER);
-        String password = database.get(DatabaseModel.DB_PASSWORD);
-        String dbName = database.get(DatabaseModel.DB_NAME);
-
+    public static int deploy(@NonNull EngineHost host) throws IOException {
+        String serverName = ServerModel.nameOf(host.serverId());
         try {
-            int instanceId = reserveEngineRow(database, limits);
+            int instanceId = reserveEngineRow(host);
 
             // Secrets AFTER the row exists (they key on its id) and BEFORE the deploy
             // reads them: applyToSettings merges them into the container environment.
-            writeEngineSecrets(instanceId, engine, password);
+            writeEngineSecrets(instanceId, host.engine(), host.rootUser(), host.rootPassword());
 
             DockerClient docker = new ServerService().clientFor(serverName);
-            retireLegacyContainer(docker, name, recordId);
+            if (!host.shared()) {
+                retireLegacyContainer(docker, host.name(), host.ownerId());
+            }
 
-            InstanceStatus status = OwnedInstances.inScope(SOURCE, DatabaseModel.MODEL_ID,
-                recordId, () -> new InstanceService().deploy(instanceId));
+            InstanceStatus status = OwnedInstances.inScope(SOURCE, host.ownerModel(),
+                host.ownerId(), () -> new InstanceService().deploy(instanceId));
             Integer port = status.publishedPort();
             if (port == null) {
-                throw new IOException("Database '" + name + "' deployed but the daemon"
-                    + " reports no published host port for its engine");
+                throw new IOException("Database engine '" + host.name() + "' deployed but the"
+                    + " daemon reports no published host port for it");
             }
             // The engine READINESS gate stays a product-tier concern, exactly like the
             // site tier's HTTP health probe stays in SiteReleases: the instance contract
             // answers "is the workload running", never "can this engine serve queries".
             ManagedDatabase.awaitReady(docker,
                 ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId),
-                engine, user, password, dbName, 60_000);
+                host.engine(), host.rootUser(), host.rootPassword(), host.initDatabase(),
+                60_000);
             return port;
         } catch (IOException failed) {
             throw failed;
         } catch (Violations refused) {
-            throw new IOException("Database '" + name + "' could not be deployed: "
+            throw new IOException("Database engine '" + host.name() + "' could not be deployed: "
                 + refused.getMessage(), refused);
         } catch (RuntimeException | Error unchecked) {
             throw unchecked;
@@ -165,11 +194,17 @@ public final class DatabaseInstances {
         }
     }
 
+    /** {@link #deploy(EngineHost)} for a DEDICATED database record with these ceilings. */
+    public static int deploy(@NonNull Row database, @NonNull ResourceLimits limits)
+            throws IOException {
+        return deploy(dedicatedWith(database, limits));
+    }
+
     /**
-     * Converge the database's owned engine INSTANCE ROW, and nothing else: no daemon call,
+     * Converge the host's owned engine INSTANCE ROW, and nothing else: no daemon call,
      * no image pull, no readiness wait. This is the half that is TRANSACTIONAL and can be
      * refused -- the owner's instance quota and the host's memory booking both charge on
-     * this write -- which is why the tenant allocation funnel runs it INLINE while the
+     * this write -- which is why the allocation funnels run it INLINE while the
      * container work stays in the background.
      *
      * AIDEV-NOTE: splitting it out fixed a silent-success shape on the admin path too.
@@ -181,53 +216,67 @@ public final class DatabaseInstances {
      * @throws Violations quota, capacity, fence or attribution refusals, unwrapped, so the
      *         funnel can render them on the field they belong to
      */
-    public static int reserveEngineRow(@NonNull Row database, @NonNull ResourceLimits limits)
-            throws Exception {
-        int recordId = database.get(DatabaseModel.ID);
-        String name = database.get(DatabaseModel.NAME);
-        int serverId = ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID));
-        ManagedDatabase.Engine engine = ManagedDatabase.engineOf(database);
-        return OwnedInstances.inScope(SOURCE, DatabaseModel.MODEL_ID, recordId, () -> {
-            Row instance = owned(recordId);
+    public static int reserveEngineRow(@NonNull EngineHost host) throws Exception {
+        return OwnedInstances.inScope(SOURCE, host.ownerModel(), host.ownerId(), () -> {
+            Row instance = ownedBy(host);
             if (instance == null) {
                 instance = Models.get(InstanceModel.class).createEmptyRow();
             }
-            instance.set(InstanceModel.NAME, instanceNameOf(name));
+            instance.set(InstanceModel.NAME, host.instanceName());
             instance.set(InstanceModel.KIND, DatabaseContainerKind.ID.toString());
-            instance.set(InstanceModel.SERVER_ID, serverId);
-            // A managed database that dies unobserved must come back: the sites attached
-            // to it are down until it does, and there is no operator "stop" story where
-            // keeping a crashed engine down is the wanted outcome.
+            instance.set(InstanceModel.SERVER_ID, host.serverId());
+            // A managed database that dies unobserved must come back: the workloads
+            // attached to it are down until it does, and there is no operator "stop"
+            // story where keeping a crashed engine down is the wanted outcome.
             instance.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_RESTART);
-            instance.set(InstanceModel.SETTINGS, desiredSettings(database, engine,
-                database.get(DatabaseModel.DB_USER), database.get(DatabaseModel.DB_NAME),
-                limits));
+            instance.set(InstanceModel.SETTINGS, desiredSettings(host));
             Models.get(InstanceModel.class).save(instance);
             return (int) (Integer) instance.get(InstanceModel.ID);
         });
     }
 
     /**
-     * Verified end of life, called explicitly by {@link DatabaseService#destroy} (the
-     * GameDomains.deleteForInstance shape: the instance soft-deletes, so nothing else
-     * would ever clean it up). The container is removed or observed absent, the ledger
-     * claims are released fully, and the data volume follows when asked -- also verified.
+     * {@link #reserveEngineRow(EngineHost)} for a DEDICATED database record with these
+     * ceilings (the resize lane reserves BEFORE it writes the new ceilings to the row).
+     *
+     * @throws IllegalStateException for a shared record: it owns no engine row, its
+     *         engine's ceilings are resized on the engine
+     */
+    public static int reserveEngineRow(@NonNull Row database, @NonNull ResourceLimits limits)
+            throws Exception {
+        return reserveEngineRow(dedicatedWith(database, limits));
+    }
+
+    private static @NonNull EngineHost dedicatedWith(@NonNull Row database,
+                                                     @NonNull ResourceLimits limits) {
+        if (DatabaseModel.isShared(database)) {
+            throw new IllegalStateException("Managed database '" + database.get(DatabaseModel.NAME)
+                + "' is a logical database on a shared engine and owns no engine instance");
+        }
+        EngineHost own = EngineHost.dedicated(database);
+        return new EngineHost(own.ownerModel(), own.ownerId(), own.name(), own.engine(),
+            own.image(), own.ephemeral(), own.rootUser(), own.rootPassword(), own.initDatabase(),
+            own.serverId(), limits, false);
+    }
+
+    /**
+     * Verified end of life of a host's engine instance, called explicitly by the owning
+     * tier's destroy (the GameDomains.deleteForInstance shape: the instance soft-deletes,
+     * so nothing else would ever clean it up). The container is removed or observed
+     * absent, the ledger claims are released fully, and the data volume follows when
+     * asked -- also verified.
      *
      * @throws IOException when the daemon cannot confirm a teardown; the caller KEEPS the
-     *         record (it holds the only copy of {@code db_password}) and retries
+     *         record (it holds the only copy of the credentials) and retries
      */
-    public static void destroyFor(@NonNull Row database, boolean removeData)
+    public static void destroyFor(@NonNull EngineHost host, boolean removeData)
             throws IOException {
-        int recordId = database.get(DatabaseModel.ID);
-        String name = database.get(DatabaseModel.NAME);
-        String serverName = ServerModel.nameOf(
-            ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID)));
-
-        Row instance = owned(recordId);
+        String serverName = ServerModel.nameOf(host.serverId());
+        Row instance = ownedBy(host);
         if (instance != null) {
             int instanceId = instance.get(InstanceModel.ID);
             try {
-                OwnedInstances.inScope(SOURCE, DatabaseModel.MODEL_ID, recordId, () -> {
+                OwnedInstances.inScope(SOURCE, host.ownerModel(), host.ownerId(), () -> {
                     new InstanceService().destroy(instanceId);
                     return null;
                 });
@@ -241,12 +290,14 @@ public final class DatabaseInstances {
         }
 
         DockerClient docker = new ServerService().clientFor(serverName);
-        // The pre-lowering container, if this database never re-deployed after the
-        // lowering: removed only when the daemon still attributes it to this record.
-        retireLegacyContainer(docker, name, recordId);
-        if (removeData) {
+        if (!host.shared()) {
+            // The pre-lowering container, if this database never re-deployed after the
+            // lowering: removed only when the daemon still attributes it to this record.
+            retireLegacyContainer(docker, host.name(), host.ownerId());
+        }
+        if (removeData && !host.ephemeral()) {
             try {
-                docker.removeVolume(dataVolumeOf(name), true);
+                docker.removeVolume(host.dataVolume(), true);
             } catch (DockerClient.ApiException e) {
                 if (!e.isNotFound()) {
                     throw e;   // refused: the data is NOT gone, so neither is the record
@@ -255,19 +306,24 @@ public final class DatabaseInstances {
         }
     }
 
+    /** {@link #destroyFor(EngineHost, boolean)} for a DEDICATED database record. */
+    public static void destroyFor(@NonNull Row database, boolean removeData) throws IOException {
+        destroyFor(EngineHost.dedicated(database), removeData);
+    }
+
     /**
      * Abandon the owned engine instance WITHOUT touching the daemon: the operator's
      * force-destroy decision. The row is SOFT-deleted through save() so the capacity and
      * quota releases riding the {@code deleted_at} transition fire, and the port claim is
      * PARKED rather than deleted -- a container nobody could confirm may still hold it.
      */
-    public static void abandonInstance(int databaseId) {
-        Row instance = owned(databaseId);
+    public static void abandonInstance(@NonNull EngineHost host) {
+        Row instance = ownedBy(host);
         if (instance == null) {
             return;
         }
         int instanceId = instance.get(InstanceModel.ID);
-        OwnedInstances.inScopeUnchecked(SOURCE, DatabaseModel.MODEL_ID, databaseId, () -> {
+        OwnedInstances.inScopeUnchecked(SOURCE, host.ownerModel(), host.ownerId(), () -> {
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
             Row row = Models.get(InstanceModel.class).findById(instanceId);
             if (row != null) {
@@ -275,8 +331,17 @@ public final class DatabaseInstances {
                 Models.get(InstanceModel.class).save(row);
             }
         });
-        Blast.log("DB-RUNTIME: abandoned the engine instance of database", databaseId,
-            "- its container may survive on the host and will surface in the reconciler");
+        Blast.log("DB-RUNTIME: abandoned the engine instance of", host.ownerModel(),
+            host.ownerId(), "- its container may survive on the host and will surface in"
+            + " the reconciler");
+    }
+
+    /** {@link #abandonInstance(EngineHost)} for a DEDICATED database record by id. */
+    public static void abandonInstance(int databaseId) {
+        Row database = Models.get(DatabaseModel.class).findById(databaseId);
+        if (database != null && !DatabaseModel.isShared(database)) {
+            abandonInstance(EngineHost.dedicated(database));
+        }
     }
 
     // -- the pre-lowering shape ------------------------------------------------
@@ -316,10 +381,10 @@ public final class DatabaseInstances {
 
     /**
      * The documented migration of pre-lowering databases (instance-tier-plan Phase 7,
-     * binding property "no data migration may lose a running workload"): every database
-     * record that owns no instance yet gets one, and any record whose engine container
-     * still exists at the daemon is re-deployed under the contract -- onto the SAME data
-     * volume, so the engine comes back on the same bytes.
+     * binding property "no data migration may lose a running workload"): every DEDICATED
+     * database record that owns no instance yet gets one, and any record whose engine
+     * container still exists at the daemon is re-deployed under the contract -- onto the
+     * SAME data volume, so the engine comes back on the same bytes.
      *
      * Idempotent and safe to run on every boot: a database that already owns an instance
      * is skipped entirely, and a host that cannot answer leaves the record for the next
@@ -332,7 +397,8 @@ public final class DatabaseInstances {
         for (Row database : Models.get(DatabaseModel.class).find().all()) {
             Integer recordId = database.get(DatabaseModel.ID);
             String name = database.get(DatabaseModel.NAME);
-            if (recordId == null || name == null || owned(recordId) != null) {
+            if (recordId == null || name == null || DatabaseModel.isShared(database)
+                    || ownedBy(EngineHost.dedicated(database)) != null) {
                 continue;
             }
             try {
@@ -352,44 +418,34 @@ public final class DatabaseInstances {
 
     // -- settings --------------------------------------------------------------
 
-    /** The instance record's name: recognisable in the admin list, never an identity. */
-    static @NonNull String instanceNameOf(@NonNull String databaseName) {
-        return "db-" + databaseName;
-    }
-
     /**
-     * THE data volume of a managed database: keyed to the record's NAME, so it survives
-     * any particular instance row and so a pre-lowering database's existing volume is
-     * the one the lowered instance mounts.
+     * THE data volume of a DEDICATED managed database: keyed to the record's NAME, so it
+     * survives any particular instance row and so a pre-lowering database's existing
+     * volume is the one the lowered instance mounts.
      */
     public static @NonNull String dataVolumeOf(@NonNull String databaseName) {
         return ControllerScope.handle(ControllerScope.KIND_DB, databaseName) + "-data";
     }
 
-    /** Map the DATABASE record onto the database_container kind settings. */
-    private static @NonNull Map<String, Object> desiredSettings(@NonNull Row database,
-                                                                ManagedDatabase.@NonNull Engine engine,
-                                                                @Nullable String user,
-                                                                @Nullable String dbName,
-                                                                @NonNull ResourceLimits limits) {
-        boolean ephemeral = Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL));
-        String image = database.get(DatabaseModel.IMAGE);
+    /** Map the host onto the database_container kind settings. */
+    private static @NonNull Map<String, Object> desiredSettings(@NonNull EngineHost host) {
+        ManagedDatabase.Engine engine = host.engine();
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("engine", engine.token());
-        settings.put("image", image == null || image.isBlank() ? engine.defaultImage : image);
-        settings.put("ephemeral", ephemeral);
-        settings.put("data_volume", ephemeral ? ""
-            : dataVolumeOf(String.valueOf((Object) database.get(DatabaseModel.NAME))));
-        settings.put("environment_variables", engine.env(user, dbName));
+        settings.put("image", host.resolvedImage());
+        settings.put("ephemeral", host.ephemeral());
+        settings.put("shared", host.shared());
+        settings.put("data_volume", host.ephemeral() ? "" : host.dataVolume());
+        settings.put("environment_variables", engine.env(host.rootUser(), host.initDatabase()));
         String command = engine.containerCommandTemplate();
         if (command != null) {
             settings.put("command", command);
         }
-        if (limits.memoryMb() != null) {
-            settings.put("memory_limit_mb", limits.memoryMb());
+        if (host.limits().memoryMb() != null) {
+            settings.put("memory_limit_mb", host.limits().memoryMb());
         }
-        if (limits.cpus() != null) {
-            settings.put("cpu_limit", limits.cpus());
+        if (host.limits().cpus() != null) {
+            settings.put("cpu_limit", host.limits().cpus());
         }
         return settings;
     }
@@ -400,8 +456,8 @@ public final class DatabaseInstances {
      * declares (an engine change must not leave a stale credential behind).
      */
     private static void writeEngineSecrets(int instanceId, ManagedDatabase.@NonNull Engine engine,
-                                           @Nullable String password) {
-        Map<String, String> secrets = engine.secretEnv(password == null ? "" : password);
+                                           @NonNull String rootUser, @Nullable String password) {
+        Map<String, String> secrets = engine.secretEnv(rootUser, password == null ? "" : password);
         InstanceVariables variables = new InstanceVariables();
         for (Map.Entry<String, String> secret : secrets.entrySet()) {
             variables.setValue(instanceId, null, secret.getKey(),
@@ -414,5 +470,12 @@ public final class DatabaseInstances {
                 variables.removeValue(instanceId, null, key);
             }
         }
+    }
+
+    /** The owner identity of a host, for callers that name it in a log or a refusal. */
+    static @NonNull String describe(@NonNull EngineHost host) {
+        Identifier model = host.ownerModel();
+        return (host.shared() ? "engine '" : "database '") + host.name() + "' (" + model + " #"
+            + host.ownerId() + ")";
     }
 }

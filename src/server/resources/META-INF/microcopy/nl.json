@@ -2507,6 +2507,15 @@
       "text": "sjabloonvolumes",
       "scope": "template_volume",
       "case": "sentence"
+    },
+    {
+      "text": "Database-engines",
+      "scope": "database_engine"
+    },
+    {
+      "text": "database-engines",
+      "scope": "database_engine",
+      "case": "sentence"
     }
   ],
   "dashboard": [
@@ -2682,6 +2691,10 @@
     {
       "text": "Gedeclareerde databanken",
       "scope": "template_contents"
+    },
+    {
+      "text": "Databases",
+      "scope": "database_engine"
     }
   ],
   "clone_confirm": {
@@ -3859,6 +3872,14 @@
     {
       "text": "Dit certificaat verwijderen? De private sleutel wordt vernietigd en de namen die het dekt serveren geen HTTPS meer tot een ander certificaat ze dekt.",
       "scope": "certificate"
+    },
+    {
+      "text": "'{$name}' verwijderen? De container en het datavolume worden vernietigd en de inloggegevens gaan verloren.",
+      "scope": "database"
+    },
+    {
+      "text": "Engine '{$name}' verwijderen? De container en het datavolume worden vernietigd. Het wordt geweigerd zolang er nog een database op draait.",
+      "scope": "database_engine"
     }
   ],
   "priority": {
@@ -5375,30 +5396,66 @@
     "text": "Verwijderen van '{$name}' kon de afbraak niet verifieren: {$reason}. Het record en de inloggegevens blijven bewaard; probeer opnieuw, of gebruik Geforceerd verwijderen voor een onbereikbare host.",
     "scope": "violations"
   },
-  "force_delete": {
-    "text": "Geforceerd verwijderen",
-    "scope": "database"
-  },
-  "force_delete_hint": {
-    "text": "Verwijder het record zonder afbraakverificatie (onbereikbare host). Container en volume kunnen blijven bestaan; de reconciler rapporteert ze.",
-    "scope": "database"
-  },
-  "force_delete_confirm_generic": {
-    "text": "Dit databaserecord verwijderen ZONDER te verifieren dat de container weg is? Wat nog draait op de host blijft bestaan, en de inloggegevens gaan verloren.",
-    "scope": "database"
-  },
-  "force_delete_confirm": {
-    "text": "Het record van '{$name}' verwijderen ZONDER te verifieren dat de container weg is? Wat nog draait op de host blijft bestaan, en de inloggegevens gaan verloren. Typ de databasenaam om te bevestigen.",
-    "scope": "database"
-  },
-  "force_delete_ok": {
-    "text": "Geforceerd verwijderen",
-    "scope": "database"
-  },
-  "force_delete_done": {
-    "text": "Record van '{$name}' verwijderd; de resources op de host zijn NIET geverifieerd verwijderd",
-    "scope": "database"
-  },
+  "force_delete": [
+    {
+      "text": "Geforceerd verwijderen",
+      "scope": "database"
+    },
+    {
+      "text": "Verwijdering forceren",
+      "scope": "database_engine"
+    }
+  ],
+  "force_delete_hint": [
+    {
+      "text": "Verwijder het record zonder afbraakverificatie (onbereikbare host). Container en volume kunnen blijven bestaan; de reconciler rapporteert ze.",
+      "scope": "database"
+    },
+    {
+      "text": "Verwijder het record zonder het opruimen te bevestigen (onbereikbare host). De container en het volume kunnen blijven bestaan; de reconciler meldt ze.",
+      "scope": "database_engine"
+    }
+  ],
+  "force_delete_confirm_generic": [
+    {
+      "text": "Dit databaserecord verwijderen ZONDER te verifieren dat de container weg is? Wat nog draait op de host blijft bestaan, en de inloggegevens gaan verloren.",
+      "scope": "database"
+    },
+    {
+      "text": "Dit enginerecord verwijderen ZONDER te bevestigen dat de container weg is? Wat nog op de host draait blijft bestaan en de rootgegevens gaan verloren.",
+      "scope": "database_engine"
+    }
+  ],
+  "force_delete_confirm": [
+    {
+      "text": "Het record van '{$name}' verwijderen ZONDER te verifieren dat de container weg is? Wat nog draait op de host blijft bestaan, en de inloggegevens gaan verloren. Typ de databasenaam om te bevestigen.",
+      "scope": "database"
+    },
+    {
+      "text": "Het record van engine '{$name}' verwijderen ZONDER te bevestigen dat de container weg is? Wat nog op de host draait blijft bestaan en de rootgegevens gaan verloren. Typ de enginenaam om te bevestigen.",
+      "scope": "database_engine"
+    }
+  ],
+  "force_delete_ok": [
+    {
+      "text": "Geforceerd verwijderen",
+      "scope": "database"
+    },
+    {
+      "text": "Verwijdering forceren",
+      "scope": "database_engine"
+    }
+  ],
+  "force_delete_done": [
+    {
+      "text": "Record van '{$name}' verwijderd; de resources op de host zijn NIET geverifieerd verwijderd",
+      "scope": "database"
+    },
+    {
+      "text": "Record van engine '{$name}' verwijderd; de bronnen op de host zijn NIET bevestigd opgeruimd",
+      "scope": "database_engine"
+    }
+  ],
   "released_at": {
     "text": "Vrijgegeven",
     "scope": "field"
@@ -5667,10 +5724,16 @@
     "text": "Enkel vertrouwd",
     "scope": "host_posture"
   },
-  "dedicated": {
-    "text": "Toegewijd aan een tenant",
-    "scope": "host_posture"
-  },
+  "dedicated": [
+    {
+      "text": "Toegewijd aan een tenant",
+      "scope": "host_posture"
+    },
+    {
+      "text": "Toegewijd",
+      "scope": "database_placement"
+    }
+  ],
   "shared_container": {
     "text": "Gedeelde containers (operator-risico)",
     "scope": "host_posture"
@@ -8884,6 +8947,15 @@
       "text": "sjabloonvolume",
       "scope": "template_volume",
       "case": "sentence"
+    },
+    {
+      "text": "database-engine",
+      "scope": "database_engine"
+    },
+    {
+      "text": "database-engine",
+      "scope": "database_engine",
+      "case": "sentence"
     }
   ],
   "member": {
@@ -10041,6 +10113,10 @@
     {
       "text": "Platformmeldingen die in je eigen postvak in het paneel toekomen.",
       "scope": "admin_inbox"
+    },
+    {
+      "text": "Gedeelde engineprocessen die op een host meerdere beheerde databases dragen.",
+      "scope": "database_engine"
     }
   ],
   "slug": {
@@ -11326,6 +11402,10 @@
     {
       "text": "Deze sites gebruiken deze provider als aanmeldpoort: {$sites} ({$rules} toegangsregels verwijzen er ook naar). Wijs ze eerst een andere provider toe, anders weigeren ze vanaf de volgende route-lading elk verzoek.",
       "scope": "auth_provider"
+    },
+    {
+      "text": "Engine '{$name}' draagt nog {$databases}. Verplaats of verwijder die databases eerst.",
+      "scope": "database_engine"
     }
   ],
   "delete_in_use_rules": {
@@ -11964,6 +12044,10 @@
     {
       "text": "Een nieuwe geheugen- of CPU-limiet opslaan hermaakt de container van een draaiende workload, dus die is even offline en de gepubliceerde poort kan wijzigen.",
       "scope": "instance"
+    },
+    {
+      "text": "Alleen het geheugen- en CPU-plafond zijn hier aanpasbaar; elk ander veld beschrijft de container die aangemaakt is. Een nieuw plafond bewaren maakt de engine opnieuw aan, dus elke database erop verliest haar verbindingen tot ze terug is.",
+      "scope": "database_engine"
     }
   ],
   "database_resize_failed": {
@@ -12227,5 +12311,143 @@
   "people_only": {
     "text": "Alleen personen",
     "scope": "activity"
+  },
+  "placement": {
+    "text": "Plaatsing",
+    "scope": "field"
+  },
+  "database_engine": [
+    {
+      "text": "Gedeelde engine",
+      "scope": "field"
+    },
+    {
+      "text": "Laat leeg voor de engine van dat soort op deze host, die dan bij het aanmaken wordt gemaakt.",
+      "scope": "help"
+    },
+    {
+      "text": "Database-engine {$name}",
+      "scope": "attention_title"
+    }
+  ],
+  "root_user": {
+    "text": "Rootgebruiker",
+    "scope": "field"
+  },
+  "root_password": {
+    "text": "Rootwachtwoord",
+    "scope": "field"
+  },
+  "database_placement": {
+    "text": "Een eigen enginecontainer, of een logische database op een engine die deze host deelt. Redis- en tmpfs-databases zijn altijd toegewijd.",
+    "scope": "help"
+  },
+  "database_engine_name": {
+    "text": "Bepaalt de naam van de enginecontainer en het datavolume: kleine letters, cijfers en streepjes.",
+    "scope": "help"
+  },
+  "database_engine_root_user": {
+    "text": "De superuser waarmee de controller deze engine bestuurt. Een workload ziet die nooit.",
+    "scope": "help"
+  },
+  "database_engine_root_password": {
+    "text": "Laat leeg om er een te genereren. Het wordt versleuteld bewaard en alleen door de controller gebruikt.",
+    "scope": "help"
+  },
+  "shared": {
+    "text": "Gedeeld",
+    "scope": "database_placement"
+  },
+  "database_shared_without_engine": {
+    "text": "Een gedeelde database moet de engine noemen waarop ze draait",
+    "scope": "violations"
+  },
+  "database_engine_on_dedicated": {
+    "text": "Een toegewijde database heeft een eigen enginecontainer en noemt dus geen gedeelde engine",
+    "scope": "violations"
+  },
+  "database_ephemeral_shared": {
+    "text": "Een tmpfs-database is per definitie een eigen container en kan dus niet op een gedeelde engine draaien",
+    "scope": "violations"
+  },
+  "database_placement_unsupported": {
+    "text": "{$engine} kent geen logische databases en kan dus niet gedeeld worden; kies de toegewijde plaatsing",
+    "scope": "violations"
+  },
+  "database_placement_unknown": {
+    "text": "Onbekende plaatsing: {$placement}",
+    "scope": "violations"
+  },
+  "database_image_engine_mismatch": {
+    "text": "Engine '{$engine}' draait {$running} en niet {$image}; laat de image leeg om die van de engine te gebruiken, of kies een andere engine",
+    "scope": "violations"
+  },
+  "database_engine_in_use": {
+    "text": "Engine '{$name}' draagt nog {$databases}; verplaats of verwijder die databases eerst",
+    "scope": "violations"
+  },
+  "database_shared_limits": {
+    "text": "Een gedeelde database heeft geen eigen limieten: het geheugen- en CPU-plafond horen bij de engine die ze bedient",
+    "scope": "violations"
+  },
+  "database_engine_kind_mismatch": {
+    "text": "Die engine draait geen {$engine}",
+    "scope": "violations"
+  },
+  "database_engine_host_mismatch": {
+    "text": "Engine '{$name}' draait op {$server} terwijl de database op {$database_server} draait; een koppelnetwerk bestaat alleen op de daemon die ze delen",
+    "scope": "violations"
+  },
+  "database_logical_identifier": {
+    "text": "Gebruik alleen letters, cijfers, punt, liggend streepje en koppelteken, hoogstens 64 tekens: de waarde wordt in de shell van de engine zelf geschreven",
+    "scope": "violations"
+  },
+  "database_engine_destroy_failed": {
+    "text": "Het opruimen van engine '{$name}' kon niet bevestigd worden: {$reason}. Het record blijft bestaan; forceer de verwijdering zodra de host weer bereikbaar is.",
+    "scope": "violations"
+  },
+  "move_shared": {
+    "text": "Naar gedeelde engine verplaatsen",
+    "scope": "database"
+  },
+  "move_shared_hint": {
+    "text": "Verplaats deze database naar de gedeelde engine van de host, als logische database met een eigen gebruiker.",
+    "scope": "database"
+  },
+  "move_shared_confirm": {
+    "text": "'{$name}' naar de gedeelde engine van deze host verplaatsen? Elke gekoppelde workload wordt gestopt zolang de dump en de restore lopen, het record staat ondertussen op Wordt aangemaakt, en de dump blijft onder het back-uppad bewaard als terugvalweg.",
+    "scope": "database"
+  },
+  "move_shared_ok": {
+    "text": "Verplaatsen",
+    "scope": "database"
+  },
+  "move_started": {
+    "text": "'{$name}' wordt naar een gedeelde engine verplaatst; het record staat op Wordt aangemaakt tot dat klaar is",
+    "scope": "database"
+  },
+  "shared_notice": {
+    "text": "Dit is een logische database op een gedeelde engine en heeft dus geen eigen limieten: pas het formaat van de engine aan in de lijst Database-engines. Elk ander veld beschrijft wat er aangemaakt is.",
+    "scope": "database"
+  },
+  "delete_confirm_shared": {
+    "text": "'{$name}' verwijderen? De logische database en de gebruiker ervan worden op de gedeelde engine verwijderd en de gegevens gaan verloren; de engine zelf blijft draaien voor de andere databases erop.",
+    "scope": "database"
+  },
+  "engine_provisioning_failed_reason": {
+    "text": "De engine kon niet gestart worden: {$reason}",
+    "scope": "attention_detail"
+  },
+  "database_operation_failed": {
+    "text": "De laatste bewerking op deze database is mislukt: {$reason}",
+    "scope": "attention_detail"
+  },
+  "tier_database_engine": {
+    "text": "Database-engine",
+    "scope": "server_overview"
+  },
+  "move_shared_confirm_generic": {
+    "text": "Deze database naar de gedeelde engine van de host verplaatsen? Elke gekoppelde workload wordt gestopt zolang de dump en de restore lopen, het record staat ondertussen op Wordt aangemaakt, en de dump blijft onder het back-uppad bewaard als terugvalweg.",
+    "scope": "database"
   }
 }

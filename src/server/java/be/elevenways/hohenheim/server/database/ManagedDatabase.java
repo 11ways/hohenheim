@@ -161,6 +161,60 @@ public class ManagedDatabase {
             return max;
         }
 
+        /**
+         * The DECLARED footprint of ONE engine serving MANY logical databases
+         * ({@link DatabaseModel#PLACEMENT_SHARED}).
+         *
+         * AIDEV-NOTE: 1024 for every sharing engine, and UNMEASURED for a multi-database
+         * load -- the number is chosen, not observed, and the docblock says so. Mongo:
+         * WiredTiger's cache is max(0.5 * (cap - 1 GiB), 256 MiB), so below a 1.5 GiB cap
+         * every cap buys the same 256 MiB floor and 1024 is the first cap that leaves the
+         * process itself room beside it. MySQL: its own persistent default is already
+         * 1024. Postgres: 512 was measured for ONE database at 117 MiB; shared_buffers
+         * defaults to 128 MB regardless of the number of databases, so 1024 is
+         * headroom, not need. An operator resizes the engine row when a measurement says
+         * otherwise; the rule that a cap is never LOWERED below a measured peak applies
+         * here the moment one exists.
+         *
+         * @throws UnsupportedOperationException for an engine that cannot share
+         */
+        public int sharedFootprintMb() {
+            if (!supportsLogicalDatabases()) {
+                throw new UnsupportedOperationException(this + " has no shared shape");
+            }
+            return 1024;
+        }
+
+        /**
+         * Whether this engine has a real per-database namespace with per-database
+         * credentials, so one running process can host many managed databases.
+         *
+         * AIDEV-NOTE: Redis is the deliberate NO. Its numbered "databases" share one
+         * password and one ACL model over one keyspace; a second tenant on the same
+         * process would be a shared credential, which is the thing a managed database
+         * exists to avoid.
+         */
+        public boolean supportsLogicalDatabases() {
+            return switch (this) {
+                case POSTGRES, MYSQL, MONGO -> true;
+                case REDIS -> false;
+            };
+        }
+
+        /**
+         * The database the engine's OWN init creates and the readiness probe dials when
+         * the container is a shared engine rather than one record's: a name that exists
+         * on every fresh engine of this kind.
+         */
+        public String rootDatabase(String rootUser) {
+            return switch (this) {
+                case POSTGRES -> rootUser;   // POSTGRES_DB defaults to the user's name
+                case MYSQL -> "mysql";
+                case MONGO -> "admin";
+                case REDIS -> "0";
+            };
+        }
+
         /** The lowercase token this engine is stored as ({@link DatabaseModel#ENGINE}). */
         public String token() {
             return this.token;
@@ -200,7 +254,11 @@ public class ManagedDatabase {
                 }
                 case MYSQL -> {
                     env.put("MYSQL_DATABASE", safeDatabase);
-                    env.put("MYSQL_USER", safeUser);
+                    // The image refuses MYSQL_USER=root ("cannot be used for the root
+                    // user"); a shared engine's root IS root and rides MYSQL_ROOT_PASSWORD.
+                    if (!MYSQL_ROOT.equals(safeUser)) {
+                        env.put("MYSQL_USER", safeUser);
+                    }
                 }
                 case MONGO -> {
                     env.put("MONGO_INITDB_ROOT_USERNAME", safeUser);
@@ -227,12 +285,19 @@ public class ManagedDatabase {
          * authentication negative control vacuous.
          */
         public @NonNull Map<String, String> secretEnv(@NonNull String password) {
+            return secretEnv(null, password);
+        }
+
+        /** {@link #secretEnv(String)} for a named user; only MySQL's root reads the name. */
+        public @NonNull Map<String, String> secretEnv(@Nullable String user, @NonNull String password) {
             Map<String, String> env = new LinkedHashMap<>();
             switch (this) {
                 case POSTGRES -> env.put("POSTGRES_PASSWORD", password);
                 case MYSQL -> {
                     env.put("MYSQL_ROOT_PASSWORD", password);
-                    env.put("MYSQL_PASSWORD", password);
+                    if (!MYSQL_ROOT.equals(user)) {
+                        env.put("MYSQL_PASSWORD", password);
+                    }
                 }
                 case MONGO -> env.put("MONGO_INITDB_ROOT_PASSWORD", password);
                 case REDIS -> env.put("REDIS_PASSWORD", password);
@@ -296,9 +361,12 @@ public class ManagedDatabase {
                     "-f", filePath);
                 // mysql's `source` builtin reads the file -- avoids a shell redirect.
                 case MYSQL -> List.of("mysql", "-u", user, database, "-e", "source " + filePath);
-                // --drop replaces existing collections; the archive carries its own db name.
+                // --drop replaces existing collections; the archive carries its own db name,
+                // and --nsInclude keeps a restore on a SHARED engine inside this one
+                // database whatever else an uploaded archive may carry.
                 case MONGO -> List.of("mongorestore", "--username", user, "--password", password,
-                    "--authenticationDatabase", "admin", "--drop", "--archive=" + filePath);
+                    "--authenticationDatabase", "admin", "--drop",
+                    "--nsInclude=" + database + ".*", "--archive=" + filePath);
                 case REDIS -> throw new UnsupportedOperationException(
                     "redis restore goes through restoreFromFile (RDB swap + restart), not a client command");
             };
@@ -340,9 +408,225 @@ public class ManagedDatabase {
         /** The env variable the mongo probe reads its password from. */
         public static final String MONGO_PROBE_PASSWORD = "HOHENHEIM_MONGO_PROBE_PASSWORD";
 
+        /** MySQL's superuser name: the one MYSQL_USER may not name. */
+        static final String MYSQL_ROOT = "root";
+
+        /** The env variable every logical-database script reads the NEW user's password from. */
+        public static final String LOGICAL_PASSWORD = "HOHENHEIM_LOGICAL_PASSWORD";
+
+        /** The shell-picking prefix every mongo script shares (mongosh on 5.0+, legacy mongo below). */
+        static final String MONGO_SHELL_PICK =
+            "if command -v mongosh >/dev/null 2>&1; then shell=mongosh; else shell=mongo; fi;";
+
+        // -- logical databases on a shared engine -----------------------------------
+
+        /**
+         * Whether a value may be a logical database's name, user or password.
+         *
+         * AIDEV-NOTE: the scripts below interpolate these three values into a shell
+         * body and from there into SQL / JavaScript, and the legacy {@code mongo} shell
+         * has no way to read an environment variable, so the values cannot ride the env
+         * lane the way a probe password does. Rather than escape for three grammars
+         * that each quote differently, a shared placement REFUSES anything outside
+         * {@code [A-Za-z0-9._-]}. The generated password ({@code Secrets.generatePassword},
+         * url-safe base64) always passes; an operator-typed one that does not is refused
+         * by name at create, never mangled.
+         */
+        public static boolean isLogicalIdentifier(@Nullable String value) {
+            if (value == null || value.isEmpty() || value.length() > 64) {
+                return false;
+            }
+            for (int i = 0; i < value.length(); i++) {
+                char c = value.charAt(i);
+                boolean ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-';
+                if (!ok) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /**
+         * The command that creates (or, when it already exists, re-credentials) ONE
+         * logical database plus a user owning exactly it, run as the engine's root inside
+         * the engine container. Idempotent: a second run with the same values changes
+         * nothing.
+         *
+         * @throws UnsupportedOperationException for an engine without logical databases
+         * @throws IllegalArgumentException when a value fails {@link #isLogicalIdentifier}
+         */
+        public List<String> createLogicalCommand(String rootUser, String database, String user) {
+            requireLogical(rootUser, database, user);
+            return switch (this) {
+                case MONGO -> List.of("sh", "-c", MONGO_CREATE_SCRIPT, "hohenheim-create",
+                    String.valueOf(port), rootUser, database, user);
+                case MYSQL -> List.of("sh", "-c", MYSQL_CREATE_SCRIPT, "hohenheim-create",
+                    rootUser, database, user);
+                case POSTGRES -> List.of("sh", "-c", POSTGRES_CREATE_SCRIPT, "hohenheim-create",
+                    rootUser, database, user);
+                case REDIS -> throw noLogical();
+            };
+        }
+
+        /**
+         * The command that removes a logical database's user and, when asked, its data.
+         *
+         * AIDEV-NOTE: {@code dropData == false} means "revoke access, keep the bytes":
+         * the user is dropped (Postgres: the role loses LOGIN, because a role owning a
+         * database cannot be dropped while the database stands). The data then sits on
+         * the engine under a name no record describes, which the reconciler cannot see;
+         * the operator who asked for it owns that.
+         */
+        public List<String> dropLogicalCommand(String rootUser, String database, String user,
+                                               boolean dropData) {
+            requireLogical(rootUser, database, user);
+            String data = dropData ? "1" : "0";
+            return switch (this) {
+                case MONGO -> List.of("sh", "-c", MONGO_DROP_SCRIPT, "hohenheim-drop",
+                    String.valueOf(port), rootUser, database, user, data);
+                case MYSQL -> List.of("sh", "-c", MYSQL_DROP_SCRIPT, "hohenheim-drop",
+                    rootUser, database, user, data);
+                case POSTGRES -> List.of("sh", "-c", POSTGRES_DROP_SCRIPT, "hohenheim-drop",
+                    rootUser, database, user, data);
+                case REDIS -> throw noLogical();
+            };
+        }
+
+        /**
+         * The command printing a CONTENT fingerprint of one database: equal output on two
+         * engines of the same kind means equal data. Mongo's {@code dbHash} (per-collection
+         * md5 plus the database md5), MySQL's {@code CHECKSUM TABLE} per table, Postgres a
+         * per-table row count plus an md5 over the ordered row texts.
+         */
+        public List<String> fingerprintCommand(String rootUser, String database) {
+            requireLogical(rootUser, database, rootUser);
+            return switch (this) {
+                case MONGO -> List.of("sh", "-c", MONGO_FINGERPRINT_SCRIPT, "hohenheim-fingerprint",
+                    String.valueOf(port), rootUser, database);
+                case MYSQL -> List.of("sh", "-c", MYSQL_FINGERPRINT_SCRIPT, "hohenheim-fingerprint",
+                    rootUser, database);
+                case POSTGRES -> List.of("sh", "-c", POSTGRES_FINGERPRINT_SCRIPT,
+                    "hohenheim-fingerprint", rootUser, database);
+                case REDIS -> throw noLogical();
+            };
+        }
+
+        /**
+         * Env for the three logical commands: the root password the way the probe and the
+         * dump carry it, plus the new user's password under {@link #LOGICAL_PASSWORD}.
+         */
+        public List<String> logicalEnv(String rootPassword, @Nullable String userPassword) {
+            List<String> env = new java.util.ArrayList<>(switch (this) {
+                case MONGO -> readyEnv(rootPassword);
+                case MYSQL, POSTGRES -> dumpEnv(rootPassword);
+                case REDIS -> throw noLogical();
+            });
+            if (userPassword != null) {
+                env.add(LOGICAL_PASSWORD + "=" + userPassword);
+            }
+            return env;
+        }
+
+        private void requireLogical(String... values) {
+            if (!supportsLogicalDatabases()) {
+                throw noLogical();
+            }
+            for (String value : values) {
+                if (!isLogicalIdentifier(value)) {
+                    throw new IllegalArgumentException("Not a logical-database identifier for "
+                        + this + ": '" + value + "' (allowed: [A-Za-z0-9._-], at most 64)");
+                }
+            }
+        }
+
+        private UnsupportedOperationException noLogical() {
+            return new UnsupportedOperationException(this + " has no logical databases;"
+                + " a " + token + " managed database is always dedicated");
+        }
+
+        /** sh -c body; $1 port, $2 root user, $3 database, $4 user; passwords via env. */
+        static final String MONGO_CREATE_SCRIPT = MONGO_SHELL_PICK
+            + " exec \"$shell\" --host 127.0.0.1 --port \"$1\" --username \"$2\""
+            + " --password \"$" + MONGO_PROBE_PASSWORD + "\" --authenticationDatabase admin"
+            + " --quiet --eval \"var target = db.getSiblingDB('$3');"
+            + " var roles = [{role: 'dbOwner', db: '$3'}];"
+            + " if (target.getUser('$4')) { target.updateUser('$4', {pwd: '$"
+            + LOGICAL_PASSWORD + "', roles: roles}); }"
+            + " else { target.createUser({user: '$4', pwd: '$" + LOGICAL_PASSWORD
+            + "', roles: roles}); } print('hohenheim-ok');\"";
+
+        /** sh -c body; $1 port, $2 root user, $3 database, $4 user, $5 drop data (1/0). */
+        static final String MONGO_DROP_SCRIPT = MONGO_SHELL_PICK
+            + " exec \"$shell\" --host 127.0.0.1 --port \"$1\" --username \"$2\""
+            + " --password \"$" + MONGO_PROBE_PASSWORD + "\" --authenticationDatabase admin"
+            + " --quiet --eval \"var target = db.getSiblingDB('$3');"
+            + " if (target.getUser('$4')) { target.dropUser('$4'); }"
+            + " if ('$5' === '1') { target.dropDatabase(); } print('hohenheim-ok');\"";
+
+        /** sh -c body; $1 port, $2 root user, $3 database. */
+        static final String MONGO_FINGERPRINT_SCRIPT = MONGO_SHELL_PICK
+            + " exec \"$shell\" --host 127.0.0.1 --port \"$1\" --username \"$2\""
+            + " --password \"$" + MONGO_PROBE_PASSWORD + "\" --authenticationDatabase admin"
+            + " --quiet --eval \"var r = db.getSiblingDB('$3').runCommand({dbHash: 1});"
+            + " var names = Object.keys(r.collections || {}).sort(); var out = [];"
+            + " for (var i = 0; i < names.length; i++) { out.push(names[i] + '='"
+            + " + r.collections[names[i]]); } print(out.join(' ') + ' md5=' + r.md5);\"";
+
+        /** sh -c body; $1 root user, $2 database, $3 user; MYSQL_PWD + LOGICAL_PASSWORD via env. */
+        static final String MYSQL_CREATE_SCRIPT = "exec mysql -u \"$1\" -e"
+            + " \"CREATE DATABASE IF NOT EXISTS \\`$2\\`;"
+            + " CREATE USER IF NOT EXISTS '$3'@'%' IDENTIFIED BY '$" + LOGICAL_PASSWORD + "';"
+            + " ALTER USER '$3'@'%' IDENTIFIED BY '$" + LOGICAL_PASSWORD + "';"
+            + " GRANT ALL PRIVILEGES ON \\`$2\\`.* TO '$3'@'%'; FLUSH PRIVILEGES;\"";
+
+        /** sh -c body; $1 root user, $2 database, $3 user, $4 drop data (1/0). */
+        static final String MYSQL_DROP_SCRIPT = "mysql -u \"$1\" -e"
+            + " \"DROP USER IF EXISTS '$3'@'%'; FLUSH PRIVILEGES;\" &&"
+            + " if [ \"$4\" = 1 ]; then exec mysql -u \"$1\" -e"
+            + " \"DROP DATABASE IF EXISTS \\`$2\\`;\"; fi";
+
+        /** sh -c body; $1 root user, $2 database. One CHECKSUM TABLE line per table. */
+        static final String MYSQL_FINGERPRINT_SCRIPT = "set -e;"
+            + " tables=$(mysql -u \"$1\" -N -e \"SELECT table_name FROM information_schema.tables"
+            + " WHERE table_schema='$2' ORDER BY table_name\");"
+            + " for t in $tables; do mysql -u \"$1\" -N -e \"CHECKSUM TABLE \\`$2\\`.\\`$t\\`\";"
+            + " done";
+
+        /** sh -c body; $1 root user, $2 database, $3 user; PGPASSWORD + LOGICAL_PASSWORD via env. */
+        static final String POSTGRES_CREATE_SCRIPT = "set -e;"
+            + " psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -c"
+            + " \"DO \\$\\$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = '$3')"
+            + " THEN ALTER ROLE \\\"$3\\\" WITH LOGIN PASSWORD '$" + LOGICAL_PASSWORD + "';"
+            + " ELSE CREATE ROLE \\\"$3\\\" WITH LOGIN PASSWORD '$" + LOGICAL_PASSWORD + "';"
+            + " END IF; END \\$\\$;\";"
+            + " if [ \"$(psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -tAc"
+            + " \"SELECT 1 FROM pg_database WHERE datname = '$2'\")\" != 1 ]; then"
+            + " psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -c"
+            + " \"CREATE DATABASE \\\"$2\\\" OWNER \\\"$3\\\"\"; fi";
+
+        /** sh -c body; $1 root user, $2 database, $3 user, $4 drop data (1/0). */
+        static final String POSTGRES_DROP_SCRIPT = "set -e;"
+            + " if [ \"$4\" = 1 ]; then"
+            + " psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -c"
+            + " \"DROP DATABASE IF EXISTS \\\"$2\\\" WITH (FORCE)\";"
+            + " psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -c \"DROP ROLE IF EXISTS \\\"$3\\\"\";"
+            + " else psql -v ON_ERROR_STOP=1 -U \"$1\" -d postgres -c"
+            + " \"DO \\$\\$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = '$3')"
+            + " THEN ALTER ROLE \\\"$3\\\" NOLOGIN; END IF; END \\$\\$;\"; fi";
+
+        /** sh -c body; $1 root user, $2 database. One "table count md5" line per table. */
+        static final String POSTGRES_FINGERPRINT_SCRIPT = "set -e;"
+            + " psql -v ON_ERROR_STOP=1 -U \"$1\" -d \"$2\" -tA -c"
+            + " \"SELECT format('SELECT %L || '' '' || count(*) || '' '' ||"
+            + " coalesce(md5(string_agg(t::text, ''|'' ORDER BY t::text)), ''empty'') FROM %I.%I t',"
+            + " c.relname, n.nspname, c.relname) FROM pg_class c JOIN pg_namespace n"
+            + " ON n.oid = c.relnamespace WHERE c.relkind = 'r' AND n.nspname NOT IN"
+            + " ('pg_catalog', 'information_schema') ORDER BY 1\""
+            + " | psql -v ON_ERROR_STOP=1 -U \"$1\" -d \"$2\" -tA";
+
         /** {@code sh -c} body: $1 = port, $2 = user; picks whichever shell the image has. */
-        static final String MONGO_READY_SCRIPT =
-            "if command -v mongosh >/dev/null 2>&1; then shell=mongosh; else shell=mongo; fi;"
+        static final String MONGO_READY_SCRIPT = MONGO_SHELL_PICK
             + " exec \"$shell\" --host 127.0.0.1 --port \"$1\" --username \"$2\""
             + " --password \"$" + MONGO_PROBE_PASSWORD + "\" --authenticationDatabase admin"
             + " --quiet --eval 'db.runCommand({ ping: 1 }).ok'";

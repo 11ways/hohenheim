@@ -161,10 +161,10 @@ public final class DatabaseEnvInjection {
         }
         String host = "127.0.0.1";
         if (style == Style.CONTAINER_NETWORK) {
-            // The engine's OWN container handle, resolved from the owned instance -- never
-            // guessed from the record name. A database that owns no instance has no
-            // reachable address at all, which is a skip, not a hostname that resolves to
-            // nothing inside the consumer's network.
+            // The container SERVING the database (its own, or its shared engine's),
+            // resolved from the owned instance -- never guessed from the record name. A
+            // database nothing serves has no reachable address at all, which is a skip,
+            // not a hostname that resolves to nothing inside the consumer's network.
             host = DatabaseInstances.handleOf(databaseId);
             if (host == null) {
                 unresolved(owner, ownerId, databaseId, name, "no_engine_instance");
@@ -175,8 +175,24 @@ public final class DatabaseEnvInjection {
         String prefix = normalizedPrefix(rawPrefix);
         env.putAll(vars(engine, host, port, database.get(DatabaseModel.DB_USER),
             database.get(DatabaseModel.DB_PASSWORD), database.get(DatabaseModel.DB_NAME),
-            prefix, primary));
+            authDatabaseOf(database), prefix, primary));
     }
+
+    /**
+     * The database a Mongo user authenticates against: a dedicated record's user is the
+     * engine root created in {@code admin}; a shared record's user was created ON its own
+     * logical database, so that database is where the credential lives.
+     */
+    public static @NonNull String authDatabaseOf(@NonNull Row database) {
+        if (DatabaseModel.isShared(database)) {
+            String name = database.get(DatabaseModel.DB_NAME);
+            return name != null ? name : "";
+        }
+        return MONGO_ROOT_AUTH_DATABASE;
+    }
+
+    /** Where a dedicated Mongo record's root user lives. */
+    public static final String MONGO_ROOT_AUTH_DATABASE = "admin";
 
     private static void unresolved(Owner owner, int ownerId, @Nullable Integer databaseId,
                                    @Nullable String name, String reason) {
@@ -204,8 +220,19 @@ public final class DatabaseEnvInjection {
                                                     @Nullable String user, @Nullable String password,
                                                     @Nullable String database,
                                                     @NonNull String prefix, boolean primary) {
+        return vars(engine, host, port, user, password, database, MONGO_ROOT_AUTH_DATABASE,
+            prefix, primary);
+    }
+
+    /** {@link #vars} naming the Mongo authentication database (see {@link #authDatabaseOf}). */
+    public static @NonNull Map<String, String> vars(ManagedDatabase.@NonNull Engine engine,
+                                                    @NonNull String host, int port,
+                                                    @Nullable String user, @Nullable String password,
+                                                    @Nullable String database,
+                                                    @NonNull String authDatabase,
+                                                    @NonNull String prefix, boolean primary) {
         Map<String, String> env = new LinkedHashMap<>();
-        String url = connectionUrl(engine, host, port, user, password, database);
+        String url = connectionUrl(engine, host, port, user, password, database, authDatabase);
         env.put(prefix + "_HOST", host);
         env.put(prefix + "_PORT", String.valueOf(port));
         env.put(prefix + "_USER", user != null ? user : "");
@@ -223,6 +250,16 @@ public final class DatabaseEnvInjection {
                                                 @NonNull String host, int port,
                                                 @Nullable String user, @Nullable String password,
                                                 @Nullable String database) {
+        return connectionUrl(engine, host, port, user, password, database,
+            MONGO_ROOT_AUTH_DATABASE);
+    }
+
+    /** {@link #connectionUrl} naming the Mongo authentication database. */
+    public static @NonNull String connectionUrl(ManagedDatabase.@NonNull Engine engine,
+                                                @NonNull String host, int port,
+                                                @Nullable String user, @Nullable String password,
+                                                @Nullable String database,
+                                                @NonNull String authDatabase) {
         String encodedUser = encode(user);
         String encodedPassword = encode(password);
         String db = database != null ? database : "";
@@ -233,9 +270,10 @@ public final class DatabaseEnvInjection {
                 + "@" + host + ":" + port + "/" + db;
             // Redis auths on password alone; there is no per-database path segment to add.
             case REDIS -> "redis://:" + encodedPassword + "@" + host + ":" + port;
-            // ManagedDatabase creates the user as a root user in the admin database.
+            // A dedicated record's user is a root user in the admin database; a shared
+            // record's user lives on its own logical database (authDatabaseOf).
             case MONGO -> "mongodb://" + encodedUser + ":" + encodedPassword
-                + "@" + host + ":" + port + "/" + db + "?authSource=admin";
+                + "@" + host + ":" + port + "/" + db + "?authSource=" + encode(authDatabase);
         };
     }
 

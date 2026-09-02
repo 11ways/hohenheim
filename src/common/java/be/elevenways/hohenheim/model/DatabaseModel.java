@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 
 /**
  * A managed database provisioned as a container by ManagedDatabase. Stores the desired
@@ -126,20 +127,85 @@ public class DatabaseModel extends Model {
      * no icon, exactly where an operator looks for it. Every surface now derives an
      * EnumBadgeState from here; nothing re-spells the colours.
      */
-    public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_PROVISIONING, v -> v.displayName("Provisioning")
-            .label(statusLabel(STATUS_PROVISIONING)).icon("rotate").color("warning"))
-        .value(STATUS_ACTIVE, v -> v.displayName("Active")
-            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color("success"))
-        .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
-        .value(STATUS_DESTROY_FAILED, v -> v.displayName("Destroy failed")
-            .label(statusLabel(STATUS_DESTROY_FAILED)).icon("triangle-exclamation").color("destructive"))
-        .build());
+    public static final EnumField STATUS = SCHEMA.addField(statusFieldBuilder("status").build());
+
+    /**
+     * The schema-field builder carrying the provisioning-status vocabulary, so a second
+     * record with the same lifecycle (a shared {@link DatabaseEngineModel}) reads and
+     * renders it from this one home.
+     */
+    public static EnumField.Builder statusFieldBuilder(String name) {
+        return EnumField.builder(name)
+            .value(STATUS_PROVISIONING, v -> v.displayName("Provisioning")
+                .label(statusLabel(STATUS_PROVISIONING)).icon("rotate").color("warning"))
+            .value(STATUS_ACTIVE, v -> v.displayName("Active")
+                .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color("success"))
+            .value(STATUS_FAILED, v -> v.displayName("Failed")
+                .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color("destructive"))
+            .value(STATUS_DESTROY_FAILED, v -> v.displayName("Destroy failed")
+                .label(statusLabel(STATUS_DESTROY_FAILED)).icon("triangle-exclamation")
+                .color("destructive"));
+    }
 
     /** The translation token for a status; the key IS the stored value. */
     private static Microcopy statusLabel(String status) {
         return Microcopy.of(status).withFilter("scope", "database_status");
+    }
+
+    /** {@link #PLACEMENT} value: the record's engine is its own container. */
+    public static final String PLACEMENT_DEDICATED = "dedicated";
+
+    /** {@link #PLACEMENT} value: the record is a logical database on a shared engine. */
+    public static final String PLACEMENT_SHARED = "shared";
+
+    /**
+     * Where the database lives: its own engine container, or a logical database on a
+     * host-shared engine ({@link #ENGINE_ID}). THE placement vocabulary's one home; every
+     * server-side branch reads {@link #isShared(Row)}.
+     *
+     * AIDEV-NOTE: nullable, and null reads as DEDICATED on purpose: every record written
+     * before 2026-09-02 owns its own container, and the migration that added this column
+     * must not have to rewrite them to say so. New records always carry an explicit value
+     * (the before-validate hook below defaults it), so null is a fact about age, never a
+     * third placement.
+     */
+    public static final EnumField PLACEMENT = SCHEMA.addField(EnumField.builder("placement")
+        .value(PLACEMENT_DEDICATED, v -> v.displayName("Dedicated")
+            .label(placementLabel(PLACEMENT_DEDICATED)).icon("box").color("secondary"))
+        .value(PLACEMENT_SHARED, v -> v.displayName("Shared")
+            .label(placementLabel(PLACEMENT_SHARED)).icon("layer-group").color("blue"))
+        .label(HohenheimFormCopy.label("placement"))
+        .help(HohenheimFormCopy.help("database_placement"))
+        .build());
+
+    /** The translation token for a placement; the key IS the stored value. */
+    private static Microcopy placementLabel(String placement) {
+        return Microcopy.of(placement).withFilter("scope", "database_placement");
+    }
+
+    /**
+     * The shared engine ({@code database_engines.id}) a SHARED record is a logical
+     * database on; null for a dedicated record. The binding, never the placement fact:
+     * a row is shared because {@link #PLACEMENT} says so, and the hook below keeps the
+     * two from disagreeing.
+     */
+    public static final IntegerField ENGINE_ID = SCHEMA.addField(IntegerField.builder()
+        .name("engine_id")
+        .label(HohenheimFormCopy.label("database_engine"))
+        .help(HohenheimFormCopy.help("database_engine"))
+        .build());
+
+    /** The shared engine relation, declared so an engine delete can correlate its dependents. */
+    public static final BelongsTo<DatabaseEngineModel> DATABASE_ENGINE = SCHEMA.addRelation(
+        BelongsTo.to(DatabaseEngineModel.class)
+            .name("database_engine")
+            .localKey(ENGINE_ID)
+            .remoteKey(DatabaseEngineModel.ID)
+            .build());
+
+    /** Whether this record is a logical database on a shared engine. */
+    public static boolean isShared(Row row) {
+        return PLACEMENT_SHARED.equals(row.get(PLACEMENT));
     }
 
     /**
@@ -237,6 +303,17 @@ public class DatabaseModel extends Model {
             Row row = context.getRow();
             if (row != null && row.get(ID) == null && row.get(SERVER_ID) == null) {
                 row.set(SERVER_ID, ServerModel.localServerId());
+            }
+        });
+        // A new record without a placement is dedicated EXPLICITLY, so only rows older
+        // than the column ever carry null. The placement/engine invariant itself lives in
+        // the server's DatabaseEngineGuards, installed AFTER TenantWrites: a tenant's
+        // frozen-field refusal must win over the invariant's, and hook order is
+        // registration order.
+        SCHEMA.addBeforeValidateHook(context -> {
+            Row row = context.getRow();
+            if (row != null && row.get(ID) == null && row.get(PLACEMENT) == null) {
+                row.set(PLACEMENT, PLACEMENT_DEDICATED);
             }
         });
         // A database's published host port is recorded in the ledger after the container

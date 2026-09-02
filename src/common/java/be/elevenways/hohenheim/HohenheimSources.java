@@ -3,6 +3,7 @@ package be.elevenways.hohenheim;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceLogModel;
@@ -119,6 +120,12 @@ public final class HohenheimSources implements ZenitModule {
         // Feeds the site-database attachment picker.
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(DatabaseModel.class)
             .search(DatabaseModel.NAME)
+            .permission(ADMIN_ACCESS)
+            .build());
+
+        // Feeds the shared-engine pick on a database's create form and the engine column.
+        RecordSourceRegistry.INSTANCE.register(RecordSource.of(DatabaseEngineModel.class)
+            .search(DatabaseEngineModel.NAME)
             .permission(ADMIN_ACCESS)
             .build());
 
