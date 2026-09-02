@@ -625,6 +625,13 @@ if [ "$role_firewall" = "true" ]; then
 "
 fi
 
+# --sun-misc-unsafe-memory-access=allow: undertow frees its pooled direct buffers
+# through sun.misc.Unsafe::invokeCleaner (DirectByteBufferDeallocator, every release
+# through 2.4.x), and JDK 24+ prints a four-line warning the first time that runs --
+# on a box with traffic, seconds after boot. Every other Unsafe caller was removed at
+# the library (classgraph, jboss-threads); this one has no library fix, so the JVM's
+# own switch is the honest answer, and it stays here rather than on the command line
+# so an offline command run by hand is quiet too.
 UNIT_BODY="[Unit]
 Description=Hohenheim controller
 After=network-online.target$DOCKER_AFTER
@@ -640,7 +647,7 @@ Restart=always
 RestartSec=5
 SuccessExitStatus=143
 TimeoutStopSec=60
-Environment=\"JAVA_TOOL_OPTIONS=-Xms128m -Xmx${HEAP_MB}m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC -Djava.io.tmpdir=$PREFIX/tmp\"
+Environment=\"JAVA_TOOL_OPTIONS=-Xms128m -Xmx${HEAP_MB}m -XX:MaxMetaspaceSize=256m -XX:+UseSerialGC --sun-misc-unsafe-memory-access=allow -Djava.io.tmpdir=$PREFIX/tmp\"
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 LimitNOFILE=60000
 NoNewPrivileges=false
