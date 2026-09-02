@@ -1,16 +1,11 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -128,10 +123,12 @@ public final class HohenheimSources implements ZenitModule {
         // edit link and inline create). An explicit copy here replaced that default
         // WITHOUT the edit/inline-create facets (source_capability_dropped at boot).
 
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(SiteAuthProviderModel.class)
-            .search(SiteAuthProviderModel.NAME)
-            .permission(ADMIN_ACCESS)
-            .build());
+        // No explicit source for SiteAuthProviderModel or DnsZoneModel either: their
+        // explicit copies added nothing over the derived defaults (AuthProviderResource and
+        // DnsZoneResource declare the same search fields) and only cost the edit link.
+        // Bans, hosts and runtime images DO need a projection / subtitle / sortable the
+        // derived default lacks; they are declared server-side in AdminSources, where the
+        // edit link and inline create can be spelled beside those facets.
 
         RecordSourceRegistry.INSTANCE.register(RecordSource.of(SystemUserModel.class)
             .search(SystemUserModel.NAME)
@@ -145,44 +142,6 @@ public final class HohenheimSources implements ZenitModule {
                 SystemUserModel.OBSOLETE.eq(false),
                 SystemUserModel.NAME.eq("spamservice"),
                 SystemUserModel.UID.gt(0)))
-            .permission(ADMIN_ACCESS)
-            .build());
-
-        // Feeds the DNS record form's zone picker.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(DnsZoneModel.class)
-            .search(DnsZoneModel.ORIGIN)
-            .permission(ADMIN_ACCESS)
-            .build());
-
-        // Bans: feeds the active-bans stat tile and the bans-created chart
-        // (sortable doubles as the bucketable whitelist for created_at).
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(BanModel.class)
-            .project(BanModel.IP, BanModel.SOURCE, BanModel.ACTIVE,
-                BanModel.EXPIRES_AT, BanModel.CREATED_AT)
-            .sortable(BanModel.CREATED_AT)
-            .permission(ADMIN_ACCESS)
-            .build());
-
-        // Hosts, for the instance form's DEPENDENT host pick: the projection is the
-        // rule vocabulary, so runtime and volume_backend MUST be projected -- the
-        // resolver (HohenheimPickRules.KindHostRules) narrows on exactly those two.
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(ServerModel.class)
-            .project(ServerModel.NAME, ServerModel.RUNTIME, ServerModel.VOLUME_BACKEND)
-            .search(ServerModel.NAME)
-            .permission(ADMIN_ACCESS)
-            .build());
-
-        // Runtime images ("yolks"), for the instance form's dependent image pick:
-        // enabled and incus_image are the resolver's rule vocabulary
-        // (HohenheimPickRules.RuntimeImageRules).
-        RecordSourceRegistry.INSTANCE.register(RecordSource.of(RuntimeImageModel.class)
-            .project(RuntimeImageModel.NAME, RuntimeImageModel.DESCRIPTION,
-                RuntimeImageModel.ENABLED, RuntimeImageModel.INCUS_IMAGE)
-            .search(RuntimeImageModel.NAME)
-            .subtitle(row -> {
-                Object description = row.get(RuntimeImageModel.DESCRIPTION);
-                return description != null ? String.valueOf(description) : "";
-            })
             .permission(ADMIN_ACCESS)
             .build());
 

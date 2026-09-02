@@ -45,7 +45,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * because nothing has applied it yet and editing it is still free. Raising the mark plus
  * pasting the pin lines the failure prints is the ONE edit a deploy that applied
  * migrations owes (docs/deploy-starfleet.md step 8); a pin is never regenerated to make a
- * red build green. Comments and formatting are outside the digest.
+ * red build green. Comments and formatting are outside the digest. The lines to paste are
+ * printed by the offline command {@code --migration-checksums} of the deployed jar, so
+ * raising the mark never needs a red run of this test to learn a digest.
  */
 class MigrationIntegrityTest {
 
@@ -359,7 +361,9 @@ class MigrationIntegrityTest {
             .as("step 2: the deployed migrations (version <= %s) must match %s.%s",
                 DEPLOYED_THROUGH, PIN_RESOURCE,
                 pasteLines.isEmpty() ? "" : System.lineSeparator()
-                    + "Paste these lines into src/browserTest/resources/" + PIN_RESOURCE + ":"
+                    + "Paste these lines into src/browserTest/resources/" + PIN_RESOURCE
+                    + " (the same lines come from `java -jar <server jar> --migration-checksums`,"
+                    + " no database and no test run needed):"
                     + System.lineSeparator() + String.join(System.lineSeparator(), pasteLines))
             .isEmpty();
     }

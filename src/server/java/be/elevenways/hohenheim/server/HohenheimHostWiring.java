@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.server.cms.AdminSources;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
@@ -43,6 +44,10 @@ public final class HohenheimHostWiring implements ZenitModule {
         // what makes the generic /{panel}/... CMS routes resolve to anything.
         new HohenheimPanel();
         new ManagePanel();
+        // The admin sources that outgrow the zenit-cms-derived defaults (projections the
+        // dependent pickers narrow on), declared where their edit link and inline create
+        // can be spelled too; explicit-beats-derived is boot-order independent.
+        AdminSources.register();
         // The /manage wiring a request depends on, installed HERE, never as a
         // Panel-constructor side effect: the eligibility checker (grant-holding
         // tenants pass the panel's ACCESS permission) and the scoped SiteModel

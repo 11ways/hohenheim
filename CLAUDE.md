@@ -87,7 +87,8 @@ silently aborts used to make a run of nothing look green.
   `SettingsPage` at `/admin/settings` (two mounts: the hohenheim context
   editing `settings/hohenheim.dry`, plus zenit's `ServerSettings` editing
   `settings/local.dry`; DIFF-based save, secrets masked, restartRequired
-  metadata drives the restart toast), and `RecordScopedPage` tabs on sites
+  metadata drives the restart toast; a group deep-links by its path, e.g.
+  `/admin/settings?section=capacity` or `?section=database.backup`), and `RecordScopedPage` tabs on sites
   (Domains, Protected paths on every non-passthrough site, Deployments on a site whose
   instance carries a git source, Dev sessions)
   and databases (Restore). `HohenheimSettings` roots at its OWN `hohenheim`
