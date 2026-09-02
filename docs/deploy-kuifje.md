@@ -1849,3 +1849,7 @@ ROLLBACK: `tools/deploy-host.sh --rollback kuifje --preflight /root/hohenheim-pr
 
 Swapped to hohenheim `739c16d7` (jar sha256 `a8a24d2166cce3c2...`, stamp 13/13 `dirty=false`; chain zenit `67dee77c` = jboss-threads 3.9.2 pinned over undertow's 3.5.0, plus the other session's zenit `da62f42` value-index feature with its zenit-forms `c7912e9` and zenit-cms `d9ab4b4` counterparts) with `tools/deploy-host.sh kuifje <jar>` in one run, exit 0; preflight `/root/hohenheim-preflight-20260902-115441/`, rollback jar `ab89d70a`; no migration (top M009). Healthy after both restarts; the boot journal carries ZERO JDK Unsafe/native-access/slf4j lines and zero `source_capability_dropped` lines.
 ROLLBACK: `tools/deploy-host.sh --rollback kuifje --preflight /root/hohenheim-preflight-20260902-115441`.
+
+### 2026-09-02, after wave 7: `--sun-misc-unsafe-memory-access=allow` on the unit
+
+Undertow frees its pooled direct buffers through `Unsafe::invokeCleaner` (every release through 2.4.x, `DirectByteBufferDeallocator`), which printed one four-line JDK warning on the first request after boot. No library fix exists, so the JVM switch was added to `JAVA_TOOL_OPTIONS` in `/etc/systemd/system/hohenheim.service` (backup `/root/hohenheim.service.bak-20260902-unsafe`), `daemon-reload`, one restart, healthy. `tools/install-host.sh` writes the same flag for new hosts. Verified: the journal since that restart carries zero `terminally deprecated`, `SLF4J(W)` or `restricted method` lines under traffic.

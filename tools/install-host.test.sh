@@ -36,7 +36,7 @@ plan_of() {
 }
 
 # 1. A proxy/dns/firewall node: kuifje's shape.
-PLAN="$(plan_of --roles proxy,dns,firewall --main-url https://panel.example --admin-email ops@example)"
+PLAN="$(plan_of --roles proxy,dns,firewall --main-url https://panel.example --admin-email ops@elevenways.be)"
 expect "roles line names the three enabled roles" "$PLAN" "proxy=true dns=true firewall=true"
 expect "instances stays off" "$PLAN" "instances=false"
 expect "writes hohenheim.dry" "$PLAN" "write /opt/hohenheim/settings/hohenheim.dry"
