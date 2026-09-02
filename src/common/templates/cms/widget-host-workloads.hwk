@@ -26,6 +26,8 @@
                         {{ t("tier_instance", scope: "server_overview") }}
                         {% elseif workload.tier == "stack" %}
                         {{ t("tier_stack", scope: "server_overview") }}
+                        {% elseif workload.tier == "database_engine" %}
+                        {{ t("tier_database_engine", scope: "server_overview") }}
                         {% else %}
                         {{ t("tier_database", scope: "server_overview") }}
                         {% /if %}

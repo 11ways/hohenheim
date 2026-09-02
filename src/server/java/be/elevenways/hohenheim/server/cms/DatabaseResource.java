@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -42,6 +43,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -67,6 +69,11 @@ public class DatabaseResource extends RowResource {
     private final FormSpec formSpec = FormSpec.builder()
         .add(DatabaseModel.NAME)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(DatabaseModel.ENGINE))
+        // Where the record lives, and (for a shared one) which engine. Blank engine means
+        // the host's engine of that kind, created on demand.
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(DatabaseModel.PLACEMENT))
+        .add(RelationPick.of(DatabaseModel.ENGINE_ID, DatabaseEngineModel.MODEL_ID)
+            .creatable(false).build())
         .add(DatabaseModel.DB_NAME)
         .add(DatabaseModel.DB_USER)
         .add(DatabaseModel.DB_PASSWORD)
@@ -96,7 +103,14 @@ public class DatabaseResource extends RowResource {
         .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).filterable().copyable().build())
         .column(ColumnSpec.fromField(DatabaseModel.SERVER_ID)
             .relation(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
-        .column(ColumnSpec.fromField(DatabaseModel.EPHEMERAL).filterable().build())
+        // Placement and its engine are what an operator scans this list for since the
+        // shared tier exists; the tmpfs flag is a rarity and moves behind the picker so
+        // the row still fits a laptop screen.
+        .column(ColumnSpec.fromField(DatabaseModel.PLACEMENT).filterable().build())
+        .column(ColumnSpec.fromField(DatabaseModel.ENGINE_ID)
+            .relation(RelationPick.of(DatabaseModel.ENGINE_ID, DatabaseEngineModel.MODEL_ID)
+                .build()).build())
+        .column(ColumnSpec.fromField(DatabaseModel.EPHEMERAL).filterable().hidden().build())
         .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
         .filter(FilterSpec.forField(DatabaseModel.NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(DatabaseModel.NAME)).build())
@@ -104,17 +118,30 @@ public class DatabaseResource extends RowResource {
             .label(FieldLabels.labelFor(DatabaseModel.ENGINE)).build())
         .filter(FilterSpec.forField(DatabaseModel.DB_NAME, FilterSpec.Kind.TEXT)
             .label(FieldLabels.labelFor(DatabaseModel.DB_NAME)).build())
+        .filter(FilterSpec.forField(DatabaseModel.PLACEMENT, FilterSpec.Kind.SELECT)
+            .label(FieldLabels.labelFor(DatabaseModel.PLACEMENT)).build())
         .filter(FilterSpec.forField(DatabaseModel.EPHEMERAL, FilterSpec.Kind.BOOLEAN)
             .label(FieldLabels.labelFor(DatabaseModel.EPHEMERAL)).build())
         .filter(FilterSpec.forField(DatabaseModel.STATUS, FilterSpec.Kind.SELECT)
             .label(FieldLabels.labelFor(DatabaseModel.STATUS)).build())
         .build();
 
-    /** The server pick defaults to the local daemon (ensuring its row exists for the picker). */
+    /**
+     * The server pick defaults to the local daemon (ensuring its row exists for the
+     * picker) and the placement to the shared tier.
+     *
+     * AIDEV-NOTE: shared is a DEFAULT, not a resolution. An engine that cannot host
+     * logical databases (Redis) and a tmpfs database are dedicated by definition, and
+     * leaving the select on shared for one of those is refused BY NAME
+     * ({@code database_placement_unsupported} / {@code database_ephemeral_shared}) rather
+     * than silently rewritten -- a form that quietly changes the answer an operator gave
+     * is worse than one that says why it cannot take it.
+     */
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = CmsSupport.mutable(formSpec().defaultValues());
         values.put("server_id", ServerModel.localServerId());
+        values.put(DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_SHARED);
         return Map.copyOf(values);
     }
 
@@ -184,6 +211,14 @@ public class DatabaseResource extends RowResource {
             frozenAfterCreate(DatabaseModel.IMAGE),
             frozenAfterCreate(DatabaseModel.EPHEMERAL),
             frozenAfterCreate(DatabaseModel.SERVER_ID),
+            frozenAfterCreate(DatabaseModel.PLACEMENT),
+            frozenAfterCreate(DatabaseModel.ENGINE_ID),
+            // A shared record has no ceilings of its own: the container is the ENGINE's
+            // and is booked once, at the engine's cap. Hiding them is the honest shape --
+            // an editable pair that {@link #updateRow} could only refuse is a control
+            // that lies about what it does, and the form notice names where they live.
+            hiddenWhenShared(DatabaseModel.MEMORY_LIMIT_MB),
+            hiddenWhenShared(DatabaseModel.CPU_LIMIT),
             // The reason is shown ONLY on a record that carries one: the create form
             // (null record) and a healthy record never render an empty failure box.
             ResourceFieldBinding.of(DatabaseModel.FAILURE_REASON.getName(),
@@ -205,15 +240,28 @@ public class DatabaseResource extends RowResource {
                 record == null ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY));
     }
 
+    /** Editable on the CREATE form, hidden once the record turns out to be shared. */
+    private static @NonNull ResourceFieldBinding hiddenWhenShared(@NonNull Field<?, ?> field) {
+        return ResourceFieldBinding.of(field.getName(),
+            FieldAccess.customRecordAware((ctx, record) ->
+                record instanceof Row row && DatabaseModel.isShared(row)
+                    ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.EDITABLE));
+    }
+
     /**
      * States the consequence the fields cannot: saving a new ceiling RECREATES the engine
-     * container, so open connections drop for as long as the engine takes to come back.
+     * container, so open connections drop for as long as the engine takes to come back --
+     * or, for a shared record, that its ceilings are the engine's and are resized there.
      * Rendered only on a stored record -- on the create form there is nothing to recreate.
      */
     @Override
     public @Nullable Microcopy formNotice(@NonNull Row record,
                                           @NonNull AccessContext accessContext) {
-        return record.get(DatabaseModel.ID) == null ? super.formNotice(record, accessContext)
+        if (record.get(DatabaseModel.ID) == null) {
+            return super.formNotice(record, accessContext);
+        }
+        return DatabaseModel.isShared(record)
+            ? Microcopy.of("shared_notice").withFilter("scope", "database")
             : Microcopy.of("resize_notice").withFilter("scope", "database");
     }
 
@@ -266,8 +314,15 @@ public class DatabaseResource extends RowResource {
         // found "created" -- which, on the pre-fix upsert path, was how a colliding create
         // reported success while it had actually overwritten someone else's database and
         // handed its id back as the new record's.
+        // A blank placement is the service's own default (shared where the engine can host
+        // logical databases and the data is persistent), never a third placement here.
+        String placement = trimmed(coerced.get(DatabaseModel.PLACEMENT.getName()));
+        Integer engineId = coerced.get(DatabaseModel.ENGINE_ID.getName()) instanceof Integer id
+            ? id : null;
+
         return rowKey(this.databaseService.createAsync(name, engine,
-            image.isEmpty() ? null : image, user, password, database, ephemeral, server, limits));
+            image.isEmpty() ? null : image, user, password, database, ephemeral, server, limits,
+            placement.isEmpty() ? null : placement, engineId));
     }
 
     /**
@@ -291,6 +346,15 @@ public class DatabaseResource extends RowResource {
                           @NonNull AccessContext accessContext) {
         Integer memoryMb = coerced.get("memory_limit_mb") instanceof Integer mb ? mb : null;
         Double cpus = coerced.get("cpu_limit") instanceof Double c ? c : null;
+        if (DatabaseModel.isShared(existing)) {
+            // The fields are HIDDEN on a shared record, so a submitted value did not come
+            // from the form this resource rendered; refuse it by name instead of booking a
+            // ceiling against a container this record does not own.
+            if (memoryMb != null || cpus != null) {
+                throw Violations.ofForm(CmsSupport.violationText("database_shared_limits"));
+            }
+            return;
+        }
         if (Objects.equals(memoryMb, existing.get(DatabaseModel.MEMORY_LIMIT_MB))
                 && Objects.equals(cpus, existing.get(DatabaseModel.CPU_LIMIT))) {
             return;
@@ -384,6 +448,20 @@ public class DatabaseResource extends RowResource {
         return super.deleteUnavailableReason(record, accessContext);
     }
 
+    /**
+     * What deleting THIS record actually takes with it, which the two placements do not
+     * share: a dedicated record's container and data volume go, a shared record's logical
+     * database and its user are dropped inside an engine that stays up serving everybody
+     * else. One sentence per shape, never one that hedges over both.
+     */
+    @Override
+    public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
+        return deleteConfirmation(Microcopy.of(
+                DatabaseModel.isShared(record) ? "delete_confirm_shared" : "delete_confirm")
+            .withFilter("scope", "database")
+            .withArg("name", String.valueOf((Object) record.get(DatabaseModel.NAME))));
+    }
+
     /** @throws Violations {@code database_in_use} naming the workloads and their detach page */
     private static void refuseWhileAttached(@Nullable String name, @Nullable Integer id) {
         String workloads = attachedWorkloads(id);
@@ -423,8 +501,69 @@ public class DatabaseResource extends RowResource {
             .url(row -> new Uri(HohenheimEndpoints.DATABASES_BACKUP
                 .with(HohenheimEndpoints.DATABASE_NAME, row.get(DatabaseModel.NAME)).toUrl()))
             .build());
+        actions.add(this.moveToSharedAction());
         actions.add(this.forceDeleteAction());
         return actions;
+    }
+
+    /**
+     * Move a dedicated database onto its host's shared engine, in the background, with the
+     * record reading Provisioning while it works.
+     *
+     * Offered only where the move can succeed: a dedicated, active record whose engine has
+     * logical databases at all. A tmpfs database is its own container by definition, so it
+     * is never offered either.
+     */
+    private @NonNull RowAction<Row> moveToSharedAction() {
+        RowAction.Invoke.Builder<Row> action =
+            RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "move_database_shared"))
+                .label(Microcopy.of("move_shared").withFilter("scope", "database"))
+                .description(Microcopy.of("move_shared_hint").withFilter("scope", "database"))
+                .icon(Icon.of("layer-group"))
+                // Not DESTRUCTIVE: the move keeps the dump AND the old data volume as two
+                // rollbacks, and painting it red beside a real delete devalues the red.
+                .style(ActionStyle.PRIMARY)
+                .inlineInRow(false)
+                .visibleFor((row, ctx) -> movable(row))
+                // The record-less fallback the framework requires beside a dynamic one.
+                .confirmation(ConfirmationSpec.builder()
+                    .title(Microcopy.of("move_shared").withFilter("scope", "database"))
+                    .body(Microcopy.of("move_shared_confirm_generic")
+                        .withFilter("scope", "database"))
+                    .confirmLabel(Microcopy.of("move_shared_ok").withFilter("scope", "database"))
+                    .style(ActionStyle.PRIMARY)
+                    .build())
+                .dynamicConfirmation(row -> ConfirmationSpec.builder()
+                    .title(Microcopy.of("move_shared").withFilter("scope", "database"))
+                    .body(Microcopy.of("move_shared_confirm").withFilter("scope", "database")
+                        .withArg("name", row.get(DatabaseModel.NAME)))
+                    .confirmLabel(Microcopy.of("move_shared_ok").withFilter("scope", "database"))
+                    .style(ActionStyle.PRIMARY)
+                    .build())
+                .handler((row, ctx) -> {
+                    String name = row.get(DatabaseModel.NAME);
+                    this.databaseService.moveToSharedEngineInBackground(name);
+                    return CmsActionResult.refreshWithToast(
+                        Microcopy.of("move_started").withFilter("scope", "database")
+                            .withArg("name", name));
+                });
+        Permission write = writePermission();
+        if (write != null) {
+            action = action.requirePermission(write);
+        }
+        return action.build();
+    }
+
+    /** Whether the move lane would accept this record; the same facts it checks itself. */
+    private static boolean movable(@NonNull Row row) {
+        if (DatabaseModel.isShared(row)
+                || !DatabaseModel.STATUS_ACTIVE.equals(row.get(DatabaseModel.STATUS))
+                || Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL))) {
+            return false;
+        }
+        ManagedDatabase.Engine engine =
+            ManagedDatabase.Engine.forToken(row.get(DatabaseModel.ENGINE));
+        return engine != null && engine.supportsLogicalDatabases();
     }
 
     /**

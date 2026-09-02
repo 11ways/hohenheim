@@ -59,6 +59,10 @@ public final class ManageDatabaseResource extends DatabaseResource {
         .column(ColumnSpec.fromField(DatabaseModel.NAME).build())
         .column(ColumnSpec.fromField(DatabaseModel.ENGINE).build())
         .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).copyable().build())
+        // The placement TOKEN and nothing else: a tenant may see that their database
+        // shares an engine (it explains why no ceilings are theirs to set), never which
+        // engine it is -- an engine name is another tenant's neighbour list.
+        .column(ColumnSpec.fromField(DatabaseModel.PLACEMENT).build())
         .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
         .build();
 
