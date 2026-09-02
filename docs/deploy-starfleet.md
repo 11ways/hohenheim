@@ -1359,3 +1359,36 @@ hohenheim moved). No migration (`0 applied`); `.at-swap2` db copy and
 Healthy after both restarts, no warnings; sites and SOA unchanged. `zd_deployed`
 current. Migration pin raised to `DEPLOYED_THROUGH = "009"` (M009 digest pinned,
 runs 93 red / 94 green). ROLLBACK: rollback2.jar + restart.
+
+## Deploy 2026-09-02 (wave 5): 78e6cfac, the annoyance wave; first run of tools/deploy-host.sh
+
+Swapped to hohenheim `78e6cfac` (jar sha256
+`fc7e6bdcedbb41f90f21ef273747b300848d97526f648fa68ab47fa42543fb22`, 268326427
+bytes, stamp 13/13 `dirty=false`; chain zenit `7357066f`, zenit-cms `9aa946fa`,
+rest as wave 4b). Built in a clean secondary workspace of detached worktrees at
+the PUSHED heads (spamservice tracks `origin/java-rewrite`, not master -- a
+worktree at its `origin/master` has no build.gradle and fails the chain with
+exit 127). Deployed with `tools/deploy-host.sh starfleet <jar>`, which this
+wave introduced. Two attempts before the one that shipped, both refused before
+the swap: the first because a root target had no run-as prefix for the
+rehearsal (`-u: command not found`; fixed with `runuser -u hohenheim --`), the
+second completed every step but refused at step 10 because zenit-forms and
+zenit-microcopy read `local-ahead` (other sessions' unpushed commits, exactly
+what the clean workspace keeps out); the gate now warns on an upstream
+`local-ahead` and refuses only on hohenheim itself, a restart pending, or any
+other verdict. Abandoned preflight dirs
+`/root/hohenheim-preflight-20260902-0920{39}/` and `-092214/` hold the
+backups of those attempts; the shipped swap is the `-092214` one (db `.pre`
+integrity ok, `.at-swap`, `settings/`, keyring sha256 matched, `rollback.jar`
+= `7b0ed91d`). `--rehearse-migrations` on a byte copy: 0 applied; boot applied
+none (top stays M009). Healthy after both restarts; `zenit-dev deployed
+starfleet` = hohenheim current, service active, no restart pending.
+
+What shipped: `/health` public alias (verified 200 from outside), zero
+`source_capability_dropped` boot lines, offline commands print only their own
+lines (the one JDK warning left is jboss-threads' `Unsafe::objectFieldOffset`
+at HTTP boot, undertow's dependency, not an offline-command line),
+`--migration-checksums`, settings `?section=<group path>` deep links, engines
+list one query per page, `/api/v1/databases` + `/api/v1/engines` with `hoh
+database|engine`.
+ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20260902-092214`.

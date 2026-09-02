@@ -1824,3 +1824,18 @@ hohenheim moved). No migration (`0 applied`); `.at-swap2` db copy and
 Healthy after both restarts, no warnings; sites and SOA unchanged. `zd_deployed`
 current. Migration pin raised to `DEPLOYED_THROUGH = "009"` (M009 digest pinned,
 runs 93 red / 94 green). ROLLBACK: rollback2.jar + restart.
+
+## Deploy 2026-09-02 (wave 5): 78e6cfac, the annoyance wave via tools/deploy-host.sh
+
+Swapped to hohenheim `78e6cfac` (jar sha256
+`fc7e6bdcedbb41f90f21ef273747b300848d97526f648fa68ab47fa42543fb22`, 268326427
+bytes, stamp 13/13 `dirty=false`; same jar as starfleet's wave 5). Deployed with
+`tools/deploy-host.sh kuifje <jar>` in one run, exit 0. Preflight
+`/root/hohenheim-preflight-20260902-092550/` (`hohenheim.db.pre` integrity ok,
+`hohenheim.db.at-swap`, `settings/`, no keyring on this install yet, rollback
+jar `rollback.jar` = `7b0ed91d`). `--rehearse-migrations` on a byte copy: 0
+applied; boot applied none. Healthy after both restarts; `/health` and
+`/api/health` answer 200 from outside; `zenit-dev deployed kuifje` = hohenheim
+current, no restart pending (zenit-forms/zenit-microcopy `local-ahead` = other
+sessions' unpushed commits, warned, not shipped).
+ROLLBACK: `tools/deploy-host.sh --rollback kuifje --preflight /root/hohenheim-preflight-20260902-092550`.

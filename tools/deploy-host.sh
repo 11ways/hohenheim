@@ -44,6 +44,7 @@ SSH_TARGET=""
 REMOTE_JAR=""
 SERVICE=""
 SUDO=""
+RUN_AS=""
 
 JAR_SHA=""
 JAR_SIZE=""
@@ -184,6 +185,14 @@ case "$SSH_TARGET" in
     root@*) SUDO="" ;;
     *) SUDO="sudo -n" ;;
 esac
+# Running a command AS the service user is a second, separate need: root has no
+# sudo prefix but still cannot spell `-u` on its own (the first starfleet run died
+# on exactly that), so root drops to the user through runuser.
+if [ -z "$SUDO" ]; then
+    RUN_AS="runuser -u '$SERVICE_USER' --"
+else
+    RUN_AS="$SUDO -u '$SERVICE_USER'"
+fi
 
 HEALTH_TRIES=$(( HEALTH_TIMEOUT / 2 ))
 [ "$HEALTH_TRIES" -ge 1 ] || HEALTH_TRIES=1
@@ -219,7 +228,11 @@ deployed_json() {
 }
 
 # Prints the per-repo verdicts of a `deployed --json` report and exits non-zero
-# when it is not the finished state (every repo current, no restart pending).
+# when it is not the finished state: hohenheim itself current, no restart pending,
+# and no repo diverged/deployed-ahead/unknown/undiffable/inconsistent. An UPSTREAM
+# repo reading local-ahead is a warning, not a refusal: the jar is built from the
+# PUSHED heads in a clean secondary workspace on purpose, so another session's
+# unpushed upstream commits are exactly what this lane keeps out of production.
 judge_deployed() {
     python3 - "$1" <<'PY'
 import json, sys
@@ -227,11 +240,20 @@ report = json.loads(sys.argv[1])
 service = report.get('service') or {}
 print('   verdict: %s   jar %s' % (report.get('verdict'), (report.get('jar') or {}).get('path')))
 bad = []
+ahead = []
 for repo in report.get('repos') or []:
     verdict = repo.get('verdict')
-    print('   %-22s %s %s' % (repo.get('repo'), verdict, repo.get('shortSha') or ''))
-    if verdict != 'current':
-        bad.append('%s=%s' % (repo.get('repo'), verdict))
+    name = repo.get('repo')
+    print('   %-22s %s %s' % (name, verdict, repo.get('shortSha') or ''))
+    if verdict == 'current':
+        continue
+    if verdict == 'local-ahead' and name != 'hohenheim':
+        ahead.append(name)
+        continue
+    bad.append('%s=%s' % (name, verdict))
+if ahead:
+    print('   WARNING: upstream local checkouts carry unpushed commits the shipped jar deliberately'
+          ' lacks (built from the pushed heads): ' + ', '.join(ahead))
 if service.get('restartPending'):
     bad.append('RESTART PENDING (the jar on disk is newer than the running process)')
 for problem in report.get('problems') or []:
@@ -395,7 +417,7 @@ JAVA=\$($SUDO systemctl show '$SERVICE' -p ExecStart --value 2>/dev/null | sed -
 [ -x \"\$JAVA\" ] || JAVA=\$(command -v java)
 echo \"@@java \$JAVA\"
 set +e
-cd '$PREFIX' && $SUDO -u '$SERVICE_USER' \"\$JAVA\" -jar '$REHEARSE_DIR/new.jar' --rehearse-migrations '$REHEARSE_DIR/rehearse.db' 2>&1
+cd '$PREFIX' && $RUN_AS \"\$JAVA\" -jar '$REHEARSE_DIR/new.jar' --rehearse-migrations '$REHEARSE_DIR/rehearse.db' 2>&1
 echo \"@@rehearse \$?\"")" || fail "the rehearsal could not run on the host"
 
 if [ "$DRY_RUN" = "no" ]; then
@@ -536,7 +558,7 @@ Swapped to hohenheim \`<commit>\` (jar sha256 \`$JAR_SHA\`, $JAR_SIZE bytes,
 stamp $CLEAN_ROWS/$CLEAN_ROWS \`dirty=false\`). Deployed with
 \`tools/deploy-host.sh $TARGET <jar>\`. Preflight \`$PREFLIGHT_DIR/\`
 (\`hohenheim.db.pre\` integrity ok, \`hohenheim.db.at-swap\`, \`settings/\`,
-keyring sha256 matched, rollback jar \`rollback.jar\`). Migrations rehearsed
+keyring: ${KEYRING_STATE:-unknown}, rollback jar \`rollback.jar\`). Migrations rehearsed
 against a byte copy through \`--rehearse-migrations\`, then applied at boot:
 $(printf '%s' "${APPLIED:-none}" | sed 's/^/  /'). Healthy after both restarts;
 \`zenit-dev deployed $TARGET\` = current.

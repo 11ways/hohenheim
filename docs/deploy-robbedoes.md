@@ -2420,3 +2420,22 @@ MB (was 9,984), instances bucket 11, engine at 490 MiB of its 1 GiB, host 8.2 GB
 available. `capacity.memory_overcommit_ratio` back at the default. Every moved
 record keeps its dump under `data/backups/moves/` and its old data volume.
 Deploy workspace `~/projects/javaweb-deploy` deleted afterwards.
+
+## Deploy 2026-09-02 (wave 5): 78e6cfac, the annoyance wave via tools/deploy-host.sh
+
+Swapped to hohenheim `78e6cfac` (jar sha256
+`fc7e6bdcedbb41f90f21ef273747b300848d97526f648fa68ab47fa42543fb22`, 268326427
+bytes, stamp 13/13 `dirty=false`; same jar as starfleet's wave 5, which also
+carries `e211afd3`, the release-aware engine booking + pre-transfer dump-size
+refusal). Deployed with `tools/deploy-host.sh robbedoes <jar>` in one run, exit
+0. Preflight `/root/hohenheim-preflight-20260902-092645/` (`hohenheim.db.pre`
+integrity ok, `hohenheim.db.at-swap`, `settings/`, no keyring on this install
+yet, rollback jar `rollback.jar` = `7b0ed91d`). `--rehearse-migrations` on a
+byte copy: 0 applied; boot applied none (top stays M009). Healthy after both
+restarts. Verified after: browser-UA `--resolve` at 51.255.43.81 gives
+earl.wcag.be 200, invulassistent.wcag.be 401 (its own gate), tavernetomberg.be
+200; `/health` 200 on the panel; 11 containers up; 0 `source_capability_dropped`
+lines in the boot journal. udesign.world and microcopy.elevenways.be still
+resolve to Phoenix (144.76.30.204, 200 there), untouched by this wave.
+`zenit-dev deployed robbedoes` = hohenheim current, no restart pending.
+ROLLBACK: `tools/deploy-host.sh --rollback robbedoes --preflight /root/hohenheim-preflight-20260902-092645`.

@@ -143,8 +143,10 @@ cat > "$BIN/zenit-dev" <<'SHIM'
 printf 'deployed\n' >> "$DEPLOYED_CALLS"
 calls="$(wc -l < "$DEPLOYED_CALLS")"
 verdict="current"
+upstream="current"
 if [ "$calls" = "1" ]; then verdict="local-ahead"; fi
-if [ "${FAKE_DEPLOYED:-current}" = "stuck" ]; then verdict="local-ahead"; fi
+if [ "${FAKE_DEPLOYED:-current}" = "stuck" ]; then verdict="deployed-ahead"; fi
+if [ "${FAKE_DEPLOYED:-current}" = "upstream-ahead" ]; then upstream="local-ahead"; fi
 cat <<JSON
 {
   "target": "testbox",
@@ -154,7 +156,7 @@ cat <<JSON
   "stamped": true,
   "repos": [
     {"repo": "hohenheim", "verdict": "$verdict", "shortSha": "12345678"},
-    {"repo": "zenit", "verdict": "current", "shortSha": "9fd78ec7"}
+    {"repo": "zenit", "verdict": "$upstream", "shortSha": "9fd78ec7"}
   ],
   "verdict": "$verdict",
   "problems": []
@@ -268,8 +270,14 @@ if OUT="$(FAKE_DEPLOYED=stuck run_lane testbox "$JAR" 2>&1)"; then
     no "a host that does not report current is refused"
 else
     expect "the not-current refusal names the state" "$OUT" "does not report current for every repo"
-    expect "it names the repo that is not current" "$OUT" "hohenheim=local-ahead"
+    expect "it names the repo that is not current" "$OUT" "hohenheim=deployed-ahead"
 fi
+
+# An UPSTREAM repo whose local checkout is merely ahead of the shipped jar is the
+# clean-workspace lane working as designed: a warning, never a refusal.
+OUT="$(FAKE_DEPLOYED=upstream-ahead run_lane testbox "$JAR" 2>&1)" || no "an upstream local-ahead lane exits 0"
+expect "an upstream local-ahead is reported as a warning" "$OUT" "WARNING: upstream local checkouts carry unpushed commits"
+expect "and names the repo" "$OUT" "pushed heads): zenit"
 
 # --- 6. argument refusals ---------------------------------------------------
 
@@ -308,6 +316,10 @@ fi
 
 OUT="$(run_lane rootbox "$JAR")" || no "the root lane exits 0"
 expect "a root ssh user needs no sudo" "$OUT" "privilege: none needed"
+OUT="$(run_lane rootbox "$JAR" --dry-run)" || no "the root dry run exits 0"
+expect "root still drops to the service user for the rehearsal" "$OUT" "runuser -u 'hohenheim' -- "
+OUT="$(run_lane testbox "$JAR" --dry-run)" || no "the sudo dry run exits 0"
+expect "a sudo box runs the rehearsal as the service user through sudo" "$OUT" "sudo -n -u 'hohenheim' "
 
 # --- 8. the dry run executes nothing ----------------------------------------
 
