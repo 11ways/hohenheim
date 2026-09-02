@@ -172,15 +172,22 @@ class DatabaseModelTest {
             assertThat(DatabaseModel.isShared(stored))
                 .as("step 1: and reads as dedicated").isFalse();
 
-            // 2. A row that PREDATES the column carries a null placement, and reads as
-            //    the dedicated database it is -- the migration rewrites nothing.
+            // 2. A row that PREDATES the column carries a null placement IN STORAGE (the
+            //    migration rewrites nothing) and LOADS as the dedicated database it is:
+            //    the read normalizes, so no surface ever renders a third, nameless
+            //    placement for a pre-M009 record.
             stored.set(DatabaseModel.PLACEMENT, null);
             model.save(stored);
+            assertThat(datasource.rawQuery(
+                    "SELECT placement AS p FROM managed_databases WHERE name = 'placement-default'")
+                    .get(0).get("p"))
+                .as("step 2: the stored column stays null").isNull();
             Row legacy = model.findByName("placement-default");
             assertThat((String) legacy.get(DatabaseModel.PLACEMENT))
-                .as("step 2: an existing row keeps its null placement").isNull();
+                .as("step 2: while the loaded row reads dedicated")
+                .isEqualTo(DatabaseModel.PLACEMENT_DEDICATED);
             assertThat(DatabaseModel.isShared(legacy))
-                .as("step 2: null reads as dedicated, never as a third placement").isFalse();
+                .as("step 2: never as a third placement").isFalse();
 
             // 3. A SHARED record with no engine is refused by name: the placement and the
             //    binding cannot disagree.

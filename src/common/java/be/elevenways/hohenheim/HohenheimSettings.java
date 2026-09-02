@@ -577,10 +577,11 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> MAX_DUMP_MB = GROUP.buildSetting("max_dump_mb", Integer.class)
             .defaultValue(2048)
-            .description("Upper bound in MiB for one binary managed-database dump (Redis RDB, "
-                + "mongodump archive) fetched out of a container. The fetch is buffered "
-                + "through controller memory, so this cap is what protects the heap -- a "
-                + "larger dump refuses instead of taking the controller down")
+            .description("Upper bound in MiB for one managed-database dump written out of a "
+                + "container. Dumps stream to disk and are cut off (partial file deleted) the "
+                + "moment they grow past this, so a runaway dump can neither fill the disk nor "
+                + "pass for a backup; a mongodump archive is uncompressed BSON, so size it "
+                + "above the engine's on-disk footprint")
             .build();
     }
 

@@ -286,6 +286,16 @@ public class DatabaseModel extends Model {
     private static final int MAX_NAME_LENGTH = 64;
 
     static {
+        // A row written before M009 carries no placement; it READS as dedicated -- the
+        // migration's own rule, applied once at load so no surface (list cell, detail
+        // form, filter) ever shows a third, nameless placement.
+        SCHEMA.addAfterFindHook(found -> {
+            for (Row row : found.getRows()) {
+                if (row.get(PLACEMENT) == null) {
+                    row.set(PLACEMENT, PLACEMENT_DEDICATED);
+                }
+            }
+        });
         SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
             if (row == null || !row.has(NAME.getName())) {
