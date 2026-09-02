@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HostPreflightWidget;
 import be.elevenways.hohenheim.HostStateWidget;
 import be.elevenways.hohenheim.HostTrustWidget;
@@ -380,25 +379,9 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
 
     // -- capacity ------------------------------------------------------------------
 
+    /** The ledger itself lives with the booking; this page and the hosts API read the same one. */
     private static @NonNull HostCapacityView capacityOf(@NonNull Row server, int serverId) {
-        Long budget = InstanceCapacity.budgetMbOf(server);
-        boolean hasReading = server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> map
-            && map.get(HostPreflight.MEM_TOTAL_FACT) instanceof Number;
-        Instant measuredAt = HostPreflight.factMeasuredAt(server, HostPreflight.MEM_TOTAL_FACT);
-        if (measuredAt == null && hasReading) {
-            measuredAt = server.get(ServerModel.PROBED_AT);
-        }
-        Integer maxAge = HohenheimSettings.VALUES.getValue(
-            HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS);
-        long booked = InstanceCapacity.bookedMbOn(serverId);
-        return new HostCapacityView(
-            budget != null,
-            budget == null && hasReading,
-            budget != null ? clampInt(budget) : 0,
-            clampInt(booked),
-            budget != null ? clampInt(InstanceCapacity.bookableMbOn(serverId, budget)) : 0,
-            measuredAt != null ? measuredAt.toString() : null,
-            maxAge != null ? maxAge : 0);
+        return InstanceCapacity.viewOf(server, serverId);
     }
 
     /**
@@ -439,10 +422,6 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
 
     private static @NonNull String megabytes(int value) {
         return value + " MB";
-    }
-
-    private static int clampInt(long value) {
-        return (int) Math.min(Integer.MAX_VALUE, Math.max(0, value));
     }
 
     // -- workloads -----------------------------------------------------------------

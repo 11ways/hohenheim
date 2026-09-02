@@ -40,6 +40,12 @@ public class HohenheimEndpoints {
         .stringResolver(Integer::parseInt)
         .build();
 
+    /** The shared database-engine record id. */
+    public static final ParameterDefinition<Integer> DB_ENGINE_ID = ParameterDefinition.builder(Integer.class)
+        .name("dbEngineId")
+        .stringResolver(Integer::parseInt)
+        .build();
+
     public static final ParameterDefinition<Integer> ZONE_ID = ParameterDefinition.builder(Integer.class)
         .name("zoneId")
         .stringResolver(Integer::parseInt)
@@ -1120,11 +1126,56 @@ public class HohenheimEndpoints {
         .rateLimit(PAAS_WRITE_LIMIT)
         .build();
 
+    /** One managed database, the shape a watcher polls while a move or a provision runs. */
+    public static final Endpoint<Object> API_DATABASE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_database"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("databases").addDelimiter().addParameter(DATABASE_ID).build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
     public static final Endpoint<Object> API_DATABASE_ENGINES = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "api_database_engines"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
             .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
             .addStatic("engines").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    /** One shared engine with the logical databases living on it (ADMIN-ONLY). */
+    public static final Endpoint<Object> API_DATABASE_ENGINE = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_database_engine"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("engines").addDelimiter().addParameter(DB_ENGINE_ID).build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    // --- PaaS API v1: hosts ---
+    //
+    // The capacity picture the admin panel's host overview renders, as data: the memory
+    // budget, what is booked against it and what each workload holds. ADMIN-ONLY -- a
+    // host row exists on the operator panel alone, and the per-workload list is every
+    // tenant's workload on that machine.
+
+    public static final Endpoint<Object> API_V1_HOSTS = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_hosts"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("hosts").build())
+        .requiresLogin()
+        .rateLimit(PAAS_READ_LIMIT)
+        .build();
+
+    public static final Endpoint<Object> API_V1_HOST = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_host"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("hosts").addDelimiter().addParameter(SERVER_ID).build())
         .requiresLogin()
         .rateLimit(PAAS_READ_LIMIT)
         .build();

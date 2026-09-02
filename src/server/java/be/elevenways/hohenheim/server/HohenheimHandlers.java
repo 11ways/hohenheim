@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.api.DnsZoneApi;
+import be.elevenways.hohenheim.server.api.HostApi;
 import be.elevenways.hohenheim.server.api.PaasApi;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.database.DatabaseApi;
@@ -63,6 +64,7 @@ public final class HohenheimHandlers {
         InstanceApi.init();
         PaasApi.init();
         DatabaseApi.init();
+        HostApi.init();
         DnsZoneApi.init();
         InstanceFileEndpoints.init();
         InstanceStatsHandler.init();

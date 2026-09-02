@@ -18,6 +18,9 @@ const fs = require('node:fs');
 const HOH = path.join(__dirname, 'hoh');
 const requests = [];
 
+/** How often the wait lane's record has been polled; it settles on the second read. */
+let waitPolls = 0;
+
 const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -117,13 +120,76 @@ const server = http.createServer((req, res) => {
         if (req.url === '/api/v1/databases' && req.method === 'GET') {
             return respond(200, { databases: [
                 { id: 61, name: 'earl-db', engine: 'postgres', db_name: 'appdb',
-                    placement: 'dedicated', status: 'active', attached: 1,
+                    placement: 'dedicated', status: 'active', outcome: 'ok', attached: 1,
                     engine_id: null, server: 'local', ephemeral: false,
-                    memory_limit_mb: 512, cpu_limit: null, failure_reason: '' },
+                    memory_limit_mb: 512, effective_memory_mb: 512,
+                    memory_source: 'declared', cpu_limit: null, failure_reason: '' },
                 { id: 62, name: 'earl-shared', engine: 'postgres', db_name: 'appdb',
-                    placement: 'shared', status: 'active', attached: 0,
+                    placement: 'shared', status: 'active', outcome: 'ok', attached: 0,
                     engine_id: 71, server: 'local', ephemeral: false,
-                    memory_limit_mb: null, cpu_limit: null, failure_reason: '' }] });
+                    memory_limit_mb: null, effective_memory_mb: 1024,
+                    memory_source: 'engine', cpu_limit: null, failure_reason: '' },
+                { id: 63, name: 'earl-default', engine: 'postgres', db_name: 'appdb',
+                    placement: 'dedicated', status: 'active', outcome: 'ok', attached: 0,
+                    engine_id: null, server: 'local', ephemeral: false,
+                    memory_limit_mb: null, effective_memory_mb: 1280,
+                    memory_source: 'default', cpu_limit: null, failure_reason: '' }] });
+        }
+        // The wait lane: 61 settles on the SECOND poll, 65 lands failed, 66 never settles.
+        if (req.url === '/api/v1/databases/61' && req.method === 'GET') {
+            waitPolls++;
+            const settled = waitPolls > 1;
+            return respond(200, { id: 61, name: 'earl-db', status: settled ? 'active' : 'provisioning',
+                outcome: settled ? 'ok' : 'pending', failure_reason: '' });
+        }
+        if (req.url === '/api/v1/databases/65' && req.method === 'GET') {
+            return respond(200, { id: 65, name: 'earl-broken', status: 'failed',
+                outcome: 'failed', failure_reason: 'engine refused the restore' });
+        }
+        if (req.url === '/api/v1/databases/66' && req.method === 'GET') {
+            return respond(200, { id: 66, name: 'earl-slow', status: 'provisioning',
+                outcome: 'pending', failure_reason: '' });
+        }
+        if (req.url === '/api/v1/engines/71' && req.method === 'GET') {
+            return respond(200, { id: 71, name: 'postgres-local', engine: 'postgres',
+                image: 'postgres:16', server: 'local', memory_limit_mb: 1024,
+                cpu_limit: null, databases: 1, status: 'active', failure_reason: '',
+                usage_mb: 384, logical_databases: [
+                    { id: 62, name: 'earl-shared', db_name: 'appdb', db_user: 'earl_shared',
+                        status: 'active', outcome: 'ok', effective_memory_mb: 1024,
+                        memory_source: 'engine' }] });
+        }
+        if (req.url === '/api/v1/hosts' && req.method === 'GET') {
+            return respond(200, { hosts: [
+                { id: 1, name: 'kuifje', runtime: 'docker', mode: 'local',
+                    admission: 'admitted', preflight_ok: true, measured: true, stale: false,
+                    budget_mb: 10915, booked_mb: 9984, bookable_mb: 10915, free_mb: 931,
+                    overcommit_ratio: 1, reserve_mb: 1024,
+                    measured_at: '2026-09-02T10:00:00Z', facts_max_age_hours: 168 },
+                { id: 2, name: 'unprobed', runtime: 'docker', mode: 'ssh',
+                    admission: 'blocked', preflight_ok: false, measured: false, stale: false,
+                    budget_mb: 0, booked_mb: 0, bookable_mb: 0, free_mb: 0,
+                    overcommit_ratio: 1, reserve_mb: 1024, measured_at: null,
+                    facts_max_age_hours: 168 }] });
+        }
+        if (req.url === '/api/v1/hosts/1' && req.method === 'GET') {
+            return respond(200, { id: 1, name: 'kuifje', runtime: 'docker', mode: 'local',
+                admission: 'admitted', preflight_ok: true, measured: true, stale: false,
+                budget_mb: 10915, booked_mb: 9984, bookable_mb: 10915, free_mb: 931,
+                overcommit_ratio: 1, reserve_mb: 1024,
+                measured_at: '2026-09-02T10:00:00Z', facts_max_age_hours: 168,
+                workloads: [
+                    { id: 51, kind: 'hohenheim:docker_container', name: 'earl-app',
+                        status: 'running', booked_mb: 512, usage_mb: 301 },
+                    { id: 52, kind: 'hohenheim:database_container', name: 'dbengine-pg',
+                        status: 'running', booked_mb: 1024 }] });
+        }
+        if (req.url === '/api/v1/hosts/2' && req.method === 'GET') {
+            return respond(200, { id: 2, name: 'unprobed', runtime: 'docker', mode: 'ssh',
+                admission: 'blocked', preflight_ok: false, measured: false, stale: true,
+                budget_mb: 0, booked_mb: 0, bookable_mb: 0, free_mb: 0,
+                overcommit_ratio: 1, reserve_mb: 1024, measured_at: null,
+                facts_max_age_hours: 168, workloads: [] });
         }
         if (req.url === '/api/v1/databases/61/move-shared') {
             return respond(200, { id: 61, name: 'earl-db', status: 'queued', watch: 'status' });
@@ -395,6 +461,71 @@ server.listen(0, '127.0.0.1', async () => {
             && r.stdout.includes('postgres:16'), r.stdout + r.stderr);
         check('engine list hit the documented lane',
             requests.at(-1).method === 'GET' && requests.at(-1).url === '/api/v1/engines');
+
+        // 12c. The memory column: the EFFECTIVE ceiling with its source marked, which is
+        //      the fix for a column that was simply EMPTY for a record on the defaults and
+        //      for a shared record (whose ceiling is its engine's, not its own). The
+        //      server sends both halves; the CLI only chooses the marker.
+        r = await run(['database', 'list']);
+        check('a declared ceiling prints bare', r.status === 0 && /\s512\s/.test(r.stdout),
+            r.stdout + r.stderr);
+        check('a defaulted ceiling is marked with *', r.stdout.includes('1280*'), r.stdout);
+        check('an engine-inherited ceiling is marked with ->',
+            r.stdout.includes('->1024'), r.stdout);
+
+        // 12d. `database wait`: blocks until the record settles, and its EXIT CODE is the
+        //      answer -- 0 landed, 1 failed with the reason, 2 timed out naming the last
+        //      status. The CLI classifies nothing: it reads the server's `outcome`.
+        waitPolls = 0;
+        r = await run(['database', 'wait', '61']);
+        check('database wait exits 0 once the record lands', r.status === 0
+            && r.stdout.includes('active'), r.stdout + r.stderr);
+        check('and it really polled the record more than once',
+            requests.filter(q => q.url === '/api/v1/databases/61').length >= 2,
+            String(requests.filter(q => q.url === '/api/v1/databases/61').length));
+        r = await run(['database', 'wait', '65']);
+        check('a failed record exits 1 with the reason', r.status === 1
+            && r.stderr.includes('engine refused the restore'), r.stderr);
+        r = await run(['database', 'wait', '66', '--timeout', '1']);
+        check('a record that never settles exits 2 naming the last status',
+            r.status === 2 && r.stderr.includes('provisioning')
+                && r.stderr.includes('Timed out'), r.stderr);
+        r = await run(['database', 'wait', '66', '--timeout', 'soon']);
+        check('a nonsense timeout is refused before any request', r.status === 1
+            && r.stderr.includes('--timeout'), r.stderr);
+
+        // 12e. `engine show`: the row plus the databases living on it, each with the same
+        //      effective ceiling, and the container's live usage when the hub has it.
+        r = await run(['engine', 'show', '71']);
+        check('engine show renders the engine and its databases', r.status === 0
+            && r.stdout.includes('postgres-local') && r.stdout.includes('earl-shared')
+            && r.stdout.includes('earl_shared'), r.stdout + r.stderr);
+        check('engine show reports the live usage it was given',
+            r.stdout.includes('384 MB'), r.stdout);
+        check('engine show hit the documented lane',
+            requests.at(-1).url === '/api/v1/engines/71');
+
+        // 12f. `host list` / `host show`: the capacity picture that only the panel had.
+        //      An UNMEASURED host must not read as an empty one -- that is the whole
+        //      reason the server sends `measured` as its own field.
+        r = await run(['host', 'list']);
+        check('host list renders the ledger', r.status === 0 && r.stdout.includes('kuifje')
+            && r.stdout.includes('9984') && r.stdout.includes('931'), r.stdout + r.stderr);
+        check('host list hit the documented lane',
+            requests.at(-1).method === 'GET' && requests.at(-1).url === '/api/v1/hosts');
+        r = await run(['host', 'show', '1']);
+        check('host show names the booking and the free room', r.status === 0
+            && r.stdout.includes('9984 of 10915 MB booked')
+            && r.stdout.includes('931 MB free'), r.stdout + r.stderr);
+        check('host show lists every workload with what it holds',
+            r.stdout.includes('earl-app') && r.stdout.includes('dbengine-pg')
+                && r.stdout.includes('1024'), r.stdout);
+        check('and the live usage column is blank where the hub has no sample',
+            r.stdout.includes('301'), r.stdout);
+        r = await run(['host', 'show', '2']);
+        check('an unmeasured host says so instead of reading as empty', r.status === 0
+            && r.stdout.includes('UNMEASURED') && r.stdout.includes('no placement budget'),
+            r.stdout + r.stderr);
 
         // 13. help: prints AND exits clean. It used to print the whole page and then
         //     die on `.catch` of undefined, because the handler is synchronous -- so

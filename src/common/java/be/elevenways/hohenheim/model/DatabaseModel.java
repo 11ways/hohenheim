@@ -11,6 +11,8 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 
+import java.util.Map;
+
 /**
  * A managed database provisioned as a container by ManagedDatabase. Stores the desired
  * configuration (engine, image, credentials, initial database); runtime state (published
@@ -150,6 +152,42 @@ public class DatabaseModel extends Model {
     /** The translation token for a status; the key IS the stored value. */
     private static Microcopy statusLabel(String status) {
         return Microcopy.of(status).withFilter("scope", "database_status");
+    }
+
+    /** {@link #outcomeOf} value: work is still in flight, so a watcher keeps waiting. */
+    public static final String OUTCOME_PENDING = "pending";
+
+    /** {@link #outcomeOf} value: the record settled usable. */
+    public static final String OUTCOME_OK = "ok";
+
+    /** {@link #outcomeOf} value: the record settled on a failure carrying a reason. */
+    public static final String OUTCOME_FAILED = "failed";
+
+    /**
+     * THE watcher's fact about a status, so nothing outside this class ever spells a list
+     * of "in flight" statuses: every declared {@link #STATUS} value maps here, and
+     * {@link #declaresOutcome} is what a drift test asks so a fifth status cannot land
+     * without a decision.
+     *
+     * An UNRECOGNISED status is {@link #OUTCOME_PENDING}, which is the fail-closed answer:
+     * a poller keeps waiting and eventually times out naming what it saw, rather than
+     * reporting a success or a failure the vocabulary never declared.
+     */
+    private static final Map<String, String> STATUS_OUTCOMES = Map.of(
+        STATUS_PROVISIONING, OUTCOME_PENDING,
+        STATUS_ACTIVE, OUTCOME_OK,
+        STATUS_FAILED, OUTCOME_FAILED,
+        STATUS_DESTROY_FAILED, OUTCOME_FAILED);
+
+    /** How a status lands for something waiting on it: pending, ok or failed. */
+    public static String outcomeOf(String status) {
+        String outcome = status == null ? null : STATUS_OUTCOMES.get(status);
+        return outcome == null ? OUTCOME_PENDING : outcome;
+    }
+
+    /** Whether the vocabulary DECLARES an outcome for this status (the drift test's question). */
+    public static boolean declaresOutcome(String status) {
+        return status != null && STATUS_OUTCOMES.containsKey(status);
     }
 
     /** {@link #PLACEMENT} value: the record's engine is its own container. */

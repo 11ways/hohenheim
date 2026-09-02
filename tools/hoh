@@ -352,7 +352,24 @@ const instanceVerbs = {
 // where to watch it rather than pretending the move is done.
 
 const databaseColumns = ['id', 'name', 'engine', 'placement', 'engine_id', 'server',
-    'memory_limit_mb', 'status', 'attached'];
+    'memory', 'status', 'attached'];
+
+/**
+ * The EFFECTIVE memory ceiling with its source marked, which is why the column is
+ * rendered rather than printed: `512` is declared on the record, `1280*` is the default
+ * the booking used because the record declares none, and `->1024` is a shared record
+ * inheriting its ENGINE's ceiling. The server computes both halves
+ * (effective_memory_mb + memory_source); this only chooses the marker.
+ */
+function memoryCell(database) {
+    const mb = database.effective_memory_mb;
+    if (mb === undefined || mb === null) return '';
+    if (database.memory_source === 'engine') return `->${mb}`;
+    if (database.memory_source === 'default') return `${mb}*`;
+    return String(mb);
+}
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /** The database with this id, plus the typed-name interlock the panel dialog is. */
 async function confirmDatabaseName(id, sentence) {
@@ -371,7 +388,43 @@ async function confirmDatabaseName(id, sentence) {
 const databaseVerbs = {
 
     async list() {
-        emit(await get('/api/v1/databases'), 'databases', databaseColumns);
+        const data = await get('/api/v1/databases');
+        if (flags.json) return emit(data);
+        table((data.databases || []).map(d => ({ ...d, memory: memoryCell(d) })),
+            databaseColumns);
+    },
+
+    // Poll one record until it settles. The CLI knows NO status names: the server
+    // publishes `outcome` (pending | ok | failed) off the status vocabulary's own
+    // declaration, and an unrecognised status reads pending, so this loop can only
+    // time out where it cannot honestly say what happened.
+    async wait([id]) {
+        const usage = 'Usage: hoh database wait <database-id> [--timeout <seconds>]';
+        if (!id) die(usage);
+        const seconds = Number(flags.timeout === undefined ? 600 : flags.timeout);
+        if (!Number.isFinite(seconds) || seconds <= 0) die('--timeout takes a number of seconds.');
+        const deadline = Date.now() + seconds * 1000;
+        let last = '(never read)';
+        while (Date.now() < deadline) {
+            const database = await get(`/api/v1/databases/${id}`);
+            last = database.status;
+            if (database.outcome === 'ok') {
+                console.log(`Database ${database.id} "${database.name}" is ${database.status}.`);
+                process.exit(0);
+            }
+            if (database.outcome === 'failed') {
+                // failure_reason is an operator column: a delegated key sees the status
+                // only, which is still the honest answer about how it landed.
+                process.stderr.write(`Database ${database.id} "${database.name}"`
+                    + ` ${database.status}`
+                    + `${database.failure_reason ? ': ' + database.failure_reason : ''}\n`);
+                process.exit(1);
+            }
+            await sleep(2000);
+        }
+        process.stderr.write(`Timed out after ${seconds}s waiting for database ${id};`
+            + ` last status ${last}.\n`);
+        process.exit(2);
     },
 
     async move([id]) {
@@ -394,6 +447,65 @@ const databaseVerbs = {
 
 const engineColumns = ['id', 'name', 'engine', 'image', 'server', 'memory_limit_mb',
     'databases', 'status'];
+
+const engineVerbs = {
+
+    async list() {
+        emit(await get('/api/v1/engines'), 'engines', engineColumns);
+    },
+
+    async show([id]) {
+        if (!id) die('Usage: hoh engine show <engine-id>');
+        const data = await get(`/api/v1/engines/${id}`);
+        if (flags.json) return emit(data);
+        console.log(`Engine ${data.id} "${data.name}" (${data.engine},`
+            + ` ${data.image || 'default image'}) on ${data.server}`);
+        const usage = data.usage_mb === undefined ? '' : `, using ${data.usage_mb} MB`;
+        console.log(`  status ${data.status}, ceiling`
+            + ` ${data.memory_limit_mb === null ? '(engine default)' : data.memory_limit_mb + ' MB'}`
+            + `${usage}`);
+        if (data.failure_reason) console.log(`  failure: ${data.failure_reason}`);
+        table((data.logical_databases || []).map(d => ({ ...d, memory: memoryCell(d) })),
+            ['id', 'name', 'db_name', 'db_user', 'status', 'memory']);
+    },
+};
+
+// -- host verbs (hoh host list|show) ------------------------------------------
+//
+// The capacity picture the admin overview page renders. Every number is the
+// server's own ledger -- booked is what placement decides on (declared ceilings,
+// charge == cap), never live RSS, which is what `docker stats` was answering.
+
+const hostColumns = ['id', 'name', 'runtime', 'admission', 'measured', 'budget_mb',
+    'booked_mb', 'free_mb', 'overcommit_ratio'];
+
+const hostVerbs = {
+
+    async list() {
+        emit(await get('/api/v1/hosts'), 'hosts', hostColumns);
+    },
+
+    async show([id]) {
+        if (!id) die('Usage: hoh host show <host-id>');
+        const data = await get(`/api/v1/hosts/${id}`);
+        if (flags.json) return emit(data);
+        console.log(`Host ${data.id} "${data.name}" (${data.runtime}/${data.mode},`
+            + ` admission=${data.admission}, preflight_ok=${data.preflight_ok})`);
+        if (!data.measured) {
+            console.log('  memory: UNMEASURED'
+                + (data.stale ? ` (the stored reading is older than ${data.facts_max_age_hours}h)`
+                    : ' (no usable reading)')
+                + ' -- this host has no placement budget');
+        } else {
+            console.log(`  memory: ${data.booked_mb} of ${data.budget_mb} MB booked,`
+                + ` ${data.free_mb} MB free`
+                + ` (overcommit ${data.overcommit_ratio}x, reserve ${data.reserve_mb} MB,`
+                + ` measured ${data.measured_at})`);
+        }
+        table(data.workloads || [],
+            ['id', 'name', 'kind', 'status', 'booked_mb', 'usage_mb']);
+    },
+};
 
 // -- commands -----------------------------------------------------------------
 
@@ -642,12 +754,18 @@ const commands = {
 
     async database([first, ...rest]) {
         if (databaseVerbs[first]) return databaseVerbs[first](rest);
-        die('Usage: hoh database list | hoh database move <id> | hoh database delete <id>');
+        die('Usage: hoh database list | hoh database wait <id> | hoh database move <id>'
+            + ' | hoh database delete <id>');
     },
 
-    async engine([first]) {
-        if (first !== 'list') die('Usage: hoh engine list');
-        emit(await get('/api/v1/engines'), 'engines', engineColumns);
+    async engine([first, ...rest]) {
+        if (engineVerbs[first]) return engineVerbs[first](rest);
+        die('Usage: hoh engine list | hoh engine show <engine-id>');
+    },
+
+    async host([first, ...rest]) {
+        if (hostVerbs[first]) return hostVerbs[first](rest);
+        die('Usage: hoh host list | hoh host show <host-id>');
     },
 
     async 'access-list'([first, ...rest]) {
@@ -748,13 +866,26 @@ Usage: hoh [--context <name>] <command> [args] [--json] [--yes]
   access-list create <name> [f=v..]  Create a list (name, satisfy, shared for admins)
   access-list delete <id> [--yes]    Delete a list and its rules (asks for the name)
   access-list rule add <id> <type> [f=v]  Add a rule (data.username=..., enabled=true)
-  database list                      Managed databases you hold view on
+  database list                      Managed databases you hold view on. The memory
+                                     column is the EFFECTIVE ceiling: "512" declared on
+                                     the record, "1280*" the default the booking used,
+                                     "->1024" inherited from the shared engine
+  database wait <id> [--timeout <s>]  Poll until the record settles (every 2s, default
+                                     600s). Exit 0 active, 1 failed (reason printed),
+                                     2 timed out naming the last status
   database move <id> [--yes]         Move a dedicated database onto its host's shared
                                      engine (admin; asks for the name; runs in the
-                                     background -- watch it with "database list")
+                                     background -- block on it with "database wait")
   database delete <id> [--yes]       Destroy a managed database (asks for the name;
                                      refused while a workload still holds it)
   engine list                        Shared database engines (admin)
+  engine show <engine-id>            One engine, the databases living on it and its
+                                     container's live usage when somebody is watching
+  host list                          Hosts with their memory ledger (admin): budget,
+                                     booked, free, overcommit ratio
+  host show <host-id>                One host plus every workload booked on it
+                                     (instances AND database engines) with what each
+                                     holds, and live usage where the stats hub has it
   logs <instance-id> [-n <lines>]    Tail an instance's console output
   power <instance-id> <action>       start | stop | restart
   vars instance|env <id> ...         List / set / unset variables (--secret for secrets;
@@ -777,7 +908,7 @@ const BOOLEAN_FLAGS = {
     '--json': 'json', '--yes': 'yes', '-y': 'yes', '--secret': 'secret',
     '--keep-ns': 'keepNs', '--help': 'help', '-h': 'help',
 };
-const VALUE_FLAGS = { '-n': 'n', '--context': 'context' };
+const VALUE_FLAGS = { '-n': 'n', '--context': 'context', '--timeout': 'timeout' };
 
 const flags = {};
 const positional = [];

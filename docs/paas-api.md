@@ -116,9 +116,13 @@ returned). Say so when delegating; the grant UI does not.
 | GET/POST | `/api/v1/environments/{id}/variables[/delete]` | Same shape, but ADMIN-ONLY (`hohenheim.admin.access`, as narrowed by the key's scopes) -- see Environment variables below |
 
 | GET | `/api/v1/databases` | Managed databases the key holds `view` on -- see Managed databases below |
+| GET | `/api/v1/databases/{id}` | One managed database, the shape `hoh database wait` polls (`status` + `outcome`) |
 | POST | `/api/v1/databases/{id}/move-shared` | Move a dedicated database onto its host's shared engine (ADMIN-ONLY, 403 otherwise); accepted/queued, the record's `status` carries the outcome |
 | POST | `/api/v1/databases/{id}/delete` | Destroy a managed database exactly as the panel's delete does (the `destroy` capability, asked by the teardown service itself); 422 `delete_in_use` while a workload holds it |
 | GET | `/api/v1/engines` | Shared database engines with their database counts (ADMIN-ONLY) |
+| GET | `/api/v1/engines/{id}` | One engine plus the logical databases on it, and its container's live usage when the stats hub has a sample (ADMIN-ONLY) |
+| GET | `/api/v1/hosts` | Hosts with their memory ledger: budget, booked, free, overcommit (ADMIN-ONLY) -- see Hosts and capacity below |
+| GET | `/api/v1/hosts/{id}` | One host plus every workload booked on it (instances AND database engines) |
 
 Also present (older lanes, admin-permission-gated): `/api/sites`,
 `/api/sites/{id}/deploy`, `/api/dns/...`, and the instance file API under
@@ -436,8 +440,11 @@ reached without a browser (`DatabaseApi`), and their doors are the panels':
   them runs in the BACKGROUND exactly as the row action does, so the answer is
   `{"id", "name", "status": "queued", "watch": "status"}` and the outcome shows up
   on the record's own `status` (provisioning while it works, active when it
-  settles, with `failure_reason` filled on a failed move). Poll `GET
-  /api/v1/databases`. Rate limit: the database I/O bucket (5 per
+  settles, with `failure_reason` filled on a failed move). Block on it with `hoh
+  database wait <id>`, which polls `GET /api/v1/databases/{id}` every 2 seconds and
+  exits **0** when the record lands active, **1** when it lands failed (printing the
+  reason), **2** on timeout (default 600s, `--timeout`) naming the last status it saw.
+  Rate limit: the database I/O bucket (5 per
   minute, `hh_db_io`) -- the move dumps and restores a whole database.
 - `POST /api/v1/databases/{id}/delete` -- rides `DatabaseResource`'s own delete
   pipeline. Seeing a database (`view`) is not enough to destroy it: the resource
@@ -451,10 +458,43 @@ reached without a browser (`DatabaseApi`), and their doors are the panels':
   unverifiable teardown is a 422 `database_destroy_failed` and keeps the record
   (status `destroy_failed`); the force-destroy escape hatch stays panel-only, as
   an operator decision about the operator's own machine.
+- `GET /api/v1/databases/{id}` -- the same projection for one record, which is what a
+  watcher polls. Beside `status` every projection carries **`outcome`**: `pending`
+  (still in flight), `ok` (settled usable) or `failed`. It is derived from the status
+  vocabulary's own declaration (`DatabaseModel.outcomeOf`), so no client carries a list
+  of status names, and an UNRECOGNISED status reads `pending` -- fail closed: a poller
+  keeps waiting and eventually times out naming what it saw, rather than reporting a
+  success the vocabulary never declared.
 - `GET /api/v1/engines` -- **ADMIN-ONLY**, because a `DatabaseEngineModel` row
   exists on the admin panel alone. `id`, `name`, `engine`, `image`, `server`,
   `memory_limit_mb`, `cpu_limit`, `databases` (the count living on it), `status`,
   `failure_reason`. The engine's superuser credentials are absent BY NAME.
+- `GET /api/v1/engines/{id}` -- the same fields plus `logical_databases`: every record
+  living on that engine with `id`, `name`, `db_name`, `db_user`, `status`, `outcome`
+  and its effective ceiling. `usage_mb` is present only when the stats hub already holds
+  a sample for the engine's container (somebody is watching it); this surface never
+  opens a daemon stats stream for a REST read, so an absent field means "not being
+  watched", never "zero".
+
+### Effective memory, and where the number came from
+
+`memory_limit_mb` is what the RECORD declares, which for two of the three shapes is
+nothing at all -- so the column was EMPTY exactly where an operator needed a number.
+Every projection therefore also carries:
+
+- `effective_memory_mb` -- the ceiling the database actually runs under. Because
+  charge == cap, this is both the cgroup limit and what the host budget is charged.
+- `memory_source` -- `declared` (the record's own `memory_limit_mb`), `default` (the
+  engine kind's declared footprint, which is what the booking used), or `engine` (a
+  SHARED record has no container of its own; the ceiling is its engine's).
+
+Both fields are computed by asking the very handler the capacity hook books through
+over the very settings the deploy writes (`DatabaseService.memoryCeilingOf`), so the
+panel, the host ledger and the CLI cannot quote three different ceilings. They are
+absent -- never guessed -- for a shared record whose engine row has gone missing.
+
+The CLI prints one column with the source MARKED: `512` is declared, `1280*` is the
+default the booking used, `->1024` is inherited from the shared engine.
 
 An unknown or out-of-scope id answers the uniform **404** on every verb, exactly
 as the instance lane does: absence and denial are one answer.
@@ -464,6 +504,48 @@ both prompt for the database NAME before they act (`--yes` skips it in scripts),
 the same client interlock `hoh rollback` carries. The server demands no phrase --
 a ConfirmationSpec is a client interlock by design -- so the prompt lives where
 the dialog does.
+
+## Hosts and capacity
+
+Added 2026-09-02, for the same reason the database verbs were: the memory picture
+existed only on the admin overview page, so an operator deciding where a database
+could go was reading `docker stats` -- which answers a DIFFERENT question. `docker
+stats` measures live RSS; placement decides on the BOOKED ceiling, and a stopped
+workload still holds its booking (a guest that can be started again without asking
+anyone must be counted, or the refusal lands on START).
+
+Both verbs are **ADMIN-ONLY** (`hohenheim.admin.access`, as narrowed by the key's
+scopes): a host row exists on the operator panel alone, and the single-host form
+enumerates every tenant's workload on the machine by name.
+
+- `GET /api/v1/hosts` -- per host: `id`, `name`, `runtime`, `mode`, `admission`
+  (`blocked` / `admitted` / `draining`), `preflight_ok`, then the ledger --
+  `measured`, `stale`, `budget_mb`, `booked_mb`, `bookable_mb`, `free_mb`,
+  `overcommit_ratio`, `reserve_mb`, `measured_at`, `facts_max_age_hours`.
+- `GET /api/v1/hosts/{id}` -- the same plus `workloads`: `id`, `kind`, `name`,
+  `status`, `booked_mb` and, when available, `usage_mb`. Database engines and
+  dedicated databases appear here as `hohenheim:database_container` instances,
+  because the tier is lowered onto the instance contract -- one walk enumerates the
+  whole ledger.
+
+Three things worth knowing before reading the numbers:
+
+- `measured: false` is an explicit state, never an empty host. A host whose memory
+  reading is missing or older than `capacity.facts_max_age_hours` has NO placement
+  budget (`InstancePlacement` refuses to choose it), and the budget columns are then
+  zero because there is no budget -- not because nothing is booked. `stale` separates
+  "the evidence is too old" from "never measured".
+- `budget_mb` can exceed the machine: it is `mem_total - capacity.host_memory_reserve_mb`
+  multiplied by `capacity.memory_overcommit_ratio`, both of which the response names,
+  so an overcommitted host is explicable rather than surprising.
+- `usage_mb` is the instance stats hub's LAST SAMPLE, present only while somebody is
+  watching that workload. This surface never opens a daemon stats stream (one host
+  listing would become N of them, for a number placement does not decide on anyway),
+  so an absent field means "nobody is watching", never "zero".
+
+Every number is the ledger the admin overview page reads (`InstanceCapacity.viewOf`,
+`InstanceCapacity.bookedMbOf`); nothing is recomputed here, so the panel and the CLI
+cannot disagree.
 
 ## DNS zones
 
@@ -676,10 +758,14 @@ hoh access-list create Staff satisfy=all shared=true   # shared is admin-only
 hoh access-list rule add 31 basic_auth data.username=earl data.password=hunter2 enabled=true
 hoh access-list rule add 31 ip_allow data.network=10.0.0.0/8 enabled=true
 hoh access-list delete 31 [--yes]     # takes its rules; asks for the name
-hoh database list                     # id, name, engine, placement, engine, host, status, attached
+hoh database list                     # memory column: 512 declared, 1280* default, ->1024 engine
+hoh database wait 61 [--timeout 600]  # polls every 2s: exit 0 active, 1 failed, 2 timed out
 hoh database move 61 [--yes]          # admin; onto the shared engine, in the background
 hoh database delete 61 [--yes]        # asks for the name; refused while attached
 hoh engine list                       # admin; shared engines and their database counts
+hoh engine show 71                    # admin; the engine, its databases and its live usage
+hoh host list                         # admin; budget, booked, free, overcommit per host
+hoh host show 1                       # admin; plus every workload booked on it
 hoh logs 3 -n 500
 hoh power 3 restart
 hoh vars instance 3                   # secrets show "(set)", never the value

@@ -13,6 +13,8 @@ import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
@@ -633,6 +635,59 @@ public class DatabaseService extends DatasourceScoped {
     public static @NonNull String placementOf(Row row) {
         return DatabaseModel.isShared(row) ? DatabaseModel.PLACEMENT_SHARED
             : DatabaseModel.PLACEMENT_DEDICATED;
+    }
+
+    /** {@link MemoryCeiling#source()}: the record's own declared {@code memory_limit_mb}. */
+    public static final String MEMORY_SOURCE_DECLARED = "declared";
+
+    /** {@link MemoryCeiling#source()}: nothing was declared, so the kind's footprint was booked. */
+    public static final String MEMORY_SOURCE_DEFAULT = "default";
+
+    /** {@link MemoryCeiling#source()}: a shared record inherits its ENGINE's ceiling. */
+    public static final String MEMORY_SOURCE_ENGINE = "engine";
+
+    /**
+     * The memory ceiling a managed database actually runs under, and where that number
+     * came from.
+     *
+     * @param megabytes the booked ceiling (charge == cap, so this is also the cgroup cap)
+     * @param source    one of {@link #MEMORY_SOURCE_DECLARED}, {@link #MEMORY_SOURCE_DEFAULT},
+     *                  {@link #MEMORY_SOURCE_ENGINE}
+     */
+    public record MemoryCeiling(int megabytes, @NonNull String source) {
+    }
+
+    /**
+     * THE effective memory ceiling of a managed database: its own declared limit, the
+     * default the booking used when it declares none, or -- for a SHARED record, which
+     * owns no container at all -- its engine's.
+     *
+     * AIDEV-NOTE: the number is not computed here. It is asked of the very handler the
+     * capacity hook books through ({@code InstanceCapacity.footprintMbOf}) over the very
+     * settings {@code DatabaseInstances} deploys, so the API, the panel and the host
+     * ledger can never quote three different ceilings for one record. Only the SOURCE
+     * label is this method's own.
+     *
+     * @return null when the record's engine host cannot be resolved (a shared record whose
+     *         engine row is gone), which is a defect to surface as an absent field rather
+     *         than a number to guess
+     */
+    public static @Nullable MemoryCeiling memoryCeilingOf(@NonNull Row database) {
+        EngineHost host;
+        try {
+            host = EngineHost.serving(database);
+        } catch (RuntimeException dangling) {
+            return null;
+        }
+        InstanceKindHandler handler = InstanceKinds.getHandler(DatabaseContainerKind.ID.toString());
+        if (handler == null) {
+            return null;
+        }
+        String source = host.shared() ? MEMORY_SOURCE_ENGINE
+            : host.limits().memoryMb() != null ? MEMORY_SOURCE_DECLARED : MEMORY_SOURCE_DEFAULT;
+        return new MemoryCeiling(
+            InstanceCapacity.footprintMbOf(handler, DatabaseInstances.desiredSettings(host)),
+            source);
     }
 
     /** The shared engine's name, or null for a dedicated record. */

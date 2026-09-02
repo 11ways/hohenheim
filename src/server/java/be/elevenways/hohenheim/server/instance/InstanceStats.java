@@ -102,6 +102,23 @@ public final class InstanceStats {
         return session == null ? List.of() : session.history();
     }
 
+    /**
+     * The most recent working set (MB) of an instance, or null when this hub holds no
+     * sample for it.
+     *
+     * AIDEV-NOTE: deliberately NEVER opens a stream. A live figure exists exactly while
+     * somebody watches the workload, and a REST read that started a daemon stats stream
+     * per workload would turn one host listing into N daemon streams for one number.
+     * Absent is an honest answer here; an invented one is not.
+     */
+    public static @Nullable Long lastMemoryMb(int instanceId) {
+        List<Sample> samples = history(instanceId);
+        if (samples.isEmpty()) {
+            return null;
+        }
+        return samples.get(samples.size() - 1).memoryBytes() / (1024L * 1024L);
+    }
+
     /** Close every live stream; the boot/shutdown seam and the test cleanup hook. */
     public static void shutdown() {
         for (Session session : SESSIONS.values()) {

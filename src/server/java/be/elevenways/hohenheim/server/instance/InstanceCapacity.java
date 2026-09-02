@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.protoblast.common.Blast;
@@ -129,6 +130,39 @@ public final class InstanceCapacity {
      */
     public static long bookableMbOn(int serverId, long budgetMb) {
         return Math.max(0, budgetMb);
+    }
+
+    /**
+     * THE capacity ledger of one host as every surface reads it: the admin overview page's
+     * bar and facts, and the {@code /api/v1/hosts} lane behind {@code hoh host}.
+     *
+     * AIDEV-NOTE: one derivation on purpose. The panel and the CLI quoting different
+     * numbers for the same host is the whole reason the operator was reading
+     * {@code docker stats} instead. {@code measured} false is an explicit state, never a
+     * zero budget: a host whose reading cannot carry a decision is not an empty host.
+     */
+    public static @NonNull HostCapacityView viewOf(@NonNull Row server, int serverId) {
+        Long budget = budgetMbOf(server);
+        boolean hasReading = server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> map
+            && map.get(HostPreflight.MEM_TOTAL_FACT) instanceof Number;
+        Instant measuredAt = HostPreflight.factMeasuredAt(server, HostPreflight.MEM_TOTAL_FACT);
+        if (measuredAt == null && hasReading) {
+            measuredAt = server.get(ServerModel.PROBED_AT);
+        }
+        Integer maxAge = HohenheimSettings.VALUES.getValue(
+            HohenheimSettings.Capacity.FACTS_MAX_AGE_HOURS);
+        return new HostCapacityView(
+            budget != null,
+            budget == null && hasReading,
+            budget != null ? clampInt(budget) : 0,
+            clampInt(bookedMbOn(serverId)),
+            budget != null ? clampInt(bookableMbOn(serverId, budget)) : 0,
+            measuredAt != null ? measuredAt.toString() : null,
+            maxAge != null ? maxAge : 0);
+    }
+
+    private static int clampInt(long value) {
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(0, value));
     }
 
     // -- the budget -----------------------------------------------------------
@@ -515,23 +549,35 @@ public final class InstanceCapacity {
     }
 
     /**
-     * What the stored row is holding: the STAMP when it has one, else the footprint its
-     * settings imply.
+     * THE amount one instance row holds against its host bucket: the STAMP when it has
+     * one, else the footprint its settings imply.
+     *
+     * AIDEV-NOTE: public because every OTHER reader of this fact -- the reconciler's
+     * expected-bucket sum and the host API's per-workload rows -- must get the number the
+     * release will actually hand back. Two spellings of "what is this row booked at" is
+     * how a reconciler reports drift that does not exist.
+     */
+    public static long bookedMbOf(@NonNull Row instance) {
+        Integer stamped = instance.get(InstanceModel.CAPACITY_MB);
+        return Math.max(0, stamped != null ? stamped : footprintMbOf(instance));
+    }
+
+    /**
+     * {@link #bookedMbOf} on a RELEASE path, which slogs the missing stamp.
      *
      * AIDEV-NOTE: the fallback exists for rows written before the stamp column and for a
      * row the backfill could not price; it is slogged rather than silent, because a
      * release computed from settings that changed since is exactly the accounting drift
-     * the stamp exists to prevent.
+     * the stamp exists to prevent. The slog lives HERE and not in the shared arithmetic:
+     * a read of the host page must not sound an accounting alarm.
      */
     private static long bookedOf(@NonNull Row stored) {
-        Integer stamped = stored.get(InstanceModel.CAPACITY_MB);
-        if (stamped != null) {
-            return stamped;
+        if (stored.get(InstanceModel.CAPACITY_MB) == null) {
+            Blast.log("CAPACITY: instance", stored.get(InstanceModel.ID),
+                "carries no booked amount; releasing the derived footprint",
+                footprintMbOf(stored));
         }
-        int derived = footprintMbOf(stored);
-        Blast.log("CAPACITY: instance", stored.get(InstanceModel.ID),
-            "carries no booked amount; releasing the derived footprint", derived);
-        return derived;
+        return bookedMbOf(stored);
     }
 
     /** The server_id the write will END UP with: staged when carried, else stored. */

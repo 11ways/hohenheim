@@ -165,10 +165,9 @@ public final class QuotaReconciler {
         return Math.max(0, stamped != null ? stamped : InstanceCapacity.footprintMbOf(row));
     }
 
-    /** The same question for the HOST budget, off the host-side stamp. */
+    /** The same question for the HOST budget, asked through the booking's own home. */
     private static long hostMemoryOf(@NonNull Row row) {
-        Integer stamped = row.get(InstanceModel.CAPACITY_MB);
-        return Math.max(0, stamped != null ? stamped : InstanceCapacity.footprintMbOf(row));
+        return InstanceCapacity.bookedMbOf(row);
     }
 
     private static void add(@NonNull Map<String, Long> expected, @Nullable String bucket,
