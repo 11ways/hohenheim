@@ -1392,3 +1392,8 @@ at HTTP boot, undertow's dependency, not an offline-command line),
 list one query per page, `/api/v1/databases` + `/api/v1/engines` with `hoh
 database|engine`.
 ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20260902-092214`.
+
+## Deploy 2026-09-02 (wave 6): ab89d70a, one logical user per shared database
+
+Swapped to hohenheim `ab89d70a` (jar sha256 `4ebfcec7cc5f3839...`, stamp 13/13 `dirty=false`, same chain as wave 5) with `tools/deploy-host.sh starfleet <jar>` in one run, exit 0; preflight `/root/hohenheim-preflight-20260902-110231/`, rollback jar `78e6cfac`; no migration (top M009). Healthy after both restarts, `/health` 200 from outside. Ships the shared-engine credential fix (taken logical name/user refused, move renames, tenant names namespaced).
+ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20260902-110231`.

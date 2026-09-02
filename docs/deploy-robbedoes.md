@@ -2476,3 +2476,8 @@ label used to make two tenants' "blog" ONE database on the shared engine.
 Pinned by `SharedDatabaseEngineTest` step 4b, `TenantDatabaseSurfaceTest` steps
 6/7 and `SharedDatabaseEngineLiveTest` (squatter + same-user refusal), runs
 126 and 131.
+
+## Deploy 2026-09-02 (wave 6): ab89d70a, one logical user per shared database
+
+Swapped to hohenheim `ab89d70a` (jar sha256 `4ebfcec7cc5f3839...`, stamp 13/13 `dirty=false`, same chain as wave 5) with `tools/deploy-host.sh robbedoes <jar>` in one run, exit 0; preflight `/root/hohenheim-preflight-20260902-110521/`, rollback jar `78e6cfac`; no migration (top M009). Healthy after both restarts, `/health` 200 from outside. Ships the shared-engine credential fix (taken logical name/user refused, move renames, tenant names namespaced).
+ROLLBACK: `tools/deploy-host.sh --rollback robbedoes --preflight /root/hohenheim-preflight-20260902-110521`.
