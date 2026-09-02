@@ -753,6 +753,42 @@ public class ManagedDatabase {
     }
 
     /**
+     * The cap refusal for a dump whose size is KNOWN before any byte is transferred: it
+     * names the number an operator has to set, and no transfer was started.
+     */
+    private static IOException capRefusal(String handle, long actualBytes) {
+        long actualMb = (actualBytes + 1024 * 1024 - 1) / (1024 * 1024);
+        return new IOException("Dump of '" + handle + "' is " + actualMb + " MB, over the"
+            + " configured cap of " + (maxDumpBytes() / (1024 * 1024)) + " MB; set"
+            + " database.max_dump_mb to at least " + actualMb + " (nothing was transferred)");
+    }
+
+    /**
+     * Refuse a binary dump that already exists inside the container when it is over the
+     * cap, BEFORE fetching it: a mongodump archive is uncompressed BSON, several times the
+     * on-disk size, and copying gigabytes only to delete them at the cap is the wrong way
+     * to learn the number.
+     */
+    private void requireUnderCap(String handle, String containerPath) throws IOException {
+        DockerClient.ExecResult stat = docker.exec(handle,
+            List.of("stat", "-c", "%s", containerPath));
+        if (stat.exitCode() != 0) {
+            throw new IOException("Could not size the dump in '" + handle + "' before fetching"
+                + " it: " + stat.stderr().trim());
+        }
+        long bytes;
+        try {
+            bytes = Long.parseLong(stat.stdout().trim());
+        } catch (NumberFormatException e) {
+            throw new IOException("Could not size the dump in '" + handle + "': stat answered '"
+                + stat.stdout().trim() + "'");
+        }
+        if (bytes > maxDumpBytes()) {
+            throw capRefusal(handle, bytes);
+        }
+    }
+
+    /**
      * Back up any engine to a file, STREAMED end to end: SQL text dumps go exec-stdout to
      * disk, binary dumps (Redis RDB, mongodump archive) go archive-API to disk -- controller
      * heap never holds a dump (the 2026-08-31 nightly OOM class). The write lands in a
@@ -789,6 +825,7 @@ public class ManagedDatabase {
                         throw new IOException("redis dump failed for '" + handle + "': "
                             + save.stderr().trim());
                     }
+                    requireUnderCap(handle, rdbPath);
                     docker.getArchiveFileTo(handle, rdbPath, partial, maxDumpBytes());
                     // The exit code alone is a liar: redis-cli has shipped exit 0 while
                     // writing an error line (NOAUTH) into the dump file. The restore path
@@ -807,6 +844,7 @@ public class ManagedDatabase {
                         throw new IOException("mongodump failed for '" + handle + "': "
                             + dump.stderr().trim());
                     }
+                    requireUnderCap(handle, archivePath);
                     docker.getArchiveFileTo(handle, archivePath, partial, maxDumpBytes());
                 }
             }

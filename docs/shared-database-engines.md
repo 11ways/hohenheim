@@ -168,3 +168,27 @@ starfleet's `skeleton-mongo` moved through the panel action.
   its dedicated 512). Put the ratio back afterwards.
 - A row written before M009 reads as `dedicated` at load (afterFind); the
   stored column stays null.
+
+## Two operator detours removed (2026-09-02, second pass)
+
+- **A full host no longer refuses the move that frees it.** The engine's
+  reservation runs inside `InstanceCapacity.withPendingRelease(host, booked)`,
+  a per-thread CREDIT on the host limit worth exactly what the dedicated
+  container about to be destroyed holds. The bucket is still charged for both
+  until that container's row is soft-deleted (the migration window's "booked on
+  both" rule); a move that fails after the reservation leaves the host over
+  budget by at most the credit, the survivable direction. The overcommit-ratio
+  dance the first rollout needed is gone; a host that fits its dedicated
+  containers fits the engine that absorbs them. Pinned by
+  `CapacityPendingReleaseTest` (the primitive) and the live move journey's
+  step 2c (a host one megabyte short).
+- **An over-cap binary dump is refused before any byte moves**, naming the
+  number: `requireUnderCap` stats the archive inside the container and answers
+  `Dump of 'x' is N MB, over the configured cap of M MB; set database.max_dump_mb
+  to at least N (nothing was transferred)`. The mid-stream cap stays as the
+  backstop for the SQL text lanes, whose size is only known at the end.
+
+Deliberately NOT built: deriving the engine ceiling from the records it absorbs
+(the engine's memory is an operator decision the resize action already owns), and
+a "move everything" host action (six confirmations with a site check between
+them is the right shape for something that stops and redeploys every workload).

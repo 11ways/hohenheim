@@ -23,8 +23,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * PER-HOST memory capacity: the InstanceQuota shape, but the bucket is a HOST rather than
@@ -248,13 +250,60 @@ public final class InstanceCapacity {
         Long budget = server == null ? null : budgetMbOf(server);
         try {
             Quotas.reserve(bucketOf(serverId), amountMb,
-                budget == null ? Long.MAX_VALUE : bookableMbOn(serverId, budget));
+                budget == null ? Long.MAX_VALUE
+                    : bookableMbOn(serverId, budget) + pendingReleaseOn(serverId));
         } catch (QuotaExceeded full) {
             throw Violations.ofForm(violation("host_capacity_reached")
                 .withArg("name", hostLabel(serverId))
                 .withArg("needed", amountMb)
                 .withArg("free", Math.max(0, full.getLimit() - full.getUsed())));
         }
+    }
+
+    /** Per thread: host id -> memory a workload this thread is replacing is about to release. */
+    private static final ThreadLocal<Map<Integer, Long>> PENDING_RELEASE =
+        ThreadLocal.withInitial(HashMap::new);
+
+    /**
+     * Run {@code body} with {@code amountMb} on {@code serverId} counted as ABOUT TO BE
+     * RELEASED, so a reservation the body takes may exceed the host budget by exactly
+     * that much -- the shape of a database moving onto a shared engine: the engine must
+     * be booked while the dedicated container it absorbs still holds its charge, and a
+     * full host refused the engine for the very memory the move was freeing (robbedoes,
+     * 2026-09-02: 9,984 booked of 10,915, engine 1,024, dedicated 512 about to go).
+     *
+     * AIDEV-NOTE: this is a CREDIT ON THE LIMIT, never a release: the bucket really is
+     * charged for both until the replaced workload's row is destroyed, which is the
+     * migration window's "booked on both" rule again. A move that fails after the
+     * reservation leaves the host over its budget by at most the credit -- the
+     * survivable direction (placement refuses one workload too many until the next
+     * successful move or an operator resize) -- and never hands memory out twice. Host
+     * side only: the owner memory quota is tenant policy and the engine is charged to
+     * the operator regardless.
+     */
+    public static <T> T withPendingRelease(int serverId, long amountMb, @NonNull Supplier<T> body) {
+        if (amountMb <= 0) {
+            return body.get();
+        }
+        Map<Integer, Long> credits = PENDING_RELEASE.get();
+        long before = credits.getOrDefault(serverId, 0L);
+        credits.put(serverId, before + amountMb);
+        try {
+            return body.get();
+        } finally {
+            if (before == 0) {
+                credits.remove(serverId);
+            } else {
+                credits.put(serverId, before);
+            }
+            if (credits.isEmpty()) {
+                PENDING_RELEASE.remove();
+            }
+        }
+    }
+
+    private static long pendingReleaseOn(int serverId) {
+        return PENDING_RELEASE.get().getOrDefault(serverId, 0L);
     }
 
     /** Hand booked memory back; a non-positive amount is a no-op, never a clamp slog. */
@@ -315,7 +364,7 @@ public final class InstanceCapacity {
     }
 
     /** What one instance record holds against a host bucket; 0 for an absent record. */
-    static long bookedOfInstance(int instanceId) {
+    public static long bookedOfInstance(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         return row == null ? 0 : bookedOf(row);
     }

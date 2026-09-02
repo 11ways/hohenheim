@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -358,9 +359,12 @@ class SharedDatabaseEngineLiveTest {
                     "db.getSiblingDB('" + database + "').filler.insertOne("
                         + "{pad: 'x'.repeat(1500000)});");
                 assertThatThrownBy(() -> service.moveToSharedEngine(name))
-                    .as("step 2b: a dump over the cap refuses the move by name")
+                    .as("step 2b: a dump over the cap refuses the move by name, sized BEFORE"
+                        + " any transfer and naming the number to set")
                     .isInstanceOf(IOException.class)
-                    .hasMessageContaining("max_dump_mb");
+                    .hasMessageContaining("max_dump_mb")
+                    .hasMessageContaining("at least")
+                    .hasMessageContaining("nothing was transferred");
                 DatabaseService.Detail refused = service.detail(name);
                 assertThat(refused.status()).as("step 2b: the record is active again")
                     .isEqualTo("active");
@@ -378,8 +382,24 @@ class SharedDatabaseEngineLiveTest {
                     capBefore);
             }
 
+            // 2c. THE HOST IS FULL: its reading shrinks to one megabyte short of what the
+            //     engine needs beside the dedicated container. The move still succeeds,
+            //     because the engine is booked against the memory the dedicated container
+            //     is about to give back -- a full host must never refuse the very move
+            //     that frees it (the robbedoes trap of 2026-09-02).
+            long booked = InstanceCapacity.bookedMbOn(ServerModel.localServerId());
+            long engineMb = ManagedDatabase.Engine.MONGO.sharedFootprintMb();
+            HostFixtures.makeLocalPlaceable(booked + engineMb - 1 + HohenheimSettings.VALUES
+                .getValue(HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB));
+            assertThat(InstanceCapacity.bookableMbOn(ServerModel.localServerId(),
+                    InstanceCapacity.budgetMbOf(Models.get(ServerModel.class)
+                        .findById(ServerModel.localServerId()))))
+                .as("step 2c: the host cannot take the engine beside the dedicated container")
+                .isLessThan(booked + engineMb);
+
             // 3. THE MOVE, synchronously.
             service.moveToSharedEngine(name);
+            HostFixtures.makeLocalPlaceable(16384);
             DatabaseService.Detail moved = service.detail(name);
             assertThat(moved.placement()).as("step 3: the record is shared now")
                 .isEqualTo(DatabaseModel.PLACEMENT_SHARED);
@@ -445,6 +465,8 @@ class SharedDatabaseEngineLiveTest {
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("already lives on a shared engine");
         } finally {
+            // Step 2c shrinks the host reading; a failed move must not leave it shrunk.
+            HostFixtures.makeLocalPlaceable(16384);
             if (instanceId != null) {
                 try {
                     new InstanceService().destroy(instanceId);

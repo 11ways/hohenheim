@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
@@ -898,9 +899,15 @@ public class DatabaseService extends DatasourceScoped {
             String oldHandle = handleOf(row, old);
             String before = fingerprint(old, oldHandle, database);
 
-            // 3. The shared engine, up.
-            Row engineRow = query(() -> DatabaseEngines.findOrCreateShared(serverId, engine,
-                row.get(DatabaseModel.IMAGE)));
+            // 3. The shared engine, up. Its reservation may exceed the host budget by what
+            //    the dedicated container below is about to give back: a full host must not
+            //    refuse the engine for the very memory this move frees.
+            Row oldInstance = query(() -> DatabaseInstances.ownedBy(old));
+            long releasing = oldInstance == null ? 0
+                : InstanceCapacity.bookedOfInstance(oldInstance.get(InstanceModel.ID));
+            Row engineRow = InstanceCapacity.withPendingRelease(serverId, releasing,
+                () -> query(() -> DatabaseEngines.findOrCreateShared(serverId, engine,
+                    row.get(DatabaseModel.IMAGE))));
             int engineId = engineRow.get(DatabaseEngineModel.ID);
             scoped(() -> {
                 DatabaseEngines.ensureRunning(engineId);
