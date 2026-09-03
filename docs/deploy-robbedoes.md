@@ -2490,3 +2490,20 @@ ROLLBACK: `tools/deploy-host.sh --rollback robbedoes --preflight /root/hohenheim
 ### 2026-09-02, after wave 7: `--sun-misc-unsafe-memory-access=allow` on the unit
 
 Undertow frees its pooled direct buffers through `Unsafe::invokeCleaner` (every release through 2.4.x, `DirectByteBufferDeallocator`), which printed one four-line JDK warning on the first request after boot. No library fix exists, so the JVM switch was added to `JAVA_TOOL_OPTIONS` in `/etc/systemd/system/hohenheim.service` (backup `/root/hohenheim.service.bak-20260902-unsafe`), `daemon-reload`, one restart, healthy. `tools/install-host.sh` writes the same flag for new hosts. Verified: the journal since that restart carries zero `terminally deprecated`, `SLF4J(W)` or `restricted method` lines under traffic.
+
+## Deploy 2026-09-03 (robbedoes): 1687be16, the list-card filter bar and the 2026-09-02 chain wave
+
+Swapped to hohenheim `1687be16` (jar sha256 `a4b14e281058f693ecf5c1e1be82575556c91f6f39b198b7d41c431246cf1532`, 269389055 bytes,
+stamp 13/13 `dirty=false`; zenit-cms `155b9bc5`, plumage `8a68eb4f`, zenit `3d08cdff`, hawkeye `63c36110`,
+protoblast `031c572a`). What shipped: the zenit-cms list card's ONE folded filter bar (the under-header
+filter row and the Filter popover are gone, the synthesized row edit is a bare pencil) on top of the whole
+2026-09-02 chain wave pushed for it -- in-place same-page navigation (`mode=reuse`), facets, `pl-pager`,
+`pl-facet`, and the bundle-budget re-baselines in spamservice and hohenheim that wave forced
+(cms.js +364 KB raw). Deployed with `zenit-dev deploy robbedoes --pushed` (`tools/deploy-host.sh`).
+Preflight `/root/hohenheim-preflight-20260903-212018/` (`hohenheim.db.pre` integrity ok,
+`hohenheim.db.at-swap`, `settings/`, keyring: absent, rollback jar `rollback.jar`). Migrations rehearsed
+against a byte copy through `--rehearse-migrations`, then applied at boot: none (48 before, 48 after).
+Healthy after both restarts; `zenit-dev deployed robbedoes` = current.
+Same preflight settings-count caveat as kuifje (the count runs unprivileged). Outside-in after the swap: see
+the session report (earl, tavernetomberg, www.wcag.be, invulassistent probed with a browser UA).
+ROLLBACK: `tools/deploy-host.sh --rollback robbedoes --preflight /root/hohenheim-preflight-20260903-212018`.
