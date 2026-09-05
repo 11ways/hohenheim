@@ -276,7 +276,7 @@ public class SiteResource extends RowResource {
             .label(FieldLabels.labelFor(SiteModel.UPSTREAM_KIND)).build())
         .filter(FilterSpec.forField(SiteModel.ENABLED, FilterSpec.Kind.BOOLEAN)
             .label(FieldLabels.labelFor(SiteModel.ENABLED)).build())
-        .filter(FilterSpec.forField(SiteModel.CREATED_AT, FilterSpec.Kind.TEXT)
+        .filter(FilterSpec.forField(SiteModel.CREATED_AT, FilterSpec.Kind.DATETIME_RANGE)
             .label(FieldLabels.labelFor(SiteModel.CREATED_AT)).build())
         .defaultSort(SortSpec.desc(SiteModel.CREATED_AT.getName()))
         .rowClasses(row -> Boolean.TRUE.equals(row.get(SiteModel.ENABLED))
