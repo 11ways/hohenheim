@@ -1437,3 +1437,45 @@ filter row; the Filter toggle unfolds four labelled filters plus the advanced ti
 to 2 rows through a SOFT navigation (a `window.__probe` planted before typing survived), focus stayed in the
 input, the toggle counted 1. Rows carry the pencil and the kebab.
 ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20260903-211535`.
+
+
+## Deploy 2026-09-05 (starfleet): compact CMS lists and visible range labels
+
+Deployed Hohenheim `a69df9a5`, CMS `bed312de`, Plumage `98e5efcf` and the
+current pushed dependency closure using `zd_build pushed:true`, then
+`zd_deploy target:starfleet` with the same artifact used on all three hosts.
+Jar SHA-256: `1cee05c28385e4516f1e11b7ba05743278c3025c38837e7f6807e161d89c4a98`
+(269460917 bytes, 13/13 clean stamp rows matching the pushed workspace).
+The dependency build completed as run 6; the MCP wait timed out while it ran,
+so the existing daemon job was reattached, never restarted. The final stamp
+check reused the completed build without recompiling.
+
+Preflight: `/root/hohenheim-preflight-20260905-114506/`. Database backup integrity
+passed, settings were copied with privileged inventory, and the copied keyring
+matched. Migration rehearsal on a byte copy applied zero migrations. The live
+ledger stayed at 48 rows; Hohenheim remains pinned through 009. Both restarts
+passed health checks; deployment returned DEPLOYED / exit 0 and all 13 repos
+were current with no restart pending. Public panel `/health` returned HTTP 200
+with `{"status":"ok"}`.
+
+Shared verification: CMS run 114 passed 10/10 (FilterControlVocabularyTest and
+ListFilterChromeBrowserTest). Starfleet live Sites filtering narrowed five
+rows to two while `window.__deployUiProbe = "cms-bed312de"` and the focused
+`filter.name` input survived. The native Filter button exposed expanded state,
+and the document contained one main landmark. At 390x844 the header measured
+149.5px; the four filters occupied two rows (tops 245.5 / 303.5px), and document
+scrollWidth remained 390px. The Sites resource has no range filter; persistent
+From/To addons were verified in the CMS numeric-range browser fixture.
+
+Outside-in checks after the wave: Earl and Taverne Tomberg rendered in the
+real Sketerm browser; Invulassistent returned its expected HTTP 401; Skeleton
+returned HTTP 200 and rendered its Alchemy success page after a slow initial
+browser load. `hoh-dns-diff compare` against kuifje and robbedoes for wcag.be
+and tavernetomberg.be (SOA/NS/A/MX) returned IDENTICAL, both authoritative;
+Tomberg MX still points to calamity.develry.be. No DNS, site or certificate
+configuration was changed.
+
+Rollback: `tools/deploy-host.sh --rollback starfleet --preflight
+/root/hohenheim-preflight-20260905-114506` (one command). The retained rollback jar
+is the previous `1687be16` artifact. The existing pushed workspace is retained
+for incremental builds; ephemeral browser identities were closed after review.
