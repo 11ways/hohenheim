@@ -1479,3 +1479,64 @@ Rollback: `tools/deploy-host.sh --rollback starfleet --preflight
 /root/hohenheim-preflight-20260905-114506` (one command). The retained rollback jar
 is the previous `1687be16` artifact. The existing pushed workspace is retained
 for incremental builds; ephemeral browser identities were closed after review.
+
+## Deploy 2026-09-05 (starfleet): temporal filters, first live check
+
+Deployed Hohenheim `91191333`, CMS `a43c2474`, Plumage `dabd1a28` through
+`zd_deploy`, after `zd_build pushed:true` verified all 13 stamp rows clean.
+Jar SHA-256 `746024d8cfe8431024a39434a2adeb24abca077fc5ad93758ada526f6cca22e1`,
+269503947 bytes. Preflight `/root/hohenheim-preflight-20260905-130622/`;
+rollback jar is `a69df9a5` (SHA-256 `1cee05c28385e4516f1e11b7ba05743278c3025c38837e7f6807e161d89c4a98`).
+Database integrity and keyring comparison passed; eight settings files copied.
+Rehearsal applied zero migrations, the live ledger stayed 48/48, and both
+restarts passed health. Deployment returned DEPLOYED / exit 0, current 13/13.
+
+Real-browser verification found a label defect before the other hosts were
+updated: calendar/time controls worked, but the comparison trigger retained
+`date_after` while its popup showed the translated option. Between exposed
+both datetime bounds, and `window.__dateDeployProbe = "91191333"` survived
+the filter navigation. No site records or DNS settings were mutated.
+The correction uses explicit reactive option labels and repairs the shared
+PlSelectItem label watcher/fallback; Plumage SelectTest run 130 exposed the
+fallback half, run 131 passed 6/6 after both halves were fixed.
+
+## Deploy 2026-09-05 (starfleet): date/time filters with translated comparisons
+
+Final artifact: Hohenheim `91191333`, CMS `d7cee7b4`, Plumage `72856a3a`.
+Built through `zd_build pushed:true` (build run 10, completed job reattached
+across the MCP response timeout; the final stamp check reused that build).
+All 13 stamp rows match the pushed workspace and are clean. Jar SHA-256
+`c76795c1713539415751979c8cd2de47a6cb4ddd0807f6db3ca5bd967bbbb4af`, 269502501 bytes.
+The same artifact was deployed sequentially to Starfleet, Kuifje and Robbedoes
+through `zd_deploy`, each returning DEPLOYED / exit 0 and current 13/13 with
+no restart pending.
+
+Preflight: `/root/hohenheim-preflight-20260905-132648/`. Database integrity,
+transfer SHA-256 and copied keyring comparison passed; 8 settings files
+copied. Rehearsal applied zero migrations on a byte copy. The live migration
+ledger stayed 48/48, with Hohenheim pinned through 009. Both restarts passed
+health checks. Retained rollback jar SHA-256: `746024d8cfe8431024a39434a2adeb24abca077fc5ad93758ada526f6cca22e1`.
+Rollback command: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20260905-132648`.
+
+The shared CMS temporal control offers inclusive lower, upper and paired bounds
+using Plumage calendar/time segments, plus the existing Expression lane for
+scalar bookmarks and saved views. No new filter grammar or app-side picker
+mapping. The final artifact includes the live-discovered selected-label fix:
+PlSelectItem observes explicit label updates and renders its fallback reactively.
+SelectTest run 131 passed 6/6; the earlier temporal evidence is Plumage run 116
+(11/11), CMS unit run 119 (50 passed), CMS run 124 (14/14), phone journey run 129
+(1/1), and Hohenheim AdminUiSurfaceTest/DisplayNameLocalizationTest run 127 passed.
+
+Live proof on Starfleet: the closed selector resolved to "On or after", then
+"Between (inclusive)"; both pickers reported mode datetime and names
+`filter.created_at.from` / `.to`. Selecting September 1 at 00:00 submitted
+`2026-08-31T22:00:00Z` for the viewer zone, narrowed to no matches, and Clear
+restored all five sites. `window.__dateDeployProbe = "final-c76795c1"` survived
+selection and clearing, and the document had one main landmark. A real browser
+screenshot confirmed the translated comparison and visible From/To controls.
+
+Public `/health` returned 200 on all three panels. Browser-UA probes returned
+200 for Earl, Tomberg and Skeleton; Invulassistent returned its expected 401.
+Earl and Tomberg additionally rendered in the real Sketerm browser. Ephemeral
+browser identities were closed. No DNS, certificates or site records changed;
+the pushed workspace is retained for incremental builds.
