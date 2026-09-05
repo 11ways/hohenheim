@@ -9,11 +9,13 @@
 # This script IS that procedure now (docs/deploy-starfleet.md, "Deploy
 # procedure"); tools/install-host.sh is its install-time sibling.
 #
-# It REFUSES on three things, loudly and before anything is irreversible:
+# Its main gates are:
 #   1. a local jar whose build stamp is DIRTY, unstamped or inconsistent,
 #   2. a migration rehearsal that does not succeed against a byte copy,
 #   3. a health probe that never turns green (it then STOPS and prints the
 #      rollback commands; it never rolls back on its own).
+# A failed swap restarts the installed jar before returning failure. This is
+# service recovery, not an automatic jar or database rollback.
 #
 # The host, jar path and service name come from the SAME `deployments` config
 # `zenit-dev deployed` reads: ~/.config/zenit-dev/config.json, key
@@ -194,8 +196,7 @@ else
     RUN_AS="$SUDO -u '$SERVICE_USER'"
 fi
 
-HEALTH_TRIES=$(( HEALTH_TIMEOUT / 2 ))
-[ "$HEALTH_TRIES" -ge 1 ] || HEALTH_TRIES=1
+[ "$HEALTH_TIMEOUT" -gt 0 ] || fail "--health-timeout must be greater than zero"
 
 # --- remote plumbing --------------------------------------------------------
 
@@ -271,13 +272,36 @@ info "jar=$REMOTE_JAR prefix=$PREFIX db=$DB_PATH user=$SERVICE_USER"
 info "preflight=$PREFLIGHT_DIR health=$HEALTH_URL (up to ${HEALTH_TIMEOUT}s)"
 [ -n "$SUDO" ] && info "privilege: $SUDO (the ssh user is not root)" || info "privilege: none needed (root over ssh)"
 
+probe_health() {
+    remote "i=0
+deadline=\$((\$(date +%s) + $HEALTH_TIMEOUT))
+while :; do
+  remaining=\$((deadline - \$(date +%s)))
+  [ \$remaining -gt 0 ] || break
+  request_timeout=2
+  [ \$remaining -ge 2 ] || request_timeout=\$remaining
+  code=\$(curl --connect-timeout 2 --max-time \"\$request_timeout\" -s -o /dev/null -w '%{http_code}' '$HEALTH_URL' 2>/dev/null || true)
+  echo \"try \$i: \$code\"
+  if [ \"\$code\" = 200 ]; then echo '@@healthy'; exit 0; fi
+  i=\$((i+1))
+  remaining=\$((deadline - \$(date +%s)))
+  [ \$remaining -gt 0 ] || break
+  pause=2
+  [ \$remaining -ge 2 ] || pause=\$remaining
+  sleep \$pause
+done
+echo '@@unhealthy'
+$SUDO journalctl -u '$SERVICE' -n 40 --no-pager 2>&1 | tail -40"
+}
+
 # --- rollback mode ----------------------------------------------------------
 
 if [ "$MODE" = "rollback" ]; then
     step "Rollback: $ROLLBACK_JAR -> $REMOTE_JAR"
     OUT="$(remote "set -e
-[ -f '$ROLLBACK_JAR' ] || { echo '@@missing'; exit 3; }
+$SUDO test -f '$ROLLBACK_JAR' || { echo '@@missing'; exit 3; }
 $SUDO install -o '$SERVICE_USER' -g '$SERVICE_USER' -m 0644 '$ROLLBACK_JAR' '$PREFIX/hohenheim-server.jar.rollingback'
+trap '$SUDO systemctl start \"$SERVICE\"' 0
 $SUDO systemctl stop '$SERVICE'
 $SUDO mv '$PREFIX/hohenheim-server.jar.rollingback' '$REMOTE_JAR'
 set +e
@@ -285,20 +309,19 @@ echo '@@jar'
 stat -c '%n %s %U:%G %a' '$REMOTE_JAR'
 sha256sum '$REMOTE_JAR'
 $SUDO systemctl start '$SERVICE'
-echo \"@@start \$?\"")" || fail "the rollback swap failed on the host"
+start_rc=\$?
+trap - 0
+echo \"@@start \$start_rc\"")" || fail "the rollback swap failed on the host"
     if [ "$DRY_RUN" = "no" ]; then
         printf '%s\n' "$OUT" | sed 's/^/   /'
     fi
     step "Health probe after the rollback"
     if [ "$DRY_RUN" = "no" ]; then
-        remote "i=0
-while [ \$i -lt $HEALTH_TRIES ]; do
-  code=\$(curl -s -o /dev/null -w '%{http_code}' '$HEALTH_URL' 2>/dev/null || echo 000)
-  echo \"try \$i: \$code\"
-  [ \"\$code\" = 200 ] && { echo '@@healthy'; exit 0; }
-  i=\$((i+1)); sleep 2
-done
-echo '@@unhealthy'" | sed 's/^/   /'
+        HEALTH="$(probe_health || true)"
+        printf '%s\n' "$HEALTH" | sed 's/^/   /'
+        if ! printf '%s\n' "$HEALTH" | /usr/bin/grep -qx '@@healthy'; then
+            fail "rollback health never answered 200; inspect $SERVICE and restore the database deliberately if migrations require it"
+        fi
     fi
     info "the database is NOT restored by this mode: a migration applied by the newer jar"
     info "makes the older one refuse to boot, so restore it deliberately:"
@@ -372,9 +395,10 @@ $SUDO sqlite3 '$PREFLIGHT_DIR/hohenheim.db.pre' \"select version || ' ' || name 
 echo '@@settings'
 $SUDO rm -rf '$PREFLIGHT_DIR/settings'
 $SUDO cp -a '$SETTINGS_DIR' '$PREFLIGHT_DIR/settings'
-ls '$PREFLIGHT_DIR/settings' | wc -l
+settings_files=\$($SUDO find '$PREFLIGHT_DIR/settings' -type f -printf '.\\n')
+printf '%s\\n' \"\$settings_files\" | /usr/bin/grep -c '^\\.$' || true
 echo '@@keyring'
-if [ -f '$KEYRING' ]; then
+if $SUDO test -f '$KEYRING'; then
   a=\$($SUDO sha256sum '$KEYRING' | cut -d' ' -f1)
   b=\$($SUDO sha256sum '$PREFLIGHT_DIR/settings/field-encryption.keys' | cut -d' ' -f1)
   if [ \"\$a\" = \"\$b\" ]; then echo \"match \$a\"; else echo \"MISMATCH \$a \$b\"; fi
@@ -431,12 +455,12 @@ fi
 # --- 6. the swap ------------------------------------------------------------
 
 step "6. Swap the jar and restart $SERVICE"
-# Everything up to the `mv` is fatal-on-error; from there on nothing may abort
-# the shell, because a script that dies between the move and the start leaves
-# the box with a new jar and no process. The verification is reported, judged
-# here, and the start happens whatever it said.
+# Arm restart recovery before stopping: a failed backup or move must not leave
+# the installed jar stopped. After the move, inspection failures are reported
+# without preventing the explicit start; health is judged by the caller.
 SWAP="$(remote "set -e
 $SUDO install -o '$SERVICE_USER' -g '$SERVICE_USER' -m 0644 '$REHEARSE_DIR/new.jar' '$PREFIX/hohenheim-server.jar.new'
+trap '$SUDO systemctl start \"$SERVICE\"' 0
 $SUDO systemctl stop '$SERVICE'
 $SUDO sqlite3 '$DB_PATH' \".backup '$PREFLIGHT_DIR/hohenheim.db.at-swap'\"
 $SUDO mv '$PREFIX/hohenheim-server.jar.new' '$REMOTE_JAR'
@@ -447,7 +471,9 @@ echo '@@sha'
 sha256sum '$REMOTE_JAR' | cut -d' ' -f1
 echo '@@start'
 $SUDO systemctl start '$SERVICE'
-echo \"rc=\$?\"
+start_rc=\$?
+trap - 0
+echo \"rc=\$start_rc\"
 echo '@@end'")" || fail "the swap failed on the host; check $SERVICE and $PREFLIGHT_DIR before retrying"
 
 if [ "$DRY_RUN" = "no" ]; then
@@ -459,18 +485,6 @@ if [ "$DRY_RUN" = "no" ]; then
 fi
 
 # --- 7. health probe --------------------------------------------------------
-
-probe_health() {
-    remote "i=0
-while [ \$i -lt $HEALTH_TRIES ]; do
-  code=\$(curl -s -o /dev/null -w '%{http_code}' '$HEALTH_URL' 2>/dev/null || echo 000)
-  echo \"try \$i: \$code\"
-  if [ \"\$code\" = 200 ]; then echo '@@healthy'; exit 0; fi
-  i=\$((i+1)); sleep 2
-done
-echo '@@unhealthy'
-$SUDO journalctl -u '$SERVICE' -n 40 --no-pager 2>&1 | tail -40"
-}
 
 # Prints the manual rollback the operator now owns; this lane never rolls back
 # on its own, because an automatic rollback of a migrated database is a second
@@ -491,7 +505,7 @@ step "7. Health probe (up to ${HEALTH_TIMEOUT}s, every 2s)"
 HEALTH="$(probe_health || true)"
 if [ "$DRY_RUN" = "no" ]; then
     printf '%s\n' "$HEALTH" | sed 's/^/   /'
-    if ! printf '%s\n' "$HEALTH" | /usr/bin/grep -q '@@healthy'; then
+    if ! printf '%s\n' "$HEALTH" | /usr/bin/grep -qx '@@healthy'; then
         print_rollback
         fail "$HEALTH_URL never answered 200 within ${HEALTH_TIMEOUT}s; the journal lines are above and NOTHING was rolled back"
     fi
@@ -506,7 +520,7 @@ step "8. Migrations the boot applied"
 # Read-only URI: the service is running again by now, and a read that opens the
 # file read-write would leave a -wal behind under the service user's nose.
 AFTER="$(remote "$SUDO sqlite3 \"file:$DB_PATH?mode=ro\" \"select version || ' ' || name from zenit_migrations order by version;\"")" \
-    || warn "could not read zenit_migrations after the boot"
+    || fail "could not read zenit_migrations after the boot; migration outcome is unknown"
 if [ "$DRY_RUN" = "no" ]; then
     MIGRATIONS_AFTER="$AFTER"
     BEFORE_COUNT="$(printf '%s\n' "$MIGRATIONS_BEFORE" | /usr/bin/grep -c . || true)"
@@ -529,7 +543,7 @@ remote "$SUDO systemctl restart '$SERVICE'" || fail "the second restart failed"
 HEALTH2="$(probe_health || true)"
 if [ "$DRY_RUN" = "no" ]; then
     printf '%s\n' "$HEALTH2" | sed 's/^/   /'
-    if ! printf '%s\n' "$HEALTH2" | /usr/bin/grep -q '@@healthy'; then
+    if ! printf '%s\n' "$HEALTH2" | /usr/bin/grep -qx '@@healthy'; then
         print_rollback
         fail "the service did not come back after the SECOND restart; the journal lines are above"
     fi

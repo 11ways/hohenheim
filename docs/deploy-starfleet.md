@@ -189,9 +189,21 @@ starfleet runs as root over ssh; kuifje and robbedoes are `debian@` and the
 whole lane goes through `sudo -n`, which the script decides from the ssh
 identity alone.
 
-It REFUSES, before anything is irreversible, on exactly three things: a build
-stamp that is DIRTY, unstamped or inconsistent; a migration rehearsal that does
-not succeed against a byte copy; a health probe that never turns green.
+The stamp and rehearsal gates refuse before the swap. Health gates run after
+the swap and after each restart; failure needs operator recovery. A failed
+backup or move after stopping the service attempts to restart the installed
+jar, then returns failure. It never automatically restores a database.
+
+The health timeout is a wall-clock budget with bounded HTTP requests, including
+in rollback mode. An unhealthy rollback exits nonzero. Failure to read the
+post-boot migration ledger is an unknown outcome and stops the lane, never a
+claim that no migrations applied. Settings inventory, keyring existence and
+rollback-jar checks run with the same privilege as their copy operations.
+
+Local regression verification (2026-09-05): `tools/deploy-host.test.sh`, 73
+passed, 0 failed. The additional cases execute generated POSIX remote shell
+against fake host commands to exercise backup/move failure recovery and a
+request that times out. No production deploy was performed for this review.
 
 0. Build in an ISOLATED worktree (`git worktree add --detach <path> HEAD`) or a
    clean secondary workspace, never the main checkout, via `zenit-dev build`.
