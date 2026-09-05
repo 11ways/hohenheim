@@ -77,6 +77,7 @@ cat > "$BIN/ssh" <<'SHIM'
 #!/usr/bin/env bash
 # The remote script is the last argument; answer by what it asks for.
 script="${@: -1}"
+printf '%s\n' "$script" >> "$REMOTE_SCRIPTS"
 log() { printf '%s\n' "$1" >> "$SSH_LOG"; }
 
 case "$script" in
@@ -97,6 +98,7 @@ case "$script" in
         ;;
     *"@@stat"*)
         log "swap"
+        printf '%s\n' "$script" > "$SWAP_SCRIPT"
         printf '@@stat\n268192262 hohenheim:hohenheim 644\n'
         printf '@@sha\n%s\n' "$FAKE_JAR_SHA"
         printf '@@start\nrc=0\n'
@@ -104,6 +106,7 @@ case "$script" in
         ;;
     *curl*)
         log "health"
+        printf '%s\n' "$script" > "$HEALTH_SCRIPT"
         if [ "${FAKE_HEALTH:-green}" = "never" ]; then
             printf 'try 0: 000\ntry 1: 000\n@@unhealthy\n'
             printf 'Sep 02 10:00:00 host hohenheim[1]: BOOT FAILED: something\n'
@@ -113,6 +116,7 @@ case "$script" in
         ;;
     *"zenit_migrations"*)
         log "migrations-after"
+        [ "${FAKE_MIGRATIONS:-ok}" = ok ] || exit 7
         printf '001 Initial schema\n002 Managed database failure reason\n009 Shared database engines\n'
         ;;
     *"systemctl restart"*)
@@ -167,6 +171,9 @@ SHIM
 chmod +x "$BIN"/*
 export PATH="$BIN:$PATH"
 export SSH_LOG DEPLOYED_CALLS
+export REMOTE_SCRIPTS="$WORK/remote-scripts"
+export SWAP_SCRIPT="$WORK/swap.sh"
+export HEALTH_SCRIPT="$WORK/health.sh"
 export FAKE_JAR_SHA="$JAR_SHA"
 export ZENIT_DEV_CONFIG="$CONFIG"
 
@@ -184,7 +191,7 @@ expect() {
     fi
 }
 
-reset_logs() { : > "$SSH_LOG"; : > "$DEPLOYED_CALLS"; }
+reset_logs() { : > "$SSH_LOG"; : > "$DEPLOYED_CALLS"; : > "$REMOTE_SCRIPTS"; }
 
 run_lane() {
     reset_logs
@@ -285,7 +292,8 @@ if OUT="$(run_lane nosuchbox "$JAR" 2>&1)"; then
     no "an unknown target is refused"
 else
     expect "the unknown target lists the known ones" "$OUT" "unknown deployment target"
-    expect "the known targets are named" "$OUT" "rootbox, testbox"
+    expect "the known root target is named" "$OUT" "rootbox"
+    expect "the known sudo target is named" "$OUT" "testbox"
 fi
 
 if OUT="$(run_lane testbox "$WORK/absent.jar" 2>&1)"; then
@@ -345,6 +353,81 @@ if OUT="$(run_lane --rollback testbox 2>&1)"; then
     no "rollback without --preflight is refused"
 else
     expect "rollback names the missing flag" "$OUT" "--rollback needs --preflight"
+fi
+
+# --- 10. failed rollback and unreadable migration ledger are not success -----
+
+if OUT="$(FAKE_HEALTH=never run_lane --rollback testbox --preflight /root/test)"; then
+    no "an unhealthy rollback fails"
+else
+    expect "rollback failure names recovery" "$OUT" "rollback health never answered 200"
+fi
+
+if OUT="$(FAKE_MIGRATIONS=unreadable run_lane testbox "$JAR")"; then
+    no "an unreadable migration ledger fails"
+else
+    expect "the ledger failure is unknown, not no migrations" "$OUT" "migration outcome is unknown"
+    expect "no false migration success" "$OUT" "no migrations applied by this deploy" no
+fi
+
+# --- 11. execute the generated swap under POSIX sh, with failing host tools ---
+# These functions replace every mutating command; no host or real service exists.
+OUT="$(run_lane testbox "$JAR")" || no "capture the generated swap"
+cat > "$WORK/execute-swap.sh" <<'REMOTE'
+set -e
+sudo() { shift; "$@"; }
+install() { :; }
+systemctl() { printf 'service %s\n' "$1"; }
+sqlite3() { [ "$BREAK_AT" != backup ]; }
+mv() { [ "$BREAK_AT" != move ]; }
+stat() { return 1; }
+sha256sum() { printf 'testhash jar\n'; }
+. "$SWAP_SCRIPT"
+REMOTE
+for failure in backup move; do
+    if OUT="$(BREAK_AT="$failure" sh "$WORK/execute-swap.sh" 2>&1)"; then
+        no "$failure failure propagates"
+    else
+        expect "$failure failure restarts the installed jar" "$OUT" "service start"
+        expect "$failure failure happened after the stop" "$OUT" "service stop"
+    fi
+done
+OUT="$(BREAK_AT=none sh "$WORK/execute-swap.sh" 2>&1)" || no "a failed stat still starts the service"
+expect "post-swap inspection failure still starts" "$OUT" "service start"
+if [ "$(printf '%s\n' "$OUT" | /usr/bin/grep -c '^service start$')" = 1 ]; then
+    ok "a successful swap starts only once"
+else
+    no "a successful swap starts only once"
+fi
+expect "settings inventory uses the same privilege as the copy" "$(cat "$REMOTE_SCRIPTS")" "sudo -n find "
+expect "keyring existence is checked with privilege" "$(cat "$REMOTE_SCRIPTS")" "if sudo -n test -f "
+OUT="$(run_lane --rollback testbox --preflight /root/test)" || no "capture the rollback"
+expect "rollback can inspect its root-only preflight directory" "$(cat "$REMOTE_SCRIPTS")" "sudo -n test -f '/root/test/rollback.jar'"
+expect "health requests have a network timeout" "$(cat "$REMOTE_SCRIPTS")" '--connect-timeout 2 --max-time "$request_timeout"'
+
+# A responding server that never finishes its request must still exhaust the
+# wall-clock budget. Exercise the emitted POSIX shell with a timeout-aware curl.
+OUT="$(run_lane testbox "$JAR" --health-timeout 1)" || no "capture a one-second probe"
+cat > "$WORK/execute-health.sh" <<'REMOTE'
+sudo() { shift; "$@"; }
+journalctl() { printf 'test journal\n'; }
+curl() {
+    while [ "$#" -gt 0 ]; do
+        if [ "$1" = --max-time ]; then sleep "$2"; printf 000; return 28; fi
+        shift
+    done
+    return 2
+}
+. "$HEALTH_SCRIPT"
+REMOTE
+START_SECONDS=$SECONDS
+OUT="$(sh "$WORK/execute-health.sh")"
+expect "a timed-out request is reported unhealthy" "$OUT" "@@unhealthy"
+expect "a curl failure does not duplicate its 000 status" "$OUT" "000000" no
+if [ "$((SECONDS - START_SECONDS))" -le 2 ]; then
+    ok "one-second health budget bounds a hanging request"
+else
+    no "one-second health budget bounds a hanging request"
 fi
 
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
