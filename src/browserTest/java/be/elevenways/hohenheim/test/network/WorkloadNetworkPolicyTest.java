@@ -123,8 +123,9 @@ class WorkloadNetworkPolicyTest {
 
             // 4. Re-applying is idempotent: same rules, still exactly one copy of each.
             policy.apply(network, Egress.OPEN);
-            String reapplied = netns.inHost("nft", "list", "table", "inet",
-                WorkloadNetworkPolicy.table()).stdout();
+            String reapplied = netns.inHost("nft", "list", "chain", "inet",
+                WorkloadNetworkPolicy.table(), WorkloadNetworkPolicy.forwardChain(
+                    WorkloadNetworkPolicy.chainKey(network.name()))).stdout();
             assertThat(occurrences(reapplied,
                 "ip saddr " + TENANT_SUBNET + " ip daddr 169.254.0.0/16 drop"))
                 .as("step 4: re-apply replaces the chain rather than appending a second copy")
@@ -177,6 +178,82 @@ class WorkloadNetworkPolicyTest {
             // 7. Removing a policy that was never applied is an observed no-op, not an
             //    error -- table already gone included.
             policy.remove("hohenheim-instance-does-not-exist-net");
+        }
+    }
+
+    @Test
+    void openEgressCanConsumePublicWebServicesOnItsOwnHostWithoutOpeningPrivateServices()
+            throws IOException {
+        LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
+            "unshare/nsenter/nft/ip/python3 unavailable: cannot build a private netns");
+        try (PrivateNetns netns = new PrivateNetns()) {
+            long tenant = netns.nested();
+            long peer = netns.nested();
+            wire(netns, tenant, peer);
+            String publicHost = "203.0.113.10";
+            String publicHostV6 = "2001:db8:31::10";
+            String hostMetadata = "169.254.169.253";
+            netns.setup("ip", "addr", "add", publicHost + "/32", "dev", "lo");
+            netns.setup("ip", "addr", "add", publicHostV6 + "/128", "dev", "lo", "nodad");
+            netns.setup("ip", "addr", "add", hostMetadata + "/32", "dev", "lo");
+            netns.listenInHost(80);
+            netns.listenInHost(443);
+            WorkloadNetworkPolicy policy = new WorkloadNetworkPolicy(netns.nftRunner(), () -> true);
+            WorkloadNetwork network = new WorkloadNetwork("hohenheim-public-consumer-net",
+                TENANT_SUBNET, TENANT_GATEWAY, TENANT_SUBNET_V6);
+
+            // 1. Prove the same-host public destinations and the forbidden alternatives
+            //    really listen before installing the policy; no absent-listener passes.
+            for (String host : List.of(publicHost, publicHostV6, TENANT_GATEWAY)) {
+                for (int port : List.of(80, 443)) {
+                    assertThat(netns.probe(tenant, host, port))
+                        .as("step 1: %s:%s listens before isolation", host, port)
+                        .isEqualTo("REACHABLE");
+                }
+            }
+            assertThat(netns.probe(tenant, publicHost, HOST_SERVICE_PORT))
+                .as("step 1: the private service also listens on the public address")
+                .isEqualTo("REACHABLE");
+            assertThat(netns.probe(tenant, hostMetadata, 80))
+                .as("step 1: metadata on the host also listens on HTTP").isEqualTo("REACHABLE");
+
+            // 2. OPEN egress keeps public HTTP(S) on BOTH families, but never gateway
+            //    HTTP(S), the private admin port, or a metadata listener on the host.
+            policy.apply(network, Egress.OPEN);
+            assertThat(policy.isEnforced(network, Egress.OPEN))
+                .as("step 2: the kernel read-back recognizes the public-web policy").isTrue();
+            for (String host : List.of(publicHost, publicHostV6)) {
+                for (int port : List.of(80, 443)) {
+                    assertThat(netns.probe(tenant, host, port))
+                        .as("step 2: public %s:%s remains reachable", host, port)
+                        .isEqualTo("REACHABLE");
+                }
+                assertThat(netns.probe(tenant, host, HOST_SERVICE_PORT))
+                    .as("step 2: public address does not expose the private service on %s", host)
+                    .isEqualTo("BLOCKED");
+            }
+            for (String host : List.of(TENANT_GATEWAY, "fd00:31:5::1", hostMetadata)) {
+                assertThat(netns.probe(tenant, host, 80))
+                    .as("step 2: private destination %s remains blocked even on HTTP", host)
+                    .isEqualTo("BLOCKED");
+            }
+
+            // 3. Re-declaring NONE removes the exception. Re-open the same policy to
+            //    prove the failed connections were enforcement, not listener failure.
+            policy.apply(network, Egress.NONE);
+            assertThat(policy.isEnforced(network, Egress.NONE))
+                .as("step 3: the kernel carries closed egress").isTrue();
+            for (String host : List.of(publicHost, publicHostV6)) {
+                assertThat(netns.probe(tenant, host, 443))
+                    .as("step 3: NONE cannot call the public host service at %s", host)
+                    .isEqualTo("BLOCKED");
+            }
+            policy.apply(network, Egress.OPEN);
+            for (String host : List.of(publicHost, publicHostV6)) {
+                assertThat(netns.probe(tenant, host, 443))
+                    .as("step 3: re-opening restores the same public service at %s", host)
+                    .isEqualTo("REACHABLE");
+            }
         }
     }
 

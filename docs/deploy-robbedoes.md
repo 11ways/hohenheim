@@ -2590,3 +2590,75 @@ Public `/health` returned 200 on all three panels. Browser-UA probes returned
 Earl and Tomberg additionally rendered in the real Sketerm browser. Ephemeral
 browser identities were closed. No DNS, certificates or site records changed;
 the pushed workspace is retained for incremental builds.
+
+## Microcopy move preparation 2026-09-07
+
+The user authorized moving the existing Node Microcopy service from Phoenix to
+Robbedoes first, retaining Phoenix for rollback. Switching production to the Java
+Microcopy application is a later operation.
+
+Site 3 / instance 2 (`hohenheim-luguij0q-instance-2`) already contains the staged
+Node application. All 33 Phoenix source files match except the intended
+`app/config/live/database.js` connection to the managed database. Both installations
+use Alchemy 1.2.5-alpha, alchemy-i18n 0.6.3 and Protoblast 0.7.21. Phoenix runs Node
+16.13.2; the staged runtime is Node 16.20.2. No dependencies were reinstalled.
+
+A fresh Phoenix `mongodump` contains all seven collections, not only translations:
+589 microcopies, 22 persistent cookies, four users, three ACL groups, two ACL rules,
+and empty media/menu collections. Every BSON file is byte-identical to Robbedoes's
+current logical `11ways_microcopy` database on shared Mongo engine instance 21.
+Index definitions also match after normalizing the tools' extended-JSON number
+wrappers and namespace/version metadata. No restore, database drop or app restart
+was needed. Unrelated shared-engine databases were not modified.
+
+Private evidence and backups are under `/home/debian/microcopy-move-20260907/`:
+`phoenix-dump.tgz` (SHA-256
+`d271f8074b61566f4887b27e0eb1d894f7d454ff389fd23ec0f41b9f310bf401`),
+`robbedoes-before.archive.gz`, source hashes, and `api-comparison.json`.
+The API comparison issued real HTTPS requests to both hosts with the existing
+access key: all 169 stored keys matched HTTP status, content type and body bytes.
+
+Certificate 6, `Microcopy`, was issued before any DNS change. It covers
+`microcopy.elevenways.be`, expires 2026-12-06 and has automatic renewal enabled
+with DNS-01 / hosted DNS. Robbedoes's existing peer 1 now correctly declares
+Kuifje as a Hohenheim peer at `https://nskuifje.mooo.com`. A dedicated Kuifje
+account API key labelled `Robbedoes DNS forwarding and ACME`, scoped to
+`hohenheim.admin.access` (the DNS API's required permission), is stored in that
+peer's protected API-key field. No transfer key was changed. DNS challenge
+creation, replication and cleanup succeeded. HTTPS returned 200 over IPv4 and
+from Phoenix over Robbedoes's public IPv6 address.
+
+An initial DNS cutover at zone serial 8 replaced only Microcopy's CNAME with
+`A 51.255.43.81` and `AAAA 2001:41d0:305:2100::1:4b26`, TTL 60. Both authoritative
+servers and Cloudflare/Google/Quad9 returned the new addresses; the public page
+rendered in Sketerm. Comparing all other records showed no semantic change,
+including the existing apex NS set. The zone file was imported with keep-NS
+checked. Sketerm's `set_value` dropped textarea newlines on the first attempt;
+that import was rejected without changing the zone. Setting the native textarea
+value and dispatching input/change preserved the verified 48-line text.
+
+**The cutover was rolled back at serial 9**: a real request from inside the
+Microcopy container to the host's public HTTPS address timed out. The cause is
+`WorkloadNetworkPolicy`'s input-hook blanket host deny, not TLS or Microcopy.
+This also prevents co-hosted Alchemy sites from consuming any service moved to
+the same host. Public DNS again names `phoenix.develry.be`, now with TTL 60;
+the container's unchanged public Microcopy request then returned 200. Both
+authoritative servers confirmed the rollback. Phoenix remains running.
+
+The fix belongs in the existing workload policy: OPEN egress may consume the
+configured public HTTP/HTTPS ports through public destinations, while bridge,
+private, metadata, loopback and non-web host services remain blocked. NONE
+egress retains the blanket host deny. Both application and kernel verification
+use the same rules. The regression journey exercises real IPv4/IPv6 packets,
+private destinations, policy reapplication and OPEN/NONE transitions.
+Targeted run 214 passed all seven tests in `WorkloadNetworkPolicyTest` and
+`VerifyWorkloadIsolationTest`, with the netns capability required and no skips.
+
+Before retrying the cutover, deploy and verify that policy, then prove HTTPS
+from a managed application container to Robbedoes's public address. Preserve
+the primary's current full zone when replacing the Microcopy records. The
+original exported zone is `elevenways-be-before.zone` in the backup directory
+on both hosts; prefer changing only Microcopy during a later rollback so newer
+unrelated zone edits are not overwritten. Restore its CNAME to
+`phoenix.develry.be` to roll back traffic. Translation edits made on Robbedoes
+after the final move must be reconciled before rolling back to Phoenix's copy.
