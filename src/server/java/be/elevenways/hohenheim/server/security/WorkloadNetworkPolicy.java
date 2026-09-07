@@ -163,7 +163,7 @@ public final class WorkloadNetworkPolicy {
 
         String key = chainKey(network.name());
         List<String> forward = forwardRules(network, egress);
-        List<String> input = inputRules(network);
+        List<String> input = inputRules(network, egress);
 
         StringBuilder ruleset = new StringBuilder();
         ruleset.append("add table inet ").append(table()).append('\n');
@@ -213,7 +213,7 @@ public final class WorkloadNetworkPolicy {
         requireEnabled(network.name());
         String key = chainKey(network.name());
         return this.chains.satisfies(forwardChain(key), "forward", forwardRules(network, egress))
-            && this.chains.satisfies(inputChain(key), "input", inputRules(network));
+            && this.chains.satisfies(inputChain(key), "input", inputRules(network, egress));
     }
 
     /**
@@ -310,17 +310,47 @@ public final class WorkloadNetworkPolicy {
     /**
      * The input-hook rules: what the workload may send TO THE HOST ITSELF.
      *
-     * AIDEV-NOTE: the bridge gateway IS the host, so this is one drop, not a per-service
-     * list -- every host service bound to 0.0.0.0 (the reverse proxy on 80/443 with the
-     * admin panel behind it, authoritative DNS on 53) is reachable from a container
-     * without it. Docker's embedded resolver lives INSIDE the container's namespace at
-     * 127.0.0.11, so container DNS does not traverse this hook and is unaffected.
+     * AIDEV-NOTE: the bridge gateway IS the host and must remain denied, even on proxy
+     * ports. OPEN egress may reach the public web listener through a public destination:
+     * otherwise moving a public service onto this host breaks its existing consumers
+     * in containers on the same host (the Microcopy move). This is the ordinary public
+     * proxy, with its authentication and access controls, never the private admin port.
+     * NONE egress gets no exception. Docker's embedded resolver lives INSIDE the
+     * container at 127.0.0.11, so container DNS does not traverse this hook.
      */
-    static @NonNull List<String> inputRules(@NonNull WorkloadNetwork network) {
+    static @NonNull List<String> inputRules(@NonNull WorkloadNetwork network,
+                                           @NonNull Egress egress) {
         List<String> rules = new ArrayList<>();
         rules.add("ct state established,related accept");
-        rules.add("ip saddr " + network.ipv4Subnet() + " drop");
         String v6 = network.ipv6Subnet();
+        if (egress == Egress.OPEN) {
+            rules.add("ip saddr " + network.ipv4Subnet() + " ip daddr " + network.ipv4Subnet()
+                + " drop");
+            if (v6 != null) {
+                rules.add("ip6 saddr " + v6 + " ip6 daddr " + v6 + " drop");
+            }
+            // Refuse private, loopback, unspecified, shared, benchmarking and multicast
+            // destinations before the public-port exception, including the OWN gateway.
+            List<String> denied = new ArrayList<>(TenantNetworkRanges.DENIED_V4);
+            denied.addAll(List.of("0.0.0.0/8", "127.0.0.0/8", "100.64.0.0/10",
+                "192.0.0.0/24", "198.18.0.0/15", "224.0.0.0/4", "240.0.0.0/4"));
+            for (String range : denied) {
+                rules.add("ip saddr " + network.ipv4Subnet() + " ip daddr " + range + " drop");
+            }
+            for (Integer port : new Integer[] {
+                    HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT),
+                    HohenheimSettings.VALUES.getValue(HohenheimSettings.Proxy.HTTPS_PORT)}) {
+                if (port == null || port < 1 || port > 65535) {
+                    continue;
+                }
+                rules.add("ip saddr " + network.ipv4Subnet() + " tcp dport " + port + " accept");
+                if (v6 != null) {
+                    rules.add("ip6 saddr " + v6 + " ip6 daddr 2000::/3 tcp dport " + port
+                        + " accept");
+                }
+            }
+        }
+        rules.add("ip saddr " + network.ipv4Subnet() + " drop");
         if (v6 != null) {
             rules.add("ip6 saddr " + v6 + " drop");
         }
