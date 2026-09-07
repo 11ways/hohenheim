@@ -2654,6 +2654,21 @@ private destinations, policy reapplication and OPEN/NONE transitions.
 Targeted run 214 passed all seven tests in `WorkloadNetworkPolicyTest` and
 `VerifyWorkloadIsolationTest`, with the netns capability required and no skips.
 
+The required full live run 218 **failed**: 1,284 passed, 41 failed, four skipped
+(1,329 total, 972 seconds). Its workload-policy, isolation-repair, live instance
+isolation and live database isolation journeys passed. This is not a green
+full-suite receipt. Saved details are the 20260907-192633 test log, accessed with
+`zenit-dev test-log`; `--run` selects saved-log position, not receipt number.
+Failures include unavailable Incus fixtures at 10.47.1.99/101, existing UI
+selectors and API error-key expectations, a concurrent whole-daemon container
+count assertion, missing StreamingBackupTest non-hermetic declaration, Redis
+fake-dump sizing and a stopped/error expectation in the fake-daemon reconciler
+test. OfflineCommandLaneTest failed preparing its fixture (`ALTER TABLE bans`
+on a copy without that table), before invoking the migration rehearsal. These
+failures are retained for follow-up, not edited away for this move. Deployment
+must independently rehearse the exact jar against a copy of Robbedoes's actual
+database, then verify the real container-to-public-proxy path before DNS moves.
+
 Before retrying the cutover, deploy and verify that policy, then prove HTTPS
 from a managed application container to Robbedoes's public address. Preserve
 the primary's current full zone when replacing the Microcopy records. The
@@ -2662,3 +2677,38 @@ on both hosts; prefer changing only Microcopy during a later rollback so newer
 unrelated zone edits are not overwritten. Restore its CNAME to
 `phoenix.develry.be` to roll back traffic. Translation edits made on Robbedoes
 after the final move must be reconciled before rolling back to Phoenix's copy.
+
+
+### Final cutover completed, 2026-09-07 17:55 UTC
+
+The deployment lane completed with exit 0 at 17:47:59 UTC, including its
+mandatory migration rehearsal and two healthy restarts. Robbedoes runs clean
+Hohenheim `a6414ef1`; no restart is pending. The deployed jar SHA-256 is
+`ed945fb14d984bebb26abe644b6de1abb8bb2899fd54dfb60ab9b63e9590a164`.
+Controller rollback material is in `/root/hohenheim-preflight-20260907-174726`
+(`rollback.jar`, database before rehearsal/swap, settings). This does not turn
+the failed full-suite receipt above into a pass.
+
+The actual Microcopy container returned HTTPS 200 when pinned to the host's
+public IPv4 address with normal hostname verification. The isolation verifier
+reported 16 enforced, no contained workloads and no errors. Fresh Mongo dumps
+at 17:48 UTC on both hosts were byte-identical to their initial seven BSON
+collections; no database restore or Node application restart was necessary.
+
+The final atomic import moved only Microcopy to Robbedoes's A/AAAA addresses
+at TTL 60, zone serial 10. Every other exported record remained unchanged.
+The strict Kuifje/Robbedoes comparison across all 26 exported owners and nine
+record types passed IDENTICAL. Cloudflare, Google and Quad9 returned both new
+addresses. A request using normal DNS from inside the managed Node container
+returned 200 from 51.255.43.81; an external IPv6 request from Phoenix returned
+200 from 2001:41d0:305:2100::1:4b26. The public Microcopy landing page rendered
+in Sketerm, and the unchanged Eleven Ways Alchemy website rendered its English
+page and headings after the switch.
+
+Production still runs the original Node/Alchemy Microcopy application. Its
+hostname and access key are unchanged; the Java replacement is not cut over.
+Phoenix remains running as rollback material. DNS-only rollback is appropriate
+while data is unchanged; reconcile subsequent translation/account writes before
+returning traffic to Phoenix. Retain the private database backups described
+above. Temporary operator credential copies and Mongo-tool connection files
+were removed, and this session's browser identities and tunnels were closed.
