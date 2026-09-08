@@ -169,6 +169,7 @@ class ContainerHardeningTest {
         DockerClient docker = new DockerClient();
         LiveLane.requireImage(docker, TEST_IMAGE);
         LiveLane.requireImage(docker, REDIS_IMAGE);
+        LiveLane.requireImage(docker, "nginx:alpine");
         LiveLane.require(LiveLane.Need.NETNS, PrivateNetns.available(),
             "no private netns: the instance tier refuses to"
             + " deploy where its network policy cannot be enforced");
@@ -196,8 +197,8 @@ class ContainerHardeningTest {
         //    release instance, so the kernel state is asserted on the INSTANCE handle and
         //    the teardown is the verified destroyFor.
         int applicationId = application("hardening-app", Map.of(
-            "image", "alpine", "tag", "latest", "container_port", 8080,
-            "command", "sleep 600"));
+            "image", "nginx", "tag", "alpine", "container_port", 80,
+            "workdir", "/etc"));
         try {
             ApplicationReleases.Release release =
                 ApplicationReleases.converge(applicationId, Map.of());
@@ -207,6 +208,14 @@ class ContainerHardeningTest {
             assertKernelState(docker, ControllerScope.handle(
                     ControllerScope.KIND_INSTANCE, release.instanceId()),
                 "step 2: application release", SERVICE_CAPS, pids);
+            DockerClient.ExecResult workingDirectory = docker.exec(ControllerScope.handle(
+                ControllerScope.KIND_INSTANCE, release.instanceId()),
+                List.of("readlink", "/proc/1/cwd"));
+            assertThat(workingDirectory.exitCode())
+                .as("step 2: the running application's cwd is observable").isZero();
+            assertThat(workingDirectory.stdout().trim())
+                .as("step 2: the workload starts in its declared directory without losing hardening")
+                .isEqualTo("/etc");
         } finally {
             ApplicationReleases.destroyFor(applicationId);
         }
