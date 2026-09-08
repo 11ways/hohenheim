@@ -19,7 +19,6 @@ import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.hohenheim.site.SiteTlsCell;
 import be.elevenways.hohenheim.site.SiteUpstreamCell;
-import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -44,7 +43,6 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
-import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FormSection;
@@ -155,34 +153,29 @@ public class SiteResource extends RowResource {
         .build();
 
     /**
-     * The instance pick belongs to the kinds that RESOLVE to an instance; on a stored
-     * site of any other kind it is not "disabled", it is not a property of that site at
-     * all, and rendering it greyed out with its help text still reading "The instance
-     * whose port this hostname serves" invited an operator to fix something that was
-     * never wrong.
+     * The instance pick stays EDITABLE, on the create form and the edit form alike.
      *
-     * AIDEV-NOTE: the answer is the kind's OWN declaration ({@code requiresInstance()}),
-     * never an id comparison -- the same fact the write hook refuses on, so the form and
-     * the write can never disagree about which kinds carry an instance. Record-LESS (the
-     * CREATE form) deliberately stays EDITABLE rather than failing closed: no kind is
-     * stored yet, the Expose journey prefills this very field, and the picker's own
-     * sibling narrowing is what keeps it inert until the instance kind is chosen. The
-     * update endpoint passes the record, so the stored side is still enforced.
+     * AIDEV-NOTE: it used to be HIDDEN whenever the STORED kind did not resolve to an
+     * instance, reasoning that a greyed-out picker reading "The instance whose port this
+     * hostname serves" invited an operator to fix something that was never wrong. The
+     * consequence was a ONE-WAY DOOR, found while rehearsing a rollback on 2026-09-08:
+     * once a site was saved as any other kind there was no control left to choose an
+     * instance, so an address or static site could never be moved (or moved BACK) to an
+     * instance upstream. Selecting the Instance radio re-rendered the settings sub-fields,
+     * which are reactive, but never this one, which is a top-level field resolved
+     * server-side from the stored row -- so the form silently offered a kind it could not
+     * complete. Neither the instance page's read-only "Exposed by" band nor the Expose
+     * journey (a CREATE prefill) was a way back.
+     *
+     * The original concern is already answered by the mechanism the create form relies on:
+     * the picker's own {@code rulesFromSiblings(UpstreamInstanceRules)} narrowing keeps it
+     * inert until the instance kind is chosen. That argument was always symmetric; only
+     * the record-less case was taking it. The stored side stays enforced by the write
+     * hook, which refuses an instance id on a kind that carries none.
      */
     @Override
     public @NonNull List<ResourceFieldBinding> fieldBindings() {
-        return List.of(ResourceFieldBinding.of(SiteModel.INSTANCE_ID.getName(),
-            FieldAccess.customRecordAware((ctx, record) ->
-                !(record instanceof Row site) || usesInstance(site)
-                    ? FieldAccess.Decision.EDITABLE
-                    : FieldAccess.Decision.HIDDEN)));
-    }
-
-    /** @return whether this site's stored upstream kind resolves to an instance record */
-    private static boolean usesInstance(@NonNull Row site) {
-        UpstreamKindInfo kind = UpstreamKinds.REGISTRY.get(
-            Identifier.tryParse(String.valueOf(site.get(SiteModel.UPSTREAM_KIND))));
-        return kind != null && kind.requiresInstance();
+        return List.of();
     }
 
     /**
