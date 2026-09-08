@@ -742,17 +742,8 @@ public class HohenheimEndpoints {
         .rateLimit(DEPLOY_LIMIT)
         .build();
 
-    /**
-     * Upload an artifact built elsewhere and release it.
-     *
-     * AIDEV-NOTE: site-scoped like its deploy sibling, and for the same reason -- it then
-     * inherits `visibleSite`'s authorization exactly, instead of growing a second way to
-     * decide who may put code on a machine. The body is the raw artifact, streamed to disk
-     * by the handler; there is deliberately no multipart wrapper, because the form lanes
-     * hand the parser the WHOLE body as one array.
-     *
-     * csrfExempt is safe: the handler refuses non-API-key principals.
-     */
+    /** Raw JAR upload; handler requires both site manage and application CONFIG.
+     * csrfExempt is safe: non-API-key principals are refused. */
     public static final Endpoint<Object> API_V1_SITE_ARTIFACT = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "api_v1_site_artifact"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
@@ -763,6 +754,25 @@ public class HohenheimEndpoints {
         .csrfExempt()
         .rateLimit(DEPLOY_LIMIT)
         .build();
+
+    public static final ParameterDefinition<Integer> ARTIFACT_OPERATION_ID =
+        ParameterDefinition.builder(Integer.class).name("operation_id").stringResolver(Integer::parseInt).build();
+
+    public static final Endpoint<Object> API_V1_SITE_ARTIFACT_OPERATION = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_artifact_operation"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("artifact").addDelimiter().addParameter(ARTIFACT_OPERATION_ID).build())
+        .requiresLogin().rateLimit(PAAS_READ_LIMIT).build();
+
+    public static final Endpoint<Object> API_V1_SITE_ARTIFACT_CURRENT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_artifact_current"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.GET)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("artifact").build())
+        .requiresLogin().rateLimit(PAAS_READ_LIMIT).build();
 
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_SITE_ROLLBACK = Endpoint.<Object>builder()

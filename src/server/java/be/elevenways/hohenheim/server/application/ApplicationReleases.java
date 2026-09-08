@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.application;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
@@ -13,14 +14,18 @@ import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
+import be.elevenways.hohenheim.server.instance.RuntimeImages;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -121,6 +126,42 @@ public final class ApplicationReleases {
         }
     }
 
+    /** Restore an imported image and its owner-keyed volumes before the first start. */
+    public static @NonNull Release restore(int applicationId, @NonNull String verifiedImageId,
+                                           InstanceService.@NonNull RestoreVolumes restoreVolumes) {
+        synchronized (ConvergenceLocks.forApplication(applicationId)) {
+            if (ownedServing(applicationId) != null || !verifiedImageId.startsWith("sha256:")) {
+                throw new IllegalStateException("Restore requires a new application and an imported image digest");
+            }
+            Row application = requireApplication(applicationId);
+            Map<String, Object> source = resolvedSettings(application, Map.of());
+            String fingerprint = ReleaseEngine.sourceFingerprint(applicationId, source);
+            Map<String, Object> imported = new LinkedHashMap<>(source);
+            imported.remove("build_context");
+            imported.remove("artifact_path");
+            imported.remove("tag");
+            imported.put("image", verifiedImageId);
+            int serverId = ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID));
+            try {
+                return inScope(applicationId, () -> {
+                    Map<String, Object> desired = desiredSettings(dockerFor(serverId), application, imported);
+                    for (String key : List.of("artifact_path", "commit_sha")) {
+                        if (source.containsKey(key)) {
+                            desired.put(key, source.get(key));
+                        }
+                    }
+                    desired.put("source_fingerprint", fingerprint);
+                    return ReleaseEngine.initialRelease(applicationId, application.get(InstanceModel.NAME),
+                        serverId, desired, fingerprint, restoreVolumes);
+                });
+            } catch (RuntimeException unchecked) {
+                throw unchecked;
+            } catch (Exception failed) {
+                throw new IllegalStateException(failed);
+            }
+        }
+    }
+
     /** {@link #converge}'s body; callers hold the application's convergence lock. */
     private static @NonNull Release convergeLocked(int applicationId,
                                                    @NonNull Map<String, Object> overrides) {
@@ -142,11 +183,9 @@ public final class ApplicationReleases {
                 boolean fingerprintable = str(settings.get("build_context")).isEmpty()
                     || !str(settings.get("commit_sha")).isEmpty();
 
-                // Fast lane: unchanged source, running workload -- reuse without even
-                // resolving the spec (which for a git-sourced application means a sandbox
-                // build). The fingerprint IS the "would a release change anything" test.
+                // Unchanged source reuses its immutable release without resolving a new
+                // spec or rebuilding. A stopped workload restarts from that same image.
                 if (fingerprintable && serving != null
-                        && InstanceModel.STATUS_RUNNING.equals(serving.get(InstanceModel.STATUS))
                         && fingerprint.equals(
                             storedSettings(serving).get("source_fingerprint"))
                         && serverId == ServerModel.canonicalServerId(
@@ -155,8 +194,14 @@ public final class ApplicationReleases {
                     InstanceStatus live =
                         reusableStatus(docker, servingId, storedSettings(serving));
                     if (live != null) {
+                        ReleaseEngine.requireHealthy(live, storedSettings(serving), serverId);
                         return new Release(servingId, live);
                     }
+                    // The immutable image and encrypted variable snapshot still represent
+                    // this source; restarting needs neither a checkout nor a rebuild.
+                    InstanceStatus restarted = new InstanceService().deploy(servingId);
+                    ReleaseEngine.requireHealthy(restarted, storedSettings(serving), serverId);
+                    return new Release(servingId, restarted);
                 }
 
                 // Rollback pin: the operator rejected exactly this source, so converge
@@ -167,10 +212,15 @@ public final class ApplicationReleases {
                         InstanceStatus live =
                             reusableStatus(docker, servingId, storedSettings(serving));
                         if (live != null) {
+                            ReleaseEngine.requireHealthy(live, storedSettings(serving),
+                                ServerModel.canonicalServerId(serving.get(InstanceModel.SERVER_ID)));
                             return new Release(servingId, live);
                         }
                     }
-                    return new Release(servingId, new InstanceService().deploy(servingId));
+                    InstanceStatus restarted = new InstanceService().deploy(servingId);
+                    ReleaseEngine.requireHealthy(restarted, storedSettings(serving),
+                        ServerModel.canonicalServerId(serving.get(InstanceModel.SERVER_ID)));
+                    return new Release(servingId, restarted);
                 }
 
                 if (serving == null) {
@@ -344,12 +394,39 @@ public final class ApplicationReleases {
 
     // -- the spec -------------------------------------------------------------
 
-    /** The application's stored settings with the caller's resolved source facts folded in. */
+    /** Resolve source, runtime defaults and variable precedence before computing identity. */
     public static @NonNull Map<String, Object> resolvedSettings(
             @NonNull Row application, @NonNull Map<String, Object> overrides) {
+        int applicationId = application.get(InstanceModel.ID);
         Map<String, Object> settings = new LinkedHashMap<>(storedSettings(application));
+        if (!overrides.containsKey("build_context") && !overrides.containsKey("artifact_path")
+                && !settings.containsKey("build_context") && !SiteSources.hasRepository(settings)) {
+            settings.putAll(ArtifactDeploys.sourceOverrides(applicationId));
+        }
         settings.putAll(overrides);
-        return settings;
+        settings.put("crash_policy", application.get(InstanceModel.CRASH_POLICY));
+        if (application.get(InstanceModel.RUNTIME_IMAGE_ID) != null) {
+            Row image = RuntimeImages.requireFor(application);
+            settings.put("runtime_image_id", image.get(RuntimeImageModel.ID));
+            settings.put("runtime_image_context", image.get(RuntimeImageModel.BUILD_CONTEXT));
+            settings.put("runtime_image_reference",
+                RuntimeImages.referenceFor(image, ServerModel.RUNTIME_DOCKER));
+            settings.put("runtime_image_content", RuntimeImages.contextFingerprint(image));
+            settings.put("runtime_image_updated_at", String.valueOf(image.get(RuntimeImageModel.UPDATED_AT)));
+            inherit(settings, "command", image.get(RuntimeImageModel.DEFAULT_COMMAND));
+            inherit(settings, "container_port", image.get(RuntimeImageModel.DEFAULT_PORT));
+            inherit(settings, "workdir", image.get(RuntimeImageModel.WORKDIR));
+        }
+        settings.put("command_template", str(settings.get("command")));
+        InstanceVariables variables = new InstanceVariables();
+        return variables.applyToSettings(settings, variables.valuesFor(applicationId),
+            DatabaseEnvInjection.envForInstance(applicationId, null));
+    }
+
+    private static void inherit(Map<String, Object> settings, String key, Object fallback) {
+        if (str(settings.get(key)).isEmpty() && fallback != null) {
+            settings.put(key, fallback);
+        }
     }
 
     /**
@@ -372,19 +449,28 @@ public final class ApplicationReleases {
         Map<String, Object> desired = new LinkedHashMap<>();
 
         String buildContext = str(settings.get("build_context"));
-        if (!buildContext.isEmpty()) {
+        String artifactPath = str(settings.get("artifact_path"));
+        if (!buildContext.isEmpty() || !artifactPath.isEmpty()) {
             String tag = ControllerScope.handle(ControllerScope.KIND_INSTANCE, applicationId)
                 + ":latest";
-            SandboxedBuilds.Result build = new SandboxedBuilds(docker,
-                serverNameOf(application)).run(new BuildRequest(
-                InstanceModel.MODEL_ID, applicationId,
-                BuildOperationModel.kindOrDefault(settings.get("builder")),
-                Path.of(buildContext), str(settings.get("dockerfile")), tag,
-                // BUILD-time args only. The runtime environment_variables are deliberately
-                // NOT passed: a build has no business seeing the workload's database
-                // password, and the log it produces is tenant-readable.
-                EnvVars.toMap(settings.get("build_arguments")),
-                str(settings.get("commit_sha")), null, BuildQuota.fromSettings()));
+            Path artifactContext = artifactPath.isEmpty() ? null
+                : RuntimeImages.materializeArtifactContext(RuntimeImages.requireFor(application),
+                    Path.of(artifactPath));
+            SandboxedBuilds.Result build;
+            try {
+                build = new SandboxedBuilds(docker, serverNameOf(application)).run(new BuildRequest(
+                    InstanceModel.MODEL_ID, applicationId,
+                    BuildOperationModel.kindOrDefault(settings.get("builder")),
+                    artifactContext != null ? artifactContext : Path.of(buildContext),
+                    str(settings.get("dockerfile")), tag,
+                    // The build sees build arguments, never the workload's secret environment.
+                    EnvVars.toMap(settings.get("build_arguments")),
+                    str(settings.get("commit_sha")), null, BuildQuota.fromSettings()));
+            } finally {
+                if (artifactContext != null) {
+                    RuntimeImages.deleteArtifactContext(artifactContext);
+                }
+            }
             if (!build.succeeded() || build.imageId() == null) {
                 throw Violations.ofField("settings.image", tag,
                     Microcopy.of("application_image_build_failed")
@@ -395,6 +481,9 @@ public final class ApplicationReleases {
             desired.put("image", build.imageId());
             desired.put("built_image_id", build.imageId());
             desired.put("commit_sha", str(settings.get("commit_sha")));
+            if (!artifactPath.isEmpty()) {
+                desired.put("artifact_path", artifactPath);
+            }
         } else {
             String image = str(settings.get("image"));
             String tag = str(settings.get("tag"));
@@ -419,9 +508,13 @@ public final class ApplicationReleases {
             }
         }
 
-        String command = str(settings.get("command"));
+        String command = str(settings.getOrDefault("command_template", settings.get("command")));
         if (!command.isEmpty()) {
             desired.put("command", command);
+        }
+        String workdir = str(settings.get("workdir"));
+        if (!workdir.isEmpty()) {
+            desired.put("workdir", workdir);
         }
         Object port = settings.get("container_port");
         if (port instanceof Number number && number.intValue() > 0) {
@@ -439,13 +532,8 @@ public final class ApplicationReleases {
             desired.put("health_path", healthPath);
         }
 
-        // Injected database variables first, operator-authored ones override. The release
-        // container joins each attached database's link network before start
-        // (InstanceDatabaseNetworks, on the InstanceService.deploy seam) and dials the
-        // database by container hostname -- 127.0.0.1 inside the container is itself.
-        Map<String, String> env = new LinkedHashMap<>(
-            DatabaseEnvInjection.envForInstance(applicationId, null));
-        env.putAll(EnvVars.toMap(settings.get("environment_variables")));
+        // Already resolved, using InstanceVariables' shared precedence, before fingerprinting.
+        Map<String, String> env = EnvVars.toMap(settings.get("environment_variables"));
         if (!env.isEmpty()) {
             desired.put("environment_variables", env);
         }
@@ -467,6 +555,7 @@ public final class ApplicationReleases {
         if (cpu instanceof Number number && number.doubleValue() > 0) {
             desired.put("cpu_limit", number.doubleValue());
         }
+        desired.put("crash_policy", settings.getOrDefault("crash_policy", InstanceModel.CRASH_NONE));
         return desired;
     }
 
@@ -515,6 +604,17 @@ public final class ApplicationReleases {
         if (stored instanceof Map<?, ?> map) {
             Map<String, Object> cast = new LinkedHashMap<>();
             map.forEach((key, value) -> cast.put(String.valueOf(key), value));
+            if (ReleaseKind.ID.toString().equals(instance.get(InstanceModel.KIND))) {
+                cast.put("crash_policy", instance.get(InstanceModel.CRASH_POLICY));
+                Map<String, String> snapshot = new InstanceVariables()
+                    .valuesFor(instance.get(InstanceModel.ID));
+                if (!snapshot.isEmpty()) {
+                    Map<String, String> env = new LinkedHashMap<>(
+                        EnvVars.toMap(cast.get("environment_variables")));
+                    env.putAll(snapshot);
+                    cast.put("environment_variables", env);
+                }
+            }
             return cast;
         }
         return Map.of();

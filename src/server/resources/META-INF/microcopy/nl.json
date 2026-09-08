@@ -7518,7 +7518,7 @@
       "scope": "field"
     },
     {
-      "text": "Pad dat de release-gezondheidscontrole bevraagt op de gepubliceerde poort voor een nieuwe release verkeer mag krijgen. Standaard /; elk volledig HTTP-antwoord onder 500 telt.",
+      "text": "Pad dat de release-gezondheidscontrole bevraagt op de gepubliceerde poort voor een nieuwe release verkeer mag krijgen. Standaard /; een volledig HTTP-antwoord met een 2xx- of 3xx-status telt.",
       "scope": "help"
     }
   ],
@@ -10668,6 +10668,14 @@
   },
   "artifact_upload_failed": {
     "text": "De artefact-upload kon niet ontvangen worden.",
+    "scope": "violations"
+  },
+  "artifact_release_failed": {
+    "text": "De artefact-deployment heeft geen gezonde, actieve release opgeleverd. Controleer de deploymentoperatie.",
+    "scope": "violations"
+  },
+  "artifact_interrupted": {
+    "text": "De controller is opnieuw gestart voordat deze artefact-deployment voltooid was.",
     "scope": "violations"
   },
   "source_no_repository": {

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.application;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -10,13 +11,16 @@ import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.host.HostLeases;
+import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
+import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -202,46 +206,54 @@ public final class ReleaseEngine {
     // -- the operations -------------------------------------------------------
 
     /**
-     * First release of an application that never had one: deploy directly, recorded as a
-     * release operation. There is deliberately no probe GATE here -- with nothing
-     * serving there is nothing a failed candidate could replace, and refusing would
-     * only hide the workload's real state; the step log states this.
-     *
-     * @throws Violations when the deploy refuses (the application is down either way)
+     * First release: only a healthy candidate is promoted to serving, even when there is
+     * no previous workload to protect.
      */
     static ApplicationReleases.@NonNull Release initialRelease(int applicationId,
                                                              @Nullable String applicationName,
                                                              int serverId,
                                                              @NonNull Map<String, Object> desired,
                                                              @NonNull String ownerFingerprint) {
+        return initialRelease(applicationId, applicationName, serverId, desired, ownerFingerprint, null);
+    }
+
+    static ApplicationReleases.@NonNull Release initialRelease(int applicationId,
+            @Nullable String applicationName, int serverId, @NonNull Map<String, Object> desired,
+            @NonNull String ownerFingerprint, InstanceService.@Nullable RestoreVolumes restoreVolumes) {
         Row op = newOperation(ReleaseOperationModel.KIND_RELEASE, applicationId,
             ownerFingerprint, ownerFingerprint);
-        step(op, "initial release: no prior release to protect, deploying directly");
+        step(op, "initial release: creating a health-gated candidate");
+        Integer instanceId = null;
         try {
             Row instance = newInstanceRow(applicationId, applicationName, serverId, desired,
-                InstanceModel.ROLE_SERVING);
-            int instanceId = instance.get(InstanceModel.ID);
+                InstanceModel.ROLE_CANDIDATE);
+            instanceId = instance.get(InstanceModel.ID);
             transition(stamp(op).set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, instanceId),
                 ReleaseOperationModel.STATUS_DEPLOYING,
                 "instance " + instanceId + " created");
-            InstanceStatus status = new InstanceService().deploy(instanceId);
+            InstanceService instances = new InstanceService();
+            InstanceStatus status = restoreVolumes == null ? instances.deploy(instanceId)
+                : instances.deployRestored(instanceId, restoreVolumes);
+            requireHealthy(status, desired, serverId);
+            transition(op, ReleaseOperationModel.STATUS_SWITCHING, "promoting healthy initial release");
+            new InstanceService().assignRuntimeRole(instanceId, InstanceModel.ROLE_SERVING);
             ApplicationUpstreams.invalidate(applicationId);
             finish(stamp(op).set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image"))),
                 ReleaseOperationModel.STATUS_SUCCEEDED, null, "deployed");
             return new ApplicationReleases.Release(instanceId, status);
         } catch (RuntimeException e) {
+            if (instanceId != null) {
+                destroyCandidateQuietly(instanceId);
+            }
             finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(e), "deploy failed");
             throw e;
         }
     }
 
     /**
-     * A forward release of changed source. When the prior release is actually serving
-     * (running with a published port), the candidate is deployed BESIDE it, probed, and
-     * only a healthy candidate takes the traffic over; any failure destroys the
-     * candidate, records it, and RETURNS the prior release still serving -- a source
-     * change can degrade an application to "stale but up", never to "down". When nothing is
-     * serving, the spec is replaced in place (there is nothing to protect).
+     * A forward release of changed source. Healthy candidates replace the prior release;
+     * failures retain its immutable spec. Exclusive volumes use stop-before-start, not
+     * concurrent writers, and still retain the prior release for rollback.
      */
     static ApplicationReleases.@NonNull Release release(@NonNull DockerClient docker, int applicationId,
                                                       @Nullable String applicationName, int serverId,
@@ -256,9 +268,8 @@ public final class ReleaseEngine {
         // branch below, returned the same dead release and recorded the operation SUCCEEDED
         // ("spec unchanged; ... without a deploy"), so the reuse lane's own OOMKilled
         // refusal (ApplicationReleases.reusableStatus) achieved nothing and the application kept
-        // pointing at a dead workload forever. Not protecting means the honest thing
-        // happens instead: redeploy in place, no probe gate, because there is no live
-        // traffic to gate against.
+        // pointing at a dead workload forever. A dead prior workload can never make a
+        // failed deployment look successful merely because its container still exists.
         boolean protecting = oldLive.running() && oldLive.publishedPort() != null
             && !oldLive.workloadDead();
 
@@ -282,66 +293,44 @@ public final class ReleaseEngine {
             throw e;
         }
 
-        if (specEquals(desired, ApplicationReleases.storedSettings(serving))
+        if (protecting && specEquals(desired, ApplicationReleases.storedSettings(serving))
                 && serverId == ServerModel.canonicalServerId(
                     serving.get(InstanceModel.SERVER_ID))) {
+            try {
+                requireHealthy(oldLive, desired, serverId);
+            } catch (RuntimeException unhealthy) {
+                finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(unhealthy),
+                    "existing release failed its health gate");
+                throw unhealthy;
+            }
             // The source fingerprint drifted (legacy row, new derivation input) but the
             // SPEC did not: adopt the fingerprint so the fast lane hits from now on.
             Row adopting = reload(servingId);
-            adopting.set(InstanceModel.SETTINGS, desired);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> persisted = new LinkedHashMap<>(
+                (Map<String, Object>) adopting.get(InstanceModel.SETTINGS));
+            persisted.put("source_fingerprint", ownerFingerprint);
+            adopting.set(InstanceModel.SETTINGS, persisted);
             Models.get(InstanceModel.class).save(adopting);
             finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null,
                 "spec unchanged; fingerprint adopted without a deploy");
-            if (protecting) {
-                return new ApplicationReleases.Release(servingId, oldLive);
-            }
-            return new ApplicationReleases.Release(servingId,
-                new InstanceService().deploy(servingId));
+            return new ApplicationReleases.Release(servingId, oldLive);
         }
 
-        // A volume no two workloads may hold at once cannot be gated: the candidate would
-        // mount the serving release's data WHILE it is still writing to it. Declaring one
-        // buys stop-then-start (a real, visible outage) instead of a silent double mount.
-        if (protecting && InstanceVolumes.hasExclusive(applicationId)) {
-            step(op, "an exclusive volume is declared; stopping the serving release before"
-                + " the new one starts instead of gating a candidate beside it");
-            protecting = false;
-        }
-
-        // The pre-deploy snapshot: a point-in-time copy of the data the new release is
-        // about to write to, taken BEFORE anything starts. A host whose backend cannot
-        // snapshot refuses the deploy by name rather than pretending it protected anything.
-        snapshotVolumes(op, applicationId, serverId);
-
-        if (!protecting || !(desired.get("container_port") instanceof Number)) {
-            // Nothing serving traffic (or a portless workload the proxy cannot probe):
-            // replace in place, today's semantics -- the step log says so.
-            step(op, "prior release not serving traffic; replacing in place without a probe gate");
-            Row replacing = reload(servingId);
-            replacing.set(InstanceModel.SETTINGS, desired);
-            replacing.set(InstanceModel.SERVER_ID, serverId);
-            Models.get(InstanceModel.class).save(replacing);
-            transition(op, ReleaseOperationModel.STATUS_DEPLOYING, "deploying in place");
-            try {
-                InstanceStatus status = new InstanceService().deploy(servingId);
-                ApplicationUpstreams.invalidate(applicationId);
-                finish(stamp(op).set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image"))),
-                    ReleaseOperationModel.STATUS_SUCCEEDED, null, "deployed");
-                return new ApplicationReleases.Release(servingId, status);
-            } catch (RuntimeException e) {
-                finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(e), "deploy failed");
-                throw e;
-            }
-        }
 
         try {
             return gatedSwap(docker, op, applicationId, applicationName, serverId, serving, desired);
         } catch (RuntimeException e) {
-            // The health gate held: the candidate never took traffic and is gone; the
-            // prior release keeps serving. Loud in the log AND durable on the record.
+            if (!protecting) {
+                throw e;
+            }
+            InstanceStatus prior = new InstanceService().liveStatus(servingId);
+            if (!prior.running() || prior.workloadDead()) {
+                throw e;
+            }
             Blast.log("RELEASE: application", applicationId, "candidate refused -", reasonOf(e),
                 "- the prior release keeps serving");
-            return new ApplicationReleases.Release(servingId, oldLive);
+            return new ApplicationReleases.Release(servingId, prior);
         }
     }
 
@@ -428,7 +417,17 @@ public final class ReleaseEngine {
         int servingId = serving.get(InstanceModel.ID);
         Integer candidateId = null;
         InstanceService instances = new InstanceService();
+        boolean exclusive = InstanceVolumes.hasExclusive(applicationId);
+        boolean stoppedPrior = false;
         try {
+            if (exclusive) {
+                step(stamp(op).set(ReleaseOperationModel.RETIRED_INSTANCE_ID, servingId),
+                    "exclusive volume: stopping prior release before snapshot and candidate start");
+                instances.stop(servingId);
+                stoppedPrior = true;
+                ApplicationUpstreams.invalidate(applicationId);
+            }
+            snapshotVolumes(op, applicationId, serverId);
             Row candidate = newInstanceRow(applicationId, applicationName, serverId, desired,
                 InstanceModel.ROLE_CANDIDATE);
             candidateId = candidate.get(InstanceModel.ID);
@@ -437,15 +436,8 @@ public final class ReleaseEngine {
                 "candidate instance " + candidateId + " created beside serving instance "
                     + servingId);
             InstanceStatus candidateStatus = instances.deploy(candidateId);
-            Integer port = candidateStatus.publishedPort();
-            if (port == null) {
-                throw Violations.ofForm(Microcopy.of("release_no_published_port")
-                    .withFilter("scope", "violations"));
-            }
-            String healthPath = healthPath(desired);
-            transition(op, ReleaseOperationModel.STATUS_PROBING,
-                "candidate deployed on 127.0.0.1:" + port + "; probing " + healthPath);
-            probe(port, healthPath);
+            transition(op, ReleaseOperationModel.STATUS_PROBING, "probing candidate HTTP health");
+            requireHealthy(candidateStatus, desired, serverId);
             step(op, "health probe passed");
 
             // The switch: roles flip candidate-first, so a crash between the two writes
@@ -479,11 +471,20 @@ public final class ReleaseEngine {
                 str(desired.get("image")), Db.currentOrDefault());
             return new ApplicationReleases.Release(candidateId, candidateStatus);
         } catch (RuntimeException gateHeld) {
+            if (candidateId != null) {
+                if (exclusive) {
+                    // Never restart a writer until candidate teardown is confirmed.
+                    instances.destroy(candidateId);
+                } else {
+                    destroyCandidateQuietly(candidateId);
+                }
+            }
+            if (stoppedPrior) {
+                instances.deploy(servingId);
+                ApplicationUpstreams.invalidate(applicationId);
+            }
             finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(gateHeld),
                 "candidate refused: " + reasonOf(gateHeld));
-            if (candidateId != null) {
-                destroyCandidateQuietly(candidateId);
-            }
             throw gateHeld;
         }
     }
@@ -593,8 +594,12 @@ public final class ReleaseEngine {
     private static void pruneArtifactsQuietly(int applicationId, @NonNull String servingImage,
                                               @NonNull Row op) {
         try {
-            BuildArtifacts.pruneSuperseded(new DockerClient(), InstanceModel.MODEL_ID.toString(),
-                applicationId, servingImage);
+            Row serving = ApplicationReleases.ownedServing(applicationId);
+            if (serving != null) {
+                int serverId = ServerModel.canonicalServerId(serving.get(InstanceModel.SERVER_ID));
+                BuildArtifacts.pruneSuperseded(ApplicationReleases.dockerFor(serverId),
+                    InstanceModel.MODEL_ID.toString(), applicationId, servingImage);
+            }
         } catch (RuntimeException e) {
             step(op, "WARNING: artifact prune failed: " + reasonOf(e));
         }
@@ -760,9 +765,23 @@ public final class ReleaseEngine {
                 return;
             }
         }
+        if (ReleaseOperationModel.STATUS_SWITCHING.equals(status) && candidateId != null
+                && retiredId == null) {
+            Row candidate = Models.get(InstanceModel.class).findById(candidateId);
+            if (candidate != null && InstanceModel.ROLE_SERVING.equals(
+                    candidate.get(InstanceModel.RUNTIME_ROLE))) {
+                finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null,
+                    "boot recovery: healthy initial release had been promoted");
+                return;
+            }
+        }
         // Pre-switch: the candidate never took traffic; destroy it and record the truth.
         if (candidateId != null) {
-            destroyCandidateQuietly(candidateId);
+            new InstanceService().destroy(candidateId);
+        }
+        if (retiredId != null && InstanceVolumes.hasExclusive(applicationId)) {
+            new InstanceService().deploy(retiredId);
+            ApplicationUpstreams.invalidate(applicationId);
         }
         finish(op, ReleaseOperationModel.STATUS_INTERRUPTED,
             "interrupted by a controller restart",
@@ -797,9 +816,19 @@ public final class ReleaseEngine {
 
     // -- the health probe -----------------------------------------------------
 
+    /** All release success lanes use the same configured HTTP gate. */
+    static void requireHealthy(@NonNull InstanceStatus status,
+                               @NonNull Map<String, Object> desired, int serverId) {
+        if (!status.running() || status.workloadDead() || status.publishedPort() == null) {
+            throw Violations.ofForm(Microcopy.of("release_no_published_port")
+                .withFilter("scope", "violations"));
+        }
+        probe(status.publishedPort(), healthPath(desired), serverId);
+    }
+
     /**
      * Interrogate the candidate on its published loopback port until it answers a
-     * complete HTTP response below 500, or the probe window closes.
+     * complete successful HTTP response (2xx/3xx), or the probe window closes.
      *
      * AIDEV-NOTE: this is deliberately NOT the console readiness_line matcher. That
      * mechanism is a template-declared substring watch on an attached console stream --
@@ -809,6 +838,10 @@ public final class ReleaseEngine {
      * two declared homes, one job each.
      */
     public static void probe(int port, @NonNull String path) {
+        probe(port, path, null);
+    }
+
+    private static void probe(int port, @NonNull String path, @Nullable Integer serverId) {
         Integer timeout = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
         Integer interval = HohenheimSettings.VALUES.getValue(
@@ -821,16 +854,30 @@ public final class ReleaseEngine {
             .build();
         URI target = URI.create("http://127.0.0.1:" + port
             + (path.startsWith("/") ? path : "/" + path));
+        HostShell remote = serverId == null || serverId == ServerModel.localServerId() ? null
+            : HostShell.forServer(Models.get(ServerModel.class).findById(serverId));
         String lastFailure = "no response";
         while (System.currentTimeMillis() < deadline) {
             try {
-                HttpResponse<Void> response = client.send(HttpRequest.newBuilder(target)
-                        .timeout(Duration.ofSeconds(5)).GET().build(),
-                    HttpResponse.BodyHandlers.discarding());
-                if (response.statusCode() < 500) {
+                int code;
+                if (remote == null) {
+                    HttpResponse<Void> response = client.send(HttpRequest.newBuilder(target)
+                            .timeout(Duration.ofSeconds(5)).GET().build(),
+                        HttpResponse.BodyHandlers.discarding());
+                    code = response.statusCode();
+                } else {
+                    HostShell.Result result = remote.run(
+                        "curl --silent --output /dev/null --write-out '%{http_code}'"
+                            + " --connect-timeout 2 --max-time 5 -- "
+                            + HostShell.quote(target.toString()), 10);
+                    String statusCode = result.text().trim();
+                    code = result.ok() && statusCode.matches("[0-9]{3}")
+                        ? Integer.parseInt(statusCode) : 0;
+                }
+                if (code >= 200 && code < 400) {
                     return;
                 }
-                lastFailure = "HTTP " + response.statusCode();
+                lastFailure = code == 0 ? "no response" : "HTTP " + code;
             } catch (IOException notUp) {
                 lastFailure = notUp.getMessage() != null ? notUp.getMessage() : "connect failed";
             } catch (InterruptedException interrupted) {
@@ -888,10 +935,22 @@ public final class ReleaseEngine {
         instance.set(InstanceModel.NAME,
             applicationName != null && !applicationName.isBlank() ? applicationName : "application-" + applicationId);
         instance.set(InstanceModel.KIND, ReleaseKind.ID.toString());
-        instance.set(InstanceModel.SETTINGS, desired);
+        Map<String, Object> persisted = new LinkedHashMap<>(desired);
+        instance.set(InstanceModel.CRASH_POLICY, str(persisted.remove("crash_policy")));
+        Map<String, String> environment = EnvVars.toMap(persisted.remove("environment_variables"));
+        instance.set(InstanceModel.SETTINGS, persisted);
         instance.set(InstanceModel.SERVER_ID, serverId);
         instance.set(InstanceModel.RUNTIME_ROLE, role);
         Models.get(InstanceModel.class).save(instance);
+        InstanceVariables variables = new InstanceVariables();
+        int instanceId = instance.get(InstanceModel.ID);
+        try {
+            environment.forEach((key, value) ->
+                variables.setValue(instanceId, null, key, InstanceVariableModel.KIND_SECRET, value));
+        } catch (RuntimeException failed) {
+            destroyCandidateQuietly(instanceId);
+            throw failed;
+        }
         return instance;
     }
 

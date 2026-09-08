@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.api;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.ArtifactOperationModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -25,7 +26,6 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.protoblast.common.util.BlastString;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -41,8 +41,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -182,66 +180,79 @@ public final class PaasApi {
 
         HohenheimEndpoints.API_V1_SITE_ARTIFACT.setHandler(conduit -> {
             AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
+            if (ctx == null) return null;
             Row site = visibleSite(conduit, ctx);
-            if (site == null) {
-                return null;
-            }
-            Integer siteId = site.get(SiteModel.ID);
-            Integer applicationId = applicationIdOf(site);
-            if (applicationId == null) {
-                // Only a site that exposes an application has anything to release.
-                return ApiConduits.refusal(conduit, Violations.ofForm(
-                    ApiConduits.violationText("deploy_not_available")));
-            }
+            if (site == null) return null;
+            Integer applicationId = artifactApplication(conduit, ctx, site);
+            if (applicationId == null) return null;
             if (!(conduit instanceof HttpConduit http)) {
                 return ApiConduits.refusal(conduit, Violations.ofForm(
                     ApiConduits.violationText("artifact_upload_failed")));
             }
-
-            // The body exists only for the life of the exchange, so the UPLOAD is
-            // synchronous while the release it triggers is not -- the same split the
-            // deploy verb makes, drawn one step later.
-            Path upload;
-            long bytes;
+            Path upload = null;
+            boolean handedOff = false;
+            Row operation = null;
             try {
                 upload = ArtifactDeploys.uploadPathFor(applicationId);
-                bytes = http.streamBodyTo(upload, maxUploadBytes());
-            }
-            catch (RequestBodyTooLargeException tooLarge) {
+                if (http.streamBodyTo(upload, maxUploadBytes()) == 0) {
+                    return ApiConduits.refusal(conduit, Violations.ofForm(
+                        ApiConduits.violationText("artifact_upload_empty")));
+                }
+                // Reauthorize after a long upload too: grants/site target may have changed.
+                Row currentSite = visibleSite(conduit, AccessContext.of(conduit));
+                if (currentSite == null) return null;
+                Integer currentApp = artifactApplication(conduit, AccessContext.of(conduit), currentSite);
+                if (currentApp == null) return null;
+                if (!applicationId.equals(currentApp)) {
+                    conduit.notFound();
+                    return null;
+                }
+                operation = ArtifactDeploys.accept(site.get(SiteModel.ID), applicationId, upload);
+                int operationId = operation.get(ArtifactOperationModel.ID);
+                Path acceptedUpload = upload;
+                Datasource datasource = Db.currentOrDefault();
+                JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
+                    ArtifactDeploys.run(operationId, acceptedUpload, DeployTrigger.API)));
+                handedOff = true;
+                conduit.setResponseStatus(202);
+                return ApiConduits.json(Map.of("operation_id", operationId, "status", "pending",
+                    "artifact_sha256", operation.get(ArtifactOperationModel.ARTIFACT_SHA256)));
+            } catch (RequestBodyTooLargeException tooLarge) {
                 return ApiConduits.refusal(conduit, Violations.ofForm(
                     ApiConduits.violationText("artifact_too_large")));
-            }
-            catch (Exception failed) {
+            } catch (Exception failed) {
+                if (operation != null) ArtifactDeploys.handoffFailed(operation);
                 return ApiConduits.refusal(conduit, Violations.ofForm(
                     ApiConduits.violationText("artifact_upload_failed")));
+            } finally {
+                if (!handedOff) ArtifactDeploys.deleteUpload(upload);
             }
+        });
 
-            if (bytes == 0) {
-                deleteQuietly(upload);
-                return ApiConduits.refusal(conduit, Violations.ofForm(
-                    ApiConduits.violationText("artifact_upload_empty")));
+        HohenheimEndpoints.API_V1_SITE_ARTIFACT_OPERATION.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) return null;
+            Row site = visibleSite(conduit, ctx);
+            if (site == null) return null;
+            Integer applicationId = artifactApplication(conduit, ctx, site);
+            if (applicationId == null) return null;
+            Integer operationId = conduit.getParameter(HohenheimEndpoints.ARTIFACT_OPERATION_ID);
+            Map<String, Object> result = operationId == null ? null
+                : ArtifactDeploys.operation(site.get(SiteModel.ID), applicationId, operationId);
+            if (result == null) {
+                conduit.notFound();
+                return null;
             }
+            return ApiConduits.json(result);
+        });
 
-            Datasource datasource = Db.currentOrDefault();
-            JobRunner.startVirtualThread(() -> Db.run(datasource, () -> {
-                try {
-                    ArtifactDeploys.deploy(applicationId, upload, DeployTrigger.API);
-                }
-                catch (RuntimeException refused) {
-                    // Same posture as deployQuietly: the caller already has its 202, so a
-                    // refusal belongs in the log and the build/release records, not thrown
-                    // into a virtual thread nobody is joining.
-                    Blast.log("Artifact release of application", applicationId, "refused:",
-                        String.valueOf(refused.getMessage()));
-                }
-                finally {
-                    deleteQuietly(upload);
-                }
-            }));
-            return ApiConduits.json(Map.of("id", siteId, "bytes", bytes, "status", "queued"));
+        HohenheimEndpoints.API_V1_SITE_ARTIFACT_CURRENT.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) return null;
+            Row site = visibleSite(conduit, ctx);
+            if (site == null) return null;
+            Integer applicationId = artifactApplication(conduit, ctx, site);
+            return applicationId == null ? null : ApiConduits.json(ArtifactDeploys.current(applicationId));
         });
 
         HohenheimEndpoints.API_V1_SITE_ROLLBACK.setHandler(conduit -> {
@@ -272,6 +283,17 @@ public final class PaasApi {
             // origin column already says "api", so a second record would double-count.
             return ApiConduits.json(Map.of("id", siteId, "status", "rolled_back"));
         });
+    }
+
+    /** Executable bytes require application CONFIG as well as the site's independent manage grant. */
+    private static @Nullable Integer artifactApplication(Conduit conduit, AccessContext ctx, Row site) {
+        Integer applicationId = applicationIdOf(site);
+        if (applicationId == null || !ctx.hasCapability(InstanceModel.MODEL_ID,
+                applicationId, HohenheimAccess.CONFIG)) {
+            conduit.notFound();
+            return null;
+        }
+        return applicationId;
     }
 
     /**
@@ -661,17 +683,5 @@ public final class PaasApi {
         return (mb == null || mb < 1 ? 512L : mb.longValue()) * 1024L * 1024L;
     }
 
-    /** An upload that has been staged (or refused) is scratch; its removal never fails a deploy. */
-    private static void deleteQuietly(@Nullable Path path) {
-        if (path == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(path);
-        }
-        catch (IOException ignored) {
-            Blast.log("Could not remove the staged artifact upload", String.valueOf(path));
-        }
-    }
 
 }

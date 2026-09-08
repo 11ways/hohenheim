@@ -18,6 +18,7 @@ import java.util.Map;
  * @param handle        the runtime resource name, e.g. {@code hohenheim-instance-7}
  * @param image         image reference (repo[:tag] resolved by the caller)
  * @param command       command override, or null to keep the image's default
+ * @param workdir       working directory override, or null to keep the image's default
  * @param env           environment variables (name to value, ordered)
  * @param volumes       persistent named volumes: volume name to container path
  * @param binds         Hohenheim-OWNED host directories: host path to container path.
@@ -110,7 +111,8 @@ public record InstanceSpec(@NonNull String handle,
                            @Nullable Integer rootDiskGb,
                            @Nullable Integer networkLimitMbit,
                            @Nullable Integer runUser,
-                           boolean tty) {
+                           boolean tty,
+                           @Nullable String workdir) {
 
     /**
      * Every collection component is defensively copied, so a caller that keeps mutating the
@@ -188,6 +190,7 @@ public record InstanceSpec(@NonNull String handle,
         private @Nullable Integer networkLimitMbit;
         private @Nullable Integer runUser;
         private boolean tty;
+        private @Nullable String workdir;
 
         private Builder(@NonNull String handle, @NonNull String image,
                         @NonNull ResourceLimits limits,
@@ -203,6 +206,11 @@ public record InstanceSpec(@NonNull String handle,
         /** @param command null keeps the image's own default */
         public @NonNull Builder command(@Nullable List<String> command) {
             this.command = command;
+            return this;
+        }
+
+        public @NonNull Builder workdir(@Nullable String workdir) {
+            this.workdir = workdir == null || workdir.isBlank() ? null : workdir;
             return this;
         }
 
@@ -296,7 +304,7 @@ public record InstanceSpec(@NonNull String handle,
                 this.ownerLabels, this.cloudInitUserData, this.imageFingerprint,
                 this.imageOrigin, this.secureBoot, this.guestAgent, this.tmpfs,
                 this.healthCheck, this.rootDiskGb, this.networkLimitMbit, this.runUser,
-                this.tty);
+                this.tty, this.workdir);
         }
     }
 
@@ -326,7 +334,7 @@ public record InstanceSpec(@NonNull String handle,
             this.binds, List.copyOf(claimed), this.limits, this.hardening,
             this.ownerLabels, this.cloudInitUserData, this.imageFingerprint, this.imageOrigin,
             this.secureBoot, this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
-            this.networkLimitMbit, this.runUser, this.tty);
+            this.networkLimitMbit, this.runUser, this.tty, this.workdir);
     }
 
     /** A copy carrying the record's pinned resolved image identity. */
@@ -335,7 +343,7 @@ public record InstanceSpec(@NonNull String handle,
             this.binds, this.publications, this.limits, this.hardening, this.ownerLabels,
             this.cloudInitUserData, fingerprint, this.imageOrigin, this.secureBoot,
             this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
-            this.networkLimitMbit, this.runUser, this.tty);
+            this.networkLimitMbit, this.runUser, this.tty, this.workdir);
     }
 
     private static @NonNull List<PortPublication> listOf(@Nullable PortPublication one) {

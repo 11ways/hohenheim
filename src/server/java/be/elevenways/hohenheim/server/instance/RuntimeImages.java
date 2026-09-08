@@ -23,9 +23,15 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileTime;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.HexFormat;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * THE runtime image ("yolk") lane: resolve the row a record runs from, and make that image
@@ -56,6 +62,10 @@ public final class RuntimeImages {
 
     /** Long enough for an image build plus an export on a small host. */
     private static final long HOST_TIMEOUT_SECONDS = 15 * 60;
+
+    /** Stable archive metadata: staging time is not build input. */
+    private static final FileTime STAGED_TIME = FileTime.fromMillis(0);
+    private static final ConcurrentHashMap<String, String> CONTEXT_IDENTITIES = new ConcurrentHashMap<>();
 
     private RuntimeImages() {
     }
@@ -279,6 +289,63 @@ public final class RuntimeImages {
 
     // -- the packaged build context -------------------------------------------
 
+    /** Packaged runtime changes must invalidate an otherwise unchanged artifact release. */
+    public static @NonNull String contextFingerprint(@NonNull Row image) {
+        String declared = image.get(RuntimeImageModel.BUILD_CONTEXT);
+        return CONTEXT_IDENTITIES.computeIfAbsent(declared == null ? "" : declared, ignored -> {
+            Path context = materializeContext(image);
+            try (var walk = Files.walk(context)) {
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                for (Path path : walk.filter(Files::isRegularFile).sorted().toList()) {
+                    digest.update(context.relativize(path).toString().getBytes(StandardCharsets.UTF_8));
+                    digest.update((byte) 0);
+                    digest.update(Files.readAllBytes(path));
+                    digest.update((byte) 0);
+                }
+                return HexFormat.of().formatHex(digest.digest());
+            } catch (IOException | NoSuchAlgorithmException failed) {
+                throw new IllegalStateException("Unable to fingerprint packaged runtime", failed);
+            } finally {
+                deleteTree(context);
+            }
+        });
+    }
+
+    /** Compose an uploaded artifact with the exact packaged managed runtime context. */
+    public static @NonNull Path materializeArtifactContext(@NonNull Row image,
+                                                           @NonNull Path artifact) {
+        if (!Boolean.TRUE.equals(image.get(RuntimeImageModel.ENABLED))) {
+            throw Violations.ofForm(Microcopy.of("runtime_image_unknown")
+                .withFilter("scope", "violations")
+                .withArg("id", String.valueOf(idOf(image))));
+        }
+        referenceFor(image, ServerModel.RUNTIME_DOCKER);
+        Path context = materializeContext(image);
+        try {
+            Files.copy(artifact, context.resolve("app.jar"));
+            Files.writeString(context.resolve("Dockerfile"),
+                "\nCOPY app.jar /home/site/app.jar\n", StandardCharsets.UTF_8,
+                StandardOpenOption.APPEND);
+            pinStagedTimes(context);
+            return context;
+        } catch (IOException | RuntimeException failed) {
+            deleteTree(context);
+            throw Violations.ofForm(contextMissing(image, "artifact context could not be composed"));
+        }
+    }
+
+    public static void deleteArtifactContext(@NonNull Path context) {
+        deleteTree(context);
+    }
+
+    private static void pinStagedTimes(@NonNull Path directory) throws IOException {
+        try (var paths = Files.walk(directory)) {
+            for (Path path : paths.toList()) {
+                Files.setLastModifiedTime(path, STAGED_TIME);
+            }
+        }
+    }
+
     /**
      * Unpack this image's build context into a fresh temporary directory.
      *
@@ -325,7 +392,7 @@ public final class RuntimeImages {
             throw Violations.ofForm(contextMissing(image, "no packaged files under " + prefix));
         }
 
-        Path directory;
+        Path directory = null;
 
         try {
             directory = Files.createTempDirectory("hohenheim-runtime-image-");
@@ -335,7 +402,11 @@ public final class RuntimeImages {
             for (String entry : entries) {
                 copyResource(entry, directory.resolve(entry.substring(prefix.length())));
             }
+            pinStagedTimes(directory);
         } catch (IOException failed) {
+            if (directory != null) {
+                deleteTree(directory);
+            }
             throw Violations.ofForm(contextMissing(image, String.valueOf(failed.getMessage())));
         }
 

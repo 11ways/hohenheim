@@ -21,6 +21,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -50,6 +51,7 @@ public final class BackupArchive {
     public static final String MANIFEST_ENTRY = "manifest.dry";
     public static final String VOLUME_PREFIX = "volumes/";
 
+    public static final String APPLICATION_PREFIX = "application/";
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int GCM_TAG_BITS = 128;
     private static final int IV_BYTES = 12;
@@ -61,7 +63,8 @@ public final class BackupArchive {
 
     /**
      * Build and encrypt one archive. {@code volumeFiles} maps each manifest volume
-     * entry's {@code file} name to its local tar.
+     * entry's {@code file} name to its local tar; application files are keyed with
+     * {@link #APPLICATION_PREFIX} so a volume cannot shadow the runtime image.
      *
      * @return the encrypted archive's size in bytes
      */
@@ -85,6 +88,17 @@ public final class BackupArchive {
                     zip.putNextEntry(new ZipEntry(VOLUME_PREFIX + volume.file()));
                     Files.copy(tar, zip);
                     zip.closeEntry();
+                }
+                if (manifest.application() != null) {
+                    for (BackupManifest.PayloadEntry payload : applicationPayloads(manifest)) {
+                        Path file = volumeFiles.get(APPLICATION_PREFIX + payload.file());
+                        if (file == null) {
+                            throw new IOException("Application backup payload is missing");
+                        }
+                        zip.putNextEntry(new ZipEntry(APPLICATION_PREFIX + payload.file()));
+                        Files.copy(file, zip);
+                        zip.closeEntry();
+                    }
                 }
             }
             encrypt(plainZip, outFile, keyring);
@@ -137,6 +151,17 @@ public final class BackupArchive {
                             + " whole -- nothing was restored from it");
                     }
                 }
+                for (BackupManifest.PayloadEntry payload : applicationPayloads(manifest)) {
+                    ZipEntry entry = zip.getEntry(APPLICATION_PREFIX + payload.file());
+                    if (entry == null) {
+                        throw new IOException("Application backup payload is missing");
+                    }
+                    Hashed hashed = hashEntry(zip, entry);
+                    if (hashed.size() != payload.size() || !hashed.sha256().equals(payload.sha256())) {
+                        throw new IOException("Application backup payload does not match its"
+                            + " recorded checksum; refused whole");
+                    }
+                }
             }
             keep = true;
             return new Opened(manifest, plainZip);
@@ -172,6 +197,31 @@ public final class BackupArchive {
             }
         }
         return tars;
+    }
+
+    private static List<BackupManifest.PayloadEntry> applicationPayloads(
+            BackupManifest manifest) {
+        return manifest.application() == null ? List.of()
+            : List.of(manifest.application().artifact(), manifest.application().image());
+    }
+
+    /** Extract the already authenticated source and runtime image, never volume payloads. */
+    public static @NonNull Map<String, Path> extractApplication(@NonNull Opened opened,
+                                                               @NonNull Path directory)
+            throws IOException {
+        Files.createDirectories(directory);
+        Map<String, Path> files = new LinkedHashMap<>();
+        try (ZipFile zip = new ZipFile(opened.zip().toFile())) {
+            for (BackupManifest.PayloadEntry payload : applicationPayloads(opened.manifest())) {
+                Path file = directory.resolve(payload.file());
+                try (InputStream in = zip.getInputStream(zip.getEntry(
+                        APPLICATION_PREFIX + payload.file()))) {
+                    Files.copy(in, file);
+                }
+                files.put(payload.file(), file);
+            }
+        }
+        return files;
     }
 
     /** Stream a local file through SHA-256. */

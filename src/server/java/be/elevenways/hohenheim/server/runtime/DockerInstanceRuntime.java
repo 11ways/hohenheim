@@ -428,6 +428,11 @@ public final class DockerInstanceRuntime
     public void removeVolumesForRestore(@NonNull InstanceSpec spec,
                                         @NonNull Map<String, String> logicalVolumes,
                                         @NonNull Collection<String> names) throws IOException {
+        for (String name : names) {
+            if (spec.binds().containsValue(logicalVolumes.get(name))) {
+                throw new IOException("Owner-managed bind volumes must be restored through their owner");
+            }
+        }
         OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
         if (owner == null) {
             throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid owner"
@@ -1016,10 +1021,15 @@ public final class DockerInstanceRuntime
         }
     }
 
-    /** The materialized volume name behind a container path, resolved off the spec. */
+    /** The materialized named volume or owner-managed bind behind a container path. */
     private static String requireMaterialized(InstanceSpec spec, String containerPath)
             throws IOException {
         for (Map.Entry<String, String> entry : spec.volumes().entrySet()) {
+            if (entry.getValue().equals(containerPath)) {
+                return entry.getKey();
+            }
+        }
+        for (Map.Entry<String, String> entry : spec.binds().entrySet()) {
             if (entry.getValue().equals(containerPath)) {
                 return entry.getKey();
             }
@@ -1100,6 +1110,9 @@ public final class DockerInstanceRuntime
         }
         if (spec.command() != null && !spec.command().isEmpty()) {
             containerSpec.put("Cmd", spec.command());
+        }
+        if (spec.workdir() != null) {
+            containerSpec.put("WorkingDir", spec.workdir());
         }
         // The DECLARED identity, as a bare number. Docker resolves a numeric User with no
         // /etc/passwd entry, which is the whole point: a workspace's uid exists on the host

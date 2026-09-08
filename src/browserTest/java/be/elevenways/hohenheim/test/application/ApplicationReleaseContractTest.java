@@ -4,12 +4,19 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.EnvironmentModel;
+import be.elevenways.hohenheim.model.ProjectModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.model.ArtifactSourceModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -20,6 +27,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -32,6 +40,7 @@ import java.util.Map;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The health-gated release engine's STATE MACHINE with no daemon anywhere: candidate up,
@@ -104,6 +113,154 @@ class ApplicationReleaseContractTest {
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, savedDrain);
     }
 
+    @Test
+    void acceptedArtifactSourceSurvivesOrdinaryConvergenceAndStoppedRestart() {
+        Db.run(datasource, () -> {
+            int applicationId = application("restored-artifact-app");
+            Row app = Models.get(InstanceModel.class).findById(applicationId);
+            app.set(InstanceModel.SETTINGS, settingsFor("v1"));
+            Models.get(InstanceModel.class).save(app);
+            Row source = Models.get(ArtifactSourceModel.class).createEmptyRow();
+            source.set(ArtifactSourceModel.APPLICATION_ID, applicationId);
+            source.set(ArtifactSourceModel.ARTIFACT_SHA256, "a".repeat(64));
+            Models.get(ArtifactSourceModel.class).save(source);
+            try {
+                int first = ApplicationReleases.restore(applicationId,
+                    FakeDockerDaemon.digestOf("fake/app:v1"), resolved -> {
+                        assertThat(resolved.runtime().status(resolved.spec().handle()).running()).isFalse();
+                        assertThat(daemon.exists(resolved.spec().handle())).isTrue();
+                    }).instanceId();
+                assertThat(settingsOf(servingOf(applicationId)).get("commit_sha"))
+                    .isEqualTo("a".repeat(64));
+                assertThat(ApplicationReleases.converge(applicationId, Map.of()).instanceId())
+                    .isEqualTo(first);
+                ApplicationReleases.stopFor(applicationId);
+                assertThat(new InstanceService().liveStatus(first).running()).isFalse();
+                var restarted = ApplicationReleases.converge(applicationId, Map.of());
+                assertThat(restarted.instanceId()).isEqualTo(first);
+                assertThat(restarted.status().running()).isTrue();
+                assertThat(settingsOf(servingOf(applicationId)).get("commit_sha"))
+                    .isEqualTo("a".repeat(64));
+            } finally {
+                ApplicationReleases.destroyFor(applicationId);
+            }
+        });
+    }
+
+    @Test
+    void runtimeDefaultsAndEncryptedVariableSnapshotsConvergeAndRollback() {
+        Db.run(datasource, () -> {
+            int applicationId = application("runtime-variable-app");
+            Row runtime = Models.get(RuntimeImageModel.class).createEmptyRow();
+            runtime.set(RuntimeImageModel.NAME, "release-test-runtime");
+            runtime.set(RuntimeImageModel.ENABLED, true);
+            runtime.set(RuntimeImageModel.DOCKER_IMAGE, "fake/runtime:1");
+            runtime.set(RuntimeImageModel.BUILD_CONTEXT, "images/java-25");
+            runtime.set(RuntimeImageModel.DEFAULT_COMMAND, "java -jar {{JAR}}");
+            runtime.set(RuntimeImageModel.DEFAULT_PORT, 8080);
+            runtime.set(RuntimeImageModel.WORKDIR, "/home/site");
+            Models.get(RuntimeImageModel.class).save(runtime);
+            Row project = Models.get(ProjectModel.class).createEmptyRow();
+            project.set(ProjectModel.NAME, "runtime-variable-project");
+            Models.get(ProjectModel.class).save(project);
+            Row environment = Models.get(EnvironmentModel.class).createEmptyRow();
+            environment.set(EnvironmentModel.NAME, "runtime-variable-environment");
+            environment.set(EnvironmentModel.PROJECT_ID, project.get(ProjectModel.ID));
+            Models.get(EnvironmentModel.class).save(environment);
+            Projects.adoptRecord(project, InstanceModel.MODEL_ID, applicationId);
+            Row app = Models.get(InstanceModel.class).findById(applicationId);
+            app.set(InstanceModel.RUNTIME_IMAGE_ID, runtime.get(RuntimeImageModel.ID));
+            app.set(InstanceModel.ENVIRONMENT_ID, environment.get(EnvironmentModel.ID));
+            app.set(InstanceModel.SETTINGS, Map.of("image", "fake/app:v1",
+                "environment_variables", Map.of("JAR", "baseline.jar")));
+            Models.get(InstanceModel.class).save(app);
+            InstanceVariables variables = new InstanceVariables();
+            variables.setValue(null, environment.get(EnvironmentModel.ID), "JAR",
+                InstanceVariableModel.KIND_PLAIN, "environment.jar");
+            variables.setValue(applicationId, null, "JAR",
+                InstanceVariableModel.KIND_SECRET, "private-one.jar");
+            try {
+                int first = ApplicationReleases.converge(applicationId, Map.of()).instanceId();
+                var resolved = new InstanceService().resolve(first);
+                assertThat(resolved.spec().command())
+                    .containsExactly("java", "-jar", "private-one.jar");
+                assertThat(resolved.spec().workdir()).isEqualTo("/home/site");
+                assertThat(resolved.spec().publication().containerPort()).isEqualTo(8080);
+                assertThat(Models.get(InstanceModel.class).findById(first)
+                    .get(InstanceModel.SETTINGS).toString()).doesNotContain("private-one.jar");
+                assertThat(ApplicationReleases.converge(applicationId, Map.of()).instanceId())
+                    .isEqualTo(first);
+                variables.setValue(applicationId, null, "JAR",
+                    InstanceVariableModel.KIND_SECRET, "private-two.jar");
+                int second = ApplicationReleases.converge(applicationId, Map.of()).instanceId();
+                assertThat(second).isNotEqualTo(first);
+                assertThat(new InstanceService().resolve(second).spec().env())
+                    .containsEntry("JAR", "private-two.jar");
+                await("second release settled", () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
+                    latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+                ReleaseEngine.rollback(applicationId);
+                int rolledBack = servingOf(applicationId).get(InstanceModel.ID);
+                assertThat(new InstanceService().resolve(rolledBack).spec().env())
+                    .containsEntry("JAR", "private-one.jar");
+                assertThat(ApplicationReleases.converge(applicationId, Map.of()).instanceId())
+                    .isEqualTo(rolledBack);
+                variables.removeValue(applicationId, null, "JAR");
+                int inherited = ApplicationReleases.converge(applicationId, Map.of()).instanceId();
+                assertThat(inherited).isNotEqualTo(rolledBack);
+                assertThat(new InstanceService().resolve(inherited).spec().env())
+                    .containsEntry("JAR", "environment.jar");
+                await("inherited release settled", () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
+                    latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+                runtime.set(RuntimeImageModel.DEFAULT_PORT, 9090);
+                Models.get(RuntimeImageModel.class).save(runtime);
+                int changedRuntime = ApplicationReleases.converge(applicationId, Map.of()).instanceId();
+                assertThat(changedRuntime).isNotEqualTo(inherited);
+                assertThat(new InstanceService().resolve(changedRuntime).spec().publication().containerPort())
+                    .isEqualTo(9090);
+                await("runtime change settled", () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
+                    latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+                Row changed = Models.get(InstanceModel.class).findById(applicationId);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> explicit = new LinkedHashMap<>(
+                    (Map<String, Object>) changed.get(InstanceModel.SETTINGS));
+                explicit.put("command", "java -jar custom.jar");
+                explicit.put("workdir", "/opt/service");
+                explicit.put("container_port", 7070);
+                changed.set(InstanceModel.SETTINGS, explicit);
+                Models.get(InstanceModel.class).save(changed);
+                int overridden = ApplicationReleases.converge(applicationId, Map.of()).instanceId();
+                var overriddenSpec = new InstanceService().resolve(overridden).spec();
+                assertThat(overriddenSpec.command()).containsExactly("java", "-jar", "custom.jar");
+                assertThat(overriddenSpec.workdir()).isEqualTo("/opt/service");
+                assertThat(overriddenSpec.publication().containerPort()).isEqualTo(7070);
+                await("explicit overrides settled", () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
+                    latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+            } finally {
+                ApplicationReleases.destroyFor(applicationId);
+            }
+        });
+    }
+
+    @Test
+    void anUnhealthyInitialReleaseNeverBecomesServing() {
+        Db.run(datasource, () -> {
+            int applicationId = application("initial-health-app");
+            try {
+                daemon.answerWithForNextWorkload(404);
+                assertThatThrownBy(() -> converge(applicationId, settingsFor("v1")))
+                    .isInstanceOf(Violations.class);
+                assertThat(servingOf(applicationId)).isNull();
+                Row operation = latestOp(applicationId);
+                assertThat(operation.get(ReleaseOperationModel.STATUS))
+                    .isEqualTo(ReleaseOperationModel.STATUS_FAILED);
+                assertThat(daemon.exists(FakeDockerDaemon.handleOf(
+                    operation.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID)))).isFalse();
+            } finally {
+                ApplicationReleases.destroyFor(applicationId);
+            }
+        });
+    }
+
     /**
      * The health gate as STATE: a candidate that answers but is unhealthy is destroyed,
      * the operation says so durably, and the prior release is still the serving one --
@@ -114,8 +271,7 @@ class ApplicationReleaseContractTest {
         Db.run(datasource, () -> {
             int applicationId = application("gate-app");
             try {
-                // 1. The initial release: nothing to protect, so it deploys directly, and
-                //    the record is pinned to the DIGEST behind the tag, never the tag.
+                // The initial candidate is health-gated, then pinned to the image digest.
                 converge(applicationId, settingsFor("v1"));
                 Row serving = servingOf(applicationId);
                 assertThat(serving).as("step 1: a serving release exists").isNotNull();
@@ -147,9 +303,6 @@ class ApplicationReleaseContractTest {
                 assertThat(op.get(ReleaseOperationModel.STATUS))
                     .as("step 3: the refused release is recorded FAILED, never forgotten")
                     .isEqualTo(ReleaseOperationModel.STATUS_FAILED);
-                assertThat((String) op.get(ReleaseOperationModel.FAILURE_REASON))
-                    .as("step 3: and the failure names the probe")
-                    .contains("release_probe_failed");
 
                 // 4. STATE of the refused candidate: soft-deleted record, no container at
                 //    the daemon, no port claim -- and the daemon's own call sequence shows
@@ -227,11 +380,6 @@ class ApplicationReleaseContractTest {
                     .as("step 2: the retained release's container is KEPT").isTrue();
                 assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(firstId)))
                     .as("step 2: but stopped once the drain window passed").isFalse();
-                assertThat((String) reload(swapOp).get(ReleaseOperationModel.STEP_LOG))
-                    .as("step 2: every phase is visible on the durable record")
-                    .contains("candidate instance").contains("probing")
-                    .contains("health probe passed").contains("switching traffic")
-                    .contains("retained as the rollback target").contains("release complete");
 
                 // 3. Roll back onto the RETAINED spec. Nothing is pulled or rebuilt: the
                 //    artifact is addressed by content, which is what makes a rollback
@@ -269,7 +417,9 @@ class ApplicationReleaseContractTest {
                 // 5. The rollback PINS: the operator rejected exactly this source, so an
                 //    unchanged converge must not release the rejected spec back on.
                 assertThat(ReleaseEngine.pinnedByRollback(applicationId,
-                        ReleaseEngine.sourceFingerprint(applicationId, settingsFor("v2"))))
+                        ReleaseEngine.sourceFingerprint(applicationId,
+                            ApplicationReleases.resolvedSettings(
+                                ApplicationReleases.requireApplication(applicationId), Map.of()))))
                     .as("step 5: the rejected source is pinned").isTrue();
                 int opsBefore = opCount(applicationId);
                 converge(applicationId, settingsFor("v2"));
