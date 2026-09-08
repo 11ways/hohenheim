@@ -2774,3 +2774,37 @@ form retains the instance picker. Site 13 was changed from Address to Instance
 through that form during managed-Microcopy preparation. This is not the
 production cutover: site 3 continues to serve the native Java process until
 the managed deployment passes its gates.
+
+## Deploy 2026-09-08 18:25 UTC: application working directories
+
+Deployed clean Hohenheim `bc67eda4` through `zenit-dev deploy robbedoes`.
+Jar SHA-256 `9a66e6207bb8c4709ceb0dc4ed7104bf7c5429a503619d69058aa9cb3ff5e415`,
+269,575,232 bytes, all 15 repository stamps clean. No new migrations;
+both mandatory restarts returned HTTP 200 and the deployed comparison was
+current with no restart pending. The lane retained its recovery material at
+`/root/hohenheim-preflight-20260908-182501/`.
+
+`WorkingDir` is now explicitly permitted inside the container's existing
+filesystem; it grants neither a host mount nor additional privileges.
+The real-container hardening journey passed in run 235, including the
+application's actual working directory and the four authorities' kernel
+isolation assertions. The earlier Alpine HTTP fixture was invalid; the
+corrected fixture uses the existing nginx image, smoke-tested before the run.
+
+Managed Microcopy's first successful artifact deployment was operation 3:
+application 23, serving release instance 25, artifact
+`c59580da00a7c53087e46a23879fc38baa0ea620f5414f4741f6a9b1158fe2a0`.
+The public preview returned HTTP 200 with its ready response. Production
+remained on the native Java service pending compatibility and lifecycle checks.
+
+The managed cutover subsequently completed: production site 3 and preview
+site 13 both name application 23 and serve release 28, artifact
+`f30384e296105fbe661372652c972f73cba0d9a39da80278c27a990ce6858ee3`
+(Microcopy `1d18cc57`). The 4,120-shape Node/managed-Java comparison and real
+client replay passed; restart, both retained-release rollback directions
+and an ordinary deploy without upload were exercised before the switch.
+The native `microcopy-java.service` was stopped and disabled at 18:53:13 UTC;
+production content/authentication checks still passed afterwards. Its files
+and original Node instance 2 remain intact for recovery. The canonical
+Microcopy deployment target now addresses Hohenheim site 3, not systemd.
+No additional recurring backup schedule was retained.
