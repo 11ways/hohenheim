@@ -37,6 +37,7 @@ public final class RuntimeImageSeeder implements Seeder {
     private static final int ID_NODE_16 = 5;
     private static final int ID_NODE_12 = 6;
     private static final int ID_NODE_10 = 7;
+    private static final int ID_JAVA_25 = 8;
 
     public RuntimeImageSeeder() {
     }
@@ -75,6 +76,14 @@ public final class RuntimeImageSeeder implements Seeder {
         ctx.sync(images, ID_JAVA_21, row -> image(row, "java-21",
             "Temurin JDK 21 with Gradle and Maven homes inside the data directory.",
             "flask", "hohenheim/java-21:1", "images/java-21",
+            "java -jar app.jar", 8080, "./gradlew --no-daemon build"));
+
+        // AIDEV-NOTE: java-25 exists because the Zenit chain targets Java 25 (its apps
+        // declare sourceCompatibility VERSION_25), so a Zenit application cannot run on
+        // java-21 at all. java-21 stays for workloads pinned to it.
+        ctx.sync(images, ID_JAVA_25, row -> image(row, "java-25",
+            "Temurin JDK 25 with Gradle and Maven homes inside the data directory.",
+            "flask", "hohenheim/java-25:1", "images/java-25",
             "java -jar app.jar", 8080, "./gradlew --no-daemon build"));
 
         ctx.sync(images, ID_DEBIAN_13, row -> image(row, "debian-13",
