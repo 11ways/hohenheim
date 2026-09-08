@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The install contract of the ONE hohenheim migration: a fresh database migrates,
+ * The install contract of Hohenheim's migration chain: a fresh database migrates,
  * re-migrates and passes strict integrity; the schema it produced really carries the
  * constraints the code relies on; and down() undoes it completely enough that up() can
  * rebuild it.
@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * (2026-08-29). Editing an APPLIED migration makes the next --run-migrations rehearsal
  * refuse under database.migration_integrity=fail, and "applied" stopped meaning "001" the
  * day starfleet ran M002/M003. So exactly one fact is declared here -- DEPLOYED_THROUGH,
- * the highest version every deployed install has applied -- and the rule derives from it:
+ * the highest version any deployed install has applied -- and the rule derives from it:
  * every discovered migration at or below the mark MUST carry a digest in the committed
  * pin table, and that digest MUST still match. A migration ABOVE the mark is not pinned,
  * because nothing has applied it yet and editing it is still free. Raising the mark plus
@@ -52,9 +52,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class MigrationIntegrityTest {
 
     /**
-     * The highest migration version every deployed install has applied; see the class note.
+     * The highest migration version any deployed install has applied; see the class note.
      */
-    private static final String DEPLOYED_THROUGH = "009";
+    private static final String DEPLOYED_THROUGH = "010";
 
     /** Classpath resource holding one {@code <class>&lt;TAB&gt;<digest>} line per pinned migration. */
     private static final String PIN_RESOURCE = "migration-pins.txt";

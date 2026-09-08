@@ -249,7 +249,7 @@ public final class ContainerHardening {
      * it shares with its neighbours. {@code Hostname}/{@code Domainname} are how a
      * container names itself to the daemon's embedded resolver, which is what a service
      * alias is for. {@code NetworkDisabled} would silently produce a workload the network
-     * policy has nothing to bind to. {@code WorkingDir}, {@code StopSignal},
+     * policy has nothing to bind to. {@code StopSignal},
      * {@code StopTimeout}, {@code Shell}, {@code Volumes} (anonymous volumes with no
      * owner labels, so unattributable debris) and the {@code AttachStd*} family are
      * refused not for danger but for the allow-list's whole point: permission is DECLARED
@@ -270,6 +270,9 @@ public final class ContainerHardening {
             + " identity the bind rule derives volume permission from.",
         "Cmd", "the command override an authority declares; running a command inside an"
             + " already-capability-bounded container buys nothing this policy bounds.",
+        "WorkingDir", "the application's declared working directory inside its existing"
+            + " container filesystem; this adds no host mount or privilege, and every"
+            + " mounted path remains subject to the ownership rules below.",
         "Env", "the workload's declared environment; product- and operator-authored, and"
             + " outside the isolation boundary by construction.",
         "User", "the DECLARED numeric uid a workspace runs as. It cannot escalate past the"

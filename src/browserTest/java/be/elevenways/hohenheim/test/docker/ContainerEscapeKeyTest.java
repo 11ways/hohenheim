@@ -248,6 +248,7 @@ class ContainerEscapeKeyTest {
         legitimate.put("Image", "alpine:latest");
         legitimate.put("Labels", instanceLabels(41));
         legitimate.put("Cmd", List.of("sleep", "30"));
+        legitimate.put("WorkingDir", "/home/site");
         legitimate.put("Env", List.of("HOME=/home/site"));
         legitimate.put("User", "10041");
         legitimate.put("ExposedPorts", Map.of("80/tcp", Map.of()));
@@ -282,7 +283,6 @@ class ContainerEscapeKeyTest {
         refused.put("Hostname", "impersonator");
         refused.put("Domainname", "internal");
         refused.put("NetworkDisabled", Boolean.TRUE);
-        refused.put("WorkingDir", "/");
         refused.put("StopSignal", "SIGKILL");
         refused.put("StopTimeout", 0);
         refused.put("Shell", List.of("/bin/sh", "-c"));

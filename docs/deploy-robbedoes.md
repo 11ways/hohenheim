@@ -2750,3 +2750,27 @@ unilaterally. The two candidate fixes, for a decision:
 2. Drive the field's visibility from the LIVE sibling value rather than the stored
    row, which needs a client-side conditional-visibility mechanism in zenit-forms
    that does not exist yet. Matches the stated intent exactly; larger.
+
+## Deploy 2026-09-08 17:10 UTC: artifact deployment controller
+
+Deployed clean Hohenheim `57e7f6fa` with Zenit `e2d9aaf9` through
+`zenit-dev deploy robbedoes --jar <pushed-workspace jar>`. Jar SHA-256
+`ee9c6afd4ced1b3badb054c805dd49fad10b8aa083ce5d55483014b8a911b43f`,
+269,573,427 bytes, 13 stamped repositories all clean. Migration
+`010 Artifact operations` passed the byte-copy rehearsal and applied at boot
+(49 to 50 recorded migrations). Both mandatory restarts returned HTTP 200;
+the deployed comparison reported current with no restart pending.
+
+Preflight and controller rollback material:
+`/root/hohenheim-preflight-20260908-171010/` contains the preflight and at-swap
+databases, settings, verified keyring copy and `rollback.jar`. Controller
+rollback is `tools/deploy-host.sh --rollback robbedoes --preflight
+/root/hohenheim-preflight-20260908-171010`; migration rollback also requires
+the at-swap database. The deployed jar's offline checksum command supplied
+the committed M010 pin.
+
+The site-picker one-way-door note above is now historical: the deployed edit
+form retains the instance picker. Site 13 was changed from Address to Instance
+through that form during managed-Microcopy preparation. This is not the
+production cutover: site 3 continues to serve the native Java process until
+the managed deployment passes its gates.
