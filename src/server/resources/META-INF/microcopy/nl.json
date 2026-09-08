@@ -10646,6 +10646,18 @@
     "text": "De applicatie-image kon niet naar een digest herleid worden: {$reason}",
     "scope": "violations"
   },
+  "artifact_no_runtime_image": {
+    "text": "Deze applicatie benoemt geen runtime-image, dus er is niets om het artefact op te kopiëren: {$reason}",
+    "scope": "violations"
+  },
+  "artifact_staging_failed": {
+    "text": "Het geuploade artefact kon niet klaargezet worden om te bouwen: {$reason}",
+    "scope": "violations"
+  },
+  "artifact_unreadable": {
+    "text": "Het geuploade artefact kon niet gelezen worden: {$reason}",
+    "scope": "violations"
+  },
   "source_no_repository": {
     "text": "Deze bron noemt geen repository om uit te checken",
     "scope": "violations"
