@@ -10658,6 +10658,18 @@
     "text": "Het geuploade artefact kon niet gelezen worden: {$reason}",
     "scope": "violations"
   },
+  "artifact_too_large": {
+    "text": "Het geüploade artefact is groter dan builds.max_upload_mb toelaat.",
+    "scope": "violations"
+  },
+  "artifact_upload_empty": {
+    "text": "De aanvraag bevatte geen artefact-bytes.",
+    "scope": "violations"
+  },
+  "artifact_upload_failed": {
+    "text": "De artefact-upload kon niet ontvangen worden.",
+    "scope": "violations"
+  },
   "source_no_repository": {
     "text": "Deze bron noemt geen repository om uit te checken",
     "scope": "violations"

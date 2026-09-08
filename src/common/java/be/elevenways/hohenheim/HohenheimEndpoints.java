@@ -742,6 +742,28 @@ public class HohenheimEndpoints {
         .rateLimit(DEPLOY_LIMIT)
         .build();
 
+    /**
+     * Upload an artifact built elsewhere and release it.
+     *
+     * AIDEV-NOTE: site-scoped like its deploy sibling, and for the same reason -- it then
+     * inherits `visibleSite`'s authorization exactly, instead of growing a second way to
+     * decide who may put code on a machine. The body is the raw artifact, streamed to disk
+     * by the handler; there is deliberately no multipart wrapper, because the form lanes
+     * hand the parser the WHOLE body as one array.
+     *
+     * csrfExempt is safe: the handler refuses non-API-key principals.
+     */
+    public static final Endpoint<Object> API_V1_SITE_ARTIFACT = Endpoint.<Object>builder()
+        .identifier(Identifier.of("hohenheim", "api_v1_site_artifact"))
+        .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
+            .addStatic("api").addDelimiter().addStatic("v1").addDelimiter()
+            .addStatic("sites").addDelimiter().addParameter(SITE_ID)
+            .addDelimiter().addStatic("artifact").build())
+        .requiresLogin()
+        .csrfExempt()
+        .rateLimit(DEPLOY_LIMIT)
+        .build();
+
     /** csrfExempt is safe: the handler refuses non-API-key principals. */
     public static final Endpoint<Object> API_V1_SITE_ROLLBACK = Endpoint.<Object>builder()
         .identifier(Identifier.of("hohenheim", "api_v1_site_rollback"))

@@ -1147,6 +1147,16 @@ public class HohenheimSettings {
                 + "larger artifact FAILS the build instead of taking the controller down")
             .build();
 
+        public static final SettingDefinition<Integer> MAX_UPLOAD_MB = GROUP
+            .buildSetting("max_upload_mb", Integer.class)
+            .defaultValue(512)
+            .suffix("MiB")
+            .description("Upper bound in MiB for an artifact uploaded to be released. "
+                + "Deliberately NOT max_artifact_mb: that one guards the heap because the "
+                + "image tar is read through controller memory, while an upload is streamed "
+                + "straight to disk and never enters the heap, so this cap guards DISK")
+            .build();
+
         public static final SettingDefinition<Integer> LOG_LIMIT_KB = GROUP
             .buildSetting("log_limit_kb", Integer.class)
             .defaultValue(512)
