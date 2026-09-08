@@ -6,6 +6,13 @@ sandbox builds, artifact uploads), per-instance logs and the variable mechanism.
 thin client of this API; nothing is reachable through it that the API does not
 offer, and nothing in the API is a wider door than the admin/manage UI.
 
+PaaS ("Platform as a Service") names Hohenheim's existing application-hosting
+machinery, not a separately installed platform. Artifact upload is another source
+for that machinery: a normal Zenit endpoint and zenit-auth principal reach
+`ArtifactDeploys`, then `ApplicationReleases` / `ReleaseEngine` and `InstanceService`.
+Runtime isolation, volumes and proxy handoff remain owned by those existing layers;
+there is no Microcopy-specific deployment or authentication path.
+
 ## Authentication
 
 Every call needs a zenit-auth API key (`znit_` token), sent as `X-Api-Key: <key>`
@@ -177,12 +184,30 @@ current report. Failure, interruption, timeout and supersession are not reported
 deployed. The client refuses dirty or invalid provenance before uploading; dry runs
 perform no build, credential read or network request.
 
+The trust boundary is deployment authority, not artifact safety: a caller allowed
+to replace the executable can run code that reads the application's credentials
+and data. Container isolation remains the boundary to the host and other workloads.
+The endpoint uses the existing deployment rate limit and bounded body streaming;
+JAR validation bounds directory metadata and inflation and checks member integrity
+without executing the application. These controls are not malware detection or an
+exhaustive security-audit claim.
+
+Provenance checks are a CLIENT workflow guard, not server-enforced attestation.
+An appropriately authorized direct caller can upload a valid unstamped JAR.
+SHA-256 identifies the uploaded bytes; build stamps describe provenance, but neither
+is a trusted-builder signature. The server does not require signed artifacts.
+
 Application backups use the existing encrypted archive and backup-target mechanism.
 They include the serving JAR, exported image, application volumes, authored profile
 and variable inventory, and restore into a NEW application. Unapplied secret,
 command or runtime-default changes are refused before stopping the workload:
 pairing the old image with newer configuration is not a coherent recovery point.
 Code-only rollback remains backupable through the serving artifact's identity.
+
+`ApplicationBackupRecoveryTest` exercises restore after source/image loss, secret
+restoration and failed-capture handling with real archive encryption and HTTP health
+probes over a controlled, stateless runtime fixture. It does not prove live volume
+contents, kernel quotas or a production off-host disaster-recovery exercise.
 
 ## Sites and domains
 
