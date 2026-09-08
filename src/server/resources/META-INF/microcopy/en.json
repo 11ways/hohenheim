@@ -10658,6 +10658,18 @@
     "text": "The uploaded artifact could not be read: {$reason}",
     "scope": "violations"
   },
+  "artifact_too_large": {
+    "text": "The uploaded artifact is larger than builds.max_upload_mb allows.",
+    "scope": "violations"
+  },
+  "artifact_upload_empty": {
+    "text": "The request carried no artifact bytes.",
+    "scope": "violations"
+  },
+  "artifact_upload_failed": {
+    "text": "The artifact upload could not be received.",
+    "scope": "violations"
+  },
   "source_no_repository": {
     "text": "This source names no repository to check out",
     "scope": "violations"

@@ -82,6 +82,21 @@ public final class ArtifactDeploys {
     }
 
     /**
+     * Where an upload lands before it is staged.
+     *
+     * AIDEV-NOTE: under the artifact tree rather than the system temp directory, so the
+     * staging copy stays on ONE filesystem. /tmp is frequently a small tmpfs, which for a
+     * jar this size is the difference between a copy and an ENOSPC halfway through a
+     * deploy -- and a tmpfs upload is heap-adjacent memory, which is exactly what the
+     * streaming lane exists to avoid.
+     */
+    public static @NonNull Path uploadPathFor(int applicationId) throws IOException {
+        Path uploads = directoryFor(applicationId).toPath().getParent().resolve("uploads");
+        Files.createDirectories(uploads);
+        return Files.createTempFile(uploads, "app-" + applicationId + "-", ".jar");
+    }
+
+    /**
      * Deploy an uploaded artifact: stage it as a build context, then converge a release.
      *
      * @param  artifact a readable file on the CONTROL PLANE; the caller owns its lifetime

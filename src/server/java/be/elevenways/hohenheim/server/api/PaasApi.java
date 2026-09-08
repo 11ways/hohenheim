@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.api;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -16,6 +17,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.application.ArtifactDeploys;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceApi;
@@ -23,6 +25,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -30,12 +33,17 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
+import be.elevenways.zenit.common.routing.RequestBodyTooLargeException;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.http.HttpConduit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -170,6 +178,70 @@ public final class PaasApi {
             JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
                 ApplicationDeploys.deployQuietly(applicationId, null, DeployTrigger.API)));
             return ApiConduits.json(Map.of("id", siteId, "status", "queued"));
+        });
+
+        HohenheimEndpoints.API_V1_SITE_ARTIFACT.setHandler(conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row site = visibleSite(conduit, ctx);
+            if (site == null) {
+                return null;
+            }
+            Integer siteId = site.get(SiteModel.ID);
+            Integer applicationId = applicationIdOf(site);
+            if (applicationId == null) {
+                // Only a site that exposes an application has anything to release.
+                return ApiConduits.refusal(conduit, Violations.ofForm(
+                    ApiConduits.violationText("deploy_not_available")));
+            }
+            if (!(conduit instanceof HttpConduit http)) {
+                return ApiConduits.refusal(conduit, Violations.ofForm(
+                    ApiConduits.violationText("artifact_upload_failed")));
+            }
+
+            // The body exists only for the life of the exchange, so the UPLOAD is
+            // synchronous while the release it triggers is not -- the same split the
+            // deploy verb makes, drawn one step later.
+            Path upload;
+            long bytes;
+            try {
+                upload = ArtifactDeploys.uploadPathFor(applicationId);
+                bytes = http.streamBodyTo(upload, maxUploadBytes());
+            }
+            catch (RequestBodyTooLargeException tooLarge) {
+                return ApiConduits.refusal(conduit, Violations.ofForm(
+                    ApiConduits.violationText("artifact_too_large")));
+            }
+            catch (Exception failed) {
+                return ApiConduits.refusal(conduit, Violations.ofForm(
+                    ApiConduits.violationText("artifact_upload_failed")));
+            }
+
+            if (bytes == 0) {
+                deleteQuietly(upload);
+                return ApiConduits.refusal(conduit, Violations.ofForm(
+                    ApiConduits.violationText("artifact_upload_empty")));
+            }
+
+            Datasource datasource = Db.currentOrDefault();
+            JobRunner.startVirtualThread(() -> Db.run(datasource, () -> {
+                try {
+                    ArtifactDeploys.deploy(applicationId, upload, DeployTrigger.API);
+                }
+                catch (RuntimeException refused) {
+                    // Same posture as deployQuietly: the caller already has its 202, so a
+                    // refusal belongs in the log and the build/release records, not thrown
+                    // into a virtual thread nobody is joining.
+                    Blast.log("Artifact release of application", applicationId, "refused:",
+                        String.valueOf(refused.getMessage()));
+                }
+                finally {
+                    deleteQuietly(upload);
+                }
+            }));
+            return ApiConduits.json(Map.of("id", siteId, "bytes", bytes, "status", "queued"));
         });
 
         HohenheimEndpoints.API_V1_SITE_ROLLBACK.setHandler(conduit -> {
@@ -582,4 +654,24 @@ public final class PaasApi {
     private static @NonNull String stringOrEmpty(@Nullable Object value) {
         return value == null ? "" : String.valueOf(value);
     }
+
+    /** The upload cap in bytes; a DISK guard, since the body never enters the heap. */
+    private static long maxUploadBytes() {
+        Integer mb = HohenheimSettings.VALUES.getValue(HohenheimSettings.Builds.MAX_UPLOAD_MB);
+        return (mb == null || mb < 1 ? 512L : mb.longValue()) * 1024L * 1024L;
+    }
+
+    /** An upload that has been staged (or refused) is scratch; its removal never fails a deploy. */
+    private static void deleteQuietly(@Nullable Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        }
+        catch (IOException ignored) {
+            Blast.log("Could not remove the staged artifact upload", String.valueOf(path));
+        }
+    }
+
 }
