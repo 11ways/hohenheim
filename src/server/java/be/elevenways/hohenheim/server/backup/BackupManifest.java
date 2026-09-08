@@ -56,10 +56,11 @@ public record BackupManifest(int version,
                              @Nullable Integer containerPort,
                              @NonNull String portProtocol,
                              @NonNull List<VolumeEntry> volumes,
-                             @Nullable InstanceProfile profile) {
+                             @Nullable InstanceProfile profile,
+                             @Nullable ApplicationEntry application) {
 
     /** The manifest format this build WRITES; it reads every version down to 1. */
-    public static final int FORMAT_VERSION = 2;
+    public static final int FORMAT_VERSION = 3;
 
     /** The first format: no {@link InstanceProfile} (see {@link #profile()}). */
     public static final int VERSION_WITHOUT_PROFILE = 1;
@@ -94,6 +95,18 @@ public record BackupManifest(int version,
     /** One captured volume payload: archive entry {@code volumes/<name>.tar}. */
     public record VolumeEntry(@NonNull String name, @NonNull String containerPath,
                               @NonNull String file, @NonNull String sha256, long size) {}
+
+    /** Files accompanying an application, inside the SAME encrypted archive as its data. */
+    public record PayloadEntry(@NonNull String file, @NonNull String sha256, long size) {}
+
+    /** Stable runtime catalog identity and the immutable source/image needed after host loss. */
+    public record ApplicationEntry(@NonNull Map<String, Object> runtimeImage,
+                                   @NonNull PayloadEntry artifact,
+                                   @NonNull PayloadEntry image,
+                                   @NonNull List<VolumeDeclaration> declarations) {}
+
+    public record VolumeDeclaration(@NonNull String name, @NonNull String containerPath,
+                                    @Nullable Long quotaBytes, boolean exclusive) {}
 
     /**
      * The template the source instance was created from, as the SOURCE controller knew
@@ -186,6 +199,23 @@ public record BackupManifest(int version,
             volumeList.add(entry);
         }
         root.put("volumes", volumeList);
+        if (this.application != null) {
+            Map<String, Object> app = new LinkedHashMap<>();
+            app.put("runtime_image", this.application.runtimeImage());
+            app.put("artifact", payloadMap(this.application.artifact()));
+            app.put("image", payloadMap(this.application.image()));
+            List<Map<String, Object>> declarations = new ArrayList<>();
+            for (VolumeDeclaration volume : this.application.declarations()) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("name", volume.name());
+                entry.put("path", volume.containerPath());
+                entry.put("quota_bytes", volume.quotaBytes());
+                entry.put("exclusive", volume.exclusive());
+                declarations.add(entry);
+            }
+            app.put("declarations", declarations);
+            root.put("application", app);
+        }
         if (this.profile != null) {
             List<Map<String, Object>> variableList = new ArrayList<>();
             for (VariableEntry variable : this.profile.variables()) {
@@ -232,6 +262,10 @@ public record BackupManifest(int version,
             summary.put("template_version", template != null ? template.version() : null);
             summary.put("variable_count", this.profile.variables().size());
             summary.put("file_count", this.profile.files().size());
+        }
+        if (this.application != null) {
+            summary.put("artifact_sha256", this.application.artifact().sha256());
+            summary.put("runtime_image", this.application.runtimeImage().get("name"));
         }
         return summary;
     }
@@ -291,6 +325,13 @@ public record BackupManifest(int version,
                     throw new IOException("Backup manifest volume '" + volumeName + "' has no size");
                 }
                 volumes.add(new VolumeEntry(volumeName, path, file, sha, size.longValue()));
+                requireSegment(volumeName, "volume name");
+                requireSegment(file, "volume file");
+                if (size.longValue() < 0 || !sha.matches("[0-9a-f]{64}")
+                        || volumes.stream().filter(v -> v.name().equals(volumeName)
+                            || v.file().equals(file)).count() > 1) {
+                    throw new IOException("Invalid or duplicate backup volume inventory");
+                }
             }
         }
 
@@ -301,7 +342,67 @@ public record BackupManifest(int version,
         Map<String, Object> typedSettings = (Map<String, Object>) settings;
         return new BackupManifest(version.intValue(), created, controllerVersion, name, kind,
             payload, typedSettings, imageReference, imageId, ownership, containerPort,
-            protocol, List.copyOf(volumes), profile);
+            protocol, List.copyOf(volumes), profile, applicationFrom(root, version.intValue()));
+    }
+
+    private static Map<String, Object> payloadMap(PayloadEntry payload) {
+        return Map.of("file", payload.file(), "sha256", payload.sha256(), "size", payload.size());
+    }
+
+    private static PayloadEntry payloadFrom(Object value) throws IOException {
+        if (!(value instanceof Map<?, ?> map) || !(map.get("size") instanceof Number size)) {
+            throw new IOException("Application backup payload inventory is missing");
+        }
+        String file = requireText(map.get("file"), "application payload file");
+        requireSegment(file, "application payload file");
+        String sha = requireText(map.get("sha256"), "application payload checksum");
+        if (size.longValue() < 0 || !sha.matches("[0-9a-f]{64}")) {
+            throw new IOException("Invalid application backup payload inventory");
+        }
+        return new PayloadEntry(file, sha, size.longValue());
+    }
+
+    private static @Nullable ApplicationEntry applicationFrom(Map<?, ?> root, int version)
+            throws IOException {
+        if (!root.containsKey("application")) {
+            return null;
+        }
+        if (version < 3 || !(root.get("application") instanceof Map<?, ?> app)
+                || !(app.get("runtime_image") instanceof Map<?, ?> runtime)
+                || !(app.get("declarations") instanceof List<?> declared)) {
+            throw new IOException("Application backup inventory is incomplete");
+        }
+        requireText(runtime.get("name"), "application.runtime_image.name");
+        List<VolumeDeclaration> declarations = new ArrayList<>();
+        for (Object value : declared) {
+            if (!(value instanceof Map<?, ?> volume)
+                    || !(volume.get("exclusive") instanceof Boolean exclusive)) {
+                throw new IOException("Application backup volume declaration is incomplete");
+            }
+            String name = requireText(volume.get("name"), "application volume name");
+            requireSegment(name, "application volume name");
+            if (declarations.stream().anyMatch(v -> v.name().equals(name))) {
+                throw new IOException("Duplicate application volume declaration");
+            }
+            declarations.add(new VolumeDeclaration(name,
+                requireText(volume.get("path"), "application volume path"),
+                volume.get("quota_bytes") instanceof Number quota ? quota.longValue() : null,
+                exclusive));
+        }
+        PayloadEntry artifact = payloadFrom(app.get("artifact"));
+        PayloadEntry image = payloadFrom(app.get("image"));
+        if (artifact.file().equals(image.file())) {
+            throw new IOException("Application image and source share a payload filename");
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> runtimeImage = (Map<String, Object>) runtime;
+        return new ApplicationEntry(runtimeImage, artifact, image, List.copyOf(declarations));
+    }
+
+    private static void requireSegment(String value, String field) throws IOException {
+        if (!value.matches("[A-Za-z0-9][A-Za-z0-9_.-]*") || value.equals("..")) {
+            throw new IOException("Unsafe backup " + field);
+        }
     }
 
     /** The profile half of a version-2-or-later manifest, parsed with the same strictness. */

@@ -45,7 +45,7 @@ class BackupArchiveTest {
                 List.of(new BackupManifest.FileEntry("/config/velocity.toml",
                         "secret = \"{{FORWARDING_SECRET}}\"", "0640", null),
                     new BackupManifest.FileEntry("/config/forced-hosts.toml",
-                        "generated", "0644", "game_domain"))));
+                        "generated", "0644", "game_domain"))), null);
     }
 
     private Path buildArchive(EncryptionKeyring keyring, byte[] payload) throws IOException {
@@ -191,5 +191,54 @@ class BackupArchiveTest {
             .as("a manifest/payload checksum disagreement is a whole-archive refusal")
             .isInstanceOf(IOException.class)
             .hasMessageContaining("does not match its recorded checksum");
+    }
+
+    @Test
+    void applicationDataSourceImageAndSecretsShareOneVerifiedEncryptedArchive() throws IOException {
+        EncryptionKeyring keyring = EncryptionKeyring.loadOrCreate(tmp.resolve("application.keys"));
+        Path data = Files.writeString(tmp.resolve("data.tar"), "sqlite-data-with-wal");
+        Path source = Files.writeString(tmp.resolve("app.jar"), "immutable-uploaded-application");
+        Path image = Files.writeString(tmp.resolve("image.tar"), "runtime-image-layers");
+        BackupManifest base = manifest(BackupArchive.sha256Of(data), Files.size(data));
+        BackupManifest.ApplicationEntry application = new BackupManifest.ApplicationEntry(
+            Map.of("name", "java-25", "docker_image", "hohenheim/java-25"),
+            new BackupManifest.PayloadEntry("app.jar", BackupArchive.sha256Of(source), Files.size(source)),
+            new BackupManifest.PayloadEntry("data.tar", BackupArchive.sha256Of(image), Files.size(image)),
+            List.of(new BackupManifest.VolumeDeclaration("data", "/data", 1048576L, true)));
+        BackupManifest manifest = new BackupManifest(BackupManifest.FORMAT_VERSION,
+            base.created(), base.controllerVersion(), "uploaded-app", "hohenheim:application",
+            base.payload(), Map.of(), base.imageReference(), "sha256:" + "a".repeat(64),
+            base.ownership(), base.containerPort(), base.portProtocol(), base.volumes(),
+            base.profile(), application);
+        Path archive = tmp.resolve("application.hib");
+        BackupArchive.create(manifest, Map.of("data.tar", data,
+            "application/app.jar", source, "application/data.tar", image),
+            archive, keyring);
+        Files.delete(data);
+        Files.delete(source);
+        Files.delete(image);
+
+        BackupArchive.Opened opened = BackupArchive.openVerified(archive, tmp, keyring);
+        Map<String, Path> restored = BackupArchive.extractApplication(opened, tmp.resolve("app-out"));
+        assertThat(Files.readString(restored.get("app.jar"))).isEqualTo("immutable-uploaded-application");
+        assertThat(Files.readString(restored.get("data.tar"))).isEqualTo("runtime-image-layers");
+        assertThat(Files.readString(BackupArchive.extractVolumes(opened,
+            tmp.resolve("data-out")).get("data"))).isEqualTo("sqlite-data-with-wal");
+        assertThat(opened.manifest().application().declarations()).containsExactly(
+            new BackupManifest.VolumeDeclaration("data", "/data", 1048576L, true));
+        assertThat(opened.manifest().profile().variables()).contains(
+            new BackupManifest.VariableEntry("FORWARDING_SECRET", "secret", "f0rward"));
+        assertThat(opened.manifest().toSummary().toString()).doesNotContain("f0rward");
+
+        // A source or image mismatch invalidates EVERYTHING, including the valid data tar.
+        Path wrongImage = Files.writeString(tmp.resolve("wrong-image.tar"), "different-image");
+        Path corrupt = tmp.resolve("bad-application.hib");
+        BackupArchive.create(opened.manifest(), Map.of(
+            "data.tar", tmp.resolve("data-out/data.tar"),
+            "application/app.jar", restored.get("app.jar"),
+            "application/data.tar", wrongImage), corrupt, keyring);
+        assertThat(catchThrowable(() -> BackupArchive.openVerified(corrupt, tmp, keyring)))
+            .isInstanceOf(IOException.class);
+        Files.delete(opened.zip());
     }
 }

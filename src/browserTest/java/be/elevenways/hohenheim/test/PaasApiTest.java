@@ -1,5 +1,9 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.ArtifactOperationModel;
+import be.elevenways.hohenheim.server.application.ArtifactDeploys;
+import java.nio.file.Files;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -161,6 +165,10 @@ class PaasApiTest extends HohenheimTestBase {
 
     @AfterAll
     static void cleanUp() {
+        deleteWhere(Models.get(ArtifactOperationModel.class),
+            Models.get(ArtifactOperationModel.class).find()
+                .where(ArtifactOperationModel.APPLICATION_ID.in(applicationAId, applicationBId)).all(),
+            ArtifactOperationModel.ID.getName());
         deleteWhere(Models.get(InstanceVariableModel.class),
             Models.get(InstanceVariableModel.class).find()
                 .where(InstanceVariableModel.KEY.startsWith(VAR_PREFIX)).all(),
@@ -628,6 +636,57 @@ class PaasApiTest extends HohenheimTestBase {
         assertThat(keyGet(keyAdmin, envBase).body())
             .as("step 6: while the admin lane reads its own value back")
             .contains(OVERRIDE_KEY);
+    }
+
+    @Test
+    @Order(8)
+    void artifactAuthorityAndDurableFailureAreScopedToTheExactApplicationAndSite() throws Exception {
+        String path = "/api/v1/sites/" + siteAId + "/artifact";
+        // This tenant can manage the hostname but has no application capability.
+        assertThat(keyPost(keyPaasA, path, "not-a-jar").statusCode()).isEqualTo(404);
+        assertThat(keyGet(keyPaasA, path).statusCode()).isEqualTo(404);
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
+            applicationAId, HohenheimAccess.CONFIG, true);
+        try {
+            String siteOnly = ApiKeyService.create(tenantAId, PREFIX + "site-only-artifact",
+                List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)), null).plaintext();
+            assertThat(keyPost(siteOnly, path, "not-a-jar").statusCode()).isEqualTo(404);
+            assertThat(keyGet(siteOnly, path).statusCode()).isEqualTo(404);
+            HttpResponse<String> accepted = keyPost(keyPaasA, path, "not-a-jar");
+            assertThat(keyPost(keyPaasA, path, "").statusCode()).isEqualTo(422);
+            Integer previousCap = HohenheimSettings.VALUES.getValue(HohenheimSettings.Builds.MAX_UPLOAD_MB);
+            try {
+                HohenheimSettings.VALUES.setValue(HohenheimSettings.Builds.MAX_UPLOAD_MB, 1);
+                assertThat(keyPost(keyPaasA, path, "x".repeat(1024 * 1024 + 1)).statusCode()).isEqualTo(422);
+            } finally {
+                HohenheimSettings.VALUES.setValue(HohenheimSettings.Builds.MAX_UPLOAD_MB, previousCap);
+            }
+            assertThat(accepted.statusCode()).isEqualTo(202);
+            Row operation = Models.get(ArtifactOperationModel.class).find()
+                .where(ArtifactOperationModel.APPLICATION_ID.eq(applicationAId)).first();
+            assertThat(operation).isNotNull();
+            int id = operation.get(ArtifactOperationModel.ID);
+            long deadline = System.nanoTime() + 10_000_000_000L;
+            do {
+                operation = Models.get(ArtifactOperationModel.class).findById(id);
+                if (ArtifactOperationModel.FAILED.equals(operation.get(ArtifactOperationModel.STATUS))) break;
+                Thread.sleep(20);
+            } while (System.nanoTime() < deadline);
+            assertThat(operation.get(ArtifactOperationModel.STATUS)).isEqualTo(ArtifactOperationModel.FAILED);
+            HttpResponse<String> receipt = keyGet(keyPaasA, path + "/" + id);
+            assertThat(receipt.statusCode()).isEqualTo(200);
+            assertThat(receipt.body()).contains("artifact_unreadable").doesNotContain("artifact_path", "environment", "not-a-jar");
+            assertThat(keyGet(siteOnly, path + "/" + id).statusCode()).isEqualTo(404);
+            assertThat(keyGet(keyPaasB, "/api/v1/sites/" + siteBId + "/artifact/" + id).statusCode()).isEqualTo(404);
+            assertThat(ArtifactDeploys.sourceOverrides(applicationAId)).isEmpty();
+            try (var uploads = Files.list(ArtifactDeploys.directoryFor(applicationAId).toPath().resolve("uploads"))) {
+                assertThat(uploads.toList()).isEmpty();
+            }
+            assertThat(keyGet(keyPaasA, path).body()).contains("absent");
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
+                applicationAId, HohenheimAccess.CONFIG);
+        }
     }
 
     /** The deploy-facing environment of one instance: variables applied over settings. */

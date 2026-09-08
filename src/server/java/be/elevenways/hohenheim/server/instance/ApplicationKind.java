@@ -95,6 +95,15 @@ public final class ApplicationKind implements InstanceKindHandler {
             .label(HohenheimFormCopy.label("container_port"))
             .help(HohenheimFormCopy.help("instance_container_port")).build());
 
+    public static final StringField COMMAND = SETTINGS_SCHEMA.addField(
+        StringField.builder().name("command")
+            .label(HohenheimFormCopy.label("container_command"))
+            .help(HohenheimFormCopy.help("container_command")).build());
+
+    public static final StringField WORKDIR = SETTINGS_SCHEMA.addField(
+        PathField.builder().name("workdir")
+            .label(HohenheimFormCopy.label("workdir")).build());
+
     /** Path the release health gate probes before a candidate may take traffic. */
     public static final StringField HEALTH_PATH = SETTINGS_SCHEMA.addField(
         StringField.builder().name("health_path")
@@ -153,7 +162,7 @@ public final class ApplicationKind implements InstanceKindHandler {
         SETTINGS_SCHEMA.addSection(
             HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME, List.of(
                 ENVIRONMENT_VARIABLES.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
-                CONSOLE_KIND.getName())));
+                CONSOLE_KIND.getName(), COMMAND.getName(), WORKDIR.getName())));
     }
 
     /**

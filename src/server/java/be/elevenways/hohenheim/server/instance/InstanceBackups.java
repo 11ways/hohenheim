@@ -8,11 +8,20 @@ import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.model.InstanceVolumeModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.application.ArtifactDeploys;
+import be.elevenways.hohenheim.server.application.ConvergenceLocks;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
 import be.elevenways.hohenheim.server.backup.BackupManifest;
 import be.elevenways.hohenheim.server.backup.BackupManifest.FileEntry;
@@ -97,22 +106,55 @@ public final class InstanceBackups {
         // doctrine requireOperationCapability documents. The explicit-target overload
         // asks again; the double ask is idempotent and keeps that entry gated too.
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.BACKUPS);
-        Resolved resolved = this.instances.resolve(instanceId);
-        Integer targetId = resolved.row().get(InstanceModel.BACKUP_TARGET_ID);
+        Row row = requireRow(instanceId);
+        Integer targetId = row.get(InstanceModel.BACKUP_TARGET_ID);
         return backupNow(instanceId, targetId, BackupTargetKinds.targetFor(targetId));
     }
 
     /** Explicit-target variant (tests, future re-target flows). */
     public int backupNow(int instanceId, @Nullable Integer targetId, @NonNull BackupTarget target) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.BACKUPS);
-        Resolved resolved = this.instances.resolve(instanceId);
+        Row owner = requireRow(instanceId);
+        if (InstanceKinds.isReleaseManaged(owner.get(InstanceModel.KIND))) {
+            synchronized (ConvergenceLocks.forApplication(instanceId)) {
+                owner = requireRow(instanceId);
+                Map<String, Object> sourceSettings = owner.get(InstanceModel.SETTINGS)
+                    instanceof Map<?, ?> map ? castSettings(map) : Map.of();
+                if (SiteSources.hasRepository(sourceSettings)
+                        || sourceSettings.containsKey("build_context")) {
+                    throw refusal("instance_backup_failed", owner,
+                        new IOException("Git/build-context application backups cannot reproduce source;"
+                            + " only immutable uploaded artifacts are supported"));
+                }
+                Row serving = ApplicationReleases.ownedServing(instanceId);
+                if (serving == null) {
+                    throw refusal("instance_backup_failed", owner,
+                        new IOException("Application has no serving release to capture"));
+                }
+                final Row authored = owner;
+                int[] result = new int[1];
+                ApplicationReleases.inScopeUnchecked(instanceId, () -> result[0] =
+                    backupResolved(instanceId, targetId, target, authored,
+                        this.instances.resolve(serving.get(InstanceModel.ID)), true));
+                return result[0];
+            }
+        }
+        return backupResolved(instanceId, targetId, target, owner,
+            this.instances.resolve(instanceId), false);
+    }
+
+    private int backupResolved(int instanceId, @Nullable Integer targetId,
+                               BackupTarget target, Row owner, Resolved resolved,
+                               boolean application) {
+        int runtimeId = resolved.row().get(InstanceModel.ID);
+        InstanceOperationGuard.requireOperable(owner);
         InstanceOperationGuard.requireOperable(resolved.row());
         NativeSnapshotSupport nativeSupport = resolved.runtime()
             instanceof NativeSnapshotSupport n ? n : null;
         VolumeSnapshotSupport support = nativeSupport == null
             ? InstanceSnapshots.requireSupport(resolved) : null;
-        Map<String, String> volumes = nativeSupport == null
-            ? InstanceSnapshots.logicalVolumes(resolved) : Map.of();
+        Map<String, String> volumes = application ? applicationVolumes(instanceId)
+            : nativeSupport == null ? InstanceSnapshots.logicalVolumes(resolved) : Map.of();
         // Health BEFORE the capture: a dead target must not cost the workload downtime.
         try {
             target.healthCheck();
@@ -123,12 +165,31 @@ public final class InstanceBackups {
         InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
         InstanceSnapshots.requirePresent(live, resolved);
         boolean wasRunning = live.running();
+        if (application) {
+            requireCoherentApplication(owner, resolved);
+        }
 
         String stamp = STAMP.format(Instant.now());
         Path staging = stagingRoot().resolve("backup-" + instanceId + "-" + stamp);
         List<VolumeSnapshotSupport.CapturedVolume> captured;
         ImageIdentity image;
         String payload;
+        BackupManifest.ApplicationEntry applicationEntry = null;
+        ImageIdentity applicationImage = null;
+        Map<String, Path> applicationFiles = new LinkedHashMap<>();
+        if (application) {
+            try {
+                Files.createDirectories(staging);
+                applicationImage = InstanceSnapshots.requireSupport(resolved).imageIdentity(resolved.spec());
+                applicationEntry = captureApplication(owner, resolved, applicationImage,
+                    staging, applicationFiles);
+            } catch (IOException | RuntimeException error) {
+                InstanceSnapshots.deleteRecursively(staging);
+                failedRow(instanceId, targetId, null, "Application source/image capture failed");
+                throw refusal("instance_backup_failed", owner,
+                    new IOException("Application source/image capture failed", error));
+            }
+        }
 
         if (nativeSupport != null) {
             // -- capture phase (native lane: LIVE, crash-consistent) ------------
@@ -162,32 +223,64 @@ public final class InstanceBackups {
         } else {
             // -- capture phase (volume lane: COLD) ------------------------------
             payload = BackupManifest.PAYLOAD_VOLUME_TARS;
-            if (wasRunning) {
-                TenantWrites.inAuthorizedOperation(() -> this.instances.stop(instanceId));
-            }
+            boolean stopped = false;
+            boolean capturing = false;
+            Exception captureFailure = null;
             long fence = this.instances.leases().requireFence(resolved.serverId());
-            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.STATUS_CAPTURING,
-                resolved.row().get(InstanceModel.NAME));
             try {
+                if (wasRunning) {
+                    TenantWrites.inAuthorizedOperation(() -> this.instances.stop(runtimeId));
+                    stopped = true;
+                }
+                InstanceOperationGuard.stamp(this.instances.leases(), runtimeId,
+                    resolved.serverId(), fence, InstanceModel.STATUS_CAPTURING,
+                    resolved.row().get(InstanceModel.NAME));
+                capturing = true;
                 Files.createDirectories(staging);
-                image = support.imageIdentity(resolved.spec());
+                image = application ? Objects.requireNonNull(applicationImage)
+                    : support.imageIdentity(resolved.spec());
                 captured = support.captureVolumes(resolved.spec(), volumes, staging,
                     InstanceSnapshots.maxArchiveBytes());
-            } catch (IOException error) {
-                InstanceSnapshots.deleteRecursively(staging);
-                InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                    resolved.serverId(), fence, InstanceModel.STATUS_STOPPED,
-                    resolved.row().get(InstanceModel.NAME));
-                redeployBestEffort(instanceId, wasRunning);
-                failedRow(instanceId, targetId, null, InstanceSnapshots.describe(error));
-                throw refusal("instance_backup_failed", resolved.row(), error);
-            }
-            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.STATUS_STOPPED,
-                resolved.row().get(InstanceModel.NAME));
-            if (wasRunning) {
-                TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
+                if (application && !volumes.keySet().equals(captured.stream()
+                        .map(VolumeSnapshotSupport.CapturedVolume::name)
+                        .collect(java.util.stream.Collectors.toSet()))) {
+                    throw new IOException("Application volume capture is incomplete");
+                }
+            } catch (IOException | RuntimeException error) {
+                captureFailure = error;
+                throw refusal("instance_backup_failed", owner,
+                    new IOException("Volume capture failed; no complete backup was stored", error));
+            } finally {
+                try {
+                    if (capturing) {
+                        InstanceOperationGuard.stamp(this.instances.leases(), runtimeId,
+                            resolved.serverId(), fence, InstanceModel.STATUS_STOPPED,
+                            resolved.row().get(InstanceModel.NAME));
+                    }
+                    if (stopped) {
+                        TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(runtimeId));
+                    }
+                } catch (RuntimeException restartFailed) {
+                    InstanceSnapshots.deleteRecursively(staging);
+                    if (application) {
+                        InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
+                            resolved.serverId(), fence, InstanceModel.STATUS_ERROR,
+                            owner.get(InstanceModel.NAME));
+                    }
+                    failedRow(instanceId, targetId, null,
+                        "Backup failed: prior serving workload could not be restarted");
+                    if (captureFailure != null) {
+                        restartFailed.addSuppressed(captureFailure);
+                    }
+                    throw refusal("instance_backup_failed", owner,
+                        new IOException("Prior serving workload could not be restarted"
+                            + (captureFailure != null ? "; volume capture also failed" : ""),
+                            restartFailed));
+                }
+                if (captureFailure != null) {
+                    InstanceSnapshots.deleteRecursively(staging);
+                    failedRow(instanceId, targetId, null, "Volume capture failed");
+                }
             }
         }
 
@@ -213,8 +306,9 @@ public final class InstanceBackups {
             .set(InstanceBackupModel.REMOTE_KEY, key)
             .write();
         try {
-            BackupManifest manifest = buildManifest(resolved, image, payload, captured);
-            Map<String, Path> files = new LinkedHashMap<>();
+            BackupManifest manifest = buildManifest(owner, image, payload, captured,
+                applicationEntry);
+            Map<String, Path> files = new LinkedHashMap<>(applicationFiles);
             for (VolumeSnapshotSupport.CapturedVolume volume : captured) {
                 files.put(volume.file().getFileName().toString(), volume.file());
             }
@@ -394,6 +488,16 @@ public final class InstanceBackups {
             HostAdmission.requireInstancePlacement(serverId, restoredKind.isolation(),
                 InstanceQuota.creationBucket());
             RestoreCapacity.require(serverId, manifest.totalVolumeBytes());
+            boolean application = InstanceKinds.isReleaseManaged(manifest.kind());
+            Integer runtimeImageId = null;
+            if (application) {
+                requireApplicationInventory(manifest);
+                RestoreCapacity.require(serverId, Math.addExact(manifest.totalVolumeBytes(),
+                    Math.addExact(manifest.application().artifact().size(), manifest.application().image().size())));
+                runtimeImageId = bindRuntimeImage(manifest.application().runtimeImage());
+            } else if (manifest.application() != null) {
+                throw new IllegalStateException("Application payload belongs to a non-application kind");
+            }
 
             // -- create the NEW record (quota reserves in the save pipeline) ----
             // AIDEV-NOTE: the columns BESIDE name/kind/settings/host are set here, before
@@ -417,6 +521,7 @@ public final class InstanceBackups {
             record.set(InstanceModel.KIND, manifest.kind());
             record.set(InstanceModel.SETTINGS, manifest.settings());
             record.set(InstanceModel.SERVER_ID, serverId);
+            record.set(InstanceModel.RUNTIME_IMAGE_ID, runtimeImageId);
             record.set(InstanceModel.CRASH_POLICY, profile != null
                 ? profile.crashPolicy() : InstanceModel.CRASH_NONE);
             record.set(InstanceModel.TEMPLATE_ID, localTemplateId(profile, notRestored));
@@ -430,6 +535,42 @@ public final class InstanceBackups {
             // spec resolved without them is a spec for a different workload.
             restoreVariables(newId, profile);
             restoreFiles(newId, profile, notRestored);
+            if (application) {
+                try {
+                    requireRematerialized(profile, newId);
+                    for (BackupManifest.VolumeDeclaration volume : manifest.application().declarations()) {
+                        InstanceVolumes.declare(newId, volume.name(), volume.containerPath(),
+                            volume.quotaBytes(), volume.exclusive());
+                    }
+                    Map<String, Path> applicationFiles = BackupArchive.extractApplication(opened,
+                        staging.resolve("application"));
+                    ArtifactDeploys.restoreSource(newId,
+                        applicationFiles.get(manifest.application().artifact().file()));
+                    DockerClient docker = dockerFor(serverId);
+                    this.instances.leases().requireFence(serverId);
+                    docker.loadImage(applicationFiles.get(manifest.application().image().file()));
+                    if (!manifest.imageId().equals(docker.inspectImage(manifest.imageId()).get("Id"))) {
+                        throw new IOException("Imported runtime image identity does not match backup");
+                    }
+                    Map<String, Path> tars = BackupArchive.extractVolumes(opened,
+                        staging.resolve("volumes"));
+                    ApplicationReleases.restore(newId, manifest.imageId(), candidate -> {
+                        Map<String, String> declared = applicationVolumes(newId);
+                        if (!declared.keySet().equals(tars.keySet())) {
+                            throw new IOException("Restored application volume inventory differs from backup");
+                        }
+                        InstanceSnapshots.requireSupport(candidate).restoreVolumes(candidate.spec(),
+                            declared, tars);
+                    });
+                    Restored restored = new Restored(newId, List.copyOf(notRestored));
+                    recordRestore(newId, backup.get(InstanceBackupModel.ID), restored);
+                    return restored;
+                } catch (IOException | RuntimeException error) {
+                    throw refusal("instance_restore_failed", record,
+                        new IOException("Application restore failed; the new application is not"
+                            + " a verified recovery", error));
+                }
+            }
 
             Resolved resolved = this.instances.resolve(newId);
             long fence = this.instances.leases().requireFence(resolved.serverId());
@@ -635,15 +776,172 @@ public final class InstanceBackups {
 
     // -- internals ------------------------------------------------------------
 
+    private static Row requireRow(int instanceId) {
+        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        if (row == null || row.get(InstanceModel.DELETED_AT) != null) {
+            throw new IllegalStateException("Instance is absent");
+        }
+        return row;
+    }
+
+    private static Map<String, String> applicationVolumes(int applicationId) {
+        Map<String, String> volumes = new LinkedHashMap<>();
+        for (Row volume : InstanceVolumes.declaredFor(applicationId)) {
+            volumes.put(volume.get(InstanceVolumeModel.NAME),
+                volume.get(InstanceVolumeModel.CONTAINER_PATH));
+        }
+        return volumes;
+    }
+
+    /** A serving image must never be paired with unapplied authored credentials/defaults. */
+    private static void requireCoherentApplication(Row owner, Resolved serving) {
+        int applicationId = owner.get(InstanceModel.ID);
+        Path artifact = ArtifactDeploys.servingArtifact(applicationId);
+        Map<String, Object> servingSettings = serving.row().get(InstanceModel.SETTINGS)
+            instanceof Map<?, ?> map ? castSettings(map) : Map.of();
+        Map<String, Object> overrides = new LinkedHashMap<>(
+            ArtifactDeploys.sourceOverrides(applicationId));
+        // Keep the canonical artifact builder facts, but judge the SERVING source.
+        // A code-only rollback changes the forward pointer without changing config.
+        if (artifact != null) {
+            overrides.put("artifact_path", artifact.toAbsolutePath().toString());
+            overrides.put("commit_sha", servingSettings.get("commit_sha"));
+        }
+        String desired = ReleaseEngine.sourceFingerprint(applicationId,
+            ApplicationReleases.resolvedSettings(owner, overrides));
+        if (artifact == null || !desired.equals(servingSettings.get("source_fingerprint"))) {
+            throw refusal("instance_backup_failed", owner, new IOException(
+                "Application configuration does not match its serving release. Settle"
+                    + " unapplied settings, secrets or runtime defaults before taking a backup;"
+                    + " refusing to combine a running image with different configuration"));
+        }
+    }
+
+    private BackupManifest.ApplicationEntry captureApplication(Row owner, Resolved serving,
+            ImageIdentity image, Path staging, Map<String, Path> files) throws IOException {
+        int appId = owner.get(InstanceModel.ID);
+        Path applicationDirectory = Files.createDirectories(staging.resolve("application"));
+        Path accepted = ArtifactDeploys.servingArtifact(appId);
+        if (accepted == null || !Files.isRegularFile(accepted)) {
+            throw new IOException("Application has no accepted immutable uploaded artifact");
+        }
+        String digest = BackupArchive.sha256Of(accepted);
+        Map<String, Object> servingSettings = serving.row().get(InstanceModel.SETTINGS)
+            instanceof Map<?, ?> map ? castSettings(map) : Map.of();
+        if (!digest.equals(servingSettings.get("commit_sha"))) {
+            throw new IOException("Accepted artifact is not the serving release source;"
+                + " backup refuses a source/runtime mismatch");
+        }
+        for (Row release : ApplicationReleases.ownedInstances(appId)) {
+            if (!Objects.equals(release.get(InstanceModel.ID), serving.row().get(InstanceModel.ID))
+                    && this.instances.liveStatus(release.get(InstanceModel.ID)).running()) {
+                throw new IOException("Another application release is still running;"
+                    + " wait for its drain before taking a cold backup");
+            }
+        }
+        if (Files.size(accepted) > InstanceSnapshots.maxArchiveBytes()) {
+            throw new IOException("Application artifact exceeds the backup payload limit");
+        }
+        Path artifact = applicationDirectory.resolve("artifact.jar");
+        Files.copy(accepted, artifact);
+        if (!digest.equals(BackupArchive.sha256Of(artifact))) {
+            throw new IOException("Accepted artifact changed during backup capture");
+        }
+        if (image.id() == null || !image.id().matches("sha256:[0-9a-f]{64}")) {
+            throw new IOException("Serving application has no immutable runtime image identity");
+        }
+        Path imageTar = applicationDirectory.resolve("runtime-image.tar");
+        dockerFor(serving.serverId()).saveImage(image.id(), imageTar, InstanceSnapshots.maxArchiveBytes());
+        files.put(BackupArchive.APPLICATION_PREFIX + "artifact.jar", artifact);
+        files.put(BackupArchive.APPLICATION_PREFIX + "runtime-image.tar", imageTar);
+        List<BackupManifest.VolumeDeclaration> declarations = new ArrayList<>();
+        for (Row volume : InstanceVolumes.declaredFor(appId)) {
+            declarations.add(new BackupManifest.VolumeDeclaration(
+                volume.get(InstanceVolumeModel.NAME), volume.get(InstanceVolumeModel.CONTAINER_PATH),
+                volume.get(InstanceVolumeModel.QUOTA_BYTES),
+                Boolean.TRUE.equals(volume.get(InstanceVolumeModel.EXCLUSIVE))));
+        }
+        return new BackupManifest.ApplicationEntry(runtimeIdentity(RuntimeImages.requireFor(owner)),
+            new BackupManifest.PayloadEntry("artifact.jar", digest, Files.size(artifact)),
+            new BackupManifest.PayloadEntry("runtime-image.tar", BackupArchive.sha256Of(imageTar),
+                Files.size(imageTar)), List.copyOf(declarations));
+    }
+
+    private static DockerClient dockerFor(int serverId) {
+        return serverId == ServerModel.localServerId() ? new DockerClient()
+            : new ServerService().clientFor(ServerModel.nameOf(serverId));
+    }
+
+    private static Map<String, Object> runtimeIdentity(Row image) {
+        Map<String, Object> identity = new LinkedHashMap<>();
+        identity.put("name", image.get(RuntimeImageModel.NAME));
+        identity.put("docker_image", image.get(RuntimeImageModel.DOCKER_IMAGE));
+        identity.put("incus_image", image.get(RuntimeImageModel.INCUS_IMAGE));
+        identity.put("build_context", image.get(RuntimeImageModel.BUILD_CONTEXT));
+        identity.put("default_command", image.get(RuntimeImageModel.DEFAULT_COMMAND));
+        identity.put("default_port", image.get(RuntimeImageModel.DEFAULT_PORT));
+        identity.put("default_build_command", image.get(RuntimeImageModel.DEFAULT_BUILD_COMMAND));
+        identity.put("workdir", image.get(RuntimeImageModel.WORKDIR));
+        identity.put("shell", image.get(RuntimeImageModel.SHELL));
+        identity.put("uid_mode", image.get(RuntimeImageModel.UID_MODE));
+        return identity;
+    }
+
+    private static int bindRuntimeImage(Map<String, Object> identity) {
+        String name = (String) identity.get("name");
+        Row image = Models.get(RuntimeImageModel.class).findByName(name);
+        if (image == null) {
+            image = Models.get(RuntimeImageModel.class).createEmptyRow();
+            image.set(RuntimeImageModel.NAME, name);
+            image.set(RuntimeImageModel.DOCKER_IMAGE, (String) identity.get("docker_image"));
+            image.set(RuntimeImageModel.INCUS_IMAGE, (String) identity.get("incus_image"));
+            image.set(RuntimeImageModel.BUILD_CONTEXT, (String) identity.get("build_context"));
+            image.set(RuntimeImageModel.DEFAULT_COMMAND, (String) identity.get("default_command"));
+            image.set(RuntimeImageModel.DEFAULT_PORT, identity.get("default_port") instanceof Number n
+                ? n.intValue() : null);
+            image.set(RuntimeImageModel.DEFAULT_BUILD_COMMAND, (String) identity.get("default_build_command"));
+            image.set(RuntimeImageModel.WORKDIR, (String) identity.get("workdir"));
+            image.set(RuntimeImageModel.SHELL, (String) identity.get("shell"));
+            image.set(RuntimeImageModel.UID_MODE, (String) identity.get("uid_mode"));
+            Models.get(RuntimeImageModel.class).save(image);
+        }
+        if (!identity.equals(runtimeIdentity(image)) || !Boolean.TRUE.equals(image.get(RuntimeImageModel.ENABLED))) {
+            throw new IllegalStateException("Runtime image '" + name
+                + "' differs from the backup or is disabled; refusing numerical-id rebinding");
+        }
+        return image.get(RuntimeImageModel.ID);
+    }
+
+    private static void requireApplicationInventory(BackupManifest manifest) {
+        BackupManifest.ApplicationEntry app = manifest.application();
+        if (app == null || manifest.profile() == null
+                || !BackupManifest.PAYLOAD_VOLUME_TARS.equals(manifest.payload())
+                || manifest.imageId() == null || !manifest.imageId().matches("sha256:[0-9a-f]{64}")) {
+            throw new IllegalStateException("Application backup lacks recoverable source/image inventory");
+        }
+        Map<String, String> declared = new LinkedHashMap<>();
+        for (BackupManifest.VolumeDeclaration volume : app.declarations()) {
+            declared.put(volume.name(), volume.containerPath());
+        }
+        Map<String, String> captured = new LinkedHashMap<>();
+        for (BackupManifest.VolumeEntry volume : manifest.volumes()) {
+            captured.put(volume.name(), volume.containerPath());
+        }
+        if (!declared.equals(captured)) {
+            throw new IllegalStateException("Application backup volume declarations and payloads differ");
+        }
+    }
+
     private @NonNull BackupManifest buildManifest(
-            @NonNull Resolved resolved,
+            @NonNull Row owner,
             @NonNull ImageIdentity image,
             @NonNull String payload,
-            @NonNull List<VolumeSnapshotSupport.CapturedVolume> captured) throws IOException {
-        int instanceId = resolved.row().get(InstanceModel.ID);
+            @NonNull List<VolumeSnapshotSupport.CapturedVolume> captured,
+            BackupManifest.@Nullable ApplicationEntry application) throws IOException {
+        int instanceId = owner.get(InstanceModel.ID);
         Set<String> subjects = HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, instanceId);
         String ownership = subjects != null ? HohenheimAccess.packSubjects(subjects) : "";
-        Map<String, Object> settings = resolved.row().get(InstanceModel.SETTINGS)
+        Map<String, Object> settings = owner.get(InstanceModel.SETTINGS)
                 instanceof Map<?, ?> map ? castSettings(map) : Map.of();
         Integer containerPort = settings.get("container_port") instanceof Number port
             ? port.intValue() : null;
@@ -655,10 +953,10 @@ public final class InstanceBackups {
         }
         return new BackupManifest(BackupManifest.FORMAT_VERSION, Instant.now().toString(),
             HostPreflight.controllerVersion(),
-            String.valueOf((Object) resolved.row().get(InstanceModel.NAME)),
-            String.valueOf((Object) resolved.row().get(InstanceModel.KIND)),
+            String.valueOf((Object) owner.get(InstanceModel.NAME)),
+            String.valueOf((Object) owner.get(InstanceModel.KIND)),
             payload, settings, image.reference(), image.id(), ownership, containerPort,
-            "tcp", volumes, profileOf(resolved.row(), instanceId));
+            "tcp", volumes, profileOf(owner, instanceId), application);
     }
 
     /**
@@ -923,17 +1221,6 @@ public final class InstanceBackups {
                 : "backup #" + backupId + " -- NOT restored: " + restored.describeLosses());
     }
 
-    private void redeployBestEffort(int instanceId, boolean wasRunning) {
-        if (!wasRunning) {
-            return;
-        }
-        try {
-            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
-        } catch (RuntimeException redeployFailed) {
-            Blast.log("BACKUP: could not restart instance", instanceId,
-                "after a failed capture:", InstanceSnapshots.describe(redeployFailed));
-        }
-    }
 
     private static void failedRow(int instanceId, @Nullable Integer targetId,
                                   @Nullable String key, @NonNull String error) {

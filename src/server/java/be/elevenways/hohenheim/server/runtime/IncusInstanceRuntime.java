@@ -150,6 +150,10 @@ public final class IncusInstanceRuntime
             throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid owner"
                 + " labels; an unattributable instance container is forbidden by design");
         }
+        if (spec.workdir() != null) {
+            throw new IOException("The incus driver cannot override the primary process working"
+                + " directory for '" + spec.handle() + "'; workdir is a docker capability");
+        }
         if (spec.tty()) {
             // The same honest refusal for the pseudo-terminal: this driver runs the start
             // command under the guest's own init, and attaching /dev/console to it is not

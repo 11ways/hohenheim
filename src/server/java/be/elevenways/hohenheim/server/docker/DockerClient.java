@@ -248,6 +248,11 @@ public class DockerClient {
         return body;
     }
 
+    /** Export an immutable image, with the existing archive lane's wire cap and cleanup. */
+    public long saveImage(String imageId, Path outFile, long maxBytes) throws IOException {
+        return streamResponseToFile("/images/" + enc(imageId) + "/get", outFile, maxBytes);
+    }
+
     /**
      * @return the full {@code /images/{name}/json} inspection (Id, RepoTags, Config, ...)
      */

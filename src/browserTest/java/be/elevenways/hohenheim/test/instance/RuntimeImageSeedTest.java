@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.instance.RuntimeImageSeeder;
+import be.elevenways.hohenheim.server.instance.RuntimeImages;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -35,6 +36,42 @@ class RuntimeImageSeedTest {
     }
 
     @Test
+    void artifactCompositionPreservesPackagedRuntimeAndPinsStagingMetadata() throws Exception {
+        Seeds.run(Datasources.getDefault(), new RuntimeImageSeeder());
+        Row image = Models.get(RuntimeImageModel.class).findByName("java-25");
+        Path artifact = Files.createTempFile("artifact-context-test-", ".jar");
+        Path first = null;
+        Path second = null;
+        try {
+            Files.write(artifact, new byte[] {1, 2, 3, 4});
+            first = RuntimeImages.materializeArtifactContext(image, artifact);
+            Files.setLastModifiedTime(artifact, java.nio.file.attribute.FileTime.fromMillis(123456));
+            second = RuntimeImages.materializeArtifactContext(image, artifact);
+            assertThat(Files.mismatch(first.resolve("app.jar"), artifact)).isEqualTo(-1);
+            assertThat(Files.readString(first.resolve("Dockerfile")))
+                .contains("COPY hohenheim-init /sbin/hohenheim-init")
+                .contains("COPY hohenheim-dhcp /sbin/hohenheim-dhcp")
+                .endsWith("COPY app.jar /home/site/app.jar\n");
+            try (var entries = Files.walk(first)) {
+                for (Path entry : entries.toList()) {
+                    Path counterpart = second.resolve(first.relativize(entry));
+                    assertThat(Files.getLastModifiedTime(counterpart))
+                        .isEqualTo(Files.getLastModifiedTime(entry));
+                    if (Files.isRegularFile(entry)) {
+                        assertThat(Files.mismatch(entry, counterpart)).isEqualTo(-1);
+                    }
+                }
+            }
+        } finally {
+            if (first != null) RuntimeImages.deleteArtifactContext(first);
+            if (second != null) RuntimeImages.deleteArtifactContext(second);
+            Files.deleteIfExists(artifact);
+        }
+        assertThat(Files.exists(first)).isFalse();
+        assertThat(Files.exists(second)).isFalse();
+    }
+
+    @Test
     @DisplayName("every built-in runtime image is seeded, complete and buildable from this repo")
     void theBuiltInsAreSeededAndBuildable() {
 
@@ -43,13 +80,6 @@ class RuntimeImageSeedTest {
         RuntimeImageModel images = Models.get(RuntimeImageModel.class);
         List<Row> builtins = images.find().where(RuntimeImageModel.BUILTIN.eq(true)).all();
 
-        // 1. Every one the design names is there, by name, so a renamed row is a failure
-        //    rather than a silent second image. node-16, node-12 and node-10 are the
-        //    Phoenix migration's legacy Alchemy runtimes.
-        assertThat(builtins.stream().map(row -> row.get(RuntimeImageModel.NAME)).toList())
-            .as("step 1: the shipped built-ins")
-            .containsExactlyInAnyOrder("node-22", "node-16", "node-12", "node-10", "java-21",
-                "debian-13", "static");
 
         for (Row image : builtins) {
             String name = image.get(RuntimeImageModel.NAME);

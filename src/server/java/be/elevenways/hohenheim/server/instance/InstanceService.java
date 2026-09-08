@@ -213,6 +213,19 @@ public final class InstanceService {
         return deployWorkload(instanceId, trigger);
     }
 
+    @FunctionalInterface
+    public interface RestoreVolumes {
+        void restore(@NonNull Resolved resolved) throws IOException;
+    }
+
+    /** Restore into the created, stopped workload inside the ordinary fenced deployment. */
+    public @NonNull InstanceStatus deployRestored(int instanceId,
+                                                  @NonNull RestoreVolumes restoreVolumes) {
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        return inFlight(instanceId,
+            () -> deployWorkloadNow(instanceId, DeployTrigger.SYSTEM, restoreVolumes));
+    }
+
     /**
      * Create (replacing only an own leftover container) and start the instance's
      * workload, then record the observed published port in the ledger (record-after:
@@ -231,12 +244,13 @@ public final class InstanceService {
 
     /** {@link #deployWorkload(int)} on a named trigger; the workload half enforces it too. */
     @NonNull InstanceStatus deployWorkload(int instanceId, @NonNull DeployTrigger trigger) {
-        return inFlight(instanceId, () -> deployWorkloadNow(instanceId, trigger));
+        return inFlight(instanceId, () -> deployWorkloadNow(instanceId, trigger, null));
     }
 
     /** {@link #deployWorkload}'s body; the in-flight mark is the wrapper's job. */
     private @NonNull InstanceStatus deployWorkloadNow(int instanceId,
-                                                      @NonNull DeployTrigger trigger) {
+                                                      @NonNull DeployTrigger trigger,
+                                                      @Nullable RestoreVolumes restoreVolumes) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
         Resolved resolved = resolve(instanceId);
         // The trigger policy for every kind that owns a container directly -- a preview
@@ -293,6 +307,9 @@ public final class InstanceService {
             // their policy enforced -- a workload must never serve without its links.
             // Every registered hook, in declared weight order; each gates itself.
             InstancePreStartHooks.run(resolved, instanceId);
+            if (restoreVolumes != null) {
+                restoreVolumes.restore(resolved);
+            }
             // The console attaches BETWEEN create and start (docker run's own order),
             // so a readiness line printed in the first instant cannot be missed.
             watch = InstanceConsoles.prepare(resolved, instanceId, this.leases);

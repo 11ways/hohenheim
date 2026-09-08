@@ -21,6 +21,7 @@ import be.elevenways.zenit.common.orm.field.DoubleField;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.field.PathField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.Icon;
@@ -99,6 +100,10 @@ public final class ReleaseKind implements InstanceKindHandler {
     public static final StringField COMMAND = SETTINGS_SCHEMA.addField(
         StringField.builder().name("command").label(HohenheimFormCopy.label("container_command"))
             .help(HohenheimFormCopy.help("container_command")).build());
+
+    public static final StringField WORKDIR = SETTINGS_SCHEMA.addField(
+        PathField.builder().name("workdir")
+            .label(HohenheimFormCopy.label("workdir")).build());
 
     /** The application's declared console, copied per release by ApplicationReleases. */
     public static final EnumField CONSOLE_KIND = SETTINGS_SCHEMA.addField(
@@ -215,6 +220,7 @@ public final class ReleaseKind implements InstanceKindHandler {
                 ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
                 HARDENING, OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
             .command(cmd)
+            .workdir(str(settings.get("workdir")))
             .env(EnvVars.toMap(settings.get("environment_variables")))
             .binds(binds)
             .publication(publication)

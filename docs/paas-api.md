@@ -1,8 +1,8 @@
 # PaaS API v1 and the `hoh` CLI
 
 The automation seam over the PaaS machinery: projects/environments, sites,
-deploy/rollback, the three operation-record lanes (git deployments, releases,
-sandbox builds), per-instance logs and the variable mechanism. The CLI is a
+deploy/rollback, four operation-record lanes (git deployments, releases,
+sandbox builds, artifact uploads), per-instance logs and the variable mechanism. The CLI is a
 thin client of this API; nothing is reachable through it that the API does not
 offer, and nothing in the API is a wider door than the admin/manage UI.
 
@@ -88,6 +88,9 @@ returned). Say so when delegating; the grant UI does not.
 | GET | `/api/v1/sites/{id}/releases/{op}` | One operation, with its step log |
 | GET | `/api/v1/sites/{id}/builds` | Sandbox build operations |
 | GET | `/api/v1/sites/{id}/builds/{build}/log` | One build's captured log (build credentials were redacted at capture) |
+| POST | `/api/v1/sites/{id}/artifact` | Raw JAR upload; returns **202 pending**, never a deployment-success claim |
+| GET | `/api/v1/sites/{id}/artifact/{op}` | Durable artifact operation scoped to the exact site and application |
+| GET | `/api/v1/sites/{id}/artifact` | Currently serving artifact, not the latest uploaded artifact |
 | POST | `/api/v1/sites` | Create a site through the admin form's own pipeline (ADMIN-ONLY, 403 otherwise) -- see Sites and domains below |
 | POST | `/api/v1/sites/{id}/delete` | Soft-delete a site exactly as the admin form does (ADMIN-ONLY); 404 for a trashed or unknown id |
 | GET | `/api/v1/sites/{id}/domains` | The site's hostname rows, oldest first |
@@ -138,6 +141,48 @@ worth keeping when this line is rewritten: the path always travels as the `path`
 QUERY PARAMETER, never as a route segment (a segment would be split and
 reassembled, and a second decode is how a normalized traversal slips in), and
 the lane carries its own read rate limit.
+
+## Artifact deployments
+
+The site must expose an application. Uploads require both site `manage` and the
+application's `config` capability, with the same gates checked again after the
+bounded upload. A site manager does not thereby gain authority over its application.
+
+The POST carries raw JAR bytes. The acceptance response contains `operation_id`,
+`status: pending` and `artifact_sha256`. Poll the operation until `succeeded`,
+`failed` or `interrupted`; `pending` and `running` are not successful deployments.
+The operation also carries `instance_id`, `image_id` and a safe `error` code.
+A controller restart marks unfinished old operations interrupted.
+
+JARs are content-addressed and immutable. A per-application lock serializes artifact
+builds and release handoff with ordinary deploys and backups. The accepted
+source pointer advances only after the requested artifact AND resolved runtime
+settings pass the release health gate. A refused candidate leaves the old serving
+release and accepted source intact. Ordinary deploys and stopped restarts reuse the
+persisted source; uploading the JAR again is not required.
+
+The selected runtime image is the artifact's base image. Its command template,
+workdir and port are inherited unless the application explicitly overrides them.
+Application variables participate in source identity; generated releases snapshot
+them through the encrypted variable carrier rather than plaintext settings. Health
+requires a complete HTTP response with a 2xx or 3xx status.
+
+The current-artifact GET reports `status: running|stopped|absent`,
+`artifact_sha256`, `instance_id`, `image_id` and raw `stamps` text (nullable for
+unstamped artifacts). It follows the serving release through rollback. `running`
+describes workload state, not a fresh HTTP health probe.
+
+`zenit-dev deploy` waits for the operation and verifies its identity against this
+current report. Failure, interruption, timeout and supersession are not reported as
+deployed. The client refuses dirty or invalid provenance before uploading; dry runs
+perform no build, credential read or network request.
+
+Application backups use the existing encrypted archive and backup-target mechanism.
+They include the serving JAR, exported image, application volumes, authored profile
+and variable inventory, and restore into a NEW application. Unapplied secret,
+command or runtime-default changes are refused before stopping the workload:
+pairing the old image with newer configuration is not a coherent recovery point.
+Code-only rollback remains backupable through the serving artifact's identity.
 
 ## Sites and domains
 
