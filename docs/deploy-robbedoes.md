@@ -2712,3 +2712,41 @@ while data is unchanged; reconcile subsequent translation/account writes before
 returning traffic to Phoenix. Retain the private database backups described
 above. Temporary operator credential copies and Mongo-tool connection files
 were removed, and this session's browser identities and tunnels were closed.
+
+### Microcopy upstream switched to the Java service, 2026-09-08 10:05 UTC
+
+Site 3 `Microcopy` went from `hohenheim:instance` (instance 2) to
+`hohenheim:address` `http://127.0.0.1:8093`, the `microcopy-java` systemd
+service. Hostname, certificate and Alchemy access key are unchanged; the Node
+container keeps running and its Mongo database is untouched. Evidence, the
+rate-limit defect it uncovered and the rehearsed rollback are recorded in
+`microcopy/docs/deploy-robbedoes.md`; do not duplicate them here.
+
+Rollback is one panel edit: set site 3's upstream port to the Node container's
+published host port (`sudo docker port hohenheim-luguij0q-instance-2`, which was
+32831 on this date and is Docker-assigned, so re-read it). Executed and verified
+in both directions on this date.
+
+**Site form defect found while rehearsing that rollback.** The upstream form
+cannot move a site BACK to `hohenheim:instance`. `SiteResource.fieldBindings`
+binds `instance_id` to `FieldAccess.customRecordAware`, hiding it whenever the
+STORED record's kind does not use an instance, so after saving any other kind
+the instance picker is gone and there is no control left to choose one. Clicking
+the Instance radio re-renders the settings sub-fields (they are reactive) but
+never the picker, which is a top-level field resolved server-side from the stored
+row. `InstanceOverviewPage`'s "Exposed by" band is a read-only reverse lookup and
+the Expose journey is a CREATE prefill, so neither is a way back.
+
+This is a one-way door, but the current behaviour is DELIBERATE and argued in
+that method's docblock (a greyed-out picker on an address site "invited an
+operator to fix something that was never wrong"), so it was not changed
+unilaterally. The two candidate fixes, for a decision:
+
+1. Make the EDIT form match the CREATE form: keep `instance_id` EDITABLE and let
+   the picker's existing `rulesFromSiblings(UpstreamInstanceRules)` narrowing keep
+   it inert until the instance kind is chosen. That is exactly the argument the
+   docblock already makes for the record-less CREATE form. Smallest change;
+   accepts an inert picker on non-instance sites, which is what the note dislikes.
+2. Drive the field's visibility from the LIVE sibling value rather than the stored
+   row, which needs a client-side conditional-visibility mechanism in zenit-forms
+   that does not exist yet. Matches the stated intent exactly; larger.
