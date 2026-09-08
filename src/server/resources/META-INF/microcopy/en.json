@@ -10646,6 +10646,18 @@
     "text": "The application image could not be resolved to a digest: {$reason}",
     "scope": "violations"
   },
+  "artifact_no_runtime_image": {
+    "text": "This application names no runtime image, so there is nothing to copy the artifact onto: {$reason}",
+    "scope": "violations"
+  },
+  "artifact_staging_failed": {
+    "text": "The uploaded artifact could not be staged for building: {$reason}",
+    "scope": "violations"
+  },
+  "artifact_unreadable": {
+    "text": "The uploaded artifact could not be read: {$reason}",
+    "scope": "violations"
+  },
   "source_no_repository": {
     "text": "This source names no repository to check out",
     "scope": "violations"
