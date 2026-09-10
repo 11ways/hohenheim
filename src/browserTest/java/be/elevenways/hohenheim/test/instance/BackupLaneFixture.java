@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -22,7 +23,6 @@ import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -135,7 +135,7 @@ final class BackupLaneFixture {
             new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
             new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
                 HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
+            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
         return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
 }

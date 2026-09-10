@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -174,8 +175,8 @@ class InstanceStatsLiveTest {
     // -- plumbing -------------------------------------------------------------
 
     private static void waitFor(java.util.function.BooleanSupplier condition, long timeoutMs) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        while (System.currentTimeMillis() < deadline && !condition.getAsBoolean()) {
+        long deadline = Now.millis() + timeoutMs;
+        while (Now.millis() < deadline && !condition.getAsBoolean()) {
             try {
                 Thread.sleep(200);
             } catch (InterruptedException e) {

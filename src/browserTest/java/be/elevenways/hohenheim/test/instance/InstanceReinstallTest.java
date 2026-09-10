@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -25,7 +26,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,8 +70,8 @@ class InstanceReinstallTest extends HohenheimTestBase {
         tenant.set(UserModel.EMAIL, "reinstall-config-only@hohenheim.local");
         tenant.set(UserModel.DISPLAY_NAME, "Config Only");
         tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Instant.now());
-        tenant.set(UserModel.UPDATED_AT, Instant.now());
+        tenant.set(UserModel.CREATED_AT, Now.instant());
+        tenant.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(tenant);
         configOnlyUserId = tenant.get(UserModel.ID);
         configOnlyPrincipal = new UserPrincipal(configOnlyUserId, "Config Only");
@@ -301,7 +301,7 @@ class InstanceReinstallTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.SETTINGS, Map.of("image", "fake/image"));
         row.set(InstanceTemplateModel.INSTALL_SCRIPT, SCRIPT);
         row.set(InstanceTemplateModel.REINSTALL_POLICY, reinstallPolicy);
-        row.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+        row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
         row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
         Models.get(InstanceTemplateModel.class).save(row);
         return row.get(InstanceTemplateModel.ID);
@@ -330,7 +330,7 @@ class InstanceReinstallTest extends HohenheimTestBase {
             new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
             new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
                 HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
+            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
         return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
 }

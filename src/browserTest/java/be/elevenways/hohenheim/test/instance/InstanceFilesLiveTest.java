@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -39,7 +40,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -386,8 +386,8 @@ class InstanceFilesLiveTest {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, email);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }

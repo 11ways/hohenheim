@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.cms.InstanceScheduleResource;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepResource;
 import be.elevenways.hohenheim.server.cms.SiteDomainResource;
 import be.elevenways.hohenheim.server.cms.SiteDomainsPage;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.cms.common.action.RowAction;
@@ -33,7 +34,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -204,8 +204,8 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         row.set(UserModel.EMAIL, email);
         row.set(UserModel.DISPLAY_NAME, name);
         row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Instant.now());
-        row.set(UserModel.UPDATED_AT, Instant.now());
+        row.set(UserModel.CREATED_AT, Now.instant());
+        row.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(row);
         return row.get(UserModel.ID);
     }

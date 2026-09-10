@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -357,7 +358,7 @@ public class AcmeService {
         certRow.set(CertificateModel.CERTIFICATE_PEM, result.certPem());
         certRow.set(CertificateModel.PRIVATE_KEY_PEM, result.keyPem());
         certRow.set(CertificateModel.EXPIRES_ON, result.expiresAt());
-        certRow.set(CertificateModel.ISSUED_ON, Instant.now());
+        certRow.set(CertificateModel.ISSUED_ON, Now.instant());
         markRenewalSuccess(certRow);
     }
 
@@ -446,7 +447,7 @@ public class AcmeService {
             String token = SecureTokens.randomToken();
             int certificateId = certRow.get(CertificateModel.ID);
             PendingManualDnsOrder pending = new PendingManualDnsOrder(
-                certificateId, order, Instant.now(), orderKey, flight);
+                certificateId, order, Now.instant(), orderKey, flight);
             manualDnsOrders.put(token, pending);
             scheduler.schedule(() -> expireManualDnsOrder(token, pending),
                 MANUAL_DNS_ORDER_MINUTES, TimeUnit.MINUTES);
@@ -465,7 +466,7 @@ public class AcmeService {
         if (pending == null) {
             return null;
         }
-        if (pending.createdAt().isBefore(Instant.now()
+        if (pending.createdAt().isBefore(Now.instant()
             .minus(MANUAL_DNS_ORDER_MINUTES, ChronoUnit.MINUTES))) {
             expireManualDnsOrder(token, pending);
             return null;
@@ -576,9 +577,9 @@ public class AcmeService {
             var ds = HohenheimDatabase.datasource();
             var certModel = Models.get(CertificateModel.class);
 
-            checkExpiryAlerts(certModel, Instant.now());
+            checkExpiryAlerts(certModel, Now.instant());
 
-            List<Row> due = findRenewalCandidates(certModel, Instant.now());
+            List<Row> due = findRenewalCandidates(certModel, Now.instant());
             if (due.isEmpty()) return;
 
             Blast.log("ACME: found", due.size(), "certificates due for renewal");
@@ -741,7 +742,7 @@ public class AcmeService {
         certRow.set(CertificateModel.STATUS, CertificateModel.STATUS_ERROR);
         certRow.set(CertificateModel.RENEWAL_ERROR, message);
         certRow.set(CertificateModel.ERROR_COUNT, errorCount);
-        certRow.set(CertificateModel.NEXT_ATTEMPT_AT, computeNextAttempt(errorCount, Instant.now()));
+        certRow.set(CertificateModel.NEXT_ATTEMPT_AT, computeNextAttempt(errorCount, Now.instant()));
     }
 
     /**

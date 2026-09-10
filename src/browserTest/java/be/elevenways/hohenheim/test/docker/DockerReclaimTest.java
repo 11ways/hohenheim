@@ -4,13 +4,13 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -150,7 +150,7 @@ class DockerReclaimTest {
             // 2. The age guard alone keeps everything: these images are seconds old
             // (a BUILD stamps Created with the build time, so the guard is real here).
             DockerReclaim.Outcome guarded = new DockerReclaim(docker, Duration.ofHours(1), false, null)
-                .reclaimImages(declared, Instant.now());
+                .reclaimImages(declared, Now.instant());
             assertThat(guarded.removed()).as("nothing may be removed under the age guard").isZero();
             assertThat(guarded.skipped()).as("the guard reports what it kept").isPositive();
             assertThat(imageIds(docker)).contains(superseded, current, unmanaged);
@@ -158,7 +158,7 @@ class DockerReclaimTest {
             // 3. A container pins the older image, so even unreferenced it stays.
             containerId = docker.createContainer("hohenheim-reclaim-test-" + System.nanoTime(),
                 Map.of("Image", supersededTag, "Cmd", List.of("sleep", "30")), ContainerHardening.STRICT);
-            new DockerReclaim(docker, Duration.ZERO, false, null).reclaimImages(declared, Instant.now());
+            new DockerReclaim(docker, Duration.ZERO, false, null).reclaimImages(declared, Now.instant());
             assertThat(imageIds(docker))
                 .as("an image a container references is never removed")
                 .contains(superseded);
@@ -167,7 +167,7 @@ class DockerReclaimTest {
             docker.removeContainer(containerId, true);
             containerId = null;
             DockerReclaim.Outcome halted = new DockerReclaim(docker, Duration.ZERO, false, () -> true)
-                .reclaimImages(declared, Instant.now());
+                .reclaimImages(declared, Now.instant());
             assertThat(halted.removed()).as("a deploy in flight halts the sweep").isZero();
             assertThat(imageIds(docker)).contains(superseded);
 
@@ -176,7 +176,7 @@ class DockerReclaimTest {
             // goes (removal by id would 409 on it).
             docker.tagImage(supersededTag, repository, "one-alias");
             DockerReclaim.Outcome swept = new DockerReclaim(docker, Duration.ZERO, false, null)
-                .reclaimImages(declared, Instant.now());
+                .reclaimImages(declared, Now.instant());
             assertThat(swept.removed()).as("the superseded image was reclaimed").isPositive();
             assertThat(swept.bytes()).as("reclaimed size is reported").isPositive();
             List<String> remaining = imageIds(docker);

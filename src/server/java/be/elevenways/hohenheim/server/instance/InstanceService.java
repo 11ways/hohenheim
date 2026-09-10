@@ -25,6 +25,7 @@ import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -490,7 +491,7 @@ public final class InstanceService {
         if (row == null) {
             return;
         }
-        row.set(InstanceModel.DELETED_AT, Instant.now());
+        row.set(InstanceModel.DELETED_AT, Now.instant());
         // The deleted_at write is the CONTINUATION of a destroy whose capability gate ran
         // at the funnel; TenantWrites' instance rule would otherwise read it as a tenant
         // authoring a frozen column (see inAuthorizedOperation's contract).
@@ -628,7 +629,7 @@ public final class InstanceService {
         if (row == null || row.get(InstanceModel.DELETED_AT) != null) {
             return;
         }
-        row.set(InstanceModel.DELETED_AT, Instant.now());
+        row.set(InstanceModel.DELETED_AT, Now.instant());
         Models.get(InstanceModel.class).save(row);
     }
 

@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService.Status;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -21,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.xbill.DNS.Name;
 import org.xbill.DNS.Type;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -156,8 +156,8 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, "release-grant@hohenheim.local");
         user.set(UserModel.DISPLAY_NAME, "Grant Holder");
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         int userId = user.get(UserModel.ID);
         RecordGrants.grant(GrantSubjectType.USER, userId, DnsRecordModel.MODEL_ID, recordId,
@@ -189,8 +189,8 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         tenant.set(UserModel.EMAIL, "release-arm-tenant@hohenheim.local");
         tenant.set(UserModel.DISPLAY_NAME, "Arm Tenant");
         tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Instant.now());
-        tenant.set(UserModel.UPDATED_AT, Instant.now());
+        tenant.set(UserModel.CREATED_AT, Now.instant());
+        tenant.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(tenant);
         int tenantId = tenant.get(UserModel.ID);
         // The tenant MANAGES the site, so it has hostname authority over "arm." -- exactly
@@ -286,7 +286,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
     private static void softDeleteSite(int siteId) {
         Model siteModel = Models.get(SiteModel.class);
         Row site = siteModel.findById(siteId);
-        site.set(SiteModel.DELETED_AT, Instant.now());
+        site.set(SiteModel.DELETED_AT, Now.instant());
         siteModel.save(site);
     }
 

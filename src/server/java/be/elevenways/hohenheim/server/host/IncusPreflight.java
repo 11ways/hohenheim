@@ -7,13 +7,13 @@ import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusClients;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.security.NftRunner;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -109,7 +109,7 @@ public final class IncusPreflight {
             report = new HostPreflight.Report(List.of(new HostPreflight.Check("daemon",
                 HostPreflight.STATUS_FAIL, true,
                 outcome.kind().token + ": " + outcome.detail())),
-                Map.of(), false, Instant.now(), outcome);
+                Map.of(), false, Now.instant(), outcome);
         }
         report = withKernelLaneCheck(server, report);
         HostPreflight.store(String.valueOf((Object) server.get(ServerModel.NAME)), report);
@@ -263,7 +263,7 @@ public final class IncusPreflight {
      */
     private static IncusClient.@Nullable ExecResult awaitProbeExec(@NonNull IncusClient client,
                                                                    @NonNull String name) {
-        long deadline = System.currentTimeMillis() + PROBE_EXEC_TIMEOUT_MS;
+        long deadline = Now.millis() + PROBE_EXEC_TIMEOUT_MS;
         do {
             try {
                 IncusClient.ExecResult result = client.exec(name, List.of("sh", "-c",
@@ -287,7 +287,7 @@ public final class IncusPreflight {
                 Thread.currentThread().interrupt();
                 return null;
             }
-        } while (System.currentTimeMillis() < deadline);
+        } while (Now.millis() < deadline);
         return null;
     }
 
@@ -345,7 +345,7 @@ public final class IncusPreflight {
             }
         }
         return new HostPreflight.Report(List.copyOf(checks), facts, passed,
-            Instant.now(), daemonFailure[0]);
+            Now.instant(), daemonFailure[0]);
     }
 
     private static Map<String, Object> probeDaemon(IncusClient client,

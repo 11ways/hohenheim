@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -47,7 +48,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -108,7 +108,7 @@ class InstanceMigrationTest {
                 HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
             // mem_total is what the capacity budget is read from: an admitted host
             // always carries it in production, and placement skips one that does not.
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
+            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
         return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
 
@@ -639,7 +639,7 @@ class InstanceMigrationTest {
                             HostPreflight.STATUS_PASS, true, "fake daemon"),
                         new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
                             HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-                    Map.of("mem_total", 200L * 1024 * 1024), true, Instant.now(), null));
+                    Map.of("mem_total", 200L * 1024 * 1024), true, Now.instant(), null));
                 assertThat(InstanceCapacity.budgetMbOf(
                         Models.get(ServerModel.class).findById(dst)))
                     .as("step 7: the destination's budget is the shrunken reading")

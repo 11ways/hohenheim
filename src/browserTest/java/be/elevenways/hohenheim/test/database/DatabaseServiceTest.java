@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.database;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -146,9 +147,9 @@ class DatabaseServiceTest {
             assertThat(service.detail(name).status()).isEqualTo(DatabaseService.STATUS_PROVISIONING);
 
             // The background job flips it to "active" once the container is up and ready.
-            long deadline = System.currentTimeMillis() + 60_000;
+            long deadline = Now.millis() + 60_000;
             String status = service.detail(name).status();
-            while (!DatabaseService.STATUS_ACTIVE.equals(status) && System.currentTimeMillis() < deadline) {
+            while (!DatabaseService.STATUS_ACTIVE.equals(status) && Now.millis() < deadline) {
                 Thread.sleep(500);
                 status = service.detail(name).status();
             }
@@ -254,9 +255,9 @@ class DatabaseServiceTest {
 
     private static String awaitStatus(DatabaseService service, String name, String wanted,
                                       long timeoutMs) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
+        long deadline = Now.millis() + timeoutMs;
         String status = service.detail(name).status();
-        while (!wanted.equals(status) && System.currentTimeMillis() < deadline) {
+        while (!wanted.equals(status) && Now.millis() < deadline) {
             pause(500);
             status = service.detail(name).status();
         }

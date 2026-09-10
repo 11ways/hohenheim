@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.site.SiteUpstreamCell;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
 import be.elevenways.zenit.cms.common.access.QueryPredicate;
@@ -62,7 +63,6 @@ import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -643,7 +643,7 @@ public class SiteResource extends RowResource {
         // Previews die WITH the site (explicit for the same reason destroyFor is:
         // the soft delete fires no remove hook that could ever do this).
         be.elevenways.hohenheim.server.preview.PreviewDeployments.destroyForSite(siteId);
-        existing.set(SiteModel.DELETED_AT, Instant.now());
+        existing.set(SiteModel.DELETED_AT, Now.instant());
         ActivityLog.withAction(ActivityLog.ACTION_DELETE, "soft-delete",
             () -> this.model().save(existing));
     }

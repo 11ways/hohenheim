@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ProcessDockerTransport;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -164,8 +165,8 @@ class DockerClientTest {
 
     @SuppressWarnings("unchecked")
     private static void waitForExit(DockerClient docker, String id, long timeoutMillis) throws IOException {
-        long deadline = System.currentTimeMillis() + timeoutMillis;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + timeoutMillis;
+        while (Now.millis() < deadline) {
             Map<String, Object> state = (Map<String, Object>) docker.inspectContainer(id).get("State");
             if (Boolean.FALSE.equals(state.get("Running"))) {
                 return;

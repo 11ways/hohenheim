@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.stack;
 
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -30,7 +31,7 @@ final class StackDeploymentRecords {
             row.set(StackDeploymentModel.STACK_ID, stackId);
             row.set(StackDeploymentModel.STATUS, StackDeploymentModel.STATUS_RUNNING);
             row.set(StackDeploymentModel.REASON, reason);
-            row.set(StackDeploymentModel.STARTED_AT, Instant.now());
+            row.set(StackDeploymentModel.STARTED_AT, Now.instant());
             model.save(row);
             return row.get(StackDeploymentModel.ID);
         } catch (RuntimeException e) {
@@ -52,7 +53,7 @@ final class StackDeploymentRecords {
                 return;
             }
             Instant started = row.get(StackDeploymentModel.STARTED_AT);
-            Instant finished = Instant.now();
+            Instant finished = Now.instant();
             row.set(StackDeploymentModel.STATUS,
                 success ? StackDeploymentModel.STATUS_SUCCESS : StackDeploymentModel.STATUS_FAILED);
             row.set(StackDeploymentModel.ERROR, error);

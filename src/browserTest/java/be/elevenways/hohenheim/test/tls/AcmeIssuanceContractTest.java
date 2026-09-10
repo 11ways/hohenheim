@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.tls.DnsTxtPublishers;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -157,7 +158,7 @@ class AcmeIssuanceContractTest {
             assertThat((Instant) stored.get(CertificateModel.EXPIRES_ON))
                 .as("step 3: and the expiry read off the CERTIFICATE, not guessed")
                 .isEqualTo(leaf.getNotAfter().toInstant())
-                .isAfter(Instant.now().plus(80, ChronoUnit.DAYS));
+                .isAfter(Now.instant().plus(80, ChronoUnit.DAYS));
             assertThat((Instant) stored.get(CertificateModel.ISSUED_ON))
                 .as("step 3: issuance is stamped").isNotNull();
 
@@ -286,7 +287,7 @@ class AcmeIssuanceContractTest {
                 .contains("refused.test");
             assertThat((Instant) refusedRow.get(CertificateModel.NEXT_ATTEMPT_AT))
                 .as("step 1: with a backed-off retry rather than a tight loop")
-                .isAfter(Instant.now());
+                .isAfter(Now.instant());
 
             // 2. The CA rejects at FINALIZE, after the authorizations passed: a different
             //    failure point that must land in the same recorded shape.

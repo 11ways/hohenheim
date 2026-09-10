@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.protoblast.common.dry.Dry;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.sun.net.httpserver.HttpServer;
@@ -247,7 +248,7 @@ class GitProviderClientTest {
             .isEqualTo("ghs_minted_token");
         assertThat(credential.expiresAtMillis())
             .as("step 1: the upstream expiry is carried on the credential")
-            .isGreaterThan(System.currentTimeMillis());
+            .isGreaterThan(Now.millis());
 
         // 2. The mint was authorized by a REAL RS256 App JWT: three segments, RS256
         //    header, the app id as issuer, and a signature the app's PUBLIC key verifies.

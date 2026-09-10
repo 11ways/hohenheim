@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -24,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import java.net.URLEncoder;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -215,8 +215,8 @@ class DnsListEditingTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, "dns-tenant@hohenheim.local");
         user.set(UserModel.DISPLAY_NAME, "Dns Tenant");
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         int tenantId = user.get(UserModel.ID);
 

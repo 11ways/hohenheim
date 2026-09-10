@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -104,10 +105,10 @@ class InstanceBackupsTest {
             int newer = 0;
             boolean aligned = false;
             for (int attempt = 0; attempt < 5 && !aligned; attempt++) {
-                long before = Instant.now().getEpochSecond();
+                long before = Now.instant().getEpochSecond();
                 older = backups.backupNow(instanceId, targetId, target);
                 newer = backups.backupNow(instanceId, targetId, target);
-                aligned = Instant.now().getEpochSecond() == before;
+                aligned = Now.instant().getEpochSecond() == before;
                 if (!aligned) {
                     backups.delete(older);
                     backups.delete(newer);
@@ -546,7 +547,7 @@ class InstanceBackupsTest {
             Models.get(InstanceModel.class).find()
                 .where(InstanceModel.ID.eq(instanceId))
                 .assign(InstanceModel.STATUS, status)
-                .assign(InstanceModel.UPDATED_AT, Instant.now())
+                .assign(InstanceModel.UPDATED_AT, Now.instant())
                 .updateAll();
             return;
         }
@@ -598,8 +599,8 @@ class InstanceBackupsTest {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, name);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }

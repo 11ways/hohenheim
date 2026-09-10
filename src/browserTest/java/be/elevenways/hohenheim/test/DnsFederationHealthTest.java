@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.comms.server.CommsDeliveryModel;
@@ -48,7 +49,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -157,7 +157,7 @@ class DnsFederationHealthTest {
             // 3. The lag outlives the window: an attention item naming peer and zone, and
             //    exactly ONE alert, however many probes follow.
             link.set(DnsZonePeerModel.BEHIND_SINCE,
-                Instant.now().minus(DnsSecondaryFreshness.STALE_AFTER).minus(Duration.ofMinutes(1)));
+                Now.instant().minus(DnsSecondaryFreshness.STALE_AFTER).minus(Duration.ofMinutes(1)));
             Models.get(DnsZonePeerModel.class).save(link);
             DnsSecondaryFreshness.probeZone(zone());
             DnsSecondaryFreshness.probeZone(zone());

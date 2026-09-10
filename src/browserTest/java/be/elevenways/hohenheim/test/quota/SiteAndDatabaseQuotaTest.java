@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.quota.DatabaseQuota;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -145,7 +146,7 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
         // 4. THE LOCKOUT TEST: the trash write SiteResource.deleteRow performs is a
         //    deleted_at stamp through save(), so the release must ride that transition.
         Row winner = raced.get(0);
-        winner.set(SiteModel.DELETED_AT, Instant.now());
+        winner.set(SiteModel.DELETED_AT, Now.instant());
         Models.get(SiteModel.class).save(winner);
         assertThat(Quotas.usedOf(SITE_BUCKET))
             .as("step 4: the trash transition hands the slot back").isEqualTo(limit - 1);

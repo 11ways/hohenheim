@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.task.TaskStatus;
 import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -69,7 +70,7 @@ class InstanceAttentionTest {
             .where(InstanceModel.ID.eq(instanceId))
             .assign(InstanceModel.DISK_USED_BYTES, used)
             .assign(InstanceModel.DISK_LIMIT_BYTES, limit)
-            .assign(InstanceModel.DISK_OBSERVED_AT, Instant.now())
+            .assign(InstanceModel.DISK_OBSERVED_AT, Now.instant())
             .updateAll();
     }
 
@@ -101,7 +102,7 @@ class InstanceAttentionTest {
             // 2. Soft-deleting the crashed instance silences it: an item about a record in
             //    the trash is noise nobody can act on.
             Row trashed = Models.get(InstanceModel.class).findById(crashed);
-            trashed.set(InstanceModel.DELETED_AT, Instant.now());
+            trashed.set(InstanceModel.DELETED_AT, Now.instant());
             Models.get(InstanceModel.class).save(trashed);
             assertThat(raised(AttentionCollector::crashedInstances))
                 .as("step 2: a trashed instance raises nothing").isEmpty();
@@ -196,7 +197,7 @@ class InstanceAttentionTest {
                 .where(InstanceBackupModel.INSTANCE_ID.eq(covered))
                 .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_COMPLETE))
                 .assign(InstanceBackupModel.CREATED_AT,
-                    Instant.now().minus(30, java.time.temporal.ChronoUnit.DAYS))
+                    Now.instant().minus(30, java.time.temporal.ChronoUnit.DAYS))
                 .updateAll();
             assertThat(raisedKeys(AttentionCollector::staleInstanceBackups))
                 .as("step 4: a success older than the window raises the stale item")
@@ -236,10 +237,10 @@ class InstanceAttentionTest {
 
             // 1. One FAILED nightly run, then 250 newer successful runs of another task.
             taskRun(nightly, TaskStatus.FAILED,
-                Instant.now().minus(9, java.time.temporal.ChronoUnit.HOURS));
+                Now.instant().minus(9, java.time.temporal.ChronoUnit.HOURS));
             for (int i = 0; i < 250; i++) {
                 taskRun(chatty, TaskStatus.COMPLETED,
-                    Instant.now().minusSeconds(250 - i));
+                    Now.instant().minusSeconds(250 - i));
             }
             assertThat(raisedKeys(AttentionCollector::failedTasks))
                 .as("step 1: the nightly failure is judged by its OWN newest row, so 250"
@@ -251,14 +252,14 @@ class InstanceAttentionTest {
             HohenheimSettings.VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "attn-target");
             taskRun(nightly, TaskStatus.COMPLETED,
-                Instant.now().minus(3, java.time.temporal.ChronoUnit.DAYS));
+                Now.instant().minus(3, java.time.temporal.ChronoUnit.DAYS));
             assertThat(raisedKeys(AttentionCollector::controlPlaneBackupFreshness))
                 .as("step 2: a stale newest success raises the freshness item")
                 .containsExactly("control_plane_backup_stale error /admin/settings");
 
             // 3. A COMPLETED run within the window silences it.
             taskRun(nightly, TaskStatus.COMPLETED,
-                Instant.now().minus(6, java.time.temporal.ChronoUnit.HOURS));
+                Now.instant().minus(6, java.time.temporal.ChronoUnit.HOURS));
             assertThat(raisedKeys(AttentionCollector::controlPlaneBackupFreshness))
                 .as("step 3: a recent success is silence").isEmpty();
 
@@ -284,7 +285,7 @@ class InstanceAttentionTest {
 
     private static void trash(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
-        row.set(InstanceModel.DELETED_AT, Instant.now());
+        row.set(InstanceModel.DELETED_AT, Now.instant());
         Models.get(InstanceModel.class).save(row);
     }
 

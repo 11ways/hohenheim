@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -360,8 +361,8 @@ class ApplicationReleaseTest {
 
     /** Bounded wait: the drain completes on a virtual thread, not inline. */
     private static void await(String what, BooleanSupplier condition) {
-        long deadline = System.currentTimeMillis() + 15_000;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + 15_000;
+        while (Now.millis() < deadline) {
             if (condition.getAsBoolean()) {
                 return;
             }

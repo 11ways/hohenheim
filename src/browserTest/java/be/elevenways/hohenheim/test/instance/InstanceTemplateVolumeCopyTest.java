@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -15,7 +16,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -204,7 +204,7 @@ class InstanceTemplateVolumeCopyTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.NAME, name);
         row.set(InstanceTemplateModel.KIND, kind);
         row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<String, Object>());
-        row.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+        row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
         row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
         templates.save(row);
         return row.get(InstanceTemplateModel.ID);

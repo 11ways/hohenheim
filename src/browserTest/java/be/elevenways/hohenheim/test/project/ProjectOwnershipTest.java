@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -42,7 +43,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -165,8 +165,8 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, name);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }
@@ -195,7 +195,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
         row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
-        row.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+        row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
         row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
         Models.get(InstanceTemplateModel.class).save(row);
         return row.get(InstanceTemplateModel.ID);
@@ -216,7 +216,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         // funnel, never a hand-written capabilities shape.
         HostPreflight.store(PREFIX + "host", new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
+            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
         return row.get(ServerModel.ID);
     }
 

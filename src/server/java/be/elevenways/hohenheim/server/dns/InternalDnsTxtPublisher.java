@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.tls.DnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -220,13 +221,13 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
             throws Exception {
         String origin = zone.getOriginString();
         Name name = Name.fromString(stripDot(record.name()) + ".");
-        long deadline = System.currentTimeMillis() + PROPAGATION_TIMEOUT_MS;
+        long deadline = Now.millis() + PROPAGATION_TIMEOUT_MS;
         while (true) {
             refreshReplica(zone);
             if (servesTxt(origin, name, record.value())) {
                 return;
             }
-            if (System.currentTimeMillis() >= deadline) {
+            if (Now.millis() >= deadline) {
                 break;
             }
             Thread.sleep(PROPAGATION_POLL_MS);
@@ -309,7 +310,7 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
         }
 
         DnsPeerModel peerModel = Models.get(DnsPeerModel.class);
-        long deadline = System.currentTimeMillis() + PROPAGATION_TIMEOUT_MS;
+        long deadline = Now.millis() + PROPAGATION_TIMEOUT_MS;
         for (Row link : links) {
             Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
             Row peer = peerId != null ? peerModel.findById(peerId) : null;
@@ -327,7 +328,7 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
 
     private static void awaitPeerSerial(@NonNull String host, int port, @NonNull Name origin,
                                         long requiredSerial, long deadline) {
-        while (System.currentTimeMillis() < deadline) {
+        while (Now.millis() < deadline) {
             Long serial = DnsSoaProbe.serial(host, port, origin);
             if (serial != null && DnsSoaProbe.serialReached(serial, requiredSerial)) {
                 return;

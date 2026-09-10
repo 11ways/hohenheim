@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.ImagePublishSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -16,7 +17,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
@@ -116,7 +116,7 @@ public final class InstanceTemplateCapture {
         InstanceTemplateModel templates = Models.get(InstanceTemplateModel.class);
         Row template = templates.createEmptyRow();
         template.set(InstanceTemplateModel.NAME, nameOf(resolved.row())
-            + " (" + STAMP.format(Instant.now()) + ")");
+            + " (" + STAMP.format(Now.instant()) + ")");
         template.set(InstanceTemplateModel.KIND, resolved.row().get(InstanceModel.KIND));
         template.set(InstanceTemplateModel.SETTINGS, settings);
         template.set(InstanceTemplateModel.SOURCE, "captured from instance #" + instanceId
@@ -139,7 +139,7 @@ public final class InstanceTemplateCapture {
         if (slug.length() > 40) {
             slug = slug.substring(0, 40);
         }
-        return "tpl-" + slug + "-" + STAMP.format(Instant.now());
+        return "tpl-" + slug + "-" + STAMP.format(Now.instant());
     }
 
     private static @NonNull String nameOf(@NonNull Row instance) {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.SystemUserModel;
@@ -10,7 +11,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
-import java.time.Instant;
 
 /**
  * Verifies the UpdateSystemUsers task reconciles discovered host state with the
@@ -62,7 +62,7 @@ class DiscoveryTaskTest {
         ghost.set(SystemUserModel.HOME, "/nonexistent");
         ghost.set(SystemUserModel.GECOS, "ghost");
         ghost.set(SystemUserModel.OBSOLETE, false);
-        ghost.set(SystemUserModel.LAST_SEEN_AT, Instant.now());
+        ghost.set(SystemUserModel.LAST_SEEN_AT, Now.instant());
         model.save(ghost);
 
         UpdateSystemUsers.reconcile();

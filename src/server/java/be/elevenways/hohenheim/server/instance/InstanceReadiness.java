@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -115,10 +116,10 @@ public final class InstanceReadiness {
     /** Wait for a TCP connect to succeed on the published host port. */
     private static void awaitPort(@NonNull Row instance, int port) {
 
-        long deadline = System.currentTimeMillis() + WINDOW_MS;
+        long deadline = Now.millis() + WINDOW_MS;
         String lastReason = "";
 
-        while (System.currentTimeMillis() < deadline) {
+        while (Now.millis() < deadline) {
             try (Socket socket = new Socket()) {
                 socket.connect(new InetSocketAddress("127.0.0.1", port), 2000);
                 return;

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -315,7 +316,7 @@ public final class DnsZoneStore {
         if (Boolean.TRUE.equals(zone.get(DnsZoneModel.DNSSEC_ENABLED))) {
             DnsSecKeys keys = DnsSecMaterial.ensure(zone);
             if (keys != null) {
-                DnsSecSigner.sign(origin, defaultTtl, negativeTtl, nodes, keys, java.time.Instant.now());
+                DnsSecSigner.sign(origin, defaultTtl, negativeTtl, nodes, keys, Now.instant());
             }
         }
 

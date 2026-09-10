@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceFileModel;
@@ -241,7 +242,7 @@ class InstanceTemplateInstallLiveTest {
             InstanceTemplateModel.REINSTALL_PRESERVE);
         // The operator approval a real catalog entry would carry -- the approval GATE
         // itself is proven by InstanceTemplatePolicyTest.
-        template.set(InstanceTemplateModel.APPROVED_AT, java.time.Instant.now());
+        template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
         Models.get(InstanceTemplateModel.class).save(template);
         int templateId = template.get(InstanceTemplateModel.ID);
 

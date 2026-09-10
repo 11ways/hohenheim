@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -148,7 +149,7 @@ public final class ApplicationDeploys {
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         Row row = model.createEmptyRow();
         String branch = ref != null && !ref.isBlank() ? ref : declaredBranch(settings);
-        Instant now = Instant.now();
+        Instant now = Now.instant();
         row.set(BuildOperationModel.BUILDER_KIND,
             BuildOperationModel.kindOrDefault(settings.get("builder")));
         row.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());

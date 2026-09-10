@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -10,7 +11,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 
 /**
  * The DURABLE half of the console: one UPSERTED {@code instance_logs} row per workload
@@ -61,7 +61,7 @@ final class InstanceConsoleLogs {
                         row.set(InstanceLogModel.HANDLE, handle);
                         row.set(InstanceLogModel.LOG_TEXT, text);
                         row.set(InstanceLogModel.LINE_COUNT, countLines(text));
-                        row.set(InstanceLogModel.SAVED_AT, Instant.now());
+                        row.set(InstanceLogModel.SAVED_AT, Now.instant());
                         model.save(row);
                     } else {
                         // Every later flush touches the episode's TEXT only: the row is
@@ -69,7 +69,7 @@ final class InstanceConsoleLogs {
                         RecordStamp.on(model, row)
                             .set(InstanceLogModel.LOG_TEXT, text)
                             .set(InstanceLogModel.LINE_COUNT, countLines(text))
-                            .set(InstanceLogModel.SAVED_AT, Instant.now())
+                            .set(InstanceLogModel.SAVED_AT, Now.instant())
                             .write();
                     }
                     this.rowId = row.get(InstanceLogModel.ID);

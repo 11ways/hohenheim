@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -104,7 +105,7 @@ public final class InstanceSnapshots {
         // captures of one instance inside the same second used to resolve to the SAME
         // directory, and then retention deleting one row's payload took the other row's
         // tars with it. Same hazard, same fix, both lanes.
-        String stamp = STAMP.format(Instant.now());
+        String stamp = STAMP.format(Now.instant());
         Path directory = snapshotRoot().resolve("instance-" + instanceId)
             .resolve(stamp + "-" + snapshot.get(InstanceSnapshotModel.ID));
         RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
@@ -185,7 +186,7 @@ public final class InstanceSnapshots {
         // second used to ask the daemon for the SAME snapshot name -- the second either
         // fails or aliases the first, and then retention deleting one row's payload takes
         // the other row's snapshot with it. That is why the row is saved first.
-        String nativeName = "hib-" + STAMP.format(Instant.now())
+        String nativeName = "hib-" + STAMP.format(Now.instant())
             + "-" + snapshot.get(InstanceSnapshotModel.ID);
         RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
             .set(InstanceSnapshotModel.NATIVE_NAME, nativeName)

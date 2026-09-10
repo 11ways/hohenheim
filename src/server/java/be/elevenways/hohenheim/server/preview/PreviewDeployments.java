@@ -36,6 +36,7 @@ import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -393,7 +394,7 @@ public final class PreviewDeployments {
             preview.set(PreviewDeploymentModel.STATUS,
                 "expired".equals(reason) ? PreviewDeploymentModel.STATUS_EXPIRED
                                          : PreviewDeploymentModel.STATUS_DESTROYED);
-            preview.set(PreviewDeploymentModel.DELETED_AT, Instant.now());
+            preview.set(PreviewDeploymentModel.DELETED_AT, Now.instant());
             model.save(preview);
             // AIDEV-NOTE: soft delete fires no remove hooks, so the one-shot expiry
             // schedule must die here explicitly (the InstanceService.destroy
@@ -717,7 +718,7 @@ public final class PreviewDeployments {
         Integer minutes = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Previews.LIFETIME_MINUTES);
         long effective = minutes != null && minutes > 0 ? minutes : 1440;
-        return Instant.now().plusSeconds(effective * 60);
+        return Now.instant().plusSeconds(effective * 60);
     }
 
     private static @NonNull String healthPath(@NonNull Map<String, Object> siteSettings) {

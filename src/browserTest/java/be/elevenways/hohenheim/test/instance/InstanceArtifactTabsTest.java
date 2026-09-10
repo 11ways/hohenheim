@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.cms.ManageInstanceBackupResource;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -96,8 +97,8 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, "artifact-console@hohenheim.local");
         user.set(UserModel.DISPLAY_NAME, "Console Only");
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         consoleUserId = user.get(UserModel.ID);
         RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,

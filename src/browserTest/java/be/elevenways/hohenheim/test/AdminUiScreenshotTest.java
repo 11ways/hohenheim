@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.microsoft.playwright.Page;
@@ -22,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -93,7 +93,7 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
             volume.set(InstanceVolumeModel.USED_BYTES,
                 "home".equals(volume.get(InstanceVolumeModel.NAME))
                     ? 731L * 1024 * 1024 : 48L * 1024 * 1024);
-            volume.set(InstanceVolumeModel.OBSERVED_AT, Instant.now());
+            volume.set(InstanceVolumeModel.OBSERVED_AT, Now.instant());
             volumes.save(volume);
         }
 
@@ -174,7 +174,7 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
             "checkout " + sha + "\nnixpacks build\nprobe /healthz\n"
                 + (failure == null ? "switch + drain" : "FAILED: " + failure));
         row.set(ReleaseOperationModel.STARTED_AT,
-            Instant.now().minusSeconds(minutesAgo * 60L));
+            Now.instant().minusSeconds(minutesAgo * 60L));
         row.set(ReleaseOperationModel.DURATION_MS, durationMs);
         operations.save(row);
     }

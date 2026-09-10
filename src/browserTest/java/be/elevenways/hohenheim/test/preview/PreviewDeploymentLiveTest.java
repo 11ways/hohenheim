@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -37,7 +38,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -281,7 +281,7 @@ class PreviewDeploymentLiveTest {
         // 6. EXPIRY: re-arm the deploy-armed one-shot at a reached deadline (the
         //    extend-the-window call, backwards); the framework sweeper reclaims
         //    EVERYTHING.
-        PreviewDeployments.armExpiry(previewId, Instant.now().minusSeconds(1));
+        PreviewDeployments.armExpiry(previewId, Now.instant().minusSeconds(1));
         new RecordSchedules(Datasources.getDefault()).runDue(null);
 
         Row dead = awaitDeleted(previewId);

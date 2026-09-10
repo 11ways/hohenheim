@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -295,7 +296,7 @@ class DnsFederationTest {
         }
         Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
         zone.set(DnsZoneModel.REPLICA_RECORDS, replica.toString());
-        zone.set(DnsZoneModel.LAST_TRANSFER_AT, java.time.Instant.now());
+        zone.set(DnsZoneModel.LAST_TRANSFER_AT, Now.instant());
         Models.get(DnsZoneModel.class).save(zone);
 
         // A fresh service (as after a process restart) restores it without any AXFR.

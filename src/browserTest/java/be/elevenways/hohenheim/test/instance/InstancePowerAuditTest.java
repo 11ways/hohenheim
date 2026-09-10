@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -28,7 +29,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -81,7 +81,7 @@ class InstancePowerAuditTest {
             new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
             new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
                 HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
+            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
         return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
 

@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.comms.server.CommsDispatcher;
@@ -29,7 +30,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -347,8 +347,8 @@ class IsolationVisibilityTest {
         Row run = history.createEmptyRow();
         run.set(SystemTaskHistoryModel.TASK_TYPE, typePath);
         run.set(SystemTaskHistoryModel.STATUS, TaskStatus.FAILED.name());
-        run.set(SystemTaskHistoryModel.STARTED_AT, Instant.now());
-        run.set(SystemTaskHistoryModel.ENDED_AT, Instant.now());
+        run.set(SystemTaskHistoryModel.STARTED_AT, Now.instant());
+        run.set(SystemTaskHistoryModel.ENDED_AT, Now.instant());
         run.set(SystemTaskHistoryModel.ERROR, "isolation UNCONFIRMED");
         history.save(run);
     }

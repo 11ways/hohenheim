@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.dry.Dry;
+import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -306,7 +307,7 @@ public final class InstanceStats {
                 }
             }
         }
-        return new Sample(System.currentTimeMillis(), cpu, memory, limit, rx, tx);
+        return new Sample(Now.millis(), cpu, memory, limit, rx, tx);
     }
 
     @SuppressWarnings("unchecked")

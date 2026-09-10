@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.channel.ChannelException;
 import be.elevenways.zenit.common.channel.ChannelHandler;
 import be.elevenways.zenit.common.channel.ChannelLink;
@@ -58,14 +59,14 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
             throw new ChannelException("Not permitted");
         }
         this.instanceId = instanceId;
-        this.lastChecked = System.currentTimeMillis();
+        this.lastChecked = Now.millis();
 
         Consumer<InstanceStats.Sample> viewer = sample -> {
             if (!this.link.isOpen()) {
                 return;
             }
-            if (System.currentTimeMillis() - this.lastChecked > REVALIDATION_INTERVAL_MS) {
-                this.lastChecked = System.currentTimeMillis();
+            if (Now.millis() - this.lastChecked > REVALIDATION_INTERVAL_MS) {
+                this.lastChecked = Now.millis();
                 if (!this.permitted(instanceId)) {
                     Blast.log("STATS: capability revoked mid-stream; closing link for instance",
                         instanceId);

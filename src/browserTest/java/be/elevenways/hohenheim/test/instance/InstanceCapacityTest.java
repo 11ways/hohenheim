@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -146,8 +147,8 @@ class InstanceCapacityTest {
     @Test
     void everyTerminatingAndMovingPathHandsTheBookingBack() {
         Db.run(datasource, () -> {
-            int alpha = host("alpha", 2048L, Instant.now());
-            int beta = host("beta", 2048L, Instant.now());
+            int alpha = host("alpha", 2048L, Now.instant());
+            int beta = host("beta", 2048L, Now.instant());
 
             // 1. A create books its DECLARED limit and stamps it on the row.
             Row row = newWorkload(alpha, "walker", 512);
@@ -197,7 +198,7 @@ class InstanceCapacityTest {
             //    one the remove hooks never see -- releases against the host the row was
             //    booked on.
             Row trashed = Models.get(InstanceModel.class).findById(id);
-            trashed.set(InstanceModel.DELETED_AT, Instant.now());
+            trashed.set(InstanceModel.DELETED_AT, Now.instant());
             Models.get(InstanceModel.class).save(trashed);
             assertThat(InstanceCapacity.bookedMbOn(beta))
                 .as("step 5: a soft delete hands the booking back").isEqualTo(0);
@@ -229,7 +230,7 @@ class InstanceCapacityTest {
     @Test
     void racingCreatesCannotOverbookAHostAndUnmeasurableHostsRefuseByName() throws Exception {
         int[] hostId = new int[1];
-        Db.run(datasource, () -> hostId[0] = host("race", 1024L, Instant.now()));
+        Db.run(datasource, () -> hostId[0] = host("race", 1024L, Now.instant()));
         int alpha = hostId[0];
 
         // 1. SIX threads behind a barrier each write a 1024 MB workload onto a host with
@@ -314,7 +315,7 @@ class InstanceCapacityTest {
             //    What protects the property that matters is that placement never CHOOSES
             //    such a host -- asserted in InstancePlacementTest, and the budget being
             //    null is the same fact both sides read.
-            int blind = host("unmeasured", null, Instant.now());
+            int blind = host("unmeasured", null, Now.instant());
             assertThat(InstanceCapacity.budgetMbOf(
                     Models.get(ServerModel.class).findById(blind)))
                 .as("step 3: an unmeasured host has NO budget, not an unlimited one")
@@ -331,7 +332,7 @@ class InstanceCapacityTest {
             // 4. A host whose reading is older than the declared freshness bound is in
             //    exactly the same position: a measurement is evidence with a shelf life,
             //    and capacity is the first gate that reads one back for a decision.
-            int stale = host("stale", 4096L, Instant.now().minus(Duration.ofDays(30)));
+            int stale = host("stale", 4096L, Now.instant().minus(Duration.ofDays(30)));
             assertThat(InstanceCapacity.budgetMbOf(
                     Models.get(ServerModel.class).findById(stale)))
                 .as("step 4: a month-old reading yields NO budget")

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
@@ -14,7 +15,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -92,7 +92,7 @@ public class BackupDatabases extends ScheduledTask {
             // here, and an Error that still occurs should fail the run loudly.
             try {
                 Path dbDir = backupRoot.resolve(db.name());
-                databaseService.backupToFile(db.name(), dbDir, STAMP.format(Instant.now()));
+                databaseService.backupToFile(db.name(), dbDir, STAMP.format(Now.instant()));
                 pruneOldBackups(dbDir, retention);
                 backedUp++;
             } catch (Exception e) {

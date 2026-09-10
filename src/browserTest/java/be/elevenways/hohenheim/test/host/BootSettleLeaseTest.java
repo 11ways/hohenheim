@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.host;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.lease.Leases;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -10,7 +11,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,7 +56,7 @@ class BootSettleLeaseTest {
                     BootSettle.processStart().minusSeconds(60)))
                 .as("step 1: a write from before this process started is a corpse")
                 .isFalse();
-            assertThat(BootSettle.writtenByThisProcess(Instant.now()))
+            assertThat(BootSettle.writtenByThisProcess(Now.instant()))
                 .as("step 1: a write from this process's lifetime is a live operation")
                 .isTrue();
             assertThat(BootSettle.writtenByThisProcess(null))

@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -274,7 +275,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             "hook-c--feature-login.preview.test");
         preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_RUNNING);
         preview.set(PreviewDeploymentModel.EXPIRES_AT,
-            java.time.Instant.now().plusSeconds(3600));
+            Now.instant().plusSeconds(3600));
         model.save(preview);
         return preview;
     }

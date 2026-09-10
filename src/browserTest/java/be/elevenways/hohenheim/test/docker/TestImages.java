@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
+import be.elevenways.protoblast.common.time.Now;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -9,7 +10,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -123,7 +123,7 @@ public final class TestImages {
         run(work, List.of("tar", "-cf", layer.toString(), "-C", layerRoot.toString(), "."));
         String layerDigest = sha256(Files.readAllBytes(layer));
 
-        String created = Instant.now().toString().replaceAll("\\.\\d+Z$", "Z");
+        String created = Now.instant().toString().replaceAll("\\.\\d+Z$", "Z");
         String config = "{\"architecture\":\"amd64\",\"os\":\"linux\",\"created\":\"" + created
             + "\",\"config\":{\"Cmd\":" + cmdJson + "},\"rootfs\":{\"type\":\"layers\","
             + "\"diff_ids\":[\"sha256:" + layerDigest + "\"]},"

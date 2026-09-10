@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
@@ -12,7 +13,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 
 /**
  * The settle-then-refuse discipline shared by every instance operation: ONE fenced
@@ -206,7 +206,7 @@ final class InstanceOperationGuard {
                 InstanceModel.CLAIM_FENCE.isNull(),
                 InstanceModel.CLAIM_FENCE.lte(fence)))
             .assign(InstanceModel.STATUS, status)
-            .assign(InstanceModel.UPDATED_AT, Instant.now())
+            .assign(InstanceModel.UPDATED_AT, Now.instant())
             .assign(InstanceModel.CLAIM_FENCE, fence)
             .updateAll();
         if (matched == 0) {
@@ -244,10 +244,10 @@ final class InstanceOperationGuard {
                 InstanceModel.CLAIM_FENCE.isNull(),
                 InstanceModel.CLAIM_FENCE.lte(fence)))
             .assign(InstanceModel.STATUS, status)
-            .assign(InstanceModel.STATUS_OBSERVED_AT, Instant.now())
+            .assign(InstanceModel.STATUS_OBSERVED_AT, Now.instant())
             .assign(InstanceModel.CLAIM_FENCE, fence);
         if (changed) {
-            statement = statement.assign(InstanceModel.UPDATED_AT, Instant.now());
+            statement = statement.assign(InstanceModel.UPDATED_AT, Now.instant());
         }
         if (statement.updateAll() == 0) {
             leases.fencedOut(serverId);

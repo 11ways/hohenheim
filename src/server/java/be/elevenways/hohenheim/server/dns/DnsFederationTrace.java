@@ -3,13 +3,13 @@ package be.elevenways.hohenheim.server.dns;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.Name;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -35,7 +35,7 @@ public final class DnsFederationTrace {
             "outcome", "ok"));
         Row link = linkFor(zone.getZoneId(), key);
         if (link != null) {
-            link.set(DnsZonePeerModel.LAST_AXFR_AT, Instant.now());
+            link.set(DnsZonePeerModel.LAST_AXFR_AT, Now.instant());
             link.set(DnsZonePeerModel.LAST_AXFR_SERIAL, (int) zone.getSerial());
             Models.get(DnsZonePeerModel.class).save(link);
         }
@@ -53,7 +53,7 @@ public final class DnsFederationTrace {
                                   long serial, @NonNull String outcome) {
         Blast.slog("dns.notify_sent", fields(origin, serial,
             String.valueOf(peer.get(DnsPeerModel.NAME)), "outcome", outcome));
-        link.set(DnsZonePeerModel.LAST_NOTIFY_AT, Instant.now());
+        link.set(DnsZonePeerModel.LAST_NOTIFY_AT, Now.instant());
         link.set(DnsZonePeerModel.LAST_NOTIFY_SERIAL, (int) serial);
         link.set(DnsZonePeerModel.LAST_NOTIFY_OUTCOME,
             outcome.length() > 255 ? outcome.substring(0, 255) : outcome);

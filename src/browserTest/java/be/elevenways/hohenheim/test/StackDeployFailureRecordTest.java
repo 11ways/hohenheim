@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -15,7 +16,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -144,7 +144,7 @@ class StackDeployFailureRecordTest extends HohenheimTestBase {
         interrupted.set(StackDeploymentModel.STACK_ID, stackId);
         interrupted.set(StackDeploymentModel.STATUS, StackDeploymentModel.STATUS_RUNNING);
         interrupted.set(StackDeploymentModel.REASON, "manual");
-        interrupted.set(StackDeploymentModel.STARTED_AT, Instant.now());
+        interrupted.set(StackDeploymentModel.STARTED_AT, Now.instant());
         deployments.save(interrupted);
         Models.get(StackModel.class).find().where(StackModel.ID.eq(stackId))
             .assign(StackModel.STATUS, StackModel.STATUS_DEPLOYING).updateAll();

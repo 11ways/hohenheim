@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.protoblast.common.time.Now;
 import javax.net.ssl.*;
 import java.net.Socket;
 import java.security.Principal;
@@ -70,7 +71,7 @@ public class SniKeyManager extends X509ExtendedKeyManager {
                         CachedAlias cached = aliasCache.get(cacheKey);
                         if (cached != null) {
                             long ttl = cached.positive() ? POSITIVE_CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS;
-                            if (System.currentTimeMillis() - cached.cachedAt() < ttl) {
+                            if (Now.millis() - cached.cachedAt() < ttl) {
                                 return cached.alias();
                             }
                             aliasCache.remove(cacheKey);
@@ -107,13 +108,13 @@ public class SniKeyManager extends X509ExtendedKeyManager {
     private void cacheResult(String key, String alias, boolean positive) {
         if (aliasCache.size() >= CACHE_MAX_SIZE) {
             // Evict expired entries
-            long now = System.currentTimeMillis();
+            long now = Now.millis();
             aliasCache.entrySet().removeIf(e -> {
                 long ttl = e.getValue().positive() ? POSITIVE_CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS;
                 return now - e.getValue().cachedAt() > ttl;
             });
         }
-        aliasCache.put(key, new CachedAlias(alias, System.currentTimeMillis(), positive));
+        aliasCache.put(key, new CachedAlias(alias, Now.millis(), positive));
     }
 
     /**

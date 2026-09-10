@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.hohenheim.server.proxy.ReleasedClaims;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
@@ -498,8 +499,8 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, email);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         int userId = user.get(UserModel.ID);
         grantManage(site, userId);
@@ -1332,7 +1333,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
 
     /** Move a ledger row's release moment back, to sit on a chosen side of the window. */
     private static void backdate(Row quarantine, Duration age) {
-        quarantine.set(ReleasedRouteClaimModel.RELEASED_AT, Instant.now().minus(age));
+        quarantine.set(ReleasedRouteClaimModel.RELEASED_AT, Now.instant().minus(age));
         Models.get(ReleasedRouteClaimModel.class).save(quarantine);
     }
 

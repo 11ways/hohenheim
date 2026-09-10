@@ -31,6 +31,7 @@ import be.elevenways.hohenheim.server.cms.ServerResource;
 import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -40,7 +41,6 @@ import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -386,7 +386,7 @@ class DeleteConfirmationTest {
 
             // 5. A trashed site no longer holds it, but an access rule naming it does --
             //    with the rules-only wording, since there is no site to name.
-            intranet.set(SiteModel.DELETED_AT, Instant.now());
+            intranet.set(SiteModel.DELETED_AT, Now.instant());
             Models.get(SiteModel.class).save(intranet);
             assertThat(providers.deleteUnavailableReason(provider, operator))
                 .as("step 5: a trashed site releases the provider").isNull();

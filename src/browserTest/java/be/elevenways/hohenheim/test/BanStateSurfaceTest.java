@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.security.BanStateCell;
 import be.elevenways.hohenheim.server.security.BanService;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterAll;
@@ -78,7 +79,7 @@ class BanStateSurfaceTest extends HohenheimTestBase {
             .contains("data-ban-state=\"" + BanStateCell.LIFTED + "\"");
 
         // 5. The state derivation itself: a lift beats an expiry, an expiry beats active.
-        Instant now = Instant.now();
+        Instant now = Now.instant();
         assertThat(BanStateCell.of(false, now, now.plus(Duration.ofHours(1)), now).token())
             .isEqualTo(BanStateCell.LIFTED);
         assertThat(BanStateCell.of(true, null, now.minusSeconds(1), now).token())

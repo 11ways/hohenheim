@@ -31,6 +31,7 @@ import be.elevenways.hohenheim.server.cms.ServerResource;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -42,7 +43,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -383,7 +383,7 @@ class RuntimeCascadeTest {
 
             // 2. The site is trashed (deleted_at, as SiteResource does): a soft-deleted site
             //    no longer holds the provider, but an access rule naming it still does.
-            gated.set(SiteModel.DELETED_AT, Instant.now());
+            gated.set(SiteModel.DELETED_AT, Now.instant());
             Models.get(SiteModel.class).save(gated);
             int listId = accessList("cascade-list");
             int ruleId = providerRule(listId, providerId);
@@ -682,7 +682,7 @@ class RuntimeCascadeTest {
 
     private static void softDelete(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
-        row.set(InstanceModel.DELETED_AT, Instant.now());
+        row.set(InstanceModel.DELETED_AT, Now.instant());
         Models.get(InstanceModel.class).save(row);
     }
 

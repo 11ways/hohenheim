@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.security.SecurityReportEnv;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -396,7 +397,7 @@ public final class SpamserviceManager {
             throw new IllegalStateException("Spamservice readiness timed out" + outputSuffix(started.output()));
         }
 
-        this.readyAtMs = System.currentTimeMillis();
+        this.readyAtMs = Now.millis();
         installIntegration(requested, config, runtimeBaseUrl);
     }
 
@@ -458,7 +459,7 @@ public final class SpamserviceManager {
             this.process = null;
             this.client = null;
             this.baseUrl = null;
-            long uptime = this.readyAtMs == 0 ? 0 : System.currentTimeMillis() - this.readyAtMs;
+            long uptime = this.readyAtMs == 0 ? 0 : Now.millis() - this.readyAtMs;
             this.readyAtMs = 0;
             if (uptime >= STABLE_RUNTIME_MS) {
                 this.consecutiveCrashes = 0;

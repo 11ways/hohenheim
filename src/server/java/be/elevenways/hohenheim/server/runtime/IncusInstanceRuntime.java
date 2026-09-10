@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusWebSocket;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 
@@ -921,12 +922,12 @@ public final class IncusInstanceRuntime
                                                           @NonNull List<String> command,
                                                           @NonNull Map<String, String> env,
                                                           long timeoutMs) throws IOException {
-        long deadline = System.currentTimeMillis() + this.type.execReadyTimeoutMs();
+        long deadline = Now.millis() + this.type.execReadyTimeoutMs();
         while (true) {
             try {
                 return this.incus.exec(handle, command, env, timeoutMs);
             } catch (IncusClient.ApiException refused) {
-                if (System.currentTimeMillis() >= deadline) {
+                if (Now.millis() >= deadline) {
                     throw refused;
                 }
                 try {
@@ -992,7 +993,7 @@ public final class IncusInstanceRuntime
                              long maxBytes, boolean withSnapshots) throws IOException {
         // The daemon-side backup object is a TEMPORARY: the export tarball is the
         // artifact, and leaving the object behind would silently fill the pool.
-        String backupName = "hib-" + System.currentTimeMillis();
+        String backupName = "hib-" + Now.millis();
         this.incus.createBackup(spec.handle(), backupName, !withSnapshots);
         try {
             return this.incus.exportBackup(spec.handle(), backupName, destination, maxBytes);

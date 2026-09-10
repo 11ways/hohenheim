@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import io.undertow.server.HttpServerExchange;
 
 import java.net.InetSocketAddress;
@@ -44,7 +45,7 @@ final class RouteResolver {
         // Check negative cache
         Long cachedAt = rt.negativeCache.get(cacheKey);
         if (cachedAt != null) {
-            if (System.currentTimeMillis() - cachedAt < NEGATIVE_CACHE_TTL_MS) {
+            if (Now.millis() - cachedAt < NEGATIVE_CACHE_TTL_MS) {
                 return new RouteResolution(null, false);
             }
             rt.negativeCache.remove(cacheKey);
@@ -85,7 +86,7 @@ final class RouteResolver {
         List<RouteMatch> regexMatches = null;
         CachedRegexMatches cached = rt.regexMatchCache.get(cacheKey);
         if (cached != null) {
-            if (System.currentTimeMillis() - cached.cachedAt() < REGEX_CACHE_TTL_MS) {
+            if (Now.millis() - cached.cachedAt() < REGEX_CACHE_TTL_MS) {
                 regexMatches = cached.matches();
             } else {
                 rt.regexMatchCache.remove(cacheKey);
@@ -95,7 +96,7 @@ final class RouteResolver {
             regexMatches = computeRegexMatches(rt, hostname, listenerIp);
             if (!regexMatches.isEmpty() && rt.regexMatchCache.size() < REGEX_CACHE_MAX) {
                 rt.regexMatchCache.put(cacheKey,
-                    new CachedRegexMatches(regexMatches, System.currentTimeMillis()));
+                    new CachedRegexMatches(regexMatches, Now.millis()));
             }
         }
         if (!regexMatches.isEmpty()) {
@@ -116,7 +117,7 @@ final class RouteResolver {
         // 4. No match. Only a fully unknown hostname is negative-cached: a known
         //    hostname with a non-matching path must keep re-checking other paths.
         if (!hostnameKnown && rt.negativeCache.size() < NEGATIVE_CACHE_MAX) {
-            rt.negativeCache.put(cacheKey, System.currentTimeMillis());
+            rt.negativeCache.put(cacheKey, Now.millis());
         }
         return new RouteResolution(null, hostnameKnown);
     }

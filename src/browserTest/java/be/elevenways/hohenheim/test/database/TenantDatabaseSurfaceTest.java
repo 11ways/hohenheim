@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.quota.DatabaseQuota;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -51,7 +52,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -187,8 +187,8 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, name);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }
@@ -236,7 +236,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(PREFIX + "host", new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
+            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
         return row.get(ServerModel.ID);
     }
 

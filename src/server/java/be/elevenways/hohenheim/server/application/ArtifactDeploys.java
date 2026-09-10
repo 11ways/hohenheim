@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -146,7 +147,7 @@ public final class ArtifactDeploys {
     private static void finish(Row operation, String status, @Nullable String error) {
         operation.set(ArtifactOperationModel.STATUS, status);
         operation.set(ArtifactOperationModel.ERROR, error);
-        operation.set(ArtifactOperationModel.FINISHED_AT, Instant.now());
+        operation.set(ArtifactOperationModel.FINISHED_AT, Now.instant());
         Models.get(ArtifactOperationModel.class).save(operation);
     }
 

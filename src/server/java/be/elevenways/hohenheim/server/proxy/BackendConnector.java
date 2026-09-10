@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.security.IpLiterals;
+import be.elevenways.protoblast.common.time.Now;
 
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -79,7 +80,7 @@ final class BackendConnector {
         if (literal != null) {
             return List.of(InetAddress.getByAddress(literal));
         }
-        long now = System.currentTimeMillis();
+        long now = Now.millis();
         CachedAddresses cached = CACHE.get(host);
         if (cached != null && now - cached.resolvedAt() < DNS_CACHE_MILLIS) {
             return cached.addresses();
@@ -113,7 +114,7 @@ final class BackendConnector {
                         Arrays.asList(resolveAll(host)));
                     if (addresses.isEmpty()) throw new UnknownHostException(host);
                     List<InetAddress> frozen = List.copyOf(addresses);
-                    CACHE.put(host, new CachedAddresses(frozen, System.currentTimeMillis()));
+                    CACHE.put(host, new CachedAddresses(frozen, Now.millis()));
                     created.complete(frozen);
                 } catch (Throwable failure) {
                     created.completeExceptionally(failure);

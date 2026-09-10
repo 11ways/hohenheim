@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -29,7 +30,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,8 +60,8 @@ class PreparedImageTest extends HohenheimTestBase {
         tenant.set(UserModel.EMAIL, "prep-img-tenant@hohenheim.local");
         tenant.set(UserModel.DISPLAY_NAME, "Prepared Image Tenant");
         tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Instant.now());
-        tenant.set(UserModel.UPDATED_AT, Instant.now());
+        tenant.set(UserModel.CREATED_AT, Now.instant());
+        tenant.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(tenant);
         tenantId = tenant.get(UserModel.ID);
         tenantPrincipal = new UserPrincipal(tenantId, "Prepared Image Tenant");
@@ -282,7 +282,7 @@ class PreparedImageTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.KIND, "hohenheim:vm");
         row.set(InstanceTemplateModel.SETTINGS, settings);
         if (approved) {
-            row.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+            row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
             row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
         }
         templates.save(row);

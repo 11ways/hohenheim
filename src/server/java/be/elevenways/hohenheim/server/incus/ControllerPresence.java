@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.incus;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -91,7 +92,7 @@ public final class ControllerPresence {
                 + " object whose removal would change enforcement.");
         }
 
-        Instant now = Instant.now();
+        Instant now = Now.instant();
         if (existing != null && !needsRefresh(seenOf(existing), now)) {
             return;   // fresh enough; a write here buys nothing
         }

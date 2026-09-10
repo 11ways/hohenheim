@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -21,7 +22,6 @@ import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -142,15 +142,15 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
         row.set(ServerModel.ACKNOWLEDGED_POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
         row.set(ServerModel.ACKNOWLEDGED_WARNING_VERSION, ServerModel.POSTURE_WARNING_VERSION);
-        row.set(ServerModel.ACKNOWLEDGED_AT, Instant.now());
+        row.set(ServerModel.ACKNOWLEDGED_AT, Now.instant());
         row.set(ServerModel.ACKNOWLEDGED_BY, "user:1");
         row.set(ServerModel.ACKNOWLEDGED_BY_LABEL, "Test Operator");
-        row.set(ServerModel.LAST_SEEN_AT, Instant.now());
+        row.set(ServerModel.LAST_SEEN_AT, Now.instant());
         servers.save(row);
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024),
-            true, Instant.now(), null));
+            true, Now.instant(), null));
         return row.get(ServerModel.ID);
     }
 
@@ -189,8 +189,8 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         row.set(UserModel.EMAIL, email);
         row.set(UserModel.DISPLAY_NAME, email);
         row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Instant.now());
-        row.set(UserModel.UPDATED_AT, Instant.now());
+        row.set(UserModel.CREATED_AT, Now.instant());
+        row.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(row);
         return row.get(UserModel.ID);
     }

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -13,7 +14,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -56,8 +56,8 @@ class InstanceOwnershipTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, email);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }
@@ -121,7 +121,7 @@ class InstanceOwnershipTest extends HohenheimTestBase {
         // 6. The liveWhen predicate: a soft-deleted instance refuses NEW grants -- a
         //    trashed record must not accumulate authority that comes back on restore.
         Model instances = Models.get(InstanceModel.class);
-        second.set(InstanceModel.DELETED_AT, Instant.now());
+        second.set(InstanceModel.DELETED_AT, Now.instant());
         instances.save(second);
         assertThat(catchThrowable(() -> RecordGrants.grant(GrantSubjectType.USER, tenantA,
                 InstanceModel.MODEL_ID, secondId, HohenheimAccess.MANAGE, true)))

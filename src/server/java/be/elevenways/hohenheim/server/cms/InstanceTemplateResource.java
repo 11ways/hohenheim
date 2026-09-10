@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
@@ -39,7 +40,6 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -214,7 +214,7 @@ public class InstanceTemplateResource extends RowResource {
                     row.get(InstanceTemplateModel.INSTALL_SCRIPT), "install script");
                 CommunityScripts.requireVocabularyImplemented(
                     row.get(InstanceTemplateModel.UPDATE_SCRIPT), "update script");
-                row.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+                row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
                 row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, ctx.access().principal().id());
                 this.model().save(row);
                 ActivityLog.record(this.model(), row.get(InstanceTemplateModel.ID),

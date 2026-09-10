@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -20,7 +21,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -180,7 +180,7 @@ class QuotaDriftReconcileTest {
             //    is what names the bucket -- computing candidates from live rows alone
             //    would leave such a leak invisible forever.
             Row trashed = Models.get(InstanceModel.class).findById(landed);
-            trashed.set(InstanceModel.DELETED_AT, Instant.now());
+            trashed.set(InstanceModel.DELETED_AT, Now.instant());
             Models.get(InstanceModel.class).save(trashed);
             Quotas.reserve(MEMORY_BUCKET, 777, Long.MAX_VALUE);
             assertThat(QuotaReconciler.reconcile().corrections())
@@ -211,7 +211,7 @@ class QuotaDriftReconcileTest {
         HostPreflight.store(PREFIX + name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, memoryMb * 1024L * 1024L),
-            true, Instant.now(), null));
+            true, Now.instant(), null));
         return id;
     }
 

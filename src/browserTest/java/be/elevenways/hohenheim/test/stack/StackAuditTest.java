@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -205,8 +206,8 @@ class StackAuditTest {
 
     /** Bounded wait: an async row action settles on the stack's worker, not inline. */
     private static void await(String what, BooleanSupplier condition) {
-        long deadline = System.currentTimeMillis() + 15_000;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + 15_000;
+        while (Now.millis() < deadline) {
             if (condition.getAsBoolean()) {
                 return;
             }

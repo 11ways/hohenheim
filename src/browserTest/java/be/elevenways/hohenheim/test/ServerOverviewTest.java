@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
@@ -222,7 +223,7 @@ class ServerOverviewTest extends HohenheimTestBase {
         //    stamp (the merge keeps per-fact provenance).
         HostPreflight.store("overview-dark", new HostPreflight.Report(List.of(),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024),
-            true, Instant.now().minus(Duration.ofDays(365)), null));
+            true, Now.instant().minus(Duration.ofDays(365)), null));
         HttpResponse<String> stale = get("/admin/servers/" + hostId + "/page/overview");
         assertThat(stale.statusCode()).isEqualTo(200);
         // The unmeasured posture is the usage widget's own built-in state now (the page
@@ -238,7 +239,7 @@ class ServerOverviewTest extends HohenheimTestBase {
         // 2. A fresh measurement turns into a real usage bar with the booked numbers.
         HostPreflight.store("overview-dark", new HostPreflight.Report(List.of(),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024),
-            true, Instant.now(), null));
+            true, Now.instant(), null));
         HttpResponse<String> fresh = get("/admin/servers/" + hostId + "/page/overview");
         assertThat(fresh.body())
             .as("step 2: a fresh measurement renders a real usage bar")
@@ -271,7 +272,7 @@ class ServerOverviewTest extends HohenheimTestBase {
 
         // Clean up so later classes' local-host assertions see no stray instance.
         Row cleanup = instances.findById(instanceId);
-        cleanup.set(InstanceModel.DELETED_AT, Instant.now());
+        cleanup.set(InstanceModel.DELETED_AT, Now.instant());
         instances.save(cleanup);
     }
 
@@ -284,7 +285,7 @@ class ServerOverviewTest extends HohenheimTestBase {
     @Order(7)
     void theQuarantineBannerIsLoudAndOffersOnlyTheRepinCeremony() throws Exception {
         Row host = Models.get(ServerModel.class).findById(hostId);
-        host.set(ServerModel.QUARANTINED_AT, Instant.now());
+        host.set(ServerModel.QUARANTINED_AT, Now.instant());
         host.set(ServerModel.QUARANTINE_REASON, "host key contradicted the pinned identity");
         Models.get(ServerModel.class).save(host);
 

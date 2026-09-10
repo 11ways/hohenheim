@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -84,8 +85,8 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, email);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         int userId = user.get(UserModel.ID);
         RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, dockerInstanceId,
@@ -189,7 +190,7 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
         Row row = instances.findById(dockerInstanceId);
         row.set(InstanceModel.DISK_USED_BYTES, 1_000L);
         row.set(InstanceModel.DISK_LIMIT_BYTES, 4_000L);
-        row.set(InstanceModel.DISK_OBSERVED_AT, Instant.now());
+        row.set(InstanceModel.DISK_OBSERVED_AT, Now.instant());
         instances.save(row);
         try {
             assertThat(get(statsUrl, sessionToken).body())

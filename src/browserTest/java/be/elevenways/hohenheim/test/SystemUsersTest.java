@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.ProcessConfinement;
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -13,7 +14,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +52,7 @@ class SystemUsersTest {
         row.set(SystemUserModel.HOME, "/nonexistent");
         row.set(SystemUserModel.GECOS, "uid resolution test");
         row.set(SystemUserModel.OBSOLETE, false);
-        row.set(SystemUserModel.LAST_SEEN_AT, Instant.now());
+        row.set(SystemUserModel.LAST_SEEN_AT, Now.instant());
         model.save(row);
     }
 

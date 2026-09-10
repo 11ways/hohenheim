@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.model.WebhookDeliveryModel;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -9,7 +10,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 
 /**
@@ -49,7 +49,7 @@ final class WebhookDeliveries {
         row.set(WebhookDeliveryModel.INSTANCE_ID, instanceId);
         row.set(WebhookDeliveryModel.DELIVERY_KEY, deliveryKey);
         row.set(WebhookDeliveryModel.EVENT, event);
-        row.set(WebhookDeliveryModel.RECEIVED_AT, Instant.now());
+        row.set(WebhookDeliveryModel.RECEIVED_AT, Now.instant());
         try {
             model.save(row);
         } catch (RuntimeException duplicate) {
@@ -85,7 +85,7 @@ final class WebhookDeliveries {
         try {
             List<Row> stale = model.find()
                 .where(WebhookDeliveryModel.INSTANCE_ID.eq(instanceId))
-                .where(WebhookDeliveryModel.RECEIVED_AT.lt(Instant.now().minus(RETAIN)))
+                .where(WebhookDeliveryModel.RECEIVED_AT.lt(Now.instant().minus(RETAIN)))
                 .orderBy(WebhookDeliveryModel.ID, SortOrder.ASC)
                 .limit(PRUNE_BATCH)
                 .all();

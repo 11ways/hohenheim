@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -481,14 +482,14 @@ class IncusColdMigrationLiveTest {
     }
 
     private static String addressOf(LiveIncusHost remote, String handle) {
-        long deadline = System.currentTimeMillis() + 60_000;
+        long deadline = Now.millis() + 60_000;
         while (true) {
             String out = execQuietly(remote, handle,
                 "ip -o -f inet addr show eth0 | awk '{print $4}' | cut -d/ -f1 | head -1");
             if (out != null && !out.isBlank()) {
                 return out.trim();
             }
-            if (System.currentTimeMillis() >= deadline) {
+            if (Now.millis() >= deadline) {
                 throw new AssertionError("no IPv4 ever appeared on " + handle);
             }
             sleep();
@@ -520,8 +521,8 @@ class IncusColdMigrationLiveTest {
     }
 
     private static void awaitTrue(String what, long timeoutMs, Supplier<Boolean> probe) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + timeoutMs;
+        while (Now.millis() < deadline) {
             if (Boolean.TRUE.equals(probe.get())) {
                 return;
             }

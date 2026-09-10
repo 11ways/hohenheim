@@ -10,13 +10,13 @@ import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.host.VolumeOperations;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -378,7 +378,7 @@ public final class InstanceVolumes {
                     continue;
                 }
                 volume.set(InstanceVolumeModel.USED_BYTES, used);
-                volume.set(InstanceVolumeModel.OBSERVED_AT, Instant.now());
+                volume.set(InstanceVolumeModel.OBSERVED_AT, Now.instant());
                 Models.get(InstanceVolumeModel.class).save(volume);
             }
         } catch (RuntimeException unreadable) {

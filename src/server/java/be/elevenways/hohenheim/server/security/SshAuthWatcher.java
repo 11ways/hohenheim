@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -148,12 +149,12 @@ public final class SshAuthWatcher {
     private void supervise() {
         long backoff = BACKOFF_MIN_MS;
         while (this.running) {
-            long startedAt = System.currentTimeMillis();
+            long startedAt = Now.millis();
             boolean clean = runOnce();
             if (!this.running) {
                 return;
             }
-            if (clean && System.currentTimeMillis() - startedAt >= HEALTHY_RUN_MS) {
+            if (clean && Now.millis() - startedAt >= HEALTHY_RUN_MS) {
                 backoff = BACKOFF_MIN_MS;
             }
             try {

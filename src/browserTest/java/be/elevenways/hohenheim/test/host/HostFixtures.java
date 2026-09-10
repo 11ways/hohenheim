@@ -3,12 +3,12 @@ package be.elevenways.hohenheim.test.host;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -45,7 +45,7 @@ public final class HostFixtures {
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true,
                 "fixture: reachable")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, memoryMb * 1024L * 1024L),
-            true, Instant.now(), null));
+            true, Now.instant(), null));
     }
 
     /** Admit the implicit local host for tenant placement (posture shared_container). */

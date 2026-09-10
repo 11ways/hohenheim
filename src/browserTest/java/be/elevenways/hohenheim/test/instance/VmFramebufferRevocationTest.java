@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -27,7 +28,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -184,8 +184,8 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
     }
 
     private static void awaitTrue(java.util.function.BooleanSupplier probe) throws Exception {
-        long deadline = System.currentTimeMillis() + 5000;
-        while (!probe.getAsBoolean() && System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + 5000;
+        while (!probe.getAsBoolean() && Now.millis() < deadline) {
             Thread.sleep(10);
         }
     }
@@ -195,8 +195,8 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, label + "@hohenheim.local");
         user.set(UserModel.DISPLAY_NAME, "FB " + label);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }

@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -36,7 +37,6 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -498,7 +498,7 @@ class ApplicationReleaseLiveTest {
             staleOp.set(ReleaseOperationModel.FOR_ID, applicationId);
             staleOp.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_PROBING);
             staleOp.set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId[0]);
-            staleOp.set(ReleaseOperationModel.STARTED_AT, Instant.now());
+            staleOp.set(ReleaseOperationModel.STARTED_AT, Now.instant());
             Models.get(ReleaseOperationModel.class).save(staleOp);
 
             // 3. Recovery settles BOTH: drain finished, candidate destroyed.
@@ -576,7 +576,7 @@ class ApplicationReleaseLiveTest {
         } catch (RuntimeException ignored) {
             // teardown best effort; the assertions are the outcome
         }
-        site.set(SiteModel.DELETED_AT, Instant.now());
+        site.set(SiteModel.DELETED_AT, Now.instant());
         site.set(SiteModel.ENABLED, false);
         Models.get(SiteModel.class).save(site);
     }
@@ -675,8 +675,8 @@ class ApplicationReleaseLiveTest {
 
     private static void await(String what, long timeoutMs, BooleanSupplier condition)
             throws InterruptedException {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + timeoutMs;
+        while (Now.millis() < deadline) {
             if (condition.getAsBoolean()) {
                 return;
             }

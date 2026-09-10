@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -38,7 +39,6 @@ import be.elevenways.zenit.server.task.schedule.CronExpression;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -350,7 +350,7 @@ public class InstanceScheduleResource extends RowResource {
                 || coerced.containsKey(RecordScheduleModel.CRON.getName())
                 || coerced.containsKey(RecordScheduleModel.TIMEZONE.getName())) {
             values.put(RecordScheduleModel.NEXT_FIRE_AT.getName(),
-                expression.nextFireAfter(Instant.now(), zoneId).orElse(null));
+                expression.nextFireAfter(Now.instant(), zoneId).orElse(null));
         }
         return values;
     }

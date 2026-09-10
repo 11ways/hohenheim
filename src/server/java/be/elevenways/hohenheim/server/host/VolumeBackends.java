@@ -4,13 +4,13 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -81,7 +81,7 @@ public final class VolumeBackends {
         server.set(ServerModel.VOLUME_BACKEND, detection.backend().token());
         server.set(ServerModel.VOLUME_ROOT, detection.root());
         server.set(ServerModel.VOLUME_BACKEND_DETAIL, detection.detail());
-        server.set(ServerModel.VOLUME_PROBED_AT, Instant.now());
+        server.set(ServerModel.VOLUME_PROBED_AT, Now.instant());
         Models.get(ServerModel.class).save(server);
     }
 

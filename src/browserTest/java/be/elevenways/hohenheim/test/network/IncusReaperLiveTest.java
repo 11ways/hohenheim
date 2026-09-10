@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -128,8 +129,8 @@ class IncusReaperLiveTest {
             createAcl(aclName(QUIET));
             createBridge(bridgeName(GONE));
             createBridge(bridgeName(QUIET));
-            stampAs(GONE, Instant.now().minus(Duration.ofDays(30)));
-            stampAs(QUIET, Instant.now());
+            stampAs(GONE, Now.instant().minus(Duration.ofDays(30)));
+            stampAs(QUIET, Now.instant());
 
             assertThat(aclExists(aclName(GONE)) && aclExists(aclName(QUIET))
                     && networkExists(bridgeName(GONE)) && networkExists(bridgeName(QUIET)))
@@ -147,7 +148,7 @@ class IncusReaperLiveTest {
             //    indistinguishable except by stamp, and they land on opposite verdicts.
             List<IncusReaper.Candidate> plan = IncusReaper.plan(
                 incus.networkAcls(), incus.networks(), ControllerIdentity.token(),
-                Instant.now(), GRACE);
+                Now.instant(), GRACE);
             assertThat(verdictOf(plan, aclName(GONE)))
                 .as("step 3: the peer whose stamp expired 30 days ago is DEPARTED")
                 .isEqualTo(IncusReaper.Verdict.DEPARTED);
@@ -225,13 +226,13 @@ class IncusReaperLiveTest {
             String alive = token();
             createAcl(aclName(never));
             createAcl(aclName(alive));
-            stampAs(alive, Instant.now());
+            stampAs(alive, Now.instant());
             try {
                 // 1. The automatic classification refuses the unstamped object: nothing on
                 //    this daemon can prove its controller is gone rather than merely old.
                 List<IncusReaper.Candidate> plan = IncusReaper.plan(
                     incus.networkAcls(), incus.networks(), ControllerIdentity.token(),
-                    Instant.now(), GRACE);
+                    Now.instant(), GRACE);
                 assertThat(verdictOf(plan, aclName(never)))
                     .as("step 1: a controller that never stamped is UNSTAMPED, not departed")
                     .isEqualTo(IncusReaper.Verdict.UNSTAMPED);

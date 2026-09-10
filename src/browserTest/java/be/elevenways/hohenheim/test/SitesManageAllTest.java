@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthEndpoints;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.cms.GrantsEditField;
@@ -38,7 +39,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -409,8 +409,8 @@ class SitesManageAllTest extends HohenheimTestBase {
         row.set(UserModel.EMAIL, email);
         row.set(UserModel.DISPLAY_NAME, displayName);
         row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Instant.now());
-        row.set(UserModel.UPDATED_AT, Instant.now());
+        row.set(UserModel.CREATED_AT, Now.instant());
+        row.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(row);
         return row.get(UserModel.ID);
     }

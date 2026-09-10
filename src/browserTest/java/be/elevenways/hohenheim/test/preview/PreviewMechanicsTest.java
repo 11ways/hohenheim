@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -205,9 +206,9 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         // 1. A preview whose lifetime ended while nothing was watching: its deadline
         //    is a ONE-SHOT record schedule in the database, not an in-memory timer.
         Row expired = newPreviewRow("stale-ref", "prev-mech--stale-ref.preview.test",
-            Instant.now().minusSeconds(60));
+            Now.instant().minusSeconds(60));
         int previewId = expired.get(PreviewDeploymentModel.ID);
-        PreviewDeployments.armExpiry(previewId, Instant.now().minusSeconds(60));
+        PreviewDeployments.armExpiry(previewId, Now.instant().minusSeconds(60));
         var domains = Models.get(SiteDomainModel.class);
         GeneratedRows.as(new GeneratedRows.Attribution(PreviewDomains.SOURCE,
             PreviewDeploymentModel.MODEL_ID.toString(), previewId), () -> {
@@ -221,9 +222,9 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         // 2. One healthy preview beside it (deadline far away), to prove the sweep is
         //    not a broom.
         Row healthy = newPreviewRow("fresh-ref", "prev-mech--fresh-ref.preview.test",
-            Instant.now().plusSeconds(3600));
+            Now.instant().plusSeconds(3600));
         int healthyId = healthy.get(PreviewDeploymentModel.ID);
-        PreviewDeployments.armExpiry(healthyId, Instant.now().plusSeconds(3600));
+        PreviewDeployments.armExpiry(healthyId, Now.instant().plusSeconds(3600));
 
         // 3. The FRAMEWORK sweeper (the exact call RunRecordSchedulesTask makes every
         //    minute) fires the due one-shot; the reached preview is fully reclaimed.
@@ -366,8 +367,8 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, email);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }
@@ -402,7 +403,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
         preview.set(PreviewDeploymentModel.HOSTNAME, hostname);
         preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_RUNNING);
         preview.set(PreviewDeploymentModel.EXPIRES_AT,
-            expiresAt != null ? expiresAt : Instant.now().plusSeconds(3600));
+            expiresAt != null ? expiresAt : Now.instant().plusSeconds(3600));
         model.save(preview);
         return preview;
     }

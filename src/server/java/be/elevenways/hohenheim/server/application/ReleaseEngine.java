@@ -25,6 +25,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -846,7 +847,7 @@ public final class ReleaseEngine {
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
         Integer interval = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Releases.PROBE_INTERVAL_MS);
-        long deadline = System.currentTimeMillis()
+        long deadline = Now.millis()
             + Math.max(1, timeout != null ? timeout : 60) * 1000L;
         long pause = Math.max(50, interval != null ? interval : 500);
         HttpClient client = HttpClient.newBuilder()
@@ -857,7 +858,7 @@ public final class ReleaseEngine {
         HostShell remote = serverId == null || serverId == ServerModel.localServerId() ? null
             : HostShell.forServer(Models.get(ServerModel.class).findById(serverId));
         String lastFailure = "no response";
-        while (System.currentTimeMillis() < deadline) {
+        while (Now.millis() < deadline) {
             try {
                 int code;
                 if (remote == null) {
@@ -1003,7 +1004,7 @@ public final class ReleaseEngine {
         op.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_PENDING);
         op.set(ReleaseOperationModel.OWNER_FINGERPRINT, ownerFingerprint);
         op.set(ReleaseOperationModel.SPEC_FINGERPRINT, specFingerprint);
-        op.set(ReleaseOperationModel.STARTED_AT, Instant.now());
+        op.set(ReleaseOperationModel.STARTED_AT, Now.instant());
         op.set(ReleaseOperationModel.STEP_LOG, "");
         model.save(op);
         return op;
@@ -1034,7 +1035,7 @@ public final class ReleaseEngine {
     private static void step(@NonNull RecordStamp stamp, @NonNull String line) {
         String existing = stamp.row().get(ReleaseOperationModel.STEP_LOG);
         stamp.set(ReleaseOperationModel.STEP_LOG,
-                (existing == null ? "" : existing) + Instant.now() + " " + line + "\n")
+                (existing == null ? "" : existing) + Now.instant() + " " + line + "\n")
             .write();
     }
 
@@ -1055,7 +1056,7 @@ public final class ReleaseEngine {
 
     private static void finish(@NonNull RecordStamp stamp, @NonNull String status,
                                @Nullable String failureReason, @NonNull String line) {
-        Instant finished = Instant.now();
+        Instant finished = Now.instant();
         stamp.set(ReleaseOperationModel.STATUS, status)
             .set(ReleaseOperationModel.FAILURE_REASON, failureReason)
             .set(ReleaseOperationModel.FINISHED_AT, finished);

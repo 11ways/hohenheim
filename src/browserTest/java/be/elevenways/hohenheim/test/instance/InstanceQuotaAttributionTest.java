@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -23,7 +24,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -62,8 +62,8 @@ class InstanceQuotaAttributionTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, "tenant@quota-attribution.test");
         user.set(UserModel.DISPLAY_NAME, "Quota Attribution Tenant");
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         tenantId = user.get(UserModel.ID);
         tenant = new UserPrincipal(tenantId, "Quota Attribution Tenant");
@@ -220,7 +220,7 @@ class InstanceQuotaAttributionTest extends HohenheimTestBase {
         //    the soft-delete transition, the exact write InstanceService.destroy performs.
         OwnedInstances.inScopeUnchecked("site", SiteModel.MODEL_ID, tenantSiteId, () -> {
             Row live = instanceRow(tenantInstance);
-            live.set(InstanceModel.DELETED_AT, Instant.now());
+            live.set(InstanceModel.DELETED_AT, Now.instant());
             Models.get(InstanceModel.class).save(live);
         });
         assertThat(Quotas.usedOf(tenantBucket))

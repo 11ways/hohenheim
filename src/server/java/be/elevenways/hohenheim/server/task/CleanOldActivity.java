@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
@@ -46,7 +46,7 @@ public class CleanOldActivity extends ScheduledTask {
      * @throws RuntimeException on failure -- recorded by the task system as FAILED
      */
     public static void clean() {
-        int deleted = ActivityLog.prune(Instant.now().minus(RETENTION_DAYS, ChronoUnit.DAYS));
+        int deleted = ActivityLog.prune(Now.instant().minus(RETENTION_DAYS, ChronoUnit.DAYS));
         if (deleted > 0) {
             Blast.log("TASK: CleanOldActivity removed", deleted, "entries older than",
                 RETENTION_DAYS, "days");

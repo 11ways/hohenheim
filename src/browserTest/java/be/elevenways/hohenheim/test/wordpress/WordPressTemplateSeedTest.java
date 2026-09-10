@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.wordpress.WordPressTemplateSeeder;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -30,7 +31,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -201,7 +201,7 @@ class WordPressTemplateSeedTest extends HohenheimTestBase {
 
         // 3. Creating an instance from the template allocates the database on the
         //    instance's host and attaches it under the declared prefix.
-        seeded.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+        seeded.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
         templates.save(seeded);
         int instanceId = new InstanceTemplates().createFromTemplate(
             templates.findById(seeded.get(InstanceTemplateModel.ID)),
@@ -282,7 +282,7 @@ class WordPressTemplateSeedTest extends HohenheimTestBase {
         HostPreflight.store(PREFIX + "host", new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024), true,
-            Instant.now(), null));
+            Now.instant(), null));
         return row.get(ServerModel.ID);
     }
 

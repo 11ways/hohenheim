@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.host;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -10,7 +11,6 @@ import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.time.Instant;
 import java.util.Map;
 
 /**
@@ -69,7 +69,7 @@ public final class HostPostureAcknowledgement {
             server.set(ServerModel.ACKNOWLEDGED_POSTURE, posture);
             server.set(ServerModel.ACKNOWLEDGED_WARNING_VERSION,
                 ServerModel.POSTURE_WARNING_VERSION);
-            server.set(ServerModel.ACKNOWLEDGED_AT, Instant.now());
+            server.set(ServerModel.ACKNOWLEDGED_AT, Now.instant());
             server.set(ServerModel.ACKNOWLEDGED_BY, actor);
             server.set(ServerModel.ACKNOWLEDGED_BY_LABEL, label);
             Models.get(ServerModel.class).save(server);

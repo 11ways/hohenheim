@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -14,7 +15,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,7 +55,7 @@ class SecurityAdminTest extends HohenheimTestBase {
         assertThat(created.get(BanModel.ACTIVE)).isTrue();
         assertThat(created.get(BanModel.SOURCE)).isEqualTo(BanModel.SOURCE_MANUAL);
         assertThat(created.get(BanModel.REASON)).isEqualTo("scanner");
-        assertThat(created.get(BanModel.EXPIRES_AT)).isAfter(Instant.now().plusSeconds(6 * 86400));
+        assertThat(created.get(BanModel.EXPIRES_AT)).isAfter(Now.instant().plusSeconds(6 * 86400));
 
         var privateIp = postForm("/admin/bans/new", "ip=192.168.1.1&duration=24h");
         // Validation failure re-renders the form (no redirect) and creates nothing.

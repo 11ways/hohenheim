@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ActionContext;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
@@ -271,7 +272,7 @@ class HostPostureAcknowledgementTest {
                 () -> HostPostureAcknowledgement.record(servers.findById(hostId)));
             Row unrelated = servers.createEmptyRow();
             unrelated.set(ServerModel.ID, hostId);
-            unrelated.set(ServerModel.LAST_SEEN_AT, Instant.now());
+            unrelated.set(ServerModel.LAST_SEEN_AT, Now.instant());
             servers.save(unrelated);
             assertThat(ServerModel.postureAcknowledged(servers.findById(hostId)))
                 .as("step 6c: a partial save that never stages the posture leaves the"
@@ -347,7 +348,7 @@ class HostPostureAcknowledgementTest {
         facts.put(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024);
         HostPreflight.store(PREFIX + name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
-            facts, true, Instant.now(), null));
+            facts, true, Now.instant(), null));
         return row.get(ServerModel.ID);
     }
 

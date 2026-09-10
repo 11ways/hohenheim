@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.task.VerifyIncusIsolation;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -104,7 +105,7 @@ class HostEvidenceTest {
             model.save(host);
 
             // 1. A full, reachable preflight: 16 GB measured, the kernel lane PROVEN.
-            Instant measuredAt = Instant.now().minus(Duration.ofMinutes(20));
+            Instant measuredAt = Now.instant().minus(Duration.ofMinutes(20));
             Map<String, Object> facts = new LinkedHashMap<>();
             facts.put(HostPreflight.MEM_TOTAL_FACT, SIXTEEN_GB);
             facts.put("incus_version", "7.3");
@@ -123,7 +124,7 @@ class HostEvidenceTest {
             // 2. THE DEFECT. A preflight whose daemon was unreachable: the battery produces
             //    a failing daemon check and NO facts at all. The failure must land, and
             //    nothing this run never looked at may be erased by it.
-            Instant failedAt = Instant.now();
+            Instant failedAt = Now.instant();
             HostPreflight.store("evidence-a", new HostPreflight.Report(List.of(
                 new HostPreflight.Check("daemon", HostPreflight.STATUS_FAIL, true,
                     "unreachable: connection refused")),
@@ -170,7 +171,7 @@ class HostEvidenceTest {
                 memory.put(HostPreflight.MEM_TOTAL_FACT, SIXTEEN_GB);
                 // The reading is measured NINE HOURS ago...
                 HostPreflight.store("evidence-a", new HostPreflight.Report(List.of(),
-                    memory, true, Instant.now().minus(Duration.ofHours(9)), null));
+                    memory, true, Now.instant().minus(Duration.ofHours(9)), null));
                 assertThat(InstanceCapacity.budgetMbOf(model.findByName("evidence-a")))
                     .as("step 4: a reading older than the bound carries no budget").isNull();
 
@@ -181,7 +182,7 @@ class HostEvidenceTest {
                 HostPreflight.store("evidence-a", new HostPreflight.Report(List.of(
                     new HostPreflight.Check("daemon", HostPreflight.STATUS_FAIL, true,
                         "unreachable: connection refused")),
-                    Map.of(), false, Instant.now(), null));
+                    Map.of(), false, Now.instant(), null));
                 assertThat(InstanceCapacity.budgetMbOf(model.findByName("evidence-a")))
                     .withFailMessage("step 5: a probe that measured nothing made a"
                         + " nine-hour-old memory reading look current, so placement is"
@@ -191,7 +192,7 @@ class HostEvidenceTest {
                 // 6. POSITIVE ANCHOR: an actual re-measurement restores the budget, so
                 //    steps 4 and 5 were the bound answering and not the merge losing a fact.
                 HostPreflight.store("evidence-a", new HostPreflight.Report(List.of(),
-                    memory, true, Instant.now(), null));
+                    memory, true, Now.instant(), null));
                 assertThat(InstanceCapacity.budgetMbOf(model.findByName("evidence-a")))
                     .as("step 6: a freshly measured reading is a budget again").isNotNull();
             } finally {
@@ -218,7 +219,7 @@ class HostEvidenceTest {
             host.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
             host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
             host.set(ServerModel.PREFLIGHT_OK, true);
-            host.set(ServerModel.LAST_SEEN_AT, Instant.now());
+            host.set(ServerModel.LAST_SEEN_AT, Now.instant());
             model.save(host);
             HostFixtures.acknowledgePosture(host);
             int serverId = model.findByName("evidence-b").get(ServerModel.ID);
@@ -236,7 +237,7 @@ class HostEvidenceTest {
                 // 2. THE DEFECT. Nine hours of silence, and every stored column still says
                 //    healthy: admitted, preflight_ok, no error kind. Only the clock knows.
                 Row lapsing = model.findByName("evidence-b");
-                lapsing.set(ServerModel.LAST_SEEN_AT, Instant.now().minus(Duration.ofHours(9)));
+                lapsing.set(ServerModel.LAST_SEEN_AT, Now.instant().minus(Duration.ofHours(9)));
                 model.save(lapsing);
                 assertThat(catchThrowable(() ->
                         HostAdmission.requireInstancePlacement(serverId,
@@ -268,7 +269,7 @@ class HostEvidenceTest {
                 //    refusal and the cell, so steps 2 and 4 were the clock and not a gate
                 //    that refuses everything.
                 Row answering = model.findByName("evidence-b");
-                answering.set(ServerModel.LAST_SEEN_AT, Instant.now());
+                answering.set(ServerModel.LAST_SEEN_AT, Now.instant());
                 model.save(answering);
                 HostAdmission.requireInstancePlacement(serverId,
                     WorkloadIsolation.SHARED_KERNEL, BUCKET);
@@ -281,7 +282,7 @@ class HostEvidenceTest {
                     HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES, 0);
                 Row silentAgain = model.findByName("evidence-b");
                 silentAgain.set(ServerModel.LAST_SEEN_AT,
-                    Instant.now().minus(Duration.ofDays(30)));
+                    Now.instant().minus(Duration.ofDays(30)));
                 model.save(silentAgain);
                 HostAdmission.requireInstancePlacement(serverId,
                     WorkloadIsolation.SHARED_KERNEL, BUCKET);
@@ -314,7 +315,7 @@ class HostEvidenceTest {
             HostPreflight.store("evidence-c", new HostPreflight.Report(List.of(
                 new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
                     HostPreflight.STATUS_PASS, true, "nft transaction applied")),
-                Map.of("incus_version", "7.3"), true, Instant.now(), null));
+                Map.of("incus_version", "7.3"), true, Now.instant(), null));
 
             // 1. THE DEFECT (item 4). The record has a blank incus_url, so it addresses the
             //    CONTROLLER's own socket -- while the operator reads a row named after some
@@ -343,10 +344,10 @@ class HostEvidenceTest {
             //    the success cleared last_error_kind, which is the only thing the list cell
             //    used to look at, so a security state vanished from the list entirely.
             Row quarantined = model.findByName("evidence-c");
-            quarantined.set(ServerModel.QUARANTINED_AT, Instant.now());
+            quarantined.set(ServerModel.QUARANTINED_AT, Now.instant());
             quarantined.set(ServerModel.QUARANTINE_REASON, "the daemon offered another cert");
             quarantined.set(ServerModel.LAST_ERROR_KIND, (String) null);
-            quarantined.set(ServerModel.LAST_SEEN_AT, Instant.now());
+            quarantined.set(ServerModel.LAST_SEEN_AT, Now.instant());
             model.save(quarantined);
             assertThat(hostStatusCell(model.findByName("evidence-c")).state())
                 .withFailMessage("step 3: a quarantined host renders in the list with no"

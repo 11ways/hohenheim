@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -281,7 +282,7 @@ public final class BanService {
                                              @Nullable String eventType, @NonNull BanScope scope,
                                              @Nullable Duration ttl,
                                              boolean rollbackOnNftFailure) {
-        Instant now = Instant.now();
+        Instant now = Now.instant();
         Row row = bans.createEmptyRow();
         row.set(BanModel.IP, normalized);
         row.set(BanModel.REASON, truncate(reason, 255));
@@ -331,7 +332,7 @@ public final class BanService {
         }
         bans.find().where(BanModel.ID.eq(id))
             .assign(BanModel.ACTIVE, false)
-            .assign(BanModel.LIFTED_AT, Instant.now())
+            .assign(BanModel.LIFTED_AT, Now.instant())
             .assign(BanModel.LIFTED_BY, truncate(liftedBy, 200))
             .updateAll();
 
@@ -366,7 +367,7 @@ public final class BanService {
         int updated = bans.find()
             .where(BanModel.ACTIVE.eq(true))
             .where(BanModel.EXPIRES_AT.isNotNull())
-            .where(BanModel.EXPIRES_AT.lte(Instant.now()))
+            .where(BanModel.EXPIRES_AT.lte(Now.instant()))
             .assign(BanModel.ACTIVE, false)
             .updateAll();
         if (updated > 0) {
@@ -378,7 +379,7 @@ public final class BanService {
     /** Flush both kernel sets and re-add every active DB ban with its remaining ttl. */
     public synchronized void resyncNftables() {
         List<NftService.ActiveBan> active = new ArrayList<>();
-        Instant now = Instant.now();
+        Instant now = Now.instant();
         for (Row row : listActive()) {
             String ip = row.get(BanModel.IP);
             BanScope scope = scopeOf(row);
@@ -582,7 +583,7 @@ public final class BanService {
     private static final ConcurrentHashMap<String, Long> refusalLogTimes = new ConcurrentHashMap<>();
 
     private static void logRefusalThrottled(@NonNull String ip, @Nullable String reason) {
-        long now = System.currentTimeMillis();
+        long now = Now.millis();
         Long last = refusalLogTimes.get(ip);
         if (last != null && now - last < REFUSAL_LOG_THROTTLE_MS) {
             return;
@@ -610,7 +611,7 @@ public final class BanService {
 
     private static boolean isExpired(@NonNull Row ban) {
         Instant expires = ban.get(BanModel.EXPIRES_AT);
-        return expires != null && expires.isBefore(Instant.now());
+        return expires != null && expires.isBefore(Now.instant());
     }
 
     private static @Nullable String truncate(@Nullable String value, int max) {

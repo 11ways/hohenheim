@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.ProcessDockerTransport;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -314,9 +315,9 @@ class DockerStreamingTest {
                 //    exits (it sleeps 60s). A buffer-to-EOF transport can never pass
                 //    this: it would block here until the sleep ends.
                 StringBuilder seen = new StringBuilder();
-                long deadline = System.currentTimeMillis() + 15_000;
+                long deadline = Now.millis() + 15_000;
                 while (seen.indexOf("first-line") < 0
-                        && System.currentTimeMillis() < deadline) {
+                        && Now.millis() < deadline) {
                     ConsoleStream.Chunk chunk = stream.next();
                     assertThat(chunk).as("step 1: stream must not end before the line").isNotNull();
                     seen.append(new String(chunk.data(), StandardCharsets.UTF_8));
@@ -376,9 +377,9 @@ class DockerStreamingTest {
                 //    and its answer comes back on the same stream.
                 stream.writeStdin(bytes("hello\n"));
                 StringBuilder seen = new StringBuilder();
-                long deadline = System.currentTimeMillis() + 15_000;
+                long deadline = Now.millis() + 15_000;
                 while (seen.indexOf("got:hello") < 0
-                        && System.currentTimeMillis() < deadline) {
+                        && Now.millis() < deadline) {
                     ConsoleStream.Chunk chunk = stream.next();
                     assertThat(chunk).as("step 2: stream must not end before the echo").isNotNull();
                     seen.append(new String(chunk.data(), StandardCharsets.UTF_8));
@@ -434,16 +435,16 @@ class DockerStreamingTest {
         for (ContainerStream stream : streams) {
             stream.close();
         }
-        long deadline = System.currentTimeMillis() + 10_000;
-        while (countCatChildren() > before && System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + 10_000;
+        while (countCatChildren() > before && Now.millis() < deadline) {
             Thread.sleep(100);
         }
         assertThat(countCatChildren())
             .as("step 3: after close, ZERO cat subprocesses remain (counted, not eyeballed)")
             .isEqualTo(before);
         for (ContainerStream stream : streams) {
-            long releaseDeadline = System.currentTimeMillis() + 5_000;
-            while (!stream.isReleased() && System.currentTimeMillis() < releaseDeadline) {
+            long releaseDeadline = Now.millis() + 5_000;
+            while (!stream.isReleased() && Now.millis() < releaseDeadline) {
                 Thread.sleep(50);
             }
             assertThat(stream.isReleased())

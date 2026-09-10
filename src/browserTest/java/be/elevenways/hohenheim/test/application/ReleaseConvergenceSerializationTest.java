@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -397,8 +398,8 @@ class ReleaseConvergenceSerializationTest {
 
     /** Bounded wait: the drain and the rival thread both settle off this thread. */
     private static void await(String what, BooleanSupplier condition) {
-        long deadline = System.currentTimeMillis() + 30_000;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + 30_000;
+        while (Now.millis() < deadline) {
             if (condition.getAsBoolean()) {
                 return;
             }
