@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.game;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -56,7 +57,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -370,14 +370,14 @@ class GameDomainLiveTest {
         user.set(UserModel.EMAIL, "game-live@hohenheim.local");
         user.set(UserModel.DISPLAY_NAME, "Game Live Tenant");
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }
 
     private static Row approve(Row template) {
-        template.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+        template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
         Models.get(InstanceTemplateModel.class).save(template);
         return template;
     }
@@ -536,12 +536,12 @@ class GameDomainLiveTest {
     private static DockerClient.ExecResult awaitFetch(DockerClient docker, String fromHandle,
                                                       String url, String expectedBody)
             throws IOException {
-        long deadline = System.currentTimeMillis() + 45_000L;
+        long deadline = Now.millis() + 45_000L;
         DockerClient.ExecResult last;
         while (true) {
             last = docker.exec(fromHandle, List.of("wget", "-T", "5", "-qO-", url));
             if ((last.exitCode() == 0 && last.stdout().contains(expectedBody))
-                    || System.currentTimeMillis() >= deadline) {
+                    || Now.millis() >= deadline) {
                 return last;
             }
             sleep(500);
@@ -549,8 +549,8 @@ class GameDomainLiveTest {
     }
 
     private static boolean await(long timeoutMs, java.util.function.Supplier<Boolean> condition) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + timeoutMs;
+        while (Now.millis() < deadline) {
             if (Boolean.TRUE.equals(condition.get())) {
                 return true;
             }

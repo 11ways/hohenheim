@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -96,7 +97,7 @@ public final class DnsSecondaryFreshness {
         }
         boolean current = served != null && DnsSoaProbe.serialReached(served, ourSerial);
 
-        Instant now = Instant.now();
+        Instant now = Now.instant();
         link.set(DnsZonePeerModel.PROBED_AT, now);
         link.set(DnsZonePeerModel.SERVED_SERIAL, served != null ? (int) (long) served : null);
         link.set(DnsZonePeerModel.PROBE_ERROR, error);
@@ -133,7 +134,7 @@ public final class DnsSecondaryFreshness {
 
     /** @return true when the link row records a lag that has outlived the window */
     public static boolean isStale(@NonNull Row link) {
-        return isStale(link.get(DnsZonePeerModel.BEHIND_SINCE), Instant.now());
+        return isStale(link.get(DnsZonePeerModel.BEHIND_SINCE), Now.instant());
     }
 
     private static int valueOr(@Nullable Integer value, int fallback) {

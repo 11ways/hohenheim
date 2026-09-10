@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -442,7 +443,7 @@ class InstanceDatabaseLinkLiveTest {
 
     /** Any address of a container, retried briefly: only the observation is tolerant. */
     private static String anyAddress(DockerClient docker, String handle) throws IOException {
-        long deadline = System.currentTimeMillis() + 20_000;
+        long deadline = Now.millis() + 20_000;
         Object lastSeen = null;
         while (true) {
             Object settings = docker.inspectContainer(handle).get("NetworkSettings");
@@ -456,7 +457,7 @@ class InstanceDatabaseLinkLiveTest {
                 }
             }
             lastSeen = networks;
-            if (System.currentTimeMillis() >= deadline) {
+            if (Now.millis() >= deadline) {
                 throw new IllegalStateException(handle + " has no address after 20s;"
                     + " last NetworkSettings.Networks: " + lastSeen);
             }

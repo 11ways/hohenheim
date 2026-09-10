@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -26,7 +27,6 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -158,7 +158,7 @@ class CommunityScriptCatalogTest {
             template.set(InstanceTemplateModel.SETTINGS,
                 Map.of("image", "alpine", "tag", "latest"));
             template.set(InstanceTemplateModel.INSTALL_SCRIPT, hwaccelScript);
-            template.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+            template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
             Models.get(InstanceTemplateModel.class).save(template);
 
             Row instance = Models.get(InstanceModel.class).createEmptyRow();
@@ -209,7 +209,7 @@ class CommunityScriptCatalogTest {
                 // 1. Import and approve (the operator act, simulated at the row).
                 int approvedId = CommunityScripts.importApp("gotify");
                 Row approved = Models.get(InstanceTemplateModel.class).findById(approvedId);
-                approved.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+                approved.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
                 Models.get(InstanceTemplateModel.class).save(approved);
                 String pinnedScript = approved.get(InstanceTemplateModel.INSTALL_SCRIPT);
                 String pinnedChecksum = approved.get(InstanceTemplateModel.SOURCE_CHECKSUM);

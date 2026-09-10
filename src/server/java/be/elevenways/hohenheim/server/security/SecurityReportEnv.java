@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -230,7 +231,7 @@ public final class SecurityReportEnv {
     private static final ConcurrentHashMap<Integer, Long> failureLogTimes = new ConcurrentHashMap<>();
 
     private static void logThrottled(int siteId, @Nullable String message) {
-        long now = System.currentTimeMillis();
+        long now = Now.millis();
         Long last = failureLogTimes.get(siteId);
         if (last != null && now - last < FAILURE_LOG_THROTTLE_MS) {
             return;

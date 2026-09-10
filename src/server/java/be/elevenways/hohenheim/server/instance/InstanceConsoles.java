@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -596,7 +597,7 @@ public final class InstanceConsoles {
      * their observed crashes here, so a workload flapping across BOTH lanes still trips
      * one threshold instead of two half-full ones. */
     static boolean flapExceeded(int instanceId) {
-        long now = System.currentTimeMillis();
+        long now = Now.millis();
         Deque<Long> log = CRASH_LOG.computeIfAbsent(instanceId, id -> new ArrayDeque<>());
         synchronized (log) {
             log.addLast(now);

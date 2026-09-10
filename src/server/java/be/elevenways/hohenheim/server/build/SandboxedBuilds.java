@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -69,7 +70,7 @@ public final class SandboxedBuilds {
         BuildQuota quota = request.quota();
         BuildLog log = new BuildLog(quota.logBytes());
         int buildId = start(request, quota);
-        long startedAt = System.currentTimeMillis();
+        long startedAt = Now.millis();
         Path artifact = null;
         Builders builder = null;
         try {
@@ -80,7 +81,7 @@ public final class SandboxedBuilds {
             recordDetection(buildId, builder);
             // A builder pre-phase (detection) spends the build's OWN wall clock: the
             // image build gets what remains, so the total stays quota-bound.
-            quota = quota.afterElapsed(System.currentTimeMillis() - startedAt);
+            quota = quota.afterElapsed(Now.millis() - startedAt);
             BuildSandbox.Outcome outcome = sandbox
                 .run(buildId, plan, quota, request.contextDir(), log);
             artifact = outcome.artifact();
@@ -154,7 +155,7 @@ public final class SandboxedBuilds {
         row.set(BuildOperationModel.DISK_LIMIT_MB, quota.diskLimitMb());
         row.set(BuildOperationModel.PIDS_LIMIT, quota.effectivePidsLimit());
         row.set(BuildOperationModel.TIMEOUT_SECONDS, quota.timeoutSeconds());
-        row.set(BuildOperationModel.STARTED_AT, Instant.now());
+        row.set(BuildOperationModel.STARTED_AT, Now.instant());
         model.save(row);
         return row.get(BuildOperationModel.ID);
     }
@@ -166,7 +167,7 @@ public final class SandboxedBuilds {
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         Row row = model.findById(buildId);
         if (row != null) {
-            Instant finished = Instant.now();
+            Instant finished = Now.instant();
             // A NARROW write: the row is fully loaded, so a save would rewrite the
             // quotas, the request identity and the detection this build already
             // recorded -- columns this outcome has no business restating.

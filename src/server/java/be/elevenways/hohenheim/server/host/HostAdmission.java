@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violation;
@@ -228,12 +229,12 @@ public final class HostAdmission {
         }
         Instant lastSeen = server.get(ServerModel.LAST_SEEN_AT);
         if (lastSeen == null
-                || lastSeen.isAfter(Instant.now().minus(Duration.ofMinutes(minutes)))) {
+                || lastSeen.isAfter(Now.instant().minus(Duration.ofMinutes(minutes)))) {
             return;
         }
         throw Violations.ofForm(violation("host_contact_lapsed")
             .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)))
-            .withArg("minutes", Duration.between(lastSeen, Instant.now()).toMinutes()));
+            .withArg("minutes", Duration.between(lastSeen, Now.instant()).toMinutes()));
     }
 
     /**

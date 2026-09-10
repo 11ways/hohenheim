@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -118,8 +119,8 @@ class InstanceConsoleLiveTest {
     }
 
     private static boolean await(long timeoutMs, Supplier<Boolean> condition) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + timeoutMs;
+        while (Now.millis() < deadline) {
             if (Boolean.TRUE.equals(condition.get())) {
                 return true;
             }

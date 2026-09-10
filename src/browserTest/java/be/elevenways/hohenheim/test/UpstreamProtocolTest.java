@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.tls.UpstreamTrust;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;
@@ -825,7 +826,7 @@ class UpstreamProtocolTest {
      */
     static X509Certificate selfSignedCert(KeyPair keyPair, String san, boolean ipSan)
             throws Exception {
-        Date now = new Date();
+        Date now = new Date(Now.millis());
         Date until = new Date(now.getTime() + 365L * 86400000);
 
         org.bouncycastle.asn1.x500.X500Name issuer =

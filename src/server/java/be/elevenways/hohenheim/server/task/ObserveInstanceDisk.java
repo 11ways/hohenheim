@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.RootDiskUsageSupport;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
@@ -14,7 +15,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -120,7 +120,7 @@ public class ObserveInstanceDisk extends ScheduledTask {
             .where(InstanceModel.ID.eq(instanceId))
             .assign(InstanceModel.DISK_USED_BYTES, usage.usedBytes())
             .assign(InstanceModel.DISK_LIMIT_BYTES, usage.limitBytes())
-            .assign(InstanceModel.DISK_OBSERVED_AT, Instant.now())
+            .assign(InstanceModel.DISK_OBSERVED_AT, Now.instant())
             .updateAll();
         return new Observation(instanceId, true, usage.usedBytes(), usage.limitBytes());
     }

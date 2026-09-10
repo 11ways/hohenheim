@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusClients;
 import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -19,7 +20,6 @@ import be.elevenways.zenit.common.task.TaskContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -134,7 +134,7 @@ public class ReapIncusControllers extends ScheduledTask {
         List<IncusReaper.Candidate> plan;
         try {
             plan = IncusReaper.plan(incus.networkAcls(), incus.networks(),
-                ControllerIdentity.token(), Instant.now(), graceDuration());
+                ControllerIdentity.token(), Now.instant(), graceDuration());
         } catch (Exception unlistable) {
             return unreachable(name, "could not list shared objects", unlistable);
         }
@@ -175,7 +175,7 @@ public class ReapIncusControllers extends ScheduledTask {
             IncusClient incus = IncusClients.forServer(server);
             ControllerPresence.stamp(incus);
             List<IncusReaper.Candidate> plan = IncusReaper.plan(incus.networkAcls(),
-                incus.networks(), ControllerIdentity.token(), Instant.now(), operatorGrace());
+                incus.networks(), ControllerIdentity.token(), Now.instant(), operatorGrace());
             IncusReaper.Reaped reaped = IncusReaper.reap(incus, plan, true);
             for (String removed : reaped.removed()) {
                 ActivityLog.record(Models.get(ServerModel.class), server.get(ServerModel.ID),

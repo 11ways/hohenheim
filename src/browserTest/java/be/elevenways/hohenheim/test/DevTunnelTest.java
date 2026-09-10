@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.EndpointRoute;
@@ -184,8 +185,8 @@ class DevTunnelTest {
     }
 
     private static void awaitRegistered(DevTunnelClient client) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + 10_000;
-        while (!client.isRegistered() && System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + 10_000;
+        while (!client.isRegistered() && Now.millis() < deadline) {
             Thread.sleep(20);
         }
         assertThat(client.isRegistered()).as("client registered").isTrue();
@@ -424,9 +425,9 @@ class DevTunnelTest {
 
     /** Poll the proxy until the name no longer resolves to a live tunnel. */
     private static boolean awaitOffline(String host) throws Exception {
-        long deadline = System.currentTimeMillis()
+        long deadline = Now.millis()
             + (HohenheimEndpoints.DEV_TUNNEL_REVALIDATION_INTERVAL_MS * 4);
-        while (System.currentTimeMillis() < deadline) {
+        while (Now.millis() < deadline) {
             if (proxyGet(host, "/")[0].contains("503")) {
                 return true;
             }

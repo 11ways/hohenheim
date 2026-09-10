@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -46,7 +47,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -177,7 +177,7 @@ class InstanceSnapshotBackupLiveTest {
         template.set(InstanceTemplateModel.VERSION, 4);
         // The operator approval a real catalog entry carries; the approval GATE itself is
         // proven by InstanceTemplatePolicyTest.
-        template.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+        template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
         Models.get(InstanceTemplateModel.class).save(template);
         int templateId = template.get(InstanceTemplateModel.ID);
 

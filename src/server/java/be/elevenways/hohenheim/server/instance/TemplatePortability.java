@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates.VolumeDeclarati
 import be.elevenways.hohenheim.server.instance.variable.VariableTypes;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -21,7 +22,6 @@ import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,7 +56,7 @@ public final class TemplatePortability {
         Map<String, Object> document = new LinkedHashMap<>();
         document.put("format", FORMAT);
         document.put("format_version", FORMAT_VERSION);
-        document.put("exported_at", Instant.now().toString());
+        document.put("exported_at", Now.instant().toString());
         Map<String, Object> checksum = new LinkedHashMap<>();
         checksum.put("algorithm", "sha256");
         checksum.put("value", checksumOf(body));
@@ -311,7 +311,7 @@ public final class TemplatePortability {
         template.set(InstanceTemplateModel.SOURCE,
             source == null || source.isBlank() ? "import" : source.trim());
         template.set(InstanceTemplateModel.SOURCE_CHECKSUM, computed);
-        template.set(InstanceTemplateModel.IMPORTED_AT, Instant.now());
+        template.set(InstanceTemplateModel.IMPORTED_AT, Now.instant());
         templates.save(template);
         int templateId = template.get(InstanceTemplateModel.ID);
 

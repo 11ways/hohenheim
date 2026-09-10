@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.thread.ScheduledJob;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -65,7 +66,7 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
     /** sha256 of the token this connection registered with; never the token itself. */
     private volatile @Nullable String tokenDigest;
     private volatile @Nullable DevTunnelBridge bridge;
-    private volatile long lastSeenAt = System.currentTimeMillis();
+    private volatile long lastSeenAt = Now.millis();
     private volatile boolean closed;
     private volatile boolean preAuthCounted;
 
@@ -96,7 +97,7 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
             }
         }, AUTH_TIMEOUT_MS));
         timers.add(TIMERS.scheduleRepeating(() -> {
-            if (!closed && System.currentTimeMillis() - lastSeenAt > IDLE_TIMEOUT_MS) {
+            if (!closed && Now.millis() - lastSeenAt > IDLE_TIMEOUT_MS) {
                 teardown("idle timeout", true);
             }
         }, 30_000));
@@ -104,7 +105,7 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
 
     @Override
     public void onTextMessage(String message) {
-        lastSeenAt = System.currentTimeMillis();
+        lastSeenAt = Now.millis();
         TunnelMessage msg;
         try {
             Object parsed = Zenit.DRY.parse(message);
@@ -135,7 +136,7 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
 
     @Override
     public void onBinaryMessage(byte[] frame) {
-        lastSeenAt = System.currentTimeMillis();
+        lastSeenAt = Now.millis();
         try {
             int streamId = TunnelFrames.streamId(frame);
             TunnelStream stream = streams.get(streamId);

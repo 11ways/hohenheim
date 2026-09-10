@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -459,12 +460,12 @@ class StackInstancesTest {
         editService(followerId, service ->
             service.setRecords(StackServiceModel.DEPENDS_ON, List.of(depends)));
 
-        long started = System.currentTimeMillis();
+        long started = Now.millis();
         assertThatThrownBy(() -> runtime.deploy(stackId, "nohealth"))
             .isInstanceOf(IOException.class)
             .hasMessageContaining("declares")
             .hasMessageContaining("no health check");
-        assertThat(System.currentTimeMillis() - started)
+        assertThat(Now.millis() - started)
             .as("the refusal is immediate, not a two-minute timeout")
             .isLessThan(60_000);
     }

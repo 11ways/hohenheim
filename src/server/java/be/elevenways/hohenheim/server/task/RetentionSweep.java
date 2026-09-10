@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.model.Model;
 
@@ -23,7 +24,7 @@ final class RetentionSweep {
      *         FAILED history row; swallowing here made repeated failures invisible
      */
     static void clean(String taskName, Model model, DateTimeField agedBy, int retentionDays) {
-        Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
+        Instant cutoff = Now.instant().minus(retentionDays, ChronoUnit.DAYS);
 
         long deleted = model.find()
             .where(agedBy.lte(cutoff))

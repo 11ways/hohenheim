@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -45,7 +46,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -121,8 +121,8 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, "devsurf-tenant@surface.test");
         user.set(UserModel.DISPLAY_NAME, "Device Surface Tenant");
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         tenantId = user.get(UserModel.ID);
         tenantKey = ApiKeyService.create(tenantId, NAME_PREFIX + "key",
@@ -133,8 +133,8 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         viewer.set(UserModel.EMAIL, "devsurf-viewer@surface.test");
         viewer.set(UserModel.DISPLAY_NAME, "Device Surface Viewer");
         viewer.set(UserModel.ENABLED, true);
-        viewer.set(UserModel.CREATED_AT, Instant.now());
-        viewer.set(UserModel.UPDATED_AT, Instant.now());
+        viewer.set(UserModel.CREATED_AT, Now.instant());
+        viewer.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(viewer);
         viewerId = viewer.get(UserModel.ID);
         viewerKey = ApiKeyService.create(viewerId, NAME_PREFIX + "viewer-key",

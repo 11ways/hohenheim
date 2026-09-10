@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -25,7 +26,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -107,7 +107,7 @@ public final class ControlPlaneBackups {
         target.healthCheck();
 
         Files.createDirectories(stagingDirectory);
-        String fileName = "control-plane-" + STAMP.format(Instant.now()) + ".zrec";
+        String fileName = "control-plane-" + STAMP.format(Now.instant()) + ".zrec";
         Path staged = stagingDirectory.resolve(fileName);
         String key = KEY_PREFIX + fileName;
 

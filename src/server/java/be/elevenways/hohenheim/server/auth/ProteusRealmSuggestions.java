@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.types.ProteusAuthProviderType;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.common.edit.FormSecrets;
@@ -94,7 +95,7 @@ public final class ProteusRealmSuggestions {
 
         String cacheKey = endpoint + "|" + realmClient;
         Cached cached = CACHE.get(cacheKey);
-        if (cached != null && System.currentTimeMillis() - cached.at() < CACHE_MILLIS) {
+        if (cached != null && Now.millis() - cached.at() < CACHE_MILLIS) {
             return cached.entries();
         }
 
@@ -113,7 +114,7 @@ public final class ProteusRealmSuggestions {
                 Blast.log("hohenheim.proteus.suggestions_failed", endpoint, realmClient, String.valueOf(error));
             }
         }
-        CACHE.put(cacheKey, new Cached(entries, System.currentTimeMillis()));
+        CACHE.put(cacheKey, new Cached(entries, Now.millis()));
         return entries;
     }
 

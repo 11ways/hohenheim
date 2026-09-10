@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -34,7 +35,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
@@ -839,7 +839,7 @@ class ApplicationReleaseContractTest {
         op.set(ReleaseOperationModel.STATUS, status);
         op.set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId);
         op.set(ReleaseOperationModel.RETIRED_INSTANCE_ID, retiredId);
-        op.set(ReleaseOperationModel.STARTED_AT, Instant.now());
+        op.set(ReleaseOperationModel.STARTED_AT, Now.instant());
         op.set(ReleaseOperationModel.STEP_LOG, "");
         Models.get(ReleaseOperationModel.class).save(op);
         return op;
@@ -881,8 +881,8 @@ class ApplicationReleaseContractTest {
 
     /** Bounded wait: the drain completes on a virtual thread, not inline. */
     private static void await(String what, BooleanSupplier condition) {
-        long deadline = System.currentTimeMillis() + 15_000;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + 15_000;
+        while (Now.millis() < deadline) {
             if (condition.getAsBoolean()) {
                 return;
             }

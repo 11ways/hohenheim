@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.cms.ManageDashboard;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.tls.CertificateAuthority;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -31,7 +32,6 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -395,8 +395,8 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         row.set(UserModel.EMAIL, email);
         row.set(UserModel.DISPLAY_NAME, name);
         row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Instant.now());
-        row.set(UserModel.UPDATED_AT, Instant.now());
+        row.set(UserModel.CREATED_AT, Now.instant());
+        row.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(row);
         return row;
     }

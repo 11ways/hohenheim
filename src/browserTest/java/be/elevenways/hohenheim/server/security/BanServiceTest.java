@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterEach;
@@ -14,7 +15,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -74,7 +74,7 @@ class BanServiceTest {
             null, Duration.ofHours(1));
 
         assertThat(ban.get(BanModel.ACTIVE)).isTrue();
-        assertThat(ban.get(BanModel.EXPIRES_AT)).isAfter(Instant.now());
+        assertThat(ban.get(BanModel.EXPIRES_AT)).isAfter(Now.instant());
         assertThat(service.isBanned("198.51.100.10")).isTrue();
         assertThat(service.isBanned("198.51.100.11")).isFalse();
         assertThat(nftCommands).contains(

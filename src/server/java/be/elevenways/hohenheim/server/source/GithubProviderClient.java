@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
+import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -162,7 +163,7 @@ public class GithubProviderClient extends ApiProviderClient {
     private @NonNull CachedToken mintedToken() throws IOException {
         CachedToken cached = MINTED.get(this.providerId);
         if (cached != null
-                && cached.expiresAtMillis() - TOKEN_REUSE_MARGIN_MS > System.currentTimeMillis()) {
+                && cached.expiresAtMillis() - TOKEN_REUSE_MARGIN_MS > Now.millis()) {
             return cached;
         }
         String jwt = appJwt();
@@ -196,12 +197,12 @@ public class GithubProviderClient extends ApiProviderClient {
                 // fall through to the conservative default below
             }
         }
-        return System.currentTimeMillis() + 55 * 60 * 1000L;
+        return Now.millis() + 55 * 60 * 1000L;
     }
 
     /** The App JWT: RS256 over {iat, exp, iss}, 9-minute validity, 60s clock skew. */
     private @NonNull String appJwt() throws IOException {
-        long now = System.currentTimeMillis() / 1000;
+        long now = Now.millis() / 1000;
         String header = base64Url("{\"alg\":\"RS256\",\"typ\":\"JWT\"}"
             .getBytes(StandardCharsets.UTF_8));
         String payload = base64Url(("{\"iat\":" + (now - 60) + ",\"exp\":" + (now + 540)

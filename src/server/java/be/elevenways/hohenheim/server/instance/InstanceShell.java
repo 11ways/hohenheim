@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.runtime.PtySupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -396,7 +397,7 @@ public final class InstanceShell {
 
     /** Close abandoned terminals and forget finished ones. */
     static void sweepIdle() {
-        long now = System.currentTimeMillis();
+        long now = Now.millis();
         for (Map.Entry<Integer, List<Session>> entry : LIVE.entrySet()) {
             List<Session> sessions = entry.getValue();
             for (Session session : sessions) {
@@ -433,7 +434,7 @@ public final class InstanceShell {
         private final @NonNull Accountability accountability;
         private final @Nullable Datasource datasource;
         private final AtomicBoolean ended = new AtomicBoolean();
-        private volatile long lastInputAt = System.currentTimeMillis();
+        private volatile long lastInputAt = Now.millis();
 
         LiveSession(int instanceId, int runUser, @NonNull String shell,
                     PtySupport.@NonNull PtySession pty, @NonNull Consumer<String> output,
@@ -485,7 +486,7 @@ public final class InstanceShell {
             if (this.ended.get() || data.isEmpty()) {
                 return;
             }
-            this.lastInputAt = System.currentTimeMillis();
+            this.lastInputAt = Now.millis();
             try {
                 this.pty.stream().writeStdin(data.getBytes(StandardCharsets.UTF_8));
             } catch (IOException gone) {
@@ -498,7 +499,7 @@ public final class InstanceShell {
             if (this.ended.get()) {
                 return;
             }
-            this.lastInputAt = System.currentTimeMillis();
+            this.lastInputAt = Now.millis();
             try {
                 this.pty.resize(cols, rows);
             } catch (IOException refused) {

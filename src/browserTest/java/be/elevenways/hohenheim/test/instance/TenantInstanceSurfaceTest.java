@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -39,7 +40,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -129,8 +129,8 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, name);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }
@@ -155,7 +155,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
         if (approved) {
-            row.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+            row.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
             row.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
         }
         templates.save(row);
@@ -755,7 +755,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         log.set(InstanceLogModel.HANDLE, PREFIX + "console-handle");
         log.set(InstanceLogModel.LOG_TEXT, marker);
         log.set(InstanceLogModel.LINE_COUNT, 1);
-        log.set(InstanceLogModel.SAVED_AT, Instant.now());
+        log.set(InstanceLogModel.SAVED_AT, Now.instant());
         logs.save(log);
         Integer logId = log.get(InstanceLogModel.ID);
         String tabUrl = "/manage/instances/" + consoleInstanceId + "/page/console";
@@ -933,7 +933,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         // passing preflight, and both batteries store mem_total).
         HostPreflight.store(PREFIX + "host", new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
+            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
         return row.get(ServerModel.ID);
     }
 }

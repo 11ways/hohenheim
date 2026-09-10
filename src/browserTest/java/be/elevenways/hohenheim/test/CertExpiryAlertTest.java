@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.comms.server.CommsDispatcher;
@@ -77,7 +78,7 @@ class CertExpiryAlertTest {
             cert.set(CertificateModel.NICE_NAME, "expiring.example.com");
             cert.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_CUSTOM);
             cert.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
-            Instant now = Instant.now();
+            Instant now = Now.instant();
             cert.set(CertificateModel.EXPIRES_ON, now.plus(5, ChronoUnit.DAYS));
             certModel.save(cert);
 

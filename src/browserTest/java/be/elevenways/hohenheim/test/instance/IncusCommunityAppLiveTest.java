@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -32,7 +33,6 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -121,7 +121,7 @@ class IncusCommunityAppLiveTest {
             //    banner: on a system container the CONSOLE speaks for the SYSTEM.
             int templateId = CommunityScripts.importApp("gotify");
             Row template = Models.get(InstanceTemplateModel.class).findById(templateId);
-            template.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+            template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
             template.set(InstanceTemplateModel.READINESS_KIND,
                 ReadinessKind.CONSOLE_LINE.token());
             template.set(InstanceTemplateModel.READINESS_LINE, "Debian GNU/Linux");
@@ -221,7 +221,7 @@ class IncusCommunityAppLiveTest {
         Db.run(datasource, () -> {
             int templateId = CommunityScripts.importApp("adguard");
             Row template = Models.get(InstanceTemplateModel.class).findById(templateId);
-            template.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+            template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
             Models.get(InstanceTemplateModel.class).save(template);
 
             int id = new InstanceTemplates().createFromTemplate(template,
@@ -287,7 +287,7 @@ class IncusCommunityAppLiveTest {
                 "source /dev/stdin <<<\"$FUNCTIONS_FILE_PATH\"\n"
                     + "color\ncatch_errors\nhh_helper_that_never_existed\n"
                     + "echo THIS-MUST-NEVER-PRINT\n");
-            template.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+            template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
             Models.get(InstanceTemplateModel.class).save(template);
 
             int id = new InstanceTemplates().createFromTemplate(template,
@@ -370,9 +370,9 @@ class IncusCommunityAppLiveTest {
     /** Poll the RECORD's status (the fenced writes are async off the console pump). */
     private static void awaitStatus(int instanceId, String expected, long timeoutMs,
                                     String description) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
+        long deadline = Now.millis() + timeoutMs;
         String last = "";
-        while (System.currentTimeMillis() < deadline) {
+        while (Now.millis() < deadline) {
             last = Models.get(InstanceModel.class).findById(instanceId)
                 .get(InstanceModel.STATUS);
             if (expected.equals(last)) {

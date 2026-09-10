@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestAccessContexts;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -44,7 +45,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -191,7 +191,7 @@ class InstancePlacementTest {
             facts.put("mem_total", memoryMb * 1024L * 1024L);
         }
         HostPreflight.store(name, new HostPreflight.Report(List.copyOf(checks), facts,
-            true, Instant.now(), null));
+            true, Now.instant(), null));
     }
 
     /**
@@ -919,8 +919,8 @@ class InstancePlacementTest {
         user.set(UserModel.EMAIL, "placement-operator@hohenheim.local");
         user.set(UserModel.DISPLAY_NAME, "Placement Operator");
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         Row grant = AuthModels.grants().createEmptyRow();
         grant.set(GrantModel.SUBJECT_TYPE, GrantSubjectType.USER.key());

@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -25,7 +26,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -229,8 +229,8 @@ class DatabaseApiTest extends HohenheimTestBase {
         row.set(UserModel.EMAIL, email);
         row.set(UserModel.DISPLAY_NAME, name);
         row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Instant.now());
-        row.set(UserModel.UPDATED_AT, Instant.now());
+        row.set(UserModel.CREATED_AT, Now.instant());
+        row.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(row);
         return row.get(UserModel.ID);
     }
@@ -248,7 +248,7 @@ class DatabaseApiTest extends HohenheimTestBase {
         HostFixtures.acknowledgePosture(row);
         HostPreflight.store(name, new HostPreflight.Report(
             List.of(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
+            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
         return row.get(ServerModel.ID);
     }
 

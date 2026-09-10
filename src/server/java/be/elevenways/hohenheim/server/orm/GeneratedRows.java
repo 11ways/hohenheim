@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.orm;
 
 import be.elevenways.hohenheim.server.cms.CmsSupport;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -15,7 +16,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
@@ -161,7 +161,7 @@ public final class GeneratedRows {
                 row.set(columns.forModel(), attribution.forModel());
                 row.set(columns.forId(), attribution.forId());
                 if (!row.has(pkName)) {
-                    row.set(columns.at(), Instant.now());
+                    row.set(columns.at(), Now.instant());
                 }
                 return;
             }

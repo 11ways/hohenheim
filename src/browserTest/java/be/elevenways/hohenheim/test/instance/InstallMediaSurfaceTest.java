@@ -32,6 +32,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -53,7 +54,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.LinkedHashMap;
@@ -102,8 +102,8 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         tenant.set(UserModel.EMAIL, "media-surf-tenant@surface.test");
         tenant.set(UserModel.DISPLAY_NAME, "Media Surface Tenant");
         tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Instant.now());
-        tenant.set(UserModel.UPDATED_AT, Instant.now());
+        tenant.set(UserModel.CREATED_AT, Now.instant());
+        tenant.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(tenant);
         tenantId = tenant.get(UserModel.ID);
     }
@@ -678,8 +678,8 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         row.set(UserModel.EMAIL, email);
         row.set(UserModel.DISPLAY_NAME, displayName);
         row.set(UserModel.ENABLED, true);
-        row.set(UserModel.CREATED_AT, Instant.now());
-        row.set(UserModel.UPDATED_AT, Instant.now());
+        row.set(UserModel.CREATED_AT, Now.instant());
+        row.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(row);
         return row.get(UserModel.ID);
     }

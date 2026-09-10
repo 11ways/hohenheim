@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.schedule.InstancePowerAction;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -112,7 +113,7 @@ class InstanceScheduleJourneyTest extends HohenheimTestBase {
             .isEqualTo(((Integer) admin.get(UserModel.ID)).longValue());
         Instant nextFire = schedule.get(RecordScheduleModel.NEXT_FIRE_AT);
         assertThat(nextFire).as("step 3: the first fire is computed on save").isNotNull();
-        assertThat(nextFire).as("step 3: and lies in the future, never 'due now'").isAfter(Instant.now());
+        assertThat(nextFire).as("step 3: and lies in the future, never 'due now'").isAfter(Now.instant());
         assertThat(nextFire.atZone(ZoneId.of("Europe/Brussels")).getHour())
             .as("step 3: at the cron's hour in the schedule's own zone").isEqualTo(4);
 

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -185,7 +186,7 @@ class TlsCertificateTest {
 
     static X509Certificate generateSelfSignedCert(KeyPair keyPair, String cn) throws Exception {
         // Use BouncyCastle to generate a self-signed cert
-        var now = new Date();
+        var now = new Date(Now.millis());
         var until = new Date(now.getTime() + 365L * 86400000);
 
         org.bouncycastle.asn1.x500.X500Name issuer =
@@ -193,7 +194,7 @@ class TlsCertificateTest {
 
         org.bouncycastle.cert.X509v3CertificateBuilder builder =
             new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
-                issuer, BigInteger.valueOf(System.currentTimeMillis()),
+                issuer, BigInteger.valueOf(Now.millis()),
                 now, until, issuer, keyPair.getPublic());
 
         // Add SAN
@@ -232,7 +233,7 @@ class TlsCertificateTest {
 
     private static X509Certificate generateWildcardCert(KeyPair keyPair, String wildcardDomain)
             throws Exception {
-        var now = new Date();
+        var now = new Date(Now.millis());
         var until = new Date(now.getTime() + 365L * 86400000);
 
         org.bouncycastle.asn1.x500.X500Name issuer =
@@ -240,7 +241,7 @@ class TlsCertificateTest {
 
         org.bouncycastle.cert.X509v3CertificateBuilder builder =
             new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
-                issuer, BigInteger.valueOf(System.currentTimeMillis()),
+                issuer, BigInteger.valueOf(Now.millis()),
                 now, until, issuer, keyPair.getPublic());
 
         org.bouncycastle.asn1.x509.GeneralName san =

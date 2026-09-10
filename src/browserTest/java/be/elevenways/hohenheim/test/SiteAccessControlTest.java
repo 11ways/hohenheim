@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
@@ -24,7 +25,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -93,8 +93,8 @@ class SiteAccessControlTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, "limited@hohenheim.local");
         user.set(UserModel.DISPLAY_NAME, "Limited User");
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         limitedUserId = user.get(UserModel.ID);
 
@@ -231,7 +231,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
 
         // 9. Trash site A the way the admin resource does it.
         Row siteA = siteModel.find().where(SiteModel.ID.eq(siteAId)).first();
-        siteA.set(SiteModel.DELETED_AT, Instant.now());
+        siteA.set(SiteModel.DELETED_AT, Now.instant());
         siteModel.save(siteA);
 
         assertThat(siteModel.find().where(SiteModel.ID.eq(siteAId)).count())

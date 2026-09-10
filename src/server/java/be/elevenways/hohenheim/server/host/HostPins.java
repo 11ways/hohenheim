@@ -3,13 +3,13 @@ package be.elevenways.hohenheim.server.host;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.time.Instant;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 
@@ -86,7 +86,7 @@ public final class HostPins {
             ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_key_pinned", () -> {
                 server.set(slot.material(), offeredMaterial);
                 server.set(slot.fingerprint(), offeredFingerprint);
-                server.set(slot.pinnedAt(), Instant.now());
+                server.set(slot.pinnedAt(), Now.instant());
                 server.set(slot.verified(), false);
                 server.set(slot.offered(), null);
                 model.save(server);
@@ -154,7 +154,7 @@ public final class HostPins {
         ActivityLog.withAction(ActivityLog.ACTION_UPDATE, "host_key_repinned", () -> {
             server.set(slot.material(), offered);
             server.set(slot.fingerprint(), fingerprint);
-            server.set(slot.pinnedAt(), Instant.now());
+            server.set(slot.pinnedAt(), Now.instant());
             server.set(slot.verified(), false);
             server.set(slot.offered(), null);
             server.set(ServerModel.PREFLIGHT_OK, false);

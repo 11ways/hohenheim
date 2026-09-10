@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -136,7 +137,7 @@ public final class WorkspaceBuilds {
 
         String branch = ref != null && !ref.isBlank() ? ref : declaredBranch(settings);
         BuildLog log = new BuildLog(BuildQuota.fromSettings().logBytes());
-        long startedAt = System.currentTimeMillis();
+        long startedAt = Now.millis();
         // The durable in-flight mark, SandboxedBuilds' contract verbatim: it lands before
         // any daemon work, so a controller that dies mid-deploy leaves `running` behind as
         // visible evidence instead of a clean-looking absence.
@@ -368,7 +369,7 @@ public final class WorkspaceBuilds {
         row.set(BuildOperationModel.STATUS, BuildOperationModel.STATUS_RUNNING);
         row.set(BuildOperationModel.SOURCE_REF, branch);
         row.set(BuildOperationModel.TIMEOUT_SECONDS, (int) (BUILD_TIMEOUT_MS / 1000));
-        row.set(BuildOperationModel.STARTED_AT, Instant.now());
+        row.set(BuildOperationModel.STARTED_AT, Now.instant());
         model.save(row);
         return row.get(BuildOperationModel.ID);
     }
@@ -382,7 +383,7 @@ public final class WorkspaceBuilds {
         if (row == null) {
             return;
         }
-        Instant finished = Instant.now();
+        Instant finished = Now.instant();
         RecordStamp.on(model, row)
             .set(BuildOperationModel.STATUS, status)
             .set(BuildOperationModel.SOURCE_REF, commitSha != null

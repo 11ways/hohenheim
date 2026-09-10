@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -23,7 +24,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -123,7 +123,7 @@ class HostRuntimeTest {
                 new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "ok"),
                 new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
                     HostPreflight.STATUS_PASS, true, "kernel lane proven")),
-                Map.of("mem_total", 4L * 1024 * 1024 * 1024), true, Instant.now(), null));
+                Map.of("mem_total", 4L * 1024 * 1024 * 1024), true, Now.instant(), null));
             assertThat(InstancePlacement.chooseForOwner("",
                     InstancePlacement.Workload.forRuntime(ServerModel.RUNTIME_INCUS)))
                 .as("step 4: the incus runtime lands on the admitted incus host")

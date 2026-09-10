@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -83,7 +84,7 @@ class TlsResilienceTest {
         Row cert = createCert("Backoff", CertificateModel.PROVIDER_LETSENCRYPT,
             CertificateModel.STATUS_ACTIVE, "backoff.test");
 
-        Instant before = Instant.now();
+        Instant before = Now.instant();
         AcmeService.recordRenewalFailure(cert, "boom");
         assertThat((String) cert.get(CertificateModel.STATUS)).isEqualTo(CertificateModel.STATUS_ERROR);
         assertThat((Integer) cert.get(CertificateModel.ERROR_COUNT)).isEqualTo(1);
@@ -103,7 +104,7 @@ class TlsResilienceTest {
     @Test
     @Order(3)
     void backoffDelayEscalatesWithJitterBounds() {
-        Instant now = Instant.now();
+        Instant now = Now.instant();
         // 15min * 2^min(count,7), +/-20% jitter
         for (int count : new int[]{1, 3, 7, 12}) {
             long baseSeconds = 15L * 60L * (1L << Math.min(count, 7));
@@ -119,7 +120,7 @@ class TlsResilienceTest {
     @Order(4)
     void renewalSweepIncludesDueErroredCertsOnly() {
         var certModel = Models.get(CertificateModel.class);
-        Instant now = Instant.now();
+        Instant now = Now.instant();
 
         Row dueError = createCert("Due Error", CertificateModel.PROVIDER_LETSENCRYPT,
             CertificateModel.STATUS_ERROR, "due-error.test");
@@ -231,7 +232,7 @@ class TlsResilienceTest {
         deletedSite.set(SiteModel.UPSTREAM_KIND, "hohenheim:address");
         deletedSite.set(SiteModel.ENABLED, true);
         deletedSite.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
-        deletedSite.set(SiteModel.DELETED_AT, java.time.Instant.now());
+        deletedSite.set(SiteModel.DELETED_AT, Now.instant());
         siteModel.save(deletedSite);
 
         Row deletedDomain = domainModel.createEmptyRow();

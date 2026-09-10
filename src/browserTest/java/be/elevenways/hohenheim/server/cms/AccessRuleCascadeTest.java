@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -14,7 +15,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -94,7 +94,7 @@ class AccessRuleCascadeTest extends HohenheimTestBase {
 
         // 2. Soft-deleting the site takes it out: the Site column used to resolve to a bare
         //    id that opened nothing.
-        site.set(SiteModel.DELETED_AT, Instant.now());
+        site.set(SiteModel.DELETED_AT, Now.instant());
         sites.save(site);
         assertThat(listedDomainIds(resource, operator))
             .as("step 2: a soft-deleted site's hostname leaves the catalog")

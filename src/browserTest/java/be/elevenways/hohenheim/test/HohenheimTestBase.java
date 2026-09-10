@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.HohenheimCommsSettings;
 import be.elevenways.hohenheim.server.HohenheimSettingsFiles;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.GrantModel;
@@ -37,7 +38,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import be.elevenways.zenit.common.session.SessionToken;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -153,8 +153,8 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
         user.set(UserModel.EMAIL, "test@hohenheim.local");
         user.set(UserModel.DISPLAY_NAME, "Test Admin");
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         ZenitAuth.markSeeded();   // a user exists, so the setup gate must not redirect
 

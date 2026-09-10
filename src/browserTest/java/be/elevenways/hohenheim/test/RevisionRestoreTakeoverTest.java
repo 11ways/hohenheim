@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -37,7 +38,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -167,8 +167,8 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         operator.set(UserModel.EMAIL, "restore-operator@hohenheim.local");
         operator.set(UserModel.DISPLAY_NAME, "Restore Operator");
         operator.set(UserModel.ENABLED, true);
-        operator.set(UserModel.CREATED_AT, Instant.now());
-        operator.set(UserModel.UPDATED_AT, Instant.now());
+        operator.set(UserModel.CREATED_AT, Now.instant());
+        operator.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(operator);
         int operatorId = operator.get(UserModel.ID);
         Session operatorSession = Zenit.getSessionStore().create();
@@ -349,8 +349,8 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         operator.set(UserModel.EMAIL, "restore-gate-operator@hohenheim.local");
         operator.set(UserModel.DISPLAY_NAME, "Restore Gate Operator");
         operator.set(UserModel.ENABLED, true);
-        operator.set(UserModel.CREATED_AT, Instant.now());
-        operator.set(UserModel.UPDATED_AT, Instant.now());
+        operator.set(UserModel.CREATED_AT, Now.instant());
+        operator.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(operator);
         int operatorId = operator.get(UserModel.ID);
         Session tenantSession = Zenit.getSessionStore().create();

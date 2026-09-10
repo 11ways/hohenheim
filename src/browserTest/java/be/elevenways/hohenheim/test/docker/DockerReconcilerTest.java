@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -40,7 +41,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -349,7 +349,7 @@ class DockerReconcilerTest {
             // 2. Soft-delete the record: the same container is now the orphan the
             //    attention list exists for (soft-deleted = not live).
             instance.set(InstanceModel.DELETED_AT,
-                Instant.now());
+                Now.instant());
             Models.get(InstanceModel.class).save(instance);
             Finding trashed = DockerReconciler.classify("container", ours("instance-" + id),
                 mapOf(OwnerLabels.of(InstanceModel.MODEL_ID, id)),
@@ -512,7 +512,7 @@ class DockerReconcilerTest {
             //    warning per server once past the age threshold (threshold in the future
             //    makes every parked row "old" without forging timestamps).
             List<AttentionItem> items = new ArrayList<>();
-            AttentionCollector.stuckReleasingPorts(items, Instant.now().plusSeconds(60));
+            AttentionCollector.stuckReleasingPorts(items, Now.instant().plusSeconds(60));
             assertThat(items)
                 .as("step 4: local and edge each raise one stuck-releasing warning")
                 .hasSize(2);

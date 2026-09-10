@@ -36,6 +36,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -118,7 +119,7 @@ public final class AttentionCollector {
             // link 404s and which no enabled role could ever act on.
             items.addAll(DockerReconciler.attentionItems());
             dockerForeignResources(items);
-            stuckReleasingPorts(items, Instant.now().minus(RELEASING_STUCK_AFTER));
+            stuckReleasingPorts(items, Now.instant().minus(RELEASING_STUCK_AFTER));
         }
         failedTasks(items);
         controlPlaneBackupDestination(items);
@@ -293,7 +294,7 @@ public final class AttentionCollector {
         if (days == null || days <= 0) {
             return;
         }
-        Instant threshold = Instant.now().minus(Duration.ofDays(days));
+        Instant threshold = Now.instant().minus(Duration.ofDays(days));
         var backups = Models.get(InstanceBackupModel.class);
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.DELETED_AT.isNull())
@@ -319,7 +320,7 @@ public final class AttentionCollector {
             Instant completedAt = newestComplete.get(InstanceBackupModel.CREATED_AT);
             if (completedAt == null || completedAt.isBefore(threshold)) {
                 long age = completedAt == null
-                    ? -1 : Duration.between(completedAt, Instant.now()).toDays();
+                    ? -1 : Duration.between(completedAt, Now.instant()).toDays();
                 items.add(item("warning", "box-archive",
                     copy("instance_backup_stale", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
@@ -461,7 +462,7 @@ public final class AttentionCollector {
         Instant successAt = newestSuccess != null
             ? newestSuccess.get(SystemTaskHistoryModel.STARTED_AT) : null;
         if (successAt == null
-                || successAt.isBefore(Instant.now().minus(CONTROL_PLANE_BACKUP_STALE_AFTER))) {
+                || successAt.isBefore(Now.instant().minus(CONTROL_PLANE_BACKUP_STALE_AFTER))) {
             items.add(item("error", "box-archive",
                 copy("control_plane_backup_stale", "attention_title"),
                 copy("control_plane_backup_stale", "attention_detail",

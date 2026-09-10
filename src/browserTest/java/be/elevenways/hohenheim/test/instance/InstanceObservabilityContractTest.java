@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -322,18 +323,18 @@ class InstanceObservabilityContractTest {
             Models.get(InstanceLogModel.class).find()
                 .where(InstanceLogModel.ID.eq(agedId))
                 .assign(InstanceLogModel.SAVED_AT,
-                    Instant.now().minus(31, ChronoUnit.DAYS))
+                    Now.instant().minus(31, ChronoUnit.DAYS))
                 .updateAll();
-            int freshId = logRow(instanceId, handle, "a fresh episode", Instant.now());
+            int freshId = logRow(instanceId, handle, "a fresh episode", Now.instant());
             // 5b. THE ROW THIS SWEEP MUST NOT TOUCH: a LIVE episode, opened long ago and
             //     written to a second ago. Sweeping by created_at deleted exactly this row
             //     and the next flush silently started a new one, losing the history the
             //     window was still supposed to hold. See CleanOldInstanceLogs.clean.
-            int liveId = logRow(instanceId, handle, "a live episode", Instant.now());
+            int liveId = logRow(instanceId, handle, "a live episode", Now.instant());
             Models.get(InstanceLogModel.class).find()
                 .where(InstanceLogModel.ID.eq(liveId))
                 .assign(InstanceLogModel.CREATED_AT,
-                    Instant.now().minus(60, ChronoUnit.DAYS))
+                    Now.instant().minus(60, ChronoUnit.DAYS))
                 .updateAll();
             CleanOldInstanceLogs.clean();
             assertThat(Models.get(InstanceLogModel.class).findById(agedId))
@@ -414,7 +415,7 @@ class InstanceObservabilityContractTest {
             new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
             new HostPreflight.Check(IncusPreflight.KERNEL_LANE_CHECK,
                 HostPreflight.STATUS_PASS, true, "fake kernel-truth lane")),
-            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Instant.now(), null));
+            Map.of("mem_total", 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
         return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
 
@@ -457,8 +458,8 @@ class InstanceObservabilityContractTest {
 
     /** Bounded wait: every stream here is pumped by a thread of its own. */
     private static void await(String what, BooleanSupplier condition) {
-        long deadline = System.currentTimeMillis() + 10_000;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + 10_000;
+        while (Now.millis() < deadline) {
             if (condition.getAsBoolean()) {
                 return;
             }

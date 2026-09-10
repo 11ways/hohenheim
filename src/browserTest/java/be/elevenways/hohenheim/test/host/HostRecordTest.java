@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -20,7 +21,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -139,7 +139,7 @@ class HostRecordTest {
 
             // 2. A stack on the host blocks removal too, even with no instances left.
             Row instance = Models.get(InstanceModel.class).findById(instanceId);
-            instance.set(InstanceModel.DELETED_AT, Instant.now());
+            instance.set(InstanceModel.DELETED_AT, Now.instant());
             Models.get(InstanceModel.class).save(instance);
             Row stack = Models.get(StackModel.class).createEmptyRow();
             stack.set(StackModel.NAME, "edge-stack");

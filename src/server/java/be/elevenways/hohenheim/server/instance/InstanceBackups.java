@@ -40,6 +40,7 @@ import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -169,7 +170,7 @@ public final class InstanceBackups {
             requireCoherentApplication(owner, resolved);
         }
 
-        String stamp = STAMP.format(Instant.now());
+        String stamp = STAMP.format(Now.instant());
         Path staging = stagingRoot().resolve("backup-" + instanceId + "-" + stamp);
         List<VolumeSnapshotSupport.CapturedVolume> captured;
         ImageIdentity image;
@@ -451,7 +452,7 @@ public final class InstanceBackups {
                 .withArg("id", backup.get(InstanceBackupModel.ID)));
         }
         String key = backup.get(InstanceBackupModel.REMOTE_KEY);
-        String stamp = STAMP.format(Instant.now());
+        String stamp = STAMP.format(Now.instant());
         Path staging = stagingRoot().resolve("restore-" + backup.get(InstanceBackupModel.ID)
             + "-" + stamp);
         BackupArchive.Opened opened = null;
@@ -951,7 +952,7 @@ public final class InstanceBackups {
                 volume.file().getFileName().toString(),
                 BackupArchive.sha256Of(volume.file()), volume.size()));
         }
-        return new BackupManifest(BackupManifest.FORMAT_VERSION, Instant.now().toString(),
+        return new BackupManifest(BackupManifest.FORMAT_VERSION, Now.instant().toString(),
             HostPreflight.controllerVersion(),
             String.valueOf((Object) owner.get(InstanceModel.NAME)),
             String.valueOf((Object) owner.get(InstanceModel.KIND)),

@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.util.Http11;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 
 import java.io.IOException;
@@ -979,8 +980,8 @@ public class ManagedDatabase {
     }
 
     private void waitForStopped(String handle, long timeoutMillis) throws IOException {
-        long deadline = System.currentTimeMillis() + timeoutMillis;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + timeoutMillis;
+        while (Now.millis() < deadline) {
             Object state = docker.inspectContainer(handle).get("State");
             if (state instanceof Map<?, ?> s && !Boolean.TRUE.equals(s.get("Running"))) {
                 return;
@@ -1011,13 +1012,13 @@ public class ManagedDatabase {
     public static void awaitReady(DockerClient docker, String handle, Engine engine, String user,
                                   String password, String database, long timeoutMillis)
             throws IOException {
-        long deadline = System.currentTimeMillis() + timeoutMillis;
+        long deadline = Now.millis() + timeoutMillis;
         List<String> command = engine.readyCommand(user, password, database);
         List<String> env = engine.readyEnv(password);
         String anchor = engine.readyStdoutContains();
         String lastOutput = null;
         IOException last = null;
-        while (System.currentTimeMillis() < deadline) {
+        while (Now.millis() < deadline) {
             try {
                 DockerClient.ExecResult probe = docker.exec(handle, command, env);
                 lastOutput = probe.stdout();

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.security.BanStateCell;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
@@ -34,7 +35,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -194,7 +194,7 @@ public final class BanResource extends RowResource {
     public @Nullable Object cellValue(@NonNull Row row, @NonNull ColumnSpec column) {
         if (STATE_COLUMN.equals(column.name())) {
             return BanStateCell.of(Boolean.TRUE.equals(row.get(BanModel.ACTIVE)),
-                row.get(BanModel.LIFTED_AT), row.get(BanModel.EXPIRES_AT), Instant.now());
+                row.get(BanModel.LIFTED_AT), row.get(BanModel.EXPIRES_AT), Now.instant());
         }
         if (!BanModel.EVENT_TYPE.getName().equals(column.name())) {
             return super.cellValue(row, column);

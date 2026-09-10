@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -465,7 +466,7 @@ public class StackRuntime {
                                                                     boolean includeUnattributed) {
         Map<String, Set<String>> referencesByServer = scoped(this::declaredImagesByServer);
         Map<String, DockerReclaim.Outcome> outcomes = new LinkedHashMap<>();
-        Instant now = Instant.now();
+        Instant now = Now.instant();
 
         for (Map.Entry<String, Set<String>> entry : referencesByServer.entrySet()) {
             String serverName = entry.getKey();
@@ -711,7 +712,7 @@ public class StackRuntime {
                     + dependency.service() + "' to be healthy, but that service declares"
                     + " no health check");
             }
-            long deadline = System.currentTimeMillis() + (needHealthy
+            long deadline = Now.millis() + (needHealthy
                 ? HEALTHY_WAIT_BASE_MS + target.healthStartPeriodSeconds() * 1000L
                 : STARTED_WAIT_CAP_MS);
             log.accept("Waiting for '" + dependency.service() + "' to be "
@@ -729,7 +730,7 @@ public class StackRuntime {
                     throw new IOException("Dependency '" + dependency.service()
                         + "' became unhealthy");
                 }
-                if (System.currentTimeMillis() > deadline) {
+                if (Now.millis() > deadline) {
                     throw new IOException("Timed out waiting for dependency '"
                         + dependency.service() + "' to become "
                         + (needHealthy ? "healthy" : "running") + " (state: "

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -44,7 +45,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -192,8 +192,8 @@ class InstanceScheduleLiveTest {
     }
 
     private static boolean await(long timeoutMs, java.util.function.Supplier<Boolean> condition) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + timeoutMs;
+        while (Now.millis() < deadline) {
             if (Boolean.TRUE.equals(condition.get())) {
                 return true;
             }
@@ -227,8 +227,8 @@ class InstanceScheduleLiveTest {
         tenant.set(UserModel.EMAIL, "schedule-tenant@hohenheim.local");
         tenant.set(UserModel.DISPLAY_NAME, "Schedule Tenant");
         tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Instant.now());
-        tenant.set(UserModel.UPDATED_AT, Instant.now());
+        tenant.set(UserModel.CREATED_AT, Now.instant());
+        tenant.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(tenant);
         long tenantId = tenant.get(UserModel.ID);
 

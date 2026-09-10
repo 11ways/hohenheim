@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -220,8 +221,8 @@ public final class BuildSandbox {
     private @NonNull Supervision supervise(int buildId, @NonNull String handle,
                                            @NonNull BuildQuota quota, @NonNull BuildLog log)
             throws IOException {
-        long deadline = System.currentTimeMillis() + quota.timeoutMs();
-        long nextDiskPoll = System.currentTimeMillis();
+        long deadline = Now.millis() + quota.timeoutMs();
+        long nextDiskPoll = Now.millis();
         long peakDisk = 0;
         int diskProbeFailures = 0;
 
@@ -235,7 +236,7 @@ public final class BuildSandbox {
                 return new Supervision(Ending.EXITED, exitCode, peakDisk);
             }
 
-            long now = System.currentTimeMillis();
+            long now = Now.millis();
             if (now > deadline) {
                 log.line("[hohenheim] build exceeded its " + quota.timeoutSeconds()
                     + "s wall-clock quota and was killed");

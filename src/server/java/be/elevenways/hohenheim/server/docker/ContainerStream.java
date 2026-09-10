@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
+import be.elevenways.protoblast.common.time.Now;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -177,7 +178,7 @@ public final class ContainerStream implements ConsoleStream {
      * spin, because a spinning thread never asks the socket anything.
      */
     private @NonNull String readHead(long timeoutMs) throws IOException {
-        long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 1);
+        long deadline = Now.millis() + Math.max(timeoutMs, 1);
         StringBuilder head = new StringBuilder();
         while (true) {
             // Scan the buffered window for the terminator, keeping scanned bytes buffered
@@ -207,7 +208,7 @@ public final class ContainerStream implements ConsoleStream {
                 throw new IOException("Docker stream closed before a response header arrived");
             }
             if (more == 0) {
-                if (System.currentTimeMillis() >= deadline) {
+                if (Now.millis() >= deadline) {
                     throw new IOException("Docker stream produced no response header within "
                         + timeoutMs + "ms");
                 }
@@ -245,7 +246,7 @@ public final class ContainerStream implements ConsoleStream {
     /** Drain a (bounded) error body so the ApiException carries the daemon's reason. */
     private @NonNull String readErrorBody() {
         StringBuilder body = new StringBuilder();
-        long deadline = System.currentTimeMillis() + ERROR_BODY_TIMEOUT_MS;
+        long deadline = Now.millis() + ERROR_BODY_TIMEOUT_MS;
         try {
             while (body.length() < MAX_ERROR_BODY) {
                 int filled = this.fill();
@@ -253,7 +254,7 @@ public final class ContainerStream implements ConsoleStream {
                     break;
                 }
                 if (filled == 0) {
-                    if (System.currentTimeMillis() >= deadline) {
+                    if (Now.millis() >= deadline) {
                         break;
                     }
                     idle();

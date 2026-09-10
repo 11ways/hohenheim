@@ -27,6 +27,7 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.instance.variable.StringVariableType;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -48,7 +49,6 @@ import be.elevenways.zenit.forms.common.render.FormOptionState;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -356,7 +356,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
         row.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE);
         row.set(InstanceSnapshotModel.NOTE, PREFIX + "note");
         row.set(InstanceSnapshotModel.TOTAL_BYTES, 4096L);
-        row.set(InstanceSnapshotModel.CREATED_AT, Instant.now());
+        row.set(InstanceSnapshotModel.CREATED_AT, Now.instant());
         snapshots.save(row);
         return row.get(InstanceSnapshotModel.ID);
     }

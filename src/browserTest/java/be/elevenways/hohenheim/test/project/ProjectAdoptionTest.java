@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.project.ProjectAdoption;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -25,7 +26,6 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -112,7 +112,7 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         claim.set(ReleasedRouteClaimModel.FORMER_SITE_ID, siteXId);
         claim.set(ReleasedRouteClaimModel.FORMER_SUBJECTS,
             HohenheimAccess.packSubjects(Set.of("user:" + userXId)));
-        claim.set(ReleasedRouteClaimModel.RELEASED_AT, Instant.now());
+        claim.set(ReleasedRouteClaimModel.RELEASED_AT, Now.instant());
         Models.get(ReleasedRouteClaimModel.class).save(claim);
         claimId = claim.get(ReleasedRouteClaimModel.ID);
     }
@@ -148,8 +148,8 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, name);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }

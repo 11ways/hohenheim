@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.devtunnel;
 
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
+import be.elevenways.protoblast.common.time.Now;
 
 import java.net.URI;
 import java.time.Instant;
@@ -17,7 +18,7 @@ public final class DevLease {
     private final DevTunnelServerHandler handler;
     private final DevTunnelBridge bridge;
     private final UpstreamTarget target;
-    private final Instant registeredAt = Instant.now();
+    private final Instant registeredAt = Now.instant();
     private final String remoteDescription;
 
     DevLease(int siteId, String name, String origin, DevTunnelServerHandler handler,

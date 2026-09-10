@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.protoblast.common.time.Now;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 
@@ -9,7 +10,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
-import java.time.Instant;
 
 /**
  * Proxy access logging: the optional combined-format access log. Best-effort --
@@ -46,7 +46,7 @@ public final class AccessLog {
                 // so escape backslash and double-quote or a crafted value would break every
                 // combined-format parser reading the file. (Undertow already terminates header
                 // values at CR/LF, so newline injection is not reachable here.)
-                String line = clientIp + " - - [" + Instant.now() + "] \""
+                String line = clientIp + " - - [" + Now.instant() + "] \""
                     + method + " " + path + (query != null && !query.isEmpty() ? "?" + query : "")
                     + " " + ex.getProtocol() + "\" " + status + " " + size
                     + " \"" + quote(hostname) + "\""

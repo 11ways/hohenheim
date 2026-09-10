@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -221,7 +222,7 @@ public final class InstanceCapacity {
             measuredAt = server.get(ServerModel.PROBED_AT);
         }
         return measuredAt != null
-            && measuredAt.isAfter(Instant.now().minus(Duration.ofHours(hours)));
+            && measuredAt.isAfter(Now.instant().minus(Duration.ofHours(hours)));
     }
 
     // -- the footprint --------------------------------------------------------

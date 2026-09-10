@@ -1,0 +1,6 @@
+Presence of this file opts the project into the protoblast plugin's checkDirectClockReads
+compile gate (no Java source, test sources included, may read the wall clock directly --
+every current-time read goes through protoblast's offset clock, Now.instant()/Now.millis()
+(or Blast.now()/Blast.millis()), so a test can move time without the code caring; the
+offset is a constant, so elapsed-time measurement is safe on it too. System.nanoTime() is
+not a wall clock and stays allowed; see CheckDirectClockReadsTask).

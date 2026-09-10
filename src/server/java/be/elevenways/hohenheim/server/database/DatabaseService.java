@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -32,7 +33,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -944,7 +944,7 @@ public class DatabaseService extends DatasourceScoped {
             Path backupRoot = Path.of(HohenheimSettings.VALUES.getValue(
                 HohenheimSettings.Database.BACKUP_PATH));
             Path dump = backupRowToFile(row, backupRoot.resolve("moves").resolve(name),
-                STAMP.format(Instant.now()));
+                STAMP.format(Now.instant()));
             EngineHost old = hostOf(row);
             String oldHandle = handleOf(row, old);
             String before = fingerprint(old, oldHandle, database);

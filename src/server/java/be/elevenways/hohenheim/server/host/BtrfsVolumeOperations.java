@@ -3,11 +3,11 @@ package be.elevenways.hohenheim.server.host;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Instant;
 import java.util.Locale;
 
 /**
@@ -134,7 +134,7 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
                                                   @NonNull String label) {
         String parent = parentOf(hostPath);
         String name = hostPath.substring(hostPath.lastIndexOf('/') + 1);
-        String stamp = Instant.now().toString().replace(':', '-').replace('.', '-');
+        String stamp = Now.instant().toString().replace(':', '-').replace('.', '-');
         return parentOf(parent) + "/" + SNAPSHOT_DIRECTORY + "/"
             + parent.substring(parent.lastIndexOf('/') + 1) + "/" + name + "@"
             + sanitize(label) + "-" + stamp;

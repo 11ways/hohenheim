@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -18,7 +19,6 @@ import be.elevenways.zenit.common.orm.field.TextSearchable;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -318,7 +318,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
             row.set(BanModel.REASON, "wavea ban reason");
             row.set(BanModel.SOURCE, BanModel.SOURCE_MANUAL);
             row.set(BanModel.ACTIVE, true);
-            row.set(BanModel.CREATED_AT, Instant.now());
+            row.set(BanModel.CREATED_AT, Now.instant());
             bans.save(row);
         }
     }

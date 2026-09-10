@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler;
 import be.elevenways.hohenheim.server.instance.InstanceStatusReconciler.Verdict;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -307,8 +308,8 @@ class InstanceStatusReconcileTest {
 
     /** Bounded wait for an async redeploy (or an error settle) to stamp the column. */
     private static void awaitStatus(int instanceId, String expected, String what) {
-        long deadline = System.currentTimeMillis() + 15_000;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + 15_000;
+        while (Now.millis() < deadline) {
             if (expected.equals(statusOf(instanceId))) {
                 return;
             }

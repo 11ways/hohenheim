@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -15,7 +16,6 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -284,7 +284,7 @@ public final class CommunityScripts {
         template.set(InstanceTemplateModel.SOURCE, "community-scripts/ProxmoxVE@"
             + catalogRevision() + " " + appKey);
         template.set(InstanceTemplateModel.SOURCE_CHECKSUM, SecureTokens.sha256Hex(install));
-        template.set(InstanceTemplateModel.IMPORTED_AT, Instant.now());
+        template.set(InstanceTemplateModel.IMPORTED_AT, Now.instant());
         // NEVER approved by import: the operator act is the trust decision.
         templates.save(template);
         return template.get(InstanceTemplateModel.ID);

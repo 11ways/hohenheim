@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.network;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -43,7 +44,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -529,7 +529,7 @@ class VerifyWorkloadIsolationTest {
             Db.run(datasource, () -> {
                 Row application = Models.get(InstanceModel.class).findById(applicationId);
                 if (application != null) {
-                    application.set(InstanceModel.DELETED_AT, Instant.now());
+                    application.set(InstanceModel.DELETED_AT, Now.instant());
                     Models.get(InstanceModel.class).save(application);
                 }
             });

@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -983,7 +984,7 @@ public final class DockerInstanceRuntime
         this.docker.createContainer(handle, containerSpec, spec.hardening());
         try {
             this.docker.startContainer(handle);
-            long deadline = System.currentTimeMillis() + timeoutMs;
+            long deadline = Now.millis() + timeoutMs;
             while (true) {
                 Map<String, Object> inspect = this.docker.inspectContainer(handle);
                 Object state = inspect.get("State");
@@ -1000,7 +1001,7 @@ public final class DockerInstanceRuntime
                     }
                     return new InstallOutcome(exitCode, tail);
                 }
-                if (System.currentTimeMillis() > deadline) {
+                if (Now.millis() > deadline) {
                     throw new IOException("Install step for '" + spec.handle()
                         + "' exceeded its " + timeoutMs + "ms timeout and was removed");
                 }

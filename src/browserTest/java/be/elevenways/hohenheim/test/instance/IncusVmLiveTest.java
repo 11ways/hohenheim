@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.live.LiveLane;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -35,7 +36,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -620,7 +620,7 @@ class IncusVmLiveTest {
         template.set(InstanceTemplateModel.SETTINGS, settings);
         template.set(InstanceTemplateModel.REINSTALL_POLICY,
             InstanceTemplateModel.REINSTALL_PRESERVE);
-        template.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+        template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
         Models.get(InstanceTemplateModel.class).save(template);
         int templateId = template.get(InstanceTemplateModel.ID);
 
@@ -662,8 +662,8 @@ class IncusVmLiveTest {
 
     /** Bounded poll: never assert a fresh workload's state with zero retry. */
     private static void awaitTrue(String what, long timeoutMs, Supplier<Boolean> probe) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + timeoutMs;
+        while (Now.millis() < deadline) {
             if (Boolean.TRUE.equals(probe.get())) {
                 return;
             }

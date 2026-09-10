@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -88,7 +89,7 @@ public final class SecondaryZoneService {
             zs.lastSuccessEpochMs = lastTransfer.toEpochMilli();
 
             int expire = valueOr(zone.get(DnsZoneModel.SOA_EXPIRE), 1209600);
-            if (System.currentTimeMillis() - zs.lastSuccessEpochMs > expire * 1000L) {
+            if (Now.millis() - zs.lastSuccessEpochMs > expire * 1000L) {
                 // The replica outlived its SOA expire while we were down: do not serve it.
                 zone.set(DnsZoneModel.TRANSFER_STATUS, DnsZoneModel.TRANSFER_EXPIRED);
                 Models.get(DnsZoneModel.class).save(zone);
@@ -155,7 +156,7 @@ public final class SecondaryZoneService {
     }
 
     private void refreshAllDue() {
-        long now = System.currentTimeMillis();
+        long now = Now.millis();
         for (Row zone : Models.get(DnsZoneModel.class).findSecondaries()) {
             int zoneId = zone.get(DnsZoneModel.ID);
             ZoneState zs = state.computeIfAbsent(zoneId, k -> new ZoneState());
@@ -213,12 +214,12 @@ public final class SecondaryZoneService {
             DnsZoneSnapshot snapshot = DnsZoneStore.snapshotFromTransfer(zoneId, originString, records);
             store.putSecondarySnapshot(snapshot);
 
-            zs.lastSuccessEpochMs = System.currentTimeMillis();
+            zs.lastSuccessEpochMs = Now.millis();
             applySoa(zone, snapshot.getSoa());
             zone.set(DnsZoneModel.TRANSFER_STATUS, DnsZoneModel.TRANSFER_OK);
             zone.set(DnsZoneModel.TRANSFER_MESSAGE, null);
-            zone.set(DnsZoneModel.LAST_TRANSFER_AT, Instant.now());
-            zone.set(DnsZoneModel.LAST_CHECKED_AT, Instant.now());
+            zone.set(DnsZoneModel.LAST_TRANSFER_AT, Now.instant());
+            zone.set(DnsZoneModel.LAST_CHECKED_AT, Now.instant());
             zone.set(DnsZoneModel.REPLICA_RECORDS, serializeReplica(records));
             Models.get(DnsZoneModel.class).save(zone);
             scheduleRefresh(zone, zs);
@@ -246,7 +247,7 @@ public final class SecondaryZoneService {
             lastSuccess = persisted != null ? persisted.toEpochMilli() : 0;
         }
 
-        if (lastSuccess != 0 && System.currentTimeMillis() - lastSuccess > expire * 1000L) {
+        if (lastSuccess != 0 && Now.millis() - lastSuccess > expire * 1000L) {
             // Past the expire window: stop serving stale data (keep retrying).
             store.removeSecondarySnapshot(zone.get(DnsZoneModel.ORIGIN));
             zone.set(DnsZoneModel.TRANSFER_STATUS, DnsZoneModel.TRANSFER_EXPIRED);
@@ -257,28 +258,28 @@ public final class SecondaryZoneService {
             Blast.log("DNS: secondary transfer of", zone.get(DnsZoneModel.ORIGIN), "failed -", message);
         }
         zone.set(DnsZoneModel.TRANSFER_MESSAGE, truncate(message));
-        zone.set(DnsZoneModel.LAST_CHECKED_AT, Instant.now());
+        zone.set(DnsZoneModel.LAST_CHECKED_AT, Now.instant());
         Models.get(DnsZoneModel.class).save(zone);
 
         int retry = valueOr(zone.get(DnsZoneModel.SOA_RETRY), 3600);
-        zs.nextAttemptEpochMs = System.currentTimeMillis() + retry * 1000L;
+        zs.nextAttemptEpochMs = Now.millis() + retry * 1000L;
     }
 
     private void markError(@NonNull Row zone, @NonNull ZoneState zs, @NonNull String message) {
         zone.set(DnsZoneModel.TRANSFER_STATUS, DnsZoneModel.TRANSFER_ERROR);
         zone.set(DnsZoneModel.TRANSFER_MESSAGE, truncate(message));
-        zone.set(DnsZoneModel.LAST_CHECKED_AT, Instant.now());
+        zone.set(DnsZoneModel.LAST_CHECKED_AT, Now.instant());
         Models.get(DnsZoneModel.class).save(zone);
-        zs.nextAttemptEpochMs = System.currentTimeMillis() + 300_000L;
+        zs.nextAttemptEpochMs = Now.millis() + 300_000L;
     }
 
     private static void scheduleRefresh(@NonNull Row zone, @NonNull ZoneState zs) {
         int refresh = valueOr(zone.get(DnsZoneModel.SOA_REFRESH), 7200);
-        zs.nextAttemptEpochMs = System.currentTimeMillis() + refresh * 1000L;
+        zs.nextAttemptEpochMs = Now.millis() + refresh * 1000L;
     }
 
     private static void stampChecked(@NonNull Row zone) {
-        zone.set(DnsZoneModel.LAST_CHECKED_AT, Instant.now());
+        zone.set(DnsZoneModel.LAST_CHECKED_AT, Now.instant());
         Models.get(DnsZoneModel.class).save(zone);
     }
 

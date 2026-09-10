@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -107,7 +108,7 @@ class WordPressTemplateLiveTest {
                 .where(InstanceTemplateModel.NAME.eq(
                     WordPressTemplateSeeder.templateName(WordPressPhp.PHP_8_1)))
                 .first();
-            template.set(InstanceTemplateModel.APPROVED_AT, Instant.now());
+            template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
             templates.save(template);
 
             // 1. Create from the template: the instance row AND its declared database.
@@ -175,12 +176,12 @@ class WordPressTemplateLiveTest {
     // -- plumbing -------------------------------------------------------------
 
     private static String awaitDatabase(int databaseId, Duration limit) {
-        Instant deadline = Instant.now().plus(limit);
+        Instant deadline = Now.instant().plus(limit);
         while (true) {
             Row row = Models.get(DatabaseModel.class).findById(databaseId);
             String status = row == null ? null : row.get(DatabaseModel.STATUS);
             if (DatabaseModel.STATUS_ACTIVE.equals(status) || DatabaseModel.STATUS_FAILED.equals(status)
-                    || Instant.now().isAfter(deadline)) {
+                    || Now.instant().isAfter(deadline)) {
                 return status;
             }
             pause(2000);
@@ -205,9 +206,9 @@ class WordPressTemplateLiveTest {
             .uri(URI.create("http://127.0.0.1:" + port + "/"))
             .timeout(Duration.ofSeconds(20))
             .GET().build();
-        Instant deadline = Instant.now().plus(limit);
+        Instant deadline = Now.instant().plus(limit);
         HttpResponse<String> last = null;
-        while (Instant.now().isBefore(deadline)) {
+        while (Now.instant().isBefore(deadline)) {
             try {
                 last = client.send(request, HttpResponse.BodyHandlers.ofString());
                 if (last.statusCode() < 500) {

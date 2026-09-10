@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.cms.InstanceQuotaResource;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -502,11 +503,11 @@ class AdminPagesTest extends HohenheimTestBase {
 
             // 4. Give it an expiry and a publisher: the same entries now read as an absolute
             //    stamp plus the relative wording, and the enum reads as its LABEL.
-            Instant expiry = Instant.now().plus(Duration.ofDays(40));
+            Instant expiry = Now.instant().plus(Duration.ofDays(40));
             cert.set(CertificateModel.EXPIRES_ON, expiry);
             cert.set(CertificateModel.CHALLENGE_TYPE, CertificateModel.CHALLENGE_DNS);
             cert.set(CertificateModel.DNS_PUBLISHER, CertificateModel.DNS_PUBLISHER_INTERNAL);
-            cert.set(CertificateModel.NEXT_ATTEMPT_AT, Instant.now().plus(Duration.ofHours(6)));
+            cert.set(CertificateModel.NEXT_ATTEMPT_AT, Now.instant().plus(Duration.ofHours(6)));
             certModel.save(cert);
 
             navigateToApp("/admin/certificates/" + cert.get(CertificateModel.ID));
@@ -983,7 +984,7 @@ class AdminPagesTest extends HohenheimTestBase {
         entry.set(ActivityModel.ACTION, "update");
         entry.set(ActivityModel.ACTOR, String.valueOf(actorId));
         entry.set(ActivityModel.ORIGIN, "web");
-        entry.set(ActivityModel.CREATED_AT, Instant.now());
+        entry.set(ActivityModel.CREATED_AT, Now.instant());
         Models.get(ActivityModel.class).save(entry);
 
         try {
@@ -1009,8 +1010,8 @@ class AdminPagesTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, displayName);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }

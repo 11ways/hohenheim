@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.PermissionResolver;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -147,7 +148,7 @@ public final class ReleasedClaims {
         // empty set reads as "operator-owned" and would hand the hostname to anyone.
         row.set(ReleasedRouteClaimModel.FORMER_SUBJECTS,
             subjects != null ? join(subjects) : "unknown:unreadable");
-        row.set(ReleasedRouteClaimModel.RELEASED_AT, Instant.now());
+        row.set(ReleasedRouteClaimModel.RELEASED_AT, Now.instant());
         ledger.save(row);
     }
 
@@ -222,7 +223,7 @@ public final class ReleasedClaims {
         List<String> listeners = RouteClaims.listenersOf(claimKey);
         for (Row claim : Models.get(ReleasedRouteClaimModel.class).find()
                 .where(ReleasedRouteClaimModel.RELEASED_AT
-                    .gte(Instant.now().minus(Duration.ofDays(days))))
+                    .gte(Now.instant().minus(Duration.ofDays(days))))
                 .orderBy(ReleasedRouteClaimModel.RELEASED_AT, SortOrder.DESC)
                 .orderBy(ReleasedRouteClaimModel.ID, SortOrder.DESC).all()) {
             String releasedKey = claim.get(ReleasedRouteClaimModel.CLAIM_KEY);
@@ -250,7 +251,7 @@ public final class ReleasedClaims {
         if (releasedAt == null) {
             return windowDays();
         }
-        long left = Duration.between(Instant.now(), releasedAt.plus(Duration.ofDays(windowDays())))
+        long left = Duration.between(Now.instant(), releasedAt.plus(Duration.ofDays(windowDays())))
             .toDays();
         return Math.max(1, left + 1);
     }
@@ -267,7 +268,7 @@ public final class ReleasedClaims {
         }
         return Models.get(ReleasedRouteClaimModel.class).find()
             .where(ReleasedRouteClaimModel.CLAIM_KEY.eq(claimKey))
-            .and(ReleasedRouteClaimModel.RELEASED_AT.gte(Instant.now().minus(Duration.ofDays(days))))
+            .and(ReleasedRouteClaimModel.RELEASED_AT.gte(Now.instant().minus(Duration.ofDays(days))))
             .orderBy(ReleasedRouteClaimModel.RELEASED_AT, SortOrder.DESC)
             .orderBy(ReleasedRouteClaimModel.ID, SortOrder.DESC)
             .first();

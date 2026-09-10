@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -115,7 +116,7 @@ class SiteHistoryTest extends HohenheimTestBase {
         // 2. Delete it the way SiteResource does: sites are trashed by hand, so the
         //    row stays physically present with deleted_at stamped.
         Row live = model.find().where(SiteModel.ID.eq(siteId)).first();
-        live.set(SiteModel.DELETED_AT, java.time.Instant.now());
+        live.set(SiteModel.DELETED_AT, Now.instant());
         model.save(live);
 
         // 3. Restoring the revision taken while the site was live rewinds the name

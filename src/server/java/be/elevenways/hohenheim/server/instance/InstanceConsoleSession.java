@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.time.Now;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -94,7 +95,7 @@ final class InstanceConsoleSession {
             ? null : stopCommand.trim();
         this.redactor = redactor;
         this.logSink = logSink;
-        this.lastFlushAt = System.currentTimeMillis();
+        this.lastFlushAt = Now.millis();
         this.exitListener = exitListener;
         JobRunner.startVirtualThread(this::pump);
     }
@@ -205,7 +206,7 @@ final class InstanceConsoleSession {
         if (matched != null) {
             matched.run();
         }
-        if (System.currentTimeMillis() - this.lastFlushAt >= FLUSH_INTERVAL_MS) {
+        if (Now.millis() - this.lastFlushAt >= FLUSH_INTERVAL_MS) {
             this.persistLog();
         }
     }
@@ -216,7 +217,7 @@ final class InstanceConsoleSession {
         if (sink == null) {
             return;
         }
-        this.lastFlushAt = System.currentTimeMillis();
+        this.lastFlushAt = Now.millis();
         String text;
         synchronized (this) {
             text = this.ring.toString();

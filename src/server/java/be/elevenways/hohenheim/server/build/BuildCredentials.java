@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -112,7 +113,7 @@ public final class BuildCredentials {
         }
         String token = SecureTokens.randomToken();
         long ttl = ttlMs > 0 ? ttlMs : DEFAULT_TTL_MS;
-        LEASES.put(token, new Entry(buildId, purpose, secret, System.currentTimeMillis() + ttl));
+        LEASES.put(token, new Entry(buildId, purpose, secret, Now.millis() + ttl));
         return new Lease(token, purpose, secret);
     }
 
@@ -129,7 +130,7 @@ public final class BuildCredentials {
         if (entry == null) {
             return null;
         }
-        if (entry.expiresAtMillis() <= System.currentTimeMillis()) {
+        if (entry.expiresAtMillis() <= Now.millis()) {
             LEASES.remove(token, entry);
             Blast.log("BUILD: credential lease of build", entry.buildId(), "expired before use");
             return null;

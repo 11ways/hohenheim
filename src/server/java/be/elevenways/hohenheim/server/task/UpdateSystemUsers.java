@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -64,7 +65,7 @@ public class UpdateSystemUsers extends ScheduledTask {
         List<ParsedUser> parsed = parsePasswdFile();
 
         SystemUserModel model = Models.get(SystemUserModel.class);
-        Instant now = Instant.now();
+        Instant now = Now.instant();
         Set<String> seen = new HashSet<>();
 
         for (ParsedUser pu : parsed) {

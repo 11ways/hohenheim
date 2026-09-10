@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.xbill.DNS.Flags;
 import org.xbill.DNS.Message;
@@ -81,7 +82,7 @@ public final class DnsRateLimiter {
             return Verdict.ALLOW;
         }
 
-        long now = System.currentTimeMillis() / 1000;
+        long now = Now.millis() / 1000;
         if (now != epochSecond) {
             synchronized (this) {
                 if (now != epochSecond) {

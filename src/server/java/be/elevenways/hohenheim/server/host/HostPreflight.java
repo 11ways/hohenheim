@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -119,7 +120,7 @@ public final class HostPreflight {
             HostProbe.Outcome outcome = HostProbe.classify(refusal);
             report = new Report(List.of(new Check("daemon", STATUS_FAIL, true,
                 outcome.kind().token + ": " + outcome.detail())),
-                Map.of(), false, Instant.now(), outcome);
+                Map.of(), false, Now.instant(), outcome);
         }
         store(serverName, report);
         return report;
@@ -149,7 +150,7 @@ public final class HostPreflight {
                 passed = false;
             }
         }
-        return new Report(List.copyOf(checks), facts, passed, Instant.now(), daemonFailure[0]);
+        return new Report(List.copyOf(checks), facts, passed, Now.instant(), daemonFailure[0]);
     }
 
     // -- individual probes ----------------------------------------------------

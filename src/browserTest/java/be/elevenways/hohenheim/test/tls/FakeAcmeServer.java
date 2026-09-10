@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.tls;
 
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
+import be.elevenways.protoblast.common.time.Now;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -374,7 +375,7 @@ public final class FakeAcmeServer implements AutoCloseable {
         }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("status", order.status);
-        body.put("expires", Instant.now().plus(1, ChronoUnit.DAYS).toString());
+        body.put("expires", Now.instant().plus(1, ChronoUnit.DAYS).toString());
         body.put("identifiers", identifiers);
         body.put("finalize", this.base + "/finalize/" + orderId);
         List<Object> authzUrls = new ArrayList<>();
@@ -395,7 +396,7 @@ public final class FakeAcmeServer implements AutoCloseable {
     private Map<String, Object> authzBody(String authzId, Authz authz) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("status", authz.status);
-        body.put("expires", Instant.now().plus(1, ChronoUnit.DAYS).toString());
+        body.put("expires", Now.instant().plus(1, ChronoUnit.DAYS).toString());
         body.put("identifier", Map.of("type", "dns", "value", authz.identifier));
         if (authz.wildcard) {
             body.put("wildcard", true);
@@ -424,7 +425,7 @@ public final class FakeAcmeServer implements AutoCloseable {
 
     private static X509Certificate selfSignedCa(KeyPair keyPair) throws Exception {
         X500Name name = new X500Name("CN=Hohenheim Test CA");
-        Instant now = Instant.now();
+        Instant now = Now.instant();
         JcaX509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(name,
             BigInteger.ONE, Date.from(now.minus(1, ChronoUnit.DAYS)),
             Date.from(now.plus(3650, ChronoUnit.DAYS)), name, keyPair.getPublic());
@@ -436,7 +437,7 @@ public final class FakeAcmeServer implements AutoCloseable {
     /** Sign the client's REAL PKCS#10 into a REAL chain; a stub PEM would prove nothing. */
     private String sign(byte[] csrDer, List<String> identifiers) throws Exception {
         JcaPKCS10CertificationRequest csr = new JcaPKCS10CertificationRequest(csrDer);
-        Instant now = Instant.now();
+        Instant now = Now.instant();
         JcaX509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
             new X500Name("CN=Hohenheim Test CA"),
             BigInteger.valueOf(this.random.nextInt(Integer.MAX_VALUE)),

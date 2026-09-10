@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.source.TestSources;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -35,7 +36,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -102,8 +102,8 @@ class ManagePanelTest extends HohenheimTestBase {
         user.set(UserModel.EMAIL, "operator@hohenheim.local");
         user.set(UserModel.DISPLAY_NAME, "Site Operator");
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         operatorId = user.get(UserModel.ID);
 
@@ -466,8 +466,8 @@ class ManagePanelTest extends HohenheimTestBase {
         outsider.set(UserModel.EMAIL, "outsider@hohenheim.local");
         outsider.set(UserModel.DISPLAY_NAME, "No Grants");
         outsider.set(UserModel.ENABLED, true);
-        outsider.set(UserModel.CREATED_AT, Instant.now());
-        outsider.set(UserModel.UPDATED_AT, Instant.now());
+        outsider.set(UserModel.CREATED_AT, Now.instant());
+        outsider.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(outsider);
 
         Session session = Zenit.getSessionStore().create();
@@ -569,8 +569,8 @@ class ManagePanelTest extends HohenheimTestBase {
         tenant.set(UserModel.EMAIL, "budget@hohenheim.local");
         tenant.set(UserModel.DISPLAY_NAME, "Budget Tenant");
         tenant.set(UserModel.ENABLED, true);
-        tenant.set(UserModel.CREATED_AT, Instant.now());
-        tenant.set(UserModel.UPDATED_AT, Instant.now());
+        tenant.set(UserModel.CREATED_AT, Now.instant());
+        tenant.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(tenant);
         Integer tenantId = tenant.get(UserModel.ID);
 

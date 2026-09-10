@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -18,7 +19,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
@@ -158,7 +158,7 @@ class InstanceQuotaTest extends HohenheimTestBase {
         //    The release must ride this deleted_at null -> non-null transition.
         Row winner = created.get(0);
         winner.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
-        winner.set(InstanceModel.DELETED_AT, Instant.now());
+        winner.set(InstanceModel.DELETED_AT, Now.instant());
         Models.get(InstanceModel.class).save(winner);
         assertThat(Quotas.usedOf(OPERATOR_BUCKET))
             .as("step 4: the soft-delete transition hands the slot back")

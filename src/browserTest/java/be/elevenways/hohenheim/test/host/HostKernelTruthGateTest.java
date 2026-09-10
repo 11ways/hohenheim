@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -23,7 +24,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -344,7 +344,7 @@ class HostKernelTruthGateTest {
             HostPreflight.store("gate-posture", new HostPreflight.Report(
                 List.of(new HostPreflight.Check("lsm", HostPreflight.STATUS_FAIL, false,
                     "no LSM on this kernel")),
-                Map.of(), true, Instant.now(), null));
+                Map.of(), true, Now.instant(), null));
             HostAdmission.requireInstancePlacement(serverId,
                 WorkloadIsolation.SHARED_KERNEL, BUCKET);
         });
@@ -372,7 +372,7 @@ class HostKernelTruthGateTest {
             }
         }
         HostPreflight.store(name, new HostPreflight.Report(checks, Map.of(), passed,
-            Instant.now(), null));
+            Now.instant(), null));
     }
 
     /**
@@ -389,6 +389,6 @@ class HostKernelTruthGateTest {
         }
         Map<String, Object> facts = new LinkedHashMap<>();
         HostPreflight.store(name, new HostPreflight.Report(List.copyOf(checks), facts,
-            true, Instant.now(), null));
+            true, Now.instant(), null));
     }
 }

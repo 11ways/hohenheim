@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -327,7 +328,7 @@ public final class DatabaseInstances {
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
             Row row = Models.get(InstanceModel.class).findById(instanceId);
             if (row != null) {
-                row.set(InstanceModel.DELETED_AT, java.time.Instant.now());
+                row.set(InstanceModel.DELETED_AT, Now.instant());
                 Models.get(InstanceModel.class).save(row);
             }
         });

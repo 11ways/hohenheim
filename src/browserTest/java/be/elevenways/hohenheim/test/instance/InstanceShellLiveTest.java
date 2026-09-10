@@ -26,6 +26,7 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -53,7 +54,6 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -128,7 +128,7 @@ class InstanceShellLiveTest {
     /** Timestamped progress marker: a hang must name the step it hung ON. */
     private static void mark(String what) {
         System.out.println("[shell-live +"
-            + (System.currentTimeMillis() - startedAt) + "ms] " + what);
+            + (Now.millis() - startedAt) + "ms] " + what);
         System.out.flush();
     }
 
@@ -173,7 +173,7 @@ class InstanceShellLiveTest {
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
-        startedAt = System.currentTimeMillis();
+        startedAt = Now.millis();
         startStallDump();
         String[] handle = new String[1];
         try {
@@ -337,7 +337,7 @@ class InstanceShellLiveTest {
         LiveLane.require(LiveLane.Need.NETNS, netns != null,
             "no private netns: the instance tier refuses to deploy unprotected");
 
-        startedAt = System.currentTimeMillis();
+        startedAt = Now.millis();
         startStallDump();
         String[] handle = new String[1];
         try {
@@ -466,8 +466,8 @@ class InstanceShellLiveTest {
 
     /** Wait for the shell to produce {@code expected}; fail with the message if it never does. */
     private static void awaitOutput(StringBuilder output, String expected, String failure) {
-        long deadline = System.currentTimeMillis() + OUTPUT_TIMEOUT_MS;
-        while (System.currentTimeMillis() < deadline) {
+        long deadline = Now.millis() + OUTPUT_TIMEOUT_MS;
+        while (Now.millis() < deadline) {
             if (snapshot(output).contains(expected)) {
                 return;
             }
@@ -505,8 +505,8 @@ class InstanceShellLiveTest {
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, email);
         user.set(UserModel.ENABLED, true);
-        user.set(UserModel.CREATED_AT, Instant.now());
-        user.set(UserModel.UPDATED_AT, Instant.now());
+        user.set(UserModel.CREATED_AT, Now.instant());
+        user.set(UserModel.UPDATED_AT, Now.instant());
         AuthModels.users().save(user);
         return user.get(UserModel.ID);
     }

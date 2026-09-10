@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.task.SuperviseProxyListeners;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.task.DefaultTaskContext;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.server.Comms;
@@ -106,7 +107,7 @@ class ProxyListenerSupervisionTest {
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, blockedPort);
 
-            AtomicLong clock = new AtomicLong(System.currentTimeMillis());
+            AtomicLong clock = new AtomicLong(Now.millis());
             proxy = new ProxyServer();
             proxy.setClockForTesting(clock::get);
             proxy.start();
@@ -230,7 +231,7 @@ class ProxyListenerSupervisionTest {
         // Step 1: HTTP on a privileged port fails at start and records attempt 1.
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
-        AtomicLong clock = new AtomicLong(System.currentTimeMillis());
+        AtomicLong clock = new AtomicLong(Now.millis());
         ProxyServer httpProxy = new ProxyServer();
         httpProxy.setClockForTesting(clock::get);
         httpProxy.start();
@@ -276,7 +277,7 @@ class ProxyListenerSupervisionTest {
         // Step 1: an HTTP listener that failed to start (privileged port), attempt 1 armed.
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 80);
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.HTTPS_PORT, 0);
-        AtomicLong clock = new AtomicLong(System.currentTimeMillis());
+        AtomicLong clock = new AtomicLong(Now.millis());
         ProxyServer taskProxy = new ProxyServer();
         taskProxy.setClockForTesting(clock::get);
         taskProxy.start();
@@ -328,7 +329,7 @@ class ProxyListenerSupervisionTest {
 
     /** The try-with-resources scope ends before step 5; rebind a clock the proxy already uses. */
     private static AtomicLong reclock(ProxyServer target) {
-        AtomicLong clock = new AtomicLong(System.currentTimeMillis());
+        AtomicLong clock = new AtomicLong(Now.millis());
         target.setClockForTesting(clock::get);
         return clock;
     }
