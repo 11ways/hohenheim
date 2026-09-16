@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command // \"\"' | grep -qE '(^|[;&|(])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((bash|sh|zsh|env)[[:space:]]+)?([^[:space:]]*/)?(gradlew|gradle)([[:space:]]|$)' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Direct Gradle execution is disabled in this workspace. Use zenit-dev build / zenit-dev test (or the zd_build / zd_test MCP tools) - they provide the locking, receipts, dedup and reuse this workflow depends on.\"}}' || true",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command // \"\"' | grep -qE '(^|[;&|(])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((bash|sh|zsh|env)[[:space:]]+)?([^[:space:]]*/)?(ssh|scp|sftp)([[:space:]]|$)' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"One-shot ssh/scp/sftp from Bash is refused in this workspace. Remote hosts go through sketerm: term_open with host ONCE per host, then term_exec for every command (structured output, real exit status); files via scp_get/scp_put; tunnels via port_forward_open. A script that ssh-es internally (tools/deploy-host.sh, zenit-dev deployed) is fine to run.\"}}' || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+// harness noise 1786224157
