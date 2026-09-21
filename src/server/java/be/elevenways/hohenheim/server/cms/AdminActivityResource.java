@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ActivityText;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.Accountability;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -125,7 +126,7 @@ public final class AdminActivityResource extends ActivityResource {
 
         if (ActivityModel.MODEL.getName().equals(name)) {
             String token = row.get(ActivityModel.MODEL);
-            String humanized = ActivityPresentation.humanizeModelToken(token);
+            String humanized = ActivityText.humanizeModelToken(token);
             return humanized.isEmpty() ? null : humanized;
         }
 

@@ -1,0 +1,9 @@
+Presence of this file opts the project into the protoblast plugin's checkLiteralColors
+compile gate (a literal color -- a hex, rgb(), hsl(), oklch() and their siblings, or a
+named color -- in the declaration values of authored .scss, .css and .hwk styles is decided
+outside the design tokens, so no theme, color scheme or brand ever reaches it; see
+CheckLiteralColorsTask). A deliberate literal carries a "literal-color: <why>" comment.
+
+This file declares no token source: no custom-property or Sass-variable definition in this
+project holds a literal color. A line opening with the token-source key, a colon and a glob
+relative to this directory would declare one; until then such a definition is reported.

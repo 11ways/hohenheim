@@ -1,9 +1,9 @@
 {% tag HhInstanceStats {
-    {#- Live charts for one running instance: renders the server-seeded history, opens the
-        instance-stats channel on mount, and folds every arriving sample into the series.
-        The subscription belongs to THIS element (opened in @mount, closed by Cleanup.on),
-        never to a render expression -- hydration revives values without re-running lets,
-        so a render-time subscription simply does not exist after a hard load. -#}
+    /* Live charts for one running instance: renders the server-seeded history, opens the
+       instance-stats channel on mount, and folds every arriving sample into the series.
+       The subscription belongs to THIS element (opened in @mount, closed by Cleanup.on),
+       never to a render expression -- hydration revives values without re-running lets,
+       so a render-time subscription simply does not exist after a hard load. */
     public required instanceId: Integer
     public cpuSeed: List = null
     public memorySeed: List = null

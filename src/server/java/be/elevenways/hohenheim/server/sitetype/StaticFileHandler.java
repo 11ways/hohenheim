@@ -159,7 +159,7 @@ public class StaticFileHandler implements SiteRequestHandler {
             html.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">");
             String safeRelPath = escapeHtml(relativePath);
             html.append("<title>Index of ").append(safeRelPath).append("</title>");
-            html.append("<style>body{font-family:monospace;padding:2rem}a{color:#06c}");
+            html.append("<style>:root{color-scheme:light dark}body{font-family:monospace;padding:2rem}a{color:LinkText}");
             html.append("table{border-collapse:collapse}td{padding:0.25rem 1rem}</style>");
             html.append("</head><body><h1>Index of ").append(safeRelPath).append("</h1>");
             html.append("<table>");
