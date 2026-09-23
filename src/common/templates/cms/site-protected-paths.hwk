@@ -11,10 +11,7 @@
 {% declare hasRowActions: Boolean = true %}
 {% declare canAdd: Boolean = true %}
 {% declare recordTabs: List<RecordTabState> %}
-{% declare flashMessage: Microcopy = null %}
-{% declare flashVariant: String = "default" %}
-{% declare flashDuration: Integer = 0 %}
-{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+{% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
@@ -23,7 +20,6 @@
         {% if canAdd %}<pl-button variant="primary" use:Zenit.route={% addTarget %} id="add-protected-path-link">{{ t("add_protected_path", scope: "site_protected_paths") }}</pl-button>{% /if %}
     </header>
 
-    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
     {% if paths %}

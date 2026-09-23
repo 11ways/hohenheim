@@ -9,18 +9,17 @@ import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.RowAction;
-import be.elevenways.zenit.cms.common.flash.FlashToast;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
-import be.elevenways.zenit.cms.server.page.CmsPageContext;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -29,6 +28,7 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.flash.Flash;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -163,8 +163,7 @@ public final class SpamserviceClientKeysResource extends SpamserviceRemoteResour
             // AIDEV-NOTE: the generated key is a one-shot disclosure; the secret-arg
             // variant parks it in SecretDisclosures so only a single-use handle
             // rides the session (an adopted key was operator-entered, not disclosed).
-            CmsPageContext.stashFlashToast(context.conduit(),
-                new FlashToast(message, CmsActionResult.Toast.Level.SUCCESS),
+            Flash.stash(context.conduit(), message, FlashLevel.SUCCESS,
                 created.generated() ? Set.of("key") : Set.of());
         }
         return created.clientId() + "~" + created.id();

@@ -22,10 +22,7 @@
 {% declare quickAddCreateUrl: String = "" %}
 {% declare addRecordTarget: RouteTarget = null %}
 {% declare recordTabs: List<RecordTabState> %}
-{% declare flashMessage: Microcopy = null %}
-{% declare flashVariant: String = "default" %}
-{% declare flashDuration: Integer = 0 %}
-{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+{% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page" data-cms-wide>
@@ -41,7 +38,6 @@
         {% /if %}
     </header>
 
-    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
     {% if available %}

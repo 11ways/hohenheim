@@ -6,10 +6,7 @@
 {% declare attachPeerTarget: RouteTarget %}
 {% declare recordTabs: List<RecordTabState> %}
 {% declare timeWording: RelativeTimeWording %}
-{% declare flashMessage: Microcopy = null %}
-{% declare flashVariant: String = "default" %}
-{% declare flashDuration: Integer = 0 %}
-{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+{% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
@@ -18,7 +15,6 @@
         <pl-button variant="primary" use:Zenit.route={% attachPeerTarget %} id="attach-secondary-link">{{ t("attach", scope: "dns_secondaries") }}</pl-button>
     </header>
 
-    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
     {#- Every fact gets its own column. The AXFR serial and the time it was served used to
