@@ -17,9 +17,6 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.cms.common.flash.CmsFlash;
-import be.elevenways.zenit.cms.common.flash.FlashEncoding;
-import be.elevenways.zenit.cms.common.flash.FlashToast;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -39,6 +36,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import be.elevenways.zenit.common.session.SessionToken;
+import be.elevenways.zenit.common.flash.FlashEncoding;
+import be.elevenways.zenit.server.flash.Flash;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -195,23 +194,23 @@ public abstract class HohenheimTestBase extends HawkeyeBrowserTestBase {
      * on a Location header for an error/saved/restored message is asserting the old
      * channel and must read the flash instead.
      */
-    protected static @Nullable FlashToast popFlash() {
+    protected static FlashEncoding.@Nullable Decoded popFlash() {
         return popFlash(sessionToken);
     }
 
     /** Pop the pending flash toast of an ARBITRARY session (a tenant's, not the admin's). */
-    protected static @Nullable FlashToast popFlash(String token) {
+    protected static FlashEncoding.@Nullable Decoded popFlash(String token) {
         Session session = Zenit.getSessionStore().get(SessionToken.of(token));
         if (session == null) {
             return null;
         }
-        Map<String, String> pending = session.get(CmsFlash.PENDING_BY_TAB);
-        if (pending == null || !pending.containsKey(CmsFlash.UNTABBED)) {
+        Map<String, String> pending = session.get(Flash.PENDING_BY_TAB);
+        if (pending == null || !pending.containsKey(Flash.UNTABBED)) {
             return null;
         }
         LinkedHashMap<String, String> remaining = new LinkedHashMap<>(pending);
-        String encoded = remaining.remove(CmsFlash.UNTABBED);
-        session.set(CmsFlash.PENDING_BY_TAB, remaining);
+        String encoded = remaining.remove(Flash.UNTABBED);
+        session.set(Flash.PENDING_BY_TAB, remaining);
         Zenit.getSessionStore().save(session);
         return FlashEncoding.decode(encoded);
     }

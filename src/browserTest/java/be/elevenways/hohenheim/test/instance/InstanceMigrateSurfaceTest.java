@@ -17,9 +17,9 @@ import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.auth.server.ZenitAuth;
-import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.RowAction;
-import be.elevenways.zenit.cms.common.flash.FlashToast;
+import be.elevenways.zenit.common.flash.FlashEncoding;
+import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -260,7 +260,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .withFailMessage("step 1: the refused submit must answer with the lane's"
                 + " post-redirect-get, never an error page (HTTP %s)", sameHost.statusCode())
             .isIn(302, 303);
-        FlashToast sameHostFlash = popFlash();
+        FlashEncoding.Decoded sameHostFlash = popFlash();
         assertThat(sameHostFlash)
             .withFailMessage("step 1: the refused submit stashed no flash at all -- the"
                 + " operator would see the page reload as if the move had happened")
@@ -268,7 +268,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         assertThat(sameHostFlash.level())
             .withFailMessage("step 1: a refused migration reported level %s -- anything"
                 + " but ERROR reads as a success", sameHostFlash.level())
-            .isEqualTo(CmsActionResult.Toast.Level.ERROR);
+            .isEqualTo(FlashLevel.ERROR);
         assertThat(sameHostFlash.message().key())
             .withFailMessage("step 1: the flash must NAME the refusal (found '%s')",
                 sameHostFlash.message().key())
@@ -288,10 +288,10 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .withFailMessage("step 2: the refused submit must answer with the lane's"
                 + " post-redirect-get (HTTP %s)", other.statusCode())
             .isIn(302, 303);
-        FlashToast otherFlash = popFlash();
+        FlashEncoding.Decoded otherFlash = popFlash();
         assertThat(otherFlash).as("step 2: the second refusal stashed a flash too").isNotNull();
         assertThat(otherFlash.level())
-            .as("step 2: also as an ERROR").isEqualTo(CmsActionResult.Toast.Level.ERROR);
+            .as("step 2: also as an ERROR").isEqualTo(FlashLevel.ERROR);
         assertThat(otherFlash.message().key())
             .withFailMessage("step 2: and named as the ADMISSION refusal, so the operator"
                 + " learns what to fix (found '%s')", otherFlash.message().key())

@@ -17,17 +17,13 @@
 {% declare cancelTarget: RouteTarget %}
 {% declare formError: String = "" %}
 {% declare variableForm: FormState %}
-{% declare flashMessage: Microcopy = null %}
-{% declare flashVariant: String = "default" %}
-{% declare flashDuration: Integer = 0 %}
-{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+{% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-form-page">
     <header class="cms-resource-list-header">
         <h1>{{ t("create_from", scope: "instance_from_template") }} {{ templateName }}</h1>
     </header>
-    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
 
     {% if templateDescription != "" %}<p>{{ templateDescription }}</p>{% /if %}
     {% if !approved %}

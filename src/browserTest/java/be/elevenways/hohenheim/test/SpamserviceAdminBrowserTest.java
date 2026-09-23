@@ -1,13 +1,12 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.flash.CmsFlash;
-import be.elevenways.zenit.cms.common.flash.FlashEncoding;
-import be.elevenways.zenit.cms.common.flash.FlashToast;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.session.SessionToken;
+import be.elevenways.zenit.common.flash.FlashEncoding;
+import be.elevenways.zenit.common.flash.FlashLevel;
+import be.elevenways.zenit.server.flash.Flash;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -62,9 +61,9 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
     void appOwnedSpamservicePageRendersThePendingFlash() throws Exception {
         Session session = Zenit.getSessionStore().get(SessionToken.of(sessionToken));
         assertThat(session).isNotNull();
-        session.set(CmsFlash.PENDING_BY_TAB, Map.of(CmsFlash.UNTABBED,
-            FlashEncoding.encode(new FlashToast(Microcopy.of("saved").withFilter("scope", "settings"),
-                CmsActionResult.Toast.Level.ERROR))));
+        session.set(Flash.PENDING_BY_TAB, Map.of(Flash.UNTABBED,
+            FlashEncoding.encode(Microcopy.of("saved").withFilter("scope", "settings"),
+                FlashLevel.ERROR, "spamservice-page")));
         Zenit.getSessionStore().save(session);
 
         var response = adminGet("/admin/spamservice");
@@ -72,10 +71,10 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body())
             .as("the app-owned page must render the centrally injected flash")
-            .contains("data-cms-toast");
+            .contains("data-flash-toast");
         Session consumed = Zenit.getSessionStore().get(SessionToken.of(sessionToken));
         assertThat(consumed).isNotNull();
-        assertThat(consumed.get(CmsFlash.PENDING_BY_TAB))
+        assertThat(consumed.get(Flash.PENDING_BY_TAB))
             .as("rendering consumes the one-shot flash")
             .isNull();
     }

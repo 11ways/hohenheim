@@ -26,10 +26,7 @@
     Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
 {% declare returnParam: String %}
 {% declare recordTabs: List<RecordTabState> %}
-{% declare flashMessage: Microcopy = null %}
-{% declare flashVariant: String = "default" %}
-{% declare flashDuration: Integer = 0 %}
-{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+{% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
@@ -37,7 +34,6 @@
         <h1>{{ instanceName }}</h1>
     </header>
 
-    {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
     {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
     {#- A runtime with no file lane states the absence; a broken browser would be worse

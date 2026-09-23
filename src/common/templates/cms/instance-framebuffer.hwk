@@ -7,10 +7,7 @@
 {% declare running: Boolean = false %}
 {% declare framebufferWsUrl: String %}
 {% declare recordTabs: List<RecordTabState> %}
-{% declare flashMessage: Microcopy = null %}
-{% declare flashVariant: String = "default" %}
-{% declare flashDuration: Integer = 0 %}
-{% extend "zenitcms:shell" var:title=title var:flashMessage=flashMessage %}
+{% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
     <section class="cms-resource-list-page">
@@ -18,7 +15,6 @@
             <h1>{{ instanceName }}</h1>
         </header>
 
-        {% render "zenitcms:flash-toast" var:flashMessage=flashMessage var:flashVariant=flashVariant var:flashDuration=flashDuration %}
         {% render "zenitcms:record-tabs" var:tabs=recordTabs %}
 
         {% if running %}
