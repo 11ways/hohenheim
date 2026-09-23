@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthThrottle;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -55,6 +56,7 @@ class ProxyAuthGateTest {
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
         Zenit.getHawkeye().setClientScriptLocation("/cms.js");
+        ProxyAuthThrottle.clearForTests();
     }
 
     @AfterAll
@@ -115,6 +117,8 @@ class ProxyAuthGateTest {
         String noAuth = request("gated.test", null, null);
         assertThat(statusLine(noAuth)).contains("401");
         assertThat(noAuth).containsIgnoringCase("WWW-Authenticate");
+        assertThat(headerValue(noAuth, "Set-Cookie"))
+            .as("step 1: nothing is stored for a request that presented no credential").isNull();
 
         // 2. Wrong credentials -> 401.
         assertThat(statusLine(request("gated.test", basic("alice", "nope"), null))).contains("401");
@@ -180,6 +184,31 @@ class ProxyAuthGateTest {
             HohenheimSettings.VALUES.setValue(
                 HohenheimSettings.Proxy.TRUSTED_PROXY_KEYS, previousKeys);
         }
+
+        // 8. Changing alice's password ends the session minted under the old one: a session is
+        //    bound to the stored hash it was verified against, not only to the username.
+        Row stored = providerModel.findById(providerId);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> existing = (Map<String, Object>) stored.get(SiteAuthProviderModel.CONFIG);
+        stored.set(SiteAuthProviderModel.CONFIG, new BasicAuthProviderType().normalizeConfigForSave(
+            Map.of("credentials", Map.of("alice", "changed")), existing));
+        providerModel.save(stored);
+        proxy.reload();
+        assertThat(statusLine(request("gated.test", null, cookiePair)))
+            .as("step 8: the old session no longer admits after a password change").contains("401");
+        assertThat(statusLine(request("gated.test", basic("alice", "s3cret"), null)))
+            .as("step 8: nor does the old password").contains("401");
+        String relogin = request("gated.test", basic("alice", "changed"), null);
+        assertThat(statusLine(relogin)).as("step 8: the new password admits").contains("200");
+
+        // 9. Deleting the user ends her sessions too.
+        String reloginCookie = headerValue(relogin, "Set-Cookie").split(";", 2)[0];
+        stored = providerModel.findById(providerId);
+        stored.set(SiteAuthProviderModel.CONFIG, Map.of("credentials", Map.of()));
+        providerModel.save(stored);
+        proxy.reload();
+        assertThat(statusLine(request("gated.test", null, reloginCookie)))
+            .as("step 9: a deleted user's session no longer admits").contains("401");
 
         proxy.stop();
         proxy = null;

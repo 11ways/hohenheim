@@ -72,31 +72,46 @@ public final class SshAuthLine {
     }
 
     /**
-     * The source address of a recognized line, positionally rather than by family: sshd
-     * spells it "from IP port N" in most families and bare "IP port N" in the
-     * connection-closed ones, so both anchors are honoured before any fallback.
+     * The source address of a recognized line: the LAST {@code <literal> port <digits>}
+     * triple on it, which covers both spellings sshd uses ("from IP port N" and the bare
+     * "IP port N" of the connection-closed families).
      *
-     * @return the literal v4 or v6 address, or null when the line carries none
+     * AIDEV-NOTE: anchored at the END on purpose. The username is attacker-controlled and
+     * sshd logs it BEFORE the source ("Invalid user x from 1.2.3.4 port 1 from <real> port
+     * N"), so the first literal, or the first "from" literal, is whatever the attacker typed
+     * -- which turned the ban tier into a way to ban any address, including the operator's.
+     * Everything sshd appends after the real source ("ssh2", "[preauth]", a key
+     * fingerprint, ": invalid format") is its own text, so the last triple is the source.
+     * There is deliberately no fallback to a bare literal: a line without the triple is
+     * not trusted to name anyone.
+     *
+     * @return the literal v4 or v6 address, or null when the line carries no source triple
      */
     static @Nullable String extractIp(@NonNull String line) {
-        String[] tokens = line.split("\\s+");
-        String fallback = null;
-        for (int i = 0; i < tokens.length; i++) {
-            String candidate = clean(tokens[i]);
-            if (candidate.isEmpty() || !IpLiterals.isLiteral(candidate)) {
+        String[] tokens = line.trim().split("\\s+");
+        for (int i = tokens.length - 3; i >= 0; i--) {
+            if (!"port".equals(tokens[i + 1]) || !isPortNumber(clean(tokens[i + 2]))) {
                 continue;
             }
-            if (i > 0 && "from".equals(clean(tokens[i - 1]))) {
-                return candidate;
-            }
-            if (i + 1 < tokens.length && "port".equals(clean(tokens[i + 1]))) {
-                return candidate;
-            }
-            if (fallback == null) {
-                fallback = candidate;
+            String candidate = clean(tokens[i]);
+            return candidate.isEmpty() || !IpLiterals.isLiteral(candidate) ? null : candidate;
+        }
+        return null;
+    }
+
+    /** Whether a token is a TCP port number as sshd prints one ("40222" or "40222:"). */
+    private static boolean isPortNumber(@NonNull String raw) {
+        String token = raw.endsWith(":") ? raw.substring(0, raw.length() - 1) : raw;
+        if (token.isEmpty() || token.length() > 5) {
+            return false;
+        }
+        for (int i = 0; i < token.length(); i++) {
+            char c = token.charAt(i);
+            if (c < '0' || c > '9') {
+                return false;
             }
         }
-        return fallback;
+        return Integer.parseInt(token) <= 65535;
     }
 
     /** Strip the punctuation sshd puts around a token ("from 1.2.3.4:" / "[1.2.3.4]"). */

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
@@ -111,20 +112,27 @@ public final class InstanceDeviceQuota {
 
     private static void reserveCreate(@NonNull Row row) {
         String pack = ownerPackOf(row.get(InstanceDeviceModel.INSTANCE_ID));
-        String type = String.valueOf(row.get(InstanceDeviceModel.TYPE.getName()));
-        if (InstanceDeviceModel.TYPE_DISK.equals(type)) {
-            Integer size = row.get(InstanceDeviceModel.SIZE_GB);
-            long amount = size == null ? 0 : size;
-            reserve(diskBucketOf(pack), amount, diskLimitFor(pack), "disk_quota_reached");
-            row.set(InstanceDeviceModel.QUOTA_BUCKET, diskBucketOf(pack));
-        } else if (InstanceDeviceModel.TYPE_NIC.equals(type)) {
-            reserve(nicBucketOf(pack), 1, nicLimitFor(pack), "nic_quota_reached");
-            row.set(InstanceDeviceModel.QUOTA_BUCKET, nicBucketOf(pack));
+        // The charge is a FACT on the member, and a token that is no member is REFUSED
+        // here: this branch used to charge nothing for anything it did not recognize.
+        DeviceType type = DeviceType.require(row.get(InstanceDeviceModel.TYPE.getName()));
+        String bucket = switch (type.charge()) {
+            case DISK_GIGABYTES -> {
+                Integer size = row.get(InstanceDeviceModel.SIZE_GB);
+                long amount = size == null ? 0 : size;
+                reserve(diskBucketOf(pack), amount, diskLimitFor(pack), "disk_quota_reached");
+                yield diskBucketOf(pack);
+            }
+            case NIC_SLOT -> {
+                reserve(nicBucketOf(pack), 1, nicLimitFor(pack), "nic_quota_reached");
+                yield nicBucketOf(pack);
+            }
+            // A cdrom row charges NOTHING: it references shared operator media, allocates
+            // no tenant storage, and is operator-attached by the funnel.
+            case NONE -> null;
+        };
+        if (bucket != null) {
+            row.set(InstanceDeviceModel.QUOTA_BUCKET, bucket);
         }
-        // A cdrom row charges NOTHING: it references shared operator media, allocates no
-        // tenant storage, and is operator-attached by the funnel -- a NIC-slot charge
-        // here (the old else-branch shape) would spend a tenant's NIC quota on a device
-        // that is not one.
     }
 
     /** A size update charges/releases the DELTA against the STAMPED bucket. */
@@ -132,8 +140,8 @@ public final class InstanceDeviceQuota {
         if (!row.has(InstanceDeviceModel.SIZE_GB.getName())) {
             return;
         }
-        boolean disk = InstanceDeviceModel.TYPE_DISK.equals(stored.get(InstanceDeviceModel.TYPE));
-        if (!disk) {
+        DeviceType type = DeviceType.parse(stored.get(InstanceDeviceModel.TYPE));
+        if (type == null || type.charge() != DeviceType.QuotaCharge.DISK_GIGABYTES) {
             return;
         }
         Integer before = stored.get(InstanceDeviceModel.SIZE_GB);
@@ -142,7 +150,7 @@ public final class InstanceDeviceQuota {
         if (delta == 0) {
             return;
         }
-        String bucket = chargedBucketOf(stored);
+        String bucket = chargedBucketOf(stored, type.charge());
         if (delta > 0) {
             String pack = packOf(bucket, DISK_PREFIX);
             reserve(bucket, delta, diskLimitFor(pack), "disk_quota_reached");
@@ -191,16 +199,20 @@ public final class InstanceDeviceQuota {
         return packOf(bucket, DISK_PREFIX);
     }
 
-    /** The bucket a stored row was charged to; a stampless row falls to the operator's. */
-    private static @NonNull String chargedBucketOf(@NonNull Row stored) {
+    /**
+     * The bucket a stored row was charged to; a stampless row falls to the operator's
+     * bucket of the SAME charge.
+     */
+    private static @NonNull String chargedBucketOf(@NonNull Row stored,
+                                                   DeviceType.@NonNull QuotaCharge charge) {
         String bucket = stored.get(InstanceDeviceModel.QUOTA_BUCKET);
         if (bucket != null && !bucket.isBlank()) {
             return bucket;
         }
         Blast.log("QUOTA: device", stored.get(InstanceDeviceModel.ID),
             "carries no charged bucket; falling back to the operator bucket");
-        boolean disk = InstanceDeviceModel.TYPE_DISK.equals(stored.get(InstanceDeviceModel.TYPE));
-        return disk ? diskBucketOf("") : nicBucketOf("");
+        return charge == DeviceType.QuotaCharge.DISK_GIGABYTES
+            ? diskBucketOf("") : nicBucketOf("");
     }
 
     private static @Nullable Row storedOf(@NonNull Row row) {
@@ -227,15 +239,22 @@ public final class InstanceDeviceQuota {
         }
         List<Doomed> doomed = new ArrayList<>();
         for (Row row : builder.all()) {
-            String type = row.get(InstanceDeviceModel.TYPE);
-            if (InstanceDeviceModel.TYPE_CDROM.equals(type)) {
-                continue;   // charged nothing at create, so releases nothing here
+            DeviceType type = DeviceType.parse(row.get(InstanceDeviceModel.TYPE));
+            if (type == null) {
+                // No member charged it at create, so nothing is released: releasing a NIC
+                // slot for it (the old else-branch) handed out capacity nobody had spent.
+                Blast.log("QUOTA: device", row.get(InstanceDeviceModel.ID), "has unknown type",
+                    row.get(InstanceDeviceModel.TYPE), "- nothing released on its removal");
+                continue;
             }
-            boolean disk = InstanceDeviceModel.TYPE_DISK.equals(type);
             Integer size = row.get(InstanceDeviceModel.SIZE_GB);
-            long amount = disk ? (size == null ? 0 : size) : 1;
+            long amount = switch (type.charge()) {
+                case DISK_GIGABYTES -> size == null ? 0 : size;
+                case NIC_SLOT -> 1;
+                case NONE -> 0;   // charged nothing at create, so releases nothing here
+            };
             if (amount > 0) {
-                doomed.add(new Doomed(chargedBucketOf(row), amount));
+                doomed.add(new Doomed(chargedBucketOf(row, type.charge()), amount));
             }
         }
         if (!doomed.isEmpty()) {

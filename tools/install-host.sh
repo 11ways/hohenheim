@@ -28,6 +28,7 @@ ROLES_RAW=""
 MAIN_URL=""
 ADMIN_EMAIL=""
 VOLUME_ROOT_GB=""
+VOLUME_ROOT_DIR=""
 SWAP_SIZE=""
 WITH_DOCKER="no"
 DRY_RUN="no"
@@ -56,16 +57,22 @@ run() {
 }
 
 # Writes a file with the given mode/owner, or prints the plan; never clobbers silently.
+# The content lands in a dot-named temp file beside the target, created 0600 by mktemp,
+# and only a finished file with its final mode and owner is renamed into place: the file
+# is never readable under root's umask and never half-written (a reader sees old or new).
 write_file() {
-    local path="$1" mode="$2" owner="$3" content="$4"
+    local path="$1" mode="$2" owner="$3" content="$4" tmp
     if [ "$DRY_RUN" = "yes" ]; then
         printf '   PLAN: write %s (mode %s, owner %s, %s bytes)\n' \
             "$path" "$mode" "$owner" "${#content}"
         return 0
     fi
-    printf '%s' "$content" > "$path"
-    chmod "$mode" "$path"
-    chown "$owner" "$path"
+    tmp="$(mktemp "$(dirname "$path")/.$(basename "$path").XXXXXX")"
+    if ! { printf '%s' "$content" > "$tmp" && chmod "$mode" "$tmp" && chown "$owner" "$tmp" \
+            && mv -f "$tmp" "$path"; }; then
+        rm -f "$tmp"
+        fail "could not write $path"
+    fi
 }
 
 usage() {
@@ -81,7 +88,10 @@ Options:
   --admin-email <address>   Let's Encrypt registration address
   --with-docker             install Docker CE from Docker's apt repo (implied by
                             the instances/databases/stacks roles)
-  --volume-root-size <GB>   create the btrfs loop-file volume root and its sudoers line
+  --volume-root-size <GB>   create the btrfs loop-file volume root (at --volume-root)
+  --volume-root <dir>       the volume root the privileged helper confines volume work to
+                            (default <prefix>/data/volumes; must equal storage.volume_root
+                            when that setting is set)
   --swap <size>             create a swapfile of this size (e.g. 2G) with vm.swappiness=10
   --panel-port <port>       admin listener port (default 3000)
   --panel-bind <addr>       admin listener address (default 127.0.0.1; the panel
@@ -90,6 +100,15 @@ Options:
   --prefix <dir>            install root (default /opt/hohenheim)
   --dry-run                 print the plan, execute nothing
   --help                    this text
+
+Root surface: the service user gets NO unrestricted root binary. nft (proxy and
+firewall roles) is granted as-is; every volume and Spamservice ownership operation
+goes through /usr/local/libexec/hohenheim/hohenheim-helper, which confines its
+arguments to the volume root and the managed Spamservice directory, and is the only
+file the hohenheim-helper sudoers line names. The firewall role also creates the
+dedicated 'spamservice' account and the grant to launch the managed Spamservice as it.
+A re-run replaces the pre-helper hohenheim-volumes grant with the narrow one.
+Every sudoers file is validated with visudo -cf BEFORE it is installed.
 
 The first administrator is created through the panel's /setup page after the
 service is up; this script prints that step and never writes to the database.
@@ -105,6 +124,7 @@ while [ $# -gt 0 ]; do
         --main-url) MAIN_URL="${2:-}"; shift 2 ;;
         --admin-email) ADMIN_EMAIL="${2:-}"; shift 2 ;;
         --volume-root-size) VOLUME_ROOT_GB="${2:-}"; shift 2 ;;
+        --volume-root) VOLUME_ROOT_DIR="${2:-}"; shift 2 ;;
         --swap) SWAP_SIZE="${2:-}"; shift 2 ;;
         --panel-port) PANEL_PORT="${2:-}"; shift 2 ;;
         --panel-bind) PANEL_BIND="${2:-}"; shift 2 ;;
@@ -157,6 +177,23 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 
 SETTINGS_DIR="$PREFIX/settings"
+VOLUME_ROOT_DIR="${VOLUME_ROOT_DIR:-$PREFIX/data/volumes}"
+SPAMSERVICE_USER="spamservice"
+SPAMSERVICE_ROOT="$PREFIX/data/managed-services/spamservice"
+HELPER_DIR="/usr/local/libexec/hohenheim"
+HELPER_PATH="$HELPER_DIR/hohenheim-helper"
+
+# The helper bakes these roots in between single quotes; anything but a plain absolute
+# path is refused rather than quoted, because the helper is root code.
+for root_dir in "$VOLUME_ROOT_DIR" "$SPAMSERVICE_ROOT"; do
+    case "$root_dir" in
+        /*) ;;
+        *) fail "'$root_dir' is not an absolute path" ;;
+    esac
+    case "$root_dir" in
+        *[!A-Za-z0-9._/-]*|*//*|*/|*/./*|*/../*) fail "'$root_dir' must be a plain absolute path ([A-Za-z0-9._/-])" ;;
+    esac
+done
 JAR_TARGET="$PREFIX/hohenheim-server.jar"
 UNIT_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 
@@ -319,38 +356,327 @@ else
     run install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 /var/log/hohenheim
 fi
 
-# --- 7. sudoers grants ------------------------------------------------------
+# --- 7. sudoers grants and the privileged helper ---------------------------
 
 step "Sudoers grants"
 NFT_BIN="$(command -v nft || printf '/usr/sbin/nft')"
+# Installs one sudoers drop-in. The body is VALIDATED in a dot-named temp file (sudo
+# ignores any name carrying a dot, so it is never live) and only a file visudo accepted
+# is renamed into place, root-owned 0440: a syntax error can never break sudo host-wide.
 write_sudoers() {
     local name="$1" body="$2"
-    local path="/etc/sudoers.d/$name"
+    local path="/etc/sudoers.d/$name" tmp
     if [ -f "$path" ] && [ "$(cat "$path" 2>/dev/null)" = "$(printf '%s' "$body")" ]; then
         skip "$path up to date"
         return 0
     fi
-    write_file "$path" 0440 root:root "$body"
-    run visudo -cf "$path"
+    if [ "$DRY_RUN" = "yes" ]; then
+        printf '   PLAN: validate with visudo -cf, then install %s (mode 0440, owner root:root):\n' "$path"
+        printf '         %s' "$body"
+        return 0
+    fi
+    tmp="$(mktemp "/etc/sudoers.d/.$name.XXXXXX")"
+    if ! { printf '%s' "$body" > "$tmp" && chmod 0440 "$tmp" && chown root:root "$tmp"; }; then
+        rm -f "$tmp"
+        fail "could not stage $path"
+    fi
+    if ! visudo -cf "$tmp" >/dev/null; then
+        rm -f "$tmp"
+        fail "visudo refused the $name grant; nothing was installed"
+    fi
+    mv -f "$tmp" "$path"
+    info "installed $path"
 }
+
+NEED_VOLUMES="no"
+if [ -n "$VOLUME_ROOT_GB" ] || [ "$role_instances" = "true" ]; then
+    NEED_VOLUMES="yes"
+fi
+NEED_SPAMSERVICE="no"
+if [ "$role_firewall" = "true" ]; then
+    # SpamserviceManager boots under the firewall role only.
+    NEED_SPAMSERVICE="yes"
+fi
+
 if [ "$role_firewall" = "true" ] || [ "$role_proxy" = "true" ]; then
     write_sudoers hohenheim-nft "$SERVICE_USER ALL=(root) NOPASSWD: $NFT_BIN
 "
 else
     skip "no nft grant needed for these roles"
 fi
-if [ -n "$VOLUME_ROOT_GB" ] || [ "$role_instances" = "true" ]; then
-    write_sudoers hohenheim-volumes "$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/btrfs, /usr/bin/chown, /usr/bin/chmod, /usr/bin/mkdir, /usr/bin/rm
+
+# The helper script: THE root surface of the volume and Spamservice lanes (the Java side
+# is be.elevenways.hohenheim.server.host.PrivilegedHelper; PrivilegedHelperDriftTest binds
+# the path, the verbs and the uid floor below to it).
+HELPER_BODY="$(cat <<'HELPER'
+#!/bin/bash
+# hohenheim-helper -- installed by tools/install-host.sh; do not edit, re-run the installer.
+#
+# The ONLY root surface the Hohenheim service user is granted for volume and Spamservice
+# ownership work. Every verb confines its paths to its own root, refuses a symlink and any
+# unsafe component, and works from a working directory it entered PHYSICALLY and verified
+# with pwd -P, so an ancestor renamed after the check cannot redirect the operation.
+set -euo pipefail
+shopt -s inherit_errexit
+set -f
+umask 022
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
+
+BELOW=""
+VOLUME_ROOT='@VOLUME_ROOT@'
+SPAMSERVICE_ROOT='@SPAMSERVICE_ROOT@'
+SPAMSERVICE_USER='@SPAMSERVICE_USER@'
+MIN_OWNER_UID=100000
+MAX_OWNER_UID=4294967294
+
+refuse() {
+    printf 'hohenheim-helper: refused: %s\n' "$*" >&2
+    exit 77
+}
+
+usage() {
+    printf 'usage: hohenheim-helper volume-create|volume-usage|volume-destroy <path>\n' >&2
+    printf '       hohenheim-helper volume-quota <path> <bytes|none>\n' >&2
+    printf '       hohenheim-helper volume-snapshot <path> <target>\n' >&2
+    printf '       hohenheim-helper volume-own <path> <uid>\n' >&2
+    printf '       hohenheim-helper spamservice-own <path>\n' >&2
+    exit 64
+}
+
+# Sets BELOW to PATH relative to ROOT when it is ROOT/<c1>/.../<cN>, MIN <= N <= MAX,
+# every component plain (not empty, not . or .., no leading dash, no newline).
+# A global, never a command substitution: a refusal inside $(...) would end only the
+# subshell, and the verb would carry on with an empty path.
+below() {
+    local root="$1" path="$2" min="$3" max="$4" rel part count=0
+    case "$path" in
+        "$root"/*) ;;
+        *) refuse "'$path' is not below $root" ;;
+    esac
+    rel="${path#"$root"/}"
+    case "$rel" in
+        ''|/*|*/|*//*) refuse "'$path' is not a plain path" ;;
+    esac
+    case "$rel" in
+        *$'\n'*) refuse "a path may not carry a newline" ;;
+    esac
+    local IFS=/
+    for part in $rel; do
+        count=$((count + 1))
+        case "$part" in
+            .|..|-*) refuse "'$path' has an unsafe component '$part'" ;;
+        esac
+    done
+    if [ "$count" -lt "$min" ] || [ "$count" -gt "$max" ]; then
+        refuse "'$path' is not $min..$max levels below $root"
+    fi
+    BELOW="$rel"
+}
+
+# cd, physically, into ROOT/REL (REL may be empty), refusing a symlink on the way.
+enter() {
+    local root="$1" rel="$2" real part
+    [ -d "$root" ] || refuse "$root is not a directory"
+    cd -P -- "$root" || refuse "cannot enter $root"
+    real="$(pwd -P)"
+    [ -n "$rel" ] || return 0
+    local IFS=/
+    for part in $rel; do
+        [ ! -L "$part" ] || refuse "'$part' is a symlink"
+        [ -d "$part" ] || refuse "'$part' is not a directory"
+        cd -P -- "$part" || refuse "cannot enter '$part'"
+        real="$real/$part"
+        [ "$(pwd -P)" = "$real" ] || refuse "'$part' moved while it was being entered"
+    done
+}
+
+# Creates ROOT/NAME as a directory unless it is one already; never follows a symlink.
+ensure_dir() {
+    local name="$1"
+    [ ! -L "$name" ] || refuse "'$name' is a symlink"
+    [ -d "$name" ] || mkdir -- "./$name"
+}
+
+# Sets BELOW to a volume: <instance>/<name> below the volume root, never the snapshot tree.
+volume() {
+    below "$VOLUME_ROOT" "$1" 2 2
+    case "$BELOW" in
+        .snapshots/*) refuse "'$1' is in the snapshot tree" ;;
+    esac
+}
+
+verb="${1:-}"
+[ -n "$verb" ] || usage
+shift
+
+case "$verb" in
+    volume-create)
+        [ $# -eq 1 ] || usage
+        volume "$1"
+        rel="$BELOW"
+        enter "$VOLUME_ROOT" ""
+        ensure_dir "${rel%/*}"
+        enter "$VOLUME_ROOT" "${rel%/*}"
+        leaf="${rel##*/}"
+        [ ! -L "$leaf" ] || refuse "'$leaf' is a symlink"
+        btrfs subvolume show "./$leaf" >/dev/null 2>&1 || btrfs subvolume create "./$leaf"
+        ;;
+    volume-quota)
+        [ $# -eq 2 ] || usage
+        volume "$1"
+        rel="$BELOW"
+        case "$2" in
+            none) ;;
+            ''|*[!0-9]*) refuse "'$2' is not a byte count or none" ;;
+        esac
+        btrfs quota enable "$VOLUME_ROOT" >/dev/null 2>&1 || true
+        enter "$VOLUME_ROOT" "${rel%/*}"
+        leaf="${rel##*/}"
+        [ ! -L "$leaf" ] || refuse "'$leaf' is a symlink"
+        btrfs qgroup limit "$2" "./$leaf"
+        ;;
+    volume-usage)
+        [ $# -eq 1 ] || usage
+        volume "$1"
+        rel="$BELOW"
+        enter "$VOLUME_ROOT" "${rel%/*}"
+        leaf="${rel##*/}"
+        [ ! -L "$leaf" ] || refuse "'$leaf' is a symlink"
+        btrfs qgroup show --raw -f "./$leaf"
+        ;;
+    volume-snapshot)
+        [ $# -eq 2 ] || usage
+        volume "$1"
+        rel="$BELOW"
+        below "$VOLUME_ROOT/.snapshots" "$2" 2 2
+        target="$BELOW"
+        enter "$VOLUME_ROOT" ""
+        ensure_dir ".snapshots"
+        enter "$VOLUME_ROOT" ".snapshots"
+        ensure_dir "${target%/*}"
+        enter "$VOLUME_ROOT" ".snapshots/${target%/*}"
+        target_dir="$(pwd -P)"
+        [ ! -e "${target##*/}" ] && [ ! -L "${target##*/}" ] || refuse "'$2' already exists"
+        enter "$VOLUME_ROOT" "${rel%/*}"
+        leaf="${rel##*/}"
+        [ ! -L "$leaf" ] || refuse "'$leaf' is a symlink"
+        btrfs subvolume snapshot -r "./$leaf" "$target_dir/${target##*/}"
+        ;;
+    volume-destroy)
+        [ $# -eq 1 ] || usage
+        case "$1" in
+            "$VOLUME_ROOT/.snapshots"/*)
+                below "$VOLUME_ROOT/.snapshots" "$1" 2 2
+                rel=".snapshots/$BELOW"
+                ;;
+            *)
+                volume "$1"
+                rel="$BELOW"
+                ;;
+        esac
+        # Nothing to destroy under an absent parent: the legacy rm -rf succeeded there too.
+        [ -d "$VOLUME_ROOT/${rel%/*}" ] || exit 0
+        enter "$VOLUME_ROOT" "${rel%/*}"
+        leaf="${rel##*/}"
+        if [ -L "$leaf" ]; then
+            rm -f -- "./$leaf"
+        elif btrfs subvolume show "./$leaf" >/dev/null 2>&1; then
+            btrfs subvolume delete "./$leaf"
+        else
+            rm -rf -- "./$leaf"
+        fi
+        ;;
+    volume-own)
+        [ $# -eq 2 ] || usage
+        volume "$1"
+        rel="$BELOW"
+        case "$2" in
+            ''|*[!0-9]*) refuse "'$2' is not a numeric uid" ;;
+        esac
+        if [ "${#2}" -gt 10 ] || [ "$2" -lt "$MIN_OWNER_UID" ] || [ "$2" -gt "$MAX_OWNER_UID" ]; then
+            refuse "uid $2 is outside $MIN_OWNER_UID..$MAX_OWNER_UID"
+        fi
+        enter "$VOLUME_ROOT" "$rel"
+        chown "$2:$2" .
+        chmod 0700 .
+        ;;
+    spamservice-own)
+        [ $# -eq 1 ] || usage
+        below "$SPAMSERVICE_ROOT" "$1" 1 2
+        rel="$BELOW"
+        case "$rel" in
+            instance|instance/data|instance/settings|instance/tmp) ;;
+            *) refuse "'$1' is not a managed Spamservice directory" ;;
+        esac
+        owner_uid="$(id -u "$SPAMSERVICE_USER")" || refuse "no '$SPAMSERVICE_USER' account"
+        owner_gid="$(id -g "$SPAMSERVICE_USER")" || refuse "no '$SPAMSERVICE_USER' account"
+        [ "$owner_uid" != "0" ] || refuse "'$SPAMSERVICE_USER' is root"
+        enter "$SPAMSERVICE_ROOT" "$rel"
+        chown -h "$owner_uid:$owner_gid" .
+        ;;
+    *)
+        usage
+        ;;
+esac
+HELPER
+)"
+HELPER_BODY="${HELPER_BODY//@VOLUME_ROOT@/$VOLUME_ROOT_DIR}"
+HELPER_BODY="${HELPER_BODY//@SPAMSERVICE_ROOT@/$SPAMSERVICE_ROOT}"
+HELPER_BODY="${HELPER_BODY//@SPAMSERVICE_USER@/$SPAMSERVICE_USER}
+"
+
+if [ "$NEED_VOLUMES" = "yes" ] || [ "$NEED_SPAMSERVICE" = "yes" ]; then
+    # Grant first, helper second: the controller switches to the helper the moment the
+    # file is executable, so the narrow grant must already be live by then.
+    write_sudoers hohenheim-helper "$SERVICE_USER ALL=(root) NOPASSWD: $HELPER_PATH
+"
+    if [ -d "$HELPER_DIR" ]; then
+        skip "$HELPER_DIR exists"
+    else
+        run install -d -o root -g root -m 0755 "$HELPER_DIR"
+    fi
+    if [ -f "$HELPER_PATH" ] && [ "$(cat "$HELPER_PATH" 2>/dev/null)" = "$(printf '%s' "$HELPER_BODY")" ]; then
+        skip "$HELPER_PATH up to date"
+    else
+        write_file "$HELPER_PATH" 0755 root:root "$HELPER_BODY"
+    fi
+else
+    skip "no privileged helper needed for these roles"
+fi
+
+# The pre-helper grant (btrfs, chown, chmod, mkdir, rm with ANY argument) was root for
+# anyone who could run a command as the service user. It is removed on every run, after
+# the helper above is in place.
+if [ -f /etc/sudoers.d/hohenheim-volumes ]; then
+    info "removing the unrestricted pre-helper grant /etc/sudoers.d/hohenheim-volumes"
+    run rm -f /etc/sudoers.d/hohenheim-volumes
+else
+    skip "no pre-helper volume grant present"
+fi
+
+# The managed Spamservice runs as its own unprivileged account: SystemUsers launches it
+# with sudo -n --preserve-env -u #uid -g #gid -- /usr/bin/prlimit ..., which needs this
+# run-as grant WITH SETENV (--preserve-env hands over the explicit, secret-free env the
+# controller built). The account is unprivileged, so the grant widens nothing beyond it.
+if [ "$NEED_SPAMSERVICE" = "yes" ]; then
+    if id "$SPAMSERVICE_USER" >/dev/null 2>&1; then
+        skip "user $SPAMSERVICE_USER exists"
+    else
+        run useradd --system --user-group --no-create-home --home-dir "$SPAMSERVICE_ROOT/instance" \
+            --shell /usr/sbin/nologin "$SPAMSERVICE_USER"
+    fi
+    write_sudoers hohenheim-spamservice "$SERVICE_USER ALL=($SPAMSERVICE_USER : $SPAMSERVICE_USER) NOPASSWD:SETENV: /usr/bin/prlimit
 "
 else
-    skip "no volume grant needed for these roles"
+    skip "no spamservice account needed for these roles"
 fi
 
 # --- 8. btrfs volume root ---------------------------------------------------
 
 step "Volume root (btrfs)"
 VOLUME_IMAGE="$PREFIX/volumes.btrfs"
-VOLUME_MOUNT="$PREFIX/data/volumes"
+VOLUME_MOUNT="$VOLUME_ROOT_DIR"
 if [ -z "$VOLUME_ROOT_GB" ]; then
     skip "--volume-root-size not given"
 else
@@ -371,7 +697,7 @@ else
     if [ -d "$VOLUME_MOUNT" ]; then
         skip "$VOLUME_MOUNT exists"
     else
-        run install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$VOLUME_MOUNT"
+        run install -d -o root -g root -m 0755 "$VOLUME_MOUNT"
     fi
     if grep -qF "$VOLUME_IMAGE $VOLUME_MOUNT" /etc/fstab 2>/dev/null; then
         skip "fstab entry present"
@@ -382,7 +708,16 @@ else
         skip "$VOLUME_MOUNT already mounted"
     else
         run mount "$VOLUME_MOUNT"
-        run chown "$SERVICE_USER:$SERVICE_USER" "$VOLUME_MOUNT"
+    fi
+    # ROOT-owned, 0755: every volume directory below it is created and handed out by the
+    # privileged helper, and a root owned by the service user would let that user rename
+    # an entry away between the helper's check and its act. Nothing writes here as the
+    # service user; docker and incus only need to traverse it.
+    if [ "$DRY_RUN" = "no" ] && [ "$(stat -c '%U:%G %a' "$VOLUME_MOUNT" 2>/dev/null)" = "root:root 755" ]; then
+        skip "$VOLUME_MOUNT is root-owned 0755"
+    else
+        run chown root:root "$VOLUME_MOUNT"
+        run chmod 0755 "$VOLUME_MOUNT"
     fi
 fi
 
@@ -710,11 +1045,23 @@ else
     skip "$SERVICE_NAME already running this build"
 fi
 
+# The address the panel answers on: the bound one, with a wildcard bind probed over the
+# matching loopback and an IPv6 literal bracketed.
+panel_probe_host() {
+    case "$PANEL_BIND" in
+        ''|0.0.0.0) printf '127.0.0.1' ;;
+        ::|'[::]') printf '[::1]' ;;
+        \[*) printf '%s' "$PANEL_BIND" ;;
+        *:*) printf '[%s]' "$PANEL_BIND" ;;
+        *) printf '%s' "$PANEL_BIND" ;;
+    esac
+}
+PANEL_PROBE="http://$(panel_probe_host):$PANEL_PORT/api/health"
 if [ "$DRY_RUN" = "no" ]; then
-    info "waiting for the panel to answer on 127.0.0.1:$PANEL_PORT"
+    info "waiting for the panel to answer on $PANEL_PROBE"
     healthy="no"
     for _ in $(seq 1 60); do
-        if curl -fsS -o /dev/null "http://127.0.0.1:$PANEL_PORT/api/health" 2>/dev/null; then
+        if curl -fsS -o /dev/null "$PANEL_PROBE" 2>/dev/null; then
             healthy="yes"
             break
         fi
@@ -723,8 +1070,10 @@ if [ "$DRY_RUN" = "no" ]; then
     if [ "$healthy" = "yes" ]; then
         info "health: OK"
     else
-        fail "the service did not answer /api/health; see: journalctl -u $SERVICE_NAME -n 80"
+        fail "the service did not answer $PANEL_PROBE; see: journalctl -u $SERVICE_NAME -n 80"
     fi
+else
+    printf '   PLAN: poll %s for up to 120s\n' "$PANEL_PROBE"
 fi
 
 # --- 16. what the operator still has to do ----------------------------------

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -245,7 +246,7 @@ class ControlPlaneBackupTest {
                 .as("step 1: an unconfigured off-host destination is a dashboard item")
                 .hasSize(1);
             assertThat(unconfigured.get(0).severity())
-                .as("step 1: at error severity -- there is no backup at all").isEqualTo("error");
+                .as("step 1: at error severity -- there is no backup at all").isEqualTo(AttentionSeverity.ERROR);
             assertThat(unconfigured.get(0).target().toUrl())
                 .as("step 1: pointing at where it is fixed").isEqualTo("/admin/settings");
 

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
 import be.elevenways.hohenheim.dns.DnsRecordFormView;
 import be.elevenways.hohenheim.dns.DnsRecordView;
@@ -14,28 +15,31 @@ import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.protoblast.common.typed.rule.Condition;
+import be.elevenways.protoblast.common.typed.rule.Operand;
+import be.elevenways.plumage.component.Pager;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
+import be.elevenways.zenit.cms.common.schema.FilterState;
+import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.cms.server.page.InlineEditStates;
 import be.elevenways.zenit.cms.server.page.QuickAddState;
 import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
+import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.data.RecordPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.field.Field;
-import be.elevenways.zenit.common.orm.field.TextSearchable;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
-import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.orm.query.rules.RuleCompiler;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
-import be.elevenways.zenit.common.routing.ParameterDefinition;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.text.Texts;
@@ -62,24 +66,14 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
 
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_records"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("records").withFilter("scope", "dns_zone"); }
-    @Override public @NonNull String slug() { return "records"; }
+    /** This tab's slug under the zone record. */
+    public static final String SLUG = "records";
+
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("list-ul"); }
 
     /** The DNS record resource lives only on the admin panel. */
-    private static final String PANEL = "admin";
-
-    /** The record resource's slug, for the panel lookup this page's links then read off it. */
-    private static final String RECORD_SLUG = "dns-records";
-
-    /**
-     * The plain search term, named after the framework's own {@code cms-list-search} input:
-     * the box on this page is that element, so the page reads and re-binds the parameter it
-     * submits rather than inventing one.
-     */
-    private static final String SEARCH = "search";
-
-    private static final ParameterDefinition<String> SEARCH_PARAM =
-        ParameterDefinition.builder(String.class).name(SEARCH).build();
+    private static final String PANEL = HohenheimSlugs.ADMIN;
 
     /**
      * The columns this tab shows, in this order: the zone itself is the page, so the
@@ -126,7 +120,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
      */
     private static @Nullable DnsRecordResource recordResource() {
         Panel panel = PanelRegistry.getBySlug(PANEL);
-        return panel != null && panel.peerBySlug(RECORD_SLUG) instanceof DnsRecordResource peer
+        return panel != null && panel.peerBySlug(DnsRecordResource.SLUG) instanceof DnsRecordResource peer
             ? peer : null;
     }
 
@@ -143,13 +137,21 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         Integer zoneId = zone.get(DnsZoneModel.ID);
         String origin = zone.get(DnsZoneModel.ORIGIN);
 
-        String search = Texts.trimmedOrNull(conduit.getQueryParam(SEARCH));
-        List<Row> records = zoneRecords(zoneId, search, resource.searchFields());
+        String search = Texts.trimmedOrNull(conduit.getQueryParam(CmsEndpoints.LIST_SEARCH_PARAM.getName()));
+        Integer requestedPage = CmsSupport.parsedInt(conduit.getQueryParam(CmsEndpoints.LIST_PAGE_PARAM.getName()));
         TableView.Applied<Row> applied = TableView
             .forPrincipal(accessContext.principal().id(), resource.id())
             .visibleColumns(COLUMNS)
+            .sort(SortSpec.asc(DnsRecordModel.NAME.getName()))
+            .filter(zoneScope(resource, zoneId))
             .build()
-            .apply(resource.tableSpec());
+            .apply(resource.tableSpec())
+            .withSearch(search)
+            .withPage(requestedPage != null && requestedPage > 0 ? requestedPage : 1);
+        // The resource's OWN list read: its access predicate, its search semantics, its
+        // page window and its total -- this tab only adds the zone scope.
+        RecordPage<Row> page = resource.listPage(applied, accessContext);
+        List<Row> records = page.rows();
 
         BoundEndpoint<?> listTarget = CmsRoutes.subpage(PANEL, DnsZoneResource.SLUG, zoneId, this.slug());
         String listUrl = listTarget.toUrl();
@@ -157,7 +159,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         // Rebuilt from the state this render knows rather than echoed from the request URL:
         // the kept select picks are appended to it per add, and echoing would stack them.
         String refreshUrl = search != null
-            ? listTarget.with(SEARCH_PARAM, search).toUrl() : listUrl;
+            ? listTarget.with(CmsEndpoints.LIST_SEARCH_PARAM, search).toUrl() : listUrl;
         // Every outgoing link (record form, row invoke, delete) carries THIS tab as its
         // return target, search included. The generated list binds one only when it has
         // query state, because its bare URL is already the framework's recomputed
@@ -210,6 +212,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         vars.put("searchValue", search != null ? search : "");
         vars.put("searchEnabled", resource.searchOffered());
         vars.put("searchActive", search != null);
+        vars.put("pager", Pager.of(page.window(), page.total(), number -> pageUrl(listTarget, search, number)));
         vars.put("addRecordTarget", addRecordTarget);
         vars.put("recordTabs", recordTabs(conduit));
         // Promoted seam: the framework's own quick-add builder. The zone preset it needs
@@ -231,33 +234,31 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
     }
 
     /**
-     * The zone's records, narrowed by the plain search term over the fields the resource
-     * declared searchable.
+     * The zone this tab lists, as the record resource's own ADVANCED filter tier.
      *
-     * AIDEV-NOTE: a hand-built query rather than {@code resource.listRows}, because the
-     * zone scope is not expressible as a table-view filter and the generated list has no
-     * zone to scope by. Only the TERM is interpreted here, and only for text fields --
-     * which is every field this resource declares searchable.
+     * AIDEV-NOTE: this replaced a hand-built, UNPAGED query with its own copy of the search
+     * (capability map: never two UIs over the same records). The scope rides the resource's
+     * filter compile, so the list, its count and its search are the generated list's own.
+     * The framework treats a tree that fails vocabulary validation as INERT -- which here
+     * would silently widen the tab to every zone's records -- so the tree is validated
+     * against the resource's vocabulary first and a failure refuses loudly (fail closed).
      */
-    private static @NonNull List<Row> zoneRecords(@NonNull Integer zoneId, @Nullable String search,
-                                                  @NonNull List<Field<?, ?>> searchFields) {
-        QueryBuilder<Row> query = Models.get(DnsRecordModel.class).find()
-            .where(DnsRecordModel.ZONE_ID.eq(zoneId));
-        if (search != null) {
-            List<Criteria> candidates = new ArrayList<>(searchFields.size());
-            for (Field<?, ?> field : searchFields) {
-                if (field instanceof TextSearchable searchable) {
-                    candidates.add(searchable.icontains(search));
-                }
-            }
-            // A term no declared field can match narrows to nothing: an unfiltered list
-            // would read as "everything matches", which is the opposite of the truth.
-            query.where(candidates.isEmpty()
-                ? Models.get(DnsRecordModel.class).matchNone()
-                : candidates.size() == 1 ? candidates.get(0)
-                    : Criteria.or(candidates.toArray(new Criteria[0])));
+    static @NonNull FilterState zoneScope(@NonNull DnsRecordResource resource, @NonNull Integer zoneId) {
+        Condition scope = Condition.all(Condition.test(DnsRecordModel.ZONE_ID.getName(), CoreTypes.EQUALS,
+            Operand.of(zoneId)));
+        if (!RuleCompiler.validate(scope, resource.filterVocabulary()).isEmpty()) {
+            throw new IllegalStateException("The DNS record vocabulary cannot scope by "
+                + DnsRecordModel.ZONE_ID.getName());
         }
-        return query.orderBy(DnsRecordModel.NAME, SortOrder.ASC).all();
+        return FilterState.empty().withAdvanced(scope);
+    }
+
+    /** One pager rung: the tab itself, keeping the search, on the given page. */
+    private static @NonNull String pageUrl(@NonNull BoundEndpoint<?> listTarget, @Nullable String search,
+                                           int number) {
+        BoundEndpoint<?> target = search != null ? listTarget.with(CmsEndpoints.LIST_SEARCH_PARAM, search)
+            : listTarget;
+        return number > 1 ? target.with(CmsEndpoints.LIST_PAGE_PARAM, number).toUrl() : target.toUrl();
     }
 
     private static @NonNull String recordUrl(@NonNull DnsRecordResource resource, @NonNull Row row,
@@ -284,7 +285,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         boolean editable = false;
         String notice = "";
         DnsRecordFormView editRecord = null;
-        String requestedRecord = conduit.getQueryParam("record");
+        String requestedRecord = conduit.getQueryParam(HohenheimParams.REMOTE_RECORD.getName());
 
         if (api != null) {
             try {
@@ -332,6 +333,13 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
         vars.put("editable", editable);
         vars.put("notice", notice);
         vars.put("editRecord", editRecord);
+        // The numeric fields ride pl-number-input, whose value is a typed Double (null =
+        // empty) -- never the native numeric input, whose decimal separator follows the
+        // browser's UI locale. Scale 0 makes the submitted canonical text a whole number.
+        vars.put("editTtl", editRecord != null ? wholeNumber(editRecord.ttl()) : null);
+        vars.put("editPriority", editRecord != null ? wholeNumber(editRecord.priority()) : null);
+        vars.put("editWeight", editRecord != null ? wholeNumber(editRecord.weight()) : null);
+        vars.put("editPort", editRecord != null ? wholeNumber(editRecord.port()) : null);
         vars.put("recordTypes", DnsRecordModel.ALL_TYPES);
         vars.put("addRecordTarget", remoteRecordTarget(zoneId, "new"));
         vars.put("recordsTabTarget", CmsRoutes.subpage(PANEL, DnsZoneResource.SLUG, zoneId, this.slug()));
@@ -354,7 +362,7 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
             .with(CmsEndpoints.PANEL_PARAM, PANEL)
             .with(CmsEndpoints.RESOURCE_PARAM, DnsZoneResource.SLUG)
             .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(zoneId))
-            .with(CmsEndpoints.SUBPAGE_PARAM, "records")
+            .with(CmsEndpoints.SUBPAGE_PARAM, SLUG)
             .with(HohenheimParams.REMOTE_RECORD, recordId);
     }
 
@@ -395,6 +403,13 @@ public final class DnsZoneRecordsPage implements RecordScopedPage<Row> {
     private static @NonNull String remoteDisplayValue(@NonNull DnsRecordDto remote) {
         return DnsRecordModel.presentationValue(remote.type(), text(remote.value()),
             remote.priority(), remote.weight(), remote.port());
+    }
+
+    /** @return the form view's number text as the Double a pl-number-input takes, null when blank or not one */
+    private static @Nullable Double wholeNumber(@NonNull String text) {
+        PrimitiveCoercion.Result<Double> parsed =
+            PrimitiveCoercion.toDouble(text, true, PrimitiveCoercion.TextRule.TRIMMED_BLANK_IS_NULL);
+        return parsed.ok() ? parsed.value() : null;
     }
 
     private static @NonNull String text(@Nullable String value) {

@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.api;
 
-import be.elevenways.hohenheim.server.instance.InstanceTemplates;
+import be.elevenways.hohenheim.server.HandlerSupport;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.result.ActionResult;
-import be.elevenways.zenit.common.result.JsonResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
@@ -38,11 +38,41 @@ public final class ApiConduits {
      * @return the access context, or null when the response has already been ended
      */
     public static @Nullable AccessContext requireKey(@NonNull Conduit conduit) {
-        if (!(conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal)) {
+        if (!isApiKey(conduit)) {
             conduit.forbidden();
             return null;
         }
         return AccessContext.of(conduit);
+    }
+
+    /**
+     * {@link #requireKey}, narrowed to a key whose owner holds the admin panel permission
+     * (as the key's own scopes narrow it); anything else is 403. For the verbs only the
+     * operator panel offers: site create and delete, zones, hosts, engines.
+     *
+     * AIDEV-NOTE: those endpoints ALSO declare requiresPermission(ADMIN_ACCESS), so the
+     * middleware refuses first; this is the defense a relaxed declaration cannot remove.
+     *
+     * @return the access context, or null when the response has already been ended
+     */
+    public static @Nullable AccessContext requireAdminKey(@NonNull Conduit conduit) {
+        AccessContext ctx = requireKey(conduit);
+        if (ctx == null) {
+            return null;
+        }
+        if (!HohenheimAccess.isAdmin(ctx)) {
+            conduit.forbidden();
+            return null;
+        }
+        return ctx;
+    }
+
+    /**
+     * THE "is this caller an API key" fact: a header-carried key, never an ambient browser
+     * session. Every csrfExempt automation endpoint rests on it.
+     */
+    public static boolean isApiKey(@NonNull Conduit conduit) {
+        return conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal;
     }
 
     /**
@@ -54,7 +84,7 @@ public final class ApiConduits {
      * describe the FIRST violation (as they always did), {@code field} is its path and
      * {@code violations} carries every refusal with its own path, key and sentence. Without
      * the path a caller submitting twenty form fields was told a value was refused and never
-     * which one -- {@code zenit.coercion.unknown_field} in particular is useless without it.
+     * which one -- {@code unknown_field} in particular is useless without it.
      *
      * A form-level violation has no path, so {@code field} is absent rather than empty: an
      * API client must be able to tell "this field" from "this submission".
@@ -96,9 +126,8 @@ public final class ApiConduits {
         return row;
     }
 
-    @SuppressWarnings("unchecked")
     public static @NonNull ActionResult<Object> json(@NonNull Map<String, Object> body) {
-        return (ActionResult<Object>) (ActionResult<?>) new JsonResult<>(body);
+        return HandlerSupport.json(body);
     }
 
     public static @NonNull Microcopy violationText(@NonNull String key) {
@@ -107,7 +136,7 @@ public final class ApiConduits {
 
     /** One submitted form value as a string, first-of-list folded, empty when absent. */
     public static @NonNull String formValue(@NonNull Conduit conduit, @NonNull String name) {
-        return InstanceTemplates.submittedString(
+        return HandlerSupport.submittedString(
             FormSubmissionRawValues.fromConduit(conduit), name);
     }
 }

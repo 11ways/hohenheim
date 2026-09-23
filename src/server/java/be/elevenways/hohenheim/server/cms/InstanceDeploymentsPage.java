@@ -88,11 +88,13 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
         // a workspace build operation records no such word, and a column of blanks reads as
         // missing data rather than as "not applicable".
         vars.put("showTrigger", releaseManaged);
+        vars.put("columnCount", releaseManaged ? 5 : 4);
 
+        WithheldFailure failures = WithheldFailure.of(conduit);
         if (releaseManaged) {
-            putReleaseVars(vars, instanceId);
+            putReleaseVars(vars, instanceId, failures);
         } else {
-            putWorkspaceVars(vars, instanceId);
+            putWorkspaceVars(vars, instanceId, failures);
         }
 
         if (HohenheimAccess.isAdmin(accessContext)) {
@@ -117,17 +119,14 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
     }
 
     /** The application lane: release operations, the serving commit and the rollback offer. */
-    private static void putReleaseVars(Map<String, Object> vars, int instanceId) {
+    private static void putReleaseVars(Map<String, Object> vars, int instanceId, WithheldFailure failures) {
+        ReleaseOperationModel model = Models.get(ReleaseOperationModel.class);
+        List<Row> operations = model.findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50);
 
-        List<Row> operations = Models.get(ReleaseOperationModel.class)
-            .findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50);
-
-        boolean inFlight = operations.stream().anyMatch(row ->
-            ReleaseOperationModel.STATUS_PENDING.equals(row.get(ReleaseOperationModel.STATUS))
-                || ReleaseOperationModel.STATUS_DEPLOYING.equals(
-                    row.get(ReleaseOperationModel.STATUS))
-                || ReleaseOperationModel.STATUS_PROBING.equals(
-                    row.get(ReleaseOperationModel.STATUS)));
+        // AIDEV-NOTE: "in flight" is the model's own answer (findInFlight), never a status
+        // list spelled here: this page used to list pending/deploying/probing and missed
+        // switching and draining, so Deploy and Rollback were offered mid-switch.
+        boolean inFlight = !model.findInFlight(InstanceModel.MODEL_ID.toString(), instanceId).isEmpty();
         vars.put("isDeploying", inFlight);
         vars.put("canRollback", !inFlight && ReleaseEngine.newestRetired(instanceId) != null);
 
@@ -137,21 +136,17 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
 
         List<Map<String, Object>> deployments = new ArrayList<>();
         for (Row row : operations) {
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("id", row.get(ReleaseOperationModel.ID));
-            entry.put("status", orEmpty(row.get(ReleaseOperationModel.STATUS)));
-            entry.put("statusVariant",
-                variantOf(ReleaseOperationModel.STATUS, row.get(ReleaseOperationModel.STATUS)));
-            entry.put("reason", orEmpty(row.get(ReleaseOperationModel.KIND)));
-            entry.put("commit", shortSha(row.get(ReleaseOperationModel.IMAGE_ID)));
-            entry.put("duration", durationLabel(row.get(ReleaseOperationModel.DURATION_MS)));
-            entry.put("error", orEmpty(row.get(ReleaseOperationModel.FAILURE_REASON)));
-            Instant startedAt = row.get(ReleaseOperationModel.STARTED_AT);
-            entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
-            String log = row.get(ReleaseOperationModel.STEP_LOG);
-            entry.put("log", log != null ? log : "");
-            entry.put("hasLog", log != null && !log.isBlank());
-            deployments.add(entry);
+            deployments.add(entry(row.get(ReleaseOperationModel.ID),
+                ReleaseOperationModel.STATUS, row.get(ReleaseOperationModel.STATUS),
+                orEmpty(row.get(ReleaseOperationModel.KIND)),
+                row.get(ReleaseOperationModel.IMAGE_ID),
+                row.get(ReleaseOperationModel.DURATION_MS),
+                failures.shown(row.get(ReleaseOperationModel.FAILURE_REASON)),
+                row.get(ReleaseOperationModel.STARTED_AT),
+                // The engine's step log carries daemon text (ReleaseEngine.reasonOf): operators
+                // only. A workspace BUILD log below stays visible -- it is the output of the
+                // tenant's own checkout and build, and without it they cannot fix a build.
+                failures.operatorOnly(row.get(ReleaseOperationModel.STEP_LOG))));
         }
         vars.put("deployments", deployments);
     }
@@ -163,7 +158,7 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
      * volume, so there is no previous artifact to point back at -- offering the control
      * would be an affordance that can only refuse.
      */
-    private static void putWorkspaceVars(Map<String, Object> vars, int instanceId) {
+    private static void putWorkspaceVars(Map<String, Object> vars, int instanceId, WithheldFailure failures) {
 
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         List<Row> operations = model.findForOwner(InstanceModel.MODEL_ID.toString(),
@@ -179,23 +174,35 @@ public final class InstanceDeploymentsPage implements RecordScopedPage<Row> {
 
         List<Map<String, Object>> deployments = new ArrayList<>();
         for (Row row : operations) {
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("id", row.get(BuildOperationModel.ID));
-            entry.put("status", orEmpty(row.get(BuildOperationModel.STATUS)));
-            entry.put("statusVariant",
-                variantOf(BuildOperationModel.STATUS, row.get(BuildOperationModel.STATUS)));
-            entry.put("reason", "");
-            entry.put("commit", shortSha(row.get(BuildOperationModel.SOURCE_REF)));
-            entry.put("duration", durationLabel(row.get(BuildOperationModel.DURATION_MS)));
-            entry.put("error", orEmpty(row.get(BuildOperationModel.FAILURE_REASON)));
-            Instant startedAt = row.get(BuildOperationModel.STARTED_AT);
-            entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
-            String log = row.get(BuildOperationModel.LOG);
-            entry.put("log", log != null ? log : "");
-            entry.put("hasLog", log != null && !log.isBlank());
-            deployments.add(entry);
+            deployments.add(entry(row.get(BuildOperationModel.ID),
+                BuildOperationModel.STATUS, row.get(BuildOperationModel.STATUS), "",
+                row.get(BuildOperationModel.SOURCE_REF),
+                row.get(BuildOperationModel.DURATION_MS),
+                failures.shown(row.get(BuildOperationModel.FAILURE_REASON)),
+                row.get(BuildOperationModel.STARTED_AT),
+                row.get(BuildOperationModel.LOG)));
         }
         vars.put("deployments", deployments);
+    }
+
+    /** One history row in the shape both lanes and the shared deploy-detail partial read. */
+    private static @NonNull Map<String, Object> entry(@Nullable Object id, @NonNull EnumField statusField,
+                                                     @Nullable Object status, @NonNull String reason,
+                                                     @Nullable Object commit, @Nullable Object durationMs,
+                                                     @NonNull String failure, @Nullable Instant startedAt,
+                                                     @Nullable String log) {
+        Map<String, Object> entry = new HashMap<>();
+        entry.put("id", id);
+        entry.put("status", orEmpty(status));
+        entry.put("statusVariant", variantOf(statusField, status));
+        entry.put("reason", reason);
+        entry.put("commit", shortSha(commit));
+        entry.put("duration", durationLabel(durationMs));
+        entry.put("error", failure);
+        entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
+        entry.put("log", log != null ? log : "");
+        entry.put("hasLog", log != null && !log.isBlank());
+        return entry;
     }
 
     /**

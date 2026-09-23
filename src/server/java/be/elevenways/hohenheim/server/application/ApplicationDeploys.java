@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.DeployStartPolicy;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.source.DeployStatuses;
 import be.elevenways.hohenheim.server.source.GitCheckout;
@@ -12,8 +13,11 @@ import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.datasource.Datasource;
+import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -65,7 +69,50 @@ public final class ApplicationDeploys {
     public static ApplicationReleases.@NonNull Release deploy(int applicationId,
                                                               @Nullable String ref,
                                                               @NonNull DeployTrigger trigger) {
+        // AIDEV-NOTE: the WHOLE verb -- checkout, converge, the durable records -- runs
+        // under the application's operation lock. The checkout used to run OUTSIDE the
+        // convergence lock, so two pushes (or a push and the Deploy button) fetched and
+        // hard-reset the same working tree under each other: one converge built a tree the
+        // other was tearing, and the commit_sha it recorded was not what it built. QUEUED,
+        // like the converge lock this replaces: a push of N+1 during the release of N must
+        // still deploy N+1. The admission is asked BEFORE queueing too, so a refused caller
+        // is told at once instead of after the running operation finishes.
+        InstanceService.requireDeployAdmitted(applicationId);
+        return InstanceOperationLock.production().exclusive(applicationId,
+            InstanceOperationLock.Contention.QUEUE,
+            () -> deployLocked(applicationId, ref, trigger));
+    }
 
+    /**
+     * Admit a deploy on the CALLER's thread, then run it on a background thread; for
+     * surfaces that answer before the build finishes (the automation API).
+     *
+     * AIDEV-NOTE: the admission MUST run here and not only inside the background deploy:
+     * the power half of it reads the request's tenant identity, which a virtual thread does
+     * not carry, so a check made only over there passes for everybody -- the hole the API
+     * deploy lane had while the HTML lane asked for power. The background deploy asks
+     * again (databases can change while it waits), and its own refusals are logged.
+     *
+     * @throws Violations {@code instance_not_permitted} or {@code database_not_ready},
+     *         before anything is queued
+     */
+    public static void deployInBackground(int applicationId, @Nullable String ref,
+                                          @NonNull DeployTrigger trigger) {
+        ApplicationReleases.requireApplication(applicationId);
+        InstanceService.requireDeployAdmitted(applicationId);
+        Datasource datasource = Db.currentOrDefault();
+        JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
+            deployQuietly(applicationId, ref, trigger)));
+    }
+
+    /** {@link #deploy}'s body; the caller holds the application's operation lock. */
+    private static ApplicationReleases.@NonNull Release deployLocked(int applicationId,
+                                                                     @Nullable String ref,
+                                                                     @NonNull DeployTrigger trigger) {
+        // The admission every deploy lane shares (power on a tenant-originated call, every
+        // attached database ready), asked HERE so the API, the forge webhook and the button
+        // cannot differ -- see InstanceService.requireDeployAdmitted.
+        InstanceService.requireDeployAdmitted(applicationId);
         Row application = ApplicationReleases.requireApplication(applicationId);
         Map<String, Object> settings = ApplicationReleases.storedSettings(application);
         Map<String, Object> overrides = new LinkedHashMap<>();

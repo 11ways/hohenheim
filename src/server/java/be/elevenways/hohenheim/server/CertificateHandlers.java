@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.cms.CertificateRequestForm;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
@@ -19,6 +20,8 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.server.http.body.FormSubmissionRawValues;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -30,9 +33,6 @@ import java.util.Map;
  * and the PEM bundle download.
  */
 final class CertificateHandlers {
-
-    /** The certificate-request page's peer slug, shared with CertificateRequestPage. */
-    private static final String CERTIFICATES_REQUEST_SLUG = "certificates-request";
 
     private CertificateHandlers() {
     }
@@ -54,7 +54,7 @@ final class CertificateHandlers {
                     return requestError(conduit, certificateError("dns_validation_failed"));
                 }
                 ActivityLog.record(certModel, certId, "requested", "manual DNS-01");
-                return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, "certificates"));
+                return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
             }
 
             List<String> hostnames = CertificateRequestForm.submittedDomains(form);
@@ -121,7 +121,7 @@ final class CertificateHandlers {
                     // The manual token is addressable page STATE (the operator resumes
                     // the challenge on this URL), so it stays a query parameter.
                     return HandlerSupport.redirect(
-                        CmsRoutes.list(HandlerSupport.ADMIN, CERTIFICATES_REQUEST_SLUG)
+                        CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES_REQUEST)
                             .with(HohenheimParams.MANUAL_CHALLENGE, manual.token()));
                 } catch (CertificateAuthority.Refused refused) {
                     return requestError(conduit, refusalMessage(refused));
@@ -193,9 +193,10 @@ final class CertificateHandlers {
                 // The names are the point of the entry; no key material is ever logged.
                 ActivityLog.record(certModel, reissueCertId, "reissued",
                     previousDomains + " -> " + String.join(",", hostnames));
-                return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, "certificates"));
+                return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
             }
 
+            int highWater = newestCertificateId(certModel);
             int certId;
             try {
                 certId = proxy.getAcmeService().requestCertificate(hostnames, niceName,
@@ -205,10 +206,7 @@ final class CertificateHandlers {
             }
 
             if (certId < 0) {
-                Row failed = certModel.find()
-                    .where(CertificateModel.STATUS.eq("error"))
-                    .orderBy(CertificateModel.CREATED_AT, SortOrder.DESC)
-                    .first();
+                Row failed = failedRequestOf(certModel, highWater, hostnames, requester);
                 String reason = failed != null ? failed.get(CertificateModel.RENEWAL_ERROR) : null;
                 if (reason == null) {
                     reason = certificateError("unknown_reason")
@@ -219,14 +217,14 @@ final class CertificateHandlers {
             }
 
             ActivityLog.record(certModel, certId, "requested", niceName);
-            return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, "certificates"));
+            return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
         });
 
         HohenheimEndpoints.CERTIFICATES_DOWNLOAD.setHandler(conduit -> {
             Integer certId = conduit.getParameter(HohenheimEndpoints.CERT_ID);
             Row cert = certModel.findById(certId);
             if (cert == null) {
-                return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, "certificates"));
+                return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
             }
 
             String certPem = cert.get(CertificateModel.CERTIFICATE_PEM);
@@ -242,6 +240,38 @@ final class CertificateHandlers {
         });
     }
 
+    /** The newest certificate id before a request, so its own row can be told from older ones. */
+    private static int newestCertificateId(@NonNull CertificateModel certModel) {
+        Row newest = certModel.find().orderBy(CertificateModel.ID, SortOrder.DESC).first();
+        Integer id = newest != null ? newest.get(CertificateModel.ID) : null;
+        return id != null ? id : 0;
+    }
+
+    /**
+     * The certificate row THIS failed request wrote: created after {@code highWater}, for
+     * exactly these hostnames, by this requester, and in the error status.
+     *
+     * AIDEV-NOTE: this replaced "the newest certificate in error", which named ANY failure --
+     * a renewal sweep or another operator's request in the same second showed its reason on
+     * this form. AcmeService.requestCertificate answers -1 without the id of the row it wrote;
+     * the exact fix is for it to return a typed outcome carrying that id (the shape
+     * ReissueResult already has), and this lookup goes away then. A request that JOINED an
+     * identical in-flight order wrote no row of its own and falls back to "unknown reason".
+     */
+    private static @Nullable Row failedRequestOf(@NonNull CertificateModel certModel, int highWater,
+                                                @NonNull List<String> hostnames,
+                                                CertificateAuthority.@NonNull Requester requester) {
+        var query = certModel.find()
+            .where(CertificateModel.ID.gt(highWater))
+            .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ERROR))
+            .where(CertificateModel.DOMAIN_NAMES_TEXT.eq(String.join(",", hostnames)));
+        Integer subject = requester.subjectId();
+        query = subject != null
+            ? query.where(CertificateModel.REQUESTED_BY_USER_ID.eq(subject))
+            : query.where(CertificateModel.REQUESTED_BY_USER_ID.isNull());
+        return query.orderBy(CertificateModel.ID, SortOrder.ASC).first();
+    }
+
     private static Microcopy certificateError(String key) {
         return Microcopy.of(key).withFilter("scope", "certificate_request_error");
     }
@@ -249,7 +279,7 @@ final class CertificateHandlers {
     private static ActionResult<Object> requestError(Conduit conduit, Microcopy message) {
         HohenheimFlash.error(conduit, message);
         return HandlerSupport.redirect(
-            CmsRoutes.list(HandlerSupport.ADMIN, CERTIFICATES_REQUEST_SLUG));
+            CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES_REQUEST));
     }
 
     /**

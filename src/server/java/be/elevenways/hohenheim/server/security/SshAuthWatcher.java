@@ -77,8 +77,14 @@ public final class SshAuthWatcher {
         @NonNull Process start() throws IOException;
     }
 
+    /** How the supervisor waits out a backoff; injectable so a test observes it instead of sleeping. */
+    interface Backoff {
+        void pause(long millis) throws InterruptedException;
+    }
+
     private final Journal journal;
     private final BiConsumer<String, String> sink;
+    private final Backoff backoff;
     private final AtomicLong signals = new AtomicLong();
 
     private volatile boolean running;
@@ -94,8 +100,15 @@ public final class SshAuthWatcher {
 
     /** Test constructor: inject the child and the scoring sink. */
     SshAuthWatcher(@NonNull Journal journal, @NonNull BiConsumer<String, String> sink) {
+        this(journal, sink, Thread::sleep);
+    }
+
+    /** Test constructor: additionally inject how a backoff is waited out. */
+    SshAuthWatcher(@NonNull Journal journal, @NonNull BiConsumer<String, String> sink,
+                   @NonNull Backoff backoff) {
         this.journal = journal;
         this.sink = sink;
+        this.backoff = backoff;
     }
 
     /** Whether an operator asked for SSH watching at all. */
@@ -147,7 +160,7 @@ public final class SshAuthWatcher {
     }
 
     private void supervise() {
-        long backoff = BACKOFF_MIN_MS;
+        long delay = BACKOFF_MIN_MS;
         while (this.running) {
             long startedAt = Now.millis();
             boolean clean = runOnce();
@@ -155,15 +168,15 @@ public final class SshAuthWatcher {
                 return;
             }
             if (clean && Now.millis() - startedAt >= HEALTHY_RUN_MS) {
-                backoff = BACKOFF_MIN_MS;
+                delay = BACKOFF_MIN_MS;
             }
             try {
-                Thread.sleep(backoff);
+                this.backoff.pause(delay);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
             }
-            backoff = Math.min(BACKOFF_MAX_MS, backoff * 2);
+            delay = Math.min(BACKOFF_MAX_MS, delay * 2);
         }
     }
 

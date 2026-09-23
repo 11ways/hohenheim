@@ -1,17 +1,15 @@
 package be.elevenways.hohenheim.ports;
 
 import be.elevenways.hohenheim.model.PortAllocationModel;
-import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
+import be.elevenways.zenit.common.orm.lease.Lease;
+import be.elevenways.zenit.common.orm.lease.Leases;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
@@ -22,11 +20,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -35,18 +30,29 @@ import java.util.Set;
  * UNIQUE claim-key index when contested (the RouteClaims shape: catch the
  * {@link DuplicateKeyException} and rethrow a NAMED conflict that can say who holds it).
  *
- * AIDEV-NOTE: concurrency posture mirrors RouteClaims -- hohenheim's SQLite engine
- * serializes write transactions (BEGIN IMMEDIATE), StackServiceModel/StackModel declare a
- * transaction around save + claim sync, so a friendly pre-write ledger READ cannot go
- * stale against a rival writer; the unique index stays as the storage-level backstop for
- * any writer that dodges the discipline. The OS probe ({@code PortProbe}) stays a
- * SEPARATE, later check: kernel-ephemeral consumers (testcontainers, orphans) will
- * never have ledger rows, so the ledger can never replace the probe.
+ * AIDEV-NOTE: concurrency posture. The unique index covers only the EXACT claim key, so
+ * it cannot see a whole-host bind racing an address-specific bind of the same port (two
+ * different keys, one impossible pair of kernel binds). Every write therefore runs its
+ * overlap check and its write under ONE fenced zenit {@link Leases} lease keyed on
+ * (server, port, protocol) -- the kernel resource both spellings contend for -- which is
+ * the portable decide-then-write guard (row locks and write serialization each cover only
+ * some backends). Inside an open write transaction on a single-writer engine (SQLite) a
+ * lease cannot be acquired and is not needed: that transaction already excludes every
+ * rival writer. The unique index stays the storage-level backstop. The OS probe
+ * ({@code PortProbe}) stays a SEPARATE, later check: kernel-ephemeral consumers
+ * (testcontainers, orphans) will never have ledger rows, so the ledger can never replace
+ * the probe.
  */
 public final class PortLedger {
 
     /** RouteClaims' separator convention: no part of a claim tuple can contain a newline. */
     private static final String SEPARATOR = "\n";
+
+    /** The lease-key prefix of the per-(server, port, protocol) claim guard. */
+    private static final String CLAIM_LEASE_PREFIX = "hohenheim_port_";
+
+    /** How long a claim waits for a concurrent claim of the same resource to finish. */
+    private static final int CLAIM_LEASE_WAIT_SECONDS = 5;
 
     /** Where the before-remove hook stashes the ids the after-remove hook must release. */
     private static final String DOOMED_SERVICES = "hohenheim.ports.doomed-services";
@@ -127,22 +133,57 @@ public final class PortLedger {
      * cannot catch the conflict it exists for. Two DIFFERENT specific addresses do not
      * exclude each other and are deliberately allowed. The unique index stays the
      * storage-level backstop for the exact-key race.
+     *
+     * AIDEV-NOTE: an ADVISORY read for callers choosing a port. It answers with the first
+     * overlapping row whoever owns it, so a caller that must tell its own row from a rival
+     * asks {@link #rivalHolder}; the claim itself re-checks under the claim lease.
      */
     public static @Nullable Row conflictingHolder(int serverId, @Nullable Object hostIp, int port,
                                                   @Nullable Object protocol) {
-        String key = claimKeyOf(serverId, hostIp, port, protocol);
-        String address = canonicalAddressOf(key);
-        for (Row claim : Models.get(PortAllocationModel.class).find()
-                .where(PortAllocationModel.SERVER_ID.eq(serverId))
-                .and(PortAllocationModel.PORT.eq(port))
-                .and(PortAllocationModel.PROTOCOL.eq(canonicalProtocolOf(key)))
-                .all()) {
-            String held = String.valueOf(claim.get(PortAllocationModel.HOST_IP));
-            if (address.isEmpty() || held.isEmpty() || held.equals(address)) {
+        List<Row> overlapping = overlappingClaims(serverId, hostIp, port, protocol);
+        return overlapping.isEmpty() ? null : overlapping.get(0);
+    }
+
+    /**
+     * The first overlapping row NOT owned by this (model, record) tuple: the holder that
+     * makes the owner's claim impossible, found even when one of the owner's own rows
+     * overlaps too (a first-row read would answer with the owner and let the rival pass).
+     *
+     * @param ownerModel null means an ownerless claim, for which every overlap is a rival
+     */
+    public static @Nullable Row rivalHolder(int serverId, @Nullable Object hostIp, int port,
+                                            @Nullable Object protocol,
+                                            @Nullable Identifier ownerModel,
+                                            @Nullable Integer ownerId) {
+        for (Row claim : overlappingClaims(serverId, hostIp, port, protocol)) {
+            if (ownerModel == null || !isOwnedBy(claim, ownerModel, ownerId)) {
                 return claim;
             }
         }
         return null;
+    }
+
+    /** EVERY row whose bind excludes this claim at the kernel, oldest first. */
+    private static @NonNull List<Row> overlappingClaims(int serverId, @Nullable Object hostIp,
+                                                        int port, @Nullable Object protocol) {
+        String key = claimKeyOf(serverId, hostIp, port, protocol);
+        String address = canonicalAddressOf(key);
+        List<Row> overlapping = new ArrayList<>();
+        for (Row claim : Models.get(PortAllocationModel.class).find()
+                .where(PortAllocationModel.SERVER_ID.eq(serverId))
+                .and(PortAllocationModel.PORT.eq(port))
+                .and(PortAllocationModel.PROTOCOL.eq(canonicalProtocolOf(key)))
+                .orderBy(PortAllocationModel.ID, SortOrder.ASC)
+                .all()) {
+            // A row production wrote with a null host_ip is the whole-host bind: the
+            // canonical spelling of "every address" has always been the empty string.
+            Object stored = claim.get(PortAllocationModel.HOST_IP);
+            String held = stored == null ? "" : String.valueOf(stored);
+            if (address.isEmpty() || held.isEmpty() || held.equals(address)) {
+                overlapping.add(claim);
+            }
+        }
+        return overlapping;
     }
 
     /** Whether a ledger row is owned by this (model, record) tuple. */
@@ -182,7 +223,7 @@ public final class PortLedger {
      * AIDEV-NOTE: a {@code releasing} row blocks a rival claim exactly like a held one --
      * a port that might still be bound is not available. Only the OWNER re-claiming a
      * tuple it already holds (typically one of its own releasing rows, e.g. a restored
-     * site landing on the same ephemeral port) replaces its old row instead of
+     * site landing on the same ephemeral port) updates its old row in place instead of
      * conflicting: one owner cannot contest itself over one kernel resource.
      *
      * @throws PortConflict when another owner already holds (or is still releasing) the tuple
@@ -227,16 +268,49 @@ public final class PortLedger {
                                   @Nullable Integer ownerId, @Nullable String note,
                                   @Nullable Long controllerFence, @Nullable String mode) {
         String key = claimKeyOf(serverId, hostIp, port, protocol);
-        Row overlapping = conflictingHolder(serverId, hostIp, port, protocol);
-        if (overlapping != null) {
-            if (ownerModel == null || !isOwnedBy(overlapping, ownerModel, ownerId)) {
-                throw new PortConflict(key, describeHolder(overlapping), null);
-            }
-            Models.get(PortAllocationModel.class)
-                .delete(overlapping.get(PortAllocationModel.ID));
+        underClaimLease(serverId, port, key, () -> writeClaim(serverId, hostIp, port, protocol,
+            key, ownerModel, ownerId, note, controllerFence, mode));
+    }
+
+    /**
+     * The decide-then-write body of every claim, run under the tuple's claim lease.
+     *
+     * AIDEV-NOTE: the owner's own overlapping row is UPDATED IN PLACE, never deleted and
+     * re-inserted: between a delete and an insert the tuple is momentarily unclaimed, and
+     * an insert that then fails leaves the owner holding nothing for a port its workload is
+     * bound to. The exact-key row is preferred; any further own row overlapping the same
+     * kernel resource is superseded by this claim and removed.
+     */
+    private static void writeClaim(int serverId, @Nullable Object hostIp, int port,
+                                   @Nullable Object protocol, @NonNull String key,
+                                   @Nullable Identifier ownerModel, @Nullable Integer ownerId,
+                                   @Nullable String note, @Nullable Long controllerFence,
+                                   @Nullable String mode) {
+        Row rival = rivalHolder(serverId, hostIp, port, protocol, ownerModel, ownerId);
+        if (rival != null) {
+            throw new PortConflict(key, describeHolder(rival), null);
         }
+        // No rival: every overlapping row left is the owner's own.
+        List<Row> own = overlappingClaims(serverId, hostIp, port, protocol);
         Model ledger = Models.get(PortAllocationModel.class);
-        Row row = ledger.createEmptyRow();
+        Row row = null;
+        for (Row claim : own) {
+            if (key.equals(claim.get(PortAllocationModel.CLAIM_KEY))) {
+                row = claim;
+                break;
+            }
+        }
+        if (row == null && !own.isEmpty()) {
+            row = own.get(0);
+        }
+        for (Row claim : own) {
+            if (claim != row) {
+                ledger.delete(claim.get(PortAllocationModel.ID));
+            }
+        }
+        if (row == null) {
+            row = ledger.createEmptyRow();
+        }
         row.set(PortAllocationModel.SERVER_ID, serverId);
         row.set(PortAllocationModel.HOST_IP, canonicalAddressOf(key));
         row.set(PortAllocationModel.PORT, port);
@@ -252,6 +326,34 @@ public final class PortLedger {
             ledger.save(row);
         } catch (DuplicateKeyException conflict) {
             throw conflictFor(key, conflict);
+        }
+    }
+
+    /**
+     * Run one claim's check-and-write under the lease of the kernel resource it contends
+     * for, so no rival writer can slip an overlapping row in between.
+     *
+     * @throws PortConflict when a concurrent claim of the same resource holds the lease
+     *         past the wait
+     */
+    private static void underClaimLease(int serverId, int port, @NonNull String key,
+                                        @NonNull Runnable body) {
+        Leases leases = Leases.of(Db.currentOrDefault());
+        if (!leases.canAcquireHere()) {
+            // Inside a write transaction on a single-writer engine: that transaction is
+            // already a database-wide exclusion, and a lease statement would block on it.
+            body.run();
+            return;
+        }
+        Lease lease = leases.acquire(CLAIM_LEASE_PREFIX + serverId + "_" + port + "_"
+            + canonicalProtocolOf(key), CLAIM_LEASE_WAIT_SECONDS);
+        if (lease == null) {
+            throw new PortConflict(key, "a concurrent claim of the same port", null);
+        }
+        try {
+            body.run();
+        } finally {
+            lease.release();
         }
     }
 
@@ -376,8 +478,21 @@ public final class PortLedger {
     }
 
     /**
-     * THE record-after primitive: write the claim for a port the KERNEL has already
-     * handed out, replacing whatever this owner held before.
+     * THE record-after primitive for a single publication: {@link #recordObservedAll} with
+     * one port.
+     *
+     * @return whether the claim was recorded; false means a stale/rival row holds the tuple
+     */
+    public static boolean recordObserved(int serverId, @Nullable Object hostIp, int port,
+                                         @Nullable Object protocol, @NonNull Identifier ownerModel,
+                                         int ownerId, @Nullable String note) {
+        return recordObservedAll(serverId, hostIp, List.of(port), protocol, ownerModel, ownerId,
+            note);
+    }
+
+    /**
+     * THE record-after primitive: write the claims for EVERY port the KERNEL has already
+     * handed this owner, superseding whatever observed claims it held before.
      *
      * AIDEV-NOTE: record-after is the decided default (instance-tier-plan, fork 2) --
      * pre-allocating does not remove the TOCTOU, it adds a second one seconds wide (an
@@ -391,30 +506,48 @@ public final class PortLedger {
      * OwnerLabels land at container-CREATE, before the port exists, so DockerReconciler can
      * still attribute the container. Never move the labels after the readback.
      *
-     * @return whether the claim was recorded; false means a stale/rival row holds the tuple
+     * AIDEV-NOTE: ONE call per owner carries ALL its observed ports. The supersession
+     * below removes every observed claim the owner holds that is NOT in this set, so a
+     * caller recording its publications one call at a time kept only the LAST one -- a
+     * multi-publication workload silently lost every other claim. The supersession is
+     * legitimate for all three callers, on two distinct arguments: the record-after DEPLOY
+     * flows reach this point strictly after OwnerLabels.removeIfOwnedBy verified (via the
+     * daemon) that the owner's previous container is gone, so its old ports are
+     * observed-free facts; DatabaseLinkNetworks.refreshInstancePort runs against a
+     * still-RUNNING container, and its argument is SUPERSESSION -- the daemon was just asked
+     * and reported the ports the container holds NOW. Pre-allocated claims are never
+     * touched here: they are reservations, not observations.
+     *
+     * @return whether every port was recorded; false means a stale/rival row holds a tuple
      */
-    public static boolean recordObserved(int serverId, @Nullable Object hostIp, int port,
-                                         @Nullable Object protocol, @NonNull Identifier ownerModel,
-                                         int ownerId, @Nullable String note) {
-        // The VERIFIED release is legitimate here for all three callers, on two distinct
-        // arguments. The two record-after DEPLOY flows reach this point strictly after
-        // OwnerLabels.removeIfOwnedBy verified (via the daemon) that the owner's previous
-        // container is gone, so the old port is an observed-free fact. The third caller,
-        // DatabaseLinkNetworks.refreshInstancePort, runs against a still-RUNNING
-        // container -- its argument is not absence but SUPERSESSION: the daemon was just
-        // asked and reported the port the container holds NOW, so whatever older row the
-        // owner held describes a binding that no longer exists and correcting it must not
-        // wait out a release grace period.
-        releaseOwnerObserved(ownerModel, ownerId);
-        try {
-            claim(serverId, hostIp, port, protocol, ownerModel, ownerId, note);
-            return true;
-        } catch (PortConflict conflict) {
-            Blast.log("PORTS: observed port", port, "of", ownerModel + " #" + ownerId,
-                "could not be recorded -", conflict.getMessage(),
-                "- the container holds the port regardless; the ledger row is stale");
-            return false;
+    public static boolean recordObservedAll(int serverId, @Nullable Object hostIp,
+                                            @NonNull List<Integer> ports,
+                                            @Nullable Object protocol,
+                                            @NonNull Identifier ownerModel, int ownerId,
+                                            @Nullable String note) {
+        Set<String> observed = new LinkedHashSet<>();
+        for (int port : ports) {
+            observed.add(claimKeyOf(serverId, hostIp, port, protocol));
         }
+        Model ledger = Models.get(PortAllocationModel.class);
+        for (Row claim : claimsOf(ownerModel, ownerId)) {
+            if (!isPreallocated(claim)
+                    && !observed.contains(String.valueOf((Object) claim.get(PortAllocationModel.CLAIM_KEY)))) {
+                ledger.delete(claim.get(PortAllocationModel.ID));
+            }
+        }
+        boolean recorded = true;
+        for (int port : ports) {
+            try {
+                claim(serverId, hostIp, port, protocol, ownerModel, ownerId, note);
+            } catch (PortConflict conflict) {
+                Blast.log("PORTS: observed port", port, "of", ownerModel + " #" + ownerId,
+                    "could not be recorded -", conflict.getMessage(),
+                    "- the container holds the port regardless; the ledger row is stale");
+                recorded = false;
+            }
+        }
+        return recorded;
     }
 
     /**
@@ -518,67 +651,6 @@ public final class PortLedger {
                 .where(PortAllocationModel.SERVER_ID.in(ids))
                 .all());
         }
-    }
-
-    /**
-     * Migration backfill: claim every stack service's declared host ports, lowest
-     * service id winning a contested tuple and the losers left unclaimed (they were
-     * already colliding at deploy time; their next edit is refused with the real
-     * conflict message -- the M045 heal stance).
-     *
-     * @return the number of declared ports left unclaimed because an earlier service
-     *         already held their tuple
-     */
-    public static int backfill(@NonNull Datasource datasource) {
-        int[] released = {0};
-        // Fresh instances, not Models.get: a migration may run long before the model
-        // singletons are registered (the RouteClaims.backfill shape). Db.run scopes
-        // every save to the migration's datasource.
-        Db.run(datasource, () -> {
-            Model stacks = new StackModel();
-            StackServiceModel services = new StackServiceModel();
-            Model ledger = new PortAllocationModel();
-            Map<Integer, Integer> serverByStack = new HashMap<>();
-            for (Row stack : stacks.find().all()) {
-                serverByStack.put(stack.get(StackModel.ID), stack.get(StackModel.SERVER_ID));
-            }
-            Set<String> claimed = new HashSet<>();
-            for (Row service : services.find()
-                    .orderBy(StackServiceModel.ID, SortOrder.ASC).all()) {
-                Integer serverId = serverByStack.get(service.get(StackServiceModel.STACK_ID));
-                if (serverId == null) {
-                    continue;   // orphaned service row: no host, nothing claimable
-                }
-                for (Row port : service.getRecords(StackServiceModel.PORTS)) {
-                    Integer host = port.get(StackServiceModel.PORT_HOST);
-                    if (host == null) {
-                        continue;
-                    }
-                    String key = claimKeyOf(serverId, port.get(StackServiceModel.PORT_HOST_IP),
-                        host, port.get(StackServiceModel.PORT_PROTOCOL));
-                    if (!claimed.add(key)) {
-                        released[0]++;
-                        continue;
-                    }
-                    Row row = ledger.createEmptyRow();
-                    row.set(PortAllocationModel.SERVER_ID, serverId);
-                    row.set(PortAllocationModel.HOST_IP, canonicalAddressOf(key));
-                    row.set(PortAllocationModel.PORT, host);
-                    row.set(PortAllocationModel.PROTOCOL, canonicalProtocolOf(key));
-                    row.set(PortAllocationModel.CLAIM_KEY, key);
-                    row.set(PortAllocationModel.OWNER_MODEL, StackServiceModel.MODEL_ID.toString());
-                    row.set(PortAllocationModel.OWNER_ID, service.get(StackServiceModel.ID));
-                    // No STATUS here: this runs inside M051, BEFORE M052 adds the column;
-                    // M052's heal stamps these rows "held".
-                    ledger.save(row);
-                }
-            }
-        });
-        if (released[0] > 0) {
-            Blast.log("PORTS: backfill left", released[0],
-                "contested stack port declaration(s) unclaimed (lowest service id kept each)");
-        }
-        return released[0];
     }
 
     private static @NonNull PortConflict conflictFor(@NonNull String key,

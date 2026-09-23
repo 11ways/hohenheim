@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
@@ -73,6 +72,12 @@ public final class InstanceSnapshots {
      */
     public int create(int instanceId, @Nullable String note) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
+        return this.instances.operations().exclusive(instanceId,
+            InstanceOperationLock.Contention.REFUSE, () -> createLocked(instanceId, note));
+    }
+
+    /** {@link #create}'s body; the caller holds the instance's operation lock. */
+    private int createLocked(int instanceId, @Nullable String note) {
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         if (resolved.runtime() instanceof NativeSnapshotSupport nativeSupport) {
@@ -87,31 +92,57 @@ public final class InstanceSnapshots {
         requirePresent(live, resolved);
         boolean wasRunning = live.running();
 
-        // Settle: the ordinary stop funnel releases the port claims verified.
-        if (wasRunning) {
-            TenantWrites.inAuthorizedOperation(() -> this.instances.stop(instanceId));
+        // Cold: the ordinary stop funnel settles the workload (releasing the port claims
+        // verified) and a failed capture hands it back, because a capture changes no data.
+        Row[] snapshot = new Row[1];
+        Path[] directory = new Path[1];
+        try {
+            InstanceMaintenanceWindow.run(this.instances, resolved,
+                new InstanceMaintenanceWindow.Plan(InstanceModel.STATUS_CAPTURING, wasRunning,
+                    InstanceModel.STATUS_STOPPED, wasRunning,
+                    InstanceMaintenanceWindow.Failure.HAND_BACK),
+                () -> {
+                    snapshot[0] = newSnapshotRow(instanceId, note);
+                    // AIDEV-NOTE: the row id is part of the directory name for the reason
+                    // createNative spells out for the native name -- the stamp resolves to
+                    // the SECOND, so two captures of one instance inside the same second
+                    // used to resolve to the SAME directory, and then retention deleting
+                    // one row's payload took the other row's tars with it. Same hazard,
+                    // same fix, both lanes.
+                    String stamp = STAMP.format(Now.instant());
+                    directory[0] = snapshotRoot().resolve("instance-" + instanceId)
+                        .resolve(stamp + "-" + snapshot[0].get(InstanceSnapshotModel.ID));
+                    RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
+                        .set(InstanceSnapshotModel.DIRECTORY, directory[0].toString())
+                        .write();
+                    captureInto(snapshot[0], directory[0], support, resolved, volumes);
+                });
+        } catch (IOException error) {
+            throw refusal("instance_snapshot_failed", resolved.row(), error);
         }
-        long fence = this.instances.leases().requireFence(resolved.serverId());
-        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
-            fence, InstanceModel.STATUS_CAPTURING, resolved.row().get(InstanceModel.NAME));
+        Blast.log("SNAPSHOT: captured instance", instanceId, "into", directory[0].toString());
+        pruneForRetention(instanceId);
+        return snapshot[0].get(InstanceSnapshotModel.ID);
+    }
 
+    /** A new snapshot row, FAILED until its capture completes (a killed capture stays evidence). */
+    private static @NonNull Row newSnapshotRow(int instanceId, @Nullable String note) {
         Row snapshot = Models.get(InstanceSnapshotModel.class).createEmptyRow();
         snapshot.set(InstanceSnapshotModel.INSTANCE_ID, instanceId);
         snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED);
         snapshot.set(InstanceSnapshotModel.NOTE, note);
         Models.get(InstanceSnapshotModel.class).save(snapshot);
-        // AIDEV-NOTE: the row id is part of the directory name for the reason createNative
-        // spells out for the native name -- the stamp resolves to the SECOND, so two
-        // captures of one instance inside the same second used to resolve to the SAME
-        // directory, and then retention deleting one row's payload took the other row's
-        // tars with it. Same hazard, same fix, both lanes.
-        String stamp = STAMP.format(Now.instant());
-        Path directory = snapshotRoot().resolve("instance-" + instanceId)
-            .resolve(stamp + "-" + snapshot.get(InstanceSnapshotModel.ID));
-        RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
-            .set(InstanceSnapshotModel.DIRECTORY, directory.toString())
-            .write();
+        return snapshot;
+    }
 
+    /**
+     * The cold capture itself: tar every volume into {@code directory} and complete the row;
+     * any failure removes the payload and records the error on the row before it propagates.
+     */
+    private static void captureInto(@NonNull Row snapshot, @NonNull Path directory,
+                                    @NonNull VolumeSnapshotSupport support,
+                                    @NonNull Resolved resolved,
+                                    @NonNull Map<String, String> volumes) throws IOException {
         try {
             Files.createDirectories(directory);
             var captured = support.captureVolumes(resolved.spec(), volumes, directory,
@@ -136,28 +167,13 @@ public final class InstanceSnapshots {
                 .set(InstanceSnapshotModel.VOLUMES, inventory)
                 .set(InstanceSnapshotModel.TOTAL_BYTES, total)
                 .write();
-        } catch (IOException error) {
+        } catch (IOException | RuntimeException error) {
             deleteRecursively(directory);
             RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
                 .set(InstanceSnapshotModel.ERROR, describe(error))
                 .write();
-            // A failed CAPTURE changed no volume data: hand the workload back rather
-            // than leaving it down over a snapshot that did not happen.
-            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.STATUS_STOPPED,
-                resolved.row().get(InstanceModel.NAME));
-            redeployBestEffort(instanceId, wasRunning);
-            throw refusal("instance_snapshot_failed", resolved.row(), error);
+            throw error;
         }
-
-        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
-            fence, InstanceModel.STATUS_STOPPED, resolved.row().get(InstanceModel.NAME));
-        if (wasRunning) {
-            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
-        }
-        Blast.log("SNAPSHOT: captured instance", instanceId, "into", directory.toString());
-        pruneForRetention(instanceId);
-        return snapshot.get(InstanceSnapshotModel.ID);
     }
 
     /**
@@ -172,43 +188,44 @@ public final class InstanceSnapshots {
         requirePresent(live, resolved);
         String prior = live.running() ? InstanceModel.STATUS_RUNNING
             : InstanceModel.STATUS_STOPPED;
-        long fence = this.instances.leases().requireFence(resolved.serverId());
-        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
-            fence, InstanceModel.STATUS_CAPTURING, resolved.row().get(InstanceModel.NAME));
-
-        Row snapshot = Models.get(InstanceSnapshotModel.class).createEmptyRow();
-        snapshot.set(InstanceSnapshotModel.INSTANCE_ID, instanceId);
-        snapshot.set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_FAILED);
-        snapshot.set(InstanceSnapshotModel.NOTE, note);
-        Models.get(InstanceSnapshotModel.class).save(snapshot);
-        // AIDEV-NOTE: the row id is part of the daemon-side name, and it has to be: the
-        // stamp resolves to the SECOND, so two captures of one instance inside the same
-        // second used to ask the daemon for the SAME snapshot name -- the second either
-        // fails or aliases the first, and then retention deleting one row's payload takes
-        // the other row's snapshot with it. That is why the row is saved first.
-        String nativeName = "hib-" + STAMP.format(Now.instant())
-            + "-" + snapshot.get(InstanceSnapshotModel.ID);
-        RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
-            .set(InstanceSnapshotModel.NATIVE_NAME, nativeName)
-            .write();
+        Row[] snapshot = new Row[1];
+        String[] nativeName = new String[1];
         try {
-            support.createSnapshot(resolved.spec(), nativeName);
-            RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
-                .set(InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE)
-                .write();
+            InstanceMaintenanceWindow.run(this.instances, resolved,
+                new InstanceMaintenanceWindow.Plan(InstanceModel.STATUS_CAPTURING, false,
+                    prior, false, InstanceMaintenanceWindow.Failure.HAND_BACK),
+                () -> {
+                    snapshot[0] = newSnapshotRow(instanceId, note);
+                    // AIDEV-NOTE: the row id is part of the daemon-side name, and it has to
+                    // be: the stamp resolves to the SECOND, so two captures of one instance
+                    // inside the same second used to ask the daemon for the SAME snapshot
+                    // name -- the second either fails or aliases the first, and then
+                    // retention deleting one row's payload takes the other row's snapshot
+                    // with it. That is why the row is saved first.
+                    nativeName[0] = "hib-" + STAMP.format(Now.instant())
+                        + "-" + snapshot[0].get(InstanceSnapshotModel.ID);
+                    RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
+                        .set(InstanceSnapshotModel.NATIVE_NAME, nativeName[0])
+                        .write();
+                    try {
+                        support.createSnapshot(resolved.spec(), nativeName[0]);
+                        RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
+                            .set(InstanceSnapshotModel.STATUS,
+                                InstanceSnapshotModel.STATUS_COMPLETE)
+                            .write();
+                    } catch (IOException | RuntimeException error) {
+                        RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
+                            .set(InstanceSnapshotModel.ERROR, describe(error))
+                            .write();
+                        throw error;
+                    }
+                });
         } catch (IOException error) {
-            RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot)
-                .set(InstanceSnapshotModel.ERROR, describe(error))
-                .write();
-            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, prior, resolved.row().get(InstanceModel.NAME));
             throw refusal("instance_snapshot_failed", resolved.row(), error);
         }
-        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
-            fence, prior, resolved.row().get(InstanceModel.NAME));
-        Blast.log("SNAPSHOT: captured native snapshot", nativeName, "of instance", instanceId);
+        Blast.log("SNAPSHOT: captured native snapshot", nativeName[0], "of instance", instanceId);
         pruneForRetention(instanceId);
-        return snapshot.get(InstanceSnapshotModel.ID);
+        return snapshot[0].get(InstanceSnapshotModel.ID);
     }
 
     /**
@@ -229,6 +246,12 @@ public final class InstanceSnapshots {
         }
         int instanceId = snapshot.get(InstanceSnapshotModel.INSTANCE_ID);
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
+        this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
+            () -> restoreLocked(instanceId, snapshotId, snapshot));
+    }
+
+    /** {@link #restore}'s body; the caller holds the instance's operation lock. */
+    private void restoreLocked(int instanceId, int snapshotId, @NonNull Row snapshot) {
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         String nativeName = snapshot.get(InstanceSnapshotModel.NATIVE_NAME);
@@ -283,30 +306,28 @@ public final class InstanceSnapshots {
         boolean wasRunning = live.running();
 
         // -- the point of no return --------------------------------------------
-        if (wasRunning) {
-            TenantWrites.inAuthorizedOperation(() -> this.instances.stop(instanceId));
-        }
-        long fence = this.instances.leases().requireFence(resolved.serverId());
-        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
-            fence, InstanceModel.STATUS_RESTORING, resolved.row().get(InstanceModel.NAME));
         try {
-            resolved.runtime().destroy(resolved.spec().handle());
-            support.removeVolumesForRestore(resolved.spec(), volumes, tars.keySet());
-            resolved.runtime().create(resolved.spec());
-            support.restoreVolumes(resolved.spec(), volumes, tars);
+            InstanceMaintenanceWindow.run(this.instances, resolved, restoreWindow(wasRunning),
+                () -> {
+                    resolved.runtime().destroy(resolved.spec().handle());
+                    support.removeVolumesForRestore(resolved.spec(), volumes, tars.keySet());
+                    resolved.runtime().create(resolved.spec());
+                    support.restoreVolumes(resolved.spec(), volumes, tars);
+                });
         } catch (IOException error) {
-            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.STATUS_ERROR,
-                resolved.row().get(InstanceModel.NAME));
             throw refusal("instance_restore_failed", resolved.row(), error);
-        }
-        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
-            fence, InstanceModel.STATUS_STOPPED, resolved.row().get(InstanceModel.NAME));
-        if (wasRunning) {
-            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         }
         recordRestore(instanceId, "snapshot #" + snapshotId);
         Blast.log("SNAPSHOT: restored snapshot", snapshotId, "onto instance", instanceId);
+    }
+
+    /**
+     * An in-place restore's window: past the point of no return the payload may be
+     * half-written, so a failure holds the record in {@code error} and starts nothing.
+     */
+    private static InstanceMaintenanceWindow.@NonNull Plan restoreWindow(boolean wasRunning) {
+        return new InstanceMaintenanceWindow.Plan(InstanceModel.STATUS_RESTORING, wasRunning,
+            InstanceModel.STATUS_STOPPED, wasRunning, InstanceMaintenanceWindow.Failure.HOLD_ERROR);
     }
 
     /** The activity action an in-place snapshot restore is recorded under. */
@@ -358,24 +379,11 @@ public final class InstanceSnapshots {
         boolean wasRunning = live.running();
 
         // -- the point of no return --------------------------------------------
-        if (wasRunning) {
-            TenantWrites.inAuthorizedOperation(() -> this.instances.stop(instanceId));
-        }
-        long fence = this.instances.leases().requireFence(resolved.serverId());
-        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
-            fence, InstanceModel.STATUS_RESTORING, resolved.row().get(InstanceModel.NAME));
         try {
-            support.restoreSnapshot(resolved.spec(), nativeName);
+            InstanceMaintenanceWindow.run(this.instances, resolved, restoreWindow(wasRunning),
+                () -> support.restoreSnapshot(resolved.spec(), nativeName));
         } catch (IOException error) {
-            InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                resolved.serverId(), fence, InstanceModel.STATUS_ERROR,
-                resolved.row().get(InstanceModel.NAME));
             throw refusal("instance_restore_failed", resolved.row(), error);
-        }
-        InstanceOperationGuard.stamp(this.instances.leases(), instanceId, resolved.serverId(),
-            fence, InstanceModel.STATUS_STOPPED, resolved.row().get(InstanceModel.NAME));
-        if (wasRunning) {
-            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
         }
         recordRestore(instanceId, "native snapshot " + nativeName);
         Blast.log("SNAPSHOT: restored native snapshot", nativeName, "onto instance", instanceId);
@@ -581,19 +589,6 @@ public final class InstanceSnapshots {
             throw Violations.ofForm(violationText("snapshot_delete_failed")
                 .withArg("snapshot", nativeName)
                 .withArg("reason", describe(error)));
-        }
-    }
-
-    /** Restart after a failed capture: best effort, the original failure stays primary. */
-    private void redeployBestEffort(int instanceId, boolean wasRunning) {
-        if (!wasRunning) {
-            return;
-        }
-        try {
-            TenantWrites.inAuthorizedOperation(() -> this.instances.deploy(instanceId));
-        } catch (RuntimeException redeployFailed) {
-            Blast.log("SNAPSHOT: could not restart instance", instanceId,
-                "after a failed capture:", describe(redeployFailed));
         }
     }
 

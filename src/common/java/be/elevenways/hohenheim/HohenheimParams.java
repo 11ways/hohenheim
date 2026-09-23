@@ -19,6 +19,16 @@ public final class HohenheimParams {
     private HohenheimParams() {
     }
 
+    /** Prefill for a create form whose record belongs to a project. */
+    public static final ParameterDefinition<Integer> PROJECT_ID_PREFILL =
+        ParameterDefinition.builder(Integer.class).name("project_id")
+            .stringResolver(Integer::parseInt).build();
+
+    /** Prefill for a create form whose record belongs to an environment. */
+    public static final ParameterDefinition<Integer> ENVIRONMENT_ID_PREFILL =
+        ParameterDefinition.builder(Integer.class).name("environment_id")
+            .stringResolver(Integer::parseInt).build();
+
     /** Prefill for a create form whose record belongs to a site. */
     public static final ParameterDefinition<Integer> SITE_ID_PREFILL =
         ParameterDefinition.builder(Integer.class).name("site_id")
@@ -100,14 +110,11 @@ public final class HohenheimParams {
             .stringResolver(value -> value).build();
 
     /**
-     * The query name of {@link #CERTIFICATE_REISSUE}, which the page READS by name --
-     * a definition composes a URL but exposes no accessor to read one back.
+     * The stored certificate the request page re-issues instead of creating a new one. A
+     * reader takes the query name off the definition itself ({@code getName()}).
      */
-    public static final String CERTIFICATE_REISSUE_NAME = "cert_id";
-
-    /** The stored certificate the request page re-issues instead of creating a new one. */
     public static final ParameterDefinition<Integer> CERTIFICATE_REISSUE =
-        ParameterDefinition.builder(Integer.class).name(CERTIFICATE_REISSUE_NAME)
+        ParameterDefinition.builder(Integer.class).name("cert_id")
             .stringResolver(Integer::parseInt).build();
 
     /** The manual-DNS challenge token the certificate request page resumes with. */
@@ -115,11 +122,8 @@ public final class HohenheimParams {
         ParameterDefinition.builder(String.class).name("manual")
             .stringResolver(value -> value).build();
 
-    /** The query name of {@link #INBOX_PAGE}, which the inbox page READS by name. */
-    public static final String INBOX_PAGE_NAME = "page";
-
     /** The page of notification-inbox items being read. */
     public static final ParameterDefinition<Integer> INBOX_PAGE =
-        ParameterDefinition.builder(Integer.class).name(INBOX_PAGE_NAME)
+        ParameterDefinition.builder(Integer.class).name("page")
             .stringResolver(Integer::parseInt).build();
 }

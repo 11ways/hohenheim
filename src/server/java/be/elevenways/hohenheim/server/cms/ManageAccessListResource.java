@@ -3,19 +3,13 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -59,12 +53,7 @@ public final class ManageAccessListResource extends AccessListResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> {
-            Criteria scope = HohenheimAccess.grantScope(ctx, Models.get(AccessListModel.class),
-                AccessListModel.MODEL_ID, HohenheimAccess.MANAGE, AccessListModel.ID::in);
-            return scope == null ? AccessDecision.allowAll()
-                : AccessDecision.allow(QueryPredicate.of(scope));
-        };
+        return TenantScopes.MANAGED_ACCESS_LISTS.accessFunction();
     }
 
     /**
@@ -76,16 +65,10 @@ public final class ManageAccessListResource extends AccessListResource {
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
         Object key = super.persistRow(coerced, accessContext);
-        int listId = Integer.parseInt(String.valueOf(key));
-        for (String subject : HohenheimAccess.creationOwnerSubjects(accessContext)) {
-            int separator = subject.indexOf(':');
-            RecordGrants.grant(GrantSubjectType.fromKey(subject.substring(0, separator)),
-                Integer.parseInt(subject.substring(separator + 1)),
-                AccessListModel.MODEL_ID, listId, HohenheimAccess.MANAGE, true);
-        }
-        // The scope memo cached "which lists does this principal manage" before the grant
-        // above changed the answer; without this the create refuses ITSELF out_of_scope.
-        HohenheimAccess.forgetGrantedRecordIds(accessContext);
+        // THE planting loop, which also drops the scope memo the grant made stale --
+        // without that the create refuses ITSELF out_of_scope.
+        HohenheimAccess.grantCreatorManage(AccessListModel.MODEL_ID,
+            Integer.parseInt(String.valueOf(key)), accessContext);
         return key;
     }
 

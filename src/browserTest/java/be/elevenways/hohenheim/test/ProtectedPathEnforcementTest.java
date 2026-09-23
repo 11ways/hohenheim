@@ -22,6 +22,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.sun.net.httpserver.HttpServer;
 
@@ -33,7 +34,8 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * Drives protected paths through the proxy with real requests: a guarded folder
  * challenges with 401 while the rest of the site serves, the prefix match keeps segment
  * boundaries, guards are ADDITIVE on top of the site's own list, nested guards all apply,
- * and the model invariant refuses the rows that would guard nothing.
+ * the model invariant refuses the rows that would guard nothing, and no spelling of a guarded
+ * path (dot-segments, doubled or encoded separators) reaches the upstream past its guard.
  */
 class ProtectedPathEnforcementTest {
 
@@ -42,6 +44,8 @@ class ProtectedPathEnforcementTest {
     private static int port;
     private static Row site;
     private static final AtomicInteger upstreamHits = new AtomicInteger();
+    /** The request target the upstream last received, exactly as it arrived on its wire. */
+    private static final AtomicReference<String> upstreamTarget = new AtomicReference<>();
 
     @BeforeAll
     static void boot() throws Exception {
@@ -53,6 +57,7 @@ class ProtectedPathEnforcementTest {
         upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         upstream.createContext("/", ex -> {
             upstreamHits.incrementAndGet();
+            upstreamTarget.set(ex.getRequestURI().getRawPath());
             byte[] body = "site-content".getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(200, body.length);
             ex.getResponseBody().write(body);
@@ -178,6 +183,47 @@ class ProtectedPathEnforcementTest {
         assertThat(request("/drafts/x")).as("step 8: the canonicalized guard enforces")
             .contains("401");
         assertThat(request("/drafts/x", authHeader("kim", "hunter2"))).contains("200");
+
+        // Step 9: no spelling of a guarded path dodges its guard. A dot-segment in any form is
+        // refused outright (no browser sends one; an upstream would resolve it back into the
+        // guarded folder), and separator spellings an upstream reads as '/' are judged as '/'.
+        int beforeBypass = upstreamHits.get();
+        for (String dotted : new String[]{"/x/../private/report.html", "/./private/report.html",
+                "/x/%2e%2e/private/report.html", "/x/%2E%2E/private/report.html",
+                "/x/..;/private/report.html", "/private/./report.html"}) {
+            assertThat(request(dotted))
+                .as("step 9: dot-segment spelling %s is refused, never served", dotted)
+                .contains("400").doesNotContain("site-content");
+        }
+        for (String collapsed : new String[]{"//private/report.html", "/private//report.html",
+                "/private%2Freport.html", "/private%2freport.html", "/private%5Creport.html"}) {
+            assertThat(request(collapsed))
+                .as("step 9: separator spelling %s is still under /private and challenges", collapsed)
+                .contains("401").doesNotContain("site-content");
+        }
+        assertThat(upstreamHits.get())
+            .as("step 9: no bypass attempt reached the upstream")
+            .isEqualTo(beforeBypass);
+        assertThat(request("//private/report.html", authHeader("kim", "hunter2")))
+            .as("step 9: the same spelling with the folder's password serves, so nothing legitimate broke")
+            .contains("200").contains("site-content");
+        assertThat(upstreamTarget.get())
+            .as("step 9: the upstream receives ONE leading '/', never a network-path reference")
+            .isEqualTo("/private/report.html");
+
+        // Step 10: a leading '//' outside the guard is not a way in either. The guard judges
+        // "/public/private/report.html" (not under /private), so the upstream must receive that
+        // same path: forwarded verbatim, a URL parser would read host "public" and path
+        // "/private/report.html" and serve the guarded folder without its password.
+        assertThat(request("//public/private/report.html"))
+            .as("step 10: a path outside the guard serves without a password")
+            .contains("200").contains("site-content");
+        assertThat(upstreamTarget.get())
+            .as("step 10: the upstream receives the path the guard judged, not host 'public'")
+            .isEqualTo("/public/private/report.html");
+        assertThat(request("/%2F/private/report.html"))
+            .as("step 10: an encoded leading separator is still judged under /private")
+            .contains("401").doesNotContain("site-content");
     }
 
     private static void reload() {

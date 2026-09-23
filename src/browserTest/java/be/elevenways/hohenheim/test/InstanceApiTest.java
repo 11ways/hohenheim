@@ -178,13 +178,13 @@ class InstanceApiTest extends HohenheimTestBase {
         HttpResponse<String> stranger = keyPost(keyAdmin, "/api/v1/instances", form(
             "name", PREFIX + "stranger", "kind", "hohenheim:application", "colour", "red"));
         assertThat(stranger.statusCode()).isEqualTo(422);
-        assertThat(codeOf(stranger.body())).isEqualTo("zenit.coercion.unknown_field");
+        assertThat(codeOf(stranger.body())).isEqualTo("unknown_field");
         HttpResponse<String> misspelled = keyPost(keyAdmin, "/api/v1/instances", form(
             "name", PREFIX + "stranger", "kind", "hohenheim:application",
             "settings.branhc", "main"));
         assertThat(misspelled.statusCode()).as("step 3: a misspelled setting too")
             .isEqualTo(422);
-        assertThat(codeOf(misspelled.body())).isEqualTo("zenit.coercion.unknown_field");
+        assertThat(codeOf(misspelled.body())).isEqualTo("unknown_field");
         assertThat(Models.get(InstanceModel.class).find()
                 .where(InstanceModel.NAME.eq(PREFIX + "stranger")).first())
             .as("step 3: neither refused create wrote a row").isNull();
@@ -233,7 +233,7 @@ class InstanceApiTest extends HohenheimTestBase {
             "settings.volumes.app", "/home/site"));
         assertThat(flat.statusCode()).as("step 6: a shape the map cannot store is refused")
             .isEqualTo(422);
-        assertThat(codeOf(flat.body())).isEqualTo("zenit.coercion.unknown_field");
+        assertThat(codeOf(flat.body())).isEqualTo("unknown_field");
         assertThat(Models.get(InstanceModel.class).find()
                 .where(InstanceModel.NAME.eq(PREFIX + "flat")).first())
             .as("step 6: and no row was written").isNull();

@@ -13,6 +13,8 @@ import be.elevenways.hohenheim.server.build.BuildLog;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceReadiness;
+import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.instance.PublishedPortProbe;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.RuntimeImages;
@@ -38,6 +40,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -740,6 +744,75 @@ class WorkspaceKindTest {
                 ReadinessKind.CONSOLE_LINE.token());
             Models.get(InstanceTemplateModel.class).save(template);
             InstanceReadiness.await(Models.get(InstanceModel.class).findById(id), running);
+        });
+    }
+
+    /**
+     * Readiness is asked on the WORKLOAD's host: a port published on a remote host binds
+     * that host's loopback, so the controller's own 127.0.0.1 answers nothing about it.
+     */
+    @Test
+    void readinessIsProbedFromTheHostThePortIsPublishedOn() {
+        Db.run(datasource, () -> {
+            int imageId = runtimeImage("node-22r", "hohenheim/node-22:1",
+                "hohenheim/node-22", "npm start", 3000, null);
+            int id = workspace("ws-remote-readiness", imageId, ServerModel.localServerId(),
+                Map.of());
+            Row template = Models.get(InstanceTemplateModel.class).createEmptyRow();
+            template.set(InstanceTemplateModel.NAME, "ws-remote-readiness-template");
+            template.set(InstanceTemplateModel.KIND, KIND);
+            template.set(InstanceTemplateModel.READINESS_KIND, ReadinessKind.PORT.token());
+            Models.get(InstanceTemplateModel.class).save(template);
+            Row instance = Models.get(InstanceModel.class).findById(id);
+            instance.set(InstanceModel.TEMPLATE_ID, template.get(InstanceTemplateModel.ID));
+            Models.get(InstanceModel.class).save(instance);
+            Row declared = Models.get(InstanceModel.class).findById(id);
+
+            // A port NOTHING on the controller listens on: bound and released again.
+            int port;
+            try (ServerSocket probe = new ServerSocket(0)) {
+                port = probe.getLocalPort();
+            } catch (IOException unbindable) {
+                throw new IllegalStateException(unbindable);
+            }
+            InstanceStatus running = new InstanceStatus(ContainerState.RUNNING, port,
+                "127.0.0.1");
+
+            // 1. The workload host's shell answers the connect: readiness passes although
+            //    the controller's own loopback would have refused -- the host lane decides.
+            List<String> asked = new ArrayList<>();
+            HostShell remoteOpen = (script, timeout) -> {
+                asked.add(script);
+                return new HostShell.Result(0, "");
+            };
+            InstanceReadiness.await(declared, running, PublishedPortProbe.over(remoteOpen));
+            assertThat(asked)
+                .as("step 1: the connect ran ON the workload host, against its loopback")
+                .anySatisfy(script -> assertThat(script)
+                    .contains("/dev/tcp/127.0.0.1/" + port));
+
+            // 2. The controller lane, asked about the same port, finds it closed: had the
+            //    readiness probe connected here (the defect), step 1 could not have passed.
+            assertThat(PublishedPortProbe.local().accepts(port))
+                .as("step 2: nothing listens on the controller's loopback at that port")
+                .isFalse();
+
+            // 3. The HTTP lane rides the same host: the release probe's curl runs there.
+            List<String> curled = new ArrayList<>();
+            HostShell remoteHttp = (script, timeout) -> {
+                curled.add(script);
+                return new HostShell.Result(0, "204");
+            };
+            ReleaseEngine.probe(port, "/healthz", PublishedPortProbe.over(remoteHttp));
+            assertThat(curled)
+                .as("step 3: the http probe ran on the workload host")
+                .anySatisfy(script -> assertThat(script)
+                    .contains("curl").contains("http://127.0.0.1:" + port + "/healthz"));
+
+            // 4. The lane is picked from the host record: the local host probes directly.
+            assertThat(PublishedPortProbe.forServer(ServerModel.localServerId()))
+                .as("step 4: the controller's own host uses the direct lane")
+                .isInstanceOf(PublishedPortProbe.Local.class);
         });
     }
 

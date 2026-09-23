@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.plumage.component.Pager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -12,6 +13,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.PageWindow;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
@@ -66,26 +68,22 @@ public final class AdminInboxPage extends PanelPage {
         vars.put("title", label().resolve(conduit.getLocales(), conduit.getMessageResolver()));
         vars.put("items", items);
         vars.put("markAllTarget", CommsInbox.markAllTarget(conduit));
-        vars.put("page", window.page());
-        vars.put("pageCount", window.pageCount());
-        vars.put("previousPage", window.page() > 1 ? pageUrl(window.page() - 1) : null);
-        vars.put("nextPage", window.hasMore() ? pageUrl(window.page() + 1) : null);
+        vars.put("pager", Pager.of(window, total, page -> pageUrl(page).toUrl()));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/inbox"), vars);
     }
 
-    /** This page at a different page number, composed typed -- never a concatenated query. */
+    /**
+     * This page at a different page number, composed typed -- never a concatenated query.
+     * Page 1 is the bare route, the parameter's absence.
+     */
     private @NonNull RouteTarget pageUrl(int page) {
-        return CmsRoutes.list("admin", slug()).with(HohenheimParams.INBOX_PAGE, page);
+        BoundEndpoint<?> list = CmsRoutes.list(HohenheimPanel.SLUG, slug());
+        return page <= 1 ? list : list.with(HohenheimParams.INBOX_PAGE, page);
     }
 
     /** The page the URL asks for; anything absent or unreadable is page 1. */
     private static int requestedPage(@NonNull Conduit conduit) {
-        String raw = conduit.getQueryParam(HohenheimParams.INBOX_PAGE_NAME);
-
-        if (raw == null || raw.isBlank()) {
-            return 1;
-        }
-        Integer requested = HohenheimParams.INBOX_PAGE.parse(raw.trim());
-        return requested == null ? 1 : requested;
+        Integer requested = CmsSupport.prefill(conduit, HohenheimParams.INBOX_PAGE);
+        return requested == null || requested < 1 ? 1 : requested;
     }
 }

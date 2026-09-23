@@ -42,9 +42,9 @@ class CertificateDateColumnTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        // The EARLY expiry is created FIRST, so the default created_at DESC order is the
-        // exact opposite of the expires_on ascending order: nothing but an honoured sort
-        // can produce the expected sequence.
+        // The EARLY expiry is created FIRST, so created_at DESC is the exact opposite of the
+        // expires_on ascending order: each asserted sequence can only come from the sort
+        // that step asked for.
         earlyId = createCertificate(EARLY_NAME, EARLY_EXPIRY, Instant.parse("2026-01-01T00:00:00Z"));
         lateId = createCertificate(LATE_NAME, LATE_EXPIRY, Instant.parse("2026-01-02T00:00:00Z"));
     }
@@ -101,22 +101,25 @@ class CertificateDateColumnTest extends HohenheimTestBase {
             .as("step 3: the expiry column header offers its own sort link")
             .contains("sort=expires_on");
 
-        // 4. The default order is created_at DESC: the LATER-expiring row was created last.
-        assertThat(list.body().indexOf(LATE_NAME))
-            .as("step 4: the default sort still leads with the newest certificate")
-            .isLessThan(list.body().indexOf(EARLY_NAME));
+        // 4. The default order is "what expires next" (c43fb56e): expiry ascending, so the
+        //    soonest-expiring certificate leads although it was created first.
+        assertThat(list.body().indexOf(EARLY_NAME))
+            .as("step 4: the default sort leads with the soonest-expiring certificate")
+            .isLessThan(list.body().indexOf(LATE_NAME));
 
-        // 5. ?sort=expires_on is HONOURED and reverses that order -- it used to be
-        //    dropped, because no date column was sortable.
-        String ascending = journeyList("&sort=expires_on").body();
-        assertThat(ascending.indexOf(EARLY_NAME))
-            .as("step 5: ascending expiry puts the soonest certificate first")
-            .isLessThan(ascending.indexOf(LATE_NAME));
-
-        // 6. And the direction is the reader's to choose.
+        // 5. ?sort=expires_on&dir=desc is HONOURED and reverses that order -- a crafted sort
+        //    on a date column used to be dropped, because no date column was sortable.
         String descending = journeyList("&sort=expires_on&dir=desc").body();
+        assertThat(descending).as("step 5: both rows are listed").contains(EARLY_NAME, LATE_NAME);
         assertThat(descending.indexOf(LATE_NAME))
-            .as("step 6: descending expiry puts the furthest certificate first")
+            .as("step 5: descending expiry puts the furthest certificate first")
             .isLessThan(descending.indexOf(EARLY_NAME));
+
+        // 6. Another date column's sort is honoured too: newest created first.
+        String newest = journeyList("&sort=created_at&dir=desc").body();
+        assertThat(newest).as("step 6: both rows are listed").contains(EARLY_NAME, LATE_NAME);
+        assertThat(newest.indexOf(LATE_NAME))
+            .as("step 6: created_at descending puts the last-created certificate first")
+            .isLessThan(newest.indexOf(EARLY_NAME));
     }
 }

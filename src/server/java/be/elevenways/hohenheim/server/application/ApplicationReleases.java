@@ -17,10 +17,12 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.RuntimeImages;
+import be.elevenways.hohenheim.server.instance.SourceBuildDetail;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -96,7 +98,8 @@ public final class ApplicationReleases {
      * the workload is not running -- an unchanged, running release is reused.
      *
      * AIDEV-NOTE: the whole pass -- read the serving release, resolve/build the spec, flip
-     * the roles, schedule the drain -- runs under the application's convergence lock, and
+     * the roles, schedule the drain -- runs under the application's operation lock
+     * ({@link InstanceOperationLock}, which replaced the convergence monitor), and
      * that read-to-flip span is exactly what the lock is for. Without it a webhook and a
      * Deploy button (or two pushes) both read the SAME serving release, both build, and
      * both flip: two rows end up role {@code serving}, {@code ownedServing} picks the
@@ -111,9 +114,9 @@ public final class ApplicationReleases {
      * fingerprint equal and returns it without resolving a spec, so a duplicate deploy
      * costs one daemon inspect rather than a second build.
      *
-     * The lock is NEVER held across the drain: {@code scheduleDrain} only hands work to a
-     * virtual thread, and that thread sleeps out the drain window after this method (and
-     * the lock) has returned.
+     * The lock is NEVER held across the drain window: {@code scheduleDrain} only hands work
+     * to a virtual thread, and that thread sleeps out the drain window after this method
+     * (and the lock) has returned -- then takes the lock again for the drain itself.
      *
      * @param overrides source facts resolved outside the record (a fresh checkout's
      *        {@code build_context} and {@code commit_sha}); empty for a plain converge
@@ -121,48 +124,54 @@ public final class ApplicationReleases {
      */
     public static @NonNull Release converge(int applicationId,
                                             @NonNull Map<String, Object> overrides) {
-        synchronized (ConvergenceLocks.forApplication(applicationId)) {
-            return convergeLocked(applicationId, overrides);
-        }
+        return InstanceOperationLock.production().exclusive(applicationId,
+            InstanceOperationLock.Contention.QUEUE,
+            () -> convergeLocked(applicationId, overrides));
     }
 
     /** Restore an imported image and its owner-keyed volumes before the first start. */
     public static @NonNull Release restore(int applicationId, @NonNull String verifiedImageId,
                                            InstanceService.@NonNull RestoreVolumes restoreVolumes) {
-        synchronized (ConvergenceLocks.forApplication(applicationId)) {
-            if (ownedServing(applicationId) != null || !verifiedImageId.startsWith("sha256:")) {
-                throw new IllegalStateException("Restore requires a new application and an imported image digest");
-            }
-            Row application = requireApplication(applicationId);
-            Map<String, Object> source = resolvedSettings(application, Map.of());
-            String fingerprint = ReleaseEngine.sourceFingerprint(applicationId, source);
-            Map<String, Object> imported = new LinkedHashMap<>(source);
-            imported.remove("build_context");
-            imported.remove("artifact_path");
-            imported.remove("tag");
-            imported.put("image", verifiedImageId);
-            int serverId = ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID));
-            try {
-                return inScope(applicationId, () -> {
-                    Map<String, Object> desired = desiredSettings(dockerFor(serverId), application, imported);
-                    for (String key : List.of("artifact_path", "commit_sha")) {
-                        if (source.containsKey(key)) {
-                            desired.put(key, source.get(key));
-                        }
+        return InstanceOperationLock.production().exclusive(applicationId,
+            InstanceOperationLock.Contention.QUEUE,
+            () -> restoreLocked(applicationId, verifiedImageId, restoreVolumes));
+    }
+
+    /** {@link #restore}'s body; the caller holds the application's operation lock. */
+    private static @NonNull Release restoreLocked(int applicationId, @NonNull String verifiedImageId,
+                                                  InstanceService.@NonNull RestoreVolumes restoreVolumes) {
+        if (ownedServing(applicationId) != null || !verifiedImageId.startsWith("sha256:")) {
+            throw new IllegalStateException("Restore requires a new application and an imported image digest");
+        }
+        Row application = requireApplication(applicationId);
+        Map<String, Object> source = resolvedSettings(application, Map.of());
+        String fingerprint = ReleaseEngine.sourceFingerprint(applicationId, source);
+        Map<String, Object> imported = new LinkedHashMap<>(source);
+        imported.remove("build_context");
+        imported.remove("artifact_path");
+        imported.remove("tag");
+        imported.put("image", verifiedImageId);
+        int serverId = ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID));
+        try {
+            return inScope(applicationId, () -> {
+                Map<String, Object> desired = desiredSettings(dockerFor(serverId), application, imported);
+                for (String key : List.of("artifact_path", "commit_sha")) {
+                    if (source.containsKey(key)) {
+                        desired.put(key, source.get(key));
                     }
-                    desired.put("source_fingerprint", fingerprint);
-                    return ReleaseEngine.initialRelease(applicationId, application.get(InstanceModel.NAME),
-                        serverId, desired, fingerprint, restoreVolumes);
-                });
-            } catch (RuntimeException unchecked) {
-                throw unchecked;
-            } catch (Exception failed) {
-                throw new IllegalStateException(failed);
-            }
+                }
+                desired.put("source_fingerprint", fingerprint);
+                return ReleaseEngine.initialRelease(applicationId, application.get(InstanceModel.NAME),
+                    serverId, desired, fingerprint, restoreVolumes);
+            });
+        } catch (RuntimeException unchecked) {
+            throw unchecked;
+        } catch (Exception failed) {
+            throw new IllegalStateException(failed);
         }
     }
 
-    /** {@link #converge}'s body; callers hold the application's convergence lock. */
+    /** {@link #converge}'s body; callers hold the application's operation lock. */
     private static @NonNull Release convergeLocked(int applicationId,
                                                    @NonNull Map<String, Object> overrides) {
 
@@ -465,7 +474,7 @@ public final class ApplicationReleases {
                     str(settings.get("dockerfile")), tag,
                     // The build sees build arguments, never the workload's secret environment.
                     EnvVars.toMap(settings.get("build_arguments")),
-                    str(settings.get("commit_sha")), null, BuildQuota.fromSettings()));
+                    str(settings.get("commit_sha")), null, buildQuotaFor(settings)));
             } finally {
                 if (artifactContext != null) {
                     RuntimeImages.deleteArtifactContext(artifactContext);
@@ -557,6 +566,18 @@ public final class ApplicationReleases {
         }
         desired.put("crash_policy", settings.getOrDefault("crash_policy", InstanceModel.CRASH_NONE));
         return desired;
+    }
+
+    /**
+     * The host's build quota with the source's declared {@code build_timeout} applied: the
+     * declaration can only SHORTEN the host's cap (SourceBuildDetail.timeoutMs).
+     */
+    private static @NonNull BuildQuota buildQuotaFor(@NonNull Map<String, Object> settings) {
+        BuildQuota host = BuildQuota.fromSettings();
+        long timeoutMs = SourceBuildDetail.timeoutMs(settings, host.timeoutMs());
+        return timeoutMs == host.timeoutMs() ? host
+            : new BuildQuota(host.cpus(), host.memoryMb(), host.diskBytes(), timeoutMs,
+                host.pidsLimit(), host.logBytes(), host.artifactBytes());
     }
 
     /**

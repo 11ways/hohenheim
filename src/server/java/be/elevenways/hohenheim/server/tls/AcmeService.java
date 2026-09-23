@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
@@ -223,7 +222,7 @@ public class AcmeService {
         flight.certificateId().set(certId);
 
         try {
-            OrderResult result = runIssuance(orderKey, flight, hostnames, email, challengeType,
+            OrderResult result = leadOrder(orderKey, flight, hostnames, email, challengeType,
                 dnsPublisher, declaring);
 
             applyIssuedMaterial(certRow, result);
@@ -299,7 +298,7 @@ public class AcmeService {
         }
 
         try {
-            OrderResult result = runIssuance(orderKey, flight, hostnames, email, challengeType,
+            OrderResult result = leadOrder(orderKey, flight, hostnames, email, challengeType,
                 dnsPublisher, declaring);
 
             applyIssuedMaterial(certRow, result);
@@ -323,33 +322,45 @@ public class AcmeService {
     }
 
     /**
-     * THE issuance pipeline both entry shapes share: validate the names, place the order,
-     * and settle the in-flight claim whichever way it ends.
+     * THE issuance pipeline every lane that leads an order shares (a fresh request, a re-issue,
+     * a renewal): validate the names, place the order, and settle the in-flight claim whichever
+     * way it ends.
      *
      * Nothing here touches a certificate row -- the row bookkeeping is the ONLY thing a
      * fresh request and a re-issue differ in, and it is what makes "leave the row alone on
      * failure" expressible at all.
+     *
+     * AIDEV-NOTE: an Error settles the flight too. The request and re-issue lanes used to
+     * catch Exception only, so an Error left a joiner blocked on the flight's future forever.
+     *
+     * @param flight a claim this caller already won for {@code orderKey}
      */
-    private OrderResult runIssuance(String orderKey, OrderFlight flight, List<String> hostnames,
-                                    @Nullable String email, String challengeType,
-                                    @Nullable String dnsPublisher,
-                                    Map<String, Integer> declaring) throws Exception {
+    private OrderResult leadOrder(String orderKey, OrderFlight flight, List<String> hostnames,
+                                  @Nullable String email, String challengeType,
+                                  @Nullable String dnsPublisher,
+                                  Map<String, Integer> declaring) throws Exception {
         try {
-            boolean dns = CertificateModel.CHALLENGE_DNS.equals(challengeType);
-            List<String> invalid = invalidHostnames(hostnames, dns);
-            if (!invalid.isEmpty()) {
-                throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
-            }
-
+            requireValidHostnames(hostnames, CertificateModel.CHALLENGE_DNS.equals(challengeType));
             OrderResult result = performAcmeOrderUncoalesced(hostnames, email, challengeType,
                 dnsPublisher, declaring);
             flight.result().complete(result);
             return result;
-        } catch (Exception e) {
-            flight.result().completeExceptionally(e);
-            throw e;
+        } catch (Exception | Error failure) {
+            flight.result().completeExceptionally(failure);
+            throw failure;
         } finally {
             inFlightOrders.remove(orderKey, flight);
+        }
+    }
+
+    /**
+     * @param allowWildcard whether one leading wildcard label is acceptable (DNS-01 only)
+     * @throws IllegalArgumentException naming every invalid hostname
+     */
+    private static void requireValidHostnames(List<String> hostnames, boolean allowWildcard) {
+        List<String> invalid = invalidHostnames(hostnames, allowWildcard);
+        if (!invalid.isEmpty()) {
+            throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
         }
     }
 
@@ -416,10 +427,7 @@ public class AcmeService {
         // Same enforcement point as requestCertificate: before the row, before the CA.
         Map<String, Integer> declaring = CertificateAuthority.authorize(requester, hostnames);
 
-        List<String> invalid = invalidHostnames(hostnames, true);
-        if (!invalid.isEmpty()) {
-            throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
-        }
+        requireValidHostnames(hostnames, true);
 
         String orderKey = certificateOrderKey(hostnames, email, null);
         OrderFlight flight = new OrderFlight(false, new CompletableFuture<>());
@@ -574,7 +582,6 @@ public class AcmeService {
      */
     private void checkRenewals() {
         try {
-            var ds = HohenheimDatabase.datasource();
             var certModel = Models.get(CertificateModel.class);
 
             checkExpiryAlerts(certModel, Now.instant());
@@ -605,13 +612,13 @@ public class AcmeService {
      * The dedup stamp self-re-arms -- a successful renewal moves expires_on forward,
      * which makes the stamp older than the new alert window.
      */
-    public static void checkExpiryAlerts(CertificateModel certModel, java.time.Instant now) {
-        java.time.Instant cutoff = now.plus(EXPIRY_ALERT_DAYS, ChronoUnit.DAYS);
+    public static void checkExpiryAlerts(CertificateModel certModel, Instant now) {
+        Instant cutoff = now.plus(EXPIRY_ALERT_DAYS, ChronoUnit.DAYS);
         for (Row cert : certModel.findExpiringSoon(cutoff)) {
-            java.time.Instant expiresOn = cert.get(CertificateModel.EXPIRES_ON);
+            Instant expiresOn = cert.get(CertificateModel.EXPIRES_ON);
             if (expiresOn == null) continue;
-            java.time.Instant notifiedAt = cert.get(CertificateModel.EXPIRY_NOTIFIED_AT);
-            java.time.Instant alertWindowStart = expiresOn.minus(EXPIRY_ALERT_DAYS, ChronoUnit.DAYS);
+            Instant notifiedAt = cert.get(CertificateModel.EXPIRY_NOTIFIED_AT);
+            Instant alertWindowStart = expiresOn.minus(EXPIRY_ALERT_DAYS, ChronoUnit.DAYS);
             if (notifiedAt != null && !notifiedAt.isBefore(alertWindowStart)) {
                 continue;   // already alerted for this expiry cycle
             }
@@ -759,16 +766,11 @@ public class AcmeService {
     // Core ACME order flow (shared by request and renewal)
     // -----------------------------------------------------------------------
 
+    /** Place a renewal order, joining an identical order already in flight instead of doubling it. */
     private OrderResult performAcmeOrder(List<String> hostnames, @Nullable String email,
                                          String challengeType, @Nullable String dnsPublisher,
                                          int certificateId,
                                          Map<String, Integer> declaring) throws Exception {
-        boolean dns = CertificateModel.CHALLENGE_DNS.equals(challengeType);
-        List<String> invalid = invalidHostnames(hostnames, dns);
-        if (!invalid.isEmpty()) {
-            throw new IllegalArgumentException("Invalid hostnames: " + String.join(", ", invalid));
-        }
-
         String orderKey = certificateOrderKey(hostnames, email, null);
         OrderFlight leader = new OrderFlight(true, new CompletableFuture<>());
         leader.certificateId().set(certificateId);
@@ -789,20 +791,7 @@ public class AcmeService {
                 throw e;
             }
         }
-
-        try {
-            OrderResult result = performAcmeOrderUncoalesced(hostnames, email, challengeType,
-                dnsPublisher, declaring);
-            leader.result().complete(result);
-            return result;
-        } catch (Throwable failure) {
-            leader.result().completeExceptionally(failure);
-            if (failure instanceof Exception exception) throw exception;
-            if (failure instanceof Error error) throw error;
-            throw new RuntimeException(failure);
-        } finally {
-            inFlightOrders.remove(orderKey, leader);
-        }
+        return leadOrder(orderKey, leader, hostnames, email, challengeType, dnsPublisher, declaring);
     }
 
     /**
@@ -819,7 +808,7 @@ public class AcmeService {
             .map(name -> name.trim().toLowerCase(Locale.ROOT))
             .distinct()
             .sorted()
-            .collect(java.util.stream.Collectors.joining(","));
+            .collect(Collectors.joining(","));
     }
 
     private OrderResult performAcmeOrderUncoalesced(List<String> hostnames, @Nullable String email,
@@ -1093,7 +1082,6 @@ public class AcmeService {
      * row has letsencrypt_email NULL, per-email rows carry their email.
      */
     KeyPair loadOrCreateAccountKeyPair(String normalizedEmail) throws Exception {
-        var ds = HohenheimDatabase.datasource();
         var certModel = Models.get(CertificateModel.class);
 
         // A handful of rows at most; match the email key in Java since NULL marks the global row.

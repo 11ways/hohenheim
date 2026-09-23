@@ -9,8 +9,9 @@
 {% declare manualToken: String = "" %}
 {% declare dnsRecords: List<Map<String, Object>> %}
 {% declare reissueCertId: Integer = 0 %}
-{% declare challengeType: String = "http" %}
-{% declare dnsMode: String = "manual" %}
+{#- Both are always supplied by CertificateRequestPage, defaulted from CertificateModel. -#}
+{% declare challengeType: String %}
+{% declare dnsMode: String %}
 {% declare accountEmail: String = "" %}
 {% declare startOverTarget: RouteTarget %}
 {% declare certificatesTarget: RouteTarget %}
@@ -72,17 +73,17 @@
             <pl-field>
                 <pl-label>{{ t("validation", scope: "certificate_request") }}</pl-label>
                 <pl-select name="challenge_type" value={% challengeType %} submitEmpty={% true %}>
-                    <pl-select-item value="http">HTTP-01</pl-select-item>
-                    <pl-select-item value="dns">DNS-01</pl-select-item>
+                    <pl-select-item value={% CertificateChallenges.HTTP %}>HTTP-01</pl-select-item>
+                    <pl-select-item value={% CertificateChallenges.DNS %}>DNS-01</pl-select-item>
                 </pl-select>
                 <pl-field-description>{{ t("validation_help", scope: "certificate_request") }}</pl-field-description>
             </pl-field>
             <pl-field>
                 <pl-label>{{ t("dns_mode", scope: "certificate_request") }}</pl-label>
                 <pl-select name="dns_mode" value={% dnsMode %} submitEmpty={% true %}>
-                    <pl-select-item value="manual">{{ t("manual", scope: "certificate_request") }}</pl-select-item>
-                    <pl-select-item value="internal" disabled={% !internalDnsAvailable %}>{{ t("internal_dns", scope: "certificate_request") }}</pl-select-item>
-                    <pl-select-item value="command" disabled={% !dnsHookConfigured %}>{{ t("automatic_hook", scope: "certificate_request") }}</pl-select-item>
+                    <pl-select-item value={% CertificateChallenges.DNS_MANUAL %}>{{ t("manual", scope: "certificate_request") }}</pl-select-item>
+                    <pl-select-item value={% CertificateChallenges.DNS_INTERNAL %} disabled={% !internalDnsAvailable %}>{{ t("internal_dns", scope: "certificate_request") }}</pl-select-item>
+                    <pl-select-item value={% CertificateChallenges.DNS_COMMAND %} disabled={% !dnsHookConfigured %}>{{ t("automatic_hook", scope: "certificate_request") }}</pl-select-item>
                 </pl-select>
                 <pl-field-description>{% if internalDnsAvailable %}{{ t("internal_ready", scope: "certificate_request") }}{% else %}{{ t("internal_unavailable", scope: "certificate_request") }}{% /if %}</pl-field-description>
                 <pl-field-description>{% if dnsHookConfigured %}{{ t("hook_ready", scope: "certificate_request") }}{% else %}{{ t("hook_missing", scope: "certificate_request") }}{% /if %}</pl-field-description>

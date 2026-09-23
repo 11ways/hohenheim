@@ -16,6 +16,7 @@ import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.auth.server.GrantableModel;
 import be.elevenways.zenit.auth.server.RecordGrantCapabilityChecker;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -224,13 +225,14 @@ public final class HohenheimAccess {
     }
 
     /**
-     * The boot-time half of this policy. Sites are the ONE model here that holds
-     * record grants, and zenit-auth refuses a grant on an undeclared model;
-     * declaring it is also what keeps the grant-cleanup hooks off every other
-     * model's deletes. The capability VOCABULARY (manage is delegable, so a
-     * holder may mint the {@code cap:hohenheim:site#manage} API-key scope) and
-     * the walk's composition RULES land here too, so the enforcement path and
-     * the delegation path can never see different policies.
+     * The boot-time half of this policy: every model here that holds record grants (sites,
+     * DNS records, instances, managed databases, git providers, access lists and
+     * certificates) is declared grantable, because zenit-auth refuses a grant on an
+     * undeclared model and the declaration is also what keeps the grant-cleanup hooks off
+     * every other model's deletes. Each model's capability VOCABULARY (e.g. site manage is
+     * delegable, so a holder may mint the {@code cap:hohenheim:site#manage} API-key scope)
+     * and the walk's composition RULES land here too, so the enforcement path and the
+     * delegation path can never see different policies.
      */
     public static void declareGrantableModels() {
         // AIDEV-NOTE: liveWhen is NOT optional here. Sites soft-delete by hand -- the
@@ -581,23 +583,36 @@ public final class HohenheimAccess {
      * authority {@link #sameOwner} answers from -- a second spelling of "who owns this
      * record" is how the quarantine and the overlap refusal would end up disagreeing.
      *
+     * AIDEV-NOTE: only LIVE grant rows count, read through zenit-auth's own
+     * {@link GrantAdministration#liveRecordGrantRows} -- an expired grant decides nothing
+     * in the check path, so it must not keep a tenant the OWNER here either. Until
+     * 2026-09-23 this counted every stored row with value=true, so an expired manage grant
+     * still made its holder "owner" for sameOwner, the quota bucket and the released-claim
+     * ledger while the walk had already stopped honouring it.
+     *
+     * AIDEV-NOTE: "zenit-auth is not installed" is asked through its presence fact
+     * ({@link AuthModels#datasourceOrNull}), never inferred from an exception. The previous
+     * {@code catch (IllegalStateException)} read ANY IllegalStateException from the grant
+     * read as "no auth, operator-owned" and answered the empty set -- so an unrelated
+     * failure made two tenants' records compare as the same owner (fail OPEN).
+     *
      * @return the manage-grant subjects, or null when grants are unreadable (callers fail closed)
      */
     public static @Nullable Set<String> manageSubjectsOf(@NonNull Identifier model,
                                                          @NonNull Object recordId) {
         Set<String> subjects = new HashSet<>();
+        if (AuthModels.datasourceOrNull() == null) {
+            // ZenitAuth.init never ran (tools, minimal tests): no grant can exist, so every
+            // record is operator-owned and the sets are legitimately equal.
+            return subjects;
+        }
         try {
-            for (Row grant : RecordGrants.listForRecord(model, recordId)) {
+            for (Row grant : GrantAdministration.liveRecordGrantRows(model, recordId)) {
                 if (MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))
                         && Boolean.TRUE.equals(grant.get(RecordGrantModel.VALUE))) {
-                    subjects.add(grant.get(RecordGrantModel.SUBJECT_TYPE)
-                        + ":" + grant.get(RecordGrantModel.SUBJECT_ID));
+                    subjects.add(GrantSubjects.tokenOf(grant));
                 }
             }
-        } catch (IllegalStateException notInstalled) {
-            // ZenitAuth.init never ran (tools, minimal tests): no tenants can exist, so
-            // every record is operator-owned and the sets are legitimately equal.
-            return subjects;
         } catch (RuntimeException unreadable) {
             return null;
         }
@@ -652,31 +667,23 @@ public final class HohenheimAccess {
      * former owner is usually exactly that.
      */
     public static @NonNull String subjectLabel(@NonNull String subject) {
-        int separator = subject.indexOf(':');
-        if (separator < 0) {
+        GrantSubjects.Subject parsed = GrantSubjects.parse(subject);
+        if (parsed == null) {
             return subject;
         }
-        String type = subject.substring(0, separator);
-        int id;
-        try {
-            id = Integer.parseInt(subject.substring(separator + 1));
-        } catch (NumberFormatException notAnId) {
-            return subject;
-        }
-        if ("user".equals(type)) {
-            Row user = AuthModels.users().findById(id);
-            String label = user == null ? null : firstNonBlank(user.get(UserModel.DISPLAY_NAME),
-                user.get(UserModel.EMAIL));
-            return label != null ? label : subject;
-        }
-        if ("group".equals(type)) {
-            Row group = AuthModels.permissionGroups().findById(id);
-            String label = group == null ? null
-                : firstNonBlank(group.get(PermissionGroupModel.TITLE),
+        String label = switch (parsed.type()) {
+            case USER -> {
+                Row user = AuthModels.users().findById(parsed.id());
+                yield user == null ? null : firstNonBlank(user.get(UserModel.DISPLAY_NAME),
+                    user.get(UserModel.EMAIL));
+            }
+            case GROUP -> {
+                Row group = AuthModels.permissionGroups().findById(parsed.id());
+                yield group == null ? null : firstNonBlank(group.get(PermissionGroupModel.TITLE),
                     group.get(PermissionGroupModel.SLUG));
-            return label != null ? label : subject;
-        }
-        return subject;
+            }
+        };
+        return label != null ? label : subject;
     }
 
     /**
@@ -814,6 +821,20 @@ public final class HohenheimAccess {
      * tools, the WebSocket authenticators, the migration/lease runners) -- miss one and
      * legitimate system work refuses itself, which is worse than a gap with no live exploit.
      * It warrants its own wave with a full enumeration; do not close it with a blind marker.
+     *
+     * AIDEV-NOTE (re-assessed 2026-09-23, still deferred, with the measured scope): as of
+     * this date the "no conduit = system" reading is relied on by 20 ScheduledTask
+     * implementations, 6 dedicated JobRunner pools and roughly 50 async spawn sites
+     * (fireAndForget / submit / raw threads) in src/server, plus the boot stages, seeds, CLI
+     * commands and the WebSocket handlers (InstanceConsoles, InstanceShell) that answer from
+     * a Principal with no conduit. Failing closed needs ONE of two things first, and neither
+     * exists: (a) a positive system marker wrapped around every one of those entry points
+     * (miss one and legitimate operator/system work refuses itself), or (b) request-identity
+     * PROPAGATION through protoblast's JobRunner, so a continuation spawned by a tenant
+     * request carries that tenant instead of reading as system -- a framework feature, not a
+     * hohenheim edit. Until (b) lands, a tenant-originated background step is only as safe as
+     * the synchronous gate its entry point ran on the SAME target, which is what the two
+     * known request-continuations above do.
      *
      * @throws Violations {@code instance_not_permitted}
      */
@@ -1113,7 +1134,48 @@ public final class HohenheimAccess {
             return Set.of();
         }
         Long principalId = ctx.principalId();
-        return principalId == null ? Set.of() : Set.of("user:" + principalId);
+        return principalId == null ? Set.of() : Set.of(GrantSubjects.userToken(principalId));
+    }
+
+    /**
+     * Hand the creation owner ({@link #creationOwnerSubjects}) {@link #MANAGE} on a record
+     * it just created, then drop the request memo the grant just made stale. Operator and
+     * system creates plant nothing: an empty subject set IS operator ownership, and a grant
+     * there would make one admin's record look tenant-held to sameOwner.
+     *
+     * AIDEV-NOTE: THE one planting loop. Four hand-rolled copies (instances, databases, git
+     * providers, access lists) each cut the token with indexOf(':') and only two of them
+     * remembered to drop the memo -- without that, zenit-cms verifying the created row
+     * against the caller's own scope predicate makes a legitimate create refuse ITSELF
+     * with out_of_scope. It MUST name the same subjects the quota charged at create.
+     */
+    public static void grantCreatorManage(@NonNull Identifier model, @NonNull Object recordId,
+                                          @Nullable AccessContext ctx) {
+        for (String token : creationOwnerSubjects(ctx)) {
+            GrantSubjects.Subject subject = GrantSubjects.require(token);
+            RecordGrants.grant(subject.type(), subject.id(), model, recordId, MANAGE, true);
+        }
+        if (ctx != null) {
+            forgetCapabilityScopes(ctx);
+        }
+    }
+
+    /**
+     * Undo {@link #grantCreatorManage} for a create that is being compensated.
+     *
+     * AIDEV-NOTE: callers delete the record FIRST and revoke after: the delete rides the
+     * tenant-write hooks, which ask for a capability the creator's own manage implies, so
+     * revoking first makes the compensation refuse itself.
+     */
+    public static void revokeCreatorManage(@NonNull Identifier model, @NonNull Object recordId,
+                                           @Nullable AccessContext ctx) {
+        for (String token : creationOwnerSubjects(ctx)) {
+            GrantSubjects.Subject subject = GrantSubjects.require(token);
+            RecordGrants.revoke(subject.type(), subject.id(), model, recordId, MANAGE);
+        }
+        if (ctx != null) {
+            forgetCapabilityScopes(ctx);
+        }
     }
 
     /**
@@ -1249,7 +1311,7 @@ public final class HohenheimAccess {
      *
      * The memo's staleness rule applies: a grant written earlier in THIS request is not
      * seen unless {@link #forgetCapabilityScopes} was called, which is correct for a
-     * render and is why creation funnels drop it.
+     * render and is why creation funnels ({@link #grantCreatorManage}) drop it.
      */
     public static boolean reachesRecord(@NonNull AccessContext ctx, @NonNull Identifier model,
                                         @Nullable Integer recordId, @NonNull String capability) {
@@ -1295,7 +1357,8 @@ public final class HohenheimAccess {
     }
 
     /**
-     * Drop the request memo because THIS request just changed the grants it caches.
+     * Drop the WHOLE request memo of capability scopes (every model and capability),
+     * because THIS request just changed the grants it caches.
      *
      * AIDEV-NOTE: the memo is deliberately "grants written mid-request stay
      * next-request-effective" -- correct for an operator editing somebody else's grants,
@@ -1303,15 +1366,27 @@ public final class HohenheimAccess {
      * the very next thing that happens is zenit-cms verifying the new row against the
      * caller's scope predicate. Without this the scoped create refuses itself with
      * {@code out_of_scope} and rolls back a perfectly legitimate allocation. Call it from
-     * the funnel that planted the grant, never speculatively.
+     * the funnel that planted the grant, never speculatively; {@link #grantCreatorManage}
+     * already does.
      */
-    public static void forgetGrantedRecordIds(@NonNull AccessContext ctx) {
+    public static void forgetCapabilityScopes(@NonNull AccessContext ctx) {
         Conduit conduit = ctx.conduit();
         Map<String, RecordCapabilityScope> cache = conduit == null ? null
             : conduit.getAttribute(CAPABILITY_SCOPES);
         if (cache != null) {
             cache.clear();
         }
+    }
+
+    /**
+     * The previous, misleading name of {@link #forgetCapabilityScopes}: it never dropped
+     * "granted record ids" only, it clears the whole memo.
+     *
+     * @deprecated use {@link #grantCreatorManage}, or {@link #forgetCapabilityScopes}
+     */
+    @Deprecated
+    public static void forgetGrantedRecordIds(@NonNull AccessContext ctx) {
+        forgetCapabilityScopes(ctx);
     }
 
     /**

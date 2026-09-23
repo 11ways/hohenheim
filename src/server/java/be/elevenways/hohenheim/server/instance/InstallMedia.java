@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -13,21 +14,23 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.UrlPolicy;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.net.BodySink;
+import be.elevenways.zenit.server.net.FetchFailure;
+import be.elevenways.zenit.server.net.FetchOutcome;
+import be.elevenways.zenit.server.net.FetchRequest;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
+import be.elevenways.zenit.server.net.PinnedFetcher;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Operator-published install media (ISO volumes) on one Incus host: the storage half
@@ -53,6 +56,28 @@ public final class InstallMedia {
 
     private static final UrlPolicy FETCH_POLICY = UrlPolicy.builder()
         .schemes("http", "https")
+        .build();
+
+    /** The whole-exchange bound of one fetch: 16 GiB at roughly 2.3 MB/s, then refused. */
+    static final Duration FETCH_DEADLINE = Duration.ofHours(2);
+
+    /**
+     * THE fetch of a media URL: public addresses only, every redirect hop re-checked and
+     * pinned, one deadline over the whole exchange and the ISO cap on the decoded body.
+     *
+     * AIDEV-NOTE: public-internet only although only an operator reaches this lane. The
+     * fetch runs ON the controller, so a private URL (the cloud metadata address, a
+     * loopback admin port, another host's LAN service) is the controller's network
+     * reached on someone's say-so; a stolen operator session must not turn this form into
+     * that. An ISO on a private mirror has a lane already: the operator uploads it
+     * (SERVERS_MEDIA_UPLOAD), which moves bytes the operator holds and reaches nothing.
+     */
+    private static final PinnedFetcher FETCHER = PinnedFetcher.builder(OutboundUrlGuard.PUBLIC_INTERNET)
+        .connectTimeout(Duration.ofSeconds(30))
+        .deadline(FETCH_DEADLINE)
+        .maxBodyBytes(MAX_ISO_BYTES)
+        .redirects(PinnedFetcher.Redirects.follow(5))
+        .userAgent("Hohenheim")
         .build();
 
     /** One listed medium: the volume name plus its daemon-reported description. */
@@ -91,14 +116,24 @@ public final class InstallMedia {
      * ISO volume named {@code name}. The download lands in a controller temp file
      * first (capped), then STREAMS to the daemon; the temp file is always removed.
      *
+     * AIDEV-NOTE: synchronous on the request thread, bounded by {@link #FETCH_DEADLINE}.
+     * A background job would free the thread, but the Install media tab (cms) has no
+     * status lane to show a running fetch or its failure on, and a failure only a log
+     * line knows about is invisible; moving it off-thread is a page change first.
+     *
      * @throws Violations {@code media_name_invalid}, {@code media_url_invalid},
-     *         {@code media_exists}, {@code media_fetch_failed}
+     *         {@code media_url_not_public}, {@code media_exists}, {@code media_fetch_failed}
      */
     public void fetch(@NonNull Row server, @NonNull String name, @NonNull String url) {
         requireName(name);
         String problem = FETCH_POLICY.problemOf(url);
         if (problem != null) {
             throw Violations.ofField("url", url, violationText("media_url_invalid"));
+        }
+        // The named refusal, before any daemon contact: the fetcher asks the SAME guard
+        // again per hop, so this is a message, never the only gate.
+        if (OutboundUrlGuard.PUBLIC_INTERNET.check(url) instanceof OutboundUrlGuard.Refused) {
+            throw Violations.ofField("url", url, violationText("media_url_not_public"));
         }
         try {
             IncusClient incus = clientOf(server);
@@ -185,7 +220,7 @@ public final class InstallMedia {
         Integer serverId = server.get(ServerModel.ID);
         List<String> holders = new ArrayList<>();
         for (Row device : Models.get(InstanceDeviceModel.class).find()
-                .where(InstanceDeviceModel.TYPE.eq(InstanceDeviceModel.TYPE_CDROM))
+                .where(InstanceDeviceModel.TYPE.eq(DeviceType.CDROM.token()))
                 .where(InstanceDeviceModel.SOURCE_MEDIA.eq(name))
                 .all()) {
             Row instance = Models.get(InstanceModel.class)
@@ -202,41 +237,47 @@ public final class InstallMedia {
         return holders;
     }
 
-    /** Stream one URL into {@code destination}, redirects followed, size capped. */
+    /** Stream one URL into {@code destination} through {@link #FETCHER}; a partial file is the caller's to delete. */
     private static void download(@NonNull String url, @NonNull Path destination)
             throws IOException {
-        HttpClient client = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .connectTimeout(Duration.ofSeconds(30))
-            .build();
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().build();
-        HttpResponse<InputStream> response;
-        try {
-            response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("download of " + url + " was interrupted");
+        long[] total = {0};
+        FetchOutcome outcome;
+        try (OutputStream out = Files.newOutputStream(destination)) {
+            outcome = FETCHER.fetch(FetchRequest.get(url), new SuccessSink(out, total));
         }
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IOException("download of " + url + " answered HTTP "
-                + response.statusCode());
-        }
-        long total = 0;
-        byte[] buffer = new byte[1 << 16];
-        try (InputStream in = response.body();
-             OutputStream out = Files.newOutputStream(destination)) {
-            int read;
-            while ((read = in.read(buffer)) > 0) {
-                total += read;
-                if (total > MAX_ISO_BYTES) {
-                    throw new IOException("download of " + url + " exceeds the "
-                        + (MAX_ISO_BYTES >> 30) + " GiB install-media cap");
+        switch (outcome) {
+            case FetchOutcome.Fetched fetched -> {
+                if (fetched.status() < 200 || fetched.status() >= 300) {
+                    throw new IOException("download answered HTTP " + fetched.status());
                 }
-                out.write(buffer, 0, read);
+                if (total[0] == 0) {
+                    throw new IOException("download carried no body");
+                }
             }
+            case FetchOutcome.Redirected redirected ->
+                throw new IOException("download redirected to a target that may not be followed ("
+                    + OutboundUrlGuard.originOf(redirected.location()) + ")");
+            case FetchOutcome.Refused refused -> throw new IOException(refused.reason());
+            case FetchOutcome.Failed failed -> throw new IOException(
+                failed.kind() == FetchFailure.TOO_LARGE
+                    ? "download exceeds the " + (MAX_ISO_BYTES >> 30) + " GiB install-media cap"
+                    : failed.reason());
         }
-        if (total == 0) {
-            throw new IOException("download of " + url + " carried no body");
+    }
+
+    /** Writes a 2xx body to the temp file, counting it; any other status is skipped unread. */
+    private record SuccessSink(@NonNull OutputStream out, long @NonNull [] total)
+            implements BodySink {
+
+        @Override
+        public boolean accepts(int status, @NonNull Map<String, List<String>> headers) {
+            return status >= 200 && status < 300;
+        }
+
+        @Override
+        public void write(byte @NonNull [] bytes, int offset, int length) throws IOException {
+            this.total[0] += length;
+            this.out.write(bytes, offset, length);
         }
     }
 

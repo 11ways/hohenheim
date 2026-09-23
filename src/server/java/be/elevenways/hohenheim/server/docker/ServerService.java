@@ -37,10 +37,32 @@ import java.util.Map;
  */
 public class ServerService extends DatasourceScoped {
 
-    // The mode vocabulary is owned by the model's EnumField declaration.
-    public static final String LOCAL = ServerModel.MODE_LOCAL;
-    public static final String MODE_LOCAL = ServerModel.MODE_LOCAL;
-    public static final String MODE_SSH = ServerModel.MODE_SSH;
+    /**
+     * The NAME of the implicit local host row -- a host name, never a mode.
+     *
+     * AIDEV-NOTE: it is spelled like {@link HostMode#LOCAL}'s token because
+     * {@code ServerModel.localServerId} stamps the row's name and mode from the same
+     * constant, but the two answer different questions: compare a host NAME against this,
+     * and read a MODE through {@link HostMode#of}.
+     */
+    public static final String LOCAL_HOST_NAME = ServerModel.MODE_LOCAL;
+
+    /**
+     * Legacy alias of {@link #LOCAL_HOST_NAME}, kept for the call sites outside the docker
+     * package that still compare host names against it.
+     *
+     * @deprecated compare host names against {@link #LOCAL_HOST_NAME}
+     */
+    @Deprecated
+    public static final String LOCAL = LOCAL_HOST_NAME;
+
+    /** @deprecated read a host's mode through {@link HostMode}; this is its token */
+    @Deprecated
+    public static final String MODE_LOCAL = HostMode.LOCAL.token();
+
+    /** @deprecated read a host's mode through {@link HostMode}; this is its token */
+    @Deprecated
+    public static final String MODE_SSH = HostMode.SSH.token();
 
     // Short deadline for an explicit reachability probe so a down remote can't hang long.
     private static final long PING_TIMEOUT_MS = 8000;
@@ -75,7 +97,7 @@ public class ServerService extends DatasourceScoped {
      * on-demand probe leaves durable evidence. Null when the server is unknown.
      */
     public @Nullable Summary probeAndStore(String name) {
-        if (LOCAL.equals(name)) {
+        if (LOCAL_HOST_NAME.equals(name)) {
             ensureLocal();
         }
         Row row = query(() -> model().findByName(name));
@@ -123,19 +145,7 @@ public class ServerService extends DatasourceScoped {
 
     /** A DockerClient for the named server (local socket or remote over SSH). */
     public DockerClient clientFor(String name) {
-        Row row = query(() -> model().findByName(name));
-        if (row == null && LOCAL.equals(name)) {
-            // The local daemon always exists; its row is bookkeeping that used
-            // to appear only once an admin FORM rendered (ensureLocal), so a
-            // restore/backup on a fresh install 500ed with "No server named
-            // 'local'" before anyone opened the databases form.
-            ensureLocal();
-            row = query(() -> model().findByName(name));
-        }
-        if (row == null) {
-            throw new IllegalArgumentException("No server named '" + name + "'");
-        }
-        return new DockerClient(transportFor(row));
+        return new DockerClient(transportFor(name));
     }
 
     /**
@@ -151,7 +161,11 @@ public class ServerService extends DatasourceScoped {
      */
     public DockerTransport transportFor(String name) {
         Row row = query(() -> model().findByName(name));
-        if (row == null && LOCAL.equals(name)) {
+        if (row == null && LOCAL_HOST_NAME.equals(name)) {
+            // The local daemon always exists; its row is bookkeeping that used
+            // to appear only once an admin FORM rendered (ensureLocal), so a
+            // restore/backup on a fresh install 500ed with "No server named
+            // 'local'" before anyone opened the databases form.
             ensureLocal();
             row = query(() -> model().findByName(name));
         }
@@ -176,7 +190,7 @@ public class ServerService extends DatasourceScoped {
                 row = model.createEmptyRow();
                 row.set(ServerModel.NAME, name);
             }
-            row.set(ServerModel.MODE, MODE_SSH);
+            row.set(ServerModel.MODE, HostMode.SSH.token());
             row.set(ServerModel.SSH_TARGET, sshTarget);
             model.save(row);
         });
@@ -188,7 +202,7 @@ public class ServerService extends DatasourceScoped {
      * or instances still reference the host -- on every delete path, not just this one.
      */
     public void remove(String name) {
-        if (LOCAL.equals(name)) {
+        if (LOCAL_HOST_NAME.equals(name)) {
             return;
         }
         exec(() -> model().find().where(ServerModel.NAME.eq(name)).delete());
@@ -202,13 +216,15 @@ public class ServerService extends DatasourceScoped {
             throw new IllegalArgumentException("Host '" + row.get(ServerModel.NAME)
                 + "' declares the incus runtime; it has no Docker daemon to address");
         }
-        if (MODE_SSH.equals(row.get(ServerModel.MODE))) {
+        // An unknown or missing mode is REFUSED by HostMode.of: it used to fall through
+        // to the local socket, which aimed a remote host's operations at this machine.
+        return switch (HostMode.of(row)) {
             // Fails closed (HostKeys.HostTrustException) on an unpinned host or one with
             // no client identity, rather than falling back to ambient ssh trust.
-            return new ProcessDockerTransport(
+            case SSH -> new ProcessDockerTransport(
                 HostKeys.sshArgv(row, ProcessDockerTransport.DIAL_STDIO));
-        }
-        return DockerClient.localTransport();
+            case LOCAL -> DockerClient.localTransport();
+        };
     }
 
     /** One live daemon probe with a TYPED outcome; never a silent null. */

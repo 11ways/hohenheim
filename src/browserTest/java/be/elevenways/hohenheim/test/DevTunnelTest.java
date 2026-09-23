@@ -18,7 +18,9 @@ import be.elevenways.zenit.common.routing.WebSocketEndpoint;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.server.devtunnel.DevTunnelClient;
+import be.elevenways.zenit.server.devtunnel.TunnelMessage;
 import be.elevenways.zenit.server.http.WebSocketRevalidator;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
 
@@ -34,12 +36,18 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.WebSocket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -258,16 +266,69 @@ class DevTunnelTest {
         assertThat(response[0]).contains("503");
     }
 
+    /**
+     * A wrong token is refused by the server, observed as the refusal itself rather than as
+     * the absence of a registration after a fixed wait.
+     *
+     * AIDEV-NOTE: this used to start a DevTunnelClient and sleep 2 s before asserting it was
+     * not registered, which passed on a slow scheduler without the register frame ever having
+     * been judged. It now speaks the protocol on a raw WebSocket and waits for the server's
+     * own answer: an error frame naming the token, then the close.
+     */
     @Test
     void invalidTokenNeverRegisters() throws Exception {
-        HttpServer target = startTarget("x".getBytes(StandardCharsets.UTF_8), null);
-        DevTunnelClient client = register("badtoken", "wrong-token", target.getAddress().getPort());
+        TunnelMessage.init();
+        CompletableFuture<String> firstText = new CompletableFuture<>();
+        CompletableFuture<Integer> closed = new CompletableFuture<>();
+        WebSocket.Listener listener = new WebSocket.Listener() {
+            @Override
+            public void onOpen(WebSocket ws) {
+                ws.sendText(Zenit.DRY.stringify(TunnelMessage.register("badtoken", "wrong-token")), true);
+                ws.request(1);
+            }
 
-        Thread.sleep(2_000);
-        assertThat(client.isRegistered()).isFalse();
+            @Override
+            public CompletionStage<?> onText(WebSocket ws, CharSequence data, boolean last) {
+                firstText.complete(data.toString());
+                ws.request(1);
+                return null;
+            }
 
+            @Override
+            public CompletionStage<?> onClose(WebSocket ws, int statusCode, String reason) {
+                closed.complete(statusCode);
+                return null;
+            }
+
+            @Override
+            public void onError(WebSocket ws, Throwable error) {
+                closed.completeExceptionally(error);
+            }
+        };
+        WebSocket socket = HttpClient.newHttpClient().newWebSocketBuilder()
+            .buildAsync(URI.create("ws://127.0.0.1:" + adminPort + "/ws/dev-tunnel"), listener)
+            .get(10, TimeUnit.SECONDS);
+        try {
+            // 1. The server answers the register frame with a refusal naming the token.
+            Object answer = Zenit.DRY.parse(firstText.get(10, TimeUnit.SECONDS));
+            assertThat(answer).as("step 1: the answer is a tunnel control message")
+                .isInstanceOf(TunnelMessage.class);
+            TunnelMessage refusal = (TunnelMessage) answer;
+            assertThat(refusal.getType()).as("step 1: it is an error, not a registration")
+                .isEqualTo(TunnelMessage.ERROR);
+            assertThat(refusal.getMessage()).as("step 1: naming the bad token")
+                .isEqualTo("invalid token");
+
+            // 2. And closes the connection: the refusal is final, not a pending state.
+            assertThat(closed.get(10, TimeUnit.SECONDS))
+                .as("step 2: the server closed the refused connection").isNotNull();
+        } finally {
+            socket.abort();
+        }
+
+        // 3. Nothing was claimed, so the name still renders the offline page.
         String[] response = proxyGet("badtoken." + BASE, "/");
-        assertThat(response[0]).contains("503");
+        assertThat(response[0]).as("step 3: the unclaimed name is offline").contains("503");
     }
 
     @Test

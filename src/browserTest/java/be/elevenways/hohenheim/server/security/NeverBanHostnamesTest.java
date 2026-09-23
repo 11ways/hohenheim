@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterEach;
@@ -47,7 +48,7 @@ class NeverBanHostnamesTest {
 
     private BanService newService() {
         NftService nft = new NftService((args, stdin) -> new NftRunner.Result(0, "", ""), () -> false);
-        return new BanService(nft, System::currentTimeMillis);
+        return new BanService(nft, Now::millis);
     }
 
     @Test

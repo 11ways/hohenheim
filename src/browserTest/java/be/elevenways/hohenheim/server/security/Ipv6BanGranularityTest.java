@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterEach;
@@ -52,7 +53,7 @@ class Ipv6BanGranularityTest {
             nftCommands.add(String.join(" ", args));
             return new NftRunner.Result(0, "", "");
         }, () -> nftEnabled);
-        return new BanService(nft, System::currentTimeMillis);
+        return new BanService(nft, Now::millis);
     }
 
     @Test

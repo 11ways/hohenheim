@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -119,7 +120,7 @@ class ForceSslAvailabilityTest {
         assertThat(items)
             .as("step 3: HTTPS-down with force-SSL sites raises an attention item")
             .hasSize(1);
-        assertThat(items.get(0).severity()).isEqualTo("error");
+        assertThat(items.get(0).severity()).isEqualTo(AttentionSeverity.ERROR);
 
         // Step 4: global force_https gets the same fail-closed treatment for MATCHED routes.
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, true);

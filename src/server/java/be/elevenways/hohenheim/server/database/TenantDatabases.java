@@ -169,10 +169,10 @@ public final class TenantDatabases {
             // re-credentialed the first tenant and reached both databases (2026-09-02).
             // The stored name is unique per owner and DatabaseService refuses a taken
             // logical name or user on the engine, so both are unique by construction.
-            engine, image == null || image.isBlank() ? null : image, sqlIdentifier(storedName),
+            engine, image == null || image.isBlank() ? null : image, userNameFor(storedName),
             Secrets.generatePassword(), sqlIdentifier(storedName), false,
             ServerModel.nameOf(serverId), ResourceLimits.none(),
-            DatabaseService.STATUS_PROVISIONING));
+            DatabaseModel.STATUS_PROVISIONING));
         Row record = created[0];
         int recordId = record.get(DatabaseModel.ID);
 
@@ -253,6 +253,33 @@ public final class TenantDatabases {
                 CmsSupport.violationText("unknown_engine").withArg("engine", token));
         }
         return engine;
+    }
+
+    /** MySQL's hard limit on a user name; the other engines allow longer ones. */
+    public static final int MAX_USER_LENGTH = 32;
+
+    /** How many hex digits of the sha256 a shortened user name keeps. */
+    private static final int USER_DIGEST_LENGTH = 8;
+
+    /**
+     * THE engine user name of a NEW tenant database: {@link #sqlIdentifier} of the stored
+     * name, deterministically shortened to at most {@value #MAX_USER_LENGTH} characters.
+     *
+     * AIDEV-NOTE: the namespaced stored name reaches 42 characters ("o" + 8 hex + "-" + a
+     * 32-character label) while MySQL refuses any user name over 32, so a long tenant label
+     * provisioned a record whose CREATE USER failed. A name that fits is used unchanged; a
+     * longer one keeps its first characters plus "_" and an 8-hex digest of the WHOLE
+     * identifier, so two long names differing only in their tail still differ. Applied to
+     * every engine for one rule. Existing records keep the user they were created with: the
+     * name is STORED on the record (db_user), never re-derived.
+     */
+    public static @NonNull String userNameFor(@NonNull String storedName) {
+        String identifier = sqlIdentifier(storedName);
+        if (identifier.length() <= MAX_USER_LENGTH) {
+            return identifier;
+        }
+        String digest = SecureTokens.sha256Hex(identifier).substring(0, USER_DIGEST_LENGTH);
+        return identifier.substring(0, MAX_USER_LENGTH - USER_DIGEST_LENGTH - 1) + "_" + digest;
     }
 
     /** The label as an in-engine database name: hyphens are not portable identifiers. */

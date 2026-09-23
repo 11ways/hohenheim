@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthKeys;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.HeaderMap;
+import io.undertow.util.HeaderValues;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
 
@@ -64,17 +66,55 @@ final class ForwardingHeaders {
         Headers.PROXY_AUTHORIZATION,
     };
 
+    /**
+     * The longest X-Proxied-By chain a request may carry. Every hop appends about ten
+     * characters, so this is dozens of proxies deep: longer is a loop between proxies that do
+     * not recognise each other, or a client padding the header, and both are refused as 508.
+     */
+    static final int MAX_PROXIED_BY_LENGTH = 512;
+
     private ForwardingHeaders() {}
 
     /**
-     * Rewrite the request headers for the upstream: operator rules first, then the trust
-     * boundary, so an operator rule can never re-introduce a spoofable client-origin header.
+     * Whether this request already passed through this dispatcher, or carries a hop chain too
+     * long to extend.
+     *
+     * AIDEV-NOTE: the chain used to be REPLACED at every hop, so only a direct self-loop was
+     * ever visible: A -> B -> A saw only "B" and forwarded forever. Each hop now appends its id
+     * and this checks the whole chain, token by token (exact match, never a substring).
+     */
+    static boolean isLoop(HeaderMap headers, String instanceId) {
+        HeaderValues values = headers.get(X_PROXIED_BY);
+        if (values == null) {
+            return false;
+        }
+        int length = 0;
+        for (String value : values) {
+            length += value.length() + 2;
+            for (String hop : value.split(",")) {
+                if (hop.trim().equals(instanceId)) {
+                    return true;
+                }
+            }
+        }
+        return length + instanceId.length() > MAX_PROXIED_BY_LENGTH;
+    }
+
+    /**
+     * Rewrite the request headers for the upstream: Hohenheim's own credentials out first,
+     * then operator rules, then the trust boundary, so an operator rule can never
+     * re-introduce a spoofable client-origin header but may still set the upstream's own
+     * Authorization.
      */
     static void applyRequestHeaders(HttpServerExchange exchange, RouteEntry entry,
                                     String instanceId, String hostname, String clientIp) {
 
         HeaderMap requestHeaders = exchange.getRequestHeaders();
-        requestHeaders.put(X_PROXIED_BY, instanceId);
+        HeaderValues hops = requestHeaders.get(X_PROXIED_BY);
+        String chain = hops == null || hops.isEmpty() ? "" : String.join(", ", hops);
+        requestHeaders.put(X_PROXIED_BY, chain.isBlank() ? instanceId : chain + ", " + instanceId);
+
+        stripOwnCredentials(requestHeaders, entry);
 
         String sourceIp = exchange.getSourceAddress().getAddress().getHostAddress();
         boolean trustedRemoteProxy = ProxyScheme.isTrustedRemoteProxy(exchange);
@@ -124,6 +164,64 @@ final class ForwardingHeaders {
             requestHeaders.put(X_FORWARDED_FOR, trustedForwardedFor);
         } else if (trustedRemoteProxy && !clientIp.equals(sourceIp)) {
             requestHeaders.put(X_FORWARDED_FOR, clientIp);
+        }
+    }
+
+    /**
+     * Remove the authentication material Hohenheim itself consumed, so an upstream (possibly a
+     * tenant's application) never receives a credential that is valid somewhere else.
+     *
+     * AIDEV-NOTE: the proxy session and pending-login cookies are Hohenheim's on EVERY route and
+     * always go. The Authorization header and the acpl remember-me cookie are names an upstream
+     * may use for itself, so they go only where a gate on this route claims them
+     * ({@link RouteEntry#ownsAuthorizationHeader}, {@link RouteEntry#ownsPersistentCookie}). A
+     * verified Basic header forwarded upstream handed the password to the backend; a forwarded
+     * acpl handed it a replayable login for the visitor's identity-provider account.
+     */
+    static void stripOwnCredentials(HeaderMap headers, RouteEntry entry) {
+        if (entry.ownsAuthorizationHeader) {
+            // Only the Basic scheme is Hohenheim's: a Bearer token on a Basic-gated route is
+            // the upstream's own credential and passes (the gate never reads it).
+            String authorization = headers.getFirst(Headers.AUTHORIZATION);
+            if (authorization != null && authorization.regionMatches(true, 0, "Basic ", 0, 6)) {
+                headers.remove(Headers.AUTHORIZATION);
+            }
+        }
+        HeaderValues cookies = headers.get(Headers.COOKIE);
+        if (cookies == null || cookies.isEmpty()) {
+            return;
+        }
+        List<String> kept = new ArrayList<>();
+        boolean changed = false;
+        for (String value : cookies) {
+            StringBuilder rebuilt = new StringBuilder();
+            for (String pair : value.split(";")) {
+                String trimmed = pair.trim();
+                if (trimmed.isEmpty()) {
+                    continue;
+                }
+                int equals = trimmed.indexOf('=');
+                String name = (equals < 0 ? trimmed : trimmed.substring(0, equals)).trim();
+                if (ProxyAuthKeys.HOHENHEIM_OWNED_COOKIES.contains(name)
+                        || (entry.ownsPersistentCookie && ProxyAuthKeys.PERSISTENT_COOKIE.equals(name))) {
+                    changed = true;
+                    continue;
+                }
+                if (!rebuilt.isEmpty()) {
+                    rebuilt.append("; ");
+                }
+                rebuilt.append(trimmed);
+            }
+            if (!rebuilt.isEmpty()) {
+                kept.add(rebuilt.toString());
+            }
+        }
+        if (!changed) {
+            return;
+        }
+        headers.remove(Headers.COOKIE);
+        for (String value : kept) {
+            headers.add(Headers.COOKIE, value);
         }
     }
 

@@ -4,10 +4,7 @@
 {% declare title: String %}
 {% declare items: List<CommsInboxItemView> %}
 {% declare markAllTarget: RouteTarget %}
-{% declare page: Integer = 1 %}
-{% declare pageCount: Integer = 1 %}
-{% declare previousPage: RouteTarget = null %}
-{% declare nextPage: RouteTarget = null %}
+{% declare pager: Pager %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
@@ -19,17 +16,7 @@
 
     <zc-inbox items={% items %} markAllTarget={% markAllTarget %}></zc-inbox>
 
-    {% if pageCount > 1 %}
-    <pl-pagination label={% t("pagination", scope: "admin_inbox") %} data-admin-inbox-pagination>
-        {% if previousPage != null %}
-        <pl-button variant="ghost" size="sm" data-admin-inbox-previous
-                   use:Zenit.route={% previousPage %}>{{ t("previous", scope: "pagination") }}</pl-button>
-        {% /if %}
-        {% if nextPage != null %}
-        <pl-button variant="ghost" size="sm" data-admin-inbox-next
-                   use:Zenit.route={% nextPage %}>{{ t("next", scope: "pagination") }}</pl-button>
-        {% /if %}
-    </pl-pagination>
-    {% /if %}
+    {#- plumage's numbered pager over core's PageWindow; it renders nothing for one page. -#}
+    <pl-pager pager={% pager %} label={% t("pagination", scope: "admin_inbox") %} data-admin-inbox-pagination></pl-pager>
 </section>
 {% /block %}

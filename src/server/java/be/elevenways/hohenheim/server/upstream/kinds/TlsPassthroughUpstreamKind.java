@@ -4,6 +4,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughTarget;
+import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
@@ -80,7 +81,14 @@ public final class TlsPassthroughUpstreamKind implements TlsPassthroughProvider 
         if (timeoutSeconds < 1 || timeoutSeconds > 300) {
             throw new IllegalArgumentException("Connect timeout must be between 1 and 300 seconds");
         }
+        // A tenant-owned site reaches public addresses only: a literal is judged here, a name
+        // at dial time against every address it resolves to (BackendConnector).
+        boolean publicOnly = TenantUpstreams.isTenantOwned(site);
+        if (publicOnly && host != null
+                && Boolean.FALSE.equals(TenantUpstreams.literalIsPublic(host.trim()))) {
+            throw new IllegalArgumentException("a tenant-owned site may only pass TLS through to a public address");
+        }
         return new TlsPassthroughTarget(host, port,
-            Boolean.TRUE.equals(settings.get("proxy_protocol_v2")), timeoutSeconds * 1000);
+            Boolean.TRUE.equals(settings.get("proxy_protocol_v2")), timeoutSeconds * 1000, publicOnly);
     }
 }

@@ -38,7 +38,8 @@
                     </form>
                     {% if execExit != "" %}
                         <p class="instance-exec-exit">{{ t("exit_code", scope: "instance_exec", code: execExit) }}</p>
-                        <pre class="instance-exec-output">{{ execOutput }}</pre>
+                        <pl-log-view class="instance-exec-output" text={% execOutput %}
+                                     label={% t("title", scope: "instance_exec") %}></pl-log-view>
                     {% /if %}
                 </pl-card-content>
             </pl-card>

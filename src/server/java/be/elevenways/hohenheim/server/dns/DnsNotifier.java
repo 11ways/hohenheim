@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -58,20 +57,25 @@ public final class DnsNotifier {
             return;
         }
 
-        DnsPeerModel peerModel = Models.get(DnsPeerModel.class);
-        for (Row link : Models.get(DnsZonePeerModel.class).findByZoneId(zoneId)) {
-            Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
-            Row peer = peerId != null ? peerModel.findById(peerId) : null;
-            if (peer == null || !Boolean.TRUE.equals(peer.get(DnsPeerModel.ENABLED))) {
-                continue;
-            }
+        for (DnsZonePeers.Linked linked : DnsZonePeers.enabled(zoneId)) {
+            Row link = linked.link();
+            Row peer = linked.peer();
             String host = peer.get(DnsPeerModel.TRANSFER_HOST);
             if (host == null || host.isBlank()) {
                 continue;
             }
             Integer port = peer.get(DnsPeerModel.TRANSFER_PORT);
-            String outcome = sendNotify(host.trim(), port != null ? port : 53, origin,
-                DnsTsig.forPeer(peer));
+            TSIG key;
+            try {
+                key = DnsTsig.forPeer(peer);
+            }
+            catch (IllegalArgumentException unusable) {
+                // Never downgrade to an unsigned NOTIFY for a peer that asked for a key.
+                DnsFederationTrace.notifySent(link, peer, originString, serial,
+                    "tsig algorithm unsupported");
+                continue;
+            }
+            String outcome = sendNotify(host.trim(), port != null ? port : 53, origin, key);
             DnsFederationTrace.notifySent(link, peer, originString, serial, outcome);
         }
     }

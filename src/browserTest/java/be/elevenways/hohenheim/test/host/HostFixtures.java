@@ -5,10 +5,12 @@ import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.Accountability;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -46,6 +48,77 @@ public final class HostFixtures {
                 "fixture: reachable")),
             Map.of(HostPreflight.MEM_TOTAL_FACT, memoryMb * 1024L * 1024L),
             true, Now.instant(), null));
+    }
+
+    /** Withdraw the implicit local host's admission, the state a fresh installation is in. */
+    public static void blockLocal() {
+        Row row = Models.get(ServerModel.class).findById(ServerModel.localServerId());
+        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+        Models.get(ServerModel.class).save(row);
+    }
+
+    /**
+     * Capture every column of the implicit local host this fixture family writes, so a
+     * class that admits, blocks or measures it can hand the shared row back unchanged.
+     *
+     * AIDEV-NOTE: the local host is ONE row shared by every class in a browser-test fork,
+     * and Gradle hands classes to forks by timing, so a class that admits it in a
+     * {@code @BeforeAll} and never restores decides what every LATER class in that fork
+     * sees. TenantInstanceSurfaceTest failed exactly that way on 2026-09-24 once
+     * InstanceQuotaTest happened to run before it. {@link #CAPTURED} must name every column
+     * {@link #admitLocal}, {@link #makeLocalPlaceable}, {@link #blockLocal} and
+     * {@link #acknowledgePosture} write, including what {@link HostPreflight#store} and the
+     * probe it drives stamp.
+     *
+     * @return the captured state; {@link LocalHostState#restore} writes it back
+     */
+    public static @NonNull LocalHostState captureLocal() {
+        Row row = Models.get(ServerModel.class).findById(ServerModel.localServerId());
+        Map<String, Object> values = new LinkedHashMap<>();
+        for (Field<?, ?> field : CAPTURED) {
+            values.put(field.getName(), row.get(field.getName()));
+        }
+        return new LocalHostState(values);
+    }
+
+    /** The local-host columns {@link #captureLocal} saves and {@link LocalHostState#restore} writes back. */
+    private static final List<Field<?, ?>> CAPTURED = List.of(
+        ServerModel.ADMISSION,
+        ServerModel.POSTURE,
+        ServerModel.PREFLIGHT_OK,
+        ServerModel.CAPABILITIES,
+        ServerModel.PROBED_AT,
+        ServerModel.CONTROLLER_VERSION,
+        ServerModel.LAST_SEEN_AT,
+        ServerModel.LAST_ERROR_KIND,
+        ServerModel.LAST_ERROR,
+        ServerModel.ACKNOWLEDGED_POSTURE,
+        ServerModel.ACKNOWLEDGED_WARNING_VERSION,
+        ServerModel.ACKNOWLEDGED_AT,
+        ServerModel.ACKNOWLEDGED_BY,
+        ServerModel.ACKNOWLEDGED_BY_LABEL);
+
+    /**
+     * The implicit local host's fixture-written columns at one moment.
+     *
+     * @param values the raw stored value per column name, nulls included
+     */
+    public record LocalHostState(@NonNull Map<String, Object> values) {
+
+        /**
+         * Write the captured columns back onto the local host in ONE save.
+         *
+         * AIDEV-NOTE: posture and acknowledgement travel together on purpose. The model's
+         * before-validate hook erases an acknowledgement that does not name the row's
+         * posture, and the captured pair is consistent by construction.
+         */
+        public void restore() {
+            Row row = Models.get(ServerModel.class).findById(ServerModel.localServerId());
+            for (Map.Entry<String, Object> value : this.values.entrySet()) {
+                row.set(value.getKey(), value.getValue());
+            }
+            Models.get(ServerModel.class).save(row);
+        }
     }
 
     /** Admit the implicit local host for tenant placement (posture shared_container). */

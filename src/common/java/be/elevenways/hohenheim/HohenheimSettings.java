@@ -5,6 +5,8 @@ import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.common.setting.SettingsContext;
+import be.elevenways.zenit.common.setting.SettingsRule;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.validation.PathKind;
 import be.elevenways.hohenheim.security.IpAddressSyntax;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -150,11 +152,9 @@ public class HohenheimSettings {
             .multiline()
             .build();
 
-        public static final SettingDefinition<Integer> FIRST_PORT = GROUP.buildSetting("first_port", Integer.class)
-            .defaultValue(4748)
-            .description("First TCP port assigned to managed child processes")
-            .restartRequired()
-            .build();
+        // AIDEV-NOTE: proxy.first_port (the managed-child-process window) was removed with the
+        // host-user process lane it served. A settings file that still carries the key keeps
+        // loading: SettingsContext drops an undeclared key with an UNKNOWN_KEY slog.
 
         public static final SettingDefinition<List<String>> TRUSTED_PROXY_KEYS = GROUP
             .buildStringListSetting("trusted_proxy_keys")
@@ -490,20 +490,41 @@ public class HohenheimSettings {
                 + "guard for freshly BUILT images (a pulled image's stamp is its upstream "
                 + "build time; deploys are protected by the in-flight check instead). "
                 + "Minimum 1")
-            .coercer(raw -> {
-                Integer value = raw instanceof Number number ? number.intValue()
-                    : raw instanceof String text && !text.isBlank() ? Integer.parseInt(text.trim())
-                    : null;
-                if (value == null) {
+            .coercer(Stacks::coerceWholeNumber)
+            .build();
+
+        /**
+         * AIDEV-NOTE: the "at least 1" refusal lives HERE and not in the coercer, which used
+         * to throw: a coercer only converts (zenit's settings contract), and a throw from it
+         * escaped the load as a bare exception and reached the settings editor as "not
+         * coercible". A rule is judged on every lane against the proposed state and renders
+         * its own copy on the key.
+         */
+        public static final SettingsRule RECLAIM_MIN_AGE_AT_LEAST_ONE =
+            SettingsRule.named("hohenheim_stacks_reclaim_min_age")
+                .reads(RECLAIM_MIN_AGE_HOURS)
+                .check(proposed -> {
+                    Integer hours = proposed.get(RECLAIM_MIN_AGE_HOURS);
+                    return hours == null || hours >= 1 ? null
+                        : "stacks.reclaim_min_age_hours is " + hours + "; it must be at least 1";
+                })
+                .says(Microcopy.of("setting_reclaim_min_age").withFilter("scope", "violations"))
+                .addTo(VALUES);
+
+        /** A whole number from a number or a numeric string; anything else is not one. */
+        private static SettingDefinition.CoercionResult<Integer> coerceWholeNumber(Object raw) {
+            if (raw instanceof Number number) {
+                return SettingDefinition.CoercionResult.accepted(number.intValue());
+            }
+            if (raw instanceof String text && !text.isBlank()) {
+                try {
+                    return SettingDefinition.CoercionResult.accepted(Integer.parseInt(text.trim()));
+                } catch (NumberFormatException notANumber) {
                     return SettingDefinition.CoercionResult.rejected();
                 }
-                if (value < 1) {
-                    throw new IllegalArgumentException(
-                        "stacks.reclaim_min_age_hours must be at least 1");
-                }
-                return SettingDefinition.CoercionResult.accepted(value);
-            })
-            .build();
+            }
+            return SettingDefinition.CoercionResult.rejected();
+        }
     }
 
     // --- Database ---
@@ -513,35 +534,26 @@ public class HohenheimSettings {
             .describe("Hohenheim's own database and managed-database backups")
             .icon("database");
 
+        // AIDEV-NOTE: path and url are the DEPRECATED app-owned spellings of hohenheim's own
+        // database. The server opens zenit's default datasource (database.url in
+        // settings/local.dry, or ZENIT__DATABASE__URL) and these two only supply its
+        // FALLBACK (HohenheimDatabase.fallbackUrl), because production installs set path and
+        // an upgrade must open the same file. The engine/username/password keys that sat
+        // here were removed: SQLite ignores credentials and the engine is always SQLite. A
+        // settings file still carrying them loads fine (an undeclared key is dropped with an
+        // UNKNOWN_KEY slog).
         public static final SettingDefinition<String> PATH = GROUP.buildSetting("path", String.class)
             .defaultValue("hohenheim.db")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
-            .description("SQLite database file path (used when 'url' is blank)")
+            .description("DEPRECATED: SQLite database file used when zenit's database.url is "
+                + "unset (and 'url' here is blank). Prefer database.url = jdbc:sqlite:<file> in "
+                + "settings/local.dry")
             .restartRequired()
             .build();
 
         public static final SettingDefinition<String> URL = GROUP.buildSetting("url", String.class)
-            .description("Full SQLite JDBC URL to use instead of 'path', e.g. "
-                + "jdbc:sqlite:/var/lib/hohenheim/hohenheim.db. Hohenheim refuses any "
-                + "other engine at boot: its migrations contain SQLite-only raw SQL")
-            .restartRequired()
-            .build();
-
-        public static final SettingDefinition<String> ENGINE = GROUP.buildSetting("engine", String.class)
-            .defaultValue("auto")
-            .description("Database engine: auto (infer from url) or sqlite. Anything else is "
-                + "refused at boot because Hohenheim's migrations contain SQLite-only raw SQL")
-            .restartRequired()
-            .build();
-
-        public static final SettingDefinition<String> USERNAME = GROUP.buildSetting("username", String.class)
-            .description("Database username (server engines only; ignored for sqlite/duckdb)")
-            .restartRequired()
-            .build();
-
-        public static final SettingDefinition<String> PASSWORD = GROUP.buildSetting("password", String.class)
-            .secret()
-            .description("Database password (server engines only)")
+            .description("DEPRECATED: SQLite JDBC URL used instead of 'path' when zenit's "
+                + "database.url is unset. Hohenheim refuses any engine other than SQLite at boot")
             .restartRequired()
             .build();
 
@@ -1034,8 +1046,8 @@ public class HohenheimSettings {
             .defaultValue(30000)
             .description("First host port of the pre-allocation window for declared "
                 + "public/UDP instance publications. Keep the window clear of the kernel "
-                + "ephemeral range (32768-60999) and of hohenheim.proxy.first_port's "
-                + "managed-process window")
+                + "ephemeral range (32768-60999). Must be above 1024 and leave room for "
+                + "the whole window below 65536")
             .build();
 
         public static final SettingDefinition<Integer> PUBLIC_PORT_COUNT = GROUP
@@ -1044,6 +1056,36 @@ public class HohenheimSettings {
             .description("Size of the pre-allocation window; allocation refuses loudly "
                 + "when every port in it is claimed or observed bound")
             .build();
+
+        /** The highest TCP/UDP port number. */
+        public static final int MAX_PORT = 65535;
+
+        /**
+         * The pre-allocation window must be a real, unprivileged port range.
+         *
+         * AIDEV-NOTE: PortPublications used to REPLACE a first port of 1024 or less with 30000
+         * (and a non-positive count with 2000) without a word, so the window an operator set
+         * was not the window in force and nothing said so. This rule refuses the save (and a
+         * settings file that says so, at load) by name instead.
+         */
+        public static final SettingsRule PUBLIC_PORT_WINDOW =
+            SettingsRule.named("hohenheim_instances_public_port_window")
+                .reads(PUBLIC_PORT_FIRST, PUBLIC_PORT_COUNT)
+                .check(proposed -> {
+                    Integer first = proposed.get(PUBLIC_PORT_FIRST);
+                    Integer count = proposed.get(PUBLIC_PORT_COUNT);
+                    if (first == null || count == null) {
+                        return "instances.public_port_first and public_port_count are both required";
+                    }
+                    if (first <= 1024 || count < 1 || (long) first + count - 1 > MAX_PORT) {
+                        return "the public port window " + first + " + " + count + " ports is not inside"
+                            + " 1025-" + MAX_PORT;
+                    }
+                    return null;
+                })
+                .says(Microcopy.of("setting_public_port_window").withFilter("scope", "violations")
+                    .withArg("max", MAX_PORT))
+                .addTo(VALUES);
     }
 
     // --- Sandboxed builders ---

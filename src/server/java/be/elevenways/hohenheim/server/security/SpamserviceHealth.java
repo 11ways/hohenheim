@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -36,7 +37,7 @@ public final class SpamserviceHealth {
     private final Map<String, CapabilityState> capabilities = new LinkedHashMap<>();
 
     private SpamserviceHealth() {
-        this(System::currentTimeMillis, Alerts::send);
+        this(Now::millis, Alerts::send);
     }
 
     /** Test constructor: inject the clock and the notification sink. */

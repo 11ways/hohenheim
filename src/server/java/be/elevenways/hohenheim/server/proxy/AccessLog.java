@@ -5,11 +5,15 @@ import be.elevenways.protoblast.common.time.Now;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Proxy access logging: the optional combined-format access log. Best-effort --
@@ -30,6 +34,11 @@ public final class AccessLog {
             return;
         }
 
+        // The path the CLIENT asked for, captured now: strip_path rewrites the exchange's path
+        // before the completion listener runs.
+        RequestPath requestPath = RequestPath.of(exchange);
+        String path = requestPath != null ? requestPath.raw() : RequestPath.rawPathOf(exchange);
+
         exchange.addExchangeCompleteListener((ex, next) -> {
             try {
                 String logPath = HohenheimSettings.VALUES.getValue(HohenheimSettings.Logging.ACCESS_PATH);
@@ -37,22 +46,21 @@ public final class AccessLog {
 
                 int status = ex.getStatusCode();
                 String method = ex.getRequestMethod().toString();
-                String path = ex.getRelativePath();
                 String query = ex.getQueryString();
                 String ua = ex.getRequestHeaders().getFirst(Headers.USER_AGENT);
                 long size = ex.getResponseBytesSent();
 
-                // Combined log format. Quoted fields carry client-controlled text (Host, User-Agent),
-                // so escape backslash and double-quote or a crafted value would break every
-                // combined-format parser reading the file. (Undertow already terminates header
-                // values at CR/LF, so newline injection is not reachable here.)
-                String line = clientIp + " - - [" + Now.instant() + "] \""
-                    + method + " " + path + (query != null && !query.isEmpty() ? "?" + query : "")
-                    + " " + ex.getProtocol() + "\" " + status + " " + size
+                // Combined log format. Every client-controlled field is escaped: backslash and
+                // double-quote so a quoted field cannot end early, and every control character
+                // so no field can start a forged line.
+                String line = escape(clientIp) + " - - [" + Now.instant() + "] \""
+                    + escape(method) + " " + escape(path)
+                    + (query != null && !query.isEmpty() ? "?" + escape(query) : "")
+                    + " " + escape(String.valueOf(ex.getProtocol())) + "\" " + status + " " + size
                     + " \"" + quote(hostname) + "\""
                     + " \"" + quote(ua) + "\"";
 
-                appendToLogFile(logPath, line);
+                append(Path.of(logPath), line);
             } catch (Exception ignored) {
                 // Don't let logging break request handling
             }
@@ -60,34 +68,111 @@ public final class AccessLog {
         });
     }
 
-    /** Escape a combined-format quoted field: backslash and double-quote only; null becomes "-". */
+    /** Escape a combined-format quoted field; null or empty becomes "-". */
     private static String quote(String value) {
         if (value == null || value.isEmpty()) {
             return "-";
         }
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+        return escape(value);
     }
 
-    // AIDEV-NOTE: serialize appends so concurrent request completions cannot interleave partial
-    // lines in the file. This still opens/closes a FileWriter per line -- a known perf limitation,
-    // acceptable because the access log is opt-in (Logging.ACCESS_TO_FILE) and off by default; a
-    // persistent writer would need lifecycle ownership tied to ProxyServer shutdown.
-    private static final Object WRITE_LOCK = new Object();
-
-    private static void appendToLogFile(String logPath, String line) {
-        try {
-            File logFile = new File(logPath);
-            File parent = logFile.getParentFile();
-            if (parent != null && !parent.exists()) parent.mkdirs();
-
-            synchronized (WRITE_LOCK) {
-                try (Writer writer = new BufferedWriter(new FileWriter(logFile, true))) {
-                    writer.write(line);
-                    writer.write('\n');
+    /**
+     * Backslash, double-quote and every control character escaped.
+     *
+     * AIDEV-NOTE: the old comment claimed newline injection was unreachable because Undertow
+     * ends header values at CR/LF. The PATH was logged decoded, where %0a IS a newline, so one
+     * request could forge whole log lines. Escaping every field here is the rule that does not
+     * depend on knowing which field can carry what.
+     */
+    static String escape(String value) {
+        if (value == null) {
+            return "-";
+        }
+        StringBuilder out = null;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            String replacement = null;
+            if (c == '\\') {
+                replacement = "\\\\";
+            } else if (c == '"') {
+                replacement = "\\\"";
+            } else if (c < 0x20 || c == 0x7f) {
+                replacement = String.format(Locale.ROOT, "\\x%02x", (int) c);
+            }
+            if (replacement != null && out == null) {
+                out = new StringBuilder(value.length() + 8).append(value, 0, i);
+            }
+            if (out != null) {
+                if (replacement != null) {
+                    out.append(replacement);
+                } else {
+                    out.append(c);
                 }
             }
-        } catch (IOException ignored) {
-            // Don't let log writing failures break request handling
         }
+        return out != null ? out.toString() : value;
+    }
+
+    // AIDEV-NOTE: ONE writer, kept open, serialized by WRITE_LOCK so concurrent completions
+    // cannot interleave partial lines. It used to open and close a FileWriter per line.
+    // Rotation-safe: before each line the file at the configured path is compared (by file key,
+    // i.e. inode) with the one the writer holds, and a renamed or deleted file (logrotate) or a
+    // changed setting reopens the path. Each line is flushed, so a crash loses nothing.
+    private static final Object WRITE_LOCK = new Object();
+    private static Writer writer;
+    private static Path writerPath;
+    private static Object writerFileKey;
+
+    private static void append(Path logPath, String line) {
+        synchronized (WRITE_LOCK) {
+            try {
+                Writer target = writerFor(logPath);
+                target.write(line);
+                target.write('\n');
+                target.flush();
+            } catch (IOException failure) {
+                // Don't let log writing failures break request handling; reopen next time.
+                closeWriter();
+            }
+        }
+    }
+
+    private static Writer writerFor(Path logPath) throws IOException {
+        Object currentKey = fileKey(logPath);
+        if (writer != null && logPath.equals(writerPath) && currentKey != null
+                && Objects.equals(currentKey, writerFileKey)) {
+            return writer;
+        }
+        closeWriter();
+        Path parent = logPath.getParent();
+        if (parent != null && !Files.exists(parent)) {
+            Files.createDirectories(parent);
+        }
+        writer = Files.newBufferedWriter(logPath, StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE, StandardOpenOption.APPEND, StandardOpenOption.WRITE);
+        writerPath = logPath;
+        writerFileKey = fileKey(logPath);
+        return writer;
+    }
+
+    private static Object fileKey(Path path) {
+        try {
+            return Files.readAttributes(path, BasicFileAttributes.class).fileKey();
+        } catch (IOException missing) {
+            return null;
+        }
+    }
+
+    private static void closeWriter() {
+        if (writer != null) {
+            try {
+                writer.close();
+            } catch (IOException ignored) {
+                // best effort
+            }
+        }
+        writer = null;
+        writerPath = null;
+        writerFileKey = null;
     }
 }

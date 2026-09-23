@@ -21,11 +21,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -115,7 +112,7 @@ public final class ControlPlaneBackups {
         String localSha;
         try {
             manifest = RecoveryArchive.create(datasource, keyring, staged);
-            localSha = sha256OfFile(staged);
+            localSha = SecureTokens.sha256Hex(staged);
             target.store(key, staged);
         } finally {
             // Always: a surviving local .zrec is indistinguishable from a real backup while
@@ -231,7 +228,8 @@ public final class ControlPlaneBackups {
     }
 
     /**
-     * Fetch an archive from the configured target and restore it onto the configured paths.
+     * Download an archive from the configured target into a private temporary directory,
+     * WITHOUT restoring it.
      *
      * LIMITATION, stated rather than papered over: resolving the target reads a backup-target
      * row and its {@code servers} host record, so this needs a READABLE control-plane database.
@@ -241,21 +239,33 @@ public final class ControlPlaneBackups {
      * resolvable without the database would mean a second, weaker authority over which remote
      * host we trust, which the host-record design deliberately refuses.
      *
+     * AIDEV-NOTE: fetching and restoring are two calls on purpose: the restore must run with
+     * NO datasource open. Swapping the SQLite file under an open pool lets the pool's close()
+     * checkpoint its WAL onto the freshly restored file -- the corruption
+     * RestoreControlPlaneCommand's note describes, which the old one-call restoreFromTarget
+     * walked straight into. The caller fetches (the target is read through the database),
+     * closes the datasource, then calls {@link #restore}.
+     *
      * @param key the archive key as {@link #listBackups} reports it
-     * @return the archive's manifest
+     * @return the fetched archive; the caller removes it with {@link #deleteFetched}
      */
-    public static RecoveryArchive.@NonNull Manifest restoreFromTarget(@NonNull String key)
-            throws IOException {
+    public static @NonNull Path fetchFromTarget(@NonNull String key) throws IOException {
         BackupTarget target = requireDestination();
         Path staging = Files.createTempDirectory("hohenheim-control-plane-restore");
         Path fetched = staging.resolve("archive.zrec");
         try {
             target.retrieve(key, fetched);
-            return restore(fetched);
-        } finally {
-            Files.deleteIfExists(fetched);
-            Files.deleteIfExists(staging);
+            return fetched;
+        } catch (IOException | RuntimeException failed) {
+            deleteFetched(fetched);
+            throw failed;
         }
+    }
+
+    /** Remove an archive {@link #fetchFromTarget} downloaded, and its private directory. */
+    public static void deleteFetched(@NonNull Path fetched) throws IOException {
+        Files.deleteIfExists(fetched);
+        Files.deleteIfExists(fetched.getParent());
     }
 
     /**
@@ -278,14 +288,13 @@ public final class ControlPlaneBackups {
     /**
      * The control-plane SQLite file the settings point at.
      *
-     * @throws IllegalStateException when {@code database.url} is set to something that is not
-     *         a plain SQLite file URL (restore replaces a FILE; it cannot address URL extras)
+     * @throws IllegalStateException when the resolved url is not a plain SQLite file URL
+     *         (restore replaces a FILE; it cannot address URL extras)
      */
     public static @NonNull Path databaseFile() {
-        String url = HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.URL);
-        if (url == null || url.isBlank()) {
-            return Path.of(HohenheimSettings.VALUES.getValue(HohenheimSettings.Database.PATH));
-        }
+        // THE resolution the server opens (zenit's database.url, else hohenheim's fallback);
+        // a second copy of that precedence here is how a restore replaces the wrong file.
+        String url = HohenheimDatabase.resolution().url();
         String prefix = "jdbc:sqlite:";
         if (!url.startsWith(prefix)) {
             throw new IllegalStateException(
@@ -314,22 +323,5 @@ public final class ControlPlaneBackups {
     public static @Nullable String configuredDestinationName() {
         return Texts.trimmedOrNull(HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET));
-    }
-
-    private static @NonNull String sha256OfFile(@NonNull Path file) throws IOException {
-        MessageDigest digest;
-        try {
-            digest = MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 unavailable", impossible);
-        }
-        byte[] buffer = new byte[64 * 1024];
-        try (InputStream in = Files.newInputStream(file)) {
-            int read;
-            while ((read = in.read(buffer)) >= 0) {
-                digest.update(buffer, 0, read);
-            }
-        }
-        return SecureTokens.hex(digest.digest());
     }
 }

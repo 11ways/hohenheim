@@ -66,7 +66,9 @@ class SpamserviceCmsContractTest {
         TableView.Applied<be.elevenways.spamservice.client.ManagedClient> applied =
             TableView.forPrincipal(0, clients.id()).build().apply(clients.tableSpec());
         assertThat(clients.listRows(applied, AccessContext.anonymous())).isEmpty();
-        assertThat(clients.countRows(applied, AccessContext.anonymous())).isEqualTo(-1);
+        assertThat(clients.countRows(applied, AccessContext.anonymous()))
+            .as("a disconnected list totals the nothing it listed, never a negative total")
+            .isZero();
         assertThat(clients.listNotice(AccessContext.anonymous())).isNotNull();
         assertThatThrownBy(() -> clients.loadRow(UUID.randomUUID(), AccessContext.anonymous()))
             .isInstanceOf(SpamserviceApiException.class);

@@ -54,6 +54,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.LinkedHashMap;
@@ -542,6 +544,25 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         assertThat(flash.message().key())
             .as("step 4: and it names the URL policy refusal")
             .isEqualTo("media_url_invalid");
+
+        // 4b. An http URL at a NON-PUBLIC address (loopback, the cloud metadata
+        //     address) is refused by the outbound guard by name, before any daemon
+        //     contact or connection: the fetch runs on the controller's network.
+        for (String privateUrl : List.of("http://127.0.0.1:8080/x.iso",
+                "http://169.254.169.254/latest/meta-data", "http://[::1]/x.iso")) {
+            var privateFetch = httpPostForm("/servers/" + hostId + "/media/fetch",
+                "name=media-surf-iso&url=" + URLEncoder.encode(privateUrl, StandardCharsets.UTF_8),
+                sessionToken, csrfToken);
+            assertThat(privateFetch.statusCode())
+                .as("step 4b: a private-address fetch redirects back to the tab: " + privateUrl)
+                .isIn(302, 303);
+            var privateFlash = popFlash();
+            assertThat(privateFlash)
+                .as("step 4b: a refusal flash was stashed for " + privateUrl).isNotNull();
+            assertThat(privateFlash.message().key())
+                .as("step 4b: and it is the named non-public refusal for " + privateUrl)
+                .isEqualTo("media_url_not_public");
+        }
 
         // 5. Deleting a medium a cdrom row still references is refused BY NAME,
         //    naming the instance, before any daemon contact.

@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -17,9 +18,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -424,11 +425,13 @@ public final class BuildSandbox {
                                              @NonNull BuildLog log, long peakDisk) {
         Path artifact = null;
         try {
-            byte[] tar = this.docker.getArchiveFile(handle, plan.artifactPath(),
-                quota.artifactBytes());
+            // STREAMED socket-to-disk: an image tar up to the artifact quota never sits in
+            // controller heap, and the envelope's one entry must be a REGULAR file -- a
+            // build that planted a symlink at the artifact path is refused, not followed.
             artifact = Files.createTempFile("hohenheim-build-artifact", ".tar");
-            Files.write(artifact, tar);
-            return new Outcome(Ending.EXITED, 0, peakDisk, artifact, tar.length);
+            long size = this.docker.getArchiveFileTo(handle, plan.artifactPath(), artifact,
+                quota.artifactBytes());
+            return new Outcome(Ending.EXITED, 0, peakDisk, artifact, size);
         } catch (IOException e) {
             log.line("[hohenheim] the build exited 0 but its artifact could not be read: "
                 + (e.getMessage() != null ? e.getMessage() : e.toString()));
@@ -493,11 +496,11 @@ public final class BuildSandbox {
                 }
                 Files.createDirectories(target.getParent());
                 Files.writeString(target, file.getValue());
-                relative.add(path);
+                relative.add(staging.relativize(target).toString());
             }
             this.docker.putArchiveFiles(handle, "/", staging, relative);
         } finally {
-            deleteRecursively(staging);
+            FileTrees.deleteQuietly(staging);
         }
     }
 
@@ -530,19 +533,23 @@ public final class BuildSandbox {
         }
     }
 
-    /** Total bytes of a directory tree; the context cap's input. */
+    /**
+     * Total bytes of a directory tree; the context cap's input. A symlink counts as a link,
+     * never as its target: the archive lane pushes links as links.
+     */
     static long directorySize(@NonNull Path root) throws IOException {
         if (!Files.isDirectory(root)) {
             throw new IOException("Build context '" + root + "' is not a directory");
         }
         try (Stream<Path> walk = Files.walk(root)) {
-            return walk.filter(Files::isRegularFile).mapToLong(file -> {
-                try {
-                    return Files.size(file);
-                } catch (IOException unreadable) {
-                    return 0;
-                }
-            }).sum();
+            return walk.filter(file -> Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS))
+                .mapToLong(file -> {
+                    try {
+                        return Files.size(file);
+                    } catch (IOException unreadable) {
+                        return 0;
+                    }
+                }).sum();
         }
     }
 
@@ -552,20 +559,6 @@ public final class BuildSandbox {
         }
         try {
             Files.deleteIfExists(file);
-        } catch (IOException ignored) {
-            // best-effort temp cleanup
-        }
-    }
-
-    private static void deleteRecursively(@NonNull Path root) {
-        try (Stream<Path> walk = Files.walk(root)) {
-            walk.sorted(Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException ignored) {
-                    // best-effort temp cleanup
-                }
-            });
         } catch (IOException ignored) {
             // best-effort temp cleanup
         }

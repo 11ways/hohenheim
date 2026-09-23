@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -143,7 +144,7 @@ class ProxyListenerSupervisionTest {
                     .hasSize(1);
                 assertThat(newSurface.get(0).severity())
                     .as("step 2: and it is an ERROR, not a note an operator can scroll past")
-                    .isEqualTo("error");
+                    .isEqualTo(AttentionSeverity.ERROR);
             } finally {
                 ServerMain.adoptProxyServer(null);
             }

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -87,12 +88,16 @@ public final class ConsoleRedaction {
 
     private static void collect(@NonNull Set<String> into, @NonNull Iterable<Row> rows) {
         for (Row row : rows) {
-            if (!InstanceVariableModel.KIND_SECRET.equals(row.get(InstanceVariableModel.KIND))) {
+            // Fail closed: a kind nobody recognizes is redacted like a secret, from
+            // whichever column carries its value.
+            if (!VariableKind.of(row.get(InstanceVariableModel.KIND)).isSecret()) {
                 continue;
             }
-            String value = row.get(InstanceVariableModel.SECRET_VALUE);
-            if (value != null && value.length() >= MIN_SECRET_LENGTH) {
-                into.add(value);
+            for (String value : new String[] {row.get(InstanceVariableModel.SECRET_VALUE),
+                    row.get(InstanceVariableModel.PLAIN_VALUE)}) {
+                if (value != null && value.length() >= MIN_SECRET_LENGTH) {
+                    into.add(value);
+                }
             }
         }
     }

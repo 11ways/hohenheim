@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim;
 
-import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.zenit.client.ClientZenitRuntime;
 import be.elevenways.zenit.common.Zenit;
 

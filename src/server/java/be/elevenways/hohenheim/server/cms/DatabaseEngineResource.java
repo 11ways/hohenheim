@@ -48,7 +48,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * The SHARED database engines: one engine process per (host, kind) serving many managed
@@ -86,6 +85,11 @@ public class DatabaseEngineResource extends RowResource {
             DatabaseEngineModel.MEMORY_LIMIT_MB.getName(),
             DatabaseEngineModel.CPU_LIMIT.getName()))
         .build();
+
+    /** Where an engine keeps the ceilings the shared resize lane reads and writes. */
+    private static final ProvisionedRecords.Columns CEILINGS = new ProvisionedRecords.Columns(
+        DatabaseEngineModel.ID, DatabaseEngineModel.MEMORY_LIMIT_MB, DatabaseEngineModel.CPU_LIMIT,
+        DatabaseEngineModel.STATUS, DatabaseEngineModel.FAILURE_REASON);
 
     /** The virtual column counting the managed databases living on an engine. */
     private static final String DATABASES_COLUMN = "databases";
@@ -160,25 +164,14 @@ public class DatabaseEngineResource extends RowResource {
         return List.of(
             ResourceFieldBinding.of(DatabaseEngineModel.STATUS.getName(),
                 FieldAccess.alwaysReadonly()),
-            frozenAfterCreate(DatabaseEngineModel.NAME),
-            frozenAfterCreate(DatabaseEngineModel.ENGINE),
-            frozenAfterCreate(DatabaseEngineModel.IMAGE),
-            frozenAfterCreate(DatabaseEngineModel.SERVER_ID),
-            frozenAfterCreate(DatabaseEngineModel.ROOT_USER),
-            frozenAfterCreate(DatabaseEngineModel.ROOT_PASSWORD),
-            // Shown ONLY on a record that carries one: the create form and a healthy
-            // engine never render an empty failure box.
-            ResourceFieldBinding.of(DatabaseEngineModel.FAILURE_REASON.getName(),
-                FieldAccess.customRecordAware((ctx, record) ->
-                    record instanceof Row row && hasText(row.get(DatabaseEngineModel.FAILURE_REASON))
-                        ? FieldAccess.Decision.READONLY : FieldAccess.Decision.HIDDEN)));
-    }
-
-    /** Editable on the CREATE form, readonly once the record exists. */
-    private static @NonNull ResourceFieldBinding frozenAfterCreate(@NonNull Field<?, ?> field) {
-        return ResourceFieldBinding.of(field.getName(),
-            FieldAccess.customRecordAware((ctx, record) ->
-                record == null ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY));
+            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.NAME),
+            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.ENGINE),
+            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.IMAGE),
+            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.SERVER_ID),
+            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.ROOT_USER),
+            ProvisionedRecords.frozenAfterCreate(DatabaseEngineModel.ROOT_PASSWORD),
+            // Shown ONLY on a record that carries one.
+            ProvisionedRecords.failureReasonWhenSet(DatabaseEngineModel.FAILURE_REASON));
     }
 
     /**
@@ -268,42 +261,16 @@ public class DatabaseEngineResource extends RowResource {
     }
 
     /**
-     * THE resize, and the only update this resource performs: the two ceilings, applied by
-     * recreating the container after the reservation was re-booked inline. Same order and
-     * same reasons as {@link DatabaseResource#updateRow}.
+     * THE resize, and the only update this resource performs: the two ceilings, re-booked
+     * inline and applied by recreating the container, through the lane it shares with
+     * {@link DatabaseResource#updateRow}. A ceiling the write does not carry keeps its stored
+     * value.
      */
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        Integer memoryMb = coerced.get(DatabaseEngineModel.MEMORY_LIMIT_MB.getName())
-            instanceof Integer mb ? mb : null;
-        Double cpus = coerced.get(DatabaseEngineModel.CPU_LIMIT.getName())
-            instanceof Double c ? c : null;
-        if (Objects.equals(memoryMb, existing.get(DatabaseEngineModel.MEMORY_LIMIT_MB))
-                && Objects.equals(cpus, existing.get(DatabaseEngineModel.CPU_LIMIT))) {
-            return;
-        }
-        Integer engineId = existing.get(DatabaseEngineModel.ID);
-        if (engineId == null) {
-            throw Violations.ofForm(CmsSupport.violationText("database_resize_failed")
-                .withArg("reason", "the record carries no id"));
-        }
-        ResourceLimits limits = ResourceLimits.of(memoryMb, cpus);
-        try {
-            DatabaseEngines.reserveRow(existing, limits);
-        } catch (Violations refused) {
-            throw refused;
-        } catch (Exception e) {
-            throw Violations.ofForm(CmsSupport.violationText("database_resize_failed")
-                .withArg("reason", String.valueOf(e.getMessage())));
-        }
-        existing.set(DatabaseEngineModel.MEMORY_LIMIT_MB, memoryMb);
-        existing.set(DatabaseEngineModel.CPU_LIMIT, cpus);
-        existing.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_PROVISIONING);
-        existing.set(DatabaseEngineModel.FAILURE_REASON, null);
-        model().save(existing);
-        model().getResolvedDatasource().afterCommit(
-            () -> DatabaseEngines.redeployInBackground(engineId));
+        ProvisionedRecords.resize(model(), existing, coerced, CEILINGS,
+            DatabaseEngines::reserveRow, DatabaseEngines::redeployInBackground);
     }
 
     /**
@@ -486,11 +453,7 @@ public class DatabaseEngineResource extends RowResource {
         return DatabaseEngines.databasesOn(engineId).size();
     }
 
-    private static boolean hasText(@Nullable Object value) {
-        return value != null && !String.valueOf(value).isBlank();
-    }
-
     private static @NonNull String trimmed(@Nullable Object value) {
-        return value != null ? String.valueOf(value).trim() : "";
+        return ProvisionedRecords.trimmed(value);
     }
 }

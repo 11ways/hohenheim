@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.source.GitProviders;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -23,6 +25,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Admin surface for git provider installations. Credentials are static encrypted
@@ -56,7 +59,7 @@ public class GitProviderResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "git_provider"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "git_provider"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "git_provider"); }
-    @Override public @NonNull String slug() { return "git-providers"; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.GIT_PROVIDERS; }
     @Override public @NonNull Model model() { return Models.get(GitProviderModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -97,20 +100,42 @@ public class GitProviderResource extends RowResource {
         actions.add(RowAction.Invoke.<Row>builder(Identifier.of("hohenheim", "test_git_provider"))
             .label(Microcopy.of("test_connection").withFilter("scope", "git_provider"))
             .icon(Icon.of("plug-circle-check"))
-            .handler((row, ctx) -> {
-                try {
-                    int count = GitProviders.clientFor(row).listRepositories().size();
-                    return CmsActionResult.toast(
-                        Microcopy.of("test_ok").withFilter("scope", "git_provider")
-                            .withArg("count", count));
-                } catch (Exception unhealthy) {
-                    return CmsActionResult.errorToast(
-                        Microcopy.of("test_failed").withFilter("scope", "git_provider")
-                            .withArg("reason", unhealthy.getMessage() != null
-                                ? unhealthy.getMessage() : unhealthy.toString()));
-                }
-            })
+            .handler((row, ctx) -> this.testConnection(row))
             .build());
         return actions;
+    }
+
+    /**
+     * List the provider's repositories through the real client and word the outcome.
+     *
+     * AIDEV-NOTE: the probe is an OUTBOUND request to a URL the record's author chose, and on
+     * /manage that author is a tenant -- so it rides THE provider client
+     * ({@code GitProviders.clientFor(row)}), whose outbound guard is decided by the ROW's
+     * ownership (SourceOwnership.providerGuard: a tenant-owned provider reaches public
+     * addresses only, on either panel), never a request built here.
+     */
+    final @NonNull CmsActionResult testConnection(@NonNull Row row) {
+        try {
+            int count = GitProviders.clientFor(row).listRepositories().size();
+            return CmsActionResult.toast(
+                Microcopy.of("test_ok").withFilter("scope", "git_provider")
+                    .withArg("count", count));
+        } catch (Exception unhealthy) {
+            Blast.slog("hohenheim.git_provider.test_failed", Map.of(
+                "provider", String.valueOf(row.get(GitProviderModel.ID)),
+                "reason", String.valueOf(unhealthy.getMessage() != null
+                    ? unhealthy.getMessage() : unhealthy.toString())));
+            return CmsActionResult.errorToast(this.connectionFailure(unhealthy));
+        }
+    }
+
+    /**
+     * The toast a failed connection test shows. The operator surface names the client's own
+     * reason: the operator chose the URL and owns the network it probes.
+     */
+    protected @NonNull Microcopy connectionFailure(@NonNull Exception failure) {
+        return Microcopy.of("test_failed").withFilter("scope", "git_provider")
+            .withArg("reason", failure.getMessage() != null
+                ? failure.getMessage() : failure.toString());
     }
 }

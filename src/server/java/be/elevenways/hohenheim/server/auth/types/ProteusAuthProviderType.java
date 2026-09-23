@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
+import be.elevenways.hohenheim.server.proxy.auth.ProxySessionSupport;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.identity.proteus.ProteusClient;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -87,8 +88,13 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
         // Pure construction (validates config, no network I/O); a blank-config throw fails closed.
         ProteusClient client = new ProteusClient(endpoint, realmClient, accessKey);
         long ttl = HohenheimSettings.VALUES.getValue(HohenheimSettings.ProxyAuth.PERSISTENT_TTL_SECONDS);
+        // AIDEV-NOTE: the binding is the realm IDENTITY (endpoint + realm client): re-pointing the
+        // provider at another realm ends every session it minted, while rotating the access key
+        // or changing the forced authenticator does not log anyone out.
+        String binding = ProxySessionSupport.binding(context.providerSlug(),
+            String.valueOf(context.providerId()), endpoint, realmClient);
         return new ProteusAuthGate(context, client, authenticator,
-            (int) Math.min(ttl, Integer.MAX_VALUE));
+            (int) Math.min(ttl, Integer.MAX_VALUE), binding);
     }
 
     @SuppressWarnings("unchecked")

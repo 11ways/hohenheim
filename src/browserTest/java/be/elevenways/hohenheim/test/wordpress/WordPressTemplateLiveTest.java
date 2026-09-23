@@ -58,7 +58,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class WordPressTemplateLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
-    private static final String WORDPRESS_IMAGE = WordPressPhp.IMAGE + ":" + WordPressPhp.PHP_8_1.tag();
+    private static final String WORDPRESS_IMAGE = WordPressPhp.IMAGE + ":" + WordPressPhp.recommended().tag();
     private static final String MYSQL_IMAGE = "mysql:8.0";
 
     private static SqliteDatasource datasource;
@@ -106,7 +106,7 @@ class WordPressTemplateLiveTest {
             InstanceTemplateModel templates = Models.get(InstanceTemplateModel.class);
             Row template = templates.find()
                 .where(InstanceTemplateModel.NAME.eq(
-                    WordPressTemplateSeeder.templateName(WordPressPhp.PHP_8_1)))
+                    WordPressTemplateSeeder.templateName(WordPressPhp.recommended())))
                 .first();
             template.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
             templates.save(template);

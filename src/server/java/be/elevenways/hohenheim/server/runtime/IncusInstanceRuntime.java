@@ -16,9 +16,12 @@ import be.elevenways.zenit.common.orm.model.Models;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -144,6 +147,14 @@ public final class IncusInstanceRuntime
         }
     }
 
+    /**
+     * The optional spec capabilities this driver DELIVERS; every other requested one is
+     * refused by name before anything is created (see {@link SpecFeature}).
+     */
+    public static final Set<SpecFeature> FEATURES = Collections.unmodifiableSet(EnumSet.of(
+        SpecFeature.CLOUD_INIT, SpecFeature.ROOT_DISK_SIZE, SpecFeature.BANDWIDTH_LIMIT,
+        SpecFeature.PREPARED_IMAGE, SpecFeature.INSTALL_MEDIA, SpecFeature.RUN_USER));
+
     @Override
     public @NonNull String create(@NonNull InstanceSpec spec) throws IOException {
         OwnerLabels.Owner owner = OwnerLabels.parse(spec.ownerLabels());
@@ -151,35 +162,10 @@ public final class IncusInstanceRuntime
             throw new IOException("InstanceSpec '" + spec.handle() + "' carries no valid owner"
                 + " labels; an unattributable instance container is forbidden by design");
         }
-        if (spec.workdir() != null) {
-            throw new IOException("The incus driver cannot override the primary process working"
-                + " directory for '" + spec.handle() + "'; workdir is a docker capability");
-        }
-        if (spec.tty()) {
-            // The same honest refusal for the pseudo-terminal: this driver runs the start
-            // command under the guest's own init, and attaching /dev/console to it is not
-            // the interactive lane the declaration promises. Refuse rather than deploy a
-            // workload whose console tab says "terminal" over a pipe.
-            throw new IOException("The incus driver cannot give '" + spec.handle()
-                + "' a pseudo-terminal on its primary process; an interactive console"
-                + " (console_kind=tty) is a docker capability");
-        }
-        if (!spec.tmpfs().isEmpty()) {
-            // The honest refusal, the cloud-init shape in reverse: silently dropping a
-            // DECLARED discardable mount would land the workload's "ephemeral" data on
-            // the host's storage pool, which is the opposite of what was declared.
-            throw new IOException("The incus driver cannot deliver the RAM-backed scratch"
-                + " mounts declared for '" + spec.handle() + "' (" + spec.tmpfs().keySet()
-                + "); tmpfs mounts are a docker capability");
-        }
-        if (spec.healthCheck() != null) {
-            // The honest refusal, same shape: Incus has no in-workload health probe it
-            // runs and reports on, and a declared health gate nobody evaluates always
-            // reports healthy -- which is worse than having no gate at all.
-            throw new IOException("The incus driver cannot run the health check declared"
-                + " for '" + spec.handle() + "'; a runtime-evaluated healthcheck is a"
-                + " docker capability");
-        }
+        // The honest refusal for every capability this driver cannot deliver (a pipe
+        // offered as a terminal, "ephemeral" tmpfs data landing on the pool, a health gate
+        // nobody evaluates, a working-directory override): see SpecFeature.
+        SpecFeature.requireSupported(spec, FEATURES, "incus");
         // The shared isolation ACL, VERIFIED in the daemon, BEFORE any instance is created
         // on it -- an Incus host whose ACL support does not really enforce refuses here,
         // never at the point where a tenant container is already running unisolated.
@@ -206,7 +192,7 @@ public final class IncusInstanceRuntime
                     + " declares " + this.type.apiType() + ". Destroy the workload"
                     + " explicitly before changing its flavour.");
             }
-            converge(spec, existing, nic);
+            converge(spec, nic);
             verifyIsolated(spec);
             // A root-size change on an EXISTING workload is never folded into the
             // converge PUT: a running grow is accepted and not performed (see
@@ -363,8 +349,7 @@ public final class IncusInstanceRuntime
                 + "' from " + current + "GiB to " + sizeGb + "GiB: a root disk can only"
                 + " grow. Create a smaller workload and migrate the data instead.");
         }
-        Map<String, Object> instance = this.incus.instance(spec.handle());
-        putDevice(spec.handle(), instance, ROOT_DEVICE, rootDevice(sizeGb));
+        putDevice(spec.handle(), ROOT_DEVICE, rootDevice(sizeGb));
         Integer actual = rootDiskGb(spec);
         if (actual == null || actual != sizeGb) {
             throw new IOException("Resize of the root disk of '" + spec.handle() + "' to "
@@ -507,57 +492,18 @@ public final class IncusInstanceRuntime
     }
 
     /** Rewrite the managed config of an existing OWNED instance; the rootfs is untouched. */
-    private void converge(@NonNull InstanceSpec spec, @NonNull Map<String, Object> existing,
-                          @NonNull Map<String, Object> nic) throws IOException {
-        Map<String, Object> config = new LinkedHashMap<>();
-        if (existing.get("config") instanceof Map<?, ?> current) {
-            current.forEach((key, value) -> {
-                String name = String.valueOf(key);
-                // volatile.* and image.* keys ride along unchanged (read-modify-write,
-                // the CLI's own shape); only the managed keys are recomputed, so a
-                // value REMOVED from the settings really disappears.
-                if (!isManagedKey(name)) {
-                    config.put(name, value);
-                }
-            });
-        }
-        applyManagedConfig(spec, config);
-        replaceDefinition(spec.handle(), existing, config, nic);
-    }
-
-    /** PUT the instance's mutable definition with a rewritten config map and NIC override. */
-    private void replaceDefinition(@NonNull String handle,
-                                   @NonNull Map<String, Object> existing,
-                                   @NonNull Map<String, Object> config,
-                                   @NonNull Map<String, Object> nic) throws IOException {
-        putDefinition(handle, existing, config, nic);
-    }
-
-    /** @param nic the isolating NIC override, or null to leave the devices untouched */
-    private void putDefinition(@NonNull String handle,
-                               @NonNull Map<String, Object> existing,
-                               @NonNull Map<String, Object> config,
-                               @Nullable Map<String, Object> nic) throws IOException {
-        Map<String, Object> devices = new LinkedHashMap<>();
-        if (existing.get("devices") instanceof Map<?, ?> current) {
-            current.forEach((key, value) -> devices.put(String.valueOf(key), value));
-        }
-        // The isolating NIC override is (re)written every converge: a reboot or an
-        // operator edit that dropped it is repaired here, not silently tolerated.
-        if (nic != null) {
+    private void converge(@NonNull InstanceSpec spec, @NonNull Map<String, Object> nic)
+            throws IOException {
+        this.incus.editInstance(spec.handle(), (config, devices) -> {
+            // volatile.* and image.* keys ride along unchanged (read-modify-write, the
+            // CLI's own shape); only the managed keys are recomputed, so a value REMOVED
+            // from the settings really disappears.
+            config.keySet().removeIf(IncusInstanceRuntime::isManagedKey);
+            applyManagedConfig(spec, config);
+            // The isolating NIC override is (re)written every converge: a reboot or an
+            // operator edit that dropped it is repaired here, not silently tolerated.
             devices.put(IncusNetworkPolicy.NIC, nic);
-        }
-
-        Map<String, Object> definition = new LinkedHashMap<>();
-        definition.put("architecture", existing.get("architecture"));
-        definition.put("config", config);
-        definition.put("devices", devices);
-        definition.put("ephemeral", Boolean.TRUE.equals(existing.get("ephemeral")));
-        definition.put("profiles", existing.get("profiles") instanceof List<?> profiles
-            ? profiles : List.of("default"));
-        definition.put("description", existing.get("description") instanceof String text
-            ? text : "");
-        this.incus.updateInstance(handle, definition);
+        });
     }
 
     /**
@@ -1035,19 +981,12 @@ public final class IncusInstanceRuntime
         // defined on another NIC"). Dropping the hwaddr keys makes the daemon mint
         // fresh ones at start.
         Map<String, Object> existing = this.incus.instance(spec.handle());
-        Map<String, Object> config = new LinkedHashMap<>();
-        boolean carriedMacs = false;
-        if (existing.get("config") instanceof Map<?, ?> current) {
-            for (Map.Entry<?, ?> entry : current.entrySet()) {
-                String name = String.valueOf(entry.getKey());
-                if (name.startsWith("volatile.") && name.endsWith(".hwaddr")) {
-                    carriedMacs = true;
-                    continue;
-                }
-                config.put(name, entry.getValue());
-            }
-        }
-        spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
+        boolean carriedMacs = existing.get("config") instanceof Map<?, ?> current
+            && current.keySet().stream().map(String::valueOf).anyMatch(IncusInstanceRuntime::isVolatileMac);
+        IncusClient.DefinitionEdit reidentify = (config, devices) -> {
+            config.keySet().removeIf(IncusInstanceRuntime::isVolatileMac);
+            spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
+        };
         // AIDEV-NOTE: the MAC strip is its OWN write, BEFORE the post-import
         // ensureIsolationAcl, and the order is load-bearing. Between import and the
         // strip the clone and its source share a MAC at the daemon, and ANY ACL write in
@@ -1056,7 +995,7 @@ public final class IncusInstanceRuntime
         // write touches only the clone's own definition -- devices unchanged -- so it
         // cannot trip over other instances.
         if (carriedMacs) {
-            putDefinition(spec.handle(), existing, config, null);
+            this.incus.editInstance(spec.handle(), reidentify);
         }
         // An imported instance re-joins the fleet's isolation exactly like a fresh one:
         // its NIC gets the verified ACL override, so a backup made before isolation
@@ -1064,8 +1003,12 @@ public final class IncusInstanceRuntime
         // already converged the ACL, so this call writes nothing and is the read-back
         // VERIFICATION that the daemon still carries every tenant-range reject.
         this.policy.ensureIsolationAcl();
-        replaceDefinition(spec.handle(), existing, config,
-            this.policy.nicDevice(managedNetworkName(), this.egress, spec.networkLimitMbit()));
+        Map<String, Object> nic = this.policy.nicDevice(managedNetworkName(), this.egress,
+            spec.networkLimitMbit());
+        this.incus.editInstance(spec.handle(), (config, devices) -> {
+            reidentify.apply(config, devices);
+            devices.put(IncusNetworkPolicy.NIC, nic);
+        });
         verifyIsolated(spec);
     }
 
@@ -1085,10 +1028,8 @@ public final class IncusInstanceRuntime
             }
             throw e;
         }
-        OwnerLabels.Owner actual = ownerOf(existing);
-        boolean ours = actual != null && actual.model().equals(owner.model())
-            && actual.id().equals(owner.id());
-        return ours ? WorkloadClaim.OURS : WorkloadClaim.FOREIGN;
+        return OwnerLabels.matches(ownerOf(existing), owner)
+            ? WorkloadClaim.OURS : WorkloadClaim.FOREIGN;
     }
 
     @Override
@@ -1207,12 +1148,11 @@ public final class IncusInstanceRuntime
             requireOwnedVolume(spec, volumeName, existing);
         }
 
-        Map<String, Object> instance = this.incus.instance(spec.handle());
         Map<String, Object> device = new LinkedHashMap<>();
         device.put("type", "disk");
         device.put("pool", pool);
         device.put("source", volumeName);
-        putDevice(spec.handle(), instance, deviceName, device);
+        putDevice(spec.handle(), deviceName, device);
         requireDevicePresent(spec.handle(), deviceName);
     }
 
@@ -1250,8 +1190,7 @@ public final class IncusInstanceRuntime
         this.policy.ensureIsolationAcl();
         this.policy.ensureExtraNetwork();
         stampPresence();
-        Map<String, Object> instance = this.incus.instance(spec.handle());
-        putDevice(spec.handle(), instance, deviceName,
+        putDevice(spec.handle(), deviceName,
             this.policy.extraNicDevice(this.egress, spec.networkLimitMbit()));
         verifyIsolated(spec);
     }
@@ -1290,13 +1229,12 @@ public final class IncusInstanceRuntime
                 + "' is not an ISO volume (content_type "
                 + media.get("content_type") + "); refusing to attach it as install media");
         }
-        Map<String, Object> instance = this.incus.instance(spec.handle());
         Map<String, Object> cdrom = new LinkedHashMap<>();
         cdrom.put("type", "disk");
         cdrom.put("pool", pool);
         cdrom.put("source", mediaVolume);
         cdrom.put("boot.priority", CDROM_BOOT_PRIORITY);
-        putDevice(spec.handle(), instance, deviceName, cdrom);
+        putDevice(spec.handle(), deviceName, cdrom);
         ensureRootBootPriority(spec.handle());
         requireDevicePresent(spec.handle(), deviceName);
     }
@@ -1304,22 +1242,25 @@ public final class IncusInstanceRuntime
     /** Stamp the root disk's boot priority ABOVE the media's (see ensureCdrom's note). */
     private void ensureRootBootPriority(@NonNull String handle) throws IOException {
         Map<String, Object> instance = this.incus.instance(handle);
-        Map<String, Object> root = new LinkedHashMap<>();
         if (instance.get("devices") instanceof Map<?, ?> devices
-                && devices.get(ROOT_DEVICE) instanceof Map<?, ?> existing) {
-            existing.forEach((key, value) -> root.put(String.valueOf(key), value));
-        } else {
-            // No instance-level root override yet (the profile's root applies): mint the
-            // minimal one so the priority has a device to ride on.
-            root.put("type", "disk");
-            root.put("path", "/");
-            root.put("pool", managedPoolName());
-        }
-        if (ROOT_BOOT_PRIORITY.equals(root.get("boot.priority"))) {
+                && devices.get(ROOT_DEVICE) instanceof Map<?, ?> root
+                && ROOT_BOOT_PRIORITY.equals(root.get("boot.priority"))) {
             return;
         }
-        root.put("boot.priority", ROOT_BOOT_PRIORITY);
-        putDevice(handle, instance, ROOT_DEVICE, root);
+        this.incus.editInstance(handle, (config, devices) -> {
+            Map<String, Object> root = new LinkedHashMap<>();
+            if (devices.get(ROOT_DEVICE) instanceof Map<?, ?> existing) {
+                existing.forEach((key, value) -> root.put(String.valueOf(key), value));
+            } else {
+                // No instance-level root override yet (the profile's root applies): mint
+                // the minimal one so the priority has a device to ride on.
+                root.put("type", "disk");
+                root.put("path", "/");
+                root.put("pool", managedPoolName());
+            }
+            root.put("boot.priority", ROOT_BOOT_PRIORITY);
+            devices.put(ROOT_DEVICE, root);
+        });
     }
 
     @Override
@@ -1336,26 +1277,7 @@ public final class IncusInstanceRuntime
         }
         if (instance != null && instance.get("devices") instanceof Map<?, ?> devices
                 && devices.get(deviceName) != null) {
-            Map<String, Object> config = new LinkedHashMap<>();
-            if (instance.get("config") instanceof Map<?, ?> current) {
-                current.forEach((key, value) -> config.put(String.valueOf(key), value));
-            }
-            Map<String, Object> remaining = new LinkedHashMap<>();
-            devices.forEach((key, value) -> {
-                if (!deviceName.equals(String.valueOf(key))) {
-                    remaining.put(String.valueOf(key), value);
-                }
-            });
-            Map<String, Object> definition = new LinkedHashMap<>();
-            definition.put("architecture", instance.get("architecture"));
-            definition.put("config", config);
-            definition.put("devices", remaining);
-            definition.put("ephemeral", Boolean.TRUE.equals(instance.get("ephemeral")));
-            definition.put("profiles", instance.get("profiles") instanceof List<?> profiles
-                ? profiles : List.of("default"));
-            definition.put("description", instance.get("description") instanceof String text
-                ? text : "");
-            this.incus.updateInstance(spec.handle(), definition);
+            this.incus.editInstance(spec.handle(), (config, current) -> current.remove(deviceName));
         }
         if (hasVolume) {
             deleteVolumes(spec, List.of(deviceName));
@@ -1422,28 +1344,9 @@ public final class IncusInstanceRuntime
     }
 
     /** Write ONE device onto the instance definition (read-modify-write, NIC untouched). */
-    private void putDevice(@NonNull String handle, @NonNull Map<String, Object> instance,
-                           @NonNull String deviceName, @NonNull Map<String, Object> device)
-            throws IOException {
-        Map<String, Object> config = new LinkedHashMap<>();
-        if (instance.get("config") instanceof Map<?, ?> current) {
-            current.forEach((key, value) -> config.put(String.valueOf(key), value));
-        }
-        Map<String, Object> devices = new LinkedHashMap<>();
-        if (instance.get("devices") instanceof Map<?, ?> current) {
-            current.forEach((key, value) -> devices.put(String.valueOf(key), value));
-        }
-        devices.put(deviceName, device);
-        Map<String, Object> definition = new LinkedHashMap<>();
-        definition.put("architecture", instance.get("architecture"));
-        definition.put("config", config);
-        definition.put("devices", devices);
-        definition.put("ephemeral", Boolean.TRUE.equals(instance.get("ephemeral")));
-        definition.put("profiles", instance.get("profiles") instanceof List<?> profiles
-            ? profiles : List.of("default"));
-        definition.put("description", instance.get("description") instanceof String text
-            ? text : "");
-        this.incus.updateInstance(handle, definition);
+    private void putDevice(@NonNull String handle, @NonNull String deviceName,
+                           @NonNull Map<String, Object> device) throws IOException {
+        this.incus.editInstance(handle, (config, devices) -> devices.put(deviceName, device));
     }
 
     /** Read the instance back and require the device the write just claimed to add. */
@@ -1465,12 +1368,11 @@ public final class IncusInstanceRuntime
             throws IOException {
         OwnerLabels.Owner want = OwnerLabels.parse(spec.ownerLabels());
         OwnerLabels.Owner actual = ownerOf(volume);
-        boolean ours = want != null && actual != null && actual.model().equals(want.model())
-            && actual.id().equals(want.id());
-        if (!ours) {
+        if (!OwnerLabels.matches(actual, want)) {
             throw new IOException("REFUSED to touch volume '" + volumeName + "': the daemon"
                 + " does not attribute it to this record ("
                 + (actual != null ? "owned by " + actual.model() + " #" + actual.id()
+                    + " of controller " + actual.controller()
                     : "no hohenheim owner labels")
                 + "). A same-named foreign volume is a name collision, not a leftover.");
         }
@@ -1518,16 +1420,20 @@ public final class IncusInstanceRuntime
             throw e;
         }
         OwnerLabels.Owner actual = ownerOf(existing);
-        boolean ours = actual != null && actual.model().equals(owner.model())
-            && actual.id().equals(owner.id());
-        if (!ours) {
+        if (!OwnerLabels.matches(actual, owner)) {
             throw new IOException("REFUSED to replace instance '" + handle + "': the daemon"
                 + " does not attribute it to this record ("
                 + (actual != null ? "owned by " + actual.model() + " #" + actual.id()
+                    + " of controller " + actual.controller()
                     : "no hohenheim owner labels")
                 + "). A same-named foreign instance is a name collision, not a leftover.");
         }
         return existing;
+    }
+
+    /** A per-NIC MAC the daemon minted ({@code volatile.<nic>.hwaddr}). */
+    private static boolean isVolatileMac(@NonNull String key) {
+        return key.startsWith("volatile.") && key.endsWith(".hwaddr");
     }
 
     /** The owner claim of an instance object's {@code user.*} config, or null. */

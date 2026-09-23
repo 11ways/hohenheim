@@ -85,9 +85,11 @@ public final class InstanceMigrations {
     /**
      * Test seam: invoked with a step name after each daemon-side milestone
      * ("stopped", "exported", "imported", "source_removed", "flipped"). A hook that
-     * throws an unchecked exception simulates a controller killed at that point --
-     * it escapes the IOException net, so no in-process settle runs and the record
-     * is left exactly as a dead controller would leave it.
+     * throws an {@link Error} simulates a controller killed at that point -- it escapes
+     * the failure net (IOException and RuntimeException, since a named refusal can land
+     * mid-window), so no in-process settle runs and the record is left exactly as a dead
+     * controller would leave it. A RuntimeException from the hook is a mid-window failure
+     * and IS settled in-process.
      */
     private final @NonNull Consumer<String> checkpoint;
 
@@ -253,6 +255,12 @@ public final class InstanceMigrations {
         if (TenantWrites.isTenantOriginated()) {
             throw Violations.ofForm(violationText("migrate_operator_only"));
         }
+        this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
+            () -> migrateToLocked(instanceId, targetServerId));
+    }
+
+    /** {@link #migrateTo}'s body; the caller holds the instance's operation lock. */
+    private void migrateToLocked(int instanceId, int targetServerId) {
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         if (InstanceModel.INSTALL_INSTALLING.equals(
@@ -366,6 +374,7 @@ public final class InstanceMigrations {
         try {
             InstanceConsoles.markStopExpected(instanceId);
             InstanceConsoles.closeSession(instanceId);
+            InstanceShell.closeSessionsOf(instanceId, InstanceShell.EndReason.WORKLOAD_ENDED);
             resolved.runtime().stop(handle, 10);
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
             this.checkpoint.accept("stopped");
@@ -402,10 +411,17 @@ public final class InstanceMigrations {
                 resolved.serverId(), sourceFence, targetServerId, targetFence,
                 InstanceModel.STATUS_STOPPED, nameOf(resolved.row()));
             this.checkpoint.accept("flipped");
-        } catch (IOException error) {
+        } catch (IOException | RuntimeException error) {
             // The same deterministic settle a killed controller gets at boot; it
             // decides rollback vs forward-completion from daemon truth, so a failure
             // after the source copy is gone still lands on the destination.
+            //
+            // AIDEV-NOTE: RuntimeException is in the net because a NAMED refusal can land
+            // mid-window -- the destination's disk check (RestoreCapacity.require) is a
+            // Violations, and so is a fenced-out stamp. Catching IOException alone left the
+            // record `migrating` and the workload stopped until the next boot's settle,
+            // with every power verb refusing the protected status meanwhile. A named
+            // refusal is rethrown UNCHANGED so its identity survives.
             boolean settled = settleQuietly(instanceId);
             if (settled && wasRunning) {
                 Row row = Models.get(InstanceModel.class).findById(instanceId);
@@ -415,6 +431,9 @@ public final class InstanceMigrations {
                             row.get(InstanceModel.SERVER_ID))) {
                     redeployBestEffort(instanceId);
                 }
+            }
+            if (error instanceof RuntimeException unchecked) {
+                throw unchecked;
             }
             throw refusal("instance_migrate_failed", resolved.row(), error);
         } finally {

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -100,7 +102,7 @@ public final class InstanceExecPage implements RecordScopedPage<Row> {
         // AIDEV-NOTE: this tab renders under /admin AND /manage, so the destination is
         // built from the HOSTING panel rather than from conduit.getPath().
         RouteTarget back = CmsRoutes.subpage(CmsSupport.panelSlug(conduit),
-            "instances", instanceId, SLUG);
+            HohenheimSlugs.INSTANCES, instanceId, SLUG);
         try {
             InstanceExec.Run run = new InstanceExec().run(instanceId, command);
             // Output is page CONTENT, so it rides the session, never the URL.
@@ -108,14 +110,7 @@ public final class InstanceExecPage implements RecordScopedPage<Row> {
             return CmsActionResult.redirect(new Uri(back.toUrl()));
         } catch (Violations refused) {
             // NEVER a silent swallow: the refusal becomes the page's error toast.
-            return CmsActionResult.errorToast(violationMessage(refused));
+            return CmsActionResult.errorToast(HandlerSupport.violationMessage(refused));
         }
-    }
-
-    /** The first violation's own message, so a refusal keeps its localized text. */
-    private static @NonNull Microcopy violationMessage(@NonNull Violations violations) {
-        return violations.all().isEmpty()
-            ? Microcopy.of("refused").withFilter("scope", "violations")
-            : violations.all().get(0).message();
     }
 }

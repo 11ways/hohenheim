@@ -142,8 +142,9 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             .isEqualTo(statusAndBody(wrongSigned))
             .isEqualTo(statusAndBody(unsigned));
 
-        // 4. The counterfactual: no build, no deploy, no claimed delivery, anywhere.
-        Thread.sleep(300);
+        // 4. The counterfactual: no build, no deploy, no claimed delivery, anywhere. No
+        //    wait is needed: every refusal above is answered BEFORE the delivery claim, and
+        //    a deploy is only ever queued after one, so the response is the proof.
         assertThat(deliveryRows())
             .as("step 4: refused deliveries claim no delivery id").isEmpty();
         assertThat(releaseOperationsOf(appAId))
@@ -192,14 +193,21 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         //    unmodelled provider event (issues, stars, releases, review comments) lands
         //    here, and before the guard existed every one of them queued a deploy.
         String refless = "{\"repository\":{\"full_name\":\"acme/repo-b\"}}";
+        String reflessDelivery = UUID.randomUUID().toString();
         String ignored = post(hookUrl(appBId), refless, "X-GitHub-Event: issues",
-            "X-GitHub-Delivery: " + UUID.randomUUID(),
+            "X-GitHub-Delivery: " + reflessDelivery,
             "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_B, refless));
         assertThat(ignored).as("step 3: an event with no ref is not a push")
             .startsWith("HTTP/1.1 200").contains("not a push");
+        assertThat(stampedAction(appBId, "gh:" + reflessDelivery))
+            .as("step 3: and the claim records that decision").isEqualTo("ignored_not_a_push");
 
-        // 4. The counterfactual for all three: nothing deployed.
-        Thread.sleep(300);
+        // 4. The counterfactual for all three: nothing deployed. The handler stamps the
+        //    decision it took onto the claim BEFORE it answers, and only a
+        //    "deploy_queued"/"preview_queued" decision starts background work -- so the
+        //    stamped actions are the deterministic proof, no sleep required.
+        assertThat(stampedAction(appBId, "gh:" + deliveryId))
+            .as("step 4: the off-branch delivery was decided as ignored").isEqualTo("ignored_branch");
         assertThat(releaseOperationsOf(appBId))
             .as("step 4: a replay and an unmodelled event deploy nothing").isEmpty();
     }
@@ -211,12 +219,15 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         // repo-a: a webhook must authorize exactly the repository binding it was
         // registered for (secret reuse / provider misconfiguration must not cross).
         String body = pushPayload("acme/repo-a", "refs/heads/main", "cafe3333");
+        String deliveryId = UUID.randomUUID().toString();
         String response = post(hookUrl(appBId), body,
-            "X-GitHub-Event: push", "X-GitHub-Delivery: " + UUID.randomUUID(),
+            "X-GitHub-Event: push", "X-GitHub-Delivery: " + deliveryId,
             "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_B, body));
         assertThat(response).as("the repository mismatch is refused")
             .startsWith("HTTP/1.1 422").contains("repository mismatch");
-        Thread.sleep(300);
+        // The refusal is stamped before the answer and queues nothing, so it is the proof.
+        assertThat(stampedAction(appBId, "gh:" + deliveryId))
+            .as("the claim records the mismatch refusal").isEqualTo("repository_mismatch");
         assertThat(releaseOperationsOf(appBId))
             .as("the mismatched delivery deployed nothing on site B's application")
             .isEmpty();
@@ -231,12 +242,15 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
     void aPushToAnotherBranchIsIgnored() throws Exception {
         int before = releaseOperationsOf(appBId).size();
         String body = pushPayload("acme/repo-b", "refs/heads/feature-x", "cafe4444");
+        String deliveryId = UUID.randomUUID().toString();
         String response = post(hookUrl(appBId), body,
-            "X-GitHub-Event: push", "X-GitHub-Delivery: " + UUID.randomUUID(),
+            "X-GitHub-Event: push", "X-GitHub-Delivery: " + deliveryId,
             "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_B, body));
         assertThat(response).as("the off-branch push is acknowledged but ignored")
             .startsWith("HTTP/1.1 200").contains("branch");
-        Thread.sleep(300);
+        assertThat(stampedAction(appBId, "gh:" + deliveryId))
+            .as("the claim records the ignore decision, which queues nothing")
+            .isEqualTo("ignored_branch");
         assertThat(releaseOperationsOf(appBId))
             .as("no deploy for a branch the application is not bound to").hasSize(before);
     }
@@ -253,6 +267,83 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         assertThat(response)
             .as("previews are an explicit opt-in; a PR event without it does nothing")
             .startsWith("HTTP/1.1 200").contains("previews disabled");
+    }
+
+    /**
+     * The body cap holds for a body that never announces its length.
+     *
+     * AIDEV-NOTE: the request is CHUNKED and deliberately never finished: the client sends
+     * a little more than the cap and then stalls. A handler that buffers the whole body
+     * before checking its size (the old shape) waits forever for the terminating chunk and
+     * the read times out; only a handler that stops reading AT the cap can answer 413.
+     */
+    @Test
+    @org.junit.jupiter.api.Order(6)
+    void aChunkedBodyPastTheCapIsRefusedWithoutWaitingForItsEnd() throws Exception {
+        try (Socket socket = new Socket("127.0.0.1", proxyPort)) {
+            socket.setSoTimeout(15000);
+            OutputStream out = socket.getOutputStream();
+            out.write(("POST " + hookUrl(appAId) + " HTTP/1.1\r\n"
+                + "Host: webhook.test\r\n"
+                + "Content-Type: application/json\r\n"
+                + "Transfer-Encoding: chunked\r\n"
+                + "X-GitHub-Event: push\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+
+            // 1. Stream 2.5 MB in 64 KB chunks, then stall with the body unterminated. The
+            //    writer runs beside the reader: a server that stops reading must not be
+            //    able to wedge the test on a full socket buffer.
+            byte[] chunk = new byte[64 * 1024];
+            java.util.Arrays.fill(chunk, (byte) 'a');
+            Thread writer = Thread.ofVirtual().start(() -> {
+                try {
+                    for (int sent = 0; sent < 40; sent++) {
+                        out.write((Integer.toHexString(chunk.length) + "\r\n")
+                            .getBytes(StandardCharsets.UTF_8));
+                        out.write(chunk);
+                        out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+                    }
+                    out.flush();
+                } catch (java.io.IOException closedByServer) {
+                    // the server hung up once it refused: exactly the point
+                }
+            });
+
+            // 2. The refusal arrives although the body never ended.
+            BufferedReader reader = new BufferedReader(
+                new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            String status = reader.readLine();
+            assertThat(status)
+                .as("step 2: the oversized chunked body is refused at the cap, not buffered to its end")
+                .isNotNull()
+                .startsWith("HTTP/1.1 413");
+            writer.join(15000);
+        }
+
+        // 3. And nothing was claimed or deployed: the body never reached the handler.
+        assertThat(releaseOperationsOf(appAId))
+            .as("step 3: a refused body deploys nothing").isEmpty();
+    }
+
+    /** A change request whose branch name git could read as an option never builds. */
+    @Test
+    @org.junit.jupiter.api.Order(7)
+    void aPullRequestWithAnOptionShapedBranchIsIgnored() throws Exception {
+        String uuid = UUID.randomUUID().toString();
+        String body = "{\"action\":\"opened\",\"repository\":{\"full_name\":\"acme/repo-c\"},"
+            + "\"pull_request\":{\"number\":8,\"head\":{\"ref\":\"--upload-pack=touch x\","
+            + "\"sha\":\"cafe8888\"}}}";
+        String response = post(hookUrl(appCId), body,
+            "X-GitHub-Event: pull_request", "X-GitHub-Delivery: " + uuid,
+            "X-Hub-Signature-256: sha256=" + SecureTokens.hmacSha256Hex(SECRET_C, body));
+        assertThat(response).as("the delivery is answered, and ignored")
+            .startsWith("HTTP/1.1 200").contains("invalid ref");
+        assertThat(stampedAction(appCId, "gh:" + uuid))
+            .as("the decision is recorded on the claim").isEqualTo("ignored_invalid_ref");
+        assertThat(Models.get(PreviewDeploymentModel.class).find()
+                .where(PreviewDeploymentModel.APPLICATION_ID.eq(appCId))
+                .where(PreviewDeploymentModel.REF.eq("--upload-pack=touch x"))
+                .all())
+            .as("no preview row was ever claimed for that ref").isEmpty();
     }
 
     private static void setPreviewBranches(Integer siteId, List<String> patterns) {
@@ -300,7 +391,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         post(hookUrl(appCId), body,
             "X-Gitea-Event: pull_request", "X-Gitea-Delivery: " + uuid,
             "X-Gitea-Signature: " + SecureTokens.hmacSha256Hex(SECRET_C, body));
-        return stampedAction("gt:" + uuid);
+        return stampedAction(appCId, "gt:" + uuid);
     }
 
     /**
@@ -321,16 +412,17 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
             "X-Gitlab-Event: Merge Request Hook",
             "X-Gitlab-Event-UUID: " + uuid,
             "X-Gitlab-Token: " + SECRET_C);
-        return stampedAction("gl:" + uuid);
+        return stampedAction(appCId, "gl:" + uuid);
     }
 
     /** The delivery's recorded outcome; the claim is written before the handler acts. */
-    private static String stampedAction(String deliveryKey) throws Exception {
+    private static String stampedAction(Integer applicationId, String deliveryKey)
+            throws Exception {
         await("delivery " + deliveryKey + " is stamped", () -> {
-            List<Row> rows = deliveryRowsOf(appCId, deliveryKey);
+            List<Row> rows = deliveryRowsOf(applicationId, deliveryKey);
             return !rows.isEmpty() && rows.get(0).get(WebhookDeliveryModel.ACTION) != null;
         });
-        return deliveryRowsOf(appCId, deliveryKey).get(0).get(WebhookDeliveryModel.ACTION);
+        return deliveryRowsOf(applicationId, deliveryKey).get(0).get(WebhookDeliveryModel.ACTION);
     }
 
     // -- fixtures -------------------------------------------------------------

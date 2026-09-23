@@ -1,7 +1,7 @@
-{#- Records tab on a DNS zone. The table, its cells and its row actions are the
-    record RESOURCE's own declarations rendered through the framework's shared row
-    partial, so this page adds exactly what a generated list cannot know: the zone
-    scope and the zone the quick-add bar adds into. -#}
+{#- Records tab on a DNS zone. The rows, their page window, their search, cells and row
+    actions are the record RESOURCE's own (its listPage, rendered through the framework's
+    shared row partial), so this page adds exactly what a generated list cannot know: the
+    zone scope and the zone the quick-add bar adds into. -#}
 {% declare title: String %}
 {% declare zoneId: Integer %}
 {% declare origin: String %}
@@ -14,6 +14,7 @@
 {% declare searchEnabled: Boolean = false %}
 {% declare searchActive: Boolean = false %}
 {% declare searchValue: String = "" %}
+{% declare pager: Pager = null %}
 {% declare quickAddEnabled: Boolean = false %}
 {% declare quickAddForm: InlineCreateFormState = null %}
 {% declare quickAddValues: Map<String, Object> = null %}
@@ -103,6 +104,9 @@
     </pl-table>
     </pl-scroll-area>
     </form>
+    {#- The resource's own page window (DnsZoneRecordsPage reads the zone through
+        listPage), footered like the generated list; one page renders nothing. -#}
+    <pl-pager pager={% pager %} label={% t("pagination", scope: "cms") %}></pl-pager>
     {% elseif searchActive %}
     <pl-empty-state icon="list-ul" data-cms-empty-state="filtered">
         <pl-empty-state-title>{{ t("empty", scope: "cms", target: "filtered_title") }}</pl-empty-state-title>

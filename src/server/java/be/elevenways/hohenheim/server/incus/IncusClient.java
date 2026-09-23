@@ -62,7 +62,23 @@ public class IncusClient {
         public boolean isAlreadyExists() {
             return this.status == 400 && String.valueOf(getMessage()).contains("already exists");
         }
+
+        /**
+         * The daemon refused a conditional write: the object changed since the ETag the
+         * write carried was read. Re-read and re-apply; never retry the same body blindly.
+         */
+        public boolean isPreconditionFailed() {
+            return this.status == 412;
+        }
     }
+
+    /**
+     * An object as read together with the {@code ETag} the daemon answered it with, the
+     * token a conditional write sends back as {@code If-Match}.
+     *
+     * @param etag null when the daemon sent none (then the write is unconditional)
+     */
+    public record Versioned(@NonNull Map<String, Object> body, @Nullable String etag) {}
 
     private final @NonNull IncusTransport transport;
 
@@ -184,6 +200,18 @@ public class IncusClient {
     /** The instance's definition ({@code GET /1.0/instances/{name}}). */
     public @NonNull Map<String, Object> instance(@NonNull String name) throws IOException {
         return syncMetadata("GET", "/1.0/instances/" + name, null, DEFAULT_TIMEOUT_MS);
+    }
+
+    /** {@link #instance} together with its ETag, for a read-modify-write. */
+    public @NonNull Versioned instanceVersioned(@NonNull String name) throws IOException {
+        Http11.Raw raw = this.transport.exchange("GET", "/1.0/instances/" + name, null,
+            DEFAULT_TIMEOUT_MS);
+        Object metadata = envelopeOf(raw).get("metadata");
+        if (!(metadata instanceof Map<?, ?> map)) {
+            throw new IOException("Incus GET /1.0/instances/" + name
+                + " answered non-object metadata: " + metadata);
+        }
+        return new Versioned(castMap(map), raw.header("etag"));
     }
 
     /** The instance's live state ({@code GET /1.0/instances/{name}/state}). */
@@ -492,11 +520,90 @@ public class IncusClient {
 
     // -- instance definition updates ------------------------------------------
 
-    /** Replace the instance's mutable definition (full PUT; async). */
+    /** Replace the instance's mutable definition (full PUT; async), unconditionally. */
     public void updateInstance(@NonNull String name, @NonNull Map<String, Object> definition)
             throws IOException {
-        waitOperation(asyncOperation("PUT", "/1.0/instances/" + name,
-            Json.stringify(definition), DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
+        updateInstance(name, definition, null);
+    }
+
+    /**
+     * Replace the instance's mutable definition ONLY if it is still the version
+     * {@code etag} names ({@code If-Match}); a concurrent writer surfaces as
+     * {@link ApiException#isPreconditionFailed} instead of being silently overwritten.
+     *
+     * @param etag the ETag of the read the definition was built from; null writes unconditionally
+     */
+    public void updateInstance(@NonNull String name, @NonNull Map<String, Object> definition,
+                               @Nullable String etag) throws IOException {
+        Map<String, String> headers = etag == null || etag.isBlank()
+            ? Map.of() : Map.of("If-Match", etag);
+        Map<String, Object> envelope = envelopeOf(this.transport.exchange("PUT",
+            "/1.0/instances/" + name, Json.stringify(definition), headers, DEFAULT_TIMEOUT_MS));
+        Object operation = envelope.get("operation");
+        if (!(operation instanceof String operationPath) || operationPath.isEmpty()) {
+            throw new IOException("Incus PUT /1.0/instances/" + name
+                + " answered no operation to wait on");
+        }
+        waitOperation(operationPath, LONG_OP_TIMEOUT_MS);
+    }
+
+    /** Edits copies of an instance's config and devices; the ONE mutation shape of a definition write. */
+    public interface DefinitionEdit {
+        void apply(@NonNull Map<String, Object> config, @NonNull Map<String, Object> devices)
+            throws IOException;
+    }
+
+    /** How many times a definition write is re-read and re-applied after losing a race. */
+    private static final int DEFINITION_WRITE_ATTEMPTS = 5;
+
+    /**
+     * THE read-modify-write of an instance definition: read it WITH its ETag, apply the
+     * edit to copies of its config and devices, PUT the whole mutable definition back under
+     * {@code If-Match}, and on 412 start over from a fresh read.
+     *
+     * AIDEV-NOTE: an Incus PUT replaces the WHOLE mutable definition, so a blind write built
+     * from a stale read silently reverts whatever another writer (an operator's
+     * {@code incus config device add}, a parallel converge, the isolation sweep) changed in
+     * between. The ETag makes that a refusal the daemon enforces, and the edit is re-applied
+     * to the fresh read rather than the stale body being retried. Before this the body was
+     * assembled in four places (the driver's converge, removeDevice and putDevice, and the
+     * kernel-isolation re-apply), none of them conditional. A daemon that sends no ETag gets
+     * an unconditional write, which is exactly the old behaviour and no worse.
+     */
+    public void editInstance(@NonNull String name, @NonNull DefinitionEdit edit)
+            throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            Versioned current = instanceVersioned(name);
+            Map<String, Object> instance = current.body();
+            Map<String, Object> config = copyOf(instance.get("config"));
+            Map<String, Object> devices = copyOf(instance.get("devices"));
+            edit.apply(config, devices);
+            Map<String, Object> definition = new LinkedHashMap<>();
+            definition.put("architecture", instance.get("architecture"));
+            definition.put("config", config);
+            definition.put("devices", devices);
+            definition.put("ephemeral", Boolean.TRUE.equals(instance.get("ephemeral")));
+            definition.put("profiles", instance.get("profiles") instanceof List<?> profiles
+                ? profiles : List.of("default"));
+            definition.put("description", instance.get("description") instanceof String text
+                ? text : "");
+            try {
+                updateInstance(name, definition, current.etag());
+                return;
+            } catch (ApiException refused) {
+                if (!refused.isPreconditionFailed() || attempt >= DEFINITION_WRITE_ATTEMPTS) {
+                    throw refused;
+                }
+            }
+        }
+    }
+
+    private static @NonNull Map<String, Object> copyOf(@Nullable Object map) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        if (map instanceof Map<?, ?> current) {
+            current.forEach((key, value) -> copy.put(String.valueOf(key), value));
+        }
+        return copy;
     }
 
     // -- network ACLs ---------------------------------------------------------

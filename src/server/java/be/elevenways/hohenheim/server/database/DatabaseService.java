@@ -16,6 +16,8 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.notification.Alerts;
+import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
@@ -26,11 +28,14 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneOffset;
@@ -54,12 +59,6 @@ import java.util.concurrent.Executors;
  * @since   0.1.0
  */
 public class DatabaseService extends DatasourceScoped {
-
-    // The status vocabulary is owned by the model's EnumField declaration.
-    public static final String STATUS_PROVISIONING = DatabaseModel.STATUS_PROVISIONING;
-    public static final String STATUS_ACTIVE = DatabaseModel.STATUS_ACTIVE;
-    public static final String STATUS_FAILED = DatabaseModel.STATUS_FAILED;
-    public static final String STATUS_DESTROY_FAILED = DatabaseModel.STATUS_DESTROY_FAILED;
 
     private static final DateTimeFormatter STAMP =
         DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
@@ -169,14 +168,14 @@ public class DatabaseService extends DatasourceScoped {
                                              ResourceLimits limits, @Nullable String placement)
             throws IOException {
         Row created = insertRecord(name, engine, image, user, password, database, ephemeral,
-            serverName, limits, STATUS_PROVISIONING, placement, null);
+            serverName, limits, DatabaseModel.STATUS_PROVISIONING, placement, null);
         int recordId = created.get(DatabaseModel.ID);
         try {
             ManagedDatabase.Connection connection = provisionRuntime(created);
-            setStatus(recordId, STATUS_ACTIVE, null);
+            setStatus(recordId, DatabaseModel.STATUS_ACTIVE, null);
             return connection;
         } catch (IOException e) {
-            setStatus(recordId, STATUS_FAILED, e.getMessage());
+            setStatus(recordId, DatabaseModel.STATUS_FAILED, e.getMessage());
             throw e;
         }
     }
@@ -324,7 +323,7 @@ public class DatabaseService extends DatasourceScoped {
                            String serverName, ResourceLimits limits, @Nullable String placement,
                            @Nullable Integer engineId) {
         Row created = insertRecord(name, engine, image, user, password, database, ephemeral,
-            serverName, limits, STATUS_PROVISIONING, placement, engineId);
+            serverName, limits, DatabaseModel.STATUS_PROVISIONING, placement, engineId);
         int recordId = created.get(DatabaseModel.ID);
         // AIDEV-NOTE: scheduled AFTER COMMIT, by id. The CMS create submit runs
         // persistRow inside the resource's mutation transaction (every create does,
@@ -370,6 +369,15 @@ public class DatabaseService extends DatasourceScoped {
      * namespacing needs no change here: whatever spelling becomes the record's name is the
      * one this refuses to collide with.
      *
+     * AIDEV-NOTE: the name check, the engine resolution and the save run in ONE
+     * transaction. The database quota is reserved in a before-write hook and the shared
+     * engine's instance row is reserved inline, and zenit's Quotas ride the ambient
+     * transaction: two concurrent creates of one name used to both pass the check, both
+     * reserve, and the loser's unique-index failure left its quota slot spent forever. Now
+     * the loser either waits for the winner's commit (SQLite write transactions are
+     * IMMEDIATE, so the check itself serializes) and is refused by name, or rolls its
+     * reservations back with its failed insert. A caller's outer transaction is joined.
+     *
      * @param placement a {@link DatabaseModel#PLACEMENT} token, or null for the default
      * @param engineId  an explicit shared engine, or null to resolve the host's
      * @throws Violations {@code database_name_taken}, {@code database_placement_unsupported},
@@ -382,48 +390,61 @@ public class DatabaseService extends DatasourceScoped {
                             ResourceLimits limits, String status, @Nullable String placement,
                             @Nullable Integer engineId) {
         return query(() -> {
-            DatabaseModel model = model();
-            if (model.findByName(name) != null) {
-                throw Violations.ofField(DatabaseModel.NAME.getName(), name,
-                    Microcopy.of("database_name_taken").withFilter("scope", "violations")
-                        .withArg("name", name));
-            }
-            String resolvedPlacement = placement == null || placement.isBlank()
-                ? defaultPlacement(engine, ephemeral) : placement.trim();
-            int serverId = ServerModel.canonicalServerId(serverName);
-            Row engineRow = null;
-            if (DatabaseModel.PLACEMENT_SHARED.equals(resolvedPlacement)) {
-                requireLogicalIdentifiers(user, password, database);
-                if (limits.memoryMb() != null || limits.cpus() != null) {
-                    throw Violations.ofField(DatabaseModel.MEMORY_LIMIT_MB.getName(),
-                        limits.memoryMb(), CmsSupport.violationText("database_shared_limits"));
-                }
-                engineRow = engineId != null ? explicitEngine(engineId, serverId, engine, image)
-                    : DatabaseEngines.findOrCreateShared(serverId, engine, image);
-                requireLogicalFree(engineRow.get(DatabaseEngineModel.ID), database, user, null);
-            } else if (!DatabaseModel.PLACEMENT_DEDICATED.equals(resolvedPlacement)) {
-                throw Violations.ofField(DatabaseModel.PLACEMENT.getName(), resolvedPlacement,
-                    CmsSupport.violationText("database_placement_unknown")
-                        .withArg("placement", resolvedPlacement));
-            }
-            Row row = model.createEmptyRow();
-            row.set(DatabaseModel.NAME, name);
-            row.set(DatabaseModel.ENGINE, engine.token());
-            row.set(DatabaseModel.IMAGE, image);
-            row.set(DatabaseModel.DB_USER, user);
-            row.set(DatabaseModel.DB_PASSWORD, password);
-            row.set(DatabaseModel.DB_NAME, database);
-            row.set(DatabaseModel.EPHEMERAL, ephemeral);
-            row.set(DatabaseModel.MEMORY_LIMIT_MB, limits.memoryMb());
-            row.set(DatabaseModel.CPU_LIMIT, limits.cpus());
-            row.set(DatabaseModel.STATUS, status);
-            row.set(DatabaseModel.SERVER_ID, serverId);
-            row.set(DatabaseModel.PLACEMENT, resolvedPlacement);
-            row.set(DatabaseModel.ENGINE_ID, engineRow == null ? null
-                : engineRow.get(DatabaseEngineModel.ID));
-            model.save(row);
-            return row;
+            Row[] inserted = new Row[1];
+            model().getResolvedDatasource().withTransaction(transaction -> inserted[0] =
+                insertInTransaction(name, engine, image, user, password, database, ephemeral,
+                    serverName, limits, status, placement, engineId));
+            return inserted[0];
         });
+    }
+
+    /** The body of {@link #insertRecord}, run inside its transaction. */
+    private static Row insertInTransaction(String name, ManagedDatabase.Engine engine, String image,
+                                           String user, String password, String database,
+                                           boolean ephemeral, String serverName, ResourceLimits limits,
+                                           String status, @Nullable String placement,
+                                           @Nullable Integer engineId) {
+        DatabaseModel model = model();
+        if (model.findByName(name) != null) {
+            throw Violations.ofField(DatabaseModel.NAME.getName(), name,
+                Microcopy.of("database_name_taken").withFilter("scope", "violations")
+                    .withArg("name", name));
+        }
+        String resolvedPlacement = placement == null || placement.isBlank()
+            ? defaultPlacement(engine, ephemeral) : placement.trim();
+        int serverId = ServerModel.canonicalServerId(serverName);
+        Row engineRow = null;
+        if (DatabaseModel.PLACEMENT_SHARED.equals(resolvedPlacement)) {
+            requireLogicalIdentifiers(user, password, database);
+            if (limits.memoryMb() != null || limits.cpus() != null) {
+                throw Violations.ofField(DatabaseModel.MEMORY_LIMIT_MB.getName(),
+                    limits.memoryMb(), CmsSupport.violationText("database_shared_limits"));
+            }
+            engineRow = engineId != null ? explicitEngine(engineId, serverId, engine, image)
+                : DatabaseEngines.findOrCreateShared(serverId, engine, image);
+            requireLogicalFree(engineRow.get(DatabaseEngineModel.ID), database, user, null);
+        } else if (!DatabaseModel.PLACEMENT_DEDICATED.equals(resolvedPlacement)) {
+            throw Violations.ofField(DatabaseModel.PLACEMENT.getName(), resolvedPlacement,
+                CmsSupport.violationText("database_placement_unknown")
+                    .withArg("placement", resolvedPlacement));
+        }
+        Row row = model.createEmptyRow();
+        row.set(DatabaseModel.NAME, name);
+        row.set(DatabaseModel.ENGINE, engine.token());
+        row.set(DatabaseModel.IMAGE, image);
+        row.set(DatabaseModel.DB_USER, user);
+        row.set(DatabaseModel.DB_PASSWORD, password);
+        row.set(DatabaseModel.DB_NAME, database);
+        row.set(DatabaseModel.EPHEMERAL, ephemeral);
+        row.set(DatabaseModel.MEMORY_LIMIT_MB, limits.memoryMb());
+        row.set(DatabaseModel.CPU_LIMIT, limits.cpus());
+        row.set(DatabaseModel.STATUS, status);
+        row.set(DatabaseModel.SERVER_ID, serverId);
+        row.set(DatabaseModel.PLACEMENT, resolvedPlacement);
+        row.set(DatabaseModel.ENGINE_ID, engineRow == null ? null
+            : engineRow.get(DatabaseEngineModel.ID));
+        model.save(row);
+        return row;
     }
 
     /**
@@ -491,13 +512,13 @@ public class DatabaseService extends DatasourceScoped {
             String name = row.get(DatabaseModel.NAME);
             try {
                 provisionRuntime(row);
-                setStatus(recordId, STATUS_ACTIVE, null);
+                setStatus(recordId, DatabaseModel.STATUS_ACTIVE, null);
             } catch (Exception e) {
                 // TERMINAL and visible: the status is what the list badge, the detail
                 // page and AttentionCollector.failedDatabases read; the reason rides the
                 // record so the operator learns WHY without the journal.
                 String reason = e.getMessage() != null ? e.getMessage() : e.toString();
-                setStatus(recordId, STATUS_FAILED, reason);
+                setStatus(recordId, DatabaseModel.STATUS_FAILED, reason);
                 Blast.log("DB: provisioning failed for", name, "-", reason);
             }
         });
@@ -628,7 +649,7 @@ public class DatabaseService extends DatasourceScoped {
 
     private static String statusOf(Row row) {
         String status = row.get(DatabaseModel.STATUS);
-        return status != null ? status : STATUS_ACTIVE;   // records predating the status column
+        return status != null ? status : DatabaseModel.STATUS_ACTIVE;   // records predating the status column
     }
 
     /** The placement token, reading rows older than the column as dedicated. */
@@ -739,15 +760,34 @@ public class DatabaseService extends DatasourceScoped {
         return target;
     }
 
-    /** A dump ready to stream to the browser: filename, MIME type, and the dump bytes. */
-    public record BackupDownload(String filename, String contentType, byte[] content) {}
+    /**
+     * A dump ready to stream to the browser: filename, MIME type, the open stream and its
+     * exact size in bytes (a long: a dump may exceed 2 GiB).
+     *
+     * AIDEV-NOTE: the file behind {@code content} is ALREADY UNLINKED when this is handed
+     * out -- the open descriptor keeps the bytes readable and the space is freed when the
+     * stream closes. That is what lets the HTTP layer serve it after this method returned
+     * without a temp file outliving a client that hung up, and without the whole dump in
+     * the heap (the old byte[] shape was reachable by any tenant with the backups
+     * capability and turned a large database into a controller OOM). Closing it is the
+     * caller's job; zenit's ServeStreamResult always does.
+     */
+    public record BackupStream(@NonNull String filename, @NonNull String contentType,
+                               @NonNull InputStream content, long size) implements Closeable {
+
+        @Override
+        public void close() throws IOException {
+            this.content.close();
+        }
+    }
 
     /**
-     * Back up a persisted database by name into a downloadable artifact (SQL text or the engine's
-     * native binary dump). The whole dump is held in memory; streaming is a follow-up for large
-     * databases.
+     * Back up a persisted database by name into a downloadable, STREAMED artifact (SQL text
+     * or the engine's native binary dump). Nothing of the dump is held in memory.
+     *
+     * @throws IOException when the dump fails; nothing is left on disk
      */
-    public BackupDownload backupDownload(String name) throws IOException {
+    public BackupStream backupStream(String name) throws IOException {
         Row row = requireWith(name, HohenheimAccess.BACKUPS);
         EngineHost host = hostOf(row);
         Path directory = Files.createTempDirectory("hohenheim-backup");
@@ -755,11 +795,32 @@ public class DatabaseService extends DatasourceScoped {
         try {
             managedFor(host.serverId()).backupToFile(handleOf(row, host), host.engine(),
                 host.rootUser(), host.rootPassword(), row.get(DatabaseModel.DB_NAME), dump);
-            return new BackupDownload(dump.getFileName().toString(),
-                host.engine().dumpContentType(), Files.readAllBytes(dump));
+            long size = Files.size(dump);
+            InputStream content = Files.newInputStream(dump);
+            return new BackupStream(dump.getFileName().toString(),
+                host.engine().dumpContentType(), content, size);
         } finally {
+            // Unlinked while (on success) still open: see BackupStream.
             Files.deleteIfExists(dump);
             Files.deleteIfExists(directory);
+        }
+    }
+
+    /** A dump materialized in memory: filename, MIME type and the bytes. */
+    public record BackupDownload(String filename, String contentType, byte[] content) {}
+
+    /**
+     * {@link #backupStream} read fully into memory.
+     *
+     * @deprecated buffers the whole dump in the heap; the download handler must serve
+     *             {@link #backupStream} through a streaming result. Kept only until
+     *             DatabaseHandlers moves over, then delete it.
+     */
+    @Deprecated
+    public BackupDownload backupDownload(String name) throws IOException {
+        try (BackupStream stream = backupStream(name)) {
+            return new BackupDownload(stream.filename(), stream.contentType(),
+                stream.content().readAllBytes());
         }
     }
 
@@ -772,10 +833,17 @@ public class DatabaseService extends DatasourceScoped {
         restoreRowFromFile(row, source);
     }
 
+    /**
+     * AIDEV-NOTE: a SHARED record restores with the engine's root credentials but under
+     * the record's own role, so what the dump creates is the tenant's and not root's (a
+     * root-owned table is one the tenant's own login cannot read). A dedicated engine's
+     * root IS the record's user, so it restores as itself.
+     */
     private void restoreRowFromFile(Row row, Path source) throws IOException {
         EngineHost host = hostOf(row);
         managedFor(host.serverId()).restoreFromFile(handleOf(row, host), host.engine(),
-            host.rootUser(), host.rootPassword(), row.get(DatabaseModel.DB_NAME), source);
+            host.rootUser(), host.rootPassword(), row.get(DatabaseModel.DB_NAME), source,
+            host.shared() ? row.get(DatabaseModel.DB_USER) : null);
     }
 
     /**
@@ -819,7 +887,7 @@ public class DatabaseService extends DatasourceScoped {
                     // operation whose destroy gate already ran above; a tenant-originated
                     // caller must not see its refusal rewritten as "status is frozen".
                     TenantWrites.inAuthorizedOperation(
-                        () -> setStatus(recordId, STATUS_DESTROY_FAILED, e.getMessage()));
+                        () -> setStatus(recordId, DatabaseModel.STATUS_DESTROY_FAILED, e.getMessage()));
                 }
                 throw new IOException("Destroy of '" + name + "' could not verify its teardown"
                     + " (record kept): " + e.getMessage(), e);
@@ -907,12 +975,30 @@ public class DatabaseService extends DatasourceScoped {
      * @throws IOException naming the step that failed; nothing was switched
      */
     public void moveToSharedEngine(String name) throws IOException {
+        runMove(claimMove(name));
+    }
+
+    /**
+     * Take the move for one record, atomically: the eligibility check, then a CONDITIONAL
+     * update that flips the record to provisioning only while it is still active and
+     * dedicated. Exactly one of two concurrent claims wins.
+     *
+     * AIDEV-NOTE: the check and the status stamp used to be two separate steps, so a
+     * double-submitted panel action (or the API beside it) could start two moves of one
+     * record: two dumps, two restores into the same logical database, two switches. The
+     * loser now matches no row and is refused before any daemon work.
+     *
+     * @return the record as it was read before the claim
+     * @throws IOException naming the refusal key when the record may not move or another
+     *         operation claimed it first; the record is untouched
+     */
+    private Row claimMove(String name) throws IOException {
         Row row = query(() -> model().findByName(name));
         if (row == null) {
             throw new IOException("No managed database named '" + name + "'");
         }
         int recordId = row.get(DatabaseModel.ID);
-        Microcopy refusal = moveRefusal(row);
+        Microcopy refusal = query(() -> moveRefusal(row));
         if (refusal != null) {
             // The KEY, not a re-spelled sentence: this is the last-line guard on a
             // background thread, and the surfaces that face a human (the row action's
@@ -920,17 +1006,36 @@ public class DatabaseService extends DatasourceScoped {
             throw new IOException("Database '" + name + "' cannot move onto a shared engine ("
                 + refusal.key() + ")");
         }
+        query(() -> {
+            requireLogicalIdentifiers(row.get(DatabaseModel.DB_USER),
+                row.get(DatabaseModel.DB_PASSWORD), row.get(DatabaseModel.DB_NAME));
+            return null;
+        });
+        int claimed = query(() -> model().find()
+            .where(DatabaseModel.ID.eq(recordId))
+            .where(DatabaseModel.STATUS.eq(DatabaseModel.STATUS_ACTIVE))
+            .where(Criteria.or(DatabaseModel.PLACEMENT.isNull(),
+                DatabaseModel.PLACEMENT.ne(DatabaseModel.PLACEMENT_SHARED)))
+            .assign(DatabaseModel.STATUS, DatabaseModel.STATUS_PROVISIONING)
+            .assign(DatabaseModel.FAILURE_REASON, null)
+            .updateAll());
+        if (claimed != 1) {
+            throw new IOException("Database '" + name + "' cannot move onto a shared engine"
+                + " (database_not_active): another operation claimed it first");
+        }
+        return row;
+    }
+
+    /** The move itself, for a record {@link #claimMove} already flipped to provisioning. */
+    private void runMove(Row row) throws IOException {
+        String name = row.get(DatabaseModel.NAME);
+        int recordId = row.get(DatabaseModel.ID);
         ManagedDatabase.Engine engine = engineOf(row);
         String storedUser = row.get(DatabaseModel.DB_USER);
         String password = row.get(DatabaseModel.DB_PASSWORD);
         String database = row.get(DatabaseModel.DB_NAME);
-        query(() -> {
-            requireLogicalIdentifiers(storedUser, password, database);
-            return null;
-        });
         int serverId = ServerModel.canonicalServerId(row.get(DatabaseModel.SERVER_ID));
 
-        setStatus(recordId, STATUS_PROVISIONING, null);
         List<Integer> stopped = new ArrayList<>();
         try {
             // 1. Stop the consumers: their injected address is about to change.
@@ -982,13 +1087,14 @@ public class DatabaseService extends DatasourceScoped {
                 database, user), engine.logicalEnv(target.rootPassword(), password),
                 "create logical database '" + database + "'");
             managedFor(serverId).restoreFromFile(targetHandle, engine, target.rootUser(),
-                target.rootPassword(), database, dump);
+                target.rootPassword(), database, dump, user);
             String after = fingerprint(target, targetHandle, database);
             if (!before.equals(after)) {
                 throw new IOException("Content fingerprint differs after the restore into engine '"
                     + target.name() + "' (dedicated: " + before + "; shared: " + after
                     + "); nothing was switched");
             }
+            requireOwnedBy(target, targetHandle, database, user);
 
             // 5. Switch: the record, the old instance, the networks, the consumers.
             exec(() -> {
@@ -998,7 +1104,7 @@ public class DatabaseService extends DatasourceScoped {
                 fresh.set(DatabaseModel.DB_USER, user);
                 fresh.set(DatabaseModel.MEMORY_LIMIT_MB, null);
                 fresh.set(DatabaseModel.CPU_LIMIT, null);
-                fresh.set(DatabaseModel.STATUS, STATUS_ACTIVE);
+                fresh.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
                 fresh.set(DatabaseModel.FAILURE_REASON, null);
                 model().save(fresh);
             });
@@ -1008,10 +1114,17 @@ public class DatabaseService extends DatasourceScoped {
                     return null;
                 });
             } catch (IOException e) {
-                // The switch stands (the shared copy is verified); the old container is
-                // an orphan the reconciler will surface, and the operator learns here.
+                // The switch stands (the shared copy is verified); the old container
+                // still runs and still holds its port, memory booking and data. A log
+                // line is not visibility: the operator is ALERTED, by name.
                 Blast.log("DB-MOVE: the old dedicated engine of", name,
                     "could not be destroyed after the move -", e.getMessage());
+                Alerts.trySend(NotificationEvents.DATABASE_MOVE_LEFTOVER,
+                    Microcopy.of("database_move_leftover_subject").withFilter("scope", "alert")
+                        .withArg("name", name),
+                    Microcopy.of("database_move_leftover_body").withFilter("scope", "alert")
+                        .withArg("name", name).withArg("engine", target.name())
+                        .withArg("reason", String.valueOf(e.getMessage())));
             }
             query(() -> InstanceDatabaseNetworks.reattachForDatabase(recordId));
             for (int instanceId : stopped) {
@@ -1030,7 +1143,7 @@ public class DatabaseService extends DatasourceScoped {
             // resolves the injected credentials off the record and REFUSES a database that
             // is not active (database_not_ready), so the other order left every workload
             // stopped after a refused move -- observed live on 2026-09-02 (invulassistent).
-            setStatus(recordId, STATUS_ACTIVE, "Move to a shared engine failed: " + reason);
+            setStatus(recordId, DatabaseModel.STATUS_ACTIVE, "Move to a shared engine failed: " + reason);
             for (int instanceId : stopped) {
                 try {
                     exec(() -> new InstanceService().deploy(instanceId));
@@ -1060,7 +1173,7 @@ public class DatabaseService extends DatasourceScoped {
             return CmsSupport.violationText("database_already_shared")
                 .withArg("name", row.get(DatabaseModel.NAME));
         }
-        if (!STATUS_ACTIVE.equals(row.get(DatabaseModel.STATUS))) {
+        if (!DatabaseModel.STATUS_ACTIVE.equals(row.get(DatabaseModel.STATUS))) {
             return CmsSupport.violationText("database_not_active")
                 .withArg("name", row.get(DatabaseModel.NAME))
                 .withArg("status", String.valueOf((Object) row.get(DatabaseModel.STATUS)));
@@ -1146,11 +1259,27 @@ public class DatabaseService extends DatasourceScoped {
         return null;
     }
 
-    /** {@link #moveToSharedEngine} on the provisioning pool, for the panel action. */
+    /**
+     * {@link #moveToSharedEngine} on the provisioning pool, for the panel action and the API.
+     * The CLAIM is taken synchronously, so a refused or lost claim reaches the caller.
+     *
+     * @throws Violations naming why the record cannot move (already shared, not active --
+     *         including "another move claimed it first" -- unsupported engine, ...)
+     */
     public void moveToSharedEngineInBackground(String name) {
+        Row claimed;
+        try {
+            claimed = claimMove(name);
+        } catch (IOException refused) {
+            Row fresh = query(() -> model().findByName(name));
+            Microcopy reason = fresh == null ? null : query(() -> moveRefusal(fresh));
+            throw Violations.ofForm(reason != null ? reason
+                : CmsSupport.violationText("database_not_active").withArg("name", name)
+                    .withArg("status", DatabaseModel.STATUS_PROVISIONING));
+        }
         PROVISION_EXECUTOR.submit(() -> {
             try {
-                moveToSharedEngine(name);
+                runMove(claimed);
             } catch (IOException e) {
                 // Already stamped on the record by the move itself.
             } catch (RuntimeException | Error e) {
@@ -1171,6 +1300,37 @@ public class DatabaseService extends DatasourceScoped {
                 + host.name() + "' (exit " + result.exitCode() + "): " + result.stderr().trim());
         }
         return result.stdout().trim();
+    }
+
+    /**
+     * Refuse a restored database any of whose objects another role owns (Postgres) or
+     * another user defines (MySQL views, routines, triggers, events).
+     *
+     * AIDEV-NOTE: the content fingerprint compares ROWS and is blind to who owns them, so a
+     * restore that handed every table to another record's role (the renamed-user case)
+     * fingerprinted equal and the move switched. A MySQL definer naming another user runs
+     * with THAT user's privileges, which on a shared engine is another tenant's database.
+     *
+     * @throws IOException naming the count; nothing was switched
+     */
+    private void requireOwnedBy(EngineHost host, String handle, String database, String user)
+            throws IOException {
+        List<String> command = host.engine().foreignOwnershipCommand(host.rootUser(), database, user);
+        if (command == null) {
+            return;
+        }
+        DockerClient.ExecResult result = dockerFor(host.serverId()).exec(handle, command,
+            host.engine().logicalEnv(host.rootPassword(), null));
+        String answer = result.stdout().trim();
+        if (result.exitCode() != 0 || !"0".equals(answer)) {
+            throw new IOException("Ownership check failed after the restore into engine '"
+                + host.name() + "': " + (result.exitCode() != 0
+                    ? "exit " + result.exitCode() + ": " + result.stderr().trim()
+                    : (answer.isEmpty() ? "role '" + user + "' does not exist"
+                        : answer + " object(s) of '" + database + "' belong to a role other than '"
+                            + user + "'"))
+                + "; nothing was switched");
+        }
     }
 
     /**

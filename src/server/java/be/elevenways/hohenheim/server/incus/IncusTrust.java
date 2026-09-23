@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.security.NftRunner;
+import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -144,7 +145,8 @@ public final class IncusTrust {
             throw Violations.ofForm(violation("identity_generation_failed")
                 .withArg("detail", String.valueOf(e.getMessage())));
         } finally {
-            deleteRecursively(directory);
+            // Best effort: a leftover temp directory holds a key we already stored.
+            FileTrees.deleteQuietly(directory);
         }
     }
 
@@ -171,20 +173,6 @@ public final class IncusTrust {
                 .withArg("detail", String.valueOf(e.getMessage())));
         }
         Blast.slog("hohenheim.host.incus_enrolled", Map.of("server", name));
-    }
-
-    private static void deleteRecursively(Path directory) {
-        if (directory == null) {
-            return;
-        }
-        try (var entries = Files.list(directory)) {
-            for (Path entry : entries.toList()) {
-                Files.deleteIfExists(entry);
-            }
-            Files.deleteIfExists(directory);
-        } catch (IOException ignored) {
-            // Best effort: a leftover temp directory holds a key we already stored.
-        }
     }
 
     private static Microcopy violation(String key) {

@@ -184,15 +184,21 @@ public final class WorkloadNetworkPolicy {
                 .append(' ').append(rule).append('\n');
         }
 
-        NftRunner.Result applied = this.runner.run(List.of("-f", "-"), ruleset.toString());
-        if (!applied.ok()) {
-            throw new IOException("REFUSED to deploy '" + network.name() + "': nft rejected the"
-                + " network policy (exit " + applied.exitCode() + "): " + applied.failureText());
-        }
+        // Apply and read-back under the table lock: a concurrent removeTableIfEmpty must
+        // never delete the table between our write and our verify (see NftChains).
+        this.chains.exclusively(() -> {
+            NftRunner.Result applied = this.runner.run(List.of("-f", "-"), ruleset.toString());
+            if (!applied.ok()) {
+                throw new IOException("REFUSED to deploy '" + network.name() + "': nft rejected"
+                    + " the network policy (exit " + applied.exitCode() + "): "
+                    + applied.failureText());
+            }
 
-        String refusal = "REFUSED to deploy '" + network.name() + "'";
-        this.chains.verify(refusal, forwardChain(key), "forward", forward);
-        this.chains.verify(refusal, inputChain(key), "input", input);
+            String refusal = "REFUSED to deploy '" + network.name() + "'";
+            this.chains.verify(refusal, forwardChain(key), "forward", forward);
+            this.chains.verify(refusal, inputChain(key), "input", input);
+            return null;
+        });
     }
 
     /**
@@ -239,16 +245,20 @@ public final class WorkloadNetworkPolicy {
             return;
         }
         String key = chainKey(networkName);
-        for (String chain : List.of(forwardChain(key), inputChain(key))) {
-            this.chains.remove(chain);
-        }
-        // AIDEV-NOTE: removal used to stop at the chains, so the table outlived every
-        // workload it ever held -- one empty hohenheim_net_<namespace> per namespace,
-        // forever (two were found and removed by hand on daystrom 2026-08-23). This only
-        // fires when the table has nothing left in it, so the OTHER owner of this same
-        // table (ProcessNetworkPolicy, keyed on uids) keeps its chains and a live
-        // namespace's table survives.
-        this.chains.removeTableIfEmpty();
+        this.chains.exclusively(() -> {
+            for (String chain : List.of(forwardChain(key), inputChain(key))) {
+                this.chains.remove(chain);
+            }
+            // AIDEV-NOTE: removal used to stop at the chains, so the table outlived every
+            // workload it ever held -- one empty hohenheim_net_<namespace> per namespace,
+            // forever (two were found and removed by hand on daystrom 2026-08-23). This only
+            // fires when the table has nothing left in it, so the OTHER owner of this same
+            // table (ProcessNetworkPolicy, keyed on uids) keeps its chains and a live
+            // namespace's table survives. The whole removal runs under the table lock, so a
+            // deploy cannot land between the emptiness check and the delete.
+            this.chains.removeTableIfEmpty();
+            return null;
+        });
     }
 
     /** @return the nft chain identifier suffix for a Docker network name */
@@ -331,10 +341,7 @@ public final class WorkloadNetworkPolicy {
             }
             // Refuse private, loopback, unspecified, shared, benchmarking and multicast
             // destinations before the public-port exception, including the OWN gateway.
-            List<String> denied = new ArrayList<>(TenantNetworkRanges.DENIED_V4);
-            denied.addAll(List.of("0.0.0.0/8", "127.0.0.0/8", "100.64.0.0/10",
-                "192.0.0.0/24", "198.18.0.0/15", "224.0.0.0/4", "240.0.0.0/4"));
-            for (String range : denied) {
+            for (String range : TenantNetworkRanges.HOST_DENIED_V4) {
                 rules.add("ip saddr " + network.ipv4Subnet() + " ip daddr " + range + " drop");
             }
             for (Integer port : new Integer[] {

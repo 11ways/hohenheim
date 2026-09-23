@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -58,7 +59,7 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
             Map<String, Object> entry = new HashMap<>();
             entry.put("peerName", peer != null ? peer.get(DnsPeerModel.NAME) : "(deleted peer)");
             entry.put("transferHost", peer != null ? peer.get(DnsPeerModel.TRANSFER_HOST) : "");
-            entry.put("editTarget", CmsRoutes.detail("admin", "dns-zone-peers",
+            entry.put("editTarget", CmsRoutes.detail(HohenheimSlugs.ADMIN, DnsZonePeerResource.SLUG,
                 link.get(DnsZonePeerModel.ID)));
             // Freshness as probed from this primary: what the peer served, when, and
             // whether that lag has outlived the stale window.
@@ -92,7 +93,7 @@ public final class DnsZoneSecondariesPage implements RecordScopedPage<Row> {
         // Create form + prefill query parameter: composed off CmsEndpoints, since
         // CmsRoutes.create returns the RouteTarget interface (no with(...)).
         vars.put("attachPeerTarget", CmsEndpoints.CREATE_FORM
-            .with(CmsEndpoints.PANEL_PARAM, "admin")
+            .with(CmsEndpoints.PANEL_PARAM, HohenheimSlugs.ADMIN)
             .with(CmsEndpoints.RESOURCE_PARAM, "dns-zone-peers")
             .with(HohenheimParams.ZONE_ID_PREFILL, zoneId));
         vars.put("recordTabs", recordTabs(conduit));

@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.build.BuildLog;
 import be.elevenways.hohenheim.server.build.BuildQuota;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
@@ -15,6 +14,7 @@ import be.elevenways.hohenheim.server.source.DeployStatuses;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.hohenheim.server.source.GitRepository;
+import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.Blast;
@@ -123,9 +123,20 @@ public final class WorkspaceBuilds {
      */
     public @NonNull Outcome deploy(int instanceId, @Nullable String ref,
                                    @NonNull DeployTrigger trigger) {
+        // The whole verb holds the workspace's operation lock: the checkout is an exec into
+        // the running container, and a second deploy's restart must not replace the
+        // container under it. QUEUED, like the application lane: a push of N+1 during the
+        // deploy of N must still deploy N+1.
+        return this.instances.operations().exclusive(instanceId,
+            InstanceOperationLock.Contention.QUEUE, () -> deployLocked(instanceId, ref, trigger));
+    }
 
-        // The same gate a power action asks for: a deploy replaces the running process.
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
+    /** {@link #deploy}'s body; the caller holds the workspace's operation lock. */
+    private @NonNull Outcome deployLocked(int instanceId, @Nullable String ref,
+                                          @NonNull DeployTrigger trigger) {
+        // The same admission a power action asks for: a deploy replaces the running
+        // process, and a workspace booted without its database credentials looks healthy.
+        InstanceService.requireDeployAdmitted(instanceId);
 
         Resolved resolved = this.instances.resolve(instanceId);
         requireWorkspace(resolved);
@@ -242,6 +253,15 @@ public final class WorkspaceBuilds {
         if (repository.isEmpty()) {
             throw Violations.ofForm(violation("source_no_repository"));
         }
+        // Both reach git's argv inside the container: a ref git would read as an option (or
+        // that is no ref at all) and a transport helper URL (ext::) are refused before the
+        // script exists, stored values from before the write gate included.
+        if (!GitRefNames.isValid(ref)) {
+            throw Violations.ofForm(violation("source_ref_invalid"));
+        }
+        if (!GitRepository.isSupportedCloneUrl(repository)) {
+            throw Violations.ofForm(violation("source_repository_url_refused"));
+        }
 
         Map<String, String> credentials = Map.of();
 
@@ -276,12 +296,12 @@ public final class WorkspaceBuilds {
         String quotedDir = shellQuote(CHECKOUT_PATH);
         String script = "set -e\n"
             + "if [ -d " + quotedDir + "/.git ]; then\n"
-            + "  git -C " + quotedDir + " remote set-url origin " + quotedUrl + "\n"
-            + "  git -C " + quotedDir + " fetch --prune --tags origin " + quotedRef + "\n"
+            + "  git -C " + quotedDir + " remote set-url -- origin " + quotedUrl + "\n"
+            + "  git -C " + quotedDir + " fetch --prune --tags -- origin " + quotedRef + "\n"
             + "  git -C " + quotedDir + " checkout --detach FETCH_HEAD\n"
             + "else\n"
             + "  rm -rf " + quotedDir + "\n"
-            + "  git clone --branch " + quotedRef + " " + quotedUrl + " " + quotedDir + "\n"
+            + "  git clone --branch " + quotedRef + " -- " + quotedUrl + " " + quotedDir + "\n"
             + "fi\n"
             + "echo " + shellQuote(COMMIT_MARKER) + "$(git -C " + quotedDir
             + " rev-parse HEAD)\n";
@@ -320,8 +340,17 @@ public final class WorkspaceBuilds {
             return false;
         }
 
+        // The source's declared build detail: the command's working directory under the
+        // checkout, its build-only environment (redacted from the log like any secret),
+        // and a timeout that can only shorten the lane's own cap.
+        Map<String, String> environment = SourceBuildDetail.environment(settings);
+        for (String value : environment.values()) {
+            log.redact(value);
+        }
         ExecSupport.ExecOutcome run = exec(resolved, command,
-            ExecSupport.ExecOptions.in(CHECKOUT_PATH));
+            ExecSupport.ExecOptions.in(SourceBuildDetail.workingDirectory(settings, CHECKOUT_PATH))
+                .withEnv(environment),
+            SourceBuildDetail.timeoutMs(settings, BUILD_TIMEOUT_MS));
         log.append(run.outputTail());
 
         if (!run.succeeded()) {
@@ -336,12 +365,20 @@ public final class WorkspaceBuilds {
     private ExecSupport.@NonNull ExecOutcome exec(@NonNull Resolved resolved,
                                                   @NonNull String script,
                                                   ExecSupport.@NonNull ExecOptions options) {
+        return exec(resolved, script, options, BUILD_TIMEOUT_MS);
+    }
+
+    /** {@link #exec(Resolved, String, ExecSupport.ExecOptions)} under an explicit time budget. */
+    private ExecSupport.@NonNull ExecOutcome exec(@NonNull Resolved resolved,
+                                                  @NonNull String script,
+                                                  ExecSupport.@NonNull ExecOptions options,
+                                                  long timeoutMs) {
         if (!(resolved.runtime() instanceof ExecSupport support)) {
             throw Violations.ofForm(violation("exec_unsupported"));
         }
         try {
             return support.runExec(resolved.spec(), List.of("/bin/bash", "-lc", script),
-                options, BUILD_TIMEOUT_MS);
+                options, timeoutMs);
         } catch (IOException failed) {
             throw Violations.ofForm(violation("workspace_exec_failed")
                 .withArg("reason", String.valueOf(failed.getMessage())));

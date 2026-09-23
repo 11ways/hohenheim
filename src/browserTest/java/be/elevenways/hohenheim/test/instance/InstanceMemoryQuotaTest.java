@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import be.elevenways.zenit.common.validation.Violations;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,8 @@ class InstanceMemoryQuotaTest extends HohenheimTestBase {
     private static final String MEMORY_BUCKET = InstanceQuota.memoryBucketOf("");
     private static final String COUNT_BUCKET = InstanceQuota.bucketKeyOf("");
 
+    private static HostFixtures.LocalHostState localBefore;
+
     private Integer previousMemoryCap;
     private Integer previousCountCap;
 
@@ -69,7 +72,16 @@ class InstanceMemoryQuotaTest extends HohenheimTestBase {
      */
     @BeforeAll
     static void makeSomewhereToPlace() {
+        localBefore = HostFixtures.captureLocal();
         HostFixtures.makeLocalPlaceable(65536);
+    }
+
+    /** Hand the shared local host back as it was: a later class in this fork may need it blocked. */
+    @AfterAll
+    static void restoreTheLocalHost() {
+        if (localBefore != null) {
+            localBefore.restore();
+        }
     }
 
     @AfterEach

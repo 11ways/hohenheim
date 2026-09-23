@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.application;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -11,16 +10,17 @@ import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.host.HostLeases;
-import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
+import be.elevenways.hohenheim.server.instance.PublishedPortProbe;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
-import be.elevenways.hohenheim.server.util.EnvVars;
+import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -33,18 +33,11 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -60,13 +53,21 @@ import java.util.TreeMap;
  * while the prior release keeps serving. Rollback is the SAME gated operation over the
  * RETAINED release's digest-pinned instance settings -- no rebuild, no source, no tag.
  *
- * AIDEV-NOTE: where the atomicity of the traffic switch comes from -- this engine runs
- * inside the construction of the INCOMING routing generation (SiteDispatcher builds the
- * whole new RouteTable before the volatile swap, and pins every in-flight request to the
- * generation it arrived on). The engine only ever RETURNS a fully-probed upstream, so a
- * request is either pinned to the outgoing generation (old release, kept running through
- * the drain window) or dispatched by the new one (candidate, already healthy). No
- * request can observe a half-configured state; there is no in-place mutation to race.
+ * AIDEV-NOTE: where the atomicity of the traffic switch comes from -- the ROLE flip plus
+ * the application's upstream GENERATION ({@link ApplicationUpstreams}). The route table no
+ * longer changes on a release at all: a site's route names the APPLICATION, and its
+ * instance upstream handler resolves the serving release's address lazily, re-resolving
+ * whenever the generation moves. The engine flips the roles only after the candidate passed
+ * its probe and bumps the generation right after, so a request is forwarded either to the
+ * old release (still running through the drain window) or to the candidate (already
+ * healthy); no request can be sent to a release that is not serving-ready.
+ *
+ * AIDEV-NOTE: every operation of one application -- converge, rollback, the drain that
+ * follows either, an artifact deploy, a backup -- holds the application's
+ * {@link InstanceOperationLock}. A drain that is still pending when the NEXT operation
+ * starts is completed FIRST, under that lock ({@link #completePendingDrains}); otherwise a
+ * release and a rollback inside one drain window each reclaimed the other's retained
+ * release and the application was left with no rollback target at all.
  *
  * AIDEV-NOTE: retention/reclaim policy -- exactly ONE superseded release is retained per
  * application (role {@code retired}: the instance row with the digest-pinned spec plus its
@@ -107,7 +108,7 @@ public final class ReleaseEngine {
         StringBuilder text = new StringBuilder("application:").append(applicationId);
         appendCanonical(text, canonical);
         appendDatabaseLinks(text, applicationId);
-        return sha256(text.toString());
+        return SecureTokens.sha256Hex(text.toString());
     }
 
     /**
@@ -164,21 +165,6 @@ public final class ReleaseEngine {
             text.append(number.doubleValue());
         } else {
             text.append(value);
-        }
-    }
-
-    private static @NonNull String sha256(@NonNull String text) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                .digest(text.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(64);
-            for (byte b : digest) {
-                hex.append(Character.forDigit((b >> 4) & 0xF, 16))
-                   .append(Character.forDigit(b & 0xF, 16));
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException(impossible);
         }
     }
 
@@ -342,16 +328,23 @@ public final class ReleaseEngine {
      * moved tag cannot change what this deploys.
      *
      * AIDEV-NOTE: the operator verbs mint a candidate for the same application a webhook
-     * converge does, so they take the SAME per-application convergence lock -- a rollback
+     * converge does, so they take the SAME per-application operation lock -- a rollback
      * racing a push would otherwise leave both their candidates role {@code serving}.
      *
      * @throws Violations when no rollback target exists or the candidate fails its
      *         probe (the current release keeps serving either way)
      */
     public static void rollback(int applicationId) {
-        synchronized (ConvergenceLocks.forApplication(applicationId)) {
-            rollbackLocked(applicationId);
-        }
+        // The admission every deploy lane shares, asked on the CALLER's thread: power on the
+        // application for a tenant-originated call (what the HTML lane's power check asks,
+        // so the API is no wider door) and every attached database ready -- a rollback
+        // boots a candidate like any release.
+        InstanceService.requireDeployAdmitted(applicationId);
+        // REFUSED while another operation of the application runs: a rollback is a person's
+        // answer to what they see serving NOW, and queueing it behind a converge would roll
+        // back whatever that converge left instead.
+        InstanceOperationLock.production().exclusive(applicationId,
+            InstanceOperationLock.Contention.REFUSE, () -> rollbackLocked(applicationId));
         // AIDEV-NOTE: no proxy reload any more, and that is the point of the re-keying. A
         // flip no longer changes the ROUTE TABLE at all -- the site's route names an
         // application, and the instance upstream handler re-resolves the serving release's
@@ -366,7 +359,7 @@ public final class ReleaseEngine {
             null);
     }
 
-    /** {@link #rollback}'s body; callers hold the application's convergence lock. */
+    /** {@link #rollback}'s body; callers hold the application's operation lock. */
     private static void rollbackLocked(int applicationId) {
         ApplicationReleases.inScopeUnchecked(applicationId, () -> {
             Row serving = ApplicationReleases.ownedServing(applicationId);
@@ -416,6 +409,7 @@ public final class ReleaseEngine {
                                                                 @NonNull Row serving,
                                                                 @NonNull Map<String, Object> desired) {
         int servingId = serving.get(InstanceModel.ID);
+        completePendingDrains(applicationId);
         Integer candidateId = null;
         InstanceService instances = new InstanceService();
         boolean exclusive = InstanceVolumes.hasExclusive(applicationId);
@@ -529,15 +523,46 @@ public final class ReleaseEngine {
                 Thread.currentThread().interrupt();
                 return;
             }
-            withScope(datasource, () -> ApplicationReleases.inScopeUnchecked(applicationId, () -> {
-                Row op = Models.get(ReleaseOperationModel.class).findById(opId);
-                if (op == null || !ReleaseOperationModel.STATUS_DRAINING.equals(
-                        op.get(ReleaseOperationModel.STATUS))) {
-                    return;
-                }
-                completeDrain(applicationId, op, retiredId, servingImage, "drain window elapsed");
-            }));
+            // The drain is an operation of the application like any other: it runs holding
+            // the application's lock, QUEUED behind whatever is running, and re-reads its
+            // operation under it -- a newer operation may already have completed it.
+            try {
+                withScope(datasource, () -> InstanceOperationLock.production().exclusive(
+                    applicationId, InstanceOperationLock.Contention.QUEUE,
+                    () -> ApplicationReleases.inScopeUnchecked(applicationId, () -> {
+                        Row op = Models.get(ReleaseOperationModel.class).findById(opId);
+                        if (op == null || !ReleaseOperationModel.STATUS_DRAINING.equals(
+                                op.get(ReleaseOperationModel.STATUS))) {
+                            return;
+                        }
+                        completeDrain(applicationId, op, retiredId, servingImage,
+                            "drain window elapsed");
+                    })));
+            } catch (RuntimeException undrained) {
+                // Boot recovery finishes a DRAINING operation; the operation row says so.
+                Blast.log("RELEASE: drain of application", applicationId, "could not run -",
+                    reasonOf(undrained));
+            }
         });
+    }
+
+    /**
+     * Complete every drain of the application still waiting out its window, now: the
+     * superseded release is stopped (and retained), older ones reclaimed, the operation
+     * finished. Called under the application's lock before an operation switches traffic
+     * again, so the NEXT operation's reclaim can never take the release this drain retains.
+     */
+    private static void completePendingDrains(int applicationId) {
+        for (Row op : Models.get(ReleaseOperationModel.class).find()
+                .where(ReleaseOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+                .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
+                .where(ReleaseOperationModel.STATUS.eq(ReleaseOperationModel.STATUS_DRAINING))
+                .orderBy(ReleaseOperationModel.ID, SortOrder.ASC)
+                .all()) {
+            Integer retiredId = op.get(ReleaseOperationModel.RETIRED_INSTANCE_ID);
+            completeDrain(applicationId, op, retiredId != null ? retiredId : -1,
+                servingImageOf(applicationId), "superseded by a newer operation; drain completed early");
+        }
     }
 
     /** The shared drain completion: stop retained, reclaim older, prune, succeed. */
@@ -644,8 +669,12 @@ public final class ReleaseEngine {
                 // would act on an operation a rival controller is still driving. A host
                 // another controller holds is skipped: the release is that controller's.
                 Integer serverId = releaseHostOf(op);
-                Runnable recover = () ->
-                    ApplicationReleases.inScopeUnchecked(applicationId, () -> recoverOne(applicationId, op));
+                // Under the application's operation lock, like every other operation of it:
+                // a webhook arriving during boot must not converge beside the recovery.
+                Runnable recover = () -> InstanceOperationLock.production().exclusive(
+                    applicationId, InstanceOperationLock.Contention.QUEUE,
+                    () -> ApplicationReleases.inScopeUnchecked(applicationId,
+                        () -> recoverOne(applicationId, op)));
                 if (serverId == null) {
                     recover.run();
                 } else {
@@ -659,6 +688,9 @@ public final class ReleaseEngine {
         }
         sweepOrphanCandidates(answered);
         sweepDuplicateServing();
+        // Previews are the release lane's other workloads: an older controller copied their
+        // environment into instance settings as plaintext, and this boot pass seals it.
+        PreviewDeployments.sealPlaintextEnvironments();
     }
 
     /**
@@ -666,7 +698,7 @@ public final class ReleaseEngine {
      * row but {@link ApplicationReleases#ownedServing}'s own pick (the newest id) is
      * retired and reclaimed, loudly.
      *
-     * AIDEV-NOTE: this is a NET, not the fix -- the per-application convergence lock is.
+     * AIDEV-NOTE: this is a NET, not the fix -- the per-application operation lock is.
      * It exists because a lock is a per-PROCESS guarantee while the state it prevents is
      * durable: a database written by a controller from before the lock (or by two of them)
      * can already hold it, and nothing else would ever notice -- {@link #reclaimOlderRetired}
@@ -824,7 +856,7 @@ public final class ReleaseEngine {
             throw Violations.ofForm(Microcopy.of("release_no_published_port")
                 .withFilter("scope", "violations"));
         }
-        probe(status.publishedPort(), healthPath(desired), serverId);
+        probe(status.publishedPort(), healthPathOf(desired), PublishedPortProbe.forServer(serverId));
     }
 
     /**
@@ -839,10 +871,14 @@ public final class ReleaseEngine {
      * two declared homes, one job each.
      */
     public static void probe(int port, @NonNull String path) {
-        probe(port, path, null);
+        probe(port, path, PublishedPortProbe.local());
     }
 
-    private static void probe(int port, @NonNull String path, @Nullable Integer serverId) {
+    /**
+     * {@link #probe(int, String)} through the lane of the host the workload runs on: its
+     * published port binds THAT host's loopback, never the controller's.
+     */
+    public static void probe(int port, @NonNull String path, @NonNull PublishedPortProbe lane) {
         Integer timeout = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Releases.PROBE_TIMEOUT_SECONDS);
         Integer interval = HohenheimSettings.VALUES.getValue(
@@ -850,31 +886,10 @@ public final class ReleaseEngine {
         long deadline = Now.millis()
             + Math.max(1, timeout != null ? timeout : 60) * 1000L;
         long pause = Math.max(50, interval != null ? interval : 500);
-        HttpClient client = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(2))
-            .build();
-        URI target = URI.create("http://127.0.0.1:" + port
-            + (path.startsWith("/") ? path : "/" + path));
-        HostShell remote = serverId == null || serverId == ServerModel.localServerId() ? null
-            : HostShell.forServer(Models.get(ServerModel.class).findById(serverId));
         String lastFailure = "no response";
         while (Now.millis() < deadline) {
             try {
-                int code;
-                if (remote == null) {
-                    HttpResponse<Void> response = client.send(HttpRequest.newBuilder(target)
-                            .timeout(Duration.ofSeconds(5)).GET().build(),
-                        HttpResponse.BodyHandlers.discarding());
-                    code = response.statusCode();
-                } else {
-                    HostShell.Result result = remote.run(
-                        "curl --silent --output /dev/null --write-out '%{http_code}'"
-                            + " --connect-timeout 2 --max-time 5 -- "
-                            + HostShell.quote(target.toString()), 10);
-                    String statusCode = result.text().trim();
-                    code = result.ok() && statusCode.matches("[0-9]{3}")
-                        ? Integer.parseInt(statusCode) : 0;
-                }
+                int code = lane.httpStatus(port, path);
                 if (code >= 200 && code < 400) {
                     return;
                 }
@@ -897,8 +912,12 @@ public final class ReleaseEngine {
             .withFilter("scope", "violations").withArg("reason", lastFailure));
     }
 
-    private static @NonNull String healthPath(@NonNull Map<String, Object> desired) {
-        String path = str(desired.get("health_path"));
+    /**
+     * THE health path a release or preview is probed on: the settings' {@code health_path},
+     * defaulting to the root.
+     */
+    public static @NonNull String healthPathOf(@NonNull Map<String, Object> settings) {
+        String path = str(settings.get("health_path"));
         return path.isEmpty() ? "/" : path;
     }
 
@@ -938,16 +957,14 @@ public final class ReleaseEngine {
         instance.set(InstanceModel.KIND, ReleaseKind.ID.toString());
         Map<String, Object> persisted = new LinkedHashMap<>(desired);
         instance.set(InstanceModel.CRASH_POLICY, str(persisted.remove("crash_policy")));
-        Map<String, String> environment = EnvVars.toMap(persisted.remove("environment_variables"));
+        Map<String, String> environment = InstanceVariables.detachEnvironment(persisted);
         instance.set(InstanceModel.SETTINGS, persisted);
         instance.set(InstanceModel.SERVER_ID, serverId);
         instance.set(InstanceModel.RUNTIME_ROLE, role);
         Models.get(InstanceModel.class).save(instance);
-        InstanceVariables variables = new InstanceVariables();
         int instanceId = instance.get(InstanceModel.ID);
         try {
-            environment.forEach((key, value) ->
-                variables.setValue(instanceId, null, key, InstanceVariableModel.KIND_SECRET, value));
+            new InstanceVariables().storeSecretEnvironment(instanceId, environment);
         } catch (RuntimeException failed) {
             destroyCandidateQuietly(instanceId);
             throw failed;

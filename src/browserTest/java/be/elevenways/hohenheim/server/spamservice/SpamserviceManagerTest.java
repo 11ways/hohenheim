@@ -368,13 +368,17 @@ class SpamserviceManagerTest {
             long started = System.nanoTime();
             manager.boot();
             long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
-            assertThat(elapsedMs).isLessThan(100);
+            // The blocked store holds its thread for 5 s: a bound well under that proves
+            // boot() queued instead of waiting, without failing on a slow CI scheduler.
+            assertThat(elapsedMs).as("boot() returns without waiting on the blocked store")
+                .isLessThan(1_500);
             assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
 
             long stopping = System.nanoTime();
             manager.stop();
             long stopElapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - stopping);
-            assertThat(stopElapsedMs).isLessThan(100);
+            assertThat(stopElapsedMs).as("stop() returns without waiting on the blocked store")
+                .isLessThan(1_500);
             release.countDown();
             await(() -> "stopped".equals(manager.snapshot().state()), 2_000);
         } finally {

@@ -224,5 +224,13 @@ class ThreatScorerTest {
             .as("step 5: ws.origin_refused rides the ws. rule").isEqualTo(2);
         assertThat(scorer.weightOf(SecurityEventTypes.WS_AUTH_REFUSED))
             .as("step 5: ws.auth_refused rides the same rule").isEqualTo(2);
+
+        // 6. A permission refusal is an authenticated, accountable actor: the lightest
+        //    weight there is, never the operator-tunable default (raised to 5 here).
+        ThreatScorer raisedDefault = new ThreatScorer(now::get,
+            () -> WINDOW_SECONDS, () -> BAN_THRESHOLD, () -> DECAY_PER_HIT, () -> 5);
+        assertThat(raisedDefault.weightOf(SecurityEventTypes.PERMISSION_DENIED))
+            .as("step 6: http.permission_denied keeps its explicit weight of 1 under a raised default")
+            .isEqualTo(1);
     }
 }

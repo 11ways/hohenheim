@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.dns.DnsApiErrorResponse;
 import be.elevenways.hohenheim.dns.DnsRecordDeleteResponse;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
@@ -13,9 +14,7 @@ import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.DnsRecordEdits;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
-import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -218,8 +217,7 @@ final class DnsRecordApiHandlers {
         // mint admin-permissioned keys for a narrower purpose, and every such key can
         // edit EVERY primary zone. API keys carry no per-zone scope today; adding one
         // means checking it here, not only on the endpoint.
-        if (!(conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal)) {
-            conduit.forbidden();
+        if (ApiConduits.requireKey(conduit) == null) {
             return null;
         }
         String rawOrigin = conduit.getParameter(HohenheimEndpoints.DNS_ORIGIN);
@@ -289,7 +287,7 @@ final class DnsRecordApiHandlers {
             row.set(DnsRecordModel.VALUE, String.valueOf(values.get("value")));
         }
         if (values.containsKey("ttl")) {
-            row.set(DnsRecordModel.TTL, DnsRecordEdits.intOrNull(values.get("ttl")));
+            row.set(DnsRecordModel.TTL, CmsSupport.parsedInt(values.get("ttl")));
         }
         // validate() always leaves the normalized per-type data map behind.
         row.set(DnsRecordModel.DATA, values.get("data"));

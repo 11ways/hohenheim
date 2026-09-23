@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -10,7 +11,6 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
-import be.elevenways.zenit.cms.common.resource.RowResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -48,7 +48,7 @@ import java.util.Set;
  * dependencies. Hidden from the sidebar -- reached through a stack's
  * Services tab. Saving never deploys; the stack's Deploy action does.
  */
-public class StackServiceResource extends RowResource {
+public class StackServiceResource extends ValidatedRowResource {
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(RelationPick.of(StackServiceModel.STACK_ID, StackModel.MODEL_ID).build())
@@ -121,38 +121,18 @@ public class StackServiceResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("stacks", row -> row.get(StackServiceModel.STACK_ID)).tab("services");
+        return ResourceParent.<Row>of(StackResource.SLUG, row -> row.get(StackServiceModel.STACK_ID)).tab(StackServicesPage.SLUG);
     }
 
     /** The stack's Services tab links here with ?stack_id= so the pick is preselected. */
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String stackId = conduit.getQueryParam("stack_id");
-        if (stackId != null && !stackId.isEmpty()) {
-            try {
-                values.put("stack_id", Integer.parseInt(stackId));
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
-            }
+        Integer stackId = CmsSupport.prefill(conduit, HohenheimParams.STACK_ID_PREFILL);
+        if (stackId != null) {
+            values.put(StackServiceModel.STACK_ID.getName(), stackId);
         }
         return Map.copyOf(values);
-    }
-
-    @Override
-    public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
-                                      @NonNull AccessContext accessContext) {
-        Map<String, Object> values = CmsSupport.mutable(coerced);
-        validate(values, null);
-        return super.persistRow(values, accessContext);
-    }
-
-    @Override
-    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
-                          @NonNull AccessContext accessContext) {
-        Map<String, Object> values = CmsSupport.mutable(coerced);
-        validate(values, existing);
-        super.updateRow(existing, values, accessContext);
     }
 
     /**
@@ -189,7 +169,8 @@ public class StackServiceResource extends RowResource {
      *  Canonical (trimmed) values are written BACK into the coerced map and record rows:
      *  validating a trimmed copy while persisting the raw one lets "web " slip past the
      *  sibling check and become an invalid Docker name. */
-    private void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
+    @Override
+    protected void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
         String name = trimmed(coerced.containsKey("name") ? coerced.get("name")
             : existing != null ? existing.get(StackServiceModel.NAME) : null);
         if (!StackResource.NAME_PATTERN.matcher(name).matches()) {
@@ -329,8 +310,8 @@ public class StackServiceResource extends RowResource {
         int index = -1;
         for (Row port : recordsOf(coerced, "ports")) {
             index++;
-            Integer container = intOrNull(port.get("container_port"));
-            if (container == null && intOrNull(port.get("host_port")) == null
+            Integer container = CmsSupport.parsedInt(port.get("container_port"));
+            if (container == null && CmsSupport.parsedInt(port.get("host_port")) == null
                 && trimmed(port.get("host_ip")).isEmpty()) {
                 continue;   // an untouched blank row the editor added
             }
@@ -340,13 +321,13 @@ public class StackServiceResource extends RowResource {
                     CmsSupport.violationText("port_container_required"));
             }
             for (String key : List.of("container_port", "host_port")) {
-                Integer value = intOrNull(port.get(key));
+                Integer value = CmsSupport.parsedInt(port.get(key));
                 if (value != null && (value < 1 || value > 65535)) {
                     throw Violations.ofField("ports." + index + "." + key, value,
                         CmsSupport.violationText("port_range"));
                 }
             }
-            Integer host = intOrNull(port.get("host_port"));
+            Integer host = CmsSupport.parsedInt(port.get("host_port"));
             if (host == null) {
                 continue;
             }
@@ -515,9 +496,5 @@ public class StackServiceResource extends RowResource {
 
     private static @NonNull String trimmed(@Nullable Object value) {
         return value != null ? String.valueOf(value).trim() : "";
-    }
-
-    private static @Nullable Integer intOrNull(@Nullable Object value) {
-        return value instanceof Number number ? number.intValue() : null;
     }
 }

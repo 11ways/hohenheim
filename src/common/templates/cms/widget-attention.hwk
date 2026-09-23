@@ -22,7 +22,7 @@
     <ul class="hh-attention-list">
         {% each data as item %}
         <li class={% item.target != null ? "hh-attention-item" : "hh-attention-item hh-attention-static" %}
-            data-severity={% item.severity %}>
+            data-severity={% item.severity.key %}>
             {% if item.target != null %}
             <a class="hh-attention-target" use:Zenit.route={% item.target %}>
                 {% render attentionContent(item) %}

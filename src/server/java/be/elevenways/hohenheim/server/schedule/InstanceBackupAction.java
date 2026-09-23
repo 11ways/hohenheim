@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -59,13 +58,10 @@ public class InstanceBackupAction extends InstanceScheduleAction {
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
         String name = instance != null ? instance.get(InstanceModel.NAME) : ("#" + instanceId);
 
-        try {
-            Alerts.send(NotificationEvents.BACKUP_FAILED,
-                    "Instance backup failed: " + name,
-                    "The scheduled backup of instance '" + name + "' failed: " + reason);
-        } catch (Exception notifyError) {
-            Blast.log("SCHEDULE: could not send backup-failure notification -",
-                    notifyError.getMessage());
-        }
+        Alerts.trySend(NotificationEvents.BACKUP_FAILED,
+            Microcopy.of("instance_backup_failed_subject").withFilter("scope", "alert")
+                .withArg("name", name),
+            Microcopy.of("instance_backup_failed_body").withFilter("scope", "alert")
+                .withArg("name", name).withArg("reason", reason));
     }
 }

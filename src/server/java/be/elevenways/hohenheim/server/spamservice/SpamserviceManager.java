@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.spamservice;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.server.SystemUsers;
+import be.elevenways.hohenheim.server.host.PrivilegedHelper;
+import be.elevenways.hohenheim.server.process.BoundedProcess;
 import be.elevenways.hohenheim.server.security.SecurityReportEnv;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.spamservice.client.SpamserviceClient;
@@ -24,7 +26,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -64,6 +65,7 @@ public final class SpamserviceManager {
     static final long INITIAL_BACKOFF_MS = 1_000;
     static final long MAX_BACKOFF_MS = 60_000;
     static final long STABLE_RUNTIME_MS = 60_000;
+    static final long OWNERSHIP_TIMEOUT_MS = 20_000;
 
     private static final Set<PosixFilePermission> OWNER_ONLY = EnumSet.of(
         PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE,
@@ -104,7 +106,7 @@ public final class SpamserviceManager {
     private volatile @Nullable String baseUrl;
     private volatile @Nullable String artifactHash;
     private volatile @Nullable String lastError;
-    private volatile String state = "stopped";
+    private volatile SpamserviceState state = SpamserviceState.STOPPED;
     private volatile boolean configurationPresent;
     private volatile boolean configurationEnabled;
     private volatile int consecutiveCrashes;
@@ -184,14 +186,14 @@ public final class SpamserviceManager {
             synchronized (this.lock) {
                 this.cleanupBlocked = true;
                 this.lastError = "Spamservice process-group cleanup was incomplete during shutdown";
-                this.state = "failed";
+                this.state = SpamserviceState.FAILED;
             }
         } else {
             synchronized (this.lock) {
                 if (this.process == current) {
                     this.process = null;
                 }
-                this.state = "stopped";
+                this.state = SpamserviceState.STOPPED;
             }
         }
         this.client = null;
@@ -218,13 +220,13 @@ public final class SpamserviceManager {
             this.desiredRunning = false;
             requested = ++this.generation;
             cancelRetryLocked();
-            this.state = "stopping";
+            this.state = SpamserviceState.STOPPING;
             current = this.process;
         }
         if (current != null) {
             current.process().destroy();
         }
-        submit(() -> stopGeneration(requested, "stopped"));
+        submit(() -> stopGeneration(requested, SpamserviceState.STOPPED));
     }
 
     public void restart() {
@@ -242,7 +244,7 @@ public final class SpamserviceManager {
             requested = ++this.generation;
             cancelRetryLocked();
             if (forceRestart) {
-                this.state = "restarting";
+                this.state = SpamserviceState.RESTARTING;
                 current = this.process;
             }
         }
@@ -284,7 +286,7 @@ public final class SpamserviceManager {
 
     public @NonNull Snapshot snapshot() {
         ManagedServiceProcess current = this.process;
-        return new Snapshot(this.configurationPresent, this.configurationEnabled, this.state,
+        return new Snapshot(this.configurationPresent, this.configurationEnabled, this.state.token(),
             current != null ? current.pid() : null, this.baseUrl, this.artifactHash,
             this.consecutiveCrashes, this.lastError);
     }
@@ -304,7 +306,7 @@ public final class SpamserviceManager {
                         this.desiredRunning = false;
                     }
                 }
-                stopGeneration(requested, "disabled");
+                stopGeneration(requested, SpamserviceState.DISABLED);
                 this.lastError = null;
                 return;
             }
@@ -313,17 +315,17 @@ public final class SpamserviceManager {
             ManagedServiceProcess current = this.process;
             if (!forceRestart && current != null && current.isAlive()
                     && config.equals(this.activeConfig)) {
-                if (this.client == null || !"ready".equals(this.state)) {
+                if (this.client == null || !this.state.ready()) {
                     installIntegration(requested, config, baseUrl(config.port()));
                 }
                 return;
             }
-            if (!stopOwnedProcess(requested, "stopped")) {
+            if (!stopOwnedProcess(requested, SpamserviceState.STOPPED)) {
                 return;
             }
             startGeneration(requested, config);
         } catch (Cancelled ignored) {
-            stopOwnedProcess(requested, "stopped");
+            stopOwnedProcess(requested, SpamserviceState.STOPPED);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             failStart(requested, "Spamservice startup interrupted");
@@ -334,7 +336,7 @@ public final class SpamserviceManager {
 
     private void startGeneration(long requested, Config original) throws Exception {
         Config config = original;
-        setState(requested, "preparing");
+        setState(requested, SpamserviceState.PREPARING);
         RuntimePaths paths = prepareRuntimePaths(this.runtimeRoot.resolve(), config.runAs(), this.ownership);
 
         if (config.controllerKey() == null || config.controllerKey().isBlank()) {
@@ -352,7 +354,7 @@ public final class SpamserviceManager {
 
         UnaryOperator<String> redactor = redactor(config.controllerKey());
         Map<String, String> migrationEnvironment = environment(config, paths, null, false);
-        setState(requested, "migrating");
+        setState(requested, SpamserviceState.MIGRATING);
         ManagedServiceProcess migration = launch(config, paths.instanceDirectory(), migrationEnvironment,
             command(config.maxHeapMb(), artifact.path(), true), redactor, null);
         adoptProcess(requested, migration);
@@ -377,7 +379,7 @@ public final class SpamserviceManager {
         String nonce = SecureTokens.randomToken(24);
         Map<String, String> runtimeEnvironment = environment(config, paths, nonce, true);
         String runtimeBaseUrl = baseUrl(config.port());
-        setState(requested, "starting");
+        setState(requested, SpamserviceState.STARTING);
         ManagedServiceProcess started = launch(config, paths.instanceDirectory(), runtimeEnvironment,
             command(config.maxHeapMb(), artifact.path(), false), redactor,
             Objects.requireNonNull(config.controllerKey()));
@@ -428,7 +430,7 @@ public final class SpamserviceManager {
             this.sinkInstaller.install(runtimeBaseUrl + EVENTS_PATH, reportingKey);
             synchronized (this.lock) {
                 ensureCurrentLocked(requested);
-                this.state = "ready";
+                this.state = SpamserviceState.READY;
             }
             this.reporterReconciler.reconcile();
         } catch (Cancelled ignored) {
@@ -439,7 +441,7 @@ public final class SpamserviceManager {
                 }
                 this.client = null;
                 this.baseUrl = null;
-                this.state = "degraded";
+                this.state = SpamserviceState.DEGRADED;
                 this.lastError = "Spamservice integration setup failed: " + messageOf(e);
                 scheduleRetryLocked(requested, false);
             }
@@ -470,7 +472,7 @@ public final class SpamserviceManager {
             }
             this.lastError = "Spamservice exited with code " + exited.exitValue()
                 + outputSuffix(exited.output());
-            this.state = "backoff";
+            this.state = SpamserviceState.BACKOFF;
             scheduleRetryLocked(requested, true);
         }
     }
@@ -479,7 +481,7 @@ public final class SpamserviceManager {
         if (!isCurrent(requested)) {
             return;
         }
-        if (!stopOwnedProcess(requested, "backoff")) {
+        if (!stopOwnedProcess(requested, SpamserviceState.BACKOFF)) {
             return;
         }
         synchronized (this.lock) {
@@ -489,7 +491,7 @@ public final class SpamserviceManager {
             this.client = null;
             this.baseUrl = null;
             this.lastError = error;
-            this.state = "backoff";
+            this.state = SpamserviceState.BACKOFF;
             if (this.desiredRunning && !this.shuttingDown) {
                 scheduleRetryLocked(requested, true);
             }
@@ -516,7 +518,7 @@ public final class SpamserviceManager {
         }, delay, TimeUnit.MILLISECONDS);
     }
 
-    private void stopGeneration(long requested, String nextState) {
+    private void stopGeneration(long requested, SpamserviceState nextState) {
         synchronized (this.lock) {
             if (this.generation != requested || this.shuttingDown) {
                 return;
@@ -525,7 +527,7 @@ public final class SpamserviceManager {
         stopOwnedProcess(requested, nextState);
     }
 
-    private boolean stopOwnedProcess(long requested, String nextState) {
+    private boolean stopOwnedProcess(long requested, SpamserviceState nextState) {
         ManagedServiceProcess current;
         synchronized (this.lock) {
             if (this.generation != requested) {
@@ -566,7 +568,7 @@ public final class SpamserviceManager {
         this.client = null;
         this.baseUrl = null;
         this.lastError = error;
-        this.state = "failed";
+        this.state = SpamserviceState.FAILED;
         cancelRetryLocked();
     }
 
@@ -588,7 +590,7 @@ public final class SpamserviceManager {
         }
     }
 
-    private void setState(long requested, String value) {
+    private void setState(long requested, SpamserviceState value) {
         synchronized (this.lock) {
             ensureCurrentLocked(requested);
             this.state = value;
@@ -700,7 +702,7 @@ public final class SpamserviceManager {
                 output.flush();
                 channel.force(true);
             }
-            String hash = hex(digest.digest());
+            String hash = SecureTokens.hex(digest.digest());
             Path target = executableDirectory.resolve("spamservice-server-" + hash + ".jar");
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
                 if (Files.isSymbolicLink(target) || !Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)
@@ -858,23 +860,23 @@ public final class SpamserviceManager {
             return;
         }
 
-        ProcessBuilder builder = new ProcessBuilder(ownershipCommand(path, runAs));
+        // The narrow helper when the installer put one here; the legacy chown grant otherwise.
+        ProcessBuilder builder = new ProcessBuilder(PrivilegedHelper.installedLocally()
+            ? helperOwnershipCommand(path) : ownershipCommand(path, runAs));
         SystemUsers.setEnvironment(builder, SystemUsers.safeEnvironment(System.getProperty("user.home")));
         builder.redirectErrorStream(true);
-        Process process = builder.start();
-        String output;
-        try (InputStream stdout = process.getInputStream()) {
-            output = new String(stdout.readAllBytes(), StandardCharsets.UTF_8).trim();
+        // AIDEV-NOTE: bounded and drained concurrently (BoundedProcess). An inline
+        // readAllBytes followed by an unbounded waitFor held the lifecycle thread forever
+        // behind a sudo that hung, and no later start, stop or restart could run.
+        BoundedProcess.Result result = BoundedProcess.run(builder, OWNERSHIP_TIMEOUT_MS, 8_192);
+        if (result.timedOut()) {
+            throw new IOException("Assigning Spamservice path ownership timed out after "
+                + OWNERSHIP_TIMEOUT_MS + " ms");
         }
-        try {
-            if (process.waitFor() != 0) {
-                throw new IOException("Could not assign Spamservice path ownership"
-                    + (output.isEmpty() ? "" : ": " + output));
-            }
-        } catch (InterruptedException exception) {
-            process.destroyForcibly();
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted while assigning Spamservice path ownership", exception);
+        String output = result.stdout().trim();
+        if (!result.succeeded()) {
+            throw new IOException("Could not assign Spamservice path ownership"
+                + (output.isEmpty() ? "" : ": " + output));
         }
 
         attributes = Files.readAttributes(path, "unix:uid,gid", LinkOption.NOFOLLOW_LINKS);
@@ -884,6 +886,16 @@ public final class SpamserviceManager {
         }
     }
 
+    /**
+     * The ownership hand-off through the privileged helper, which derives the owner from the
+     * spamservice account itself and refuses any path but the managed directories.
+     */
+    static @NonNull List<String> helperOwnershipCommand(@NonNull Path path) {
+        return PrivilegedHelper.argv(PrivilegedHelper.Verb.SPAMSERVICE_OWN,
+            path.toAbsolutePath().normalize().toString());
+    }
+
+    /** The LEGACY ownership hand-off, for a host whose installer predates the helper. */
     static @NonNull List<String> ownershipCommand(@NonNull Path path,
                                                    SystemUsers.@NonNull RunAsUser runAs) {
         String owner = String.valueOf(runAs.uid());
@@ -938,25 +950,11 @@ public final class SpamserviceManager {
             Thread.ofPlatform().daemon().name("spamservice-manager").unstarted(runnable));
     }
 
-    private static String sha256(Path path) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+    /** The artifact's digest, read WITHOUT following a symlink planted in its place. */
+    private static String sha256(Path path) throws IOException {
         try (InputStream input = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
-            byte[] buffer = new byte[64 * 1024];
-            int count;
-            while ((count = input.read(buffer)) != -1) {
-                if (count > 0) digest.update(buffer, 0, count);
-            }
+            return SecureTokens.sha256Hex(input);
         }
-        return hex(digest.digest());
-    }
-
-    private static String hex(byte[] bytes) {
-        StringBuilder result = new StringBuilder(bytes.length * 2);
-        for (byte value : bytes) {
-            result.append(Character.forDigit((value >> 4) & 0xf, 16));
-            result.append(Character.forDigit(value & 0xf, 16));
-        }
-        return result.toString();
     }
 
     private static String messageOf(Throwable error) {
@@ -971,10 +969,35 @@ public final class SpamserviceManager {
         return trimmed.isEmpty() ? "" : ": " + trimmed;
     }
 
+    /**
+     * One read of the manager's state; {@code state} stays the {@link SpamserviceState}
+     * TOKEN because the admin surfaces render it verbatim.
+     */
     public record Snapshot(boolean configured, boolean enabled, @NonNull String state,
                            @Nullable Long pid, @Nullable String baseUrl,
                            @Nullable String artifactHash, int consecutiveCrashes,
-                           @Nullable String lastError) {}
+                           @Nullable String lastError) {
+
+        /** The state as its vocabulary member, or null for a token no member carries. */
+        public @Nullable SpamserviceState runtimeState() {
+            return SpamserviceState.fromToken(this.state);
+        }
+
+        /** Whether the runtime is ready; an unknown token is never ready. */
+        public boolean ready() {
+            SpamserviceState parsed = runtimeState();
+            return parsed != null && parsed.ready();
+        }
+
+        /**
+         * Whether an operator should be told: the installation is configured and enabled
+         * and its state is not ready (an unknown token included -- fail closed).
+         */
+        public boolean needsAttention() {
+            SpamserviceState parsed = runtimeState();
+            return this.configured && this.enabled && (parsed == null || parsed.needsAttention());
+        }
+    }
 
     record Config(int id, boolean enabled, int port, SystemUsers.@NonNull RunAsUser runAs,
                   int maxHeapMb, @Nullable String controllerKey) {

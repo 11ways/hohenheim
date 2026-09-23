@@ -1,6 +1,6 @@
 # Hohenheim
 
-Reverse proxy / app manager. Routes hostnames to typed upstreams, supervises the containers and virtual machines behind them, handles Let's Encrypt TLS, auth, and a web admin UI. This is the Zenit-based rewrite of the original Node.js/AlchemyMVC Hohenheim; it lives on the `java-rewrite` branch (`master` is the Node original).
+Reverse proxy / app manager. Routes hostnames to typed upstreams, supervises the containers and virtual machines behind them, handles Let's Encrypt TLS, auth, and a web admin UI. This is the Zenit-based rewrite of the original Node.js/AlchemyMVC Hohenheim. Locally it is the `master` branch, which tracks `origin/java-rewrite`; the REMOTE `origin/master` is still the Node original, so never push this history there or pull from it.
 
 ## Stack
 
@@ -25,7 +25,10 @@ Reverse proxy / app manager. Routes hostnames to typed upstreams, supervises the
   and `shared-database-engines.md` for managed-database placement)
 - `tools/install-host.sh` THE host install procedure (idempotent, `--help`, `--dry-run`);
   `docs/deploy-native.md` is its long-form companion. Never hand-write an install step the
-  script already performs -- fix the script.
+  script already performs -- fix the script. Root work on a host (btrfs volumes, Spamservice
+  directory ownership) goes through the helper the script installs
+  (`server/host/PrivilegedHelper`, one sudoers line naming one file); never grant a bare
+  root binary such as chown or rm.
 
 ## Build and run
 
@@ -135,7 +138,7 @@ silently aborts used to make a run of nothing look green.
   `EngineHost.serving(row)` / `DatabaseInstances.handleOf(databaseId)` -- and no operation
   reads the placement itself. See `docs/shared-database-engines.md`.
 - Handlers are long-lived: created when a site loads, updated on config change, destroyed on removal. Not per-request.
-- ClientMain MUST call `HohenheimModels.registerAll()` + `HohenheimSources.register()` before `ClientZenitRuntime.main` (the browser has no MODELS/MODULES boot stage).
+- ClientMain registers nothing by hand: models self-register at class-load (the generated `BlastAutoLoadInit`) and record sources through the `HohenheimSources` module, which `ClientZenitRuntime` inits before hydration. The one explicit call is `HohenheimChannels.init()`, before `ClientZenitRuntime.main`, because the stats channel must exist before a Stats tag opens a link.
 
 ## Tasks, roles and operator visibility
 

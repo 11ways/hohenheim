@@ -8,6 +8,8 @@
 {% declare canRollback: Boolean = false %}
 {#- The trigger column is the release lane's vocabulary; a workspace build records none. -#}
 {% declare showTrigger: Boolean = true %}
+{#- How many columns the history table has, so the detail row spans all of them. -#}
+{% declare columnCount: Integer = 5 %}
 {% declare currentCommit: String = "" %}
 {% declare deployments: List %}
 {% declare returnUrl: String = "" %}
@@ -85,31 +87,7 @@
                         <pl-table-cell>{{ deploy.get("duration") }}</pl-table-cell>
                     </pl-table-row>
                     {% if deploy.get("error") != "" or deploy.get("hasLog") == true %}
-                    <pl-table-row data-detail>
-                        <pl-table-cell colspan="5" class="hh-deploy-detail">
-                            {% if deploy.get("error") != "" %}
-                            <div class="hh-deploy-error">
-                                <pl-icon name="triangle-exclamation"></pl-icon>
-                                <span>{{ deploy.get("error") }}</span>
-                            </div>
-                            {% /if %}
-                            {% if deploy.get("hasLog") == true %}
-                            <pl-collapsible>
-                                <pl-collapsible-trigger>
-                                    <pl-button variant={% "ghost" %} size={% "sm" %}>{{ t("build_log", scope: "deployments") }}</pl-button>
-                                </pl-collapsible-trigger>
-                                <pl-collapsible-content>
-                                    {#- pl-log-view, never a hand-rolled <pre>: it is the
-                                        follow-tail pane, it names its own scroll region for
-                                        assistive technology, and it bounds its own height. -#}
-                                    <pl-log-view class="hh-deploy-log"
-                                                 text={% deploy.get("log") %}
-                                                 label={% t("build_log", scope: "deployments") %}></pl-log-view>
-                                </pl-collapsible-content>
-                            </pl-collapsible>
-                            {% /if %}
-                        </pl-table-cell>
-                    </pl-table-row>
+                    {% render "hohenheim:cms/deploy-detail" var:deploy=deploy var:colspan=columnCount var:logLabel=t("build_log", scope: "deployments") %}
                     {% /if %}
                     {% /each %}
                 </pl-table-body>

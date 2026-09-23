@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
@@ -136,7 +137,7 @@ public class AccessRuleResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("access-lists",
+        return ResourceParent.<Row>of(HohenheimSlugs.ACCESS_LISTS,
             row -> row.get(AccessRuleModel.ACCESS_LIST_ID)).tab("rules");
     }
 

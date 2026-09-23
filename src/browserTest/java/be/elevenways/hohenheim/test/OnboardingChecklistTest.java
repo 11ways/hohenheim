@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.OnboardingCollector;
@@ -42,7 +43,7 @@ class OnboardingChecklistTest {
                 List<OnboardingStep> blocked = OnboardingCollector.collect();
                 assertThat(blocked.get(0).state())
                     .as("step 1: an enrolled but unadmitted host does not complete the step")
-                    .isEqualTo(OnboardingStep.TODO);
+                    .isEqualTo(OnboardingState.TODO);
                 assertThat(blocked.get(0).detail().key())
                     .as("step 1: and the detail names the pending admission")
                     .isEqualTo("checklist_host_pending");
@@ -55,7 +56,7 @@ class OnboardingChecklistTest {
                 List<OnboardingStep> admitted = OnboardingCollector.collect();
                 assertThat(admitted.get(0).state())
                     .as("step 2: an admitted host completes the step")
-                    .isEqualTo(OnboardingStep.DONE);
+                    .isEqualTo(OnboardingState.DONE);
                 assertThat(admitted.get(0).detail().key())
                     .as("step 2: with the plain detail")
                     .isEqualTo("checklist_host_detail");

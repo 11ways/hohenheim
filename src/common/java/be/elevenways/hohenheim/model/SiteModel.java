@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.RevisionableBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
+import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -140,45 +141,9 @@ public class SiteModel extends Model {
         // certificates back.
         SCHEMA.addLifecycleField(DELETED_AT);
 
-        // THE instance-link invariant: the kind DECLARES whether it resolves to an
-        // instance (UpstreamKindInfo.requiresInstance), and this is the only place that
-        // enforces it in both directions -- an instance upstream without a record to serve
-        // is a site that can only 502, and an instance_id on a static site is a dangling
-        // reference the "exposed by" reverse lookup would render as a lie.
-        SCHEMA.addBeforeValidateHook(context -> {
-            Row row = context.getRow();
-            if (row == null) return;
-            Object kind = effective(row, UPSTREAM_KIND);
-            if (kind == null) return;
-            UpstreamKindInfo info = UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind.toString()));
-            if (info == null) return;
-            Object instanceId = effective(row, INSTANCE_ID);
-            if (info.requiresInstance() && instanceId == null) {
-                throw violation("instance_id", null, "upstream_instance_required");
-            }
-            if (!info.requiresInstance() && instanceId != null) {
-                throw violation("instance_id", instanceId, "upstream_instance_unexpected");
-            }
-        });
+        // The upstream-shape refusals (instance link, TLS passthrough gates) are NOT
+        // registered here: see installUpstreamInvariants.
 
-        SCHEMA.addBeforeValidateHook(context -> {
-            Row row = context.getRow();
-            if (row == null || !UPSTREAM_TLS_PASSTHROUGH.equals(effective(row, UPSTREAM_KIND))) return;
-            Object authProvider = effective(row, AUTH_PROVIDER_ID);
-            if (authProvider != null) {
-                throw violation("auth_provider_id", authProvider, "tls_passthrough_no_http_auth");
-            }
-            Object accessList = effective(row, ACCESS_LIST_ID);
-            if (accessList != null) {
-                throw violation("access_list_id", accessList, "tls_passthrough_no_access_list");
-            }
-            Integer id = row.has(ID.getName()) ? row.get(ID) : null;
-            if (id != null) {
-                for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(id)) {
-                    SiteDomainModel.validateTlsPassthroughValues(domain);
-                }
-            }
-        });
         // AIDEV-NOTE: a HARD site delete used to leave its site_domains rows behind holding
         // a non-null live_route_key. The conflict scan skips them (the site lookup returns
         // null, so they read as not-live) but the UNIQUE index on live_route_key still
@@ -233,6 +198,79 @@ public class SiteModel extends Model {
             // belong to a site at all -- the APPLICATION owns them (instance_databases), and
             // it outlives every site that exposed it, so deleting a site must not touch
             // them. Deleting the application is what deletes its links.
+        }
+    }
+
+    /** Whether {@link #installUpstreamInvariants} already registered its hooks. */
+    private static boolean upstreamInvariantsInstalled;
+
+    /**
+     * Register the upstream-shape refusals on every site write; idempotent.
+     *
+     * AIDEV-NOTE: deliberately NOT from this class's static block. Hook order is
+     * registration order, and HohenheimWriteHooks calls this AFTER TenantWrites.install, so
+     * a delegated tenant writing a frozen operator column (instance_id, the access list, the
+     * auth provider) is answered by tenant_field_frozen -- the authority question -- instead
+     * of a shape refusal that would answer first and mask it. The DatabaseEngineGuards
+     * placement invariant is installed after TenantWrites for the same reason.
+     */
+    public static void installUpstreamInvariants() {
+        if (upstreamInvariantsInstalled) {
+            return;
+        }
+        upstreamInvariantsInstalled = true;
+        SCHEMA.addBeforeValidateHook(SiteModel::refuseInstanceLinkMismatch);
+        SCHEMA.addBeforeValidateHook(SiteModel::refuseHttpGatesOnPassthrough);
+    }
+
+    /**
+     * THE instance-link invariant: the kind DECLARES whether it resolves to an instance
+     * (UpstreamKindInfo.requiresInstance), and this is the only place that enforces it in
+     * both directions -- an instance upstream without a record to serve is a site that can
+     * only 502, and an instance_id on a static site is a dangling reference the "exposed by"
+     * reverse lookup would render as a lie.
+     *
+     * @throws Violations {@code upstream_instance_required} or {@code upstream_instance_unexpected}
+     */
+    private static void refuseInstanceLinkMismatch(@NonNull SaveToDatasource context) {
+        Row row = context.getRow();
+        if (row == null) return;
+        Object kind = effective(row, UPSTREAM_KIND);
+        if (kind == null) return;
+        UpstreamKindInfo info = UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind.toString()));
+        if (info == null) return;
+        Object instanceId = effective(row, INSTANCE_ID);
+        if (info.requiresInstance() && instanceId == null) {
+            throw violation("instance_id", null, "upstream_instance_required");
+        }
+        if (!info.requiresInstance() && instanceId != null) {
+            throw violation("instance_id", instanceId, "upstream_instance_unexpected");
+        }
+    }
+
+    /**
+     * A TLS passthrough site never decrypts, so it can carry no HTTP login gate or access
+     * list, and none of its domain rows an HTTP-only option.
+     *
+     * @throws Violations {@code tls_passthrough_no_http_auth}, {@code tls_passthrough_no_access_list}
+     *         or a domain row's own passthrough refusal
+     */
+    private static void refuseHttpGatesOnPassthrough(@NonNull SaveToDatasource context) {
+        Row row = context.getRow();
+        if (row == null || !UPSTREAM_TLS_PASSTHROUGH.equals(effective(row, UPSTREAM_KIND))) return;
+        Object authProvider = effective(row, AUTH_PROVIDER_ID);
+        if (authProvider != null) {
+            throw violation("auth_provider_id", authProvider, "tls_passthrough_no_http_auth");
+        }
+        Object accessList = effective(row, ACCESS_LIST_ID);
+        if (accessList != null) {
+            throw violation("access_list_id", accessList, "tls_passthrough_no_access_list");
+        }
+        Integer id = row.has(ID.getName()) ? row.get(ID) : null;
+        if (id != null) {
+            for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(id)) {
+                SiteDomainModel.validateTlsPassthroughValues(domain);
+            }
         }
     }
 

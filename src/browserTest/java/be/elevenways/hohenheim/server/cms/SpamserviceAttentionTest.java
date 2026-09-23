@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +43,7 @@ class SpamserviceAttentionTest {
         AttentionItem starting = AttentionCollector.spamserviceIssue(
             snapshot(true, true, "starting", null));
         assertThat(starting).as("an enabled unready spamservice must warn").isNotNull();
-        assertThat(starting.severity()).as("severity is a warning").isEqualTo("warning");
+        assertThat(starting.severity()).as("severity is a warning").isEqualTo(AttentionSeverity.WARNING);
         assertThat(starting.detail()).as("the item explains itself").isNotNull();
         assertThat(starting.detail().isLiteral())
             .as("without an error the detail is localized microcopy, never a raw state token")

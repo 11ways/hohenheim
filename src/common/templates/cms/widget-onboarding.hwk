@@ -6,5 +6,5 @@
     <pl-icon name="rocket"></pl-icon>
     <pl-empty-state-title>{{ t("title", scope: "onboarding") }}</pl-empty-state-title>
     <pl-empty-state-description>{{ t("description", scope: "onboarding") }}</pl-empty-state-description>
-    <a use:Zenit.route={% newSiteTarget %}><pl-button variant="primary">{{ t("create_site", scope: "onboarding") }}</pl-button></a>
+    <pl-button variant="primary" use:Zenit.route={% newSiteTarget %}>{{ t("create_site", scope: "onboarding") }}</pl-button>
 </pl-empty-state>

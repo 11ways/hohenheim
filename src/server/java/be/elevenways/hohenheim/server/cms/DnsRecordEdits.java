@@ -57,7 +57,7 @@ public final class DnsRecordEdits {
             : existing != null ? existing.get(DnsRecordModel.VALUE) : "";
         String value = valueValue != null ? String.valueOf(valueValue) : "";
 
-        Integer ttl = intOrNull(coerced.containsKey("ttl") ? coerced.get("ttl")
+        Integer ttl = CmsSupport.parsedInt(coerced.containsKey("ttl") ? coerced.get("ttl")
             : existing != null ? existing.get(DnsRecordModel.TTL) : null);
 
         // Normalize the type-specific extras into the shape the TYPE declares: exactly
@@ -172,19 +172,5 @@ public final class DnsRecordEdits {
             case "priority", "weight", "port" -> "data." + codecField;
             default -> codecField;
         };
-    }
-
-    public static @Nullable Integer intOrNull(@Nullable Object value) {
-        if (value instanceof Integer number) {
-            return number;
-        }
-        if (value instanceof String text && !text.isBlank()) {
-            try {
-                return Integer.parseInt(text.trim());
-            } catch (NumberFormatException ignored) {
-                return null;
-            }
-        }
-        return null;
     }
 }

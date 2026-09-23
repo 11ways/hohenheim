@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
@@ -13,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * A refused save must explain itself in words, never in machine tokens: the
  * 2026-08-15 starfleet rebuild read these exact refusals as SILENT because the
- * rerendered field errors carried raw {@code zenit.coercion.*} keys (no catalog
+ * rerendered field errors carried raw coercion keys (then {@code zenit.coercion.*}, no catalog
  * entry existed for the whole coercion vocabulary) and the LE request lane's
  * refusal only lives in a flash the next page renders.
  */
@@ -52,7 +53,7 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
         assertThat(noSibling.body())
             .as("the field error is resolved copy, not a raw key")
             .contains("Upstream must be chosen before its settings can be saved")
-            .doesNotContain("data-unresolved>zenit.coercion");
+            .doesNotContain("data-unresolved>" + SubmittedValueCoercion.SCHEMA_UNRESOLVED_MESSAGE_KEY);
 
         // Step 3: a nonsense scalar for a boolean setting is refused with the
         // boolean sentence, again with nothing written.
@@ -65,7 +66,7 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
         assertThat(afterBadBoolean).isEqualTo(before);
         assertThat(badBoolean.body())
             .contains("This is not a valid on/off value")
-            .doesNotContain("data-unresolved>zenit.coercion");
+            .doesNotContain("data-unresolved>" + SubmittedValueCoercion.INVALID_BOOLEAN_MESSAGE_KEY);
 
         // Step 4: the LE request lane refuses comma-joined domains with a 302
         // whose follow-up page RENDERS the flash naming the bad hostnames --

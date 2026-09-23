@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -14,8 +16,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * THE "does this caller answer for this hostname" predicate, shared by every tier that
@@ -164,6 +168,133 @@ public final class HostnameAuthority {
             return HostnameAuthority.specificityOf(domain.get(SiteDomainModel.HOSTNAME),
                 domain.get(SiteDomainModel.MATCH_TYPE));
         }
+
+        /** The live EXACT rows spelling exactly {@code name} (already canonical). */
+        private @NonNull List<Row> exactRowsAt(@NonNull String name) {
+            List<Row> rows = new ArrayList<>();
+            for (Row domain : this.domains) {
+                Row site = this.siteOf(domain);
+                if (site == null || site.get(SiteModel.DELETED_AT) != null) {
+                    continue;
+                }
+                String hostname = domain.get(SiteDomainModel.HOSTNAME);
+                String matchType = domain.get(SiteDomainModel.MATCH_TYPE);
+                if (SiteDomainModel.MATCH_EXACT.equals(HostnamePatterns.effectiveKind(hostname, matchType))
+                        && name.equals(SiteDomainModel.canonicalHostname(hostname, matchType))) {
+                    rows.add(domain);
+                }
+            }
+            return rows;
+        }
+    }
+
+    /**
+     * The neutral refusal of a hostname a tenant may not claim; it names nothing about who
+     * holds the name, so probing it enumerates nothing.
+     */
+    public static final String HOSTNAME_UNAVAILABLE = "hostname_unavailable";
+
+    /**
+     * Whether a site may take a NEW claim on an exact hostname: no ancestor of the name (the
+     * name itself included) may be held by a DIFFERENT owner than the claiming site's, unless
+     * a nearer operator delegation hands the namespace to that owner.
+     *
+     * AIDEV-NOTE: this is the claim-time half of {@link #canManage}. Hostname authority was
+     * decided by COVERAGE alone, so a tenant adding {@code shop.victim.com} to its own site
+     * became the only covering row for that name while tenant B held {@code victim.com}, and
+     * the same held for {@code mail.example.com} under a zone the operator hosts: the claim
+     * was then read as authority to write TXT/A records in someone else's zone and to order
+     * certificates for it. Recorded decision (2026-09-23): a tenant may not claim at or under
+     * a name another owner holds -- a live EXACT domain row on a site with other manage-grant
+     * subjects ({@link HohenheimAccess#manageSubjectsOf}), or a hosted DNS zone origin (zones
+     * are operator-owned by decision, see HohenheimAccess.declareGrantableModels) -- unless
+     * the operator delegated it. THE delegation is the existing wildcard-row mechanism: a
+     * live leading-{@code *.} row on a site with the claimant's own owner, rooted at or below
+     * the foreign holder. Tenants cannot author wildcard rows ({@code tenant_match_type_exact}),
+     * so a delegation is operator-authored by construction.
+     *
+     * AIDEV-NOTE: the NEAREST level decides, walking up from the name: a delegation rooted
+     * there allows, a foreign holder there refuses, and at one level the delegation wins
+     * (the operator placed it over that holder on purpose). Existing rows are never judged
+     * here -- this runs for NEW claims only, so every claim stored before the rule landed
+     * keeps resolving through {@link #canManage} exactly as it did.
+     *
+     * @return false when a foreign owner holds an ancestor, or when ownership is unreadable
+     */
+    public static boolean mayClaim(int siteId, @Nullable String hostname) {
+        return mayClaim(Snapshot.load(), zoneOrigins(), siteId, hostname);
+    }
+
+    /** Snapshot-reusing variant of {@link #mayClaim(int, String)}. */
+    public static boolean mayClaim(@NonNull Snapshot snapshot, @NonNull Set<String> zoneOrigins,
+                                   int siteId, @Nullable String hostname) {
+        String name = SiteDomainModel.canonicalHostname(hostname, SiteDomainModel.MATCH_EXACT);
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        Set<String> claimant = HohenheimAccess.manageSubjectsOf(SiteModel.MODEL_ID, siteId);
+        if (claimant == null) {
+            return false;
+        }
+        Map<Integer, Set<String>> owners = new HashMap<>();
+        List<Row> covering = snapshot.covering(name);
+        for (String level : DnsNames.candidateOrigins(name)) {
+            if (delegatesAt(snapshot, covering, level, claimant, owners)) {
+                return true;
+            }
+            // A hosted zone is the operator's, and the operator owns the empty subject set.
+            if (zoneOrigins.contains(level) && !claimant.isEmpty()) {
+                return false;
+            }
+            for (Row holder : snapshot.exactRowsAt(level)) {
+                if (!claimant.equals(ownerOf(holder.get(SiteDomainModel.SITE_ID), owners))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** The origin of every hosted zone, primary or replica, enabled or not (fail closed). */
+    public static @NonNull Set<String> zoneOrigins() {
+        Set<String> origins = new HashSet<>();
+        for (Row zone : Models.get(DnsZoneModel.class).find().all()) {
+            String origin = zone.get(DnsZoneModel.ORIGIN);
+            if (origin != null && !origin.isBlank()) {
+                origins.add(DnsNames.canonicalName(origin));
+            }
+        }
+        return origins;
+    }
+
+    /** Whether a same-owner leading-wildcard row covering the name is rooted at {@code level}. */
+    private static boolean delegatesAt(@NonNull Snapshot snapshot, @NonNull List<Row> covering,
+                                       @NonNull String level, @NonNull Set<String> claimant,
+                                       @NonNull Map<Integer, Set<String>> owners) {
+        for (Row domain : covering) {
+            String pattern = SiteDomainModel.canonicalHostname(domain.get(SiteDomainModel.HOSTNAME),
+                domain.get(SiteDomainModel.MATCH_TYPE));
+            if (pattern == null || !pattern.startsWith("*.") || !pattern.substring(2).equals(level)) {
+                continue;
+            }
+            Row site = snapshot.siteOf(domain);
+            if (site != null && claimant.equals(ownerOf(site.get(SiteModel.ID), owners))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @return the site's owner subjects, memoized per decision; null when unreadable */
+    private static @Nullable Set<String> ownerOf(@Nullable Integer siteId,
+                                                 @NonNull Map<Integer, Set<String>> owners) {
+        if (siteId == null) {
+            return null;
+        }
+        if (!owners.containsKey(siteId)) {
+            owners.put(siteId, HohenheimAccess.manageSubjectsOf(SiteModel.MODEL_ID, siteId));
+        }
+        return owners.get(siteId);
     }
 
     /**
@@ -214,9 +345,15 @@ public final class HostnameAuthority {
         if (deciding.isEmpty()) {
             return false;
         }
+        // AIDEV-NOTE: answered off the request's capability-scope memo (reachesRecord), never
+        // the per-record walk (canManageSite): TenantScopes asks this once per rendered row,
+        // and the per-record face paid one grant-store round trip per row for a set the same
+        // render had already enumerated -- the extra query the /manage budget tests caught.
+        // Both faces run the same precedence rows, so the answer is the same.
         for (Row domain : deciding) {
             Integer siteId = domain.get(SiteDomainModel.SITE_ID);
-            if (siteId == null || !HohenheimAccess.canManageSite(ctx, siteId)) {
+            if (siteId == null
+                    || !HohenheimAccess.reachesRecord(ctx, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE)) {
                 return false;
             }
         }

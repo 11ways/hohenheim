@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.net.Hostnames;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
@@ -26,10 +27,7 @@ public final class DnsNames {
         if (input == null) {
             return null;
         }
-        String origin = input.trim().toLowerCase(Locale.ROOT);
-        while (origin.endsWith(".")) {
-            origin = origin.substring(0, origin.length() - 1);
-        }
+        String origin = canonicalName(input);
         if (origin.isEmpty() || origin.contains("*")) {
             return null;
         }
@@ -46,10 +44,7 @@ public final class DnsNames {
         if (input == null) {
             return null;
         }
-        String owner = input.trim().toLowerCase(Locale.ROOT);
-        while (owner.endsWith(".")) {
-            owner = owner.substring(0, owner.length() - 1);
-        }
+        String owner = canonicalName(input);
         if (owner.isEmpty() || APEX.equals(owner)) {
             return APEX;
         }
@@ -79,11 +74,7 @@ public final class DnsNames {
 
     /** @return the name folded and stripped of trailing dots, comparable against an origin */
     public static @NonNull String canonicalName(@NonNull String fqdn) {
-        String name = fqdn.trim().toLowerCase(Locale.ROOT);
-        while (name.endsWith(".")) {
-            name = name.substring(0, name.length() - 1);
-        }
-        return name;
+        return Hostnames.stripTrailingDots(fqdn.trim().toLowerCase(Locale.ROOT));
     }
 
     /**

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -141,13 +142,9 @@ public final class EnvironmentVariableResource extends RowResource {
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String environmentId = conduit.getQueryParam("environment_id");
-        if (environmentId != null && !environmentId.isEmpty()) {
-            try {
-                values.put("environment_id", Integer.parseInt(environmentId));
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
-            }
+        Integer environmentId = CmsSupport.prefill(conduit, HohenheimParams.ENVIRONMENT_ID_PREFILL);
+        if (environmentId != null) {
+            values.put("environment_id", environmentId);
         }
         return values;
     }

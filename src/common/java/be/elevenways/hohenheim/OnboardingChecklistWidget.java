@@ -1,61 +1,21 @@
 package be.elevenways.hohenheim;
 
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.annotation.ZenitAutoLoad;
-import be.elevenways.zenit.common.edit.FormSpec;
-import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.widget.common.WidgetRegistry;
-import be.elevenways.zenit.widget.common.WidgetType;
-import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
- * Dashboard readiness checklist: the ordered steps between a fresh install and a deployed
- * workload, each one derived from the REAL gate rather than restating it.
+ * The stored type id of {@link HohenheimWidgets#ONBOARDING_CHECKLIST}, kept for existing call sites.
  *
- * The dashboard omits the whole band once every step is done, so it retires itself.
+ * AIDEV-NOTE: the widget type itself is declared once in {@link HohenheimWidgets}; this class only
+ * aliases its id. New code reads {@code HohenheimWidgets.ONBOARDING_CHECKLIST.id()}; once no call site names this
+ * class it can be deleted.
  *
  * @author Jelle De Loecker
- * @since  0.5.0
+ * @since  0.1.0
  */
-@ZenitAutoLoad
-public final class OnboardingChecklistWidget implements WidgetType {
+public final class OnboardingChecklistWidget {
 
-    public static final Identifier ID = Identifier.of("hohenheim", "onboarding_checklist");
-    public static final Identifier DISPLAY_TEMPLATE = Identifier.of("hohenheim", "cms/widget-onboarding-checklist");
+    public static final Identifier ID = HohenheimWidgets.ONBOARDING_CHECKLIST.id();
 
-    public static final OnboardingChecklistWidget INSTANCE = new OnboardingChecklistWidget();
-
-    static {
-        WidgetRegistry.INSTANCE.register(INSTANCE);
-    }
-
-    private final FormSpec configSpec = FormSpec.builder().build();
-
-    private OnboardingChecklistWidget() {}
-
-    @Override
-    public @NonNull Identifier id() {
-        return ID;
-    }
-
-    @Override
-    public @NonNull Microcopy label() {
-        return Microcopy.of("checklist_title").withFilter("scope", "onboarding_checklist");
-    }
-
-    @Override
-    public @NonNull FormSpec configSpec() {
-        return this.configSpec;
-    }
-
-    @Override
-    public @NonNull Icon icon() {
-        return Icon.of("list-check");
-    }
-
-    @Override
-    public @NonNull Identifier displayTemplateId() {
-        return DISPLAY_TEMPLATE;
+    private OnboardingChecklistWidget() {
     }
 }

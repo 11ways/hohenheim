@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.wordpress;
 
 import be.elevenways.hohenheim.instance.ReadinessKind;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -17,6 +18,7 @@ import be.elevenways.hohenheim.server.wordpress.WordPressPhp;
 import be.elevenways.hohenheim.server.wordpress.WordPressTemplateSeeder;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -74,11 +76,18 @@ class WordPressTemplateSeedTest extends HohenheimTestBase {
             GeneratedRows.sweeping("database", () -> {
                 for (Row instance : instances.find()
                         .where(InstanceModel.SERVER_ID.eq(hostId)).all()) {
-                    instances.delete(instance.get(InstanceModel.ID));
+                    InstanceRowCleanup.delete(instance.get(InstanceModel.ID));
                 }
             });
             for (Row row : databases.find().where(DatabaseModel.SERVER_ID.eq(hostId)).all()) {
                 databases.delete(row.get(DatabaseModel.ID));
+            }
+            // The shared engine the declared database was allocated on goes LAST among the
+            // host's rows: it refuses while a database still names it, and the host refuses
+            // (server_in_use, engines=1) while the engine is there.
+            Model engines = Models.get(DatabaseEngineModel.class);
+            for (Row engine : engines.find().where(DatabaseEngineModel.SERVER_ID.eq(hostId)).all()) {
+                engines.delete(engine.get(DatabaseEngineModel.ID));
             }
             Models.get(ServerModel.class).delete(hostId);
         }
@@ -155,7 +164,10 @@ class WordPressTemplateSeedTest extends HohenheimTestBase {
         assertThat(WordPressPhp.forVersion(null)).as("step 5: null version").isNull();
         assertThat(WordPressPhp.forVersion("7.4")).isEqualTo(WordPressPhp.PHP_7_4);
         assertThat(WordPressPhp.PHP_7_4.frozen()).as("step 5: 7.4 is the frozen tag").isTrue();
-        assertThat(WordPressPhp.PHP_8_1.frozen()).as("step 5: 8.1 is maintained").isFalse();
+        assertThat(WordPressPhp.PHP_8_1.frozen())
+            .as("step 5: 8.1 left the upstream matrix at its end of life").isTrue();
+        assertThat(WordPressPhp.recommended().frozen())
+            .as("step 5: a NEW site is recommended a maintained PHP").isFalse();
         List<String> tags = new ArrayList<>();
         for (WordPressPhp php : WordPressPhp.values()) {
             tags.add(php.tag());
@@ -166,6 +178,24 @@ class WordPressTemplateSeedTest extends HohenheimTestBase {
         long before = templates.find().count();
         Seeds.run(Datasources.getDefault(), new WordPressTemplateSeeder());
         assertThat(templates.find().count()).as("step 6: once means once").isEqualTo(before);
+
+        // 7. PRODUCTION SHAPE: an installation that already ran the original wave has its
+        //    ledger key spent, so every member added later must seed under a key of its own
+        //    or it would never reach that installation.
+        List<String> laterKeys = new ArrayList<>();
+        for (WordPressPhp php : WordPressPhp.values()) {
+            if (php.original()) {
+                assertThat(WordPressTemplateSeeder.ledgerKeyOf(php))
+                    .as("step 7: original member %s rides the original key", php)
+                    .isEqualTo(WordPressTemplateSeeder.LEDGER_KEY);
+            } else {
+                laterKeys.add(WordPressTemplateSeeder.ledgerKeyOf(php));
+            }
+        }
+        assertThat(laterKeys).as("step 7: later members exist").isNotEmpty();
+        assertThat(laterKeys).as("step 7: each later member has a key of its own")
+            .doesNotHaveDuplicates()
+            .doesNotContain(WordPressTemplateSeeder.LEDGER_KEY);
     }
 
     @Test

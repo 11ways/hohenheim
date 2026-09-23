@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.server.util.Watchdog;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.SocketException;
@@ -8,10 +10,7 @@ import java.net.UnixDomainSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SocketChannel;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The default {@link DockerTransport}: HTTP/1.1 over the daemon's local unix socket.
@@ -24,14 +23,8 @@ import java.util.concurrent.TimeUnit;
 public class UnixSocketDockerTransport implements DockerTransport, DockerStreamTransport {
 
     // AIDEV-NOTE: A blocking SocketChannel over AF_UNIX can't use Socket.setSoTimeout, so we bound
-    // each request with a watchdog that closes the channel on expiry; the blocked connect/read then
-    // throws ClosedChannelException, surfaced as a timeout.
-    private static final ScheduledExecutorService WATCHDOG =
-        Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "docker-unix-watchdog");
-            thread.setDaemon(true);
-            return thread;
-        });
+    // each request with a watchdog (the shared util.Watchdog) that closes the channel on expiry;
+    // the blocked connect/read then throws ClosedChannelException, surfaced as a timeout.
 
     private final UnixDomainSocketAddress address;
 
@@ -47,8 +40,7 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
     @Override
     public byte[] roundTrip(byte[] request, long timeoutMs, long maxResponseBytes) throws IOException {
         SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
-        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
-            () -> closeQuietly(channel), timeoutMs, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel), timeoutMs);
         try {
             channel.connect(address);
             try {
@@ -131,8 +123,8 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
         SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
         // The watchdog covers connect + request write ONLY: once the stream is
         // handed over, its lifetime is the consumer's decision, not a deadline's.
-        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
-            () -> closeQuietly(channel), connectTimeoutMs, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel),
+            connectTimeoutMs);
         try {
             channel.connect(address);
             writeFully(channel, ByteBuffer.wrap(request));

@@ -6,10 +6,10 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
-import be.elevenways.hohenheim.server.application.ConvergenceLocks;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
@@ -25,9 +25,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.management.LockInfo;
-import java.lang.management.ManagementFactory;
-import java.lang.management.ThreadInfo;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,12 +43,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * This is the falsifiable half of the per-application convergence lock. The overlap is
  * FORCED, not hoped for: the fake daemon holds the first converge inside the start of its
  * candidate -- so the lock is provably held -- and the second converge is only released
- * once the JVM itself reports it blocked on that exact monitor. Without the lock the two
+ * once the lock itself reports it queued on that application's operation lock. Without
+ * the lock the two
  * read the same serving release, both build and both flip, and the application ends with
  * two rows role {@code serving} of which only the newer is ever resolved again.
  *
  * WHAT THIS CANNOT PROVE: anything about a SECOND controller. The lock is an
- * intra-process monitor, exactly like the preview lane's; two controllers are excluded by
+ * intra-process lock (InstanceOperationLock); two controllers are excluded by
  * the host lease and the fenced writes, and {@link ReleaseEngine#sweepDuplicateServing()}
  * -- the second journey here -- is the net under both.
  */
@@ -133,7 +131,7 @@ class ReleaseConvergenceSerializationTest {
                 .isTrue();
 
             // 3. Converge B starts while A is stalled, and A is resumed only once B is
-            //    BLOCKED ON THE APPLICATION'S OWN MONITOR -- reported by the JVM, not
+            //    QUEUED ON THE APPLICATION'S OWN LOCK -- reported by the lock, not
             //    inferred from a sleep. The `!isAlive` arm is what keeps the falsification
             //    honest: with the lock removed B simply runs to completion here instead,
             //    the overlap still happens, and the invariants below are what fail.
@@ -141,10 +139,9 @@ class ReleaseConvergenceSerializationTest {
             AtomicReference<Throwable> bFailure = new AtomicReference<>();
             Thread b = converger(applicationId, bResult, bFailure, "converge-b");
             b.start();
-            Object lock = ConvergenceLocks.forApplication(applicationId);
             await("step 3: converge B either queued on the lock or ran past it",
-                () -> blockedOn(b, lock) || !b.isAlive());
-            boolean bQueuedOnTheLock = blockedOn(b, lock);
+                () -> queuedOn(applicationId, b) || !b.isAlive());
+            boolean bQueuedOnTheLock = queuedOn(applicationId, b);
 
             // 4. Both finish. B waited (it did not coalesce away), so it converged for
             //    real -- onto the release A had just made serving.
@@ -211,8 +208,8 @@ class ReleaseConvergenceSerializationTest {
                 //    while A was mid-flight. Asserted last so a lock-less engine fails on
                 //    the INVARIANT above rather than on the handshake.
                 assertThat(bQueuedOnTheLock)
-                    .as("step 8: converge B was blocked on the application's own"
-                        + " convergence monitor, not merely slow")
+                    .as("step 8: converge B was queued on the application's own"
+                        + " operation lock, not merely slow")
                     .isTrue();
             });
         } finally {
@@ -292,6 +289,69 @@ class ReleaseConvergenceSerializationTest {
         });
     }
 
+    /**
+     * A release and a rollback inside ONE drain window: the rollback completes the pending
+     * drain first, so neither operation's reclaim can take the release the other retains.
+     */
+    @Test
+    void aRollbackInsideADrainWindowNeverLeavesTheApplicationWithoutARollbackTarget() {
+        Db.run(datasource, () -> {
+            int applicationId = application("drain-race", "v1");
+            // A drain window no test waits out: the timer must never be what settles it.
+            HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 600);
+            try {
+                // 1. v1 serves (A), then v2 is released (B): A is retired and its drain is
+                //    PENDING for the whole window.
+                ApplicationReleases.converge(applicationId, Map.of());
+                int releaseA = ApplicationReleases.ownedServing(applicationId).get(InstanceModel.ID);
+                setSettings(applicationId, "v2");
+                ApplicationReleases.converge(applicationId, Map.of());
+                int releaseB = ApplicationReleases.ownedServing(applicationId).get(InstanceModel.ID);
+                Row forward = latestOp(applicationId);
+                assertThat((String) forward.get(ReleaseOperationModel.STATUS))
+                    .as("step 1: the forward release is still draining")
+                    .isEqualTo(ReleaseOperationModel.STATUS_DRAINING);
+
+                // 2. The operator rolls back INSIDE that window.
+                ReleaseEngine.rollback(applicationId);
+                int releaseC = ApplicationReleases.ownedServing(applicationId).get(InstanceModel.ID);
+                assertThat(releaseC)
+                    .as("step 2: the rollback minted a fresh serving release")
+                    .isNotIn(releaseA, releaseB);
+
+                // 3. The pending drain was completed FIRST, under the application's lock:
+                //    its timer, whenever it fires, finds nothing left to do -- the defect was
+                //    that timer reclaiming every retired release but its own, B included.
+                Row forwardAfter = Models.get(ReleaseOperationModel.class)
+                    .findById(forward.get(ReleaseOperationModel.ID));
+                assertThat((String) forwardAfter.get(ReleaseOperationModel.STATUS))
+                    .as("step 3: the superseded drain is finished, not still pending")
+                    .isEqualTo(ReleaseOperationModel.STATUS_SUCCEEDED);
+                assertThat((String) forwardAfter.get(ReleaseOperationModel.STEP_LOG))
+                    .as("step 3: and says why it finished early")
+                    .contains("superseded by a newer operation");
+
+                // 4. The rollback's own drain (finished here the way a restart would) keeps
+                //    B -- what the operator rolled back FROM -- as the rollback target.
+                ReleaseEngine.recoverInterrupted();
+                List<Row> retired = releasesWithRole(applicationId, InstanceModel.ROLE_RETIRED);
+                assertThat(retired)
+                    .as("step 4: exactly one release is retained as the rollback target")
+                    .hasSize(1);
+                assertThat((Object) retired.get(0).get(InstanceModel.ID))
+                    .as("step 4: and it is B, the release the rollback replaced")
+                    .isEqualTo(releaseB);
+                assertThat((Object) ApplicationReleases.ownedServing(applicationId)
+                        .get(InstanceModel.ID))
+                    .as("step 4: while the rolled-back release still serves")
+                    .isEqualTo(releaseC);
+            } finally {
+                HohenheimSettings.VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
+                ApplicationReleases.destroyFor(applicationId);
+            }
+        });
+    }
+
     // -- fixtures --------------------------------------------------------------
 
     private static Thread converger(int applicationId,
@@ -308,21 +368,18 @@ class ReleaseConvergenceSerializationTest {
     }
 
     /**
-     * Whether a thread is blocked entering EXACTLY this monitor.
+     * Whether a thread is queued on EXACTLY the application's operation lock.
      *
-     * AIDEV-NOTE: the JVM's own answer, so the handshake needs no sleep and no guess. A
-     * plain {@code Thread.State.BLOCKED} would also be true of a thread parked on the
-     * datasource or the daemon transport, which is precisely the false green that would
-     * make the falsification of this journey unreliable.
+     * AIDEV-NOTE: the lock's own answer (ReentrantLock.hasQueuedThread), so the handshake
+     * needs no sleep and no guess. A plain {@code Thread.State.WAITING} would also be true
+     * of a thread parked on the datasource or the daemon transport, which is precisely the
+     * false green that would make the falsification of this journey unreliable.
      */
-    private static boolean blockedOn(Thread thread, Object monitor) {
-        ThreadInfo info = ManagementFactory.getThreadMXBean().getThreadInfo(thread.threadId());
-        if (info == null) {
-            return false;
-        }
-        LockInfo lock = info.getLockInfo();
-        return Thread.State.BLOCKED.equals(info.getThreadState()) && lock != null
-            && lock.getIdentityHashCode() == System.identityHashCode(monitor);
+    private static boolean queuedOn(int applicationId, Thread thread) {
+        boolean[] queued = {false};
+        Db.run(datasource, () -> queued[0] =
+            InstanceOperationLock.production().isQueued(applicationId, thread));
+        return queued[0];
     }
 
     private static void awaitLatch(CountDownLatch latch) {

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.server.HohenheimCommsSettings;
 import be.elevenways.zenit.comms.CommsSettings;
+import be.elevenways.zenit.comms.server.cms.CommsSettingsLabels;
 import be.elevenways.zenit.server.setting.SettingsEditor;
 import org.junit.jupiter.api.Test;
 
@@ -36,8 +37,11 @@ class CommsSettingsFileTest extends HohenheimTestBase {
             .as("the mail chain is read from the comms file, keys relative to the comms group")
             .isEqualTo(DSN);
 
-        // 3. The settings page mounts the comms context and masks the secret chain.
-        navigateToApp("/admin/settings");
+        // 3. The settings page mounts the comms context and masks the secret chain. Sections
+        //    are LAZY (zenit-cms 380f48f): a bare load renders only the first group's rows,
+        //    so the comms channels section is named through ?section=, its JS-free lane.
+        navigateToApp("/admin/settings?section=setting-" + CommsSettingsLabels.MOUNT_KEY + "-"
+            + CommsSettings.Channels.CHANNELS.getName());
         waitForHydration();
         assertThat(page.locator("[data-path='comms.channels.mail_transports']").count())
             .as("the comms mount renders the mail transport chain setting")

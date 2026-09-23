@@ -414,27 +414,64 @@ class PaasApiTest extends HohenheimTestBase {
         assertThat(deploy.statusCode()).as("step 1: refused, typed").isEqualTo(422);
         assertThat(deploy.body()).as("step 1: named").contains("deploy_not_available");
 
-        // 2. Rollback on an INSTANCE-upstream site DISPATCHES to the release engine: with no
-        //    retained release the engine's own named refusal comes back, which proves
-        //    the call reached ReleaseEngine rather than a re-implementation.
+        // 2. Tenant A MANAGES site alpha but holds NO capability on the application behind
+        //    it. Managing a hostname is not power over the workload it routes to: deploy and
+        //    rollback are refused BEFORE anything is queued or minted, in the instance
+        //    gate's own words -- the old lane queued the deploy first and asked nothing.
         long opsBefore = Models.get(ReleaseOperationModel.class).find()
             .where(ReleaseOperationModel.FOR_ID.eq(applicationAId)).count();
-        HttpResponse<String> rollback = keyPost(keyPaasA,
+        long buildsBefore = Models.get(BuildOperationModel.class).find()
+            .where(BuildOperationModel.FOR_ID.eq(applicationAId)).count();
+        HttpResponse<String> powerlessDeploy = keyPost(keyPaasA,
+            "/api/v1/sites/" + siteAId + "/deploy", "");
+        assertThat(powerlessDeploy.statusCode())
+            .as("step 2: a site manager without instance power cannot deploy").isEqualTo(422);
+        assertThat(powerlessDeploy.body())
+            .as("step 2: refused by the instance gate, not queued")
+            .contains("instance_not_permitted")
+            .doesNotContain("queued");
+        HttpResponse<String> powerlessRollback = keyPost(keyPaasA,
             "/api/v1/sites/" + siteAId + "/rollback", "");
-        assertThat(rollback.statusCode()).as("step 2: refused, typed").isEqualTo(422);
-        assertThat(rollback.body())
-            .as("step 2: with the release engine's own violation")
-            .contains("release_no_rollback_target");
+        assertThat(powerlessRollback.statusCode())
+            .as("step 2: nor roll back").isEqualTo(422);
+        assertThat(powerlessRollback.body())
+            .as("step 2: with the same named refusal")
+            .contains("instance_not_permitted");
         assertThat(Models.get(ReleaseOperationModel.class).find()
                 .where(ReleaseOperationModel.FOR_ID.eq(applicationAId)).count())
-            .as("step 2: and no operation row was minted for the refused rollback")
+            .as("step 2: no release operation was minted for either refused verb")
             .isEqualTo(opsBefore);
+        assertThat(Models.get(BuildOperationModel.class).find()
+                .where(BuildOperationModel.FOR_ID.eq(applicationAId)).count())
+            .as("step 2: and no build record either -- nothing reached the application")
+            .isEqualTo(buildsBefore);
 
-        // 3. A site with no instance upstream and no git wrapper has no rollback lane at all.
+        // 3. With POWER on the application, rollback DISPATCHES to the release engine: with
+        //    no retained release the engine's own named refusal comes back, which proves
+        //    the call reached ReleaseEngine rather than a re-implementation.
+        RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
+            applicationAId, HohenheimAccess.POWER, true);
+        try {
+            HttpResponse<String> rollback = keyPost(keyPaasA,
+                "/api/v1/sites/" + siteAId + "/rollback", "");
+            assertThat(rollback.statusCode()).as("step 3: refused, typed").isEqualTo(422);
+            assertThat(rollback.body())
+                .as("step 3: with the release engine's own violation")
+                .contains("release_no_rollback_target");
+            assertThat(Models.get(ReleaseOperationModel.class).find()
+                    .where(ReleaseOperationModel.FOR_ID.eq(applicationAId)).count())
+                .as("step 3: and no operation row was minted for the refused rollback")
+                .isEqualTo(opsBefore);
+        } finally {
+            RecordGrants.revoke(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
+                applicationAId, HohenheimAccess.POWER);
+        }
+
+        // 4. A site with no instance upstream and no git wrapper has no rollback lane at all.
         HttpResponse<String> staticRollback = keyPost(keyPaasA,
             "/api/v1/sites/" + staticSiteId + "/rollback", "");
-        assertThat(staticRollback.statusCode()).as("step 3: refused, typed").isEqualTo(422);
-        assertThat(staticRollback.body()).as("step 3: named")
+        assertThat(staticRollback.statusCode()).as("step 4: refused, typed").isEqualTo(422);
+        assertThat(staticRollback.body()).as("step 4: named")
             .contains("rollback_not_available");
     }
 

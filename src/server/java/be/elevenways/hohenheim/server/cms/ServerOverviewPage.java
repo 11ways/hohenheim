@@ -1,9 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HostPreflightWidget;
-import be.elevenways.hohenheim.HostStateWidget;
-import be.elevenways.hohenheim.HostTrustWidget;
-import be.elevenways.hohenheim.HostWorkloadsWidget;
+import be.elevenways.hohenheim.HohenheimWidgets;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.host.HostFactView;
 import be.elevenways.hohenheim.host.HostPreflightReportView;
@@ -122,7 +120,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
         state.add(new WidgetInstance(StatusWidget.ID,
             Map.of("label", HohenheimWidgetCopy.localized("state", "server_overview")))
             .withData(stateBadges(server, locales, resolver)));
-        state.add(new WidgetInstance(HostStateWidget.ID, Map.of())
+        state.add(new WidgetInstance(HohenheimWidgets.HOST_STATE.id(), Map.of())
             .withData(ServerResource.statusCellOf(server)));
 
         String lastError = blankable(server.get(ServerModel.LAST_ERROR));
@@ -179,11 +177,11 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
         List<TrustLaneView> lanes = trustLanes(server);
         if (!lanes.isEmpty()) {
             bands.add(band(new WidgetTree(List.of(
-                new WidgetInstance(HostTrustWidget.ID, Map.of()).withData(lanes)))));
+                new WidgetInstance(HohenheimWidgets.HOST_TRUST.id(), Map.of()).withData(lanes)))));
         }
 
         bands.add(band(new WidgetTree(List.of(
-            new WidgetInstance(HostPreflightWidget.ID, Map.of()).withData(preflightReport(server))))));
+            new WidgetInstance(HohenheimWidgets.HOST_PREFLIGHT.id(), Map.of()).withData(preflightReport(server))))));
 
         HostCapacityView capacity = capacityOf(server, serverId);
         bands.add(band(new WidgetTree(List.of(
@@ -194,7 +192,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
                 .withData(capacityFacts(capacity, locales, resolver))))));
 
         bands.add(band(new WidgetTree(List.of(
-            new WidgetInstance(HostWorkloadsWidget.ID, Map.of())
+            new WidgetInstance(HohenheimWidgets.HOST_WORKLOADS.id(), Map.of())
                 .withData(workloadsOf(panelSlug, serverId))))));
 
         // AIDEV-NOTE: the per-record RECENT ACTIVITY band -- what an operator did to THIS
@@ -441,7 +439,7 @@ public final class ServerOverviewPage extends RecordDashboardPage<Row> {
                 "instance",
                 badgeOf(InstanceModel.STATUS, instance.get(InstanceModel.STATUS)),
                 instance.get(InstanceModel.CAPACITY_MB),
-                CmsRoutes.detail(panel, "instances", instance.get(InstanceModel.ID))));
+                CmsRoutes.detail(panel, HohenheimSlugs.INSTANCES, instance.get(InstanceModel.ID))));
         }
         for (Row stack : Models.get(StackModel.class).find()
                 .where(StackModel.SERVER_ID.eq(serverId)).all()) {

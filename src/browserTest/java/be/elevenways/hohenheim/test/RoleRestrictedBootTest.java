@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
-import be.elevenways.hohenheim.server.task.CleanOldActivity;
+import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
 import be.elevenways.hohenheim.server.task.MonitorStacks;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
@@ -147,7 +147,7 @@ class RoleRestrictedBootTest {
             .toList();
         assertThat(taskTypes)
             .as("step 7: role-free and DNS tasks are scheduled")
-            .contains(CleanOldActivity.class.getName(), ResignDnssecZones.class.getName());
+            .contains(BackupControlPlane.class.getName(), ResignDnssecZones.class.getName());
         assertThat(taskTypes)
             .as("step 7: disabled roles' tasks declared no schedules")
             .doesNotContain(

@@ -3,9 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
@@ -18,9 +16,6 @@ import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -91,18 +86,10 @@ public final class ManageInstanceResource extends InstanceResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> {
-            // Generated (product-tier-owned) instances stay off the delegated surface
-            // too: their one UI is the owning record's own page.
-            Criteria base = new CompositeCriteria(CompositeOperator.AND,
-                InstanceModel.DELETED_AT.isNull(), InstanceModel.GENERATED_BY.isNull());
-            Criteria scope = HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW);
-            if (scope == null) {
-                return AccessDecision.allow(QueryPredicate.of(base));
-            }
-            return AccessDecision.allow(QueryPredicate.of(
-                new CompositeCriteria(CompositeOperator.AND, base, scope)));
-        };
+        // Generated (product-tier-owned) instances stay off the delegated surface too:
+        // their one UI is the owning record's own page. The scope says so once, for this
+        // list and the instance picker alike.
+        return TenantScopes.INSTANCES.accessFunction();
     }
 
     @Override public boolean creatable() { return false; }

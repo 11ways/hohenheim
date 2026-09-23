@@ -63,7 +63,23 @@ public final class SshBackupTarget implements BackupTarget {
      */
     public SshBackupTarget(int serverId, @NonNull String basePath) {
         this.serverId = serverId;
-        this.basePath = basePath;
+        this.basePath = normalizedBase(basePath);
+    }
+
+    /**
+     * The base path without trailing slashes ("/" stays "/").
+     *
+     * AIDEV-NOTE: {@link #list} matches {@code find}'s output against {@code base + "/"}, so a
+     * configured {@code /backups/} matched nothing ("/backups//x" never appears): list()
+     * answered empty for a target full of archives and retention never pruned anything.
+     */
+    public static @NonNull String normalizedBase(@NonNull String basePath) {
+        String trimmed = basePath.trim();
+        int end = trimmed.length();
+        while (end > 1 && trimmed.charAt(end - 1) == '/') {
+            end--;
+        }
+        return trimmed.substring(0, end);
     }
 
     /**
@@ -111,9 +127,13 @@ public final class SshBackupTarget implements BackupTarget {
             throw error;
         }
         // Commit is a separate exchange: the rename happens only after the stream
-        // above finished cleanly, so a killed upload leaves ONLY the .part name.
+        // above finished cleanly, so a killed upload leaves ONLY the .part name. The
+        // staged bytes are synced BEFORE the rename and the directory after it, so a
+        // remote crash cannot leave the committed name over unwritten blocks. `sync FILE`
+        // is coreutils; a sync without it (busybox) falls back to syncing everything.
         try {
-            run("mv " + quoted(staging) + " " + quoted(committed), null, null);
+            run(syncOf(staging) + " && mv " + quoted(staging) + " " + quoted(committed)
+                + " && " + syncOf(directory), null, null);
         } catch (IOException error) {
             bestEffort("rm -f " + quoted(staging));
             throw error;
@@ -297,6 +317,11 @@ public final class SshBackupTarget implements BackupTarget {
         } finally {
             process.destroyForcibly();
         }
+    }
+
+    /** A remote command flushing one path to disk, degrading to a whole-system sync. */
+    private static @NonNull String syncOf(@NonNull String path) {
+        return "{ sync -- " + quoted(path) + " 2>/dev/null || sync; }";
     }
 
     /** Single-quote a remote path for the remote shell ('\'' escape for embedded quotes). */

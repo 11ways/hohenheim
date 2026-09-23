@@ -14,9 +14,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
 
 /**
  * WHEN a freshly started workload counts as ready, per its template's
@@ -80,6 +77,18 @@ public final class InstanceReadiness {
      *         something nothing has ever reached
      */
     public static void await(@NonNull Row instance, @NonNull InstanceStatus status) {
+        await(instance, status, PublishedPortProbe.local());
+    }
+
+    /**
+     * {@link #await(Row, InstanceStatus)} through the probe lane of the workload's host;
+     * a deploy passes {@code PublishedPortProbe.forServer(serverId)}, because the port is
+     * published on THAT host's loopback.
+     *
+     * @throws Violations {@code readiness_timed_out} or {@code readiness_needs_port}
+     */
+    public static void await(@NonNull Row instance, @NonNull InstanceStatus status,
+                             @NonNull PublishedPortProbe lane) {
 
         ReadinessKind kind = declaredKind(instance);
 
@@ -107,25 +116,24 @@ public final class InstanceReadiness {
         }
 
         switch (kind) {
-            case PORT -> awaitPort(instance, port);
-            case HTTP -> ReleaseEngine.probe(port, declaredTarget(instance));
+            case PORT -> awaitPort(instance, port, lane);
+            case HTTP -> ReleaseEngine.probe(port, declaredTarget(instance), lane);
             case CONSOLE_LINE -> { }
         }
     }
 
     /** Wait for a TCP connect to succeed on the published host port. */
-    private static void awaitPort(@NonNull Row instance, int port) {
+    private static void awaitPort(@NonNull Row instance, int port,
+                                  @NonNull PublishedPortProbe lane) {
 
         long deadline = Now.millis() + WINDOW_MS;
         String lastReason = "";
 
         while (Now.millis() < deadline) {
-            try (Socket socket = new Socket()) {
-                socket.connect(new InetSocketAddress("127.0.0.1", port), 2000);
+            if (lane.accepts(port)) {
                 return;
-            } catch (IOException refused) {
-                lastReason = String.valueOf(refused.getMessage());
             }
+            lastReason = "connection refused";
             try {
                 Thread.sleep(INTERVAL_MS);
             } catch (InterruptedException interrupted) {

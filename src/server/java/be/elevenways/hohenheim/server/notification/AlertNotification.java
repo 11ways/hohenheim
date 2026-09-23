@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.notification;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.CommsRecipient;
+import be.elevenways.zenit.comms.CommsTexts;
 import be.elevenways.zenit.comms.Importance;
 import be.elevenways.zenit.comms.Notification;
 import be.elevenways.zenit.comms.message.ChatMessage;
@@ -18,16 +20,22 @@ import java.util.Map;
 /**
  * One platform alert (cert expiry, backup failure, ...) rendered per channel.
  *
+ * AIDEV-NOTE: subject and message are Microcopy IDENTITY, never pre-rendered English: the
+ * inbox stores the identity and re-resolves it per viewer, chat resolves it in the
+ * recipient's locale at send time, and the webhook body carries the default-locale reading.
+ * A caller holding only free text (an exception message, an operator-authored string) wraps
+ * it as {@code Microcopy.literal}, which never touches the resolver.
+ *
  * @author  Jelle De Loecker
  * @since   0.2.0
  */
 public final class AlertNotification extends Notification {
 
     private final String event;
-    private final String subject;
-    private final @Nullable String message;
+    private final Microcopy subject;
+    private final @Nullable Microcopy message;
 
-    public AlertNotification(@NonNull String event, @NonNull String subject, @Nullable String message) {
+    public AlertNotification(@NonNull String event, @NonNull Microcopy subject, @Nullable Microcopy message) {
         this.event = event;
         this.subject = subject;
         this.message = message;
@@ -77,8 +85,9 @@ public final class AlertNotification extends Notification {
     @Override
     public @Nullable WebhookMessage toWebhook(@NonNull CommsRecipient recipient) {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("subject", this.subject);
-        data.put("message", this.message == null ? "" : this.message);
+        data.put("subject", CommsTexts.plain(this.subject));
+        String message = CommsTexts.plain(this.message);
+        data.put("message", message == null ? "" : message);
         return new WebhookMessage().setEvent(this.event).setData(data);
     }
 }

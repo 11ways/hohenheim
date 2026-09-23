@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -93,7 +94,7 @@ public class InstanceTemplateResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_template"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_template"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_template"); }
-    @Override public @NonNull String slug() { return "instance-templates"; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.INSTANCE_TEMPLATES; }
     @Override public @NonNull Model model() { return Models.get(InstanceTemplateModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -188,7 +189,7 @@ public class InstanceTemplateResource extends RowResource {
             // A CMS route PLUS a query parameter: composed off CmsEndpoints, since
             // CmsRoutes returns the RouteTarget interface (no with(...)).
             .url(row -> new Uri(CmsEndpoints.LIST
-                .with(CmsEndpoints.PANEL_PARAM, "admin")
+                .with(CmsEndpoints.PANEL_PARAM, HohenheimSlugs.ADMIN)
                 .with(CmsEndpoints.RESOURCE_PARAM, "instances-from-template")
                 .with(HohenheimParams.FROM_TEMPLATE_TEMPLATE,
                     row.get(InstanceTemplateModel.ID)).toUrl()))

@@ -17,9 +17,15 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 import org.xbill.DNS.Flags;
 import org.xbill.DNS.Message;
@@ -41,9 +47,31 @@ public final class DnsServer {
     private static final int TCP_IDLE_TIMEOUT_MS = 30_000;
     private static final int TCP_MAX_CONNECTIONS = 128;
 
+    /**
+     * Concurrent TCP connections one client address may hold.
+     *
+     * AIDEV-NOTE: without it one host could take all {@link #TCP_MAX_CONNECTIONS} slots and
+     * starve every other TCP client -- including the resolvers a UDP SLIP verdict just told
+     * to retry over TCP, which turned the rate limiter's escape hatch into its own outage.
+     */
+    public static final int TCP_MAX_CONNECTIONS_PER_CLIENT = 8;
+
+    /**
+     * The ABSOLUTE lifetime of one TCP connection, however busy it is.
+     *
+     * AIDEV-NOTE: the idle timeout alone re-arms on every read (it is a per-read socket
+     * timeout, and readFully issues one read per arriving segment), so a client dribbling
+     * one byte every 29 seconds held a slot forever. This deadline closes the socket from
+     * outside the reading thread. Generous on purpose: a large AXFR to a slow secondary is
+     * the longest legitimate exchange.
+     */
+    private static final long TCP_CONNECTION_DEADLINE_MS = 120_000;
+
     private final DnsResponder responder;
     private final AxfrResponder axfrResponder;
     private final Semaphore tcpConnections = new Semaphore(TCP_MAX_CONNECTIONS);
+    private final ConcurrentHashMap<InetAddress, Integer> tcpPerClient = new ConcurrentHashMap<>();
+    private volatile long tcpConnectionDeadlineMs = TCP_CONNECTION_DEADLINE_MS;
     private final DnsRateLimiter rateLimiter = new DnsRateLimiter(() -> {
         Integer limit = HohenheimSettings.VALUES.getValue(HohenheimSettings.Dns.RATE_LIMIT_PER_SECOND);
         return limit != null ? limit : 0;
@@ -65,6 +93,7 @@ public final class DnsServer {
     private @Nullable DatagramSocket udpSocket;
     private @Nullable ServerSocket tcpSocket;
     private @Nullable ExecutorService workers;
+    private @Nullable ScheduledExecutorService deadlines;
 
     /** @return true when the server is enabled in settings and both listeners bound */
     public boolean startIfEnabled() {
@@ -125,6 +154,11 @@ public final class DnsServer {
         this.udpSocket = udpBound;
         this.tcpSocket = tcpBound;
         this.workers = Executors.newVirtualThreadPerTaskExecutor();
+        this.deadlines = Executors.newSingleThreadScheduledExecutor(task -> {
+            Thread thread = new Thread(task, "hohenheim-dns-tcp-deadline");
+            thread.setDaemon(true);
+            return thread;
+        });
         this.running = true;
         this.startupError = null;
 
@@ -152,10 +186,19 @@ public final class DnsServer {
             this.workers.shutdown();
             this.workers = null;
         }
+        if (this.deadlines != null) {
+            this.deadlines.shutdownNow();
+            this.deadlines = null;
+        }
     }
 
     public boolean isRunning() {
         return this.running;
+    }
+
+    /** For tests: shorten the absolute TCP connection lifetime so it can be observed. */
+    public void setTcpConnectionDeadlineMillis(long deadlineMs) {
+        this.tcpConnectionDeadlineMs = deadlineMs;
     }
 
     /** Wires the secondary service so inbound NOTIFY triggers an immediate refresh. */
@@ -204,6 +247,13 @@ public final class DnsServer {
                 Message parsed = tryParse(wire);
                 byte[] reply;
                 if (parsed != null && parsed.getHeader().getOpcode() == Opcode.NOTIFY) {
+                    // A NOTIFY is a spoofable UDP packet that costs a zone lookup and a TSIG
+                    // verify: over-limit ones from one prefix are dropped (the refresh timer
+                    // covers a genuinely lost NOTIFY), keyed per zone like NXDOMAIN.
+                    if (this.rateLimiter.check(client.getAddress(), notifyBucket(parsed))
+                            != DnsRateLimiter.Verdict.ALLOW) {
+                        return;
+                    }
                     reply = handleNotify(parsed, wire);
                 }
                 else if (parsed == null) {
@@ -219,11 +269,13 @@ public final class DnsServer {
                     // SLIP verdict answers truncated so real clients retry over TCP.
                     // The verdict keys on the COMPUTED response so an NXDOMAIN flood
                     // with random subdomains shares one per-zone bucket.
-                    Message answer = this.responder.respond(parsed);
-                    if (answer == null) {
+                    DnsResponder.Answer computed = this.responder.answer(parsed);
+                    if (computed == null) {
                         return;
                     }
-                    switch (this.rateLimiter.check(client.getAddress(), DnsRateLimiter.keyFor(parsed, answer))) {
+                    Message answer = computed.response();
+                    switch (this.rateLimiter.check(client.getAddress(),
+                            DnsRateLimiter.keyFor(parsed, answer, computed.source()))) {
                         case DROP -> {
                             return;
                         }
@@ -263,27 +315,85 @@ public final class DnsServer {
                 continue;
             }
 
-            if (!this.tcpConnections.tryAcquire()) {
+            InetAddress peer = socket.getInetAddress();
+            if (!this.acquireTcpSlot(peer)) {
                 closeSocketQuietly(socket);
                 continue;
             }
 
             ExecutorService pool = this.workers;
-            if (pool == null) {
-                this.tcpConnections.release();
+            ScheduledExecutorService reaper = this.deadlines;
+            if (pool == null || reaper == null) {
+                this.releaseTcpSlot(peer);
                 closeSocketQuietly(socket);
                 return;
             }
-            pool.execute(() -> {
-                try {
-                    this.handleTcpConnection(socket);
-                }
-                finally {
-                    this.tcpConnections.release();
-                    closeSocketQuietly(socket);
-                }
-            });
+            try {
+                ScheduledFuture<?> deadline = reaper.schedule(() -> closeSocketQuietly(socket),
+                    this.tcpConnectionDeadlineMs, TimeUnit.MILLISECONDS);
+                pool.execute(() -> {
+                    try {
+                        this.handleTcpConnection(socket);
+                    }
+                    finally {
+                        deadline.cancel(false);
+                        this.releaseTcpSlot(peer);
+                        closeSocketQuietly(socket);
+                    }
+                });
+            }
+            catch (RejectedExecutionException stopping) {
+                // stop() shut the pools down between the accept and here.
+                this.releaseTcpSlot(peer);
+                closeSocketQuietly(socket);
+                return;
+            }
         }
+    }
+
+    /**
+     * Take one of the server-wide TCP slots AND one of the client's own.
+     *
+     * AIDEV-NOTE: the per-client count moves only inside {@code compute}, which is atomic per
+     * key, so a racing release can never strand a count on a detached holder.
+     *
+     * @return false when either is exhausted; nothing is held then
+     */
+    private boolean acquireTcpSlot(@NonNull InetAddress client) {
+        boolean[] admitted = {false};
+        this.tcpPerClient.compute(client, (key, held) -> {
+            int current = held == null ? 0 : held;
+            if (current >= TCP_MAX_CONNECTIONS_PER_CLIENT) {
+                return held;
+            }
+            admitted[0] = true;
+            return current + 1;
+        });
+        if (!admitted[0]) {
+            return false;
+        }
+        if (!this.tcpConnections.tryAcquire()) {
+            this.releaseClientSlot(client);
+            return false;
+        }
+        return true;
+    }
+
+    /** Give back what {@link #acquireTcpSlot} took. */
+    private void releaseTcpSlot(@NonNull InetAddress client) {
+        this.tcpConnections.release();
+        this.releaseClientSlot(client);
+    }
+
+    private void releaseClientSlot(@NonNull InetAddress client) {
+        this.tcpPerClient.compute(client, (key, held) -> held == null || held <= 1 ? null : held - 1);
+    }
+
+    /** The RRL bucket of a NOTIFY: per claimed zone, so a flood of one zone shares one bucket. */
+    private static @NonNull String notifyBucket(@NonNull Message query) {
+        Record question = query.getQuestion();
+        return "notify|" + (question != null
+            ? question.getName().toString(true).toLowerCase(Locale.ROOT) : "-");
     }
 
     private void handleTcpConnection(@NonNull Socket socket) {

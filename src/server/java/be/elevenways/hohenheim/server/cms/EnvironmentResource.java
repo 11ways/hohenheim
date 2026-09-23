@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
@@ -114,13 +115,9 @@ public final class EnvironmentResource extends RowResource {
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String projectId = conduit.getQueryParam("project_id");
-        if (projectId != null && !projectId.isEmpty()) {
-            try {
-                values.put("project_id", Integer.parseInt(projectId));
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
-            }
+        Integer projectId = CmsSupport.prefill(conduit, HohenheimParams.PROJECT_ID_PREFILL);
+        if (projectId != null) {
+            values.put("project_id", projectId);
         }
         return values;
     }

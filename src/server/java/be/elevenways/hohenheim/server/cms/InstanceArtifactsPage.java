@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceArtifactView;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -102,7 +103,8 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
         Integer instanceId = instance.get(InstanceModel.ID);
         String name = String.valueOf((Object) instance.get(InstanceModel.NAME));
         String panel = CmsSupport.panelSlug(conduit);
-        String pageUrl = CmsRoutes.subpage(panel, "instances", instanceId, this.slug()).toUrl();
+        String pageUrl = CmsRoutes.subpage(panel, HohenheimSlugs.INSTANCES, instanceId, this.slug()).toUrl();
+        WithheldFailure failures = WithheldFailure.of(conduit);
 
         // The newest page only: the panel-wide resource paginates, and this scoped view
         // must not turn into an unbounded load of every artifact an instance ever made.
@@ -119,7 +121,7 @@ abstract class InstanceArtifactsPage implements RecordScopedPage<Row> {
                 this.noteOf(artifact),
                 this.sizeOf(artifact),
                 isoOf(artifact.get(this.createdAtField())),
-                this.errorOf(artifact),
+                failures.shown(this.errorOf(artifact)),
                 CmsRoutes.detail(panel, this.resource.slug(), artifactId),
                 this.invokesFor(artifact, accessContext, panel, artifactId, pageUrl)));
         }

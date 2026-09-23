@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
@@ -76,9 +77,13 @@ public final class StackInstances {
     private StackInstances() {
     }
 
-    /** Install the shared owned-instance funnel (MODULES stage); idempotent. */
+    /**
+     * Install the shared owned-instance funnel and the stack volume-name refusal (MODULES
+     * stage); idempotent.
+     */
     public static void install() {
         OwnedInstances.install();
+        StackVolumes.install();
     }
 
     // -- naming ---------------------------------------------------------------
@@ -88,7 +93,13 @@ public final class StackInstances {
         return ControllerScope.handle(ControllerScope.KIND_STACK, stackName);
     }
 
-    /** THE materialized name of one declared mount: stack-scoped, so it outlives any instance row. */
+    /**
+     * THE materialized name of one declared mount: stack-scoped, so it outlives any instance row.
+     *
+     * AIDEV-NOTE: ambiguous by construction (both halves may contain '-') and kept as it is,
+     * because deployed volumes carry these names; {@link StackVolumes} refuses a new colliding
+     * declaration and makes the purge exact instead.
+     */
     public static @NonNull String volumeName(@NonNull String stackName,
                                              StackSpec.@NonNull MountSpec mount) {
         return mount.externalName() != null ? mount.externalName()
@@ -191,6 +202,11 @@ public final class StackInstances {
                     if (instance == null) {
                         instance = Models.get(InstanceModel.class).createEmptyRow();
                     }
+                    Map<String, Object> settings = desiredSettings(spec, service);
+                    // The service's encrypted env never lands in this plain JSON column:
+                    // it travels as SECRET variable rows (see StackServiceSecrets).
+                    Map<String, String> environment =
+                        InstanceVariables.detachEnvironment(settings);
                     instance.set(InstanceModel.NAME, spec.name() + "-" + service.name());
                     instance.set(InstanceModel.KIND, StackServiceKind.ID.toString());
                     instance.set(InstanceModel.SERVER_ID, serverId);
@@ -201,9 +217,11 @@ public final class StackInstances {
                     instance.set(InstanceModel.CRASH_POLICY,
                         "no".equals(service.restartPolicy())
                             ? InstanceModel.CRASH_NONE : InstanceModel.CRASH_RESTART);
-                    instance.set(InstanceModel.SETTINGS, desiredSettings(spec, service));
+                    instance.set(InstanceModel.SETTINGS, settings);
                     Models.get(InstanceModel.class).save(instance);
-                    return (int) (Integer) instance.get(InstanceModel.ID);
+                    int savedId = instance.get(InstanceModel.ID);
+                    new InstanceVariables().storeSecretEnvironment(savedId, environment);
+                    return savedId;
                 });
 
             // THE capability refusal, at the runtime funnel: a declaration outside the
@@ -295,9 +313,9 @@ public final class StackInstances {
             return;
         }
         Map<String, Object> settings = settingsOf(row);
-        String handle = str(settings.get("stack_network"));
-        String alias = str(settings.get("service_name"));
-        Object stackId = settings.get("stack_id");
+        String handle = str(settings.get(StackServiceKind.STACK_NETWORK.getName()));
+        String alias = str(settings.get(StackServiceKind.SERVICE_NAME.getName()));
+        Object stackId = settings.get(StackServiceKind.STACK_ID.getName());
         if (handle.isEmpty() || alias.isEmpty() || !(stackId instanceof Number number)) {
             throw new IOException("Instance " + instanceId + " is a stack service but its"
                 + " settings name no stack network, service alias or stack id");
@@ -330,29 +348,28 @@ public final class StackInstances {
     // -- volumes ---------------------------------------------------------------
 
     /**
-     * Remove every volume this stack's NAME scopes, once its containers are gone.
+     * Remove the volumes this stack materializes, once its containers are gone.
      * IRREVERSIBLE: this is the one daemon resource whose contents cannot be re-fetched,
      * so callers guard it (the admin action makes the operator type the stack's name).
      *
-     * Volumes declared with an EXTERNAL name are skipped by construction -- the sweep is
-     * by the controller-scoped stack prefix, which an adopted volume never carries, so we
-     * still never remove what we did not create.
+     * AIDEV-NOTE: EXACT names, never a prefix sweep. The prefix {@code <stack handle>-} of
+     * stack "a" is also the prefix of every volume of stack "a-b", so the old sweep deleted
+     * another stack's data. The names come from every service record (disabled ones
+     * included) plus the given specs, and each volume is removed only when its labels
+     * attribute it to this stack ({@link StackVolumes#ownedByStack}). External volumes are
+     * never in the set: an adopted volume is not ours to remove.
      *
+     * @param alsoDeclared specs whose mounts also count (the teardown spec, the last snapshot)
+     * @return the volumes that were removed
      * @throws IOException when the daemon refuses a removal (a volume still attached)
      */
-    static void removeOwnedVolumes(@NonNull String serverName, @NonNull String stackName)
+    static @NonNull List<String> removeOwnedVolumes(@NonNull StackSpec spec,
+                                                    @NonNull List<StackSpec> alsoDeclared)
             throws IOException {
-        DockerClient docker = new ServerService().clientFor(serverName);
-        String prefix = networkHandle(stackName) + "-";
-        for (Object entry : docker.listVolumes()) {
-            if (!(entry instanceof Map<?, ?> volume)
-                    || !(volume.get("Name") instanceof String name)
-                    || !name.startsWith(prefix)) {
-                continue;
-            }
-            docker.removeVolume(name, true);
-            Blast.log("STACK: removed volume", name);
-        }
+        List<StackSpec> specs = new ArrayList<>(alsoDeclared);
+        specs.add(spec);
+        return StackVolumes.purge(new ServerService().clientFor(spec.serverName()),
+            spec.stackId(), spec.name(), StackVolumes.declaredBy(spec.stackId(), spec.name(), specs));
     }
 
     // -- the pre-lowering shape ------------------------------------------------
@@ -428,7 +445,8 @@ public final class StackInstances {
      * {@link InstanceFileModel} is documented as "the StackFileModel mechanism
      * generalized", so the stack rows stay the AUTHORING surface (encrypted at rest, admin
      * editable) and the instance rows are the derived runtime shape, exactly like the
-     * service row's env is the author and {@code instances.settings} the derived copy.
+     * service row's env is the author and the instance's SECRET variable rows the derived
+     * copy (never {@code instances.settings}, a plain JSON column; see StackServiceSecrets).
      * They carry the GeneratedRows attribution of their stack service, so nothing outside
      * this scope can author one and the sweep can tell them from hand-written files.
      */
@@ -471,6 +489,9 @@ public final class StackInstances {
      * @return how many stacks were adopted in this pass
      */
     public static int adoptExisting() {
+        // First the credential backfill: it is pure database work, and a stack deployed
+        // below would seal its own rows anyway -- this reaches the ones nobody redeploys.
+        StackServiceSecrets.sealPlaintext();
         int adopted = 0;
         for (Row stack : Models.get(StackModel.class).find()
                 .where(StackModel.ENABLED.eq(true)).all()) {
@@ -494,14 +515,22 @@ public final class StackInstances {
 
     // -- settings --------------------------------------------------------------
 
-    /** Map one resolved SERVICE onto the stack_service kind settings. */
-    private static @NonNull Map<String, Object> desiredSettings(@NonNull StackSpec spec,
-                                                                StackSpec.@NonNull ServiceSpec service) {
+    /**
+     * Map one resolved SERVICE onto the stack_service kind settings.
+     *
+     * AIDEV-NOTE: written by the kind's own field names and read back by
+     * {@link StackServiceKind#specFor} through the SAME fields; a port entry is
+     * {@link StackSpec.PortSpec}'s own map, the shape the deployment snapshot stores. The
+     * environment is included here and detached by the caller into secret variables.
+     */
+    static @NonNull Map<String, Object> desiredSettings(@NonNull StackSpec spec,
+                                                        StackSpec.@NonNull ServiceSpec service) {
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", service.image());
-        settings.put("command", List.copyOf(service.command()));
-        settings.put("environment_variables", Map.copyOf(service.environment()));
-        settings.put("capabilities", List.copyOf(service.capabilities()));
+        settings.put(StackServiceKind.IMAGE.getName(), service.image());
+        settings.put(StackServiceKind.COMMAND.getName(), List.copyOf(service.command()));
+        settings.put(StackServiceKind.ENVIRONMENT_VARIABLES.getName(),
+            Map.copyOf(service.environment()));
+        settings.put(StackServiceKind.CAPABILITIES.getName(), List.copyOf(service.capabilities()));
 
         Map<String, String> volumes = new LinkedHashMap<>();
         List<String> tmpfs = new ArrayList<>();
@@ -512,36 +541,34 @@ public final class StackInstances {
                 volumes.put(volumeName(spec.name(), mount), mount.containerPath());
             }
         }
-        settings.put("volumes", volumes);
-        settings.put("tmpfs_paths", tmpfs);
+        settings.put(StackServiceKind.VOLUMES.getName(), volumes);
+        settings.put(StackServiceKind.TMPFS_PATHS.getName(), tmpfs);
 
         List<Map<String, Object>> ports = new ArrayList<>();
         for (StackSpec.PortSpec port : service.ports()) {
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("container_port", port.containerPort());
-            entry.put("host_port", port.hostPort());
-            entry.put("protocol", port.protocol());
-            entry.put("host_ip", port.hostIp());
-            ports.add(entry);
+            ports.add(port.toMap());
         }
-        settings.put("ports", ports);
+        settings.put(StackServiceKind.PORTS.getName(), ports);
 
         if (service.healthCmd() != null) {
-            settings.put("health_cmd", service.healthCmd());
-            settings.put("health_interval_seconds", service.healthIntervalSeconds());
-            settings.put("health_timeout_seconds", service.healthTimeoutSeconds());
-            settings.put("health_retries", service.healthRetries());
-            settings.put("health_start_period_seconds", service.healthStartPeriodSeconds());
+            settings.put(StackServiceKind.HEALTH_CMD.getName(), service.healthCmd());
+            settings.put(StackServiceKind.HEALTH_INTERVAL_SECONDS.getName(),
+                service.healthIntervalSeconds());
+            settings.put(StackServiceKind.HEALTH_TIMEOUT_SECONDS.getName(),
+                service.healthTimeoutSeconds());
+            settings.put(StackServiceKind.HEALTH_RETRIES.getName(), service.healthRetries());
+            settings.put(StackServiceKind.HEALTH_START_PERIOD_SECONDS.getName(),
+                service.healthStartPeriodSeconds());
         }
         if (service.memoryLimitMb() != null) {
-            settings.put("memory_limit_mb", service.memoryLimitMb());
+            settings.put(StackServiceKind.MEMORY_LIMIT_MB.getName(), service.memoryLimitMb());
         }
         if (service.cpuLimit() != null) {
-            settings.put("cpu_limit", service.cpuLimit());
+            settings.put(StackServiceKind.CPU_LIMIT.getName(), service.cpuLimit());
         }
-        settings.put("stack_id", spec.stackId());
-        settings.put("stack_network", networkHandle(spec.name()));
-        settings.put("service_name", service.name());
+        settings.put(StackServiceKind.STACK_ID.getName(), spec.stackId());
+        settings.put(StackServiceKind.STACK_NETWORK.getName(), networkHandle(spec.name()));
+        settings.put(StackServiceKind.SERVICE_NAME.getName(), service.name());
         return settings;
     }
 

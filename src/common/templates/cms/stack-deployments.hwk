@@ -38,26 +38,7 @@
                 <pl-table-cell>{{ deploy.get("duration") }}</pl-table-cell>
             </pl-table-row>
             {% if deploy.get("error") != "" or deploy.get("hasLog") == true %}
-            <pl-table-row data-detail>
-                <pl-table-cell colspan="4" class="hh-deploy-detail">
-                    {% if deploy.get("error") != "" %}
-                    <div class="hh-deploy-error">
-                        <pl-icon name="triangle-exclamation"></pl-icon>
-                        <span>{{ deploy.get("error") }}</span>
-                    </div>
-                    {% /if %}
-                    {% if deploy.get("hasLog") == true %}
-                    <pl-collapsible>
-                        <pl-collapsible-trigger>
-                            <pl-button variant={% "ghost" %} size={% "sm" %}>{{ t("deploy_log", scope: "stack_deployments") }}</pl-button>
-                        </pl-collapsible-trigger>
-                        <pl-collapsible-content>
-                            <pre class="hh-deploy-log">{{ deploy.get("log") }}</pre>
-                        </pl-collapsible-content>
-                    </pl-collapsible>
-                    {% /if %}
-                </pl-table-cell>
-            </pl-table-row>
+            {% render "hohenheim:cms/deploy-detail" var:deploy=deploy var:colspan=4 var:logLabel=t("deploy_log", scope: "stack_deployments") %}
             {% /if %}
             {% /each %}
         </pl-table-body>

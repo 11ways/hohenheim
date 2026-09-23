@@ -30,7 +30,7 @@ middleware reads disk first, then classpath -- the classpath has no cms.js).
         --roles proxy,dns,firewall \
         --main-url https://panel.example.com \
         --admin-email hostmaster@example.com \
-        [--with-docker] [--volume-root-size 8] [--swap 2G] \
+        [--with-docker] [--volume-root-size 8] [--volume-root <dir>] [--swap 2G] \
         [--panel-port 3000] [--panel-bind 127.0.0.1] [--prefix /opt/hohenheim]
 
 Debian 12/13 first (Debian 13 trixie is what it is proven on); it runs as root,
@@ -62,12 +62,28 @@ What each step does, in order:
 6. **Layout** -- `settings/ data/ public/ logs/ tmp/` plus
    `/var/log/hohenheim`, `0750` and owned by the service user; the prefix is
    `0711` and `settings/` is `0700`.
-7. **Sudoers** -- `/etc/sudoers.d/hohenheim-nft` (the nft binary resolved on
-   this host) for the proxy/firewall roles, `/etc/sudoers.d/hohenheim-volumes`
-   for the instances role or `--volume-root-size`. Both `visudo -cf` validated.
+7. **Sudoers and the privileged helper** -- `/etc/sudoers.d/hohenheim-nft` (the
+   nft binary resolved on this host) for the proxy/firewall roles. For the
+   instances role, `--volume-root-size` or the firewall role: the helper
+   `/usr/local/libexec/hohenheim/hohenheim-helper` (root:root 0755) and
+   `/etc/sudoers.d/hohenheim-helper`, which grants that ONE file. For the
+   firewall role: the unprivileged `spamservice` account and
+   `/etc/sudoers.d/hohenheim-spamservice` (run-as `spamservice`, `SETENV`,
+   `/usr/bin/prlimit` only), which is what the managed Spamservice is launched
+   through. The pre-helper `/etc/sudoers.d/hohenheim-volumes` grant is REMOVED
+   on every run. Every grant is validated with `visudo -cf` in a dot-named temp
+   file (sudo ignores it) and only renamed into place, 0440, once it parsed, so
+   a bad grant can never break sudo on the host. Every other file the script
+   writes is also staged beside its target and renamed in with its final mode,
+   so none is ever briefly readable under root's umask.
 8. **Volume root** -- with `--volume-root-size <GB>`: `btrfs-progs`, a loop file
    `<prefix>/volumes.btrfs`, `mkfs.btrfs`, an `loop,defaults,nofail` fstab entry
-   and the mount at `<prefix>/data/volumes`.
+   and the mount at `<prefix>/data/volumes` (or `--volume-root <dir>`, which must
+   equal `storage.volume_root` when that is set: the helper refuses any volume
+   path outside the root it was installed with). The volume root is root-owned
+   `0755`, re-asserted on every run: every directory below it is created and
+   handed out by the helper, and a root the service user owned would let it swap
+   an entry between the helper's check and its act.
 9. **Settings** -- seeds `settings/hohenheim.dry` (0640), `settings/local.dry`
    and `settings/auth.dry` (0600, secrets). An existing file is NEVER rewritten:
    the panel's settings editor persists into these same files. That idempotence
@@ -105,7 +121,9 @@ What each step does, in order:
 15. **Migrations** -- `--run-migrations` as the service user, with the service
     stopped, when the database is new or the jar changed.
 16. **Service** -- enable, start (or restart when the jar/unit moved), then poll
-    `/api/health` for up to 120s and fail loudly with the journal command.
+    `/api/health` for up to 120s ON THE BOUND ADDRESS (`--panel-bind`; a wildcard
+    bind is probed over the matching loopback, an IPv6 literal bracketed) and
+    fail loudly with the journal command.
 17. **Next steps** -- prints the admin bootstrap and the manual remainder.
 
 What it deliberately does NOT do: create the first administrator (there is no
@@ -184,18 +202,49 @@ box with no sites yet.
     visudo -cf /etc/sudoers.d/hohenheim-nft
 
 `NftRunner.Sudo` invokes `/usr/bin/sudo -n -- nft`. A host that places
-WORKSPACES or APPLICATIONS (a btrfs volume root) needs one more line, because
-the volume lane is root work by nature -- chown to the workspace's foreign uid,
-qgroup limits, subvolume snapshot and delete all refuse to an ordinary user --
-and `BtrfsVolumeOperations` elevates each of those binaries with `sudo -n`
-whenever the shell is not root (`HostShell.elevated`):
+WORKSPACES or APPLICATIONS (a btrfs volume root), or runs the firewall role's
+managed Spamservice, needs the privileged helper, because that work is root by
+nature -- chown to the workspace's foreign uid, qgroup limits, subvolume snapshot
+and delete all refuse to an ordinary user. Do NOT hand-write it: take the helper
+out of `tools/install-host.sh` (run the installer, or copy the `HELPER_BODY`
+heredoc with its three `@...@` roots filled in) to
+`/usr/local/libexec/hohenheim/hohenheim-helper`, root:root 0755, and grant that
+one file:
 
-    printf 'hohenheim ALL=(root) NOPASSWD: /usr/bin/btrfs, /usr/bin/chown, /usr/bin/chmod, /usr/bin/mkdir, /usr/bin/rm\n' \
-        > /etc/sudoers.d/hohenheim-volumes
-    chmod 440 /etc/sudoers.d/hohenheim-volumes
-    visudo -cf /etc/sudoers.d/hohenheim-volumes
+    printf 'hohenheim ALL=(root) NOPASSWD: /usr/local/libexec/hohenheim/hohenheim-helper\n' \
+        > /etc/sudoers.d/.hohenheim-helper.new
+    chmod 440 /etc/sudoers.d/.hohenheim-helper.new
+    visudo -cf /etc/sudoers.d/.hohenheim-helper.new \
+        && mv /etc/sudoers.d/.hohenheim-helper.new /etc/sudoers.d/hohenheim-helper
 
-Those two lines are the entire root surface the controller needs; a missing
+`BtrfsVolumeOperations` and `SpamserviceManager` call it through
+`PrivilegedHelper` whenever the shell is not root (`HostShell.elevated`). The
+helper confines every path to the volume root (or the managed Spamservice
+directory), refuses symlinks, `..`, a leading dash and a volume owner below uid
+100000, and acts from a working directory it entered physically. NEVER grant
+`/usr/bin/chown`, `chmod`, `rm`, `mkdir` or `btrfs` bare: with no argument
+restriction any of them is root for whoever runs as the service user (the old
+`hohenheim-volumes` line was exactly that; the installer deletes it). A host whose
+helper is not installed yet keeps working through that old grant until the
+installer is re-run, because every call site falls back to the legacy command
+when the helper file is absent.
+
+The managed Spamservice additionally needs its own account and a run-as grant
+(the installer's firewall role does both):
+
+    useradd --system --user-group --no-create-home \
+        --home-dir /opt/hohenheim/data/managed-services/spamservice/instance \
+        --shell /usr/sbin/nologin spamservice
+    printf 'hohenheim ALL=(spamservice : spamservice) NOPASSWD:SETENV: /usr/bin/prlimit\n' \
+        > /etc/sudoers.d/hohenheim-spamservice     # validate as above
+
+`SystemUsers.executionBuilder` launches it as `sudo -n --preserve-env -u #uid
+-g #gid -- /usr/bin/prlimit ... setpriv ... java`, and `--preserve-env` is what
+needs `SETENV`; the environment is the explicit map the controller built, and the
+controller key travels on stdin. Pick the `spamservice` account in the Spamservice
+settings once the system-user sync has seen it.
+
+These lines are the entire root surface the controller needs; a missing
 grant surfaces as `volume_own_failed` (or a sibling) carrying sudo's own
 "a password is required" text, never as a silent success. The Incus admin group is
 `incus-admin` (full API); the restricted `incus` group is NOT enough for the

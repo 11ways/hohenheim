@@ -3,9 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.cms.common.resource.RecordSubpageRegistry;
@@ -17,9 +15,6 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -81,16 +76,7 @@ public final class ManageCertificateResource extends CertificateResource {
     /** Admins see every certificate; everyone else only the walk-reachable ones. */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> {
-            Criteria notTheAccountRow = new CompositeCriteria(CompositeOperator.OR,
-                CertificateModel.PROVIDER.isNull(),
-                CertificateModel.PROVIDER.ne(CertificateModel.PROVIDER_ACME_ACCOUNT));
-            Criteria scope = ManagePanel.certificateScope(ctx);
-            return scope == null
-                ? AccessDecision.allow(QueryPredicate.of(notTheAccountRow))
-                : AccessDecision.allow(QueryPredicate.of(
-                    new CompositeCriteria(CompositeOperator.AND, notTheAccountRow, scope)));
-        };
+        return TenantScopes.CERTIFICATES.accessFunction();
     }
 
     @Override

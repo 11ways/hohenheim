@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
@@ -80,7 +81,7 @@ class InstanceAttentionTest {
         collector.accept(items);
         List<String> rendered = new ArrayList<>();
         for (AttentionItem item : items) {
-            rendered.add(item.severity() + " " + targetUrl(item));
+            rendered.add(item.severity().key() + " " + targetUrl(item));
         }
         return rendered;
     }
@@ -164,9 +165,16 @@ class InstanceAttentionTest {
             int covered = instance("attn-fresh-covered", InstanceModel.STATUS_RUNNING);
             int uncovered = instance("attn-fresh-uncovered", InstanceModel.STATUS_RUNNING);
             HohenheimSettings.VALUES.setValue(HohenheimSettings.Backup.STALE_AFTER_DAYS, 7);
+            // A real target row: backup_target_id is an enforced foreign key, and the
+            // collector reads only that a target is declared, never the target itself.
+            Row target = Models.get(BackupTargetModel.class).createEmptyRow();
+            target.set(BackupTargetModel.NAME, "attn-fresh-target");
+            target.set(BackupTargetModel.KIND, "hohenheim:filesystem");
+            target.set(BackupTargetModel.SETTINGS, Map.of("path", "/nonexistent/attn-fresh"));
+            Models.get(BackupTargetModel.class).save(target);
             Models.get(InstanceModel.class).find()
                 .where(InstanceModel.ID.eq(covered))
-                .assign(InstanceModel.BACKUP_TARGET_ID, 4242)
+                .assign(InstanceModel.BACKUP_TARGET_ID, target.get(BackupTargetModel.ID))
                 .updateAll();
 
             // 1. A declared target and ZERO completed backups: the never-backed-up item
@@ -296,7 +304,7 @@ class InstanceAttentionTest {
         collector.accept(items);
         List<String> rendered = new ArrayList<>();
         for (AttentionItem item : items) {
-            rendered.add(item.title().key() + " " + item.severity() + " "
+            rendered.add(item.title().key() + " " + item.severity().key() + " "
                 + targetUrl(item));
         }
         return rendered;

@@ -205,7 +205,7 @@ public final class DynamicDnsService {
         String origin = zone.get(DnsZoneModel.ORIGIN);
         String fqdn = DnsNames.absolute(origin, record.get(DnsRecordModel.NAME));
         if (hostname != null && !hostname.isBlank()
-                && !stripTrailingDot(hostname).equalsIgnoreCase(fqdn)) {
+                && !DnsNames.canonicalName(hostname).equals(DnsNames.canonicalName(fqdn))) {
             return new UpdateResult(Status.NOHOST, null);
         }
 
@@ -333,10 +333,5 @@ public final class DynamicDnsService {
             }
         }
         return true;
-    }
-
-    private static @NonNull String stripTrailingDot(@NonNull String host) {
-        String trimmed = host.trim();
-        return trimmed.endsWith(".") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
     }
 }

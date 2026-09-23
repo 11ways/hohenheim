@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
@@ -71,7 +73,10 @@ public final class DnsZonePeerResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "dns_zone_peer"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_zone_peer"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_zone_peer"); }
-    @Override public @NonNull String slug() { return "dns-zone-peers"; }
+    /** The panel slug, which the zone's Secondaries tab links peer records by. */
+    public static final String SLUG = "dns-zone-peers";
+
+    @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Model model() { return Models.get(DnsZonePeerModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -83,21 +88,14 @@ public final class DnsZonePeerResource extends RowResource {
 
     @Override
     public @org.checkerframework.checker.nullness.qual.Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("dns-zones", row -> row.get(DnsZonePeerModel.ZONE_ID)).tab("secondaries");
+        return ResourceParent.<Row>of(HohenheimSlugs.DNS_ZONES, row -> row.get(DnsZonePeerModel.ZONE_ID)).tab("secondaries");
     }
 
     /** The zone's Secondaries tab links here with ?zone_id= so the link is scoped. */
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
-        String zoneId = conduit.getQueryParam("zone_id");
-        if (zoneId != null && !zoneId.isEmpty()) {
-            try {
-                return Map.of("zone_id", Integer.parseInt(zoneId));
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
-            }
-        }
-        return Map.of();
+        Integer zoneId = CmsSupport.prefill(conduit, HohenheimParams.ZONE_ID_PREFILL);
+        return zoneId != null ? Map.of("zone_id", zoneId) : Map.of();
     }
 
     /**

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
+import be.elevenways.hohenheim.server.proxy.auth.CredentialOwner;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.session.InMemorySessionStore;
@@ -211,6 +212,59 @@ class AccessRuleTreeTest {
         assertThat(gatedResult.refusal(gatedExchange))
             .as("step 12: and the challenge is the provider gate's own decision")
             .isSameAs(redirect);
+    }
+
+    /**
+     * Which request credentials a compiled tree claims for itself, so the forwarding stage knows
+     * what never to hand the upstream.
+     */
+    @Test
+    void treeKnowsWhichCredentialsItsLeavesConsume() {
+        String hash = BasicCredentials.hashIfNeeded("s3cret");
+        Fixture provider = new Fixture(AccessRuleModel.TYPE_AUTH_PROVIDER,
+            Map.of("provider_id", 4243), true, List.of());
+
+        // 1. Address rules consume no credential at all.
+        AccessRuleTree addresses = tree(AccessListModel.SATISFY_ANY,
+            List.of(leaf(AccessRuleModel.TYPE_IP_ALLOW, "10.0.0.0/8")));
+        assertThat(addresses.ownsAuthorizationHeader()).as("step 1: no Authorization owner").isFalse();
+        assertThat(addresses.ownsPersistentCookie()).as("step 1: no remember-me owner").isFalse();
+
+        // 2. A basic_auth leaf, even nested, reads the Authorization header as its own.
+        AccessRuleTree basic = tree(AccessListModel.SATISFY_ALL, List.of(
+            group(AccessListModel.SATISFY_ANY, credentialLeaf("operator", hash))));
+        assertThat(basic.ownsAuthorizationHeader()).as("step 2: a basic leaf owns Authorization").isTrue();
+        assertThat(basic.ownsPersistentCookie()).as("step 2: but not the remember-me cookie").isFalse();
+
+        // 3. A provider leaf claims whatever its gate declares, and nothing when it declares nothing.
+        AccessRuleTree remembering = compile(AccessListModel.SATISFY_ANY, rows(List.of(provider)),
+            new StubContext(new RememberingGate()));
+        assertThat(remembering.ownsPersistentCookie()).as("step 3: the gate's remember-me cookie").isTrue();
+        assertThat(remembering.ownsAuthorizationHeader()).as("step 3: and only that").isFalse();
+        AccessRuleTree silent = compile(AccessListModel.SATISFY_ANY, rows(List.of(provider)),
+            new StubContext(gateAnswering(null)));
+        assertThat(silent.ownsPersistentCookie()).as("step 3: a gate declaring nothing claims nothing")
+            .isFalse();
+
+        // 4. A provider leaf whose gate cannot judge sessions never passes on a session: it stays
+        //    PENDING and challenges (fail closed), as step 12 of the journey above shows for the
+        //    no-session case.
+        assertThat(verdict(silent, "10.0.0.5", null)).as("step 4: no accepted session, PENDING")
+            .isEqualTo(AccessRuleTree.Verdict.PENDING);
+    }
+
+    /** A provider gate that owns the persistent remember-me cookie. */
+    private static final class RememberingGate implements SiteAuthGate, CredentialOwner {
+
+        @Override
+        public @Nullable SiteAuthDecision evaluate(HttpServerExchange exchange) {
+            return null;
+        }
+
+        @Override
+        public boolean ownsPersistentCookie() {
+            return true;
+        }
     }
 
     /**

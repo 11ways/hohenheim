@@ -163,7 +163,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
         HttpResponse<String> stranger = keyPost(keyAdmin, "/api/v1/dns/zones", form(
             "origin", "stranger-zone-api-a.test", "colour", "red"));
         assertThat(stranger.statusCode()).as("step 4: a stranger key is a typed refusal").isEqualTo(422);
-        assertThat(codeOf(stranger.body())).isEqualTo("zenit.coercion.unknown_field");
+        assertThat(codeOf(stranger.body())).isEqualTo("unknown_field");
         assertThat(keyPost(keyNarrow, "/api/v1/dns/zones", form("origin", "narrow-zone-api-a.test"))
             .statusCode()).as("step 4: the narrowed key is shut out").isEqualTo(403);
         assertThat(keyGet(keyNarrow, "/api/v1/dns/zones").statusCode())

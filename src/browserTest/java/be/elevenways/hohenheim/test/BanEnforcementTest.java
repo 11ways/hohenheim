@@ -157,6 +157,8 @@ class BanEnforcementTest {
             rawRequest(httpPort(proxy), "scan-" + i + ".example", "/",
                 "X-Hohenheim-Key: " + KEY, "X-Real-IP: 203.0.113.195");
         }
+        // Auto-bans are written by BanService's background writer, off the I/O thread.
+        BanService.INSTANCE.awaitPendingWrites();
         Row autoBan = Models.get(BanModel.class).find()
             .where(BanModel.IP.eq("203.0.113.195"))
             .where(BanModel.ACTIVE.eq(true))

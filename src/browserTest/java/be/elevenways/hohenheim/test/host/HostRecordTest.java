@@ -119,7 +119,10 @@ class HostRecordTest {
         });
     }
 
-    /** Removal refuses while stacks or live instances still reference the host. */
+    /**
+     * Removal refuses while stacks or live instances still reference the host, and a trashed
+     * instance is not an owner: it is detached so the removal works under enforced foreign keys.
+     */
     @Test
     void removalRefusesWhileOwnedResourcesRemain() {
         Db.run(datasource, () -> {
@@ -150,10 +153,17 @@ class HostRecordTest {
                 .isInstanceOf(Violations.class);
 
             // 3. With every owner gone (the instance already soft-deleted), removal works.
+            //    The trashed row still named the host, which the foreign key refuses; the
+            //    removal detaches that history pointer instead of refusing forever or
+            //    purging the row (its backups outlive it).
             Models.get(StackModel.class).delete(stack.get(StackModel.ID));
             servers.remove("edge-owned");
             assertThat(Models.get(ServerModel.class).findByName("edge-owned"))
                 .as("step 3: an unowned host removes cleanly").isNull();
+            Row trashed = Models.get(InstanceModel.class).findById(instanceId);
+            assertThat(trashed).as("step 3: the trashed instance row is kept").isNotNull();
+            assertThat((Object) trashed.get(InstanceModel.SERVER_ID))
+                .as("step 3: with its host pointer detached").isNull();
         });
     }
 

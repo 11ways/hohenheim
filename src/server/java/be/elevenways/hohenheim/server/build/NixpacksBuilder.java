@@ -2,22 +2,23 @@ package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.Json;
+import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.protoblast.common.dry.Dry;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -110,7 +111,7 @@ public final class NixpacksBuilder implements Builders {
 
         // Stale output of a previous build in a reused checkout slot never leaks into
         // this detection; the phase re-emits from scratch.
-        deleteRecursively(request.contextDir().resolve(EMIT_DIR));
+        FileTrees.deleteQuietly(request.contextDir().resolve(EMIT_DIR));
 
         log.line("[hohenheim] nixpacks detection phase starting (nixpacks "
             + HohenheimSettings.VALUES.getValue(HohenheimSettings.Builds.NIXPACKS_VERSION)
@@ -299,26 +300,20 @@ public final class NixpacksBuilder implements Builders {
      * Unpack the phase's emitted {@code .nixpacks} directory into the control-plane
      * context (docker's archive envelope roots entries at the directory basename, so the
      * tar extracts as {@code .nixpacks/...} directly).
+     *
+     * AIDEV-NOTE: the tar is authored by the TENANT's build phase, and it is unpacked on
+     * the CONTROLLER. It goes through the strict in-Java extractor (regular files and
+     * directories only, no link ever created or written through, no {@code ..}), never a
+     * system {@code tar -xf}: a link planted in the emitted tree would otherwise point a
+     * later host-side read or write of the context at a controller file.
      */
     private static void unpackEmitted(@Nullable Path dirTar, @NonNull Path contextDir)
             throws IOException {
         if (dirTar == null) {
             return;
         }
-        try {
-            Process process = new ProcessBuilder("tar", "-xf", dirTar.toString(),
-                "-C", contextDir.toString()).start();
-            if (!process.waitFor(60, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                throw new IOException("Unpacking the emitted nixpacks output timed out");
-            }
-            if (process.exitValue() != 0) {
-                throw new IOException("Unpacking the emitted nixpacks output failed (tar exit "
-                    + process.exitValue() + ")");
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Unpacking the emitted nixpacks output was interrupted");
+        try (InputStream in = Files.newInputStream(dirTar)) {
+            Tar.extractTo(in, contextDir);
         }
     }
 
@@ -329,29 +324,15 @@ public final class NixpacksBuilder implements Builders {
         }
         try (Stream<Path> walk = Files.walk(root)) {
             for (Path path : walk.toList()) {
-                Files.setLastModifiedTime(path, FileTime.fromMillis(0));
+                // A link is never touched through: setLastModifiedTime follows symlinks.
+                if (!Files.isSymbolicLink(path)) {
+                    Files.setLastModifiedTime(path, FileTime.fromMillis(0));
+                }
             }
         }
     }
 
     private static @NonNull String text(byte @Nullable [] bytes) {
         return bytes == null ? "" : new String(bytes, StandardCharsets.UTF_8);
-    }
-
-    private static void deleteRecursively(@NonNull Path root) {
-        if (!Files.exists(root)) {
-            return;
-        }
-        try (Stream<Path> walk = Files.walk(root)) {
-            walk.sorted(Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException ignored) {
-                    // best-effort; the phase re-emits over leftovers anyway
-                }
-            });
-        } catch (IOException ignored) {
-            // best-effort
-        }
     }
 }

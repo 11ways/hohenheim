@@ -18,6 +18,8 @@ import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.upstream.kinds.AddressUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.StaticUpstreamKind;
+import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -28,8 +30,10 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryContext;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.net.AddressScope;
 import be.elevenways.zenit.common.validation.UrlPolicy;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -56,7 +60,9 @@ import java.util.Set;
  * AIDEV-NOTE: the domain rule is a WHITELIST (see {@link #DOMAIN_TENANT_WRITABLE}), not a
  * blacklist of the four fields the decision named. A blacklist silently opens every column
  * added later; the whitelist makes a new column tenant-frozen by default and forces whoever
- * adds it to decide.
+ * adds it to decide. Sites, instances and databases follow the same shape through the one
+ * {@link #refuseFrozenColumns} rule, and every remove of a row a tenant could otherwise
+ * reach answers to its parent's authority through a remove hook.
  *
  * AIDEV-NOTE: enforcement here deliberately does NOT touch the read path of
  * {@code DnsRecordModel}. {@code /nic/update} (DYNDNS_UPDATE, public, token-authenticated)
@@ -153,15 +159,53 @@ public final class TenantWrites {
      * that is what puts /nic/update under the DNS type allow-list instead of outside it.
      */
     public static boolean isTenantOriginated() {
-        if (GeneratedDnsRecords.inSystemScope() || AUTHORIZED_OPERATION.get() > 0) {
+        if (GeneratedDnsRecords.inSystemScope() || AUTHORIZED_OPERATION.isActive()) {
             return false;
         }
         AccessContext ctx = acting();
         return ctx != null && !HohenheimAccess.isAdmin(ctx);
     }
 
-    /** Nesting depth of {@link #inAuthorizedOperation} on this thread. */
-    private static final ThreadLocal<Integer> AUTHORIZED_OPERATION = ThreadLocal.withInitial(() -> 0);
+    /**
+     * A per-thread NESTABLE scope flag: THE shape of every "this thread runs inside X" marker
+     * this class owns.
+     *
+     * AIDEV-NOTE: one mechanism for both markers ({@link #inAuthorizedOperation},
+     * {@link #inDatabaseAllocation}); they were two copies of the same depth counter. It is
+     * a depth counter, not a boolean, so a nested scope leaving never ends the outer one,
+     * and it restores in a finally, because an unbalanced scope would leave the whole thread
+     * inside it.
+     */
+    private static final class ThreadScope {
+
+        private final ThreadLocal<Integer> depth = ThreadLocal.withInitial(() -> 0);
+
+        void run(@NonNull Runnable body) {
+            this.depth.set(this.depth.get() + 1);
+            try {
+                body.run();
+            } finally {
+                int remaining = this.depth.get() - 1;
+                if (remaining <= 0) {
+                    this.depth.remove();
+                } else {
+                    this.depth.set(remaining);
+                }
+            }
+        }
+
+        boolean isActive() {
+            boolean active = this.depth.get() > 0;
+            if (!active) {
+                // get() planted the initial value; do not leave an entry behind on the thread.
+                this.depth.remove();
+            }
+            return active;
+        }
+    }
+
+    /** The scope of {@link #inAuthorizedOperation} on this thread. */
+    private static final ThreadScope AUTHORIZED_OPERATION = new ThreadScope();
 
     /**
      * Run the CONTINUATION of an operation whose authority was already decided at its
@@ -177,17 +221,7 @@ public final class TenantWrites {
      * scope would leave the whole thread authorized. Never wrap a request handler in it.
      */
     public static void inAuthorizedOperation(@NonNull Runnable body) {
-        AUTHORIZED_OPERATION.set(AUTHORIZED_OPERATION.get() + 1);
-        try {
-            body.run();
-        } finally {
-            int depth = AUTHORIZED_OPERATION.get() - 1;
-            if (depth <= 0) {
-                AUTHORIZED_OPERATION.remove();
-            } else {
-                AUTHORIZED_OPERATION.set(depth);
-            }
-        }
+        AUTHORIZED_OPERATION.run(body);
     }
 
     /** Install the tenant-write invariants; idempotent, called at the MODULES boot stage. */
@@ -208,10 +242,26 @@ public final class TenantWrites {
                 checkRecordWrite(row);
             }
         });
+        // A domain row answers to its SITE on removal exactly as on a write: the resource's
+        // AccessFunction scoping which rows a tenant SEES is not a gate on a criteria delete
+        // that reaches the datasource past it (the class docblock's premise).
+        SiteDomainModel.SCHEMA.addBeforeRemoveHook(context -> {
+            if (!isTenantOriginated()) {
+                return;
+            }
+            for (Row doomed : doomedRows(context)) {
+                requireManagedSite(doomed.get(SiteDomainModel.SITE_ID));
+            }
+        });
         SiteModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
-            if (row != null) {
-                checkProxyUpstream(row, isTenantOriginated());
+            if (row == null) {
+                return;
+            }
+            if (isTenantOriginated()) {
+                checkSiteWrite(row);
+            } else {
+                checkProxyUpstream(row);
             }
         });
         InstanceModel.SCHEMA.addBeforeValidateHook(context -> {
@@ -538,10 +588,40 @@ public final class TenantWrites {
         // create). certificate_id lands here: pinning a certificate row is authority over a
         // name the tenant may not hold, and the picker failing closed is incidental, not a
         // gate.
+        refuseFrozenColumns(model, row, stored, DOMAIN_TENANT_WRITABLE, DOMAIN_DERIVED);
+
+        // A NEW claim -- a create, a changed hostname, or a row moved onto another site --
+        // must not land at or under a name another owner holds (HostnameAuthority.mayClaim
+        // carries the decision and why). Judged LAST, after the tier and column refusals, so
+        // those keep their specific messages; and on NEW claims only, so every stored claim
+        // (and every re-save of one: HSTS, force_ssl) keeps working exactly as before.
+        String claimed = SiteDomainModel.canonicalHostname(
+            hostnameValue != null ? String.valueOf(hostnameValue) : null, SiteDomainModel.MATCH_EXACT);
+        boolean newClaim = stored == null
+            || !Objects.equals(claimed, SiteDomainModel.canonicalHostname(
+                stored.get(SiteDomainModel.HOSTNAME), SiteDomainModel.MATCH_EXACT))
+            || !Objects.equals(siteId, stored.get(SiteDomainModel.SITE_ID));
+        // A blank hostname claims nothing; the model's own validation refuses it by name.
+        if (newClaim && claimed != null && !claimed.isEmpty()
+                && !HostnameAuthority.mayClaim(siteId, claimed)) {
+            throw Violations.ofField(SiteDomainModel.HOSTNAME.getName(), hostnameValue,
+                CmsSupport.violationText(HostnameAuthority.HOSTNAME_UNAVAILABLE));
+        }
+    }
+
+    /**
+     * THE frozen-column rule every allow-listed model here shares: each column outside
+     * {@code writable} and {@code derived} keeps its stored value (its declared default on a
+     * create).
+     *
+     * @throws Violations {@code tenant_field_frozen} on the first offending column
+     */
+    private static void refuseFrozenColumns(@NonNull Model model, @NonNull Row row,
+                                            @Nullable Row stored, @NonNull Set<String> writable,
+                                            @NonNull Set<String> derived) {
         for (Field<?, ?> field : model.getSchema().getFields().values()) {
             String name = field.getName();
-            if (DOMAIN_TENANT_WRITABLE.contains(name) || DOMAIN_DERIVED.contains(name)
-                    || !row.has(name)) {
+            if (writable.contains(name) || derived.contains(name) || !row.has(name)) {
                 continue;
             }
             Object baseline = stored != null ? stored.get(name) : field.getDefaultValue();
@@ -550,6 +630,67 @@ public final class TenantWrites {
                     CmsSupport.violationText("tenant_field_frozen"));
             }
         }
+    }
+
+    // --- Sites -----------------------------------------------------------------------
+
+    /**
+     * The only columns a delegated tenant may author on a site: exactly what
+     * {@code ManageSiteResource} offers (its form, its field bindings, its updateRow and the
+     * enable toggle). The upstream kind, the settings (every dial target: forward_host,
+     * socket, root_path, ...), instance_id, slug, the access list, the auth provider, the
+     * status and the quota bucket are all operator decisions -- authoring one is authoring
+     * where the site's traffic goes or what it may reach.
+     *
+     * AIDEV-NOTE: until 2026-09-23 sites had NO allow-list here, unlike domains, instances
+     * and databases, and relied on the /manage resource's fieldBindings and
+     * restorableFieldsOutsideForm -- exactly the resource-layer gate this class says can
+     * never be one (a revision restore or a direct model.save carries whatever it likes).
+     */
+    private static final Set<String> SITE_TENANT_WRITABLE = Set.of(
+        SiteModel.NAME.getName(),
+        SiteModel.ENABLED.getName(),
+        SiteModel.DESCRIPTION.getName());
+
+    /**
+     * Columns the write pipeline DERIVES. {@code quota_bucket} is deliberately NOT one: it is
+     * stamped by SiteQuota's beforeWRITE hook, after this beforeValidate judgement, so a
+     * tenant row carrying anything but the stored value is forging the bucket its
+     * reservation will be released against.
+     */
+    private static final Set<String> SITE_DERIVED = Set.of(
+        SiteModel.ID.getName(),
+        SiteModel.CREATED_AT.getName(),
+        SiteModel.UPDATED_AT.getName());
+
+    /**
+     * Refuse a tenant site write that aims the upstream somewhere a tenant may not dial or
+     * that reaches past the delegated column set.
+     *
+     * AIDEV-NOTE: the upstream judgement runs FIRST and only when the upstream MOVES (kind
+     * or settings differ from the stored row): an operator may have pointed a tenant's site
+     * at a LAN backend on purpose, and a tenant renaming that site is not re-aiming it. With
+     * settings frozen the column rule would refuse the same write anyway; the upstream
+     * judgement is the defence that survives a later widening of the allow-list, and it
+     * gives the precise refusal while both apply.
+     *
+     * @throws Violations {@code tenant_proxy_upstream_private} or {@code tenant_field_frozen}
+     */
+    private static void checkSiteWrite(@NonNull Row row) {
+        Model model = Models.get(SiteModel.class);
+        Object idValue = row.has(SiteModel.ID.getName()) ? row.get(SiteModel.ID) : null;
+        Row stored = idValue != null ? model.findById(idValue) : null;
+
+        Object kind = effective(row, stored, SiteModel.UPSTREAM_KIND);
+        Object settings = effective(row, stored, SiteModel.SETTINGS);
+        boolean upstreamMoves = stored == null
+            || !Objects.equals(kind, stored.get(SiteModel.UPSTREAM_KIND))
+            || !Objects.equals(settings, stored.get(SiteModel.SETTINGS));
+        if (upstreamMoves && settings instanceof Map<?, ?> map) {
+            refuseTenantUpstream(String.valueOf(kind), map);
+        }
+
+        refuseFrozenColumns(model, row, stored, SITE_TENANT_WRITABLE, SITE_DERIVED);
     }
 
     // --- Proxy upstream (SSRF) -------------------------------------------------------
@@ -563,28 +704,42 @@ public final class TenantWrites {
         .schemes("http", "https").build();
 
     /**
-     * The delegated-tenant tier additionally refuses loopback, RFC-1918/ULA and link-local
-     * literals -- {@code 169.254.169.254} (cloud metadata) and a loopback admin port are the
-     * SSRF a tenant with {@code manage} on a proxy site would otherwise reach. An operator
-     * pointing a site at a LAN address stays legitimate (the DNS/self-hosted-GitLab stance).
+     * The delegated-tenant tier: zenit's public-internet outbound guard, which refuses every
+     * non-{@link AddressScope#PUBLIC} literal (loopback, RFC 1918, link-local and so the
+     * cloud-metadata {@code 169.254.169.254}, CGNAT, ULA, the unspecified address, ...) AND a
+     * DNS name resolving to any such address. An operator pointing a site at a LAN address
+     * stays legitimate (the DNS/self-hosted-GitLab stance) and never reaches this guard.
+     *
+     * AIDEV-NOTE: a write-time verdict only. The name can be re-pointed after the write
+     * (DNS rebinding), so the proxy's DIAL must judge the address it actually connects to as
+     * well; that half lives with the forwarder, not here.
      */
-    private static final UrlPolicy PROXY_UPSTREAM_TENANT = UrlPolicy.builder()
-        .schemes("http", "https").blockLoopbackHosts().blockPrivateHosts().build();
+    private static volatile OutboundUrlGuard tenantUpstreamGuard = OutboundUrlGuard.PUBLIC_INTERNET;
 
     /**
-     * Refuse a proxy site whose {@code forward_host} the writer may not aim there.
+     * For tests: judge tenant upstream hostnames through {@code resolver} instead of the
+     * system resolver, so a name resolving to a private address can be proven refused
+     * without depending on the test host's DNS.
+     *
+     * @param resolver the resolver, or null to restore the system one
+     */
+    public static void resolveTenantUpstreamsWith(OutboundUrlGuard.@Nullable HostResolver resolver) {
+        tenantUpstreamGuard = resolver == null
+            ? OutboundUrlGuard.PUBLIC_INTERNET : OutboundUrlGuard.resolvingWith(resolver);
+    }
+
+    /**
+     * Refuse an operator-tier proxy site whose {@code forward_host} is not a plain http(s)
+     * host without credentials.
      *
      * AIDEV-NOTE: lives on the model write pipeline, not on a form or handler, for the reason
      * the class docblock states -- the revision-restore endpoint, the peer API and any direct
-     * {@code model.save} reach the datasource past every form. The tenant tier reuses the
-     * SAME {@link UrlPolicy} mechanism GitProviders applies one tier over; textual host
-     * blocking is all it can do here (a DNS name resolving to a private address is caught at
-     * fetch time, which is out of scope for a stored setting).
+     * {@code model.save} reach the datasource past every form. The tenant tier is
+     * {@link #refuseTenantUpstream}.
      *
-     * @throws Violations {@code proxy_upstream_invalid} (any writer) or
-     *         {@code tenant_proxy_upstream_private} (a tenant aiming at a blocked host)
+     * @throws Violations {@code proxy_upstream_invalid}
      */
-    private static void checkProxyUpstream(@NonNull Row row, boolean tenant) {
+    private static void checkProxyUpstream(@NonNull Row row) {
         if (!row.has(SiteModel.SETTINGS.getName())) {
             return;
         }
@@ -595,29 +750,84 @@ public final class TenantWrites {
         if (!(settingsValue instanceof Map<?, ?> settings)) {
             return;
         }
-        Object hostValue = settings.get(AddressUpstreamKind.FORWARD_HOST.getName());
-        if (hostValue == null || String.valueOf(hostValue).isBlank()) {
+        String host = textOf(settings.get(AddressUpstreamKind.FORWARD_HOST.getName()));
+        if (host.isEmpty()) {
             return;
         }
-        String host = String.valueOf(hostValue).trim();
-        Object schemeValue = settings.get(AddressUpstreamKind.FORWARD_SCHEME.getName());
-        String scheme = schemeValue != null && !String.valueOf(schemeValue).isBlank()
-            ? String.valueOf(schemeValue) : "http";
-        String url = scheme + "://" + host;
-
-        if (tenant) {
-            if (PROXY_UPSTREAM_TENANT.problemOf(url) != null) {
-                throw Violations.ofField(
-                    SiteModel.SETTINGS.getName() + "." + AddressUpstreamKind.FORWARD_HOST.getName(),
-                    host, CmsSupport.violationText("tenant_proxy_upstream_private"));
-            }
-            return;
-        }
-        if (PROXY_UPSTREAM_BASE.problemOf(url) != null) {
-            throw Violations.ofField(
-                SiteModel.SETTINGS.getName() + "." + AddressUpstreamKind.FORWARD_HOST.getName(),
+        if (PROXY_UPSTREAM_BASE.problemOf(schemeOf(settings) + "://" + host) != null) {
+            throw Violations.ofField(settingsKey(AddressUpstreamKind.FORWARD_HOST.getName()),
                 host, CmsSupport.violationText("proxy_upstream_invalid"));
         }
+    }
+
+    /**
+     * Refuse a tenant-authored upstream that dials anything but a public address.
+     *
+     * AIDEV-NOTE: each dial target a kind's settings can spell is judged, not only
+     * {@code forward_host}: the address kind's {@code socket} OVERRIDES the host entirely
+     * (AddressUpstreamKind.createHandler takes socket mode first), so {@code
+     * /var/run/docker.sock} walked past a host-only check; the TLS-passthrough kind dials
+     * its own {@code forward_host} raw; and a static {@code root_path}/{@code fallback_file}
+     * is a HOST filesystem path, which is operator authority outright. A kind this method
+     * does not name dials nothing it can judge, and it stays closed anyway: the site column
+     * allow-list ({@link #SITE_TENANT_WRITABLE}) freezes the whole settings map for a tenant.
+     *
+     * @throws Violations {@code tenant_proxy_upstream_private} or {@code tenant_field_frozen}
+     */
+    private static void refuseTenantUpstream(@NonNull String kind, @NonNull Map<?, ?> settings) {
+        if (AddressUpstreamKind.ID.toString().equals(kind)) {
+            String socket = textOf(settings.get(AddressUpstreamKind.SOCKET.getName()));
+            if (!socket.isEmpty()) {
+                throw Violations.ofField(settingsKey(AddressUpstreamKind.SOCKET.getName()), socket,
+                    CmsSupport.violationText("tenant_proxy_upstream_private"));
+            }
+            refusePrivateHost(AddressUpstreamKind.FORWARD_HOST.getName(), schemeOf(settings),
+                settings.get(AddressUpstreamKind.FORWARD_HOST.getName()),
+                settings.get(AddressUpstreamKind.FORWARD_PORT.getName()));
+        } else if (TlsPassthroughUpstreamKind.ID.toString().equals(kind)) {
+            // The URL is only the guard's input shape; passthrough dials host:port raw.
+            refusePrivateHost(TlsPassthroughUpstreamKind.FORWARD_HOST.getName(), "https",
+                settings.get(TlsPassthroughUpstreamKind.FORWARD_HOST.getName()),
+                settings.get(TlsPassthroughUpstreamKind.FORWARD_PORT.getName()));
+        } else if (StaticUpstreamKind.ID.toString().equals(kind)) {
+            for (String pathKey : List.of(StaticUpstreamKind.ROOT_PATH.getName(),
+                    StaticUpstreamKind.FALLBACK_FILE.getName())) {
+                String path = textOf(settings.get(pathKey));
+                if (!path.isEmpty()) {
+                    throw Violations.ofField(settingsKey(pathKey), path,
+                        CmsSupport.violationText("tenant_field_frozen"));
+                }
+            }
+        }
+    }
+
+    /** @throws Violations {@code tenant_proxy_upstream_private} unless the host is public */
+    private static void refusePrivateHost(@NonNull String key, @NonNull String scheme,
+                                          @Nullable Object hostValue, @Nullable Object portValue) {
+        String host = textOf(hostValue);
+        if (host.isEmpty()) {
+            return;
+        }
+        String authority = portValue instanceof Integer port ? host + ":" + port : host;
+        if (tenantUpstreamGuard.problemOf(scheme + "://" + authority) != null) {
+            throw Violations.ofField(settingsKey(key), host,
+                CmsSupport.violationText("tenant_proxy_upstream_private"));
+        }
+    }
+
+    /** The upstream scheme an address-kind settings map dials, defaulting like the handler. */
+    private static @NonNull String schemeOf(@NonNull Map<?, ?> settings) {
+        String scheme = textOf(settings.get(AddressUpstreamKind.FORWARD_SCHEME.getName()));
+        return scheme.isEmpty() ? "http" : scheme;
+    }
+
+    /** The violation field of one settings member. */
+    private static @NonNull String settingsKey(@NonNull String member) {
+        return SiteModel.SETTINGS.getName() + "." + member;
+    }
+
+    private static @NonNull String textOf(@Nullable Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
     }
 
     /** The site type the write ends up with, reading the stored row on a partial update. */
@@ -712,17 +922,7 @@ public final class TenantWrites {
                 .withFilter("scope", "violations"));
         }
 
-        for (Field<?, ?> field : model.getSchema().getFields().values()) {
-            String name = field.getName();
-            if (INSTANCE_TENANT_WRITABLE.contains(name) || INSTANCE_DERIVED.contains(name)
-                    || !row.has(name)) {
-                continue;
-            }
-            if (!Objects.equals(row.get(name), stored.get(name))) {
-                throw Violations.ofField(name, row.get(name),
-                    CmsSupport.violationText("tenant_field_frozen"));
-            }
-        }
+        refuseFrozenColumns(model, row, stored, INSTANCE_TENANT_WRITABLE, INSTANCE_DERIVED);
 
         checkInstanceSettingsWrite(row, stored);
     }
@@ -797,9 +997,8 @@ public final class TenantWrites {
         DatabaseModel.CREATED_AT.getName(),
         DatabaseModel.UPDATED_AT.getName());
 
-    /** Nesting depth of {@link #inDatabaseAllocation} on this thread. */
-    private static final ThreadLocal<Integer> DATABASE_ALLOCATION =
-        ThreadLocal.withInitial(() -> 0);
+    /** The scope of {@link #inDatabaseAllocation} on this thread. */
+    private static final ThreadScope DATABASE_ALLOCATION = new ThreadScope();
 
     /**
      * Run the ONE funnel that may insert a managed-database row on a tenant's behalf
@@ -814,17 +1013,7 @@ public final class TenantWrites {
      * later frozen by DEFAULT, the property the domain whitelist exists for.
      */
     public static void inDatabaseAllocation(@NonNull Runnable body) {
-        DATABASE_ALLOCATION.set(DATABASE_ALLOCATION.get() + 1);
-        try {
-            body.run();
-        } finally {
-            int depth = DATABASE_ALLOCATION.get() - 1;
-            if (depth <= 0) {
-                DATABASE_ALLOCATION.remove();
-            } else {
-                DATABASE_ALLOCATION.set(depth);
-            }
-        }
+        DATABASE_ALLOCATION.run(body);
     }
 
     /**
@@ -840,24 +1029,14 @@ public final class TenantWrites {
         Row stored = idValue != null ? model.findById(idValue) : null;
 
         if (stored == null) {
-            if (DATABASE_ALLOCATION.get() <= 0) {
+            if (!DATABASE_ALLOCATION.isActive()) {
                 throw Violations.ofForm(
                     CmsSupport.violationText("tenant_database_not_allocatable"));
             }
             return;
         }
 
-        for (Field<?, ?> field : model.getSchema().getFields().values()) {
-            String name = field.getName();
-            if (DATABASE_TENANT_WRITABLE.contains(name) || DATABASE_DERIVED.contains(name)
-                    || !row.has(name)) {
-                continue;
-            }
-            if (!Objects.equals(row.get(name), stored.get(name))) {
-                throw Violations.ofField(name, row.get(name),
-                    CmsSupport.violationText("tenant_field_frozen"));
-            }
-        }
+        refuseFrozenColumns(model, row, stored, DATABASE_TENANT_WRITABLE, DATABASE_DERIVED);
     }
 
     /**

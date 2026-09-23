@@ -41,8 +41,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 /**
@@ -93,30 +91,23 @@ public final class InstanceService {
     public static final String ACTIVITY_DESTROY_DETAIL = "destroy";
 
     /**
-     * The instance ids THIS controller has a runtime operation in flight for.
+     * Run one runtime operation holding the record's operation lock; re-entrant on the
+     * same thread, and a second operation on the same record is REFUSED while one runs.
      *
-     * AIDEV-NOTE: the missing half of the transitional story, and it exists for exactly
-     * one reader: {@link InstanceStatusReconciler}. A deploy is not marked by any status
-     * -- the record keeps its PREVIOUS status until the fenced stamp at the very end --
-     * so between {@code create} and that stamp the daemon legitimately disagrees with a
-     * record that says {@code running}, and a sweeper reading only the daemon would
-     * "correct" a workload that is being brought up right now.
+     * AIDEV-NOTE: this was an in-flight SET, and a set is not a lock: a second deploy ran
+     * beside the first (two create() calls replacing each other's container), and the
+     * first one's finally cleared the mark while the second still ran. The reconciler
+     * question the set used to answer ("is this controller mid-operation on the record?")
+     * is now {@link InstanceOperationLock#isBusy}, asked through the same lock.
      *
-     * The host LEASE cannot answer this: {@code HostLeases.requireFence} acquires on miss
-     * and then holds for the process lifetime, so "we hold host X" means "no RIVAL is
-     * working on X", never "we are idle on X". The two guards are complementary and both
-     * are needed -- the lease excludes other controllers, this set excludes ourselves.
-     */
-    private static final Set<Integer> IN_FLIGHT = ConcurrentHashMap.newKeySet();
-
-    /** Whether this controller is inside a deploy, stop or destroy of this record. */
-    static boolean hasOperationInFlight(int instanceId) {
-        return IN_FLIGHT.contains(instanceId);
-    }
-
-    /**
-     * Run one runtime operation with the record marked in flight; re-entrant safe (only
-     * the OUTERMOST scope clears the mark).
+     * AIDEV-NOTE: the reconciler still needs that question, for the transitional story: a
+     * deploy is not marked by any status -- the record keeps its PREVIOUS status until the
+     * fenced stamp at the very end -- so between {@code create} and that stamp the daemon
+     * legitimately disagrees with a record that says {@code running}. The host LEASE cannot
+     * answer it: {@code HostLeases.requireFence} acquires on miss and then holds for the
+     * process lifetime, so "we hold host X" means "no RIVAL is working on X", never "we
+     * are idle on X". The two guards are complementary and both are needed -- the lease
+     * excludes other controllers, this lock excludes ourselves.
      *
      * AIDEV-NOTE: the upstream invalidation lives HERE, at the one funnel deploy, stop and
      * destroy all pass through, rather than in each kind's lane. Only the release engine
@@ -130,20 +121,23 @@ public final class InstanceService {
      * It runs in a finally, and on the INNER scopes of a nested operation too, because a
      * failed or partial operation moves the address exactly as a settled one does -- a
      * refused stop parks the claims, and the next resolution must see that.
+     *
+     * @throws Violations {@code instance_operation_in_progress} when another operation holds
+     *         the record
      */
-    private <T> T inFlight(int instanceId, @NonNull Supplier<T> body) {
-        boolean marked = IN_FLIGHT.add(instanceId);
+    private <T> T operation(int instanceId, @NonNull Supplier<T> body) {
         try {
-            return body.get();
+            return this.operations.exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
+                body);
         } finally {
-            if (marked) {
-                IN_FLIGHT.remove(instanceId);
-            }
             ApplicationUpstreams.invalidateForInstance(instanceId);
         }
     }
 
     private final HostLeases leases;
+
+    /** The per-record operation locks of this controller identity. */
+    private final InstanceOperationLock operations;
 
     /** Test seam: runs between the daemon operations and the fenced outcome write. */
     private final Runnable beforeOutcomeWrite;
@@ -158,6 +152,7 @@ public final class InstanceService {
      */
     public InstanceService(@NonNull HostLeases leases, @NonNull Runnable beforeOutcomeWrite) {
         this.leases = leases;
+        this.operations = InstanceOperationLock.of(leases);
         this.beforeOutcomeWrite = beforeOutcomeWrite;
     }
 
@@ -187,17 +182,39 @@ public final class InstanceService {
      * permissive classification. The word survives only where the deploy is RECORDED.
      */
     public @NonNull InstanceStatus deploy(int instanceId, @NonNull DeployTrigger trigger) {
-        // The ONE power gate, on the service every surface funnels through: the CMS row
-        // action, the automation API and anything later. A tenant-originated call must
-        // hold power; operator and system work (crash restarts, schedule chains, installs)
-        // runs outside a request and passes untouched.
+        return operation(instanceId, () -> deployNow(instanceId, trigger));
+    }
+
+    /**
+     * THE deploy admission every lane asks before it spends anything: the power gate and
+     * the databases-ready guard, thrown as the same named Violations on every surface.
+     *
+     * AIDEV-NOTE: public because the application layer is a deploy lane of its own that
+     * surfaces reach WITHOUT this service (the automation API, the forge webhook, the
+     * rollback verb): ApplicationDeploys and ReleaseEngine.rollback ask it, so none of
+     * them is a wider door than the HTML lane's power check. Asked on the CALLER's thread
+     * -- the power half reads the request's tenant identity, which a background thread
+     * does not carry (off-conduit work is operator/system work and passes, see
+     * HohenheimAccess.requireOperationCapability).
+     *
+     * @throws Violations {@code instance_not_permitted} or {@code database_not_ready}
+     */
+    public static void requireDeployAdmitted(int instanceId) {
+        // The ONE power gate: a tenant-originated call must hold power; operator and system
+        // work (crash restarts, schedule chains, installs) runs outside a request and passes.
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
-        // Every lane below assembles its environment through DatabaseEnvInjection, which
+        // Every lane assembles its environment through DatabaseEnvInjection, which
         // fail-softs: a database that is still provisioning (or failed) would drop its
         // whole variable family and the workload would boot without credentials looking
-        // healthy. Refuse HERE, above the fold, so all three lanes and every surface --
-        // row action, automation API, schedule chain -- answer the same way.
+        // healthy.
         InstanceOperationGuard.requireDatabasesReady(instanceId);
+    }
+
+    /** {@link #deploy(int, DeployTrigger)}'s body; the caller holds the operation lock. */
+    private @NonNull InstanceStatus deployNow(int instanceId, @NonNull DeployTrigger trigger) {
+        // Above the fold, so all three lanes and every surface -- row action, automation
+        // API, schedule chain -- answer the same way.
+        requireDeployAdmitted(instanceId);
         // A release-managed record owns no container: deploying it means checking the
         // source out and converging a RELEASE. The branch is here, after the gate and
         // before any driver work, so every existing power surface deploys an application
@@ -211,7 +228,7 @@ public final class InstanceService {
         if (WorkspaceBuilds.deploysSource(liveRow(instanceId))) {
             return new WorkspaceBuilds(this).deploy(instanceId, null, trigger).status();
         }
-        return deployWorkload(instanceId, trigger);
+        return deployWorkloadNow(instanceId, trigger, null);
     }
 
     @FunctionalInterface
@@ -223,7 +240,7 @@ public final class InstanceService {
     public @NonNull InstanceStatus deployRestored(int instanceId,
                                                   @NonNull RestoreVolumes restoreVolumes) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
-        return inFlight(instanceId,
+        return operation(instanceId,
             () -> deployWorkloadNow(instanceId, DeployTrigger.SYSTEM, restoreVolumes));
     }
 
@@ -245,10 +262,10 @@ public final class InstanceService {
 
     /** {@link #deployWorkload(int)} on a named trigger; the workload half enforces it too. */
     @NonNull InstanceStatus deployWorkload(int instanceId, @NonNull DeployTrigger trigger) {
-        return inFlight(instanceId, () -> deployWorkloadNow(instanceId, trigger, null));
+        return operation(instanceId, () -> deployWorkloadNow(instanceId, trigger, null));
     }
 
-    /** {@link #deployWorkload}'s body; the in-flight mark is the wrapper's job. */
+    /** {@link #deployWorkload}'s body; the operation lock is the wrapper's job. */
     private @NonNull InstanceStatus deployWorkloadNow(int instanceId,
                                                       @NonNull DeployTrigger trigger,
                                                       @Nullable RestoreVolumes restoreVolumes) {
@@ -282,8 +299,10 @@ public final class InstanceService {
         InstanceConsoles.Watch watch = null;
         try {
             // A previous run's console session (if any) watches a container this
-            // deploy is about to replace; end it before the daemon work starts.
+            // deploy is about to replace, and a shell's process lives in it: end both
+            // before the daemon work starts.
             InstanceConsoles.closeSession(instanceId);
+            InstanceShell.closeSessionsOf(instanceId, InstanceShell.EndReason.WORKLOAD_ENDED);
             // Pre-allocation honesty: a UDP/public/fixed-port publication claims its host
             // port in the ledger BEFORE the container exists (and before the image pull
             // that sits inside the create window); record-after specs pass unchanged.
@@ -324,7 +343,8 @@ public final class InstanceService {
             // The template's DECLARED readiness, for the two kinds that can only be
             // answered once the workload is up and its host port is known. console_line
             // is the console hub's and was already armed above.
-            InstanceReadiness.await(resolved.row(), status);
+            InstanceReadiness.await(resolved.row(), status,
+                PublishedPortProbe.forServer(resolved.serverId()));
             this.beforeOutcomeWrite.run();
             // The fence gate comes BEFORE any ledger write: a stale controller that
             // reached the ledger first would delete the winner's fresh port claim.
@@ -332,6 +352,10 @@ public final class InstanceService {
             // fenced write flips it to RUNNING when the line is observed.
             stampGuarded(resolved, fence, watch != null
                 ? watch.initialStatus() : InstanceModel.STATUS_RUNNING);
+            // Every record-after publication's observed port is recorded in ONE call: the
+            // ledger supersedes whatever observed claims the owner held that are not in
+            // the set, so a call per publication kept only the last one.
+            List<Integer> observedPorts = new ArrayList<>();
             for (var publication : spec.publications()) {
                 if (publication.requiresPreallocation()) {
                     // A pre-allocated claim already exists (written before create);
@@ -344,9 +368,12 @@ public final class InstanceService {
                         ? null : status.publishedPorts().get(0))
                     : status.publishedFor(publication.containerPort(), publication.protocol());
                 if (observed != null) {
-                    PortLedger.recordObserved(resolved.serverId(), BIND_ADDRESS,
-                        observed.hostPort(), "tcp", InstanceModel.MODEL_ID, instanceId, null);
+                    observedPorts.add(observed.hostPort());
                 }
+            }
+            if (!observedPorts.isEmpty()) {
+                PortLedger.recordObservedAll(resolved.serverId(), BIND_ADDRESS, observedPorts,
+                    "tcp", InstanceModel.MODEL_ID, instanceId, null);
             }
             if (watch != null) {
                 InstanceConsoles.arm(watch, instanceId);
@@ -382,13 +409,13 @@ public final class InstanceService {
      * @throws Violations naming the failure; the claims are parked, the status untouched
      */
     public void stop(int instanceId) {
-        inFlight(instanceId, () -> {
+        operation(instanceId, () -> {
             stopNow(instanceId);
             return null;
         });
     }
 
-    /** {@link #stop}'s body; the in-flight mark is the wrapper's job. */
+    /** {@link #stop}'s body; the operation lock is the wrapper's job. */
     private void stopNow(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
         if (releaseManaged(instanceId)) {
@@ -407,6 +434,7 @@ public final class InstanceService {
             // the daemon's idempotent no-op after a successful console stop, and the
             // enforcement (SIGTERM, then SIGKILL after grace) when there was none.
             InstanceConsoles.markStopExpected(instanceId);
+            InstanceShell.closeSessionsOf(instanceId, InstanceShell.EndReason.WORKLOAD_ENDED);
             boolean graceful = InstanceConsoles.tryGracefulStop(instanceId, 10);
             if (graceful) {
                 Blast.log("INSTANCE: stop of", resolved.spec().handle(),
@@ -443,13 +471,13 @@ public final class InstanceService {
      *         (status {@code error}), the claims are parked, and the operator retries
      */
     public void destroy(int instanceId) {
-        inFlight(instanceId, () -> {
+        operation(instanceId, () -> {
             destroyNow(instanceId);
             return null;
         });
     }
 
-    /** {@link #destroy}'s body; the in-flight mark is the wrapper's job. */
+    /** {@link #destroy}'s body; the operation lock is the wrapper's job. */
     private void destroyNow(int instanceId) {
         // Destroy is its OWN verb, not a power action: stopping is reversible, this is not.
         // Through the SHARED resolver, so the panel's dead Delete and this refusal are one
@@ -467,6 +495,7 @@ public final class InstanceService {
             // Destroy is an intended end: never a crash, and no session survives it.
             InstanceConsoles.markStopExpected(instanceId);
             InstanceConsoles.closeSession(instanceId);
+            InstanceShell.closeSessionsOf(instanceId, InstanceShell.EndReason.WORKLOAD_ENDED);
             resolved.runtime().destroy(resolved.spec().handle());
             // Device rows and their daemon-side volumes die WITH the workload,
             // verified -- destroy soft-deletes the record, so nothing else would ever
@@ -653,6 +682,11 @@ public final class InstanceService {
     /** The lease set this service mutates hosts under (shared with snapshot/backup ops). */
     @NonNull HostLeases leases() {
         return this.leases;
+    }
+
+    /** The per-record operation locks this service serializes on (shared with snapshot/backup/migration ops). */
+    @NonNull InstanceOperationLock operations() {
+        return this.operations;
     }
 
     /**
@@ -861,6 +895,11 @@ public final class InstanceService {
      */
     public @NonNull List<String> destroyWithData(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.DESTROY);
+        return operation(instanceId, () -> destroyWithDataNow(instanceId));
+    }
+
+    /** {@link #destroyWithData}'s body; the caller holds the operation lock. */
+    private @NonNull List<String> destroyWithDataNow(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
             throw Violations.ofForm(violationText("instance_not_found")
@@ -949,8 +988,13 @@ public final class InstanceService {
      * refusal is the honest outcome if one is ever wired.
      */
     public void restart(int instanceId, @NonNull DeployTrigger trigger) {
-        stop(instanceId);
-        deploy(instanceId, trigger);
+        // ONE hold across both halves: another operation must not land between the stop
+        // and the start and find the workload down for a reason nobody recorded.
+        operation(instanceId, () -> {
+            stop(instanceId);
+            deploy(instanceId, trigger);
+            return null;
+        });
     }
 
     /**
@@ -960,8 +1004,10 @@ public final class InstanceService {
      * @return the status the workload came back with
      */
     @NonNull InstanceStatus restartWorkload(int instanceId) {
-        stop(instanceId);
-        return deployWorkload(instanceId);
+        return operation(instanceId, () -> {
+            stop(instanceId);
+            return deployWorkload(instanceId);
+        });
     }
 
     /**

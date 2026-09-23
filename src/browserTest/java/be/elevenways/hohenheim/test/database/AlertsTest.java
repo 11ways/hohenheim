@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -241,6 +242,19 @@ class AlertsTest {
             .isEqualTo(CommsInboxOwners.userKey(admin));
         assertThat((String) items.get(0).get(CommsInboxModel.TITLE)).isEqualTo("Backup failed");
         assertThat((String) items.get(0).get(CommsInboxModel.IMPORTANCE)).isEqualTo("high");
+
+        // 5. The catalog lane: an alert composed of Microcopy (resolved per reader, never
+        //    pre-rendered English) is queued the same way, through the one never-throwing
+        //    helper every failure path uses.
+        assertThat(Alerts.trySend(NotificationEvents.BACKUP_FAILED,
+                Microcopy.of("database_backup_failed_subject").withFilter("scope", "alert")
+                    .withArg("name", "shop"),
+                Microcopy.of("database_backup_failed_body").withFilter("scope", "alert")
+                    .withArg("name", "shop").withArg("reason", "disk full")))
+            .as("step 5: a Microcopy alert reaches the administrator's inbox too")
+            .isEqualTo(1);
+        assertThat(Models.get(CommsInboxModel.class).find().all())
+            .as("step 5: as a second inbox item").hasSize(2);
     }
 
     /**

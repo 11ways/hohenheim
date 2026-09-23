@@ -10,9 +10,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -158,6 +161,56 @@ class BackupArchiveTest {
         Throwable refusal = catchThrowable(() -> BackupArchive.openVerified(archive, tmp, keyring));
         assertThat(refusal)
             .as("a flipped byte is an authentication refusal naming the corruption")
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("refused whole");
+    }
+
+    /**
+     * The decryption STREAMS (BouncyCastle GCM releases plaintext before the final tag
+     * check; the JDK cipher buffered the whole ciphertext, so an archive larger than the heap
+     * could be written and never restored) -- and streaming must not weaken the refusal.
+     */
+    @Test
+    void aMultiChunkArchiveStreamsThroughDecryptionAndABadTagLeavesNoPlaintext() throws IOException {
+        EncryptionKeyring keyring = EncryptionKeyring.loadOrCreate(tmp.resolve("ring.keys"));
+        byte[] payload = new byte[3 * 1024 * 1024 + 123];
+        new Random(20260923L).nextBytes(payload);
+
+        // 1. A payload spanning dozens of 64 KiB cipher chunks, written by the (unchanged)
+        //    JDK encryptor -- the byte format every production archive already has -- opens
+        //    and extracts byte-for-byte through the streaming decryptor.
+        Path archive = buildArchive(keyring, payload);
+        Path work = tmp.resolve("work");
+        BackupArchive.Opened opened = BackupArchive.openVerified(archive, work, keyring);
+        Map<String, Path> tars = BackupArchive.extractVolumes(opened, tmp.resolve("out"));
+        assertThat(Files.readAllBytes(tars.get("data")))
+            .as("step 1: a multi-chunk payload round-trips exactly")
+            .isEqualTo(payload);
+        Files.delete(opened.zip());
+
+        // 2. A flipped TAG byte (the last byte of the file) is an authentication refusal, and
+        //    the plaintext the stream already wrote is deleted with it.
+        byte[] bytes = Files.readAllBytes(archive);
+        byte[] badTag = bytes.clone();
+        badTag[badTag.length - 1] ^= 0x01;
+        Path tampered = tmp.resolve("tampered.hib");
+        Files.write(tampered, badTag);
+        Path tamperedWork = tmp.resolve("tampered-work");
+        assertThat(catchThrowable(() -> BackupArchive.openVerified(tampered, tamperedWork, keyring)))
+            .as("step 2: a bad GCM tag refuses the archive whole")
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("refused whole");
+        try (Stream<Path> left = Files.list(tamperedWork)) {
+            assertThat(left.toList())
+                .as("step 2: no decrypted plaintext survives a failed tag check")
+                .isEmpty();
+        }
+
+        // 3. A truncated archive (tag cut off) is refused too, never read as a short zip.
+        Path truncated = tmp.resolve("truncated.hib");
+        Files.write(truncated, Arrays.copyOf(bytes, bytes.length - 16));
+        assertThat(catchThrowable(() -> BackupArchive.openVerified(truncated, tmp.resolve("t"), keyring)))
+            .as("step 3: a truncated archive fails authentication")
             .isInstanceOf(IOException.class)
             .hasMessageContaining("refused whole");
     }

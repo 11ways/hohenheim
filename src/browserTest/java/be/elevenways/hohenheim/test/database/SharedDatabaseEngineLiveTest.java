@@ -37,6 +37,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -206,12 +207,11 @@ class SharedDatabaseEngineLiveTest {
 
             // 6. Backup and restore are scoped to ONE logical database: dump A, destroy
             //    its collection, restore, and the document is back.
-            DatabaseService.BackupDownload dump = service.backupDownload(nameA);
-            assertThat(dump.content().length)
-                .as("step 6: the dump of one logical database is not empty").isPositive();
             Path dumpFile = Files.createTempFile("shared-engine-dump", ".archive");
-            try {
-                Files.write(dumpFile, dump.content());
+            try (DatabaseService.BackupStream dump = service.backupStream(nameA)) {
+                assertThat(dump.size())
+                    .as("step 6: the dump of one logical database is not empty").isPositive();
+                Files.copy(dump.content(), dumpFile, StandardCopyOption.REPLACE_EXISTING);
                 mongo(docker, engine, "usera", passwordA, dbA, dbA, "db.probe.drop();");
                 assertThat(mongo(docker, engine, "usera", passwordA, dbA, dbA,
                         "print('count=' + db.probe.countDocuments({}));"))
@@ -528,6 +528,9 @@ class SharedDatabaseEngineLiveTest {
         DatabaseService service = new DatabaseService(datasource);
         String mysqlName = "sharedmy" + System.nanoTime();
         String postgresName = "sharedpg" + System.nanoTime();
+        String postgresOther = "sharedpgo" + System.nanoTime();
+        String mysqlWild = "sharedmyw" + System.nanoTime();
+        String mysqlVictim = "sharedmyv" + System.nanoTime();
         String mysqlDatabase = "myshared";
         String postgresDatabase = "pgshared";
         String password = "sqlpw1234";
@@ -604,6 +607,65 @@ class SharedDatabaseEngineLiveTest {
             assertThat(fingerprint(docker, pgHandle, postgresEngine, postgresDatabase))
                 .as("step 3: and so does postgres's").contains("probe");
 
+            // 3b. TENANT ISOLATION. A second postgres record's role cannot even CONNECT to
+            //     the first record's database: PUBLIC's connect is revoked on create.
+            service.create(postgresOther, ManagedDatabase.Engine.POSTGRES, POSTGRES_IMAGE,
+                "pgother", password, "pgother", false, ServerService.LOCAL, ResourceLimits.none(),
+                DatabaseModel.PLACEMENT_SHARED);
+            DockerClient.ExecResult crossPg = docker.exec(pgHandle, List.of("psql",
+                "-U", "pgother", "-d", postgresDatabase, "-tA", "-c", "SELECT id FROM probe"),
+                List.of("PGPASSWORD=" + password));
+            assertThat(crossPg.exitCode())
+                .as("step 3b: another tenant's role cannot connect to this database: %s",
+                    crossPg.stdout()).isNotZero();
+            assertThat(crossPg.stderr())
+                .as("step 3b: refused by the CONNECT privilege").contains("permission denied");
+
+            // 3c. MySQL: "_" is a GRANT wildcard, so a grant on my_wild used to reach a
+            //     database named myxwild on the same engine. The escaped grant does not.
+            service.create(mysqlWild, ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "wilduser",
+                password, "my_wild", false, ServerService.LOCAL, ResourceLimits.none(),
+                DatabaseModel.PLACEMENT_SHARED);
+            service.create(mysqlVictim, ManagedDatabase.Engine.MYSQL, MYSQL_IMAGE, "victimuser",
+                password, "myxwild", false, ServerService.LOCAL, ResourceLimits.none(),
+                DatabaseModel.PLACEMENT_SHARED);
+            DockerClient.ExecResult victimWrite = docker.exec(myHandle, List.of("mysql",
+                "-u", "victimuser", "myxwild", "-e",
+                "CREATE TABLE secret (v INT); INSERT INTO secret VALUES (7);"),
+                List.of("MYSQL_PWD=" + password));
+            assertThat(victimWrite.exitCode())
+                .as("step 3c: the victim writes its own database: %s", victimWrite.stderr()).isZero();
+            DockerClient.ExecResult crossMy = docker.exec(myHandle, List.of("mysql",
+                "-u", "wilduser", "-N", "-e", "SELECT v FROM myxwild.secret"),
+                List.of("MYSQL_PWD=" + password));
+            assertThat(crossMy.exitCode())
+                .as("step 3c: the wildcard-shaped name reaches nothing else: %s", crossMy.stdout())
+                .isNotZero();
+            DockerClient.ExecResult ownMy = docker.exec(myHandle, List.of("mysql",
+                "-u", "wilduser", "my_wild", "-e", "CREATE TABLE mine (v INT);"),
+                List.of("MYSQL_PWD=" + password));
+            assertThat(ownMy.exitCode())
+                .as("step 3c: while its own database still works: %s", ownMy.stderr()).isZero();
+
+            // 3d. The fingerprint survives a table name the shell would have split (and
+            //     that used to be pasted into a root shell verbatim).
+            DockerClient.ExecResult oddTable = docker.exec(myHandle, List.of("mysql",
+                "-u", "myuser", mysqlDatabase, "-e", "CREATE TABLE `odd name` (id INT);"),
+                List.of("MYSQL_PWD=" + password));
+            assertThat(oddTable.exitCode())
+                .as("step 3d: a table with a space in its name: %s", oddTable.stderr()).isZero();
+            assertThat(fingerprint(docker, myHandle, mysqlEngine, mysqlDatabase))
+                .as("step 3d: is fingerprinted like any other").contains("odd name");
+
+            // 3e. The boot-and-hourly repair runs clean over both engines.
+            assertThat(DatabaseEngines.reconcileIsolation(postgresEngineId))
+                .as("step 3e: postgres isolation re-asserts without a failure").isEmpty();
+            assertThat(DatabaseEngines.reconcileIsolation(mysqlEngineId))
+                .as("step 3e: and so does mysql's").isEmpty();
+            service.destroy(postgresOther, true);
+            service.destroy(mysqlWild, true);
+            service.destroy(mysqlVictim, true);
+
             // 4. Destroy drops the logical database ON the engine, asserted by asking the
             //    engine's own catalogue -- with the pre-destroy listing as the anchor.
             assertThat(mysqlDatabases(docker, myHandle, mysqlEngine))
@@ -634,7 +696,7 @@ class SharedDatabaseEngineLiveTest {
             mysqlVolume = null;
             postgresVolume = null;
         } finally {
-            cleanUpDatabases(service, mysqlName, postgresName);
+            cleanUpDatabases(service, mysqlName, postgresName, postgresOther, mysqlWild, mysqlVictim);
             cleanUpEngine(docker, mysqlEngineId, mysqlVolume);
             cleanUpEngine(docker, postgresEngineId, postgresVolume);
         }

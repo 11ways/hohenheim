@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.SampleDetail;
@@ -51,7 +52,7 @@ public final class SpamserviceSampleAnalysisPage implements RecordScopedPage<Sam
             "language", value(property.language(), ""))).toList());
         vars.put("breakdown", detail.breakdown().stream().map(line -> Map.<String, Object>of(
             "flag", line.flag(), "points", line.points(), "detail", value(line.detail(), ""))).toList());
-        Panel panel = PanelRegistry.getBySlug("admin");
+        Panel panel = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
         vars.put("recordTabs", RecordTabs.build(panel, this.resource, record.id(), record, context, SLUG));
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/spamservice-sample-analysis"), vars);
     }

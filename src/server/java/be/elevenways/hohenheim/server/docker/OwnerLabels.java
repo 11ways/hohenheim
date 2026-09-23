@@ -84,6 +84,29 @@ public final class OwnerLabels {
     }
 
     /**
+     * THE ownership test every guard asks: the claim was made by THIS controller for
+     * exactly this record.
+     *
+     * AIDEV-NOTE: the controller token is part of the answer, never optional. A model+id
+     * match alone attributes another controller's record #1 to ours (the collision the
+     * CONTROLLER label exists for), and before this method there were eight spellings of
+     * the test, half of which left the token out.
+     *
+     * @param recordId the record that must own the resource; null (a record-less caller)
+     *                 matches nothing
+     */
+    public static boolean matches(@Nullable Owner held, @NonNull Identifier model,
+                                  @Nullable Object recordId) {
+        return isOurs(held) && recordId != null && held.model().equals(model)
+            && held.id().equals(String.valueOf(recordId));
+    }
+
+    /** {@link #matches(Owner, Identifier, Object)} for the record {@code expected} names; null matches nothing. */
+    public static boolean matches(@Nullable Owner held, @Nullable Owner expected) {
+        return expected != null && matches(held, expected.model(), expected.id());
+    }
+
+    /**
      * Remove a same-named container ONLY when the daemon attributes it to this record
      * via its owner labels; an absent container is a verified no-op.
      *
@@ -115,9 +138,7 @@ public final class OwnerLabels {
         Object config = inspect.get("Config");
         Owner owner = parse(config instanceof Map<?, ?> c && c.get("Labels") instanceof Map<?, ?> l
             ? l : null);
-        boolean ours = isOurs(owner) && recordId != null && owner.model().equals(model)
-            && owner.id().equals(String.valueOf(recordId));
-        if (!ours) {
+        if (!matches(owner, model, recordId)) {
             throw new IOException("REFUSED to remove container '" + containerName + "': it is not"
                 + " attributably ours (" + (owner != null
                     ? "owned by " + owner.model() + " #" + owner.id() + " of controller "

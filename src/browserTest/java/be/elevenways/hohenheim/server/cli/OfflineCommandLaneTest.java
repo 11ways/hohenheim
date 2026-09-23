@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.test.migration.InstallsAt;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthModels;
@@ -15,7 +16,9 @@ import be.elevenways.zenit.auth.server.SetPasswordOfflineCommand;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.server.cli.HistorySecretSurveyCommand;
+import be.elevenways.zenit.server.cli.HostConsole;
 import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.cli.OfflineCommands;
 import be.elevenways.zenit.server.cli.PurgeHistorySecretsCommand;
@@ -26,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -227,6 +229,29 @@ class OfflineCommandLaneTest {
             .isInstanceOf(OfflineCommandException.class)
             .hasMessageContaining(RestoreControlPlaneCommand.FLAG);
 
+        // 6b. A MISTYPED break-glass flag is refused by the argv gate before the lane opens
+        //     anything: an operator typing --restore-control-plan meant to replace this very
+        //     database, so it must neither boot a server on it nor touch it. Through the host
+        //     console the refusal is a message and exit status 1, never a stack trace.
+        Datasource beforeTypo = Datasources.getDefault();
+        assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
+                "--restore-control-plan", "archive.zrec"}, line -> { }))
+            .as("step 6b: an undeclared option is refused by name")
+            .isInstanceOf(OfflineCommandException.class)
+            .hasMessageContaining("--restore-control-plan");
+        assertThat(Datasources.getDefault())
+            .as("step 6b: and the refusal came before any datasource was opened")
+            .isSameAs(beforeTypo);
+        List<String> errors = new ArrayList<>();
+        int[] exitStatus = {-1};
+        assertThat(OfflineBoot.runIfRequested(new String[] {"--restore-control-plan", "x"},
+                new HostConsole(line -> { }, errors::add, status -> exitStatus[0] = status)))
+            .as("step 6b: the host face claims the run so main never boots")
+            .isTrue();
+        assertThat(exitStatus[0]).as("step 6b: with exit status 1").isEqualTo(1);
+        assertThat(String.join("\n", errors))
+            .as("step 6b: and the refusal on stderr").contains("--restore-control-plan");
+
         // 7. The settings file the lane loaded is the one the property named: this is what
         //    makes a database.encryption.key_file override in settings/local.dry apply to a
         //    break-glass command exactly as it does to a boot.
@@ -262,38 +287,44 @@ class OfflineCommandLaneTest {
             .isInstanceOf(OfflineCommandException.class)
             .hasMessageContaining("LIVE");
 
-        // 2. A byte copy REGRESSED by one migration -- the state a pre-M008 production
-        //    copy is in: no scope column, no ledger row.
+        // 2. A copy ONE migration behind: the install every upgrade meets, built as that
+        //    install really is (the discovered set through the second-newest version of this
+        //    app's stream). Never by deleting a middle ledger row off the live file: that is a
+        //    history no install can have, and the strict integrity check refuses it as out of
+        //    order the moment a migration is appended after the one it removed.
+        List<Migration> own = InstallsAt.hohenheimMigrations(
+            HohenheimDatabase.datasource().getDatasourceIdentifier());
+        assertThat(own).as("step 2: the stream has a migration to be one behind on").hasSizeGreaterThan(1);
+        Migration newest = own.get(own.size() - 1);
         Path copy = Files.createTempFile("hohenheim-rehearsal", ".db");
-        Files.copy(live, copy, StandardCopyOption.REPLACE_EXISTING);
-        try (Connection surgery = DriverManager.getConnection("jdbc:sqlite:" + copy);
-             Statement statement = surgery.createStatement()) {
-            statement.executeUpdate("ALTER TABLE bans DROP COLUMN scope");
-            statement.executeUpdate(
-                "DELETE FROM zenit_migrations WHERE name = 'Ban enforcement scope'");
-        }
+        Files.delete(copy);
+        InstallsAt.migrateThrough(copy, own.get(own.size() - 2).getVersion());
+        String newestApplied = "SELECT COUNT(*) FROM zenit_migrations WHERE name = '"
+            + newest.getName().replace("'", "''") + "'";
+        assertThat(scalar(copy, newestApplied))
+            .as("step 2: the copy has not applied %s yet", newest.getVersion())
+            .isZero();
+        int liveLedger = scalar(live, "SELECT COUNT(*) FROM zenit_migrations");
 
-        // 3. The rehearsal migrates THE COPY and reports exactly that.
+        // 3. The rehearsal migrates THE COPY, under the strict posture a deploy boots with,
+        //    and reports exactly that.
         List<String> out = new ArrayList<>();
-        assertThat(OfflineBoot.runIfRequested(new String[] {
+        InstallsAt.withIntegrityMode("fail", () -> assertThat(OfflineBoot.runIfRequested(new String[] {
                 RehearseMigrationsCommand.FLAG, copy.toString()}, out::add))
             .as("step 3: the rehearsal claims the run")
-            .isTrue();
+            .isTrue());
         assertThat(String.join("\n", out))
             .as("step 3: naming the applied count and the copy it ran against")
             .contains("1 applied")
             .contains(copy.toString());
-        assertThat(scalar(copy,
-                "SELECT COUNT(*) FROM pragma_table_info('bans') WHERE name = 'scope'"))
-            .as("step 3: the copy gained the migrated column")
+        assertThat(scalar(copy, newestApplied))
+            .as("step 3: the copy gained %s", newest.getVersion())
             .isEqualTo(1);
 
-        // 4. The live file was never touched: its ledger still carries the row the copy
-        //    had to regain, so nothing regressed or re-migrated it.
-        assertThat(scalar(live,
-                "SELECT COUNT(*) FROM zenit_migrations WHERE name = 'Ban enforcement scope'"))
+        // 4. The live file was never touched: its ledger holds exactly the rows it held.
+        assertThat(scalar(live, "SELECT COUNT(*) FROM zenit_migrations"))
             .as("step 4: the live ledger is untouched")
-            .isEqualTo(1);
+            .isEqualTo(liveLedger);
         Files.deleteIfExists(copy);
     }
 

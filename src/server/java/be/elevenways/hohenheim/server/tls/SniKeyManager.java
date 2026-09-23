@@ -17,6 +17,11 @@ import java.util.function.Predicate;
  * Includes a domain-level resolution cache with TTL and negative-result backoff
  * to avoid repeated lookups on the TLS handshake hot path.
  *
+ * AIDEV-NOTE: every cached alias carries the {@link CertificateStore#generation()} it was
+ * resolved under and is stale the moment the store swaps a snapshot. The cache used to be
+ * cleared only by a clearCache() nobody called, so a replaced or deleted certificate kept
+ * being served (or kept failing) for up to the five-minute TTL after the store reloaded.
+ *
  * AIDEV-NOTE: the handshake-stage ban check below is defense-in-depth, NOT the live enforcer.
  * In the shipped topology HTTPS terminates on 127.0.0.1 behind {@code PublicTcpListener}, so
  * {@code engine.getPeerHost()} here is always the loopback hop and the check never fires on a
@@ -34,7 +39,7 @@ public class SniKeyManager extends X509ExtendedKeyManager {
     private static final long NEGATIVE_CACHE_TTL_MS = 30 * 1000;
     private static final int CACHE_MAX_SIZE = 10_000;
 
-    private record CachedAlias(String alias, long cachedAt, boolean positive) {}
+    private record CachedAlias(String alias, long cachedAt, boolean positive, long generation) {}
 
     private final ConcurrentHashMap<String, CachedAlias> aliasCache = new ConcurrentHashMap<>();
 
@@ -71,7 +76,8 @@ public class SniKeyManager extends X509ExtendedKeyManager {
                         CachedAlias cached = aliasCache.get(cacheKey);
                         if (cached != null) {
                             long ttl = cached.positive() ? POSITIVE_CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS;
-                            if (Now.millis() - cached.cachedAt() < ttl) {
+                            if (cached.generation() == store.generation()
+                                    && Now.millis() - cached.cachedAt() < ttl) {
                                 return cached.alias();
                             }
                             aliasCache.remove(cacheKey);
@@ -114,14 +120,7 @@ public class SniKeyManager extends X509ExtendedKeyManager {
                 return now - e.getValue().cachedAt() > ttl;
             });
         }
-        aliasCache.put(key, new CachedAlias(alias, Now.millis(), positive));
-    }
-
-    /**
-     * Clear the alias cache. Call after certificate store reloads.
-     */
-    public void clearCache() {
-        aliasCache.clear();
+        aliasCache.put(key, new CachedAlias(alias, Now.millis(), positive, store.generation()));
     }
 
     private boolean isKeyTypeCompatible(String alias, String keyType) {

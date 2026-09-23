@@ -216,6 +216,48 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
         Models.get(InstanceDeviceModel.class).delete(nic.get(InstanceDeviceModel.ID));
         assertThat(Quotas.usedOf(NIC_BUCKET))
             .as("step 4: the NIC slot came back").isEqualTo(usedBefore);
+
+        // 5. A type token no DeviceType member declares is REFUSED and charges nothing:
+        //    the create hook used to charge nothing for it and let it land.
+        Row unknown = Models.get(InstanceDeviceModel.class).createEmptyRow();
+        unknown.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
+        unknown.set(InstanceDeviceModel.TYPE, "floppy");
+        unknown.set(InstanceDeviceModel.NAME, NAME_PREFIX + "floppy");
+        Throwable unknownRefused = catchThrowable(() ->
+            Models.get(InstanceDeviceModel.class).save(unknown));
+        assertThat(unknownRefused)
+            .as("step 5: an unknown device type is refused").isInstanceOf(Violations.class);
+        assertThat(Models.get(InstanceDeviceModel.class).find()
+                .where(InstanceDeviceModel.NAME.eq(NAME_PREFIX + "floppy")).count())
+            .as("step 5: and nothing landed").isZero();
+        assertThat(Quotas.usedOf(NIC_BUCKET))
+            .as("step 5: no NIC slot was spent on it").isEqualTo(usedBefore);
+        assertThat(Quotas.usedOf(DISK_BUCKET))
+            .as("step 5: no disk GB was spent on it").isEqualTo(diskUsedBefore);
+
+        // 6. A STORED row whose type drifted to an unknown token (a hook-free write, as an
+        //    older or foreign writer could leave it) releases NOTHING on removal: the old
+        //    delete path released one NIC slot for anything that was not a cdrom, handing
+        //    out capacity nobody had spent.
+        Row charged = Models.get(InstanceDeviceModel.class).createEmptyRow();
+        charged.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
+        charged.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_NIC);
+        charged.set(InstanceDeviceModel.NAME, NAME_PREFIX + "drifted");
+        Models.get(InstanceDeviceModel.class).save(charged);
+        assertThat(Quotas.usedOf(NIC_BUCKET))
+            .as("step 6: the NIC charged its slot").isEqualTo(usedBefore + 1);
+        Models.get(InstanceDeviceModel.class).find()
+            .where(InstanceDeviceModel.ID.eq(charged.get(InstanceDeviceModel.ID)))
+            .assign(InstanceDeviceModel.TYPE, "floppy")
+            .updateAll();
+        Models.get(InstanceDeviceModel.class).delete(charged.get(InstanceDeviceModel.ID));
+        try {
+            assertThat(Quotas.usedOf(NIC_BUCKET))
+                .as("step 6: removing an unknown-typed row released nothing")
+                .isEqualTo(usedBefore + 1);
+        } finally {
+            Quotas.release(NIC_BUCKET, 1);
+        }
     }
 
     /**

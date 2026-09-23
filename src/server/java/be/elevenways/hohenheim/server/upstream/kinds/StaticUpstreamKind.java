@@ -3,8 +3,11 @@ package be.elevenways.hohenheim.server.upstream.kinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimPaths;
+import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.StaticFileHandler;
+import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -44,9 +47,7 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
             .label(HohenheimFormCopy.label("show_hidden_files"))
             .help(HohenheimFormCopy.help("show_hidden_files")).build());
 
-    public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("delay").suffix("ms").label(HohenheimFormCopy.label("delay"))
-            .help(HohenheimFormCopy.help("delay")).build());
+    public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(UpstreamSettings.delay());
 
     public static final StringField FALLBACK_FILE = SETTINGS_SCHEMA.addField(
         PathField.builder().name("fallback_file").label(HohenheimFormCopy.label("fallback_file"))
@@ -98,6 +99,16 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
                 exchange.setStatusCode(200);
                 exchange.endExchange();
             };
+        }
+
+        // AIDEV-NOTE: a tenant-owned static site is REFUSED at dial time. No allowed-roots
+        // declaration exists that could say which host directories a tenant may publish, and
+        // without one root_path serves any directory hohenheim can read (its own database and
+        // settings included). Fail closed until the operator owns the site again.
+        if (TenantUpstreams.isTenantOwned(site)) {
+            Integer siteId = site.get(SiteModel.ID);
+            return new FaultedSiteHandler(siteId != null ? siteId : -1,
+                "a tenant-owned site may not serve files from the host");
         }
 
         return new StaticFileHandler(Path.of(rootPathStr), fallbackFile, autoindex,

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
@@ -19,10 +20,8 @@ import be.elevenways.zenit.comms.CommsSettings;
 import be.elevenways.zenit.comms.server.cms.CommsSettingsLabels;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.server.ServerZenitRuntime;
-import be.elevenways.zenit.server.setting.ServerSettings;
 import be.elevenways.zenit.server.setting.SettingsEditor;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +39,9 @@ public final class HohenheimPanel extends Panel {
      * sources, server panel) can never spell it differently.
      */
     public static final Permission ACCESS = HohenheimSources.ADMIN_ACCESS;
+
+    /** The panel's slug, aliased from the common declaring home so endpoint paths agree with it. */
+    public static final String SLUG = HohenheimSlugs.ADMIN;
 
     // AIDEV-NOTE: sidebar order is these weights, ASCENDING (PanelNav.sections). It is
     // ordered by WHAT THIS PRODUCT IS FOR, not alphabetically and not by module: Deploy
@@ -109,7 +111,7 @@ public final class HohenheimPanel extends Panel {
             .withSeparatorBefore(true);
 
     public HohenheimPanel() {
-        super(Identifier.of("hohenheim", "admin"), "admin", Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
+        super(Identifier.of("hohenheim", "admin"), SLUG, Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
     }
 
     /** Below ManagePanel's default 100: an operator holding both panels lands on /admin. */
@@ -222,10 +224,7 @@ public final class HohenheimPanel extends Panel {
         peers.add(new AdminInboxPage());
         // What is this server running: every bundled module's git commit (System group).
         peers.add(new BuildInfoPage());
-        SettingsPage settings = settingsPage();
-        if (settings != null) {
-            peers.add(settings);
-        }
+        peers.add(settingsPage());
         addIf(peers, new CertificateRequestPage(), Role.PROXY);
         return peers;
     }
@@ -242,14 +241,18 @@ public final class HohenheimPanel extends Panel {
     }
 
     /**
-     * The framework settings editor: Hohenheim's own settings file plus
-     * zenit's server settings ({@code settings/local.dry}). Each mount only
-     * appears when this boot actually loaded its editable file, so the panel
-     * never breaks over a missing settings source (test boots load others).
-     * Mounts are subtree-scoped by context ownership, so the framework mount
-     * skips the hohenheim group and vice versa.
+     * The settings editor: Hohenheim's own settings file, zenit's framework mount, the comms
+     * transport chain and the spamservice backend. The hohenheim and comms mounts only appear
+     * when this boot actually loaded their editable file, so the panel never breaks over a
+     * missing settings source (test boots load others).
+     *
+     * AIDEV-NOTE: the framework mount is zenit-cms's own {@link SettingsPage#frameworkMount()},
+     * never a hand-built {@code SettingsEditor} over settings/local.dry: its key and label are
+     * the framework's declared vocabulary (SettingsPage.FRAMEWORK_MOUNT_KEY, SettingsLabels), so
+     * a ?section=framework.* deep link and its translation cannot drift from other hosts. The
+     * mount order is unchanged from before (hohenheim, framework, comms, spamservice).
      */
-    private static @Nullable SettingsPage settingsPage() {
+    private static @NonNull SettingsPage settingsPage() {
         List<SettingsPage.Mount> mounts = new ArrayList<>();
         try {
             SettingsEditor appEditor = SettingsEditor.forFile(
@@ -257,16 +260,11 @@ public final class HohenheimPanel extends Panel {
             mounts.add(new SettingsPage.Mount("app",
                 Microcopy.literal("Hohenheim"), appEditor));
         } catch (IllegalArgumentException notLoaded) {
-            // Boot without the hohenheim settings file: framework mount only.
+            // Boot without the hohenheim settings file: the other mounts only.
         }
-        try {
-            SettingsEditor frameworkEditor = SettingsEditor.forFile(
-                ServerSettings.VALUES, ServerZenitRuntime.PATH_ROOT.resolve("settings/local.dry"));
-            mounts.add(new SettingsPage.Mount("framework",
-                Microcopy.of("framework").withFilter("scope", "settings_mount")
-                    .withFallback("Framework"), frameworkEditor));
-        } catch (IllegalArgumentException notLoaded) {
-            // Boot without the standard zenit chain: app settings only.
+        SettingsPage.Mount framework = SettingsPage.frameworkMount();
+        if (framework != null) {
+            mounts.add(framework);
         }
         try {
             mounts.add(new SettingsPage.Mount(CommsSettingsLabels.MOUNT_KEY, CommsSettingsLabels.mount(),
@@ -276,9 +274,6 @@ public final class HohenheimPanel extends Panel {
         }
         mounts.add(new SettingsPage.Mount("spamservice",
             Microcopy.literal("Spamservice"), new SpamserviceSettingsBackend()));
-        if (mounts.isEmpty()) {
-            return null;
-        }
         return new AdminSettingsPage(mounts);
     }
 }

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.security.IpLiterals;
+import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
 import be.elevenways.protoblast.common.time.Now;
 
 import java.io.IOException;
@@ -43,12 +44,24 @@ final class BackendConnector {
 
     private BackendConnector() {}
 
-    static Socket connect(String host, int port, int timeoutMillis, int publicTlsPort) throws IOException {
+    /**
+     * @param publicOnly refuse every resolved address zenit does not classify as public: the
+     *                   dial-time half of a tenant-owned route, judged on the SAME addresses
+     *                   this method then connects to, so a rebinding answer cannot slip in
+     */
+    static Socket connect(String host, int port, int timeoutMillis, int publicTlsPort,
+                          boolean publicOnly) throws IOException {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
         List<InetAddress> addresses = resolve(host, deadline);
         IOException lastFailure = null;
         int remainingCandidates = addresses.size();
         for (InetAddress address : addresses) {
+            if (publicOnly && !TenantUpstreams.isPublic(address)) {
+                lastFailure = new IOException("TLS passthrough target of a tenant-owned site resolves to a "
+                    + "non-public address");
+                remainingCandidates--;
+                continue;
+            }
             if (isLocalListener(address, port, publicTlsPort)) {
                 lastFailure = new IOException("TLS passthrough target resolves to Hohenheim's public listener");
                 remainingCandidates--;

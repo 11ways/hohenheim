@@ -177,7 +177,7 @@ class InstanceSettingsSectionTest {
         assertThat(sectionMembers(ReleaseKind.SETTINGS_SCHEMA, HohenheimFormSections.MANAGED))
             .containsExactly("built_image_id", "image_ref", "source_fingerprint");
         assertThat(sectionMembers(StackServiceKind.SETTINGS_SCHEMA, HohenheimFormSections.MANAGED))
-            .containsExactly("stack_network", "service_name");
+            .containsExactly("stack_network", "service_name", "stack_id");
         assertThat(visibleRun(StackServiceKind.SETTINGS_SCHEMA))
             .containsExactly("image", "command", "environment_variables", "volumes", "ports");
 

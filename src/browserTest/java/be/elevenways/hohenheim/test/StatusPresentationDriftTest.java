@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.CertificateChallenges;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.instance.ConsoleKind;
@@ -485,7 +486,14 @@ class StatusPresentationDriftTest {
         return -1;
     }
 
-    /** The {@code dns_mode} select's literal option values, read out of the request template. */
+    /**
+     * The {@code dns_mode} select's option values, read out of the request template: a literal
+     * {@code value="x"} as written, a {@code value={% CertificateChallenges.NAME %}} resolved to
+     * the constant it names, so an option spelled either way is judged against the enum.
+     *
+     * @throws AssertionError when an option value is neither shape, so a third spelling can never
+     *         slip past as "nothing offered"
+     */
     private static List<String> dnsModeOptionsOffered() throws Exception {
         String template = Files.readString(
             Path.of("src/common/templates/cms/certificate-request.hwk"));
@@ -495,9 +503,21 @@ class StatusPresentationDriftTest {
         String body = template.substring(select, template.indexOf("</pl-select>", select));
 
         List<String> offered = new ArrayList<>();
-        Matcher matcher = Pattern.compile("<pl-select-item value=\"([^\"]+)\"").matcher(body);
-        while (matcher.find()) {
-            offered.add(matcher.group(1));
+        Matcher items = Pattern.compile("<pl-select-item value=").matcher(body);
+        Pattern literal = Pattern.compile("\"([^\"]+)\"");
+        Pattern constant = Pattern.compile("\\{%\\s*CertificateChallenges\\.([A-Z_]+)\\s*%}");
+        while (items.find()) {
+            String rest = body.substring(items.end());
+            Matcher literalValue = literal.matcher(rest);
+            Matcher constantValue = constant.matcher(rest);
+            if (literalValue.lookingAt()) {
+                offered.add(literalValue.group(1));
+            } else if (constantValue.lookingAt()) {
+                offered.add((String) CertificateChallenges.class.getField(constantValue.group(1)).get(null));
+            } else {
+                throw new AssertionError("dns_mode option value is neither a literal nor a"
+                    + " CertificateChallenges constant: " + rest.substring(0, Math.min(60, rest.length())));
+            }
         }
         return offered;
     }

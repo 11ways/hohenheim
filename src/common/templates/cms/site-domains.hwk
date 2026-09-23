@@ -53,14 +53,11 @@
                     reads the coverage state and the expiry, never the operator's
                     certificate name. -#}
                 <pl-table-cell data-cert-status={% domain.get("certStatus") %}>
-                    {% if domain.get("certStatus") == "active" %}
-                    {% if domain.get("canOpenCert") == true %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "success" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "success" %}>{{ t("covered", scope: "site_domains") }}</pl-badge>{% /if %}
-                    {% elseif domain.get("certStatus") == "error" %}
-                    {% if domain.get("canOpenCert") == true %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "destructive" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "destructive" %}>{{ t("not_covered", scope: "site_domains") }}</pl-badge>{% /if %}
-                    {% elseif domain.get("certStatus") == "pending" %}
-                    {% if domain.get("canOpenCert") == true %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% "warning" %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% "warning" %}>{{ t("coverage_pending", scope: "site_domains") }}</pl-badge>{% /if %}
-                    {% elseif domain.get("certStatus") == "none" %}
-                    <pl-badge variant={% "outline" %}>{{ t("none", scope: "site_domains") }}</pl-badge>
+                    {#- Variant and wording are facts on CertCoverage (SiteDomainsPage puts them);
+                        an empty status is a row no certificate applies to (TLS passthrough, a
+                        non-exact match) and renders nothing. -#}
+                    {% if domain.get("certStatus") != "" %}
+                    {% if domain.get("canOpenCert") == true %}<a use:Zenit.route={% domain.get("certTarget") %}><pl-badge variant={% domain.get("certBadge") %}>{{ domain.get("certName") }}</pl-badge></a>{% else %}<pl-badge variant={% domain.get("certBadge") %}>{{ domain.get("certLabel") }}</pl-badge>{% /if %}
                     {% /if %}
                     {#- The coverage badge and the expiry are two sentences in one cell:
                         the newline between them is markup whitespace and does not survive,

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -137,7 +139,7 @@ public class InstanceDatabaseResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("instances",
+        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCES,
             row -> row.get(InstanceDatabaseModel.INSTANCE_ID)).tab("databases");
     }
 
@@ -184,14 +186,9 @@ public class InstanceDatabaseResource extends RowResource {
     /** The instance's Databases tab links here with ?instance_id= so the pick is preselected. */
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
-        String instanceId = conduit.getQueryParam("instance_id");
-        if (instanceId != null && !instanceId.isEmpty()) {
-            try {
-                return Map.of("instance_id", Integer.parseInt(instanceId),
-                    "env_prefix", InstanceDatabaseModel.DEFAULT_PREFIX);
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
-            }
+        Integer instanceId = CmsSupport.prefill(conduit, HohenheimParams.INSTANCE_ID_PREFILL);
+        if (instanceId != null) {
+            return Map.of("instance_id", instanceId, "env_prefix", InstanceDatabaseModel.DEFAULT_PREFIX);
         }
         return Map.of("env_prefix", InstanceDatabaseModel.DEFAULT_PREFIX);
     }

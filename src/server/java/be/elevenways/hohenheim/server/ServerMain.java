@@ -27,7 +27,6 @@ import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
@@ -50,6 +49,8 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.task.TaskRuntime;
 import be.elevenways.zenit.server.task.TaskService;
+
+import java.util.Map;
 
 /**
  * Server entry point for Hohenheim.
@@ -287,24 +288,57 @@ public class ServerMain {
 
     /** A skipped role must never be silent: name the role and what did not start. */
     private static void roleSkip(HohenheimRoles.@NonNull Role role, @NonNull String skipped) {
-        Blast.slog("hohenheim.role_disabled", java.util.Map.of(
+        Blast.slog("hohenheim.role_disabled", Map.of(
             "role", role.token(),
             "skipped", skipped));
     }
 
     /** Registers cleanup before the first managed child can start. */
     private static void installShutdownHook() {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            if (proxyServer != null) proxyServer.stop();
-            if (dnsServer != null) dnsServer.stop();
-            if (secondaryZoneService != null) secondaryZoneService.stop();
-            SpamserviceManager.get().shutdown();
-            // Destroy the journalctl child; a leaked follow survives the JVM.
-            SshAuthWatcher.INSTANCE.stop();
-            // Hand the host leases back so a successor controller does not have to
-            // wait out the TTL; a crash still recovers through expiry.
-            HostLeases.production().releaseAll();
-        }, "hohenheim-shutdown"));
+        Runtime.getRuntime().addShutdownHook(new Thread(ServerMain::shutdown, "hohenheim-shutdown"));
+    }
+
+    /**
+     * Every shutdown step, each one independent of the others.
+     *
+     * AIDEV-NOTE: a step that throws is logged and the next one still runs. They used to
+     * share one lambda, so a throwing proxy or DNS stop skipped the Spamservice process-group
+     * cleanup (a setsid child that outlives the JVM outside systemd), the journalctl follow
+     * and the host lease hand-back.
+     */
+    static void shutdown() {
+        shutdownStep("proxy listeners", () -> {
+            if (proxyServer != null) {
+                proxyServer.stop();
+            }
+        });
+        shutdownStep("dns listeners", () -> {
+            if (dnsServer != null) {
+                dnsServer.stop();
+            }
+        });
+        shutdownStep("secondary zone replication", () -> {
+            if (secondaryZoneService != null) {
+                secondaryZoneService.stop();
+            }
+        });
+        shutdownStep("spamservice", () -> SpamserviceManager.get().shutdown());
+        // Destroy the journalctl child; a leaked follow survives the JVM.
+        shutdownStep("ssh auth watcher", SshAuthWatcher.INSTANCE::stop);
+        // Hand the host leases back so a successor controller does not have to
+        // wait out the TTL; a crash still recovers through expiry.
+        shutdownStep("host leases", () -> HostLeases.production().releaseAll());
+    }
+
+    /** Run one shutdown step, logging instead of propagating whatever it throws. */
+    static void shutdownStep(@NonNull String name, @NonNull Runnable step) {
+        try {
+            step.run();
+        } catch (RuntimeException | Error failed) {
+            Blast.slog("hohenheim.shutdown_step_failed", Map.of(
+                "step", name,
+                "error", String.valueOf(failed)));
+        }
     }
 
     // baseline("/") is a catch-all (zenit-auth 620125d): every admin path requires login except

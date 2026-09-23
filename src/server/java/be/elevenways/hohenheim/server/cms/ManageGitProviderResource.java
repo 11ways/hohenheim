@@ -3,21 +3,19 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -31,7 +29,10 @@ import java.util.Map;
  * - SHARED is absent from the form and the table. It is the OPERATOR's declaration that
  *   this installation's credential may be used by every tenant, so offering it here would
  *   let a tenant publish its own credential to the whole installation. Absent from the
- *   form means absent from coercion, which is the enforcement, not merely the rendering.
+ *   form keeps it out of coercion, and {@link #refuseSharedChange} refuses any wider map
+ *   this resource is handed -- the omission is no longer the whole gate.
+ * - A failed connection test answers ONE generic message ({@link #connectionFailure}):
+ *   the tenant chose the URL, so the client's own error text would be a port-scan oracle.
  * - The list is scoped to MANAGED rows only, not to the picker's shared-plus-managed
  *   scope: a tenant may USE an operator's shared provider, and must never be able to open
  *   its record, retype its base URL or delete it.
@@ -70,12 +71,7 @@ public final class ManageGitProviderResource extends GitProviderResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> {
-            Criteria scope = HohenheimAccess.grantScope(ctx, Models.get(GitProviderModel.class),
-                GitProviderModel.MODEL_ID, HohenheimAccess.MANAGE, GitProviderModel.ID::in);
-            return scope == null ? AccessDecision.allowAll()
-                : AccessDecision.allow(QueryPredicate.of(scope));
-        };
+        return TenantScopes.MANAGED_GIT_PROVIDERS.accessFunction();
     }
 
     /**
@@ -86,20 +82,60 @@ public final class ManageGitProviderResource extends GitProviderResource {
     @Override
     public @NonNull Object persistRow(@NonNull Map<String, Object> coerced,
                                       @NonNull AccessContext accessContext) {
+        refuseSharedChange(coerced, null);
         Object key = super.persistRow(coerced, accessContext);
-        int providerId = Integer.parseInt(String.valueOf(key));
-        for (String subject : HohenheimAccess.creationOwnerSubjects(accessContext)) {
-            int separator = subject.indexOf(':');
-            RecordGrants.grant(GrantSubjectType.fromKey(subject.substring(0, separator)),
-                Integer.parseInt(subject.substring(separator + 1)),
-                GitProviderModel.MODEL_ID, providerId, HohenheimAccess.MANAGE, true);
-        }
-        // The request memo caches "which records does this principal hold X on", and the
-        // grant above just changed the answer. zenit-cms verifies the created row against
-        // the caller's own scope predicate before committing, so a stale memo would make a
-        // legitimate create refuse ITSELF with out_of_scope.
-        HohenheimAccess.forgetGrantedRecordIds(accessContext);
+        // THE planting loop, which also drops the scope memo the grant made stale --
+        // zenit-cms verifies the created row against the caller's own scope predicate
+        // before committing, so a stale memo makes a legitimate create refuse ITSELF.
+        HohenheimAccess.grantCreatorManage(GitProviderModel.MODEL_ID,
+            Integer.parseInt(String.valueOf(key)), accessContext);
         return key;
+    }
+
+    @Override
+    public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
+                          @NonNull AccessContext accessContext) {
+        refuseSharedChange(coerced, existing);
+        super.updateRow(existing, coerced, accessContext);
+    }
+
+    /**
+     * Refuse any write through this surface that would move SHARED off its stored (or, on a
+     * create, default) value.
+     *
+     * AIDEV-NOTE: the form omits SHARED, and coercion only carries form entries -- but that
+     * made the omission the WHOLE gate, so any lane handing this resource a wider map (a
+     * programmatic ResourceWrites call, a future quick-add) published a tenant credential
+     * installation-wide. This is the resource's own refusal. The model-level gate belongs in
+     * TenantWrites beside the identical AccessListModel.SHARED freeze, which covers every
+     * writer; until it lands there, this is what holds on /manage.
+     *
+     * @throws Violations anchored on the shared field
+     */
+    static void refuseSharedChange(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
+        String name = GitProviderModel.SHARED.getName();
+        if (!coerced.containsKey(name)) {
+            return;
+        }
+        Object baseline = existing != null ? existing.get(GitProviderModel.SHARED)
+            : GitProviderModel.SHARED.getDefaultValue();
+        if (Boolean.TRUE.equals(coerced.get(name)) != Boolean.TRUE.equals(baseline)) {
+            throw Violations.ofField(name, coerced.get(name),
+                CmsSupport.violationText("tenant_field_frozen"));
+        }
+    }
+
+    /**
+     * ONE generic message for every failed test on the tenant surface.
+     *
+     * AIDEV-NOTE: the tenant chose the URL this probe connects to, so echoing the client's
+     * own failure ("connection refused", "timed out", a TLS or DNS error) would turn the
+     * button into a port scanner of whatever the server can reach, with the toast as its
+     * oracle. The operator surface keeps the detailed reason; the real reason is logged.
+     */
+    @Override
+    protected @NonNull Microcopy connectionFailure(@NonNull Exception failure) {
+        return Microcopy.of("test_failed_generic").withFilter("scope", "git_provider");
     }
 
     /** NAV-ONLY (zero granted providers hide the empty list); the route stays scoped. */
@@ -107,5 +143,15 @@ public final class ManageGitProviderResource extends GitProviderResource {
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
         return HohenheimAccess.reachesAny(access, GitProviderModel.MODEL_ID,
             HohenheimAccess.MANAGE);
+    }
+
+    /**
+     * The contributed pages only (the generic access matrix, which gates itself per record).
+     * Deliberately NOT frameworkSubpages(): the admin activity/revision history stays off the
+     * delegated surface, and dropping the page here also 404s its routes.
+     */
+    @Override
+    public @NonNull List<RecordScopedPage<Row>> subpages() {
+        return this.contributedSubpages();
     }
 }

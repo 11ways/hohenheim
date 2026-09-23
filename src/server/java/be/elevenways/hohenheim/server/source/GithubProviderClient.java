@@ -2,20 +2,18 @@ package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
+import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.spec.PKCS8EncodedKeySpec;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -35,8 +33,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class GithubProviderClient extends ApiProviderClient {
 
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(20);
-
     /** Re-mint margin: a cached installation token is reused until 5 min before expiry. */
     private static final long TOKEN_REUSE_MARGIN_MS = 5 * 60 * 1000L;
 
@@ -55,7 +51,8 @@ public class GithubProviderClient extends ApiProviderClient {
 
     GithubProviderClient(int providerId, @Nullable String baseUrl, @Nullable String accessToken,
                          @Nullable String appId, @Nullable String appInstallationId,
-                         @Nullable String appPrivateKeyPem) {
+                         @Nullable String appPrivateKeyPem, @NonNull OutboundUrlGuard guard) {
+        super(guard);
         this.providerId = providerId;
         String base = baseUrl == null || baseUrl.isBlank()
             ? "https://github.com" : trimSlash(baseUrl.trim());
@@ -69,8 +66,8 @@ public class GithubProviderClient extends ApiProviderClient {
     }
 
     @Override
-    protected void decorate(HttpRequest.@NonNull Builder request) {
-        request.header("Accept", "application/vnd.github+json");
+    protected @NonNull Map<String, String> extraHeaders() {
+        return Map.of("Accept", "application/vnd.github+json");
     }
 
     private boolean appConfigured() {
@@ -167,17 +164,12 @@ public class GithubProviderClient extends ApiProviderClient {
             return cached;
         }
         String jwt = appJwt();
-        HttpRequest request = HttpRequest.newBuilder(URI.create(this.apiBase
-                + "/app/installations/" + this.appInstallationId + "/access_tokens"))
-            .timeout(REQUEST_TIMEOUT)
-            .header("Authorization", "Bearer " + jwt)
-            .header("Accept", "application/vnd.github+json")
-            .POST(HttpRequest.BodyPublishers.noBody())
-            .build();
-        HttpResponse<String> response = send(request);
-        if (response.statusCode() != 201 && response.statusCode() != 200) {
+        Response response = exchange(HttpMethod.POST, this.apiBase
+                + "/app/installations/" + this.appInstallationId + "/access_tokens",
+            Map.of("Authorization", "Bearer " + jwt), new byte[0]);
+        if (response.status() != 201 && response.status() != 200) {
             throw new IOException("GitHub App token mint refused: HTTP "
-                + response.statusCode());
+                + response.status());
         }
         Object parsed = new Dry().parse(response.body());
         if (!(parsed instanceof Map<?, ?> map) || map.get("token") == null) {

@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.host;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.server.host.BtrfsVolumeOperations;
 import be.elevenways.hohenheim.server.host.HostShell;
+import be.elevenways.hohenheim.server.host.PrivilegedHelper;
 import be.elevenways.hohenheim.server.host.VolumeOperations;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -185,6 +186,56 @@ class VolumeOperationsTest {
         VolumeOperations asRoot = VolumeOperations.forBackend(VolumeBackend.BTRFS, root);
         asRoot.own(volume, 100042);
         assertThat(root.last()).as("step 3: root runs chown bare").doesNotContain("sudo");
+    }
+
+    /**
+     * An unprivileged shell goes through the privileged helper wherever the host has one,
+     * and falls back to the legacy per-binary sudo only where it does not.
+     *
+     * AIDEV-NOTE: the helper replaced an unrestricted chown/chmod/rm/mkdir/btrfs grant, which
+     * was root for anyone running as the service user. The fallback is what keeps a host
+     * whose installer has not been re-run working after the controller upgrade; the installer
+     * installs the helper and removes the old grant in the same run.
+     */
+    @Test
+    void anUnprivilegedShellPrefersThePrivilegedHelper() {
+
+        FakeShell shell = FakeShell.succeeding().unprivileged();
+        VolumeOperations btrfs = VolumeOperations.forBackend(VolumeBackend.BTRFS, shell);
+        String volume = "/srv/data/volumes/42/home";
+        String helper = HostShell.quote(PrivilegedHelper.PATH);
+        String probe = "if [ -x " + helper + " ]; then sudo -n " + helper + " ";
+
+        // 1. own: the helper verb with the path and uid as separate quoted arguments, the
+        //    legacy chown only in the else branch.
+        btrfs.own(volume, 100042);
+        assertThat(shell.last())
+            .as("step 1: own calls the helper's volume-own verb when it is installed")
+            .startsWith(probe + "volume-own '" + volume + "' '100042'; else ")
+            .contains("sudo -n chown 100042:100042 '" + volume + "'");
+
+        // 2. Every other operation names its own verb the same way.
+        btrfs.create(volume);
+        assertThat(shell.last()).as("step 2: create")
+            .startsWith(probe + "volume-create '" + volume + "'; else ");
+        btrfs.setQuota(volume, 1024L);
+        assertThat(shell.last()).as("step 2: quota carries the limit")
+            .startsWith(probe + "volume-quota '" + volume + "' '1024'; else ");
+        String snapshot = btrfs.snapshot(volume, "pre");
+        assertThat(shell.last()).as("step 2: snapshot carries its target")
+            .startsWith(probe + "volume-snapshot '" + volume + "' '" + snapshot + "'; else ");
+        btrfs.destroy(volume);
+        assertThat(shell.last()).as("step 2: destroy")
+            .startsWith(probe + "volume-destroy '" + volume + "'; else ");
+        btrfs.usage(volume);
+        assertThat(shell.last()).as("step 2: usage")
+            .startsWith(probe + "volume-usage '" + volume + "'; else ");
+
+        // 3. A root shell needs neither: no helper, no sudo.
+        FakeShell root = FakeShell.succeeding();
+        VolumeOperations.forBackend(VolumeBackend.BTRFS, root).own(volume, 100042);
+        assertThat(root.last()).as("step 3: root runs the bare commands")
+            .doesNotContain(PrivilegedHelper.PATH).doesNotContain("sudo");
     }
 
     /** Usage is parsed off the qgroup report, and an unreadable answer is -1, never 0. */

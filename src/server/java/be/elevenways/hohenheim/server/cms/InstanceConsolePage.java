@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.instance.ConsoleKind;
@@ -131,22 +132,19 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
         }
         vars.put("storedLogs", logs);
 
-        String selected = conduit.getQueryParam("log");
+        // A malformed id reads as null: the page renders with no selection.
+        Integer selected = CmsSupport.prefill(conduit, HohenheimParams.SELECTED_LOG);
         String text = "";
         String title = "";
-        if (selected != null && !selected.isBlank() && instanceId != null) {
-            try {
-                Row log = model.findById(Integer.parseInt(selected));
-                // Ownership guard: a log id belonging to another instance must not render.
-                if (log != null && instanceId.equals(log.get(InstanceLogModel.INSTANCE_ID))) {
-                    // Already redacted at ingest, and still the workload's stdout VERBATIM:
-                    // it leaves here as TEXT and the template renders it as a text node.
-                    String stored = log.get(InstanceLogModel.LOG_TEXT);
-                    text = stored != null ? stored : "";
-                    title = String.valueOf((Object) log.get(InstanceLogModel.CREATED_AT));
-                }
-            } catch (NumberFormatException ignored) {
-                // Bad id: render the page with no selection.
+        if (selected != null && instanceId != null) {
+            Row log = model.findById(selected);
+            // Ownership guard: a log id belonging to another instance must not render.
+            if (log != null && instanceId.equals(log.get(InstanceLogModel.INSTANCE_ID))) {
+                // Already redacted at ingest, and still the workload's stdout VERBATIM:
+                // it leaves here as TEXT and the template renders it as a text node.
+                String stored = log.get(InstanceLogModel.LOG_TEXT);
+                text = stored != null ? stored : "";
+                title = String.valueOf((Object) log.get(InstanceLogModel.CREATED_AT));
             }
         }
         vars.put("selectedLogText", text);
@@ -165,7 +163,7 @@ public final class InstanceConsolePage implements RecordScopedPage<Row> {
                                                   @NonNull Integer logId) {
         return CmsEndpoints.RECORD_SUBPAGE
             .with(CmsEndpoints.PANEL_PARAM, CmsSupport.panelSlug(conduit))
-            .with(CmsEndpoints.RESOURCE_PARAM, "instances")
+            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCES)
             .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
             .with(CmsEndpoints.SUBPAGE_PARAM, SLUG)
             .with(HohenheimParams.SELECTED_LOG, logId);

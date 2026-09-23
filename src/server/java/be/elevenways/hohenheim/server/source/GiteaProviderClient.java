@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.server.util.Json;
+import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -42,7 +43,9 @@ public class GiteaProviderClient extends ApiProviderClient {
      * @param baseUrl the installation's web base; REQUIRED (see
      *        {@code GitProviders.clientFor}, which refuses a blank one by name)
      */
-    GiteaProviderClient(@NonNull String baseUrl, @Nullable String accessToken) {
+    GiteaProviderClient(@NonNull String baseUrl, @Nullable String accessToken,
+                        @NonNull OutboundUrlGuard guard) {
+        super(guard);
         String base = trimSlash(baseUrl.trim());
         this.webBase = base;
         this.apiBase = base + "/api/v1";

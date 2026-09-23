@@ -100,6 +100,15 @@ public final class InstanceTemplateHandlers {
             if (template == null) {
                 return redirect(CmsRoutes.list(panel, TEMPLATES_SLUG));
             }
+            // The GET page's own gate, asked BEFORE anything renders: the refusal below
+            // re-renders the form, and that form carries the template's name, description,
+            // variable keys, labels and defaults. A template this actor may not select is
+            // answered exactly like one that does not exist, so a guessed id learns nothing.
+            try {
+                InstanceTemplates.requireSelectable(template, ctx);
+            } catch (Violations notSelectable) {
+                return redirect(CmsRoutes.list(panel, TEMPLATES_SLUG));
+            }
 
             String name = InstanceTemplates.submittedString(form, "name");
             // The submitted host is passed on unchanged and INTENTIONALLY unvalidated

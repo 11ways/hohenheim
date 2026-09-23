@@ -30,6 +30,25 @@ public interface IncusTransport {
                                  @Nullable String jsonBody, long timeoutMs) throws IOException;
 
     /**
+     * {@link #exchange(String, String, String, long)} carrying extra request headers (the
+     * {@code If-Match} of a conditional write).
+     *
+     * AIDEV-NOTE: the default FAILS CLOSED for a transport that cannot carry headers: a
+     * precondition silently dropped would turn a conditional write back into the blind
+     * overwrite it exists to prevent. An empty map is the plain exchange.
+     */
+    default Http11.@NonNull Raw exchange(@NonNull String method, @NonNull String pathAndQuery,
+                                         @Nullable String jsonBody,
+                                         @NonNull Map<String, String> headers,
+                                         long timeoutMs) throws IOException {
+        if (headers.isEmpty()) {
+            return exchange(method, pathAndQuery, jsonBody, timeoutMs);
+        }
+        throw new IOException("Incus transport " + describe() + " cannot carry request headers "
+            + headers.keySet() + "; refusing to drop them");
+    }
+
+    /**
      * One exchange whose request body STREAMS from a local file (backup import): the
      * archive never sits in controller memory. The response is the ordinary small
      * envelope.

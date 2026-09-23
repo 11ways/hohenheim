@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
@@ -166,7 +167,7 @@ class DnsFederationHealthTest {
             assertThat(deliveries()).as("step 3: one alert for one lag").isEqualTo(1);
             List<AttentionItem> items = staleItems();
             assertThat(items).as("step 3: the stale secondary is an item").hasSize(1);
-            assertThat(items.get(0).severity()).isEqualTo("warning");
+            assertThat(items.get(0).severity()).isEqualTo(AttentionSeverity.WARNING);
             assertThat(items.get(0).title().key()).isEqualTo("dns_secondary_stale");
             assertThat(items.get(0).target()).as("step 3: the item links to the zone").isNotNull();
 
@@ -406,7 +407,7 @@ class DnsFederationHealthTest {
             assertThat(deliveries()).as("step 1: the transition into a defect alerts once").isEqualTo(1);
             List<AttentionItem> items = delegationItems();
             assertThat(items).as("step 1: one item for the zone").hasSize(1);
-            assertThat(items.get(0).severity()).isEqualTo("warning");
+            assertThat(items.get(0).severity()).isEqualTo(AttentionSeverity.WARNING);
             assertThat(items.get(0).detail().key()).as("step 1: the verdict label is the detail")
                 .isEqualTo("ns_stale_serial");
 
@@ -426,7 +427,7 @@ class DnsFederationHealthTest {
                     DelegationVerdict.NS_UNREACHABLE);
             assertThat(report.verdict()).isEqualTo(DelegationVerdict.NS_UNREACHABLE);
             assertThat(delegationItems().get(0).severity()).as("step 3: a lame delegation is an error")
-                .isEqualTo("error");
+                .isEqualTo(AttentionSeverity.ERROR);
             assertThat(deliveries()).as("step 3: a changed verdict alerts again").isEqualTo(2);
 
             // 4. No delegation at the parent at all (the registrar step still pending).

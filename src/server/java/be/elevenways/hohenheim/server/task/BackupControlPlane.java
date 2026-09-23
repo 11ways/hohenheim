@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
@@ -48,14 +49,10 @@ public class BackupControlPlane extends ScheduledTask {
             ControlPlaneBackups.backupNow();
         } catch (Exception error) {
             Blast.log("TASK: BackupControlPlane failed:", error.getMessage());
-            try {
-                Alerts.send(NotificationEvents.BACKUP_FAILED,
-                    "Control-plane backup failed",
-                    "The scheduled backup of the control-plane database + keyring failed: "
-                        + error.getMessage());
-            } catch (Exception notifyError) {
-                Blast.log("TASK: could not send backup-failure notification -", notifyError.getMessage());
-            }
+            Alerts.trySend(NotificationEvents.BACKUP_FAILED,
+                Microcopy.of("control_plane_backup_failed_subject").withFilter("scope", "alert"),
+                Microcopy.of("control_plane_backup_failed_body").withFilter("scope", "alert")
+                    .withArg("reason", String.valueOf(error.getMessage())));
             // Rethrow so the task run is recorded as FAILED, not green-with-a-log-line.
             throw error instanceof RuntimeException runtime
                 ? runtime

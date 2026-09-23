@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import static be.elevenways.hohenheim.test.migration.InstallsAt.withIntegrityMode;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -55,6 +56,12 @@ class MigrationIntegrityTest {
      * The highest migration version any deployed install has applied; see the class note.
      */
     private static final String DEPLOYED_THROUGH = "010";
+
+    /**
+     * The highest migration version shipped by commit 91191333, the build a production install
+     * still runs; its upgrade path is checked on its own because it sits below the mark.
+     */
+    private static final String PRODUCTION_91191333_THROUGH = "009";
 
     /** Classpath resource holding one {@code <class><TAB><digest>} line per pinned migration. */
     private static final String PIN_RESOURCE = "migration-pins.txt";
@@ -139,6 +146,54 @@ class MigrationIntegrityTest {
                 "SELECT failure_reason AS name FROM managed_databases WHERE id = 1"))
             .as("step 3: and it stores what a failed provision writes")
             .containsExactly("boom");
+    }
+
+    /**
+     * The upgrade every deployed install meets: its own stream applied through the version it
+     * shipped, everything appended since pending, migrated under the strict integrity posture.
+     * Checked from the production commit 91191333 (which shipped through 009) and from the
+     * deployed high-water mark, so an appended migration that sorts or depends wrongly fails
+     * here instead of refusing a real boot as out of order.
+     */
+    @Test
+    void aDeployedInstallUpgradesThroughEveryAppendedMigrationUnderStrictIntegrity() throws Exception {
+        for (String shipped : List.of(PRODUCTION_91191333_THROUGH, DEPLOYED_THROUGH)) {
+            // 1. The install as it is: the discovered set with this stream cut at `shipped`.
+            File file = File.createTempFile("hohenheim-migration-deployed-" + shipped, ".db");
+            file.delete();
+            file.deleteOnExit();
+            InstallsAt.migrateThrough(file.toPath(), shipped);
+            SqliteDatasource datasource = new SqliteDatasource("jdbc:sqlite:" + file.getAbsolutePath());
+            List<String> appended = new ArrayList<>();
+            List<String> own = new ArrayList<>();
+            for (Migration migration : InstallsAt.hohenheimMigrations(datasource.getDatasourceIdentifier())) {
+                own.add(migration.getName());
+                if (migration.getVersion().compareTo(shipped) > 0) {
+                    appended.add(migration.getName());
+                }
+            }
+            assertThat(columnsOf(datasource, "SELECT name FROM zenit_migrations"))
+                .as("step 1: an install through %s has applied none of the appended migrations", shipped)
+                .doesNotContainAnyElementsOf(appended);
+
+            // 2. Upgrading applies exactly the appended migrations, with no integrity finding.
+            withIntegrityMode("fail", () -> {
+                MigrationRunnerResult upgrade = new MigrationRunner(datasource).migrate();
+                assertThat(upgrade.isSuccess())
+                    .as("step 2: the upgrade from %s under integrity=fail failed: %s",
+                        shipped, failureDetail(upgrade))
+                    .isTrue();
+                assertThat(upgrade.getAppliedCount())
+                    .as("step 2: the upgrade from %s applies exactly what was appended", shipped)
+                    .isEqualTo(appended.size());
+            });
+
+            // 3. And the ledger now carries every migration of this stream.
+            assertThat(columnsOf(datasource, "SELECT name FROM zenit_migrations"))
+                .as("step 3: the install from %s now records every migration of the stream", shipped)
+                .containsAll(own);
+            datasource.close();
+        }
     }
 
     /**
@@ -420,20 +475,6 @@ class MigrationIntegrityTest {
         db.delete();
         db.deleteOnExit();
         return new SqliteDatasource("jdbc:sqlite:" + db.getAbsolutePath());
-    }
-
-    /**
-     * Run a body under a temporary {@code database.migration_integrity} mode. Package-visible
-     * so any fixture that deliberately builds an unusual install does not need a second copy.
-     */
-    static void withIntegrityMode(String mode, Runnable body) {
-        String previous = ServerSettings.VALUES.getValue(ServerSettings.Database.MIGRATION_INTEGRITY);
-        ServerSettings.VALUES.setValue(ServerSettings.Database.MIGRATION_INTEGRITY, mode);
-        try {
-            body.run();
-        } finally {
-            ServerSettings.VALUES.setValue(ServerSettings.Database.MIGRATION_INTEGRITY, previous);
-        }
     }
 
     private static List<String> columnsOf(SqliteDatasource datasource, String pragmaSql) {

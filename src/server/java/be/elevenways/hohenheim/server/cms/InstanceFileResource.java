@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -74,7 +76,7 @@ public final class InstanceFileResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("instances",
+        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCES,
             row -> row.get(InstanceFileModel.INSTANCE_ID)).tab("provisioning");
     }
 
@@ -82,13 +84,9 @@ public final class InstanceFileResource extends RowResource {
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String instanceId = conduit.getQueryParam("instance_id");
-        if (instanceId != null && !instanceId.isEmpty()) {
-            try {
-                values.put("instance_id", Integer.parseInt(instanceId));
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
-            }
+        Integer instanceId = CmsSupport.prefill(conduit, HohenheimParams.INSTANCE_ID_PREFILL);
+        if (instanceId != null) {
+            values.put("instance_id", instanceId);
         }
         return Map.copyOf(values);
     }

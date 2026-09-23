@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.server.cms.SiteDomainResource;
 import be.elevenways.hohenheim.server.cms.SiteResource;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -52,7 +51,7 @@ public final class SiteApi {
 
     static void init() {
         HohenheimEndpoints.API_V1_SITE_CREATE.setHandler(conduit -> {
-            AccessContext ctx = requireAdminKey(conduit);
+            AccessContext ctx = ApiConduits.requireAdminKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -73,7 +72,7 @@ public final class SiteApi {
         });
 
         HohenheimEndpoints.API_V1_SITE_DELETE.setHandler(conduit -> {
-            AccessContext ctx = requireAdminKey(conduit);
+            AccessContext ctx = ApiConduits.requireAdminKey(conduit);
             if (ctx == null) {
                 return null;
             }
@@ -176,25 +175,6 @@ public final class SiteApi {
                 return null;
             }
         });
-    }
-
-    /**
-     * A key whose owner holds the admin panel permission, narrowed by the key's scopes;
-     * anything else is 403, because the only UI that creates or hard-deletes a site is
-     * the admin panel.
-     *
-     * @return the access context, or null when the response has already been ended
-     */
-    static @Nullable AccessContext requireAdminKey(@NonNull Conduit conduit) {
-        AccessContext ctx = ApiConduits.requireKey(conduit);
-        if (ctx == null) {
-            return null;
-        }
-        if (!HohenheimAccess.isAdmin(ctx)) {
-            conduit.forbidden();
-            return null;
-        }
-        return ctx;
     }
 
     /** Every domain row of a site, oldest first, as the enumerated projection. */

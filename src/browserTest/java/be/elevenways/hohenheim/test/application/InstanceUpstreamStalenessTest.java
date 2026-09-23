@@ -200,11 +200,13 @@ class InstanceUpstreamStalenessTest {
 
     /**
      * The reconciler's correction is a ROUTING fact: a workload that died with nobody
-     * watching keeps its port claim in the ledger, so only the corrected status can stop
-     * the proxy naming a dead container's address.
+     * watching keeps its port claim in the ledger, so only the correction can stop the proxy
+     * naming a dead container's address. It corrects to {@code error}, which is SERVABLE (a
+     * failed operation's workload may still run), so the correction must also release the
+     * dead workload's observed claim, as the console lane's crash settle does.
      */
     @Test
-    void aWorkloadCorrectedToStoppedStopsAnsweringItsDeadAddress() {
+    void aWorkloadCorrectedAfterAnUnobservedDeathStopsAnsweringItsDeadAddress() {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
             InstanceStatusReconciler reconciler = new InstanceStatusReconciler();
@@ -231,13 +233,18 @@ class InstanceUpstreamStalenessTest {
                         + " only a settled stop releases one")
                     .isNotNull();
 
-                // 3. THE SWEEP corrects the record against daemon truth.
+                // 3. THE SWEEP corrects the record against daemon truth. An unobserved death
+                //    under crash policy none settles to ERROR, never to an operator's
+                //    `stopped` (InstanceStatusReconciler: the two must not share a pill).
                 InstanceStatusReconciler.Outcome corrected = reconciler.reconcile(instanceId);
                 assertThat(corrected.verdict())
                     .as("step 3: the daemon disagrees, so the record is corrected")
                     .isEqualTo(Verdict.CORRECTED);
                 assertThat((String) statusOf(instanceId))
-                    .as("step 3: to stopped").isEqualTo(InstanceModel.STATUS_STOPPED);
+                    .as("step 3: to error, the crash it was").isEqualTo(InstanceModel.STATUS_ERROR);
+                assertThat(ledgerPortOf(instanceId))
+                    .as("step 3: and the dead workload's observed claim is released")
+                    .isNull();
 
                 // 4. AND THE PROXY FOLLOWS. The correction is a hook-free updateAll, so
                 //    nothing observes it on its own; without the invalidation the handler

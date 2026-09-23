@@ -128,14 +128,6 @@ class InstanceMigrationTest {
             (serverId, bytes) -> {});
     }
 
-    private static InstanceMigrations migrationsCrashingAt(String crashStep) {
-        return new InstanceMigrations(new InstanceService(), step -> {
-            if (crashStep.equals(step)) {
-                throw new IllegalStateException("controller killed at " + step);
-            }
-        }, (serverId, bytes) -> {});
-    }
-
     private static Map<String, FakeNativeDaemons.FakeWorkload> daemonOf(int serverId) {
         return FakeNativeDaemons.daemonOf(serverId);
     }
@@ -329,10 +321,10 @@ class InstanceMigrationTest {
             // 1. Controller dies right after the destination import: both daemons
             //    hold a copy, the record still points at the source.
             Throwable killed = catchThrowable(
-                () -> migrationsCrashingAt("imported").migrateTo(id, betaId));
+                () -> KilledController.migrationsCrashingAt("imported").migrateTo(id, betaId));
             assertThat(killed)
                 .as("step 1: the simulated kill escapes the migration's failure net")
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(KilledController.Killed.class);
             Row row = Models.get(InstanceModel.class).findById(id);
             assertThat((String) row.get(InstanceModel.STATUS))
                 .as("step 1: the record is left mid-migration, exactly like a dead"
@@ -367,8 +359,8 @@ class InstanceMigrationTest {
             // 3. Second window: the controller dies AFTER the source copy is removed
             //    but BEFORE the handoff -- the record points at a host holding nothing.
             Throwable killedLate = catchThrowable(
-                () -> migrationsCrashingAt("source_removed").migrateTo(id, betaId));
-            assertThat(killedLate).isInstanceOf(IllegalStateException.class);
+                () -> KilledController.migrationsCrashingAt("source_removed").migrateTo(id, betaId));
+            assertThat(killedLate).isInstanceOf(KilledController.Killed.class);
             assertThat(daemonOf(alphaId).containsKey(handle))
                 .as("step 3: source copy already gone").isFalse();
             assertThat(daemonOf(betaId).containsKey(handle))
@@ -579,9 +571,9 @@ class InstanceMigrationTest {
                 FakeNativeDaemons.FakeNativeKind.ID.toString());
             service.deploy(crasher);
             assertThat(catchThrowable(
-                    () -> migrationsCrashingAt("imported").migrateTo(crasher, dst)))
+                    () -> KilledController.migrationsCrashingAt("imported").migrateTo(crasher, dst)))
                 .as("step 4: the simulated kill leaves the record mid-migration")
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(KilledController.Killed.class);
             assertThat(InstanceCapacity.bookedMbOn(src))
                 .as("step 4: the source still holds its charge inside the window")
                 .isEqualTo(128);
@@ -605,9 +597,9 @@ class InstanceMigrationTest {
             // 6. The other window settles FORWARD (only the destination holds the data),
             //    and the ledger follows the record there instead.
             assertThat(catchThrowable(
-                    () -> migrationsCrashingAt("source_removed").migrateTo(crasher, dst)))
+                    () -> KilledController.migrationsCrashingAt("source_removed").migrateTo(crasher, dst)))
                 .as("step 6: killed after the source copy was removed")
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(KilledController.Killed.class);
             InstanceMigrations.recoverInterrupted();
             assertThat((Object) Models.get(InstanceModel.class).findById(crasher)
                     .get(InstanceModel.SERVER_ID))
@@ -701,9 +693,9 @@ class InstanceMigrationTest {
                 FakeNativeDaemons.FakeNativeKind.ID.toString());
             service.deploy(mover);
             assertThat(catchThrowable(
-                    () -> migrationsCrashingAt("imported").migrateTo(mover, dst)))
+                    () -> KilledController.migrationsCrashingAt("imported").migrateTo(mover, dst)))
                 .as("step 1: the simulated kill leaves an OPEN migration window")
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(KilledController.Killed.class);
             Row row = Models.get(InstanceModel.class).findById(mover);
             assertThat((String) row.get(InstanceModel.STATUS))
                 .as("step 1: mid-window").isEqualTo(InstanceModel.STATUS_MIGRATING);
@@ -766,9 +758,9 @@ class InstanceMigrationTest {
             // 5. The FORWARD settle re-stamps CAPACITY_MB from the window, because from
             //    the handoff on that is what the destination bucket holds for the row.
             assertThat(catchThrowable(
-                    () -> migrationsCrashingAt("source_removed").migrateTo(mover, dst)))
+                    () -> KilledController.migrationsCrashingAt("source_removed").migrateTo(mover, dst)))
                 .as("step 5: killed after the source copy was removed")
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(KilledController.Killed.class);
             Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(mover))
                 .assign(InstanceModel.CAPACITY_MB, 512).updateAll();
             InstanceMigrations.recoverInterrupted();

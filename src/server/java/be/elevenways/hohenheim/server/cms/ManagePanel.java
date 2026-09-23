@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
@@ -19,12 +19,9 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.auth.HostnameAuthority;
-import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelPeer;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -33,24 +30,16 @@ import be.elevenways.zenit.common.data.RecordCreateProvider;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeCriteria;
-import be.elevenways.zenit.common.orm.query.criteria.CompositeOperator;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.security.PermissionChecker;
-import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.server.data.RecordSourceGate;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Delegated operator panel at /manage: only the sites (and their domains) the
@@ -66,12 +55,12 @@ public final class ManagePanel extends Panel {
      * against the declaration instead of re-spelling the literal
      * ({@code CmsSupport.isDelegatedPanel} is the one reader).
      */
-    public static final String SLUG = "manage";
+    public static final String SLUG = HohenheimSlugs.MANAGE;
 
     private static volatile boolean sourceRegistered = false;
 
     public ManagePanel() {
-        super(Identifier.of("hohenheim", "manage"), SLUG,
+        super(Identifier.of("hohenheim", SLUG), SLUG,
             Microcopy.of("title").withFilter("scope", "manage"), ACCESS);
     }
 
@@ -259,16 +248,20 @@ public final class ManagePanel extends Panel {
      * merge, so an explicit source that changes the derived gate is REFUSED at boot
      * unless it says the change is deliberate; every source below narrows the derived
      * admin gate to a walk-confirmed manage scope, which IS that deliberate change.
+     *
+     * AIDEV-NOTE: no scope is SPELLED here. Each source applies its model's
+     * {@link TenantScopes} declaration, the same one the Manage* resource's accessFunction
+     * reads, so a picker and the /manage list cannot drift apart again (they had: the
+     * instance source offered generated rows and the domain source the domains of
+     * soft-deleted sites, both of which the lists hid).
      */
     static void declareSources() {
         // The SiteModel default source. zenit-cms derives one from SiteModel.NAME through
         // both the admin SiteResource and the delegated ManageSiteResource; this server-side
         // declaration replaces it deliberately, because its scope reads zenit-auth grants
         // unavailable to the common/browser registration lane.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteModel.class)
-            .search(SiteModel.NAME, SiteModel.SLUG)
-            .baseCriteria(() -> SiteModel.DELETED_AT.isNull())
-            .accessCriteria(ManagePanel::siteScope)
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.SITES.applyTo(
+                RecordSource.of(SiteModel.class).search(SiteModel.NAME, SiteModel.SLUG))
             .build());
 
         // The domain source, for the SAME reason and by the same verb -- plus one that is
@@ -282,24 +275,23 @@ public final class ManagePanel extends Panel {
         // row -- SiteDomainModel deliberately has NO grant surface of its own (see
         // docs/instance-tier-plan.md, Phase 2 parallel gate): a second authority over a
         // child row is a second authority that can disagree with the first.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(SiteDomainModel.class)
-            .search(SiteDomainModel.HOSTNAME)
-            .accessCriteria(ManagePanel::domainScope)
+        // AIDEV-NOTE: the base now carries the live-site filter the /manage list always
+        // applied: a domain of a soft-deleted site is no longer offered by a picker either.
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.DOMAINS.applyTo(
+                RecordSource.of(SiteDomainModel.class).search(SiteDomainModel.HOSTNAME))
             .build());
 
         // Access lists: the pickers (a site's list, a protected path's list) offer shared
         // rows plus the principal's managed ones -- the git-provider policy verbatim, and
         // an explicit override for the same two-panel shadowing reason as site_domain
         // (AccessListResource and ManageAccessListResource both expose the model).
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(AccessListModel.class)
-            .search(AccessListModel.NAME)
-            .accessCriteria(HohenheimAccess::accessListScope)
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.USABLE_ACCESS_LISTS.applyTo(
+                RecordSource.of(AccessListModel.class).search(AccessListModel.NAME))
             .build());
 
         // Protected paths: child rows scoped by their parent SITE, like domains.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProtectedPathModel.class)
-            .search(ProtectedPathModel.PATH)
-            .accessCriteria(ManagePanel::protectedPathScope)
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.PROTECTED_PATHS.applyTo(
+                RecordSource.of(ProtectedPathModel.class).search(ProtectedPathModel.PATH))
             .build());
 
         // DNS records: this one scopes child rows by their parent zone, so a tenant reaches
@@ -319,9 +311,8 @@ public final class ManagePanel extends Panel {
         // has to be declared here or the bar simply never appears. It used to be a
         // hand-written copy of that provider; nothing about the reduction or the
         // persistence path was ever hohenheim-specific.
-        var dnsRecords = RecordSource.of(DnsRecordModel.class)
-            .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
-            .accessCriteria(ManagePanel::dnsRecordScope);
+        var dnsRecords = TenantScopes.DNS_RECORDS.applyTo(RecordSource.of(DnsRecordModel.class)
+            .search(DnsRecordModel.NAME, DnsRecordModel.VALUE));
         RecordCreateProvider dnsCreate = CmsRecordSources.createProviderFor(new DnsRecordResource());
         if (dnsCreate != null) {
             dnsRecords.creatable(dnsCreate, HohenheimSources.ADMIN_ACCESS);
@@ -332,10 +323,8 @@ public final class ManagePanel extends Panel {
         // browser registry keeps, legitimately -- the scope below reads zenit-auth record
         // grants that common code cannot see). The base criteria is the SAME method the
         // common registration uses, never a second copy of the ACME-account exclusion.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(CertificateModel.class)
-            .search(CertificateModel.NICE_NAME)
-            .baseCriteria(HohenheimSources::notTheAcmeAccountRow)
-            .accessCriteria(ManagePanel::certificateScope)
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.CERTIFICATES.applyTo(
+                RecordSource.of(CertificateModel.class).search(CertificateModel.NICE_NAME))
             .build());
 
         // Instances: the SAME two-panel shadowing hazard as sites and domains, now that
@@ -345,11 +334,13 @@ public final class ManagePanel extends Panel {
         // AIDEV-NOTE: kind IS projected because the site form's dependent instance
         // pick (HohenheimPickRules.UpstreamInstanceRules) narrows on it -- the
         // projection is the rule vocabulary, so dropping it silently 400s the picker.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceModel.class)
-            .project(InstanceModel.NAME, InstanceModel.KIND)
-            .search(InstanceModel.NAME)
-            .baseCriteria(() -> InstanceModel.DELETED_AT.isNull())
-            .accessCriteria(ctx -> HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW))
+        // AIDEV-NOTE: the base excludes GENERATED instances like the /manage list always
+        // did (TenantScopes.INSTANCES): a product-tier-owned row is managed through its
+        // owning record, and a picker offering it was a tenant read the list refused.
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.INSTANCES.applyTo(
+                RecordSource.of(InstanceModel.class)
+                    .project(InstanceModel.NAME, InstanceModel.KIND)
+                    .search(InstanceModel.NAME))
             .build());
 
         // Templates: exposed by TWO RowResources (admin InstanceTemplateResource and
@@ -357,28 +348,25 @@ public final class ManagePanel extends Panel {
         // the same shadowing hazard as instances above. The scope is THE catalog policy:
         // operators browse everything, everyone else only APPROVED templates. The
         // instance form's dependent template pick narrows on the projected kind.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceTemplateModel.class)
-            .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
-            .search(InstanceTemplateModel.NAME)
-            .accessCriteria(ctx -> HohenheimAccess.isAdmin(ctx)
-                ? null : InstanceTemplateModel.APPROVED_AT.isNotNull())
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.INSTANCE_TEMPLATES.applyTo(
+                RecordSource.of(InstanceTemplateModel.class)
+                    .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
+                    .search(InstanceTemplateModel.NAME))
             .build());
 
         // Record schedules: this declaration carries the SAME scope the delegated resource
         // enforces, so a picker and the resource can never disagree -- a deliberate
         // narrowing of the default derived from RecordScheduleModel.NAME.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(RecordScheduleModel.class)
-            .search(RecordScheduleModel.NAME)
-            .accessCriteria(ManagePanel::recordScheduleScope)
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.INSTANCE_SCHEDULES.applyTo(
+                RecordSource.of(RecordScheduleModel.class).search(RecordScheduleModel.NAME))
             .build());
 
         // Projects: the SAME two-derived-defaults hazard, now that ManageProjectResource
         // exposes the model beside the admin ProjectResource -- and the widest of the two
         // would name every tenant's projects to whoever a picker rendered for. The scope
         // is THE visibility policy, so a picker and the resource can never disagree.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(ProjectModel.class)
-            .search(ProjectModel.NAME)
-            .accessCriteria(Projects::visibleScope)
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.PROJECTS.applyTo(
+                RecordSource.of(ProjectModel.class).search(ProjectModel.NAME))
             .build());
 
         // Managed databases: the common registration (HohenheimSources) is ADMIN_ACCESS
@@ -389,29 +377,23 @@ public final class ManagePanel extends Panel {
         // rendered for, starting with the site-database attachment picker. override, not
         // register: the manage panel deliberately serves a WIDER audience than the
         // databases panel's own permission, scoped to what each principal was granted.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(DatabaseModel.class)
-            .search(DatabaseModel.NAME)
-            .accessCriteria(ctx -> HohenheimAccess.databaseScope(ctx, HohenheimAccess.VIEW))
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.DATABASES.applyTo(
+                RecordSource.of(DatabaseModel.class).search(DatabaseModel.NAME))
             .build());
 
         // Instance devices: same two-derived-defaults hazard again, and the widest one
         // would list every tenant's disk names and sizes to whoever a picker rendered for.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDeviceModel.class)
-            .search(InstanceDeviceModel.NAME)
-            .accessCriteria(ManagePanel::instanceDeviceScope)
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.INSTANCE_DEVICES.applyTo(
+                RecordSource.of(InstanceDeviceModel.class).search(InstanceDeviceModel.NAME))
             .build());
 
         // Preview deployments: the same two-derived-defaults hazard (the admin
         // PreviewDeploymentResource and the delegated ManagePreviewDeploymentResource
         // both derive), and the widest one would name every tenant's branch names and
         // preview hostnames to whoever a picker rendered for.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(
-                PreviewDeploymentModel.class)
-            .search(PreviewDeploymentModel.HOSTNAME,
-                PreviewDeploymentModel.REF)
-            .baseCriteria(() ->
-                PreviewDeploymentModel.DELETED_AT.isNull())
-            .accessCriteria(ManagePanel::previewScope)
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.PREVIEWS.applyTo(
+                RecordSource.of(PreviewDeploymentModel.class)
+                    .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.REF))
             .build());
 
         // Git providers: the SAME two-derived-defaults hazard (the admin
@@ -421,206 +403,16 @@ public final class ManagePanel extends Panel {
         // for. The scope IS the visibility policy (shared rows plus the ones the
         // principal manages), so the site form's provider picker and this source can
         // never disagree.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(GitProviderModel.class)
-            .search(GitProviderModel.NAME)
-            .accessCriteria(HohenheimAccess::gitProviderScope)
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.USABLE_GIT_PROVIDERS.applyTo(
+                RecordSource.of(GitProviderModel.class).search(GitProviderModel.NAME))
             .build());
 
         // Instance-database attachments: the row names both a workload and a credential
         // store, so this source must carry the parent instance's visibility scope instead
         // of the admin gate zenit-cms derives.
-        RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceDatabaseModel.class)
-            .title()
-            .accessCriteria(ManagePanel::instanceDatabaseScope)
+        RecordSourceRegistry.INSTANCE.override(TenantScopes.INSTANCE_DATABASES.applyTo(
+                RecordSource.of(InstanceDatabaseModel.class).title())
             .build());
-    }
-
-    /** @return null for an unconstrained scope, else the devices of viewable instances */
-    static @Nullable Criteria instanceDeviceScope(@NonNull AccessContext ctx) {
-        return HohenheimAccess.grantScope(ctx, Models.get(InstanceDeviceModel.class),
-            InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDeviceModel.INSTANCE_ID::in);
-    }
-
-    /** @return null for an unconstrained scope, else the attachments of viewable instances */
-    static @Nullable Criteria instanceDatabaseScope(@NonNull AccessContext ctx) {
-        return HohenheimAccess.grantScope(ctx, Models.get(InstanceDatabaseModel.class),
-            InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDatabaseModel.INSTANCE_ID::in);
-    }
-
-    /** @return null for an unconstrained scope, else the schedules of viewable instances */
-    static @Nullable Criteria recordScheduleScope(@NonNull AccessContext ctx) {
-        return ManageInstanceScheduleResource.scopeCriteria(ctx);
-    }
-
-    /**
-     * The DNS records a principal may read: the ones under a hostname it answers for, plus
-     * the ones explicitly granted {@code view}.
-     *
-     * AIDEV-NOTE: the derived half enumerates EXACT managed hostnames only. A managed
-     * WILDCARD domain confers write authority over the names it covers (HostnamePatterns
-     * .covers, via HostnameAuthority) but contributes no owner label here, so such a row is
-     * authored-but-unlisted until an explicit view grant. Deliberate: the read scope is a
-     * criteria over stored owner labels, and widening it to "any label a wildcard could
-     * cover" would need a scan of dns_records to build a query over dns_records.
-     *
-     * @return null for an unconstrained walk scope, else a criteria that never widens
-     *         past the two sets
-     */
-    static @Nullable Criteria dnsRecordScope(@NonNull AccessContext ctx) {
-        // The walk's tri-state instead of hand-written isAdmin/isAnonymous branches:
-        // ALL (the admin row -- DnsRecordModel declares no type-level) is the
-        // unconstrained answer, and an anonymous context already scopes to NONE here
-        // AND contributes no hostname clauses below, so both prefixes were second
-        // spellings of rows the walk owns. The composite itself cannot fold onto
-        // grantScope: the derived-hostname half is not a grant question.
-        RecordCapabilityScope granted = HohenheimAccess.capabilityScope(ctx,
-            DnsRecordModel.MODEL_ID, HohenheimAccess.VIEW);
-        if (granted.isAll()) {
-            return null;
-        }
-
-        List<Criteria> reachable = new ArrayList<>(zoneScopedNameCriteria(ctx));
-        Set<Integer> grantedIds = HohenheimAccess.grantedRecordIds(ctx,
-            DnsRecordModel.MODEL_ID, HohenheimAccess.VIEW);
-        if (!grantedIds.isEmpty()) {
-            reachable.add(DnsRecordModel.ID.in(grantedIds));
-        }
-
-        if (reachable.isEmpty()) {
-            return Models.get(DnsRecordModel.class).matchNone();
-        }
-        return reachable.size() == 1 ? reachable.get(0)
-            : new CompositeCriteria(CompositeOperator.OR, reachable.toArray(new Criteria[0]));
-    }
-
-    /**
-     * One {@code zone_id = z AND name IN (...)} clause per zone holding a managed hostname.
-     *
-     * AIDEV-NOTE: the site scope is read as a TRI-STATE, not as an id set. An every-site
-     * holder (hohenheim.sites.manage_all) reaches every domain row, and asking for ids there
-     * throws by design -- so the domain query drops its site filter instead of being handed
-     * an empty set that would have silently produced no clauses at all.
-     */
-    private static @NonNull List<Criteria> zoneScopedNameCriteria(@NonNull AccessContext ctx) {
-        RecordCapabilityScope sites = HohenheimAccess.capabilityScope(ctx, SiteModel.MODEL_ID,
-            HohenheimAccess.MANAGE);
-        if (sites.isNone()) {
-            return List.of();
-        }
-
-        HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
-        Set<String> hostnames = new LinkedHashSet<>();
-        var domains = Models.get(SiteDomainModel.class).find();
-        if (!sites.isAll()) {
-            domains.where(SiteDomainModel.SITE_ID.in(
-                HohenheimAccess.managedSiteIds(ctx)));
-        }
-        for (Row domain : domains.all()) {
-            String hostname = domain.get(SiteDomainModel.HOSTNAME);
-            if (hostname == null || hostname.isBlank()
-                    || !SiteDomainModel.MATCH_EXACT.equals(domain.get(SiteDomainModel.MATCH_TYPE))) {
-                continue;
-            }
-            // The SAME predicate the write side uses: the most specific covering rows
-            // decide the name, so an exact row of a managed site lists its names even
-            // under an operator's catch-all wildcard, while a name an equally specific
-            // foreign row also covers is a name two owners answer for and lists nothing.
-            if (HostnameAuthority.canManage(snapshot, ctx, hostname)) {
-                hostnames.add(BlastString.lower(hostname.trim()));
-            }
-        }
-        if (hostnames.isEmpty()) {
-            return List.of();
-        }
-
-        List<Criteria> perZone = new ArrayList<>();
-        for (Row zone : Models.get(DnsZoneModel.class).find().all()) {
-            String origin = zone.get(DnsZoneModel.ORIGIN);
-            Integer zoneId = zone.get(DnsZoneModel.ID);
-            if (origin == null || zoneId == null) {
-                continue;
-            }
-            Set<String> owners = new LinkedHashSet<>();
-            for (String hostname : hostnames) {
-                String owner = DnsNames.relative(origin, hostname);
-                if (owner != null) {
-                    owners.add(owner);
-                }
-            }
-            if (!owners.isEmpty()) {
-                perZone.add(new CompositeCriteria(CompositeOperator.AND,
-                    DnsRecordModel.ZONE_ID.eq(zoneId), DnsRecordModel.NAME.in(owners)));
-            }
-        }
-        return perZone;
-    }
-
-    /**
-     * The certificates a principal may read: exactly the rows the walk confirms
-     * {@code view} on -- the ones it REQUESTED arrive through the walk's own owner row
-     * (CertificateModel declares {@code ownedBy(requested_by_user_id)} and VIEW is
-     * owner-implied), the rest through explicit grants.
-     *
-     * AIDEV-NOTE: no hand-written {@code REQUESTED_BY_USER_ID.eq(principalId)} disjunct
-     * beside the walk. That was a SECOND spelling of the owner row, and a WIDER one:
-     * the walk's version also demands the credential's scope cover the capability
-     * (Principal.coversCapability -- see the framework note on why a scope-narrowed API
-     * key must not inherit owner-implied capabilities) and sits behind the gate-denial
-     * row. The hand-written disjunct consulted neither, so a narrowed API key could
-     * enumerate every certificate its owning user ever requested. Same lesson as
-     * Projects.coversOwnedVocabulary, one tier over.
-     *
-     * AIDEV-NOTE: deliberately NOT "every certificate covering a managed domain", which the
-     * superseded AIDEV-TODO in HohenheimSources proposed. Coverage is authority to REQUEST a
-     * certificate and CertificateAuthority already owns that question; making it a READ scope
-     * too would put a second authority beside the capability walk this vocabulary declares,
-     * and the two would disagree the moment a name moves between sites.
-     *
-     * @return null for admins, else a criteria matching only the walk-reachable rows
-     */
-    static @Nullable Criteria certificateScope(@NonNull AccessContext ctx) {
-        return HohenheimAccess.grantScope(ctx, Models.get(CertificateModel.class),
-            CertificateModel.MODEL_ID, HohenheimAccess.VIEW, CertificateModel.ID::in);
-    }
-
-    /**
-     * @return null for an unconstrained scope (the admin row, an every-site holder),
-     *         an impossible criteria for principals without grants, else
-     *         {@code ID IN (managed ids)}
-     */
-    static @Nullable Criteria siteScope(@NonNull AccessContext ctx) {
-        return HohenheimAccess.managedSiteScope(ctx, Models.get(SiteModel.class), SiteModel.ID::in);
-    }
-
-    /**
-     * @return null for admins, else the domains of the principal's managed sites
-     */
-    static @Nullable Criteria domainScope(@NonNull AccessContext ctx) {
-        return HohenheimAccess.managedSiteScope(ctx, Models.get(SiteDomainModel.class),
-            SiteDomainModel.SITE_ID::in);
-    }
-
-    /**
-     * @return null for admins, else the protected paths of the principal's managed sites
-     */
-    static @Nullable Criteria protectedPathScope(@NonNull AccessContext ctx) {
-        return HohenheimAccess.managedSiteScope(ctx, Models.get(ProtectedPathModel.class),
-            ProtectedPathModel.SITE_ID::in);
-    }
-
-    /**
-     * @return null for admins, else the previews of the principal's managed APPLICATIONS
-     */
-    static @Nullable Criteria previewScope(@NonNull AccessContext ctx) {
-        return HohenheimAccess.grantScope(ctx,
-            Models.get(PreviewDeploymentModel.class),
-            InstanceModel.MODEL_ID, HohenheimAccess.MANAGE,
-            PreviewDeploymentModel.APPLICATION_ID::in);
-    }
-
-    /** Matches nothing; NEVER ID.in(empty), which some backends reject or widen. */
-    static @NonNull Criteria impossible() {
-        return Models.get(SiteModel.class).matchNone();
     }
 
     /**

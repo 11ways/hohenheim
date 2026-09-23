@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -54,7 +55,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Docker-provisioned managed databases. Create provisions the container in the
@@ -65,6 +65,11 @@ import java.util.Objects;
 public class DatabaseResource extends RowResource {
 
     private final DatabaseService databaseService = new DatabaseService();
+
+    /** Where a dedicated record keeps the ceilings the shared resize lane reads and writes. */
+    private static final ProvisionedRecords.Columns CEILINGS = new ProvisionedRecords.Columns(
+        DatabaseModel.ID, DatabaseModel.MEMORY_LIMIT_MB, DatabaseModel.CPU_LIMIT,
+        DatabaseModel.STATUS, DatabaseModel.FAILURE_REASON);
 
     private final FormSpec formSpec = FormSpec.builder()
         .add(DatabaseModel.NAME)
@@ -203,41 +208,24 @@ public class DatabaseResource extends RowResource {
         // STATUS is service-owned even on create.
         return List.of(
             ResourceFieldBinding.of(DatabaseModel.STATUS.getName(), FieldAccess.alwaysReadonly()),
-            frozenAfterCreate(DatabaseModel.NAME),
-            frozenAfterCreate(DatabaseModel.ENGINE),
-            frozenAfterCreate(DatabaseModel.DB_NAME),
-            frozenAfterCreate(DatabaseModel.DB_USER),
-            frozenAfterCreate(DatabaseModel.DB_PASSWORD),
-            frozenAfterCreate(DatabaseModel.IMAGE),
-            frozenAfterCreate(DatabaseModel.EPHEMERAL),
-            frozenAfterCreate(DatabaseModel.SERVER_ID),
-            frozenAfterCreate(DatabaseModel.PLACEMENT),
-            frozenAfterCreate(DatabaseModel.ENGINE_ID),
+            ProvisionedRecords.frozenAfterCreate(DatabaseModel.NAME),
+            ProvisionedRecords.frozenAfterCreate(DatabaseModel.ENGINE),
+            ProvisionedRecords.frozenAfterCreate(DatabaseModel.DB_NAME),
+            ProvisionedRecords.frozenAfterCreate(DatabaseModel.DB_USER),
+            ProvisionedRecords.frozenAfterCreate(DatabaseModel.DB_PASSWORD),
+            ProvisionedRecords.frozenAfterCreate(DatabaseModel.IMAGE),
+            ProvisionedRecords.frozenAfterCreate(DatabaseModel.EPHEMERAL),
+            ProvisionedRecords.frozenAfterCreate(DatabaseModel.SERVER_ID),
+            ProvisionedRecords.frozenAfterCreate(DatabaseModel.PLACEMENT),
+            ProvisionedRecords.frozenAfterCreate(DatabaseModel.ENGINE_ID),
             // A shared record has no ceilings of its own: the container is the ENGINE's
             // and is booked once, at the engine's cap. Hiding them is the honest shape --
             // an editable pair that {@link #updateRow} could only refuse is a control
             // that lies about what it does, and the form notice names where they live.
             hiddenWhenShared(DatabaseModel.MEMORY_LIMIT_MB),
             hiddenWhenShared(DatabaseModel.CPU_LIMIT),
-            // The reason is shown ONLY on a record that carries one: the create form
-            // (null record) and a healthy record never render an empty failure box.
-            ResourceFieldBinding.of(DatabaseModel.FAILURE_REASON.getName(),
-                FieldAccess.customRecordAware((ctx, record) ->
-                    record instanceof Row row && hasText(row.get(DatabaseModel.FAILURE_REASON))
-                        ? FieldAccess.Decision.READONLY : FieldAccess.Decision.HIDDEN)));
-    }
-
-    /**
-     * Editable on the CREATE form, readonly once the record exists.
-     *
-     * AIDEV-NOTE: record-AWARE rather than {@code alwaysReadonly()}, and the difference is
-     * the whole create form: a readonly binding applies to both views, so freezing these
-     * with it would leave an operator unable to type a database name.
-     */
-    private static @NonNull ResourceFieldBinding frozenAfterCreate(@NonNull Field<?, ?> field) {
-        return ResourceFieldBinding.of(field.getName(),
-            FieldAccess.customRecordAware((ctx, record) ->
-                record == null ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY));
+            // The reason is shown ONLY on a record that carries one.
+            ProvisionedRecords.failureReasonWhenSet(DatabaseModel.FAILURE_REASON));
     }
 
     /** Editable on the CREATE form, hidden once the record turns out to be shared. */
@@ -263,10 +251,6 @@ public class DatabaseResource extends RowResource {
         return DatabaseModel.isShared(record)
             ? Microcopy.of("shared_notice").withFilter("scope", "database")
             : Microcopy.of("resize_notice").withFilter("scope", "database");
-    }
-
-    private static boolean hasText(@Nullable Object value) {
-        return value != null && !String.valueOf(value).isBlank();
     }
 
     @Override
@@ -327,63 +311,26 @@ public class DatabaseResource extends RowResource {
 
     /**
      * THE resize: the only update this resource performs, and it applies the two resource
-     * ceilings and nothing else.
-     *
-     * The order is the one {@code DatabaseInstances} was split for. The engine row's
-     * reservation runs INLINE, so a host without room refuses on the form the operator is
-     * looking at ({@code host_capacity_reached}, naming the host, what was asked and what
-     * is free) instead of flipping the record to failed on a pool thread minutes later.
-     * The container work then rides {@code afterCommit}: a deploy scheduled from inside
-     * the CMS mutation transaction would read the row on its own connection before this
-     * one commits and apply the OLD ceiling.
-     *
-     * An unchanged form is a no-op on purpose. A deploy is a RECREATE (there is no Docker
-     * update path here), so treating "operator pressed Save" as "recreate the engine"
-     * would drop every live connection for nothing.
+     * ceilings and nothing else, through the lane it shares with the shared engines
+     * ({@link ProvisionedRecords#resize}). The engine row's reservation runs INLINE through
+     * {@code DatabaseInstances.reserveEngineRow}, so a host without room refuses on this form
+     * ({@code host_capacity_reached}, naming the host, what was asked and what is free).
+     * A ceiling the write does not carry keeps its stored value.
      */
     @Override
     public void updateRow(@NonNull Row existing, @NonNull Map<String, Object> coerced,
                           @NonNull AccessContext accessContext) {
-        Integer memoryMb = coerced.get("memory_limit_mb") instanceof Integer mb ? mb : null;
-        Double cpus = coerced.get("cpu_limit") instanceof Double c ? c : null;
         if (DatabaseModel.isShared(existing)) {
             // The fields are HIDDEN on a shared record, so a submitted value did not come
             // from the form this resource rendered; refuse it by name instead of booking a
             // ceiling against a container this record does not own.
-            if (memoryMb != null || cpus != null) {
+            if (ProvisionedRecords.carriesCeiling(coerced, CEILINGS)) {
                 throw Violations.ofForm(CmsSupport.violationText("database_shared_limits"));
             }
             return;
         }
-        if (Objects.equals(memoryMb, existing.get(DatabaseModel.MEMORY_LIMIT_MB))
-                && Objects.equals(cpus, existing.get(DatabaseModel.CPU_LIMIT))) {
-            return;
-        }
-        Integer recordId = existing.get(DatabaseModel.ID);
-        if (recordId == null) {
-            throw Violations.ofForm(CmsSupport.violationText("database_resize_failed")
-                .withArg("reason", "the record carries no id"));
-        }
-        ResourceLimits limits = ResourceLimits.of(memoryMb, cpus);
-        try {
-            // Books the new ceiling against the host budget through the instance write
-            // hook, and refuses here when it does not fit.
-            DatabaseInstances.reserveEngineRow(existing, limits);
-        } catch (Violations refused) {
-            throw refused;
-        } catch (Exception e) {
-            throw Violations.ofForm(CmsSupport.violationText("database_resize_failed")
-                .withArg("reason", String.valueOf(e.getMessage())));
-        }
-        existing.set(DatabaseModel.MEMORY_LIMIT_MB, memoryMb);
-        existing.set(DatabaseModel.CPU_LIMIT, cpus);
-        // Provisioning again is the honest status: the engine is being recreated, and it
-        // is what the list badge, the detail page and AttentionCollector already read.
-        existing.set(DatabaseModel.STATUS, DatabaseModel.STATUS_PROVISIONING);
-        existing.set(DatabaseModel.FAILURE_REASON, null);
-        model().save(existing);
-        model().getResolvedDatasource().afterCommit(
-            () -> this.databaseService.provisionInBackground(recordId));
+        ProvisionedRecords.resize(model(), existing, coerced, CEILINGS,
+            DatabaseInstances::reserveEngineRow, this.databaseService::provisionInBackground);
     }
 
     /**
@@ -422,9 +369,12 @@ public class DatabaseResource extends RowResource {
         } catch (IOException e) {
             // A NAMED refusal, not a 500: the record is kept (status destroy_failed), the
             // port claim is parked, and the force-destroy action is the recorded way out.
-            throw Violations.ofForm(CmsSupport.violationText("database_destroy_failed")
-                .withArg("name", name)
-                .withArg("reason", e.getMessage()));
+            String detail = WithheldFailure.operatorDetail(e);
+            throw Violations.ofForm(detail == null
+                ? CmsSupport.violationText("database_destroy_failed_tenant").withArg("name", name)
+                : CmsSupport.violationText("database_destroy_failed")
+                    .withArg("name", name)
+                    .withArg("reason", detail));
         }
         // Links to soft-deleted owners are debris once the database is gone: the row delete
         // inside destroy takes them along through the model funnel (InstanceDatabaseLinks).
@@ -482,11 +432,11 @@ public class DatabaseResource extends RowResource {
             return "";
         }
         Conduit conduit = RouteScope.currentConduit();
-        String panel = conduit != null ? CmsSupport.panelSlug(conduit) : "admin";
+        String panel = conduit != null ? CmsSupport.panelSlug(conduit) : HohenheimSlugs.ADMIN;
         List<String> workloads = new ArrayList<>();
         for (Row instance : InstanceDatabaseLinks.liveInstances(databaseId)) {
             workloads.add(instance.get(InstanceModel.NAME) + " ("
-                + CmsRoutes.subpage(panel, "instances", instance.get(InstanceModel.ID),
+                + CmsRoutes.subpage(panel, HohenheimSlugs.INSTANCES, instance.get(InstanceModel.ID),
                     InstanceDatabasesPage.SLUG).toUrl() + ")");
         }
         return DeleteImpact.join(workloads);
@@ -611,6 +561,6 @@ public class DatabaseResource extends RowResource {
     }
 
     private static @NonNull String trimmed(@Nullable Object value) {
-        return value != null ? String.valueOf(value).trim() : "";
+        return ProvisionedRecords.trimmed(value);
     }
 }

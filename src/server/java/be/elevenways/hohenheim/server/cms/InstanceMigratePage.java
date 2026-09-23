@@ -101,13 +101,12 @@ public final class InstanceMigratePage implements RecordScopedPage<Row> {
         Map<String, Object> body = conduit.getBody(CmsFormBody.BODY);
         Object raw = body == null ? null : body.get(TARGET_FIELD);
         int instanceId = instance.get(InstanceModel.ID);
-        int target;
-        try {
-            target = Integer.parseInt(String.valueOf(raw).strip());
-        } catch (NumberFormatException malformed) {
+        Integer parsed = CmsSupport.parsedInt(raw);
+        if (parsed == null) {
             throw Violations.ofField(TARGET_FIELD, raw,
                 Microcopy.of("migrate_target_required").withFilter("scope", "violations"));
         }
+        int target = parsed;
         new InstanceMigrations().migrateTo(instanceId, target);
         return CmsActionResult.refreshWithToast(
             Microcopy.of("migrated_toast").withFilter("scope", "instance")

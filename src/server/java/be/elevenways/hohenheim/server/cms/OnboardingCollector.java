@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -36,7 +38,7 @@ import java.util.List;
  */
 public final class OnboardingCollector {
 
-    private static final String ADMIN = "admin";
+    private static final String ADMIN = HohenheimSlugs.ADMIN;
 
     private OnboardingCollector() {
     }
@@ -103,7 +105,7 @@ public final class OnboardingCollector {
             }
         }
         return new OnboardingStep(
-            admitted ? OnboardingStep.DONE : OnboardingStep.TODO,
+            admitted ? OnboardingState.DONE : OnboardingState.TODO,
             "server",
             copy("checklist_host"),
             copy(!admitted && !servers.isEmpty() ? "checklist_host_pending" : "checklist_host_detail"),
@@ -112,7 +114,7 @@ public final class OnboardingCollector {
 
     private static OnboardingStep hostAcceptsWorkloads(boolean placeable, @Nullable Microcopy refusal) {
         return new OnboardingStep(
-            placeable ? OnboardingStep.DONE : OnboardingStep.BLOCKED,
+            placeable ? OnboardingState.DONE : OnboardingState.BLOCKED,
             // The step's SUBJECT, never its state -- the template picks the state marker.
             "shield-halved",
             copy("checklist_admit"),
@@ -124,11 +126,11 @@ public final class OnboardingCollector {
 
     private static OnboardingStep instanceCreated(boolean any) {
         return new OnboardingStep(
-            any ? OnboardingStep.DONE : OnboardingStep.TODO,
+            any ? OnboardingState.DONE : OnboardingState.TODO,
             "cube",
             copy("checklist_create_instance"),
             copy("checklist_create_instance_detail"),
-            listTarget("instances"));
+            listTarget(HohenheimSlugs.INSTANCES));
     }
 
     private static OnboardingStep instanceRunning() {
@@ -138,11 +140,11 @@ public final class OnboardingCollector {
             .count();
 
         return new OnboardingStep(
-            running > 0 ? OnboardingStep.DONE : OnboardingStep.TODO,
+            running > 0 ? OnboardingState.DONE : OnboardingState.TODO,
             "rocket",
             copy("checklist_deploy"),
             copy("checklist_deploy_detail"),
-            listTarget("instances"));
+            listTarget(HohenheimSlugs.INSTANCES));
     }
 
     /**

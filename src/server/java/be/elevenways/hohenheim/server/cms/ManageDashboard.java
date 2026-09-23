@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.AttentionItem;
-import be.elevenways.hohenheim.AttentionWidget;
+import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -67,7 +68,7 @@ public final class ManageDashboard extends DashboardPanelPeer {
         List<WidgetInstance> widgets = new ArrayList<>();
         boolean instances = HohenheimRoles.enabled(Role.INSTANCES);
         List<AttentionItem> attention = instances ? tenantAttention(accessContext) : List.of();
-        widgets.add(section(new WidgetInstance(AttentionWidget.ID, Map.of())
+        widgets.add(section(new WidgetInstance(HohenheimWidgets.ATTENTION.id(), Map.of())
             .withData(attention)));
         if (instances) {
             widgets.add(section(new WidgetInstance(RecordsWidget.ID, Map.of(
@@ -91,9 +92,10 @@ public final class ManageDashboard extends DashboardPanelPeer {
      */
     private static @NonNull List<AttentionItem> tenantAttention(@NonNull AccessContext accessContext) {
         List<AttentionItem> items = new ArrayList<>();
-        Criteria scope = HohenheimAccess.instanceScope(accessContext, HohenheimAccess.VIEW);
-        var find = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.DELETED_AT.isNull());
+        // THE /manage instance scope, so an item never links an instance the list 404s
+        // (a generated row, which this query used to include).
+        Criteria scope = TenantScopes.INSTANCES.criteria(accessContext);
+        var find = Models.get(InstanceModel.class).find();
         if (scope != null) {
             find = find.where(scope);
         }
@@ -111,11 +113,12 @@ public final class ManageDashboard extends DashboardPanelPeer {
                 if (refusal == null) {
                     continue;
                 }
-                items.add(new AttentionItem("warning", "triangle-exclamation",
+                items.add(new AttentionItem(AttentionSeverity.WARNING, "triangle-exclamation",
                     Microcopy.of("blocked_instance").withFilter("scope", "manage_dashboard")
                         .withArg("instance", String.valueOf(instance.get(InstanceModel.NAME))),
                     Microcopy.of("blocked_instance_detail").withFilter("scope", "manage_dashboard"),
-                    CmsRoutes.subpage(ManagePanel.SLUG, "instances", id, InstanceOverviewPage.SLUG)));
+                    CmsRoutes.subpage(ManagePanel.SLUG, HohenheimSlugs.INSTANCES, id,
+                        InstanceOverviewPage.SLUG)));
             } catch (RuntimeException failed) {
                 // A broken host/kind record must never kill the landing page, but
                 // silence is not visibility either -- the log names the row.

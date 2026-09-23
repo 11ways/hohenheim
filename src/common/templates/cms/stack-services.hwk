@@ -56,7 +56,7 @@
                     {% each service.get("files") as fileIndex, file %}
                     <a use:Zenit.route={% file.get("editTarget") %}><code>{{ file.get("path") }}</code></a>
                     {% /each %}
-                    <pl-button variant="ghost" size="sm" use:Zenit.route={% service.get("addFileTarget") %} class="hh-stack-add-file">{{ t("add_file", scope: "stack_services") }}</pl-button>
+                    <pl-button variant="ghost" size="sm" use:Zenit.route={% service.get("addFileTarget") %}>{{ t("add_file", scope: "stack_services") }}</pl-button>
                 </pl-table-cell>
             </pl-table-row>
             {% /each %}

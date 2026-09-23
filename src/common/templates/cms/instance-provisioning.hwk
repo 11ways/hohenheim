@@ -32,7 +32,7 @@
             </p>
             <p>{{ t("install_state", scope: "instance_provisioning") }}: <pl-badge variant="secondary">{{ installStateLabel }}</pl-badge></p>
             {% if installError != "" %}
-            <pl-alert variant="destructive"><pre>{{ installError }}</pre></pl-alert>
+            <pl-alert variant="destructive"><pl-code value={% installError %} wrap="wrap" size="sm"></pl-code></pl-alert>
             {% /if %}
         </pl-card-content>
     </pl-card>

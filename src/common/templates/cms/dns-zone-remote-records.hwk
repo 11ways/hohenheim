@@ -12,6 +12,10 @@
 {% declare editable: Boolean = false %}
 {% declare notice: String = "" %}
 {% declare editRecord: DnsRecordFormView = null %}
+{% declare editTtl: Double = null %}
+{% declare editPriority: Double = null %}
+{% declare editWeight: Double = null %}
+{% declare editPort: Double = null %}
 {% declare recordTypes: List %}
 {% declare recordTabs: List<RecordTabState> %}
 {% extend "zenitcms:shell" var:title=title %}
@@ -21,9 +25,7 @@
     <header class="cms-resource-list-header">
         <h1>{{ origin }}</h1>
         {% if editable %}
-        <a use:Zenit.route={% addRecordTarget %} id="add-remote-record-link">
-            <pl-button variant={% "primary" %}>{{ t("add_record", scope: "dns_zone") }}</pl-button>
-        </a>
+        <pl-button variant="primary" use:Zenit.route={% addRecordTarget %} id="add-remote-record-link">{{ t("add_record", scope: "dns_zone") }}</pl-button>
         {% /if %}
     </header>
 
@@ -68,7 +70,7 @@
                 <pl-field>
                     <pl-label target="rr_ttl">{{ t("record_ttl_column", scope: "dns_zone") }}</pl-label>
                     <pl-input-group>
-                        <pl-input inputId="rr_ttl" type="number" name="ttl" value={% editRecord.ttl %}></pl-input>
+                        <pl-number-input inputId="rr_ttl" name="ttl" value={% editTtl %} scale={% 0 %} min={% 0.0 %} submitEmpty={% true %}></pl-number-input>
                         <pl-input-group-addon>s</pl-input-group-addon>
                     </pl-input-group>
                 </pl-field>
@@ -77,17 +79,17 @@
                 {% if editType{:} == "MX" or editType == "SRV" %}
                 <pl-field>
                     <pl-label target="rr_priority">{{ t("priority", scope: "dns_remote") }}</pl-label>
-                    <pl-input inputId="rr_priority" type="text" name="priority" value={% editRecord.priority %}></pl-input>
+                    <pl-number-input inputId="rr_priority" name="priority" value={% editPriority %} scale={% 0 %} min={% 0.0 %} submitEmpty={% true %}></pl-number-input>
                 </pl-field>
                 {% /if %}
                 {% if editType{:} == "SRV" %}
                 <pl-field>
                     <pl-label target="rr_weight">{{ t("weight", scope: "dns_remote") }}</pl-label>
-                    <pl-input inputId="rr_weight" type="text" name="weight" value={% editRecord.weight %}></pl-input>
+                    <pl-number-input inputId="rr_weight" name="weight" value={% editWeight %} scale={% 0 %} min={% 0.0 %} submitEmpty={% true %}></pl-number-input>
                 </pl-field>
                 <pl-field>
                     <pl-label target="rr_port">{{ t("port", scope: "dns_remote") }}</pl-label>
-                    <pl-input inputId="rr_port" type="text" name="port" value={% editRecord.port %}></pl-input>
+                    <pl-number-input inputId="rr_port" name="port" value={% editPort %} scale={% 0 %} min={% 0.0 %} submitEmpty={% true %}></pl-number-input>
                 </pl-field>
                 {% /if %}
                 <pl-field>
@@ -101,9 +103,7 @@
         </pl-card>
         <div class="cms-form-actions">
             <pl-button variant="primary" type="submit">{{ t("save_remote", scope: "dns_remote") }}</pl-button>
-            <a use:Zenit.route={% recordsTabTarget %}>
-                <pl-button variant={% "ghost" %} type="button">{{ t("cancel_remote", scope: "dns_remote") }}</pl-button>
-            </a>
+            <pl-button variant="ghost" use:Zenit.route={% recordsTabTarget %}>{{ t("cancel_remote", scope: "dns_remote") }}</pl-button>
         </div>
     </form>
     {% /if %}

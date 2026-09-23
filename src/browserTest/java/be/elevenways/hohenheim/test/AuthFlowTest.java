@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
+import be.elevenways.zenit.server.http.ReturnTarget;
 import org.junit.jupiter.api.*;
 
 import java.net.URI;
@@ -26,21 +27,38 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AuthFlowTest extends HohenheimTestBase {
 
+    /**
+     * A BROWSER navigation: it accepts HTML, which is what makes zenit-auth answer an anonymous
+     * visitor with the login card instead of the bare refusal an API caller reads.
+     */
     private HttpResponse<String> get(String path, boolean followRedirects) throws Exception {
+        return send(path, followRedirects, "text/html");
+    }
+
+    private HttpResponse<String> send(String path, boolean followRedirects, String accept) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(followRedirects ? HttpClient.Redirect.NORMAL : HttpClient.Redirect.NEVER)
             .build();
         return client.send(HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:" + getServerPort() + path)).GET().build(),
+            .uri(URI.create("http://localhost:" + getServerPort() + path))
+            .header("Accept", accept).GET().build(),
             HttpResponse.BodyHandlers.ofString());
     }
 
     @Test
     @Order(1)
     void anonymousSurfaceGatesTheAdminOffersLoginAndServesAssets() throws Exception {
+        // 1. An anonymous browser navigation is sent to the login card.
         HttpResponse<String> response = get("/", false);   // no session cookie
-        assertThat(response.statusCode()).isEqualTo(302);
-        assertThat(response.headers().firstValue("Location")).hasValue("/login");
+        assertThat(response.statusCode()).as("step 1: an anonymous page visit is redirected").isEqualTo(302);
+        // zenit-auth binds the page the visitor was blocked on as the sanitized return target.
+        assertThat(response.headers().firstValue("Location")).as("step 1: to the login card, carrying the return")
+            .hasValue("/login?" + ReturnTarget.PARAM + "=%2F");
+
+        // 2. A caller that reads no HTML (an API client, a script) gets the refusal itself,
+        //    never a redirect into a page it would not render (zenit-auth's loginRequired split).
+        response = send("/", false, "application/json");
+        assertThat(response.statusCode()).as("step 2: an anonymous API caller reads 401").isEqualTo(401);
 
         response = get("/login", false);
         assertThat(response.statusCode()).isEqualTo(200);

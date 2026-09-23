@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.net.Hostnames;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.AAAARecord;
@@ -136,10 +137,7 @@ public final class DnsRecordCodec {
     }
 
     private static @NonNull Name targetName(@NonNull String value) throws DnsValueException {
-        String target = value.toLowerCase(Locale.ROOT);
-        while (target.endsWith(".")) {
-            target = target.substring(0, target.length() - 1);
-        }
+        String target = Hostnames.stripTrailingDots(value.toLowerCase(Locale.ROOT));
         if (target.isEmpty() || target.contains("*") || target.contains(" ")) {
             throw new DnsValueException("value", "dns_target_format");
         }

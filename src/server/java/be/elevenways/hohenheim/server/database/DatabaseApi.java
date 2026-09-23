@@ -101,7 +101,13 @@ public final class DatabaseApi {
             }
             int databaseId = row.get(DatabaseModel.ID);
             String name = row.get(DatabaseModel.NAME);
-            new DatabaseService().moveToSharedEngineInBackground(name);
+            try {
+                // The claim is atomic and synchronous: a second submit of the same move
+                // (or one racing the panel's action) is refused here, by name.
+                new DatabaseService().moveToSharedEngineInBackground(name);
+            } catch (Violations refused) {
+                return ApiConduits.refusal(conduit, refused);
+            }
             ActivityLog.record(Models.get(DatabaseModel.class), databaseId, "move_shared", name);
             // The panel's toast, as data: the work is accepted, and the RECORD's status is
             // the thing to watch (provisioning while it runs, active when it settles).

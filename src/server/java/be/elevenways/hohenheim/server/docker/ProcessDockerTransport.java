@@ -1,14 +1,13 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.server.util.Watchdog;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -21,13 +20,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since   0.1.0
  */
 public class ProcessDockerTransport implements DockerTransport, DockerStreamTransport {
-
-    private static final ScheduledExecutorService WATCHDOG =
-        Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "docker-process-watchdog");
-            thread.setDaemon(true);
-            return thread;
-        });
 
     /** How long to wait for the stderr drain to finish once stdout has hit EOF. */
     private static final long STDERR_DRAIN_GRACE_MS = 2000;
@@ -71,10 +63,10 @@ public class ProcessDockerTransport implements DockerTransport, DockerStreamTran
         drain.start();
 
         AtomicBoolean timedOut = new AtomicBoolean(false);
-        ScheduledFuture<?> watchdog = WATCHDOG.schedule(() -> {
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> {
             timedOut.set(true);
             process.destroyForcibly();
-        }, timeoutMs, TimeUnit.MILLISECONDS);
+        }, timeoutMs);
         try {
             OutputStream stdin = process.getOutputStream();
             stdin.write(request);
@@ -83,6 +75,12 @@ public class ProcessDockerTransport implements DockerTransport, DockerStreamTran
             // which truncates the response. The daemon closes after the response (Connection:
             // close), giving us stdout EOF here.
             byte[] response = readBounded(process.getInputStream(), maxResponseBytes);
+            // AIDEV-NOTE: a watchdog kill ENDS stdout, so the read above returns NORMALLY
+            // with whatever arrived before the kill. That is a partial response, not a
+            // short one: checked here, after the read, never only in the catch.
+            if (timedOut.get()) {
+                throw new IOException("Docker transport timed out after " + timeoutMs + "ms");
+            }
             if (response.length == 0) {
                 // AIDEV-NOTE: JOIN the drain thread before reading its buffer. Reading it
                 // straight after stdout EOF races the drain, so the diagnostic text --
@@ -122,8 +120,7 @@ public class ProcessDockerTransport implements DockerTransport, DockerStreamTran
         ProcessStreamConnection connection = new ProcessStreamConnection(process);
         // Bound only the request write: ssh may take seconds to connect, but once the
         // stream is live its lifetime belongs to the consumer.
-        ScheduledFuture<?> watchdog = WATCHDOG.schedule(
-            connection::close, connectTimeoutMs, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> watchdog = Watchdog.schedule(connection::close, connectTimeoutMs);
         try {
             connection.write(request);
         } catch (IOException e) {

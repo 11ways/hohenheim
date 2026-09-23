@@ -102,7 +102,8 @@ public final class SpamserviceSecurityEventsResource extends SpamserviceRemoteRe
 
     @Override
     protected @NonNull PageResult<SecurityEventEntry> fetchPage(@NonNull SpamserviceClient client,
-                                                                 TableView.@NonNull Applied<SecurityEventEntry> applied) {
+                                                                 TableView.@NonNull Applied<SecurityEventEntry> applied,
+                                                                 @NonNull AccessContext accessContext) {
         return client.securityEvents(applied.page(), applied.schema().pageSize(),
             textFilter(applied, "client_id"), textFilter(applied, "type"), textFilter(applied, "ip"),
             textFilter(applied, "from"), textFilter(applied, "to"));

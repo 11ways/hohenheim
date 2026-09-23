@@ -7,7 +7,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -115,7 +114,7 @@ public final class DockerPtyExec {
         start.put("Tty", true);
         start.put("ConsoleSize", List.of(safeRows, safeCols));
         byte[] body = Json.stringify(start).getBytes(StandardCharsets.UTF_8);
-        byte[] request = streamRequest("/exec/" + execId + "/start", body);
+        byte[] request = streamRequest(DockerPaths.exec(execId) + "/start", body);
         ContainerStream stream = ContainerStream.open(streaming, request,
             CONTROL_TIMEOUT_MS, true, true);
 
@@ -134,7 +133,7 @@ public final class DockerPtyExec {
             @Override
             public boolean failedToStart() throws IOException {
                 Object parsed = new Dry().parse(new String(
-                    exchange(transport, "GET", "/exec/" + enc(execId) + "/json", null).body(),
+                    exchange(transport, "GET", DockerPaths.exec(execId) + "/json", null).body(),
                     StandardCharsets.UTF_8));
                 if (!(parsed instanceof Map<?, ?> info)
                         || Boolean.TRUE.equals(info.get("Running"))) {
@@ -179,7 +178,7 @@ public final class DockerPtyExec {
 
         byte[] body = Json.stringify(spec).getBytes(StandardCharsets.UTF_8);
         Http11.Raw response = exchange(transport, "POST",
-            "/containers/" + enc(containerId) + "/exec", body);
+            DockerPaths.container(containerId) + "/exec", body);
         Object parsed = new Dry().parse(new String(response.body(), StandardCharsets.UTF_8));
         Object id = parsed instanceof Map<?, ?> map ? map.get("Id") : null;
         if (!(id instanceof String execId) || execId.isBlank()) {
@@ -193,7 +192,7 @@ public final class DockerPtyExec {
     private static void resize(@NonNull DockerTransport transport, @NonNull String execId,
                                int cols, int rows) throws IOException {
         exchange(transport, "POST",
-            "/exec/" + enc(execId) + "/resize?h=" + rows + "&w=" + cols, null);
+            DockerPaths.exec(execId) + "/resize?h=" + rows + "&w=" + cols, null);
     }
 
     /** One bounded control exchange with Docker's own status policy applied. */
@@ -223,13 +222,12 @@ public final class DockerPtyExec {
      * used either: it emits no body, and {@code /exec/{id}/start} needs one.
      */
     private static byte @NonNull [] streamRequest(@NonNull String path, byte @NonNull [] body) {
-        String head = "POST " + path + " HTTP/1.1\r\n"
-            + "Host: docker\r\n"
-            + "Content-Type: application/json\r\n"
-            + "Content-Length: " + body.length + "\r\n"
-            + "Connection: Upgrade\r\n"
-            + "Upgrade: tcp\r\n\r\n";
-        byte[] headBytes = head.getBytes(StandardCharsets.ISO_8859_1);
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("Content-Length", String.valueOf(body.length));
+        headers.put("Connection", "Upgrade");
+        headers.put("Upgrade", "tcp");
+        byte[] headBytes = Http11.head("POST", path, "docker", headers);
         byte[] request = new byte[headBytes.length + body.length];
         System.arraycopy(headBytes, 0, request, 0, headBytes.length);
         System.arraycopy(body, 0, request, headBytes.length, body.length);
@@ -242,9 +240,5 @@ public final class DockerPtyExec {
             return fallback;
         }
         return Math.min(value, MAX_DIMENSION);
-    }
-
-    private static @NonNull String enc(@NonNull String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }

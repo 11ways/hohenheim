@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 import org.junit.jupiter.api.AfterEach;
@@ -16,6 +17,9 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -126,6 +130,35 @@ class SshAuthWatchTest {
             .isEqualTo("203.0.113.20");
     }
 
+    /**
+     * The username is attacker-controlled and sshd logs it BEFORE the source, so a crafted
+     * name must never choose whom the tier bans: the source is the LAST address-port pair.
+     */
+    @Test
+    void aHostileUsernameCannotChooseTheBannedAddress() {
+        // 1. A username that spells a whole fake "from IP port N" clause.
+        assertSignal("Invalid user x from 1.2.3.4 port 1 from 9.9.9.9 port 22",
+            SecurityEventTypes.SSH_INVALID_USER, "9.9.9.9");
+        assertSignal("Failed password for invalid user x from 1.2.3.4 port 1 from"
+                + " 203.0.113.40 port 40222 ssh2",
+            SecurityEventTypes.SSH_PASSWORD_FAILED, "203.0.113.40");
+
+        // 2. The bare "IP port N" spelling of the preauth families, with a forged pair too.
+        assertSignal("Connection closed by invalid user x 1.2.3.4 port 1 203.0.113.41 port 22"
+                + " [preauth]",
+            SecurityEventTypes.SSH_INVALID_USER, "203.0.113.41");
+
+        // 3. A name that is just an address, with no port after it, is not a source at all.
+        assertSignal("Failed password for invalid user 1.2.3.4 from 203.0.113.42 port 40222 ssh2",
+            SecurityEventTypes.SSH_PASSWORD_FAILED, "203.0.113.42");
+
+        // 4. When the real source is not a literal, a forged literal earlier on the line is
+        //    never used as a fallback: nothing is scored.
+        assertThat(SshAuthLine.parse("Invalid user x from 1.2.3.4 port 1 from scanner.example port 22"))
+            .as("step 4: no fallback to an attacker-typed address")
+            .isNull();
+    }
+
     // -----------------------------------------------------------------------
     // The watcher
     // -----------------------------------------------------------------------
@@ -188,22 +221,38 @@ class SshAuthWatchTest {
     @Test
     void anUnreadableJournalDegradesInsteadOfCrashing() throws Exception {
         AtomicLong attempts = new AtomicLong();
+        List<Long> pauses = new CopyOnWriteArrayList<>();
+        CountDownLatch thirdPause = new CountDownLatch(1);
+        // The backoff is observed, never slept: the first two pauses return at once, the
+        // third parks the supervisor until stop() interrupts it, so the counts below are
+        // exact instead of "whatever fitted in 300ms".
         SshAuthWatcher watcher = new SshAuthWatcher(
             () -> {
                 attempts.incrementAndGet();
                 throw new java.io.IOException("Permission denied");
             },
-            (type, ip) -> { });
+            (type, ip) -> { },
+            millis -> {
+                pauses.add(millis);
+                if (pauses.size() == 3) {
+                    thirdPause.countDown();
+                    new CountDownLatch(1).await();
+                }
+            });
 
         HohenheimSettings.VALUES.setValue(HohenheimSettings.Security.SSH_WATCH_ENABLED, true);
         watcher.start();
-        // The first attempt is immediate; the backoff makes the second one a second later.
-        Thread.sleep(300);
+        assertThat(thirdPause.await(5, TimeUnit.SECONDS))
+            .as("step 1: the supervisor reached its third backoff").isTrue();
+        long attemptsAtThirdPause = attempts.get();
         watcher.stop();
 
-        assertThat(attempts.get())
-            .as("step 1: it tried, and the 1s backoff kept it from spinning")
-            .isBetween(1L, 2L);
+        assertThat(attemptsAtThirdPause)
+            .as("step 1: exactly one attempt per backoff, never a spin")
+            .isEqualTo(3L);
+        assertThat(pauses)
+            .as("step 1: the backoff starts at 1s and doubles")
+            .containsExactly(1_000L, 2_000L, 4_000L);
         assertThat(watcher.snapshot().lastError())
             .as("step 2: the reason is retained for the dashboard")
             .contains("Permission denied");
@@ -227,7 +276,7 @@ class SshAuthWatchTest {
             nftCommands.add(String.join(" ", args));
             return new NftRunner.Result(0, "", "");
         }, () -> true);
-        BanService service = new BanService(nft);
+        BanService service = new BanService(nft, Now::millis);
 
         // 1. The scorer decides the scope from the event type that crossed the threshold.
         assertThat(BanScope.forEventType(SecurityEventTypes.SSH_INVALID_USER))

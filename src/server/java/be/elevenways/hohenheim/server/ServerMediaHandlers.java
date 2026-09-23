@@ -49,7 +49,10 @@ final class ServerMediaHandlers {
             String url = form.getOrDefault("url", "").trim();
             try {
                 // The fetch downloads and re-uploads a multi-GB ISO synchronously (the
-                // backup lane's contract); the endpoint's rate limit bounds abuse.
+                // backup lane's contract), public addresses only and bounded by
+                // InstallMedia.FETCH_DEADLINE; the endpoint's rate limit bounds abuse.
+                // AIDEV-TODO: move it off the request thread once the Install media tab
+                // can show a running fetch and its outcome (see InstallMedia.fetch).
                 media.fetch(server, name, url);
             } catch (Violations refused) {
                 HohenheimFlash.error(conduit, HandlerSupport.violationMessage(refused));

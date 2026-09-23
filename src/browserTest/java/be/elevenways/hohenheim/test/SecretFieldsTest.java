@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.PasswordHasher;
@@ -16,6 +17,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -171,27 +174,31 @@ class SecretFieldsTest extends HohenheimTestBase {
 
     @Test
     @Order(2)
-    void basicAuthCredentialsRemainVisibleAndEditable() throws Exception {
+    void basicAuthCredentialsAreHashedAndStayEditable() throws Exception {
         var response = postForm("/admin/auth-providers/new",
             "name=Team+gate&provider_type=hohenheim%3Abasic"
             + "&config.credentials.0.key=alice&config.credentials.0.value=secret123");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
+        // 1. The typed password is stored as an argon2 hash that verifies it.
         Row row = Models.get(SiteAuthProviderModel.class).find()
             .where(SiteAuthProviderModel.NAME.eq("Team gate")).first();
         assertThat(row).isNotNull();
         Map<String, String> credentials = BasicAuthProviderType.credentials(configOf(row));
-        assertThat(credentials.get("alice")).isEqualTo("secret123");
+        assertThat(BasicCredentials.isHashed(credentials.get("alice")))
+            .as("step 1: the password is stored hashed").isTrue();
+        assertThat(BasicAuthProviderType.verify(basic("alice", "secret123"), credentials))
+            .as("step 1: and the hash verifies it").isEqualTo("alice");
         Integer id = row.get(SiteAuthProviderModel.ID);
 
-        // Basic provider credentials are intentionally operator-visible.
+        // 2. The edit page still lists the user, but never the plaintext password.
         navigateToApp("/admin/auth-providers/" + id);
         waitForHydration();
         String content = page.content();
-        assertThat(content).contains("alice");
-        assertThat(content).contains("secret123");
+        assertThat(content).as("step 2: the user stays visible").contains("alice");
+        assertThat(content).as("step 2: the plaintext never reaches the page").doesNotContain("secret123");
 
-        // Editing the visible password replaces it directly.
+        // 3. Typing a new password replaces it, hashed again.
         response = postForm("/admin/auth-providers/" + id,
             "name=Team+gate&provider_type=hohenheim%3Abasic"
             + "&config.credentials.0.key=alice&config.credentials.0.value=new-secret");
@@ -200,10 +207,16 @@ class SecretFieldsTest extends HohenheimTestBase {
         Row stored = Models.get(SiteAuthProviderModel.class).find()
             .where(SiteAuthProviderModel.ID.eq(id)).first();
         Map<String, String> updated = BasicAuthProviderType.credentials(configOf(stored));
-        assertThat(updated.get("alice")).isEqualTo("new-secret");
-        String header = "Basic " + java.util.Base64.getEncoder()
-            .encodeToString("alice:new-secret".getBytes());
-        assertThat(BasicAuthProviderType.verify(header, updated)).isEqualTo("alice");
+        assertThat(BasicCredentials.isHashed(updated.get("alice"))).as("step 3: stored hashed").isTrue();
+        assertThat(BasicAuthProviderType.verify(basic("alice", "new-secret"), updated))
+            .as("step 3: the new password verifies").isEqualTo("alice");
+        assertThat(BasicAuthProviderType.verify(basic("alice", "secret123"), updated))
+            .as("step 3: the old one no longer does").isNull();
+    }
+
+    private static String basic(String user, String password) {
+        return "Basic " + Base64.getEncoder()
+            .encodeToString((user + ":" + password).getBytes(StandardCharsets.UTF_8));
     }
 
     @SuppressWarnings("unchecked")

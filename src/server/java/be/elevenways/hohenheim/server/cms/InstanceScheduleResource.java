@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.RowAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -39,7 +40,6 @@ import be.elevenways.zenit.server.task.schedule.CronExpression;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -90,7 +90,10 @@ public class InstanceScheduleResource extends RowResource {
     @Override public @NonNull Identifier id() { return Identifier.of("hohenheim", "instance_schedule"); }
     @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_schedule"); }
     @Override public @Nullable Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "instance_schedule"); }
-    @Override public @NonNull String slug() { return "instance-schedules"; }
+    /** The peer slug, shared with the step resource's parent link. */
+    public static final String SLUG = "instance-schedules";
+
+    @Override public @NonNull String slug() { return SLUG; }
 
     /**
      * A schedule's front door is its chain: a fresh schedule runs NOTHING until it has a
@@ -111,8 +114,8 @@ public class InstanceScheduleResource extends RowResource {
     }
 
     /**
-     * Stage the columns the form never carries: the target MODEL, the authority stamp and
-     * the next fire, all put on the coerced map by {@link #validated}.
+     * Stage the columns the form never carries -- the target MODEL and the authority stamp,
+     * both put on the coerced map by {@link #validated} -- then arm the next fire.
      *
      * AIDEV-NOTE: this override IS the "Saving failed" fix. {@code RowFormSupport
      * .applyValuesToRow} writes FORM ENTRIES only, so everything {@code validated} staged
@@ -122,18 +125,34 @@ public class InstanceScheduleResource extends RowResource {
      */
     @Override
     public void applyValuesToRow(@NonNull Row row, @NonNull Map<String, Object> coerced) {
+        boolean wasEnabled = Boolean.TRUE.equals(row.get(RecordScheduleModel.ENABLED));
+        boolean created = row.get(RecordScheduleModel.ID) == null;
         super.applyValuesToRow(row, coerced);
         for (Field<?, ?> staged : STAGED_OUTSIDE_FORM) {
             if (coerced.containsKey(staged.getName())) {
                 row.set(staged.getName(), coerced.get(staged.getName()));
             }
         }
+        // AIDEV-NOTE: the FIRST fire is armed here on purpose, through the framework's own
+        // arming path. The framework reads a null next_fire_at as "due now", which for a chain
+        // of power/backup actions against a live instance means a "stop nightly at 04:00"
+        // schedule saved at 14:00 stops the instance within a minute. RecordSchedules.armCron
+        // evaluates the cron in RecordSchedules.zoneOf -- the zone every LATER fire uses -- so
+        // a blank timezone means UTC for the first fire too. This class used to compute the
+        // first fire itself in ZoneId.systemDefault(), which put the first run of a
+        // blank-zone schedule at the wrong hour on any host not running in UTC.
+        boolean enabling = !wasEnabled && Boolean.TRUE.equals(row.get(RecordScheduleModel.ENABLED));
+        if (created || enabling
+                || coerced.containsKey(RecordScheduleModel.CRON.getName())
+                || coerced.containsKey(RecordScheduleModel.TIMEZONE.getName())) {
+            RecordSchedules.armCron(row);
+        }
     }
 
     /** The columns {@link #validated} stages that no form entry backs. */
     private static final List<Field<?, ?>> STAGED_OUTSIDE_FORM = List.of(
         RecordScheduleModel.MODEL, RecordScheduleModel.RUN_AS,
-        RecordScheduleModel.DISABLED_REASON, RecordScheduleModel.NEXT_FIRE_AT);
+        RecordScheduleModel.DISABLED_REASON);
     @Override public @NonNull Model model() { return Models.get(RecordScheduleModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -159,7 +178,7 @@ public class InstanceScheduleResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("instances",
+        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCES,
             row -> parseInstanceId(row.get(RecordScheduleModel.RECORD_ID))).tab("schedules");
     }
 
@@ -174,9 +193,10 @@ public class InstanceScheduleResource extends RowResource {
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String recordId = conduit.getQueryParam("record_id");
-        if (recordId != null && !recordId.isEmpty()) {
-            values.put("record_id", recordId);
+        Integer instanceId = CmsSupport.prefill(conduit, HohenheimParams.RECORD_ID_PREFILL);
+        if (instanceId != null) {
+            // Record schedules key their target polymorphically, as a STRING.
+            values.put(RecordScheduleModel.RECORD_ID.getName(), String.valueOf(instanceId));
         }
         return Map.copyOf(values);
     }
@@ -211,7 +231,7 @@ public class InstanceScheduleResource extends RowResource {
             return Map.of();
         }
         Integer instanceId = CmsSupport.scopedParentId(conduit,
-            RecordScheduleModel.RECORD_ID.getName(), "instances");
+            HohenheimParams.RECORD_ID_PREFILL.getName(), HohenheimSlugs.INSTANCES);
         return instanceId != null
             ? Map.of(RecordScheduleModel.RECORD_ID.getName(), String.valueOf(instanceId))
             : Map.of();
@@ -315,22 +335,20 @@ public class InstanceScheduleResource extends RowResource {
         requireManage(accessContext, instanceId);
 
         Object cron = CmsSupport.valueOf(coerced, existing, RecordScheduleModel.CRON);
-        CronExpression expression;
         try {
-            expression = CronExpression.parse(String.valueOf(cron));
+            CronExpression.parse(String.valueOf(cron));
         } catch (RuntimeException e) {
             throw Violations.ofField("cron", cron, CmsSupport.violationText("invalid_cron"));
         }
 
         Object timezone = CmsSupport.valueOf(coerced, existing, RecordScheduleModel.TIMEZONE);
-        ZoneId zoneId = ZoneId.systemDefault();
-        if (timezone instanceof String zone && !zone.isBlank()) {
-            try {
-                zoneId = ZoneId.of(zone);
-            } catch (RuntimeException e) {
-                throw Violations.ofField("timezone", zone,
-                    CmsSupport.violationText("invalid_timezone"));
-            }
+        try {
+            // The framework's own reading (blank = UTC), so validation refuses exactly what
+            // the arming path and every later fire could not evaluate.
+            RecordSchedules.zoneOf(timezone instanceof String zone ? zone : null);
+        } catch (RuntimeException e) {
+            throw Violations.ofField("timezone", timezone,
+                CmsSupport.violationText("invalid_timezone"));
         }
 
         Map<String, Object> values = new LinkedHashMap<>(coerced);
@@ -340,18 +358,7 @@ public class InstanceScheduleResource extends RowResource {
         // A hand-edited schedule is trusted to fire again; the runtime re-disables
         // (with a fresh reason) if it is still structurally broken.
         values.put(RecordScheduleModel.DISABLED_REASON.getName(), null);
-        // AIDEV-NOTE: the FIRST fire is computed here on purpose. The framework reads a
-        // null next_fire_at as "due now" (a fresh row fires at the next sweep, then
-        // stamps), which for a chain of power/backup actions against a live instance
-        // means a "stop nightly at 04:00" schedule saved at 14:00 stops the instance
-        // within a minute. Stamping the real next occurrence makes the save mean what
-        // the cron says, and gives the Schedules tab a next-run to show.
-        if (existing == null
-                || coerced.containsKey(RecordScheduleModel.CRON.getName())
-                || coerced.containsKey(RecordScheduleModel.TIMEZONE.getName())) {
-            values.put(RecordScheduleModel.NEXT_FIRE_AT.getName(),
-                expression.nextFireAfter(Now.instant(), zoneId).orElse(null));
-        }
+        // The first fire is armed in applyValuesToRow, on the row itself.
         return values;
     }
 

@@ -45,6 +45,14 @@ expect "local.dry is a secret" "$PLAN" "settings/local.dry (mode 0600"
 expect "auth.dry is a secret" "$PLAN" "settings/auth.dry (mode 0600"
 expect "creates the service user" "$PLAN" "useradd --system"
 expect "installs the nft sudoers grant" "$PLAN" "/etc/sudoers.d/hohenheim-nft"
+expect "a sudoers grant is validated before it is installed" "$PLAN" "validate with visudo -cf, then install /etc/sudoers.d/hohenheim-nft"
+expect "the firewall role gets the helper grant" "$PLAN" "/etc/sudoers.d/hohenheim-helper"
+expect "the helper grant names the helper only" "$PLAN" "hohenheim ALL=(root) NOPASSWD: /usr/local/libexec/hohenheim/hohenheim-helper"
+expect "the helper is installed root-owned 0755" "$PLAN" "write /usr/local/libexec/hohenheim/hohenheim-helper (mode 0755, owner root:root"
+expect "the firewall role creates the spamservice account" "$PLAN" "--shell /usr/sbin/nologin spamservice"
+expect "the spamservice launch grant carries SETENV for prlimit only" "$PLAN" "hohenheim ALL=(spamservice : spamservice) NOPASSWD:SETENV: /usr/bin/prlimit"
+expect "no unrestricted root binaries are granted" "$PLAN" "/usr/bin/chown" no
+expect "the health probe follows the loopback bind" "$PLAN" "poll http://127.0.0.1:3000/api/health"
 expect "writes the systemd unit" "$PLAN" "write /etc/systemd/system/hohenheim.service"
 expect "runs migrations" "$PLAN" "--run-migrations"
 expect "prints the setup step" "$PLAN" "redirects to /setup"
@@ -60,6 +68,13 @@ expect "the seeded settings are declared write-once" "$PLAN" "never rewritten"
 PLAN="$(plan_of --roles proxy --panel-bind 0.0.0.0)"
 expect "--panel-bind moves the listener" "$PLAN" "panel listener: 0.0.0.0:3000"
 expect "a public bind is warned about" "$PLAN" "answer on a public port"
+expect "a wildcard bind is probed over loopback" "$PLAN" "poll http://127.0.0.1:3000/api/health"
+expect "a proxy-only node needs no helper" "$PLAN" "no privileged helper needed for these roles"
+expect "a proxy-only node needs no spamservice account" "$PLAN" "no spamservice account needed for these roles"
+PLAN="$(plan_of --roles proxy --panel-bind 10.0.0.5)"
+expect "a specific bind is probed on that address" "$PLAN" "poll http://10.0.0.5:3000/api/health"
+PLAN="$(plan_of --roles proxy --panel-bind 2001:db8::5)"
+expect "an IPv6 bind is probed bracketed" "$PLAN" "poll http://[2001:db8::5]:3000/api/health"
 
 # 1b. The same node with a swapfile.
 PLAN="$(plan_of --roles proxy,dns,firewall --swap 2G)"
@@ -73,11 +88,21 @@ PLAN="$(plan_of --roles instances,databases --volume-root-size 8)"
 # Docker is either installed here already or planned; what the role must change is
 # that the step is no longer skipped as unrequested (host-independent assertion).
 expect "instances pull in docker" "$PLAN" "not requested by any role" no
-expect "installs the volume sudoers grant" "$PLAN" "/etc/sudoers.d/hohenheim-volumes"
+expect "installs the helper sudoers grant" "$PLAN" "/etc/sudoers.d/hohenheim-helper"
+expect "the old unrestricted volume grant is never written" "$PLAN" "NOPASSWD: /usr/bin/btrfs" no
+expect "the volume root is root-owned" "$PLAN" "chown root:root /opt/hohenheim/data/volumes"
+expect "no spamservice account without the firewall role" "$PLAN" "no spamservice account needed for these roles"
 expect "creates the btrfs loop file" "$PLAN" "truncate -s 8G"
 expect "makes the btrfs filesystem" "$PLAN" "mkfs.btrfs"
 expect "adds the nofail fstab entry" "$PLAN" "loop,defaults,nofail"
 expect "no dns work without the dns role" "$PLAN" "dns role not requested"
+PLAN="$(plan_of --roles instances --volume-root /srv/volumes)"
+expect "--volume-root is baked into the helper plan" "$PLAN" "write /usr/local/libexec/hohenheim/hohenheim-helper"
+if OUT="$(bash "$SCRIPT" --dry-run --jar "$JAR" --roles instances --volume-root "/srv/it's" 2>&1)"; then
+    no "a volume root the helper cannot carry verbatim is refused"
+else
+    expect "an unsafe volume root is named" "$OUT" "must be a plain absolute path"
+fi
 
 # 3. Refusals.
 if OUT="$(bash "$SCRIPT" --dry-run --jar "$JAR" --roles proxy,bogus 2>&1)"; then

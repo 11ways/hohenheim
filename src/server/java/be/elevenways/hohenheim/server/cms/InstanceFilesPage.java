@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -18,7 +20,6 @@ import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -111,8 +112,8 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
         }
 
         String panel = CmsSupport.panelSlug(conduit);
-        String requested = conduit.getQueryParam("path");
-        String editing = conduit.getQueryParam("edit");
+        String requested = conduit.getQueryParam(HohenheimParams.FILES_PATH.getName());
+        String editing = conduit.getQueryParam(HohenheimParams.FILES_EDIT.getName());
         try {
             InstanceFiles.Listing listing = files.list(instanceId, requested);
             vars.put("path", listing.path());
@@ -152,7 +153,7 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
                 vars.put("editContent", files.readText(instanceId, editing));
             }
         } catch (Violations refused) {
-            vars.put("error", messageOf(conduit, refused));
+            vars.put("error", HandlerSupport.messageOf(conduit, refused));
         }
         return new RenderTemplateResult(Identifier.of("hohenheim", "cms/instance-files"), vars);
     }
@@ -224,7 +225,7 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
                                                                             @NonNull Integer instanceId) {
         return CmsEndpoints.RECORD_SUBPAGE
             .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, "instances")
+            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCES)
             .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
             .with(CmsEndpoints.SUBPAGE_PARAM, SLUG);
     }
@@ -246,14 +247,5 @@ public final class InstanceFilesPage implements RecordScopedPage<Row> {
             }
         }
         return listing.path();
-    }
-
-    private static @NonNull String messageOf(@NonNull Conduit conduit,
-                                             @NonNull Violations violations) {
-        List<Violation> all = violations.all();
-        if (all.isEmpty()) {
-            return String.valueOf(violations.getMessage());
-        }
-        return all.get(0).message().resolve(conduit.getLocales(), conduit.getMessageResolver());
     }
 }

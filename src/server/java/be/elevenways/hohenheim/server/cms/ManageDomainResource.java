@@ -3,14 +3,11 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -46,12 +43,7 @@ public final class ManageDomainResource extends SiteDomainResource {
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> {
-            Criteria scope = ManagePanel.domainScope(ctx);
-            return AccessDecision.allow(QueryPredicate.of(scope == null
-                ? liveSiteScope()
-                : Criteria.and(liveSiteScope(), scope)));
-        };
+        return TenantScopes.DOMAINS.accessFunction();
     }
 
     /**

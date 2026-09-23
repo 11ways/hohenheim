@@ -8,12 +8,15 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -75,72 +78,53 @@ public class InstanceModel extends Model {
 
     /**
      * The statuses under which a workload may be ON THE BRIDGE, and therefore the ones an
-     * isolation sweep must verify.
+     * isolation sweep must verify: DERIVED from {@link InstanceStatus#liveGuest}.
      *
      * AIDEV-NOTE: ONE list, because the two isolation sweeps disagreed about it and the
-     * disagreement was an oversight rather than a decision. {@code VerifyIncusIsolation}
-     * filtered {@code running} alone while its Docker twin filtered running OR starting, so
-     * an Incus workload was never kernel-verified while it sat in {@code starting} -- which
-     * deploy stamps for every template carrying a readiness line. {@code error} was missing
-     * from BOTH, and it is the status most likely to name a live-but-unwatched guest: a
-     * readiness timeout stamps error and stops NOTHING (InstanceConsoles.arm), so the guest
-     * keeps running with its record claiming failure. The status column's own words are
-     * "the last runtime operation failed; the daemon may disagree".
-     *
-     * DELIBERATELY EXCLUDED: {@code capturing}, {@code restoring} and {@code migrating}.
-     * Those guests can be live too, but they are the protected in-flight statuses whose
-     * declared contract refuses stop and deploy, and an isolation sweep's terminal action IS
-     * a stop -- letting a firewall sweep abort a backup or a migration would trade one
-     * silent failure for a louder one. Their exposure is bounded by the operation's own
-     * lifetime and by the next sweep after it settles. {@code created} and {@code stopped}
-     * name no guest at all.
+     * disagreement was an oversight rather than a decision ({@code VerifyIncusIsolation}
+     * filtered {@code running} alone while its Docker twin filtered running OR starting, and
+     * {@code error} was missing from both). The classification and its reasons live on the
+     * enum member now; this list only projects it, so a new status cannot slip past the
+     * sweeps by not being listed.
      */
-    public static final List<String> LIVE_GUEST_STATUSES =
-        List.of(STATUS_RUNNING, STATUS_STARTING, STATUS_ERROR);
+    public static final List<String> LIVE_GUEST_STATUSES = InstanceStatus.tokensWhere(InstanceStatus::liveGuest);
 
     /**
-     * The in-flight statuses that refuse another operator operation on this record.
+     * The in-flight statuses that refuse another operator operation on this record: the
+     * complement of {@link InstanceStatus#operable}, derived.
      *
-     * AIDEV-NOTE: declared HERE, beside the statuses themselves, because two layers need
-     * the same answer for two different reasons and neither may re-spell it:
-     * {@code InstanceOperationGuard.requireOperable} REFUSES on it (the authority), and the
-     * admin surfaces ASK it to state why a control cannot act right now (the affordance).
-     * A surface that re-listed the statuses would silently drift the moment a fourth
-     * protected status ships.
+     * AIDEV-NOTE: {@code InstanceOperationGuard.requireOperable} REFUSES on it (the
+     * authority), and the admin surfaces ASK it to state why a control cannot act right
+     * now (the affordance). Neither re-spells it.
      */
     public static final List<String> PROTECTED_STATUSES =
-        List.of(STATUS_CAPTURING, STATUS_RESTORING, STATUS_MIGRATING);
+        InstanceStatus.tokensWhere(status -> !status.operable());
 
     /**
      * The statuses under which the RECORD ITSELF still leaves something traffic could
      * reach, and therefore the only ones a site's {@code instance} upstream resolves an
-     * address for.
+     * address for: DERIVED from {@link InstanceStatus#servable}.
      *
-     * AIDEV-NOTE: an ALLOWLIST, so a status added later is unroutable until somebody
-     * classifies it here -- a new member silently joining the routable set is how a paused
-     * workload keeps taking traffic ({@code InstanceUpstreamStalenessTest} fails the build
-     * on an unclassified member). Deliberately WIDER than {@link #LIVE_GUEST_STATUSES}: the
-     * three protected statuses keep their container running, so a backup must not 503 the
-     * site it is protecting, and {@code error} is the status whose own words are "the daemon
-     * may disagree" (a failed operation already parked its port claims, so the ledger
-     * answers null there anyway).
-     *
-     * AIDEV-NOTE: what this EXCLUDES is the pair that claims no workload at all, and that
-     * exclusion is what lets the status reconciler's correction reach the proxy. A workload
-     * that died without a stop leaves its OBSERVED port claim in the ledger -- only a
-     * settled stop releases one -- so the ledger alone cannot tell that the address is dead.
+     * AIDEV-NOTE: an ALLOWLIST by construction (an exhaustive switch on the member), so a
+     * status added later is unroutable until somebody classifies it -- a new member silently
+     * joining the routable set is how a paused workload keeps taking traffic
+     * ({@code InstanceUpstreamStalenessTest} still pins it).
      */
-    public static final List<String> SERVABLE_STATUSES =
-        List.of(STATUS_STARTING, STATUS_RUNNING, STATUS_ERROR,
-            STATUS_CAPTURING, STATUS_RESTORING, STATUS_MIGRATING);
+    public static final List<String> SERVABLE_STATUSES = InstanceStatus.tokensWhere(InstanceStatus::servable);
 
     /**
      * Whether another operator operation may start on this record right now.
      *
-     * @see #PROTECTED_STATUSES
+     * AIDEV-NOTE: FAILS CLOSED on a stored token no member declares (an ALLOWLIST, where it
+     * used to be "not in the protected list", which made every unknown status operable). A
+     * null status reads as the field's declared default, {@code created}.
+     *
+     * @see InstanceStatus#operable
      */
     public static boolean isOperable(@NonNull Row row) {
-        return !PROTECTED_STATUSES.contains(row.get(STATUS));
+        String token = row.get(STATUS);
+        InstanceStatus status = InstanceStatus.forToken(token == null ? STATUS_CREATED : token);
+        return status != null && status.operable();
     }
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
@@ -175,25 +159,17 @@ public class InstanceModel extends Model {
             .label(HohenheimFormCopy.label("server"))
             .build());
 
-    public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_CREATED, v -> v.displayName("Created").icon("circle")
-            .label(Microcopy.of("created").withFilter("scope", "instance_status")).color("gray"))
-        .value(STATUS_STARTING, v -> v.displayName("Starting").icon("hourglass-half")
-            .label(Microcopy.of("starting").withFilter("scope", "instance_status")).color("blue"))
-        .value(STATUS_RUNNING, v -> v.displayName("Running").icon("circle-play")
-            .label(Microcopy.of("running").withFilter("scope", "instance_status")).color("green"))
-        .value(STATUS_STOPPED, v -> v.displayName("Stopped").icon("circle-stop")
-            .label(Microcopy.of("stopped").withFilter("scope", "instance_status")).color("orange"))
-        .value(STATUS_ERROR, v -> v.displayName("Error").icon("circle-exclamation")
-            .label(Microcopy.of("error").withFilter("scope", "instance_status")).color("red"))
-        .value(STATUS_CAPTURING, v -> v.displayName("Capturing").icon("camera")
-            .label(Microcopy.of("capturing").withFilter("scope", "instance_status")).color("blue"))
-        .value(STATUS_RESTORING, v -> v.displayName("Restoring").icon("clock-rotate-left")
-            .label(Microcopy.of("restoring").withFilter("scope", "instance_status")).color("blue"))
-        .value(STATUS_MIGRATING, v -> v.displayName("Migrating").icon("arrow-right-arrow-left")
-            .label(Microcopy.of("migrating").withFilter("scope", "instance_status")).color("blue"))
-        .defaultValue(STATUS_CREATED)
-        .build());
+    public static final EnumField STATUS = SCHEMA.addField(statusField());
+
+    /** The status field, one value per {@link InstanceStatus} member and nothing else. */
+    private static EnumField statusField() {
+        EnumField.Builder builder = EnumField.builder("status");
+        for (InstanceStatus status : InstanceStatus.values()) {
+            builder.value(status.token(), v -> v.displayName(status.displayName()).icon(status.icon())
+                .label(status.label()).color(status.color()));
+        }
+        return builder.defaultValue(STATUS_CREATED).build();
+    }
 
     /** {@link #INSTALL_STATE}: this instance has no install lifecycle (no template step). */
     public static final String INSTALL_NONE = "none";
@@ -586,6 +562,35 @@ public class InstanceModel extends Model {
             .where(DELETED_AT.isNull())
             .orderBy(CREATED_AT, SortOrder.DESC)
             .all();
+    }
+
+    /**
+     * Clear {@code reference} on every TRASHED instance {@code scope} matches, so the row it
+     * names can be deleted while foreign keys are enforced.
+     *
+     * AIDEV-NOTE: THE detach of a destroyed workload's history pointers, called by a delete
+     * hook only AFTER its refusal of live references passed (ServerModel for server_id,
+     * InstanceCatalogGuards for template_id and runtime_image_id). A trashed row keeps
+     * referencing its host, template and image, and since foreign keys are enforced
+     * (zenit 8a86d3c2) that turned every host, template and image a destroyed workload ever
+     * used into a row nobody can delete: there is no purge lane for trashed instances, and
+     * one would drop the backup and snapshot history that outlives them. The pointer is
+     * history only -- a restore reads the backup manifest, not the source row -- so it is
+     * cleared, never the row. A cleared server_id reads as the local daemon (the column's
+     * null convention), which is the same answer the restore lane already gives a backup
+     * whose source row is gone. Ids are collected first so the UPDATE carries a plain id
+     * list instead of the caller's relation criteria.
+     */
+    public static void detachTrashed(@NonNull IntegerField reference, @NonNull Criteria scope) {
+        InstanceModel model = Models.get(InstanceModel.class);
+        List<Integer> trashed = new ArrayList<>();
+        for (Row row : model.find().where(scope).where(DELETED_AT.isNotNull()).all()) {
+            trashed.add(row.get(ID));
+        }
+        if (trashed.isEmpty()) {
+            return;
+        }
+        model.find().where(ID.in(trashed)).assign(reference, null).updateAll();
     }
 
     @Override

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -92,7 +94,7 @@ public final class InstanceTemplateVariableResource extends RowResource {
 
     @Override
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.<Row>of("instance-templates",
+        return ResourceParent.<Row>of(HohenheimSlugs.INSTANCE_TEMPLATES,
             row -> row.get(InstanceTemplateVariableModel.TEMPLATE_ID)).tab("contents");
     }
 
@@ -118,7 +120,7 @@ public final class InstanceTemplateVariableResource extends RowResource {
             return Map.of();
         }
         Integer templateId = CmsSupport.scopedParentId(conduit,
-            InstanceTemplateVariableModel.TEMPLATE_ID.getName(), "instance-templates");
+            InstanceTemplateVariableModel.TEMPLATE_ID.getName(), HohenheimSlugs.INSTANCE_TEMPLATES);
         return templateId != null
             ? Map.of(InstanceTemplateVariableModel.TEMPLATE_ID.getName(), templateId) : Map.of();
     }
@@ -145,13 +147,9 @@ public final class InstanceTemplateVariableResource extends RowResource {
     @Override
     public @NonNull Map<String, Object> createValues(@NonNull Conduit conduit) {
         Map<String, Object> values = new LinkedHashMap<>(formSpec().defaultValues());
-        String templateId = conduit.getQueryParam("template_id");
-        if (templateId != null && !templateId.isEmpty()) {
-            try {
-                values.put("template_id", Integer.parseInt(templateId));
-            } catch (NumberFormatException ignored) {
-                // Malformed prefill: render the bare form.
-            }
+        Integer templateId = CmsSupport.prefill(conduit, HohenheimParams.TEMPLATE_ID_PREFILL);
+        if (templateId != null) {
+            values.put("template_id", templateId);
         }
         return Map.copyOf(values);
     }

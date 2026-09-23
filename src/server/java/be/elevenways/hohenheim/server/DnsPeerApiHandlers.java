@@ -1,15 +1,14 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.dns.DnsApiErrorResponse;
 import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.server.dns.DnsFederationKeys;
 import be.elevenways.hohenheim.server.dns.DnsTsig;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.conduit.ConduitAttributes;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -38,8 +37,7 @@ final class DnsPeerApiHandlers {
         HohenheimEndpoints.API_DNS_PEER_KEY.setHandler(conduit -> {
             // Same gate as the record API: the endpoint permission decides WHO may call,
             // this decides that it is a key and not an ambient browser session.
-            if (!(conduit.getAttribute(ConduitAttributes.PRINCIPAL) instanceof ApiKeyPrincipal)) {
-                conduit.forbidden();
+            if (ApiConduits.requireKey(conduit) == null) {
                 return null;
             }
 

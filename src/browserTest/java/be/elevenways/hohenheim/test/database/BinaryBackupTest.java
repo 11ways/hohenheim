@@ -81,11 +81,16 @@ class BinaryBackupTest {
             // RDB files begin with the ASCII magic "REDIS" followed by a 4-digit version.
             assertThat(new String(bytes, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("REDIS");
 
-            // The downloadable artifact (admin UI backup button) carries the same binary dump.
-            DatabaseService.BackupDownload download = service.backupDownload(name);
-            assertThat(download.filename()).isEqualTo(name + ".rdb");
-            assertThat(download.contentType()).isEqualTo("application/octet-stream");
-            assertThat(new String(download.content(), 0, 5, StandardCharsets.US_ASCII)).isEqualTo("REDIS");
+            // The downloadable artifact (admin UI backup button) carries the same binary dump,
+            // STREAMED: an open stream of a declared size, its temp file already unlinked.
+            try (DatabaseService.BackupStream download = service.backupStream(name)) {
+                assertThat(download.filename()).isEqualTo(name + ".rdb");
+                assertThat(download.contentType()).isEqualTo("application/octet-stream");
+                byte[] streamed = download.content().readAllBytes();
+                assertThat((long) streamed.length)
+                    .as("the declared size is exactly what the stream delivers").isEqualTo(download.size());
+                assertThat(new String(streamed, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("REDIS");
+            }
         } finally {
             cleanup(service, name, dir);
         }
@@ -187,7 +192,7 @@ class BinaryBackupTest {
         try {
             Files.writeString(dummy, "not an rdb file", StandardCharsets.UTF_8);
             assertThatThrownBy(() -> databases.restoreFromFile(
-                    "any-handle", ManagedDatabase.Engine.REDIS, "u", "p", "d", dummy))
+                    "any-handle", ManagedDatabase.Engine.REDIS, "u", "p", "d", dummy, null))
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("REDIS magic");
         } finally {

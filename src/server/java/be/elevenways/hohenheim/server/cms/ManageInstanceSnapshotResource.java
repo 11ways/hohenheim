@@ -1,17 +1,15 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.access.AccessDecision;
 import be.elevenways.zenit.cms.common.access.AccessFunction;
-import be.elevenways.zenit.cms.common.access.QueryPredicate;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.cms.common.resource.RecordScopedPage;
 import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.List;
 
 /**
  * The /manage view over snapshots: the snapshots of instances the principal holds
@@ -38,13 +36,7 @@ public final class ManageInstanceSnapshotResource extends InstanceSnapshotResour
      */
     @Override
     public @NonNull AccessFunction<Row> accessFunction() {
-        return ctx -> {
-            Criteria scope = HohenheimAccess.grantScope(ctx,
-                Models.get(InstanceSnapshotModel.class), InstanceModel.MODEL_ID,
-                HohenheimAccess.SNAPSHOTS, InstanceSnapshotModel.INSTANCE_ID::in);
-            return scope == null ? AccessDecision.allowAll()
-                : AccessDecision.allow(QueryPredicate.of(scope));
-        };
+        return TenantScopes.INSTANCE_SNAPSHOTS.accessFunction();
     }
 
     /** NAV-ONLY; reachesAny, because an id set cannot express every-record authority. */
@@ -52,5 +44,15 @@ public final class ManageInstanceSnapshotResource extends InstanceSnapshotResour
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
         return HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID,
             HohenheimAccess.SNAPSHOTS);
+    }
+
+    /**
+     * The contributed pages only (the generic access matrix, which gates itself per record).
+     * Deliberately NOT frameworkSubpages(): the admin activity/revision history stays off the
+     * delegated surface, and dropping the page here also 404s its routes.
+     */
+    @Override
+    public @NonNull List<RecordScopedPage<Row>> subpages() {
+        return this.contributedSubpages();
     }
 }

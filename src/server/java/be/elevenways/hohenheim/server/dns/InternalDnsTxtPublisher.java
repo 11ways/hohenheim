@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.tls.DnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
@@ -22,7 +21,6 @@ import org.xbill.DNS.Type;
 
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -94,11 +92,11 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
      * primary, so the peer's admin channel is part of the answer, not an afterthought.
      */
     public @Nullable Refusal refusalFor(@NonNull String fqdn) {
-        String name = stripDot(fqdn);
+        String name = DnsNames.canonicalName(fqdn);
         if (this.store.findPrimaryZoneFor(name) != null) {
             return null;
         }
-        DnsZoneSnapshot zone = this.store.findZoneFor(name);
+        DnsZoneSnapshot zone = this.store.findServingZoneFor(name);
         if (zone == null) {
             return new Refusal(REFUSAL_NOT_HOSTED, null);
         }
@@ -194,12 +192,12 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
     private record Target(@NonNull DnsZoneSnapshot zone, @Nullable DnsPeerApi api) {}
 
     private @NonNull Target requireTarget(@NonNull String recordName) {
-        String fqdn = stripDot(recordName);
+        String fqdn = DnsNames.canonicalName(recordName);
         DnsZoneSnapshot primary = this.store.findPrimaryZoneFor(fqdn);
         if (primary != null) {
             return new Target(primary, null);
         }
-        DnsZoneSnapshot zone = this.store.findZoneFor(fqdn);
+        DnsZoneSnapshot zone = this.store.findServingZoneFor(fqdn);
         DnsPeerApi api = zone != null ? DnsPeerApi.forPeer(owningPeer(zone)) : null;
         if (zone == null || api == null) {
             Refusal refusal = refusalFor(fqdn);
@@ -220,7 +218,7 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
     private void awaitReplica(@NonNull DnsZoneSnapshot zone, @NonNull DnsTxtRecord record)
             throws Exception {
         String origin = zone.getOriginString();
-        Name name = Name.fromString(stripDot(record.name()) + ".");
+        Name name = Name.fromString(DnsNames.canonicalName(record.name()) + ".");
         long deadline = Now.millis() + PROPAGATION_TIMEOUT_MS;
         while (true) {
             refreshReplica(zone);
@@ -295,9 +293,9 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
         if (current == null) {
             return;
         }
-        List<Row> links = Models.get(DnsZonePeerModel.class).findByZoneId(current.getZoneId());
+        List<DnsZonePeers.Linked> links = DnsZonePeers.enabled(current.getZoneId());
         if (links.isEmpty()) {
-            return; // no secondaries: the local snapshot already serves it
+            return; // no (enabled) secondaries: the local snapshot already serves it
         }
 
         long requiredSerial = current.getSerial();
@@ -309,14 +307,9 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
             return;
         }
 
-        DnsPeerModel peerModel = Models.get(DnsPeerModel.class);
         long deadline = Now.millis() + PROPAGATION_TIMEOUT_MS;
-        for (Row link : links) {
-            Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
-            Row peer = peerId != null ? peerModel.findById(peerId) : null;
-            if (peer == null || !Boolean.TRUE.equals(peer.get(DnsPeerModel.ENABLED))) {
-                continue;
-            }
+        for (DnsZonePeers.Linked linked : links) {
+            Row peer = linked.peer();
             String host = peer.get(DnsPeerModel.TRANSFER_HOST);
             if (host == null || host.isBlank()) {
                 continue;
@@ -346,7 +339,7 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
     }
 
     private @NonNull String relativeOwner(@NonNull DnsZoneSnapshot zone, @NonNull String recordName) {
-        String owner = DnsNames.relative(zone.getOriginString(), stripDot(recordName));
+        String owner = DnsNames.relative(zone.getOriginString(), DnsNames.canonicalName(recordName));
         if (owner == null) {
             throw new IllegalStateException("Record name " + recordName
                 + " left zone " + zone.getOriginString());
@@ -354,11 +347,4 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
         return owner;
     }
 
-    private static @NonNull String stripDot(@Nullable String name) {
-        String value = name != null ? name.trim().toLowerCase(Locale.ROOT) : "";
-        while (value.endsWith(".")) {
-            value = value.substring(0, value.length() - 1);
-        }
-        return value;
-    }
 }

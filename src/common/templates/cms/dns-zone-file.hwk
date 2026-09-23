@@ -27,7 +27,7 @@
             <pl-card-description>{{ t("ds_description", scope: "dns_zone") }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
-            <pre class="hh-zone-file"><code>{{ dsRecord }}</code></pre>
+            <pl-code value={% dsRecord %} copy={% true %} label={% t("ds_title", scope: "dns_zone") %}></pl-code>
         </pl-card-content>
     </pl-card>
     {% /if %}
@@ -38,7 +38,7 @@
             <pl-card-description>{{ t("zone_file_description", scope: "dns_zone") }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
-            <pre class="hh-zone-file"><code>{{ zoneText }}</code></pre>
+            <pl-code value={% zoneText %} copy={% true %} label={% t("zone_file", scope: "dns_zone") %}></pl-code>
         </pl-card-content>
     </pl-card>
 

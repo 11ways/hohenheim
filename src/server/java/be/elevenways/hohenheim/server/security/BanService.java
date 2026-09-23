@@ -8,22 +8,29 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.net.AddressScope;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongSupplier;
 
 /**
@@ -39,6 +46,13 @@ import java.util.function.LongSupplier;
  * normalizes v6 targets to the {@code <network>/64} key stored in the ip
  * column, and lookups normalize the incoming address the same way (O(1), no
  * CIDR scans).
+ *
+ * AIDEV-NOTE: the proxy calls in from Undertow I/O threads (the ban check on every request,
+ * the threat scorer's threshold trigger), so those two entry points never touch the database,
+ * nftables or this object's monitor. {@link #isBanned} is a read of the volatile snapshot, and
+ * {@link #autoBan} only screens the target in memory and hands the write to ONE background ban
+ * writer; the writer does the lookup, the row, the {@code sudo nft} call and the budget under
+ * the monitor, where only it and the admin-driven mutations meet.
  */
 public final class BanService {
 
@@ -46,9 +60,20 @@ public final class BanService {
 
     private static final long AUTO_BAN_WINDOW_MS = 3_600_000;
 
+    /** How many distinct automatic bans may wait for the writer before new ones are dropped. */
+    private static final int WRITER_QUEUE_CAPACITY = 1024;
+
     private final NftService nft;
     private final LongSupplier clock;
     private final SecurityNotifier notifier;
+    private final Executor writer;
+
+    // Keys (target + scope) an automatic ban is queued for, so a flood of threshold crossings
+    // from one actor is one write, not one per request.
+    private final Set<String> queuedAutoBans = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean refreshQueued = new AtomicBoolean();
+    private final AtomicLong droppedAutoBans = new AtomicLong();
+    private volatile long lastDropLogMs;
     private final AtomicBoolean nftBootStarted = new AtomicBoolean();
     private volatile @Nullable Thread nftBootThread;
 
@@ -67,21 +92,40 @@ public final class BanService {
     private long budgetSuppressed;
     private boolean budgetWarned;
 
+    /** The production shape: the real clock, operator alerts and the background ban writer. */
     BanService(@NonNull NftService nft) {
-        this(nft, System::currentTimeMillis);
+        this(nft, Now::millis, Alerts::send, backgroundWriter());
     }
 
-    /** Test constructor: inject the clock the auto-ban budget window uses. */
+    /** Test constructor: inject the clock the auto-ban budget window uses; writes run inline. */
     BanService(@NonNull NftService nft, @NonNull LongSupplier clock) {
         this(nft, clock, Alerts::send);
     }
 
-    /** Test constructor: additionally inject the operator-notification sink. */
+    /** Test constructor: additionally inject the operator-notification sink; writes run inline. */
     BanService(@NonNull NftService nft, @NonNull LongSupplier clock,
                @NonNull SecurityNotifier notifier) {
+        this(nft, clock, notifier, Runnable::run);
+    }
+
+    /**
+     * @param writer where automatic bans and cache loads run; {@code Runnable::run} makes them
+     *               synchronous, which is what a test asserting on the row right after wants
+     */
+    BanService(@NonNull NftService nft, @NonNull LongSupplier clock,
+               @NonNull SecurityNotifier notifier, @NonNull Executor writer) {
         this.nft = nft;
         this.clock = clock;
         this.notifier = notifier;
+        this.writer = writer;
+    }
+
+    /** The one daemon thread every automatic ban and background cache load runs on. */
+    private static @NonNull Executor backgroundWriter() {
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>(WRITER_QUEUE_CAPACITY),
+            runnable -> Thread.ofPlatform().daemon().name("ban-writer").unstarted(runnable));
+        return executor;
     }
 
     NftService nft() {
@@ -117,7 +161,11 @@ public final class BanService {
         if (!enforcementEnabled()) {
             return false;
         }
-        ensureCacheLoaded();
+        if (!this.cacheLoaded) {
+            // Boot warms the cache; this is the early-datasource retry, and it never runs the
+            // query on the caller's (I/O) thread.
+            queueCacheLoad();
+        }
         if (ip.indexOf(':') >= 0) {
             String key = IpLiterals.subnetKey(ip);
             return key != null && activeIps.contains(key);
@@ -135,32 +183,65 @@ public final class BanService {
     // -----------------------------------------------------------------------
 
     /**
-     * Automatic-ban entry point (threat scorer, reputation policy): create a
-     * ban with the configured TTL and the caller's reason. Idempotent for
-     * already-banned IPs, a no-op when bans are disabled, and subject to the
-     * global {@code security.auto_ban_budget_per_hour} budget.
+     * Automatic-ban entry point (threat scorer, reputation policy): create a ban with the
+     * configured TTL and the caller's reason, in the scope the event type names. Idempotent
+     * for an actor already banned IN THAT SCOPE, a no-op when bans are disabled, and subject
+     * to the global {@code security.auto_ban_budget_per_hour} budget.
+     *
+     * Returns before the ban exists: the lookup, the row and the kernel element are the ban
+     * writer's work (see the class note), and {@link #awaitPendingWrites} is the seam for a
+     * caller that must observe the row.
      */
     public void autoBan(@NonNull String ip, @Nullable String eventType, @NonNull String reason) {
         if (!enforcementEnabled()) {
             return;
         }
+        String trimmed = ip.trim();
+        // Screened in memory on the caller's thread: a protected or unparseable target never
+        // occupies the writer.
+        String problem = protectionProblem(trimmed);
+        if (problem != null) {
+            logRefusalThrottled(ip, problem);
+            return;
+        }
+        String normalized = normalizeBanTarget(trimmed);
+        if (normalized == null) {
+            logRefusalThrottled(ip, "not a literal IP address");
+            return;
+        }
+        BanScope scope = BanScope.forEventType(eventType);
+        String queueKey = scope.token() + " " + normalized;
+        if (!this.queuedAutoBans.add(queueKey)) {
+            return;   // this actor's ban in this scope is already on its way
+        }
+        try {
+            this.writer.execute(() -> {
+                try {
+                    writeAutoBan(ip, normalized, eventType, scope, reason);
+                } catch (RuntimeException failure) {
+                    Blast.log("BANS: auto-ban failed for", ip, "-", failure.getMessage());
+                } finally {
+                    this.queuedAutoBans.remove(queueKey);
+                }
+            });
+        } catch (RejectedExecutionException full) {
+            this.queuedAutoBans.remove(queueKey);
+            noteDroppedAutoBan(normalized);
+        }
+    }
+
+    /** The writer half of {@link #autoBan}: dedupe per scope, spend the budget, create the row. */
+    private void writeAutoBan(@NonNull String ip, @NonNull String normalized,
+                              @Nullable String eventType, @NonNull BanScope scope,
+                              @NonNull String reason) {
         int exhaustedBudget = 0;
         synchronized (this) {
-            String trimmed = ip.trim();
-            String problem = protectionProblem(trimmed);
-            if (problem != null) {
-                logRefusalThrottled(ip, problem);
-                return;
-            }
-            String normalized = normalizeBanTarget(trimmed);
-            if (normalized == null) {
-                logRefusalThrottled(ip, "not a literal IP address");
-                return;
-            }
-
             BanModel bans = Models.get(BanModel.class);
-            Row existing = findActiveBan(bans, normalized);
-            if (existing != null) {
+            // AIDEV-NOTE: the dedupe is PER SCOPE. It used to find any active row for the
+            // address, so a web ban from hostname scanning silently suppressed the SSH ban
+            // for the same actor's brute force (and vice versa) -- the kernel set for the
+            // other scope never got the element.
+            if (findActiveBan(bans, normalized, scope) != null) {
                 return;
             }
 
@@ -182,8 +263,7 @@ public final class BanService {
                     int ttlHours = HohenheimSettings.VALUES.getValue(
                         HohenheimSettings.Security.AUTO_BAN_TTL_HOURS);
                     createBanNormalized(bans, normalized, reason, BanModel.SOURCE_AUTO,
-                        eventType, BanScope.forEventType(eventType),
-                        Duration.ofHours(Math.max(1, ttlHours)), true);
+                        eventType, scope, Duration.ofHours(Math.max(1, ttlHours)), true);
                     this.completedAutoBans.addLast(now);
                 } catch (RuntimeException e) {
                     Blast.log("BANS: auto-ban failed for", ip, "-", e.getMessage());
@@ -192,6 +272,35 @@ public final class BanService {
         }
         if (exhaustedBudget > 0) {
             notifyBudgetExhausted(exhaustedBudget);
+        }
+    }
+
+    /** A full writer queue drops the ban (the actor keeps scoring and retries) and says so. */
+    private void noteDroppedAutoBan(@NonNull String normalized) {
+        long dropped = this.droppedAutoBans.incrementAndGet();
+        long now = Now.millis();
+        if (now - this.lastDropLogMs >= REFUSAL_LOG_THROTTLE_MS) {
+            this.lastDropLogMs = now;
+            Blast.log("BANS: ban writer queue full; automatic ban of", normalized,
+                "dropped (" + dropped + " dropped so far) -- the actor stays scored and will"
+                    + " trigger again");
+        }
+    }
+
+    /**
+     * Block until every automatic ban and cache load queued so far has been written.
+     *
+     * @throws IllegalStateException when the writer does not drain within ten seconds
+     */
+    public void awaitPendingWrites() throws InterruptedException {
+        CountDownLatch drained = new CountDownLatch(1);
+        try {
+            this.writer.execute(drained::countDown);
+        } catch (RejectedExecutionException full) {
+            throw new IllegalStateException("the ban writer queue is full");
+        }
+        if (!drained.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("the ban writer did not drain within 10s");
         }
     }
 
@@ -235,8 +344,8 @@ public final class BanService {
     }
 
     /**
-     * Create a ban (null ttl = permanent). Returns the existing active row when
-     * the IP is already banned.
+     * Create a web-scoped ban (null ttl = permanent). Returns the existing active web
+     * row when the IP is already banned there.
      *
      * @throws IllegalArgumentException when the IP is unparseable or protected
      *         (loopback/private/link-local or one of this server's own addresses)
@@ -250,8 +359,9 @@ public final class BanService {
 
     /**
      * Create a ban in an explicit enforcement scope (null ttl = permanent). Returns the
-     * existing active row when the IP is already banned, whatever scope that row carries:
-     * one address is one actor, and two rows for it would be two lifting decisions.
+     * existing active row when the IP is already banned IN THAT SCOPE: the two scopes are two
+     * kernel sets and two refusals, so a web ban never stands in for an SSH one or the other
+     * way around, and each is lifted on its own.
      *
      * @throws IllegalArgumentException when the IP is unparseable or protected
      */
@@ -269,7 +379,7 @@ public final class BanService {
         String normalized = normalizeBanTarget(trimmed);
 
         BanModel bans = Models.get(BanModel.class);
-        Row existing = findActiveBan(bans, normalized);
+        Row existing = findActiveBan(bans, normalized, scope);
         if (existing != null) {
             return existing;
         }
@@ -307,12 +417,18 @@ public final class BanService {
         return row;
     }
 
-    private static @Nullable Row findActiveBan(@NonNull BanModel bans, @NonNull String normalized) {
-        Row existing = bans.find()
-            .where(BanModel.IP.eq(normalized))
-            .where(BanModel.ACTIVE.eq(true))
-            .first();
-        return existing != null && !isExpired(existing) ? existing : null;
+    /** The active, unexpired row banning this key in this scope (a pre-scope row is WEB). */
+    private static @Nullable Row findActiveBan(@NonNull BanModel bans, @NonNull String normalized,
+                                               @NonNull BanScope scope) {
+        for (Row row : bans.find()
+                .where(BanModel.IP.eq(normalized))
+                .where(BanModel.ACTIVE.eq(true))
+                .all()) {
+            if (!isExpired(row) && BanScope.fromToken(row.get(BanModel.SCOPE)) == scope) {
+                return row;
+            }
+        }
+        return null;
     }
 
     /**
@@ -338,7 +454,7 @@ public final class BanService {
 
         String ip = ban.get(BanModel.IP);
         BanScope scope = scopeOf(ban);
-        if (ip != null && scope != null && !stillActivelyBanned(ip)) {
+        if (ip != null && scope != null && findActiveBan(bans, ip, scope) == null) {
             nft.removeBan(scope, ip);
         }
         refreshCache();
@@ -431,7 +547,7 @@ public final class BanService {
         try {
             // WEB scope only: this cache IS the proxy's HTTP/TLS refusal, and an SSH
             // brute-forcer was never declared unwelcome on a customer's website.
-            Set<String> ips = new java.util.HashSet<>();
+            Set<String> ips = new HashSet<>();
             for (Row row : listActive()) {
                 String ip = row.get(BanModel.IP);
                 if (ip != null && BanScope.WEB == BanScope.fromToken(row.get(BanModel.SCOPE))) {
@@ -446,9 +562,23 @@ public final class BanService {
         }
     }
 
-    private void ensureCacheLoaded() {
-        if (!cacheLoaded) {
-            refreshCache();
+    /** Load the cache on the writer, at most one load queued at a time. */
+    private void queueCacheLoad() {
+        if (!this.refreshQueued.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            this.writer.execute(() -> {
+                try {
+                    if (!this.cacheLoaded) {
+                        refreshCache();
+                    }
+                } finally {
+                    this.refreshQueued.set(false);
+                }
+            });
+        } catch (RejectedExecutionException full) {
+            this.refreshQueued.set(false);
         }
     }
 
@@ -511,17 +641,9 @@ public final class BanService {
         if (literal == null) {
             return "not a literal IP address";
         }
-        InetAddress address;
-        try {
-            address = InetAddress.getByAddress(literal);
-        } catch (UnknownHostException e) {
-            return "not a valid IP address";
-        }
-        if (address.isLoopbackAddress() || address.isAnyLocalAddress()) {
-            return "loopback address";
-        }
-        if (address.isSiteLocalAddress() || address.isLinkLocalAddress()) {
-            return "private address";
+        String scopeProblem = scopeProblem(literal);
+        if (scopeProblem != null) {
+            return scopeProblem;
         }
         for (String own : UpdateSystemIpAddresses.getLocalAddresses()) {
             if (key.equals(own)) {
@@ -548,20 +670,11 @@ public final class BanService {
         if (network == null) {
             return "not a literal IP address";
         }
-        InetAddress address;
-        try {
-            address = InetAddress.getByAddress(network);
-        } catch (UnknownHostException e) {
-            return "not a valid IP address";
-        }
-        // ::1 lives in ::/64, whose network address is the any-local :: --
-        // the network-address checks therefore cover the protected /64s.
-        if (address.isLoopbackAddress() || address.isAnyLocalAddress()) {
-            return "loopback address";
-        }
-        if (address.isSiteLocalAddress() || address.isLinkLocalAddress()
-                || isUniqueLocalV6(address)) {
-            return "private address";
+        // ::1 lives in ::/64, whose network address is the unspecified :: -- the
+        // network-address classification therefore covers the protected /64s.
+        String scopeProblem = scopeProblem(network);
+        if (scopeProblem != null) {
+            return scopeProblem;
         }
         for (String own : UpdateSystemIpAddresses.getLocalAddresses()) {
             if (own.indexOf(':') >= 0 && key.equals(IpLiterals.subnetKey(own))) {
@@ -576,6 +689,24 @@ public final class BanService {
             return "contains an address on the security.never_ban allowlist (resolved hostname)";
         }
         return null;
+    }
+
+    /**
+     * The refusal an address's zenit {@link AddressScope} earns: this host (loopback, the
+     * unspecified address) and every local network (RFC 1918, the shared 100.64/10 space
+     * tailnets use, link-, unique- and site-local) are never banned.
+     *
+     * AIDEV-NOTE: an exhaustive switch over the scope's REACH, no default, so a reach zenit
+     * adds fails the build here instead of silently becoming bannable. The special-purpose
+     * families (documentation, benchmarking, reserved, ...) stay bannable exactly as before:
+     * a client presenting one is not an address the operator depends on.
+     */
+    private static @Nullable String scopeProblem(byte @NonNull [] address) {
+        return switch (AddressScope.of(address).reach()) {
+            case THIS_HOST -> "loopback address";
+            case LOCAL_NETWORK -> "private address";
+            case INTERNET, SPECIAL -> null;
+        };
     }
 
     // Per-IP refusal-log throttle so a scanning loop cannot flood the log.
@@ -593,20 +724,6 @@ public final class BanService {
             refusalLogTimes.clear();
         }
         Blast.log("BANS: over-threshold IP", ip, "is protected and stays UNENFORCED -", reason);
-    }
-
-    private static boolean isUniqueLocalV6(@NonNull InetAddress address) {
-        byte[] bytes = address.getAddress();
-        return bytes.length == 16 && (bytes[0] & 0xFE) == 0xFC;
-    }
-
-    private boolean stillActivelyBanned(@NonNull String ip) {
-        for (Row row : listActive()) {
-            if (ip.equals(row.get(BanModel.IP))) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static boolean isExpired(@NonNull Row ban) {

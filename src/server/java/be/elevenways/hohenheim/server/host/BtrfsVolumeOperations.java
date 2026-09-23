@@ -48,24 +48,27 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
         // A plain directory left by an earlier backend is NOT silently adopted: it would
         // take no quota and no snapshot, which is the failure this whole tier exists to
         // make impossible. Only an absent path or an existing subvolume is acceptable.
-        run(this.sudo + "mkdir -p " + HostShell.quote(parentOf(hostPath))
-            + " && { " + this.sudo + "btrfs subvolume show " + quoted + " >/dev/null 2>&1"
-            + " || " + this.sudo + "btrfs subvolume create " + quoted + "; }", "volume_create_failed", hostPath);
+        run(privileged(PrivilegedHelper.Verb.VOLUME_CREATE,
+            this.sudo + "mkdir -p " + HostShell.quote(parentOf(hostPath))
+                + " && { " + this.sudo + "btrfs subvolume show " + quoted + " >/dev/null 2>&1"
+                + " || " + this.sudo + "btrfs subvolume create " + quoted + "; }", hostPath),
+            "volume_create_failed", hostPath);
     }
 
     @Override
     public void setQuota(@NonNull String hostPath, @Nullable Long bytes) {
         String quoted = HostShell.quote(hostPath);
         String limit = bytes == null || bytes <= 0 ? "none" : String.valueOf(bytes);
-        run(this.sudo + "btrfs quota enable " + HostShell.quote(mountpointOf(hostPath)) + " >/dev/null 2>&1;"
-            + " " + this.sudo + "btrfs qgroup limit " + limit + " " + quoted,
+        run(privileged(PrivilegedHelper.Verb.VOLUME_QUOTA,
+            this.sudo + "btrfs quota enable " + HostShell.quote(mountpointOf(hostPath)) + " >/dev/null 2>&1;"
+                + " " + this.sudo + "btrfs qgroup limit " + limit + " " + quoted, hostPath, limit),
             "volume_quota_failed", hostPath);
     }
 
     @Override
     public long usage(@NonNull String hostPath) {
-        HostShell.Result result = this.shell.run(
-            this.sudo + "btrfs qgroup show --raw -f " + HostShell.quote(hostPath));
+        HostShell.Result result = this.shell.run(privileged(PrivilegedHelper.Verb.VOLUME_USAGE,
+            this.sudo + "btrfs qgroup show --raw -f " + HostShell.quote(hostPath), hostPath));
         if (!result.ok()) {
             Blast.log("VOLUMES: btrfs could not report usage of", hostPath, "-", result.text());
             return -1;
@@ -97,9 +100,11 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
     @Override
     public @NonNull String snapshot(@NonNull String hostPath, @NonNull String label) {
         String target = snapshotPathFor(hostPath, label);
-        run(this.sudo + "mkdir -p " + HostShell.quote(parentOf(target))
-            + " && " + this.sudo + "btrfs subvolume snapshot -r " + HostShell.quote(hostPath) + " "
-            + HostShell.quote(target), "volume_snapshot_failed", hostPath);
+        run(privileged(PrivilegedHelper.Verb.VOLUME_SNAPSHOT,
+            this.sudo + "mkdir -p " + HostShell.quote(parentOf(target))
+                + " && " + this.sudo + "btrfs subvolume snapshot -r " + HostShell.quote(hostPath) + " "
+                + HostShell.quote(target), hostPath, target),
+            "volume_snapshot_failed", hostPath);
         return target;
     }
 
@@ -111,8 +116,10 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
     @Override
     public void destroy(@NonNull String hostPath) {
         String quoted = HostShell.quote(hostPath);
-        run("if " + this.sudo + "btrfs subvolume show " + quoted + " >/dev/null 2>&1; then"
-            + " " + this.sudo + "btrfs subvolume delete " + quoted + "; else " + this.sudo + "rm -rf " + quoted + "; fi",
+        run(privileged(PrivilegedHelper.Verb.VOLUME_DESTROY,
+            "if " + this.sudo + "btrfs subvolume show " + quoted + " >/dev/null 2>&1; then"
+                + " " + this.sudo + "btrfs subvolume delete " + quoted + "; else " + this.sudo + "rm -rf " + quoted + "; fi",
+            hostPath),
             "volume_destroy_failed", hostPath);
     }
 
@@ -121,7 +128,9 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
         String quoted = HostShell.quote(hostPath);
         // The directory itself, and its mode: 0700 so the number that owns it is the only
         // identity that can read it. Nothing else on the host answers to that number.
-        run(this.sudo + "chown " + uid + ":" + uid + " " + quoted + " && " + this.sudo + "chmod 0700 " + quoted,
+        run(privileged(PrivilegedHelper.Verb.VOLUME_OWN,
+            this.sudo + "chown " + uid + ":" + uid + " " + quoted + " && " + this.sudo + "chmod 0700 " + quoted,
+            hostPath, String.valueOf(uid)),
             "volume_own_failed", hostPath);
     }
 
@@ -153,6 +162,18 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
     private static @NonNull String sanitize(@NonNull String label) {
         String cleaned = label.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "-");
         return cleaned.isBlank() ? "snapshot" : cleaned;
+    }
+
+    /**
+     * The script one operation runs: the bare commands on a root shell, and on an unprivileged
+     * one the {@link PrivilegedHelper} verb, falling back to the sudo-elevated legacy commands
+     * on a host whose helper is not installed yet.
+     *
+     * @param legacy the operation's commands, already prefixed with {@link #sudo}
+     */
+    private @NonNull String privileged(PrivilegedHelper.@NonNull Verb verb, @NonNull String legacy,
+                                       @NonNull String... args) {
+        return this.shell.elevated() ? legacy : PrivilegedHelper.snippet(verb, legacy, args);
     }
 
     private void run(@NonNull String script, @NonNull String violation,

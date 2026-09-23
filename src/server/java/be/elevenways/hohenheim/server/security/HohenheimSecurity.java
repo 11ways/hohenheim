@@ -117,6 +117,7 @@ public final class HohenheimSecurity {
         labels.put(SecurityEventTypes.AUTH_LOCKOUT, label("lockout"));
         labels.put(SecurityEventTypes.RATE_LIMITED, label("rate_limited"));
         labels.put(SecurityEventTypes.CSRF_FAILURE, label("csrf_failure"));
+        labels.put(SecurityEventTypes.PERMISSION_DENIED, label("permission_denied"));
         labels.put(SecurityEventTypes.WS_ORIGIN_REFUSED, label("ws_origin_refused"));
         labels.put(SecurityEventTypes.WS_AUTH_REFUSED, label("ws_auth_refused"));
         labels.put(SecurityEventTypes.SSH_INVALID_USER, label("ssh_invalid_user"));

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -67,7 +68,7 @@ public final class DatabaseRestorePage implements RecordScopedPage<Row> {
             if (instance != null) {
                 instances.add(Map.of(
                     "name", String.valueOf(instance.get(InstanceModel.NAME)),
-                    "target", CmsRoutes.subpage("admin", "instances",
+                    "target", CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES,
                         instance.get(InstanceModel.ID), "databases")));
             }
         }

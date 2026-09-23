@@ -108,8 +108,10 @@
                 {#- Redacted at ingest, but still the workload's stdout VERBATIM, and a
                     tenant dictates what a workload prints. It is TEXT: {{ }} builds a
                     text node, so nothing in it can ever become markup. Never render it
-                    as HTML. -#}
-                <div class="hh-proclog-content">{{ selectedLogText }}</div>
+                    as HTML. pl-log-view carries it as its plain `text` property and owns the
+                    mono frame, the bounded height and the named scroll region. -#}
+                <pl-log-view text={% selectedLogText %}
+                             label={% t("stored_log", scope: "instance_console", title: selectedLogTitle) %}></pl-log-view>
             </pl-card-content>
         </pl-card>
         {% /if %}

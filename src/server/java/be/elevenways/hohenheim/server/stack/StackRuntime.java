@@ -799,7 +799,11 @@ public class StackRuntime {
         }
         StackInstances.removeNetwork(spec.serverName(), spec.name());
         if (removeVolumes) {
-            StackInstances.removeOwnedVolumes(spec.serverName(), spec.name());
+            // The last deployed snapshot joins the declared set: a mount dropped from the
+            // records since then still names a volume the stack created.
+            StackSpec deployed = scoped(() -> latestSnapshot(spec.stackId()));
+            StackInstances.removeOwnedVolumes(spec,
+                deployed != null ? List.of(deployed) : List.of());
         }
     }
 

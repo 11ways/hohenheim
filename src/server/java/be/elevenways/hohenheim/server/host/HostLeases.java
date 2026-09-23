@@ -128,14 +128,32 @@ public final class HostLeases {
         return true;
     }
 
-    /** Release every held host lease (shutdown). */
-    public void releaseAll() {
+    /**
+     * Release every held host lease (shutdown).
+     *
+     * AIDEV-NOTE: each release is independent, exactly like {@link #release}: one lease
+     * whose row or database is already gone used to throw out of the loop and strand every
+     * later lease until its TTL, which is the wait this shutdown step exists to spare a
+     * successor controller.
+     *
+     * @return how many holds were released without error
+     */
+    public int releaseAll() {
+        int released = 0;
         for (Integer serverId : this.held.keySet()) {
             Hold hold = this.held.remove(serverId);
-            if (hold != null) {
+            if (hold == null) {
+                continue;
+            }
+            try {
                 hold.lease().release();
+                released++;
+            } catch (RuntimeException failed) {
+                Blast.log("HOST: releasing the lease of host", serverId, "failed;"
+                    + " it expires by TTL:", failed.getMessage());
             }
         }
+        return released;
     }
 
     private @Nullable Lease currentLease(int serverId, boolean acquire) {

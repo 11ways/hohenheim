@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.util.PortProbe;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -227,11 +228,15 @@ final class PortPublications {
     private static void claimOrRefuse(int serverId, @NonNull String bind, int port,
                                       @NonNull String protocol, int instanceId,
                                       boolean localHost) {
-        Row holder = PortLedger.conflictingHolder(serverId, bind, port, protocol);
-        if (holder != null && !PortLedger.isOwnedBy(holder, InstanceModel.MODEL_ID, instanceId)) {
-            throw conflictRefusal(port, PortLedger.describeHolder(holder));
+        // The RIVAL is asked for by owner, never read off the first overlapping row: the
+        // instance's own row can come back first while a rival's overlapping row survives.
+        Row rival = PortLedger.rivalHolder(serverId, bind, port, protocol,
+            InstanceModel.MODEL_ID, instanceId);
+        if (rival != null) {
+            throw conflictRefusal(port, PortLedger.describeHolder(rival));
         }
-        boolean reclaimingOwnRow = holder != null;
+        boolean reclaimingOwnRow =
+            PortLedger.conflictingHolder(serverId, bind, port, protocol) != null;
         if (localHost && !reclaimingOwnRow && !PortProbe.isFree(bind, port, protocol)) {
             throw Violations.ofField("settings.host_port", port,
                 violationText("port_bound_on_host").withArg("port", port));
@@ -256,10 +261,22 @@ final class PortPublications {
         return server != null && ServerModel.MODE_LOCAL.equals(server.get(ServerModel.MODE));
     }
 
+    /** The configured public window's first port, or the built-in 30000 when unusable. */
     private static int windowFirst() {
         Integer first = HohenheimSettings.VALUES.getValue(
             HohenheimSettings.Instances.PUBLIC_PORT_FIRST);
-        return first == null || first <= 1024 ? 30000 : first;
+        if (first != null && first <= 1024) {
+            // AIDEV-NOTE: the substitution below is NOT a silent default: an operator who
+            // configured a privileged first port gets a window they never asked for, and
+            // DNS/firewall rules written against their number would point nowhere. Until a
+            // SettingsRule refuses the value at save and at boot, it is said out loud on
+            // every allocation that reads it.
+            Blast.log("PORTS: instances.public_port_first =", first, "is a privileged port"
+                + " (<= 1024) and is IGNORED; public publications allocate from 30000 instead."
+                + " Set a first port above 1024.");
+            return 30000;
+        }
+        return first == null ? 30000 : first;
     }
 
     private static int windowCount() {

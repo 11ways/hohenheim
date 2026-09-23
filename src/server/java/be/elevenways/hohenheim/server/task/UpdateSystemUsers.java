@@ -60,6 +60,16 @@ public class UpdateSystemUsers extends ScheduledTask {
         reconcile();
     }
 
+    /** Copy one scanned passwd entry onto its row and mark it seen now. */
+    private static void apply(@NonNull Row row, @NonNull ParsedUser user, @NonNull Instant now) {
+        row.set(SystemUserModel.UID, user.uid());
+        row.set(SystemUserModel.GID, user.gid());
+        row.set(SystemUserModel.HOME, user.home());
+        row.set(SystemUserModel.GECOS, user.gecos());
+        row.set(SystemUserModel.OBSOLETE, false);
+        row.set(SystemUserModel.LAST_SEEN_AT, now);
+    }
+
     /** Parse /etc/passwd and reconcile the system_users table. */
     public static void reconcile() {
         List<ParsedUser> parsed = parsePasswdFile();
@@ -74,12 +84,7 @@ public class UpdateSystemUsers extends ScheduledTask {
             if (existing == null) {
                 Row row = model.createEmptyRow();
                 row.set(SystemUserModel.NAME, pu.name());
-                row.set(SystemUserModel.UID, pu.uid());
-                row.set(SystemUserModel.GID, pu.gid());
-                row.set(SystemUserModel.HOME, pu.home());
-                row.set(SystemUserModel.GECOS, pu.gecos());
-                row.set(SystemUserModel.OBSOLETE, false);
-                row.set(SystemUserModel.LAST_SEEN_AT, now);
+                apply(row, pu, now);
                 try {
                     model.save(row);
                 } catch (DuplicateKeyException lostRace) {
@@ -90,12 +95,7 @@ public class UpdateSystemUsers extends ScheduledTask {
                     continue;
                 }
             } else {
-                existing.set(SystemUserModel.UID, pu.uid());
-                existing.set(SystemUserModel.GID, pu.gid());
-                existing.set(SystemUserModel.HOME, pu.home());
-                existing.set(SystemUserModel.GECOS, pu.gecos());
-                existing.set(SystemUserModel.OBSOLETE, false);
-                existing.set(SystemUserModel.LAST_SEEN_AT, now);
+                apply(existing, pu, now);
                 model.save(existing);
             }
         }

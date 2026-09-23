@@ -5,16 +5,12 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.HostCapacityView;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.security.AccessContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -51,7 +47,7 @@ public final class HostApi {
 
     public static void init() {
         HohenheimEndpoints.API_V1_HOSTS.setHandler(conduit -> {
-            if (requireAdminKey(conduit) == null) {
+            if (ApiConduits.requireAdminKey(conduit) == null) {
                 return null;
             }
             List<Map<String, Object>> hosts = new ArrayList<>();
@@ -63,7 +59,7 @@ public final class HostApi {
         });
 
         HohenheimEndpoints.API_V1_HOST.setHandler(conduit -> {
-            if (requireAdminKey(conduit) == null) {
+            if (ApiConduits.requireAdminKey(conduit) == null) {
                 return null;
             }
             Integer serverId = conduit.getParameter(HohenheimEndpoints.SERVER_ID);
@@ -77,24 +73,6 @@ public final class HostApi {
             body.put("workloads", workloadsOn(serverId));
             return ApiConduits.json(body);
         });
-    }
-
-    /**
-     * An API-key context holding the admin panel permission, as narrowed by the key's own
-     * scopes -- the engine list's door.
-     *
-     * @return the access context, or null when the response has already been ended
-     */
-    private static @Nullable AccessContext requireAdminKey(@NonNull Conduit conduit) {
-        AccessContext ctx = ApiConduits.requireKey(conduit);
-        if (ctx == null) {
-            return null;
-        }
-        if (!HohenheimAccess.isAdmin(ctx)) {
-            conduit.forbidden();
-            return null;
-        }
-        return ctx;
     }
 
     // -- projections -----------------------------------------------------------

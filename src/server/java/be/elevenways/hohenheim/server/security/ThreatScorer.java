@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 
 import java.util.Map;
@@ -50,11 +51,20 @@ public final class ThreatScorer {
     // and must never ban the owner); an invalid USERNAME and a protocol abuse are what
     // only a scanner does, and "maximum authentication attempts exceeded" already means
     // sshd counted several failures itself.
+    //
+    // AIDEV-NOTE: http.permission_denied is an AUTHENTICATED principal refused a route its
+    // grants do not cover. That is routine for a real person (a stale tab after a role
+    // change, a shared admin link opened by a tenant) and the actor is already accountable
+    // by identity, so it carries the lowest weight there is: only a session sweeping
+    // forbidden routes with no ordinary traffic in between ever reaches the threshold.
+    // Explicit rather than DEFAULT_WEIGHTED so an operator raising the default for unknown
+    // types never makes a colleague behind the same NAT bannable by it.
     private static final Map<String, Integer> EVENT_WEIGHTS = Map.ofEntries(
         Map.entry(SecurityEventTypes.AUTH_LOGIN_FAILED, 3),
         Map.entry(SecurityEventTypes.AUTH_LOCKOUT, 10),
         Map.entry(SecurityEventTypes.RATE_LIMITED, 1),
         Map.entry(SecurityEventTypes.CSRF_FAILURE, 2),
+        Map.entry(SecurityEventTypes.PERMISSION_DENIED, 1),
         Map.entry(SecurityEventTypes.DOMAIN_MISS, 1),
         Map.entry(SecurityEventTypes.SSH_INVALID_USER, 4),
         Map.entry(SecurityEventTypes.SSH_PASSWORD_FAILED, 3),
@@ -152,7 +162,7 @@ public final class ThreatScorer {
     }
 
     public ThreatScorer() {
-        this(System::currentTimeMillis,
+        this(Now::millis,
             () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_WINDOW_SECONDS),
             () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_BAN_THRESHOLD),
             () -> HohenheimSettings.VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_DECAY_PER_HIT),
