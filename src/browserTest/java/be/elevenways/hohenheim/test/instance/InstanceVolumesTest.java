@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * The DECLARATION half of the volume mechanism: where a volume's host path comes from, what
  * a host that cannot deliver one refuses, and what a name is allowed to be.
  *
- * <p>Hermetic: nothing here reaches a filesystem. Every case either derives a path (a pure
+ * Hermetic: nothing here reaches a filesystem. Every case either derives a path (a pure
  * function) or refuses BEFORE the host is asked -- which is the point of each one, since a
  * refusal that arrives after the deploy already ran is not a refusal.
  */

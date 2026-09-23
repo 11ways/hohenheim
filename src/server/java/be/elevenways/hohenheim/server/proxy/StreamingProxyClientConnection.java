@@ -30,13 +30,13 @@ import java.util.concurrent.TimeUnit;
  * Adapts Undertow's client for streaming upstreams, which stock Undertow proxying cannot
  * carry. Two defects, both fatal to gRPC:
  *
- * <p>Response trailers: Undertow's h2 client DROPS them (nothing in stock Undertow calls
+ * Response trailers: Undertow's h2 client DROPS them (nothing in stock Undertow calls
  * setTrailersHandler), so gRPC's grpc-status never reaches the downstream client. The
  * captured map is stored under REQUEST_TRAILERS on the client exchange because
  * ProxyHandler's trailer-copy listener reads that key from its source attachable when
  * emitting response trailers downstream.
  *
- * <p>Request commit: the upstream request is never put on the wire until a request BODY
+ * Request commit: the upstream request is never put on the wire until a request BODY
  * byte shows up -- see {@link #commitRequestHeaders}.
  */
 final class StreamingProxyClientConnection implements ClientConnection {
@@ -68,7 +68,7 @@ final class StreamingProxyClientConnection implements ClientConnection {
     /**
      * Sends the upstream request headers without waiting for a request body.
      *
-     * <p>AIDEV-NOTE: Undertow writes a request's HEADERS frame lazily, on the first write to
+     * AIDEV-NOTE: Undertow writes a request's HEADERS frame lazily, on the first write to
      * the request channel, and for an incomplete downstream request ProxyHandler only calls
      * {@code Transfer.initiateTransfer}, which writes NOTHING while no body bytes are
      * buffered (it reads 0 bytes and breaks out). A bidirectional gRPC client opens its
@@ -79,7 +79,7 @@ final class StreamingProxyClientConnection implements ClientConnection {
      * is why ordinary unary gRPC and normal requests (complete on arrival, so ProxyHandler
      * shuts down writes and flushes) always worked.
      *
-     * <p>Deliberately a flush and NOT shutdownWrites: the request half must stay open for a
+     * Deliberately a flush and NOT shutdownWrites: the request half must stay open for a
      * client that will send messages later. A flush is a no-op once anything else has
      * written, so complete requests are unaffected.
      */

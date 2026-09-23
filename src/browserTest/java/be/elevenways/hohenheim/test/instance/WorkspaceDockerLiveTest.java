@@ -46,10 +46,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * that is a real btrfs subvolume with a real quota, an in-container checkout and build, a
  * restart the data survives, and the two delete verbs telling data from container.
  *
- * <p>The twin of {@code WorkspaceIncusLiveTest}: the same declarations, the other runtime.
+ * The twin of {@code WorkspaceIncusLiveTest}: the same declarations, the other runtime.
  * What only this half can say is that Docker's numeric {@code User} field really produces
  * host-side ownership by that number through a bind mount, and that the sandboxed build
- * lane really produces the image the deploy then starts.</p>
+ * lane really produces the image the deploy then starts.
  *
  * AIDEV-NOTE: it runs on the PRIMARY live host (daystrom); the Incus half holds the
  * secondary, so neither wave contends for one machine's 3.9 GiB.

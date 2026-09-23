@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@link BtrfsVolumeOperations} against a REAL btrfs filesystem: the half
  * {@code VolumeOperationsTest} structurally cannot prove.
  *
- * <p>What only this test can say: that {@code subvolume create} really makes a subvolume
+ * What only this test can say: that {@code subvolume create} really makes a subvolume
  * (not a directory), that a qgroup limit is really ENFORCED by the kernel against a write,
  * that a read-only snapshot really refuses a write and really keeps the pre-snapshot bytes,
  * and that {@code subvolume delete} really removes it. Every one of those is a kernel

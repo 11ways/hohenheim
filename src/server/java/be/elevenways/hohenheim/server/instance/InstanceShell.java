@@ -38,12 +38,10 @@ import java.util.function.Consumer;
  * THE interactive shell of the instance tier: one pseudo-terminal inside a workload, as
  * that workload's own non-root uid, gated on the delegable {@code shell} capability.
  *
- * <p>THREE gates, all on this funnel, in this order:</p>
- * <ol>
- *   <li>the caller holds {@code shell} on THIS record (principal-only walk -- see below);</li>
- *   <li>the workload declares a NON-ROOT {@code runUser};</li>
- *   <li>its driver offers a pseudo-terminal at all.</li>
- * </ol>
+ * THREE gates, all on this funnel, in this order:
+ * the caller holds {@code shell} on THIS record (principal-only walk -- see below).
+ * the workload declares a NON-ROOT {@code runUser}.
+ * its driver offers a pseudo-terminal at all.
  *
  * AIDEV-NOTE: gate 2 -- the non-root uid -- is the whole security argument, so it is an
  * explicit REFUSAL here rather than an accident of how a kind happens to be configured.

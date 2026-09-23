@@ -26,7 +26,7 @@ import java.util.stream.Stream;
  * THE reaper for the Docker debris a live run leaves behind, scoped to the controller
  * namespaces THIS machine's dead test JVMs minted and never to a running session's.
  *
- * <p>The failure it removes is a false failure in an unrelated test: every live run mints
+ * The failure it removes is a false failure in an unrelated test: every live run mints
  * a fresh {@code ControllerIdentity} token per database (see
  * {@code TestDatabases.remintControllerIdentity}) and every PRIVATE-posture workload gets
  * its own Docker network named {@code hohenheim-<token>-<kind>-<id>-net}. A test that
@@ -38,17 +38,17 @@ import java.util.stream.Stream;
  * asserts. Two sessions lost real time diagnosing it (see {@link WorkloadNetworks}'s host
  * ceiling note, which describes the same ceiling from the production side).
  *
- * <p>Two halves, both riding {@link LiveLaneReport}'s per-forked-JVM lifecycle rather than
+ * Two halves, both riding {@link LiveLaneReport}'s per-forked-JVM lifecycle rather than
  * a new mechanism -- that listener is registered through {@code META-INF/services}, so it
  * observes every JVM this suite forks and needs no per-class wiring:
- * <ul>
- *   <li>{@link #sweepOwn()} at plan finish removes what THIS JVM's namespaces still hold,
- *       whatever the verdict. An {@code @AfterAll} cannot do this: it belongs to one
- *       class, it does not run when the JVM dies, and a shared-JVM lane runs dozens of
- *       classes against dozens of namespaces.</li>
- *   <li>{@link #sweepAbandoned()} at plan start reaps the ledgers of PREVIOUS JVMs that
- *       are gone -- the SIGKILL case the shutdown hook structurally cannot cover.</li>
- * </ul>
+ *
+ * {@link #sweepOwn()} at plan finish removes what THIS JVM's namespaces still hold,
+ * whatever the verdict. An {@code @AfterAll} cannot do this: it belongs to one
+ * class, it does not run when the JVM dies, and a shared-JVM lane runs dozens of
+ * classes against dozens of namespaces.
+ *
+ * {@link #sweepAbandoned()} at plan start reaps the ledgers of PREVIOUS JVMs that
+ * are gone -- the SIGKILL case the shutdown hook structurally cannot cover.
  *
  * AIDEV-NOTE: the safety property is that a namespace is reaped only when the JVM that
  * minted it is PROVABLY dead. The ledger header carries pid AND that process's start

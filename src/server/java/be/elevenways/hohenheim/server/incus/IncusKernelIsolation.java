@@ -120,7 +120,7 @@ public final class IncusKernelIsolation {
      * The nft lane that provably reaches the DAEMON'S kernel, or null when the record
      * offers none.
      *
-     * <p>A unix-socket endpoint means the daemon runs on this machine, so the local sudo
+     * A unix-socket endpoint means the daemon runs on this machine, so the local sudo
      * runner is that daemon's kernel. An https endpoint needs a declared ssh lane; the
      * local runner would be the controller's kernel and would verify nothing.
      */
@@ -156,7 +156,7 @@ public final class IncusKernelIsolation {
      * The same question as {@link #available()} asked of a RECORD, without contacting the
      * daemon: gates run on hosts whose Incus client may not even be constructible.
      *
-     * <p>It answers whether a lane is DECLARED and trusted, never whether it works -- that
+     * It answers whether a lane is DECLARED and trusted, never whether it works -- that
      * is what the preflight probe is for.
      */
     public static boolean laneAvailable(@NonNull Row server) {

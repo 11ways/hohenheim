@@ -108,7 +108,7 @@ public record StackSpec(
     /**
      * Resolve the records WITHOUT ordering the services.
      *
-     * <p>AIDEV-NOTE: teardown must never depend on a valid dependency graph. Two
+     * AIDEV-NOTE: teardown must never depend on a valid dependency graph. Two
      * individually-valid saves can still form a cycle (A depends on B, then B on A),
      * and {@link #topologicallySorted} rightly refuses that -- but if destroy resolved
      * through it, such a stack could no longer be deleted or cleaned up at all. Deploy

@@ -36,8 +36,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * actually has, and a template carries no volume CONTENT to bring along (its authored
  * content is {@code instance_template_files}, which {@code copyFiles} already carried).
  *
- * <p>Hermetic: a create reaches no daemon and no filesystem, so both halves -- the copy
- * and every refusal -- are proven without a host.</p>
+ * Hermetic: a create reaches no daemon and no filesystem, so both halves -- the copy
+ * and every refusal -- are proven without a host.
  */
 class InstanceTemplateVolumeCopyTest extends HohenheimTestBase {
 

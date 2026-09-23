@@ -20,11 +20,11 @@ import java.time.Instant;
  * THE build entry point: one durable operation record and one log stream, shared by
  * every builder kind, around the one sandbox.
  *
- * <p>Durability contract, the {@code InstanceInstalls} shape: the {@code running} row
+ * Durability contract, the {@code InstanceInstalls} shape: the {@code running} row
  * lands BEFORE any daemon work, so a controller that dies mid-build leaves visible
  * evidence rather than a clean-looking absence; every ending -- success, non-zero exit,
  * timeout, disk kill, refusal -- stamps a terminal status with its reason and its log;
- * and the credential leases are revoked in a finally block that no path skips.</p>
+ * and the credential leases are revoked in a finally block that no path skips.
  *
  * AIDEV-NOTE: a build NEVER promotes a partial artifact. Success requires all three of
  * {@code exited}, {@code exit 0} and {@code artifact read within the cap}

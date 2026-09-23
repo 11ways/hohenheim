@@ -9,7 +9,7 @@ import java.io.IOException;
  * Commits a proxied response as soon as the upstream headers arrive, instead of waiting
  * for the first body byte.
  *
- * <p>AIDEV-NOTE: Undertow will NOT emit a proxied response's headers until something
+ * AIDEV-NOTE: Undertow will NOT emit a proxied response's headers until something
  * writes. {@code ProxyHandler.ResponseCallback} copies the status and headers and then
  * calls {@code Transfer.initiateTransfer}, which writes nothing when the upstream has no
  * DATA ready yet (it reads 0 bytes and breaks out), and
@@ -20,7 +20,7 @@ import java.io.IOException;
  * for 50 seconds and gave up with "didn't receive a registration header from the Signal
  * server", while the same upstream committed its headers in 7ms when dialed directly.
  *
- * <p>ProxyHandler offers no hook for this -- it is {@code final}, its response callback is
+ * ProxyHandler offers no hook for this -- it is {@code final}, its response callback is
  * {@code private}, and Undertow has no eager-flush option -- so the flush is scheduled
  * from a response wrapper. The wrapper runs inside {@code getResponseChannel()}, i.e.
  * after the headers were copied and before the transfer starts, and the queued IO-thread
@@ -30,7 +30,7 @@ import java.io.IOException;
  * {@code Http2DataStreamSinkChannel.isFlushRequiredOnEmptyBuffer()} is true for the first
  * frame.
  *
- * <p>Responses whose body was already available are unaffected: the transfer writes first,
+ * Responses whose body was already available are unaffected: the transfer writes first,
  * which commits the headers, and the scheduled flush is then a no-op.
  */
 final class EagerResponseCommit {

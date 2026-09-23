@@ -14,7 +14,7 @@ import java.util.Base64;
  * request time, so the two halves cannot drift into disagreeing about what a stored value
  * is.
  *
- * @author Jelle De Loecker &lt;jelle@elevenways.be&gt;
+ * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
  */
 public final class BasicCredentials {

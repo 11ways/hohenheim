@@ -52,18 +52,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * WHAT THIS CANNOT PROVE, and therefore what {@code ApplicationReleaseLiveTest} remains the only
  * proof of -- read no hermetic green here as total coverage:
  *
- * <ul>
- *   <li>zero dropped requests across the swap. There is no proxy and no traffic here; the
- *       routing-generation swap that makes the switch atomic is the live test's Hammer.</li>
- *   <li>{@code DockerInstanceRuntime}, {@code WorkloadNetworks} and the nftables workload
- *       policy. The fake stands in for the kind's runtime, so container hardening, the
- *       private network and its kernel chains are not exercised at all.</li>
- *   <li>the image fingerprint pin ({@code pinResolvedImage}), which needs a driver that
- *       reports an image identity; the fake deliberately reports none.</li>
- *   <li>a real image, a real pull and a real build. The digest here is derived from the
- *       reference, so it proves the engine PINS and RE-USES a digest, never that a
- *       registry produced one.</li>
- * </ul>
+ * zero dropped requests across the swap. There is no proxy and no traffic here; the
+ * routing-generation swap that makes the switch atomic is the live test's Hammer.
+ *
+ * {@code DockerInstanceRuntime}, {@code WorkloadNetworks} and the nftables workload
+ * policy. The fake stands in for the kind's runtime, so container hardening, the
+ * private network and its kernel chains are not exercised at all.
+ *
+ * the image fingerprint pin ({@code pinResolvedImage}), which needs a driver that
+ * reports an image identity; the fake deliberately reports none.
+ *
+ * a real image, a real pull and a real build. The digest here is derived from the
+ * reference, so it proves the engine PINS and RE-USES a digest, never that a
+ * registry produced one.
  *
  * AIDEV-NOTE: every journey mints its OWN application record and tears it down through the
  * production {@code destroyFor}, so the port ledger and the fake daemon start each journey

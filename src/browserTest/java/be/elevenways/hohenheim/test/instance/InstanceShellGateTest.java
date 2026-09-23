@@ -41,10 +41,10 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * The interactive shell's THREE gates, each proved as a refusal AND as an absence in the
  * UI, with a positive anchor beside every negative so none of them is vacuous.
  *
- * <p>No daemon is needed: every refusal here fires before any driver call, which is the
+ * No daemon is needed: every refusal here fires before any driver call, which is the
  * point -- a gate that only holds once the daemon answers is not a gate. The half that
  * genuinely needs a container (the session itself, the uid it lands as, resize, teardown)
- * is {@code InstanceShellLiveTest}.</p>
+ * is {@code InstanceShellLiveTest}.
  *
  * AIDEV-NOTE: the capability walk under test is the PRINCIPAL-only one, because that is
  * what a WebSocket handshake has. Driving it through

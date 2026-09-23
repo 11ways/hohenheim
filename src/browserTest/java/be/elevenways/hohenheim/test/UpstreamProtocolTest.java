@@ -660,7 +660,7 @@ class UpstreamProtocolTest {
      * Opens an h2c stream with HEADERS only: no END_STREAM, no DATA -- exactly how a
      * bidirectional gRPC client starts a stream before it has a message to send.
      *
-     * <p>Hand-rolled because neither Undertow client can express it: they write the HEADERS
+     * Hand-rolled because neither Undertow client can express it: they write the HEADERS
      * frame lazily, on the first body write, so a body-less request never reaches the wire
      * at all. That same laziness is what the proxy trips over, which is why this test needs
      * to own the bytes. HPACK here is literal-without-indexing (0x00) and never Huffman,

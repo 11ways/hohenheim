@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * The ONE host path a container may bind: a directory under this deployment's volume root.
  *
- * <p>Hermetic on purpose, unlike {@code ContainerHardeningTest} (which is the live lane's
+ * Hermetic on purpose, unlike {@code ContainerHardeningTest} (which is the live lane's
  * proof that the baseline reaches a real kernel). This rule is a pure decision about a
  * HostConfig map, and it is the only rule that says yes to a shape the policy refused
  * outright until phase-0 brief 7 -- so it needs a test that runs on every machine, every

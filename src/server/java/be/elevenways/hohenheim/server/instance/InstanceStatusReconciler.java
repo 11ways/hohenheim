@@ -126,11 +126,11 @@ public final class InstanceStatusReconciler {
     /**
      * Reconcile ONE record.
      *
-     * <p>Transitional records are skipped by three independent guards, each answering a
+     * Transitional records are skipped by three independent guards, each answering a
      * different question: this controller's own in-flight mark
      * ({@code InstanceService.hasOperationInFlight}) for a deploy/stop/destroy we are
      * driving right now, the install lifecycle for a template whose install step has not
-     * finished, and the borrowed HOST LEASE for a rival controller's work.</p>
+     * finished, and the borrowed HOST LEASE for a rival controller's work.
      */
     public @NonNull Outcome reconcile(int instanceId) {
         Row instance = Models.get(InstanceModel.class).find()

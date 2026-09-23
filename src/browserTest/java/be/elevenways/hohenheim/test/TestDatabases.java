@@ -21,7 +21,7 @@ import java.nio.file.StandardCopyOption;
  * Hands out freshly-migrated databases to tests without paying for the migrations
  * every time.
  *
- * <p>AIDEV-NOTE: {@link HohenheimDatabase#init()} always runs the full migration set,
+ * AIDEV-NOTE: {@link HohenheimDatabase#init()} always runs the full migration set,
  * which on an empty SQLite file is roughly four seconds -- the dominant cost of the
  * browser suite, since dozens of tests wanted their own clean database. The FIRST
  * database of a JVM pays that price and is then kept as a template; every later
@@ -29,7 +29,7 @@ import java.nio.file.StandardCopyOption;
  * already populated and no-ops. Semantics are identical: callers still get a private,
  * fully-migrated, data-free database.
  *
- * <p>The template is captured through {@link SnapshotCapableDatasource#snapshotTo}
+ * The template is captured through {@link SnapshotCapableDatasource#snapshotTo}
  * (VACUUM INTO), never a bare file copy: the datasource runs journal_mode=WAL, so the
  * main file of a live database is just the header page and a {@code Files.copy} of it
  * captures an EMPTY database -- which is exactly how this optimization was silently dead

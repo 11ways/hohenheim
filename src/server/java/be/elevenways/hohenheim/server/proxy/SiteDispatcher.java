@@ -70,7 +70,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * Handles loop detection, request header injection, HSTS, force-SSL, custom headers,
  * path-based routing, default site fallback, and IP reputation tracking.
  *
- * <p>The pipeline's stages live in package collaborators: {@link RouteResolver} selects the
+ * The pipeline's stages live in package collaborators: {@link RouteResolver} selects the
  * route, {@link AccessListGate} enforces the access list, {@link ForwardingHeaders} rewrites
  * the upstream request, {@link ResponseMutations} rewrites the response and
  * {@link UpstreamProxyClient} dials the backend.
@@ -85,7 +85,7 @@ public class SiteDispatcher implements HttpHandler {
      * Canonical route path: leading slash enforced, trailing slash stripped,
      * root/empty collapsed to null (= catch-all).
      *
-     * <p>AIDEV-NOTE: THE single definition of route-path identity. Domain uniqueness in
+     * AIDEV-NOTE: THE single definition of route-path identity. Domain uniqueness in
      * SiteDomainResource must compare with this exact function, or the editor can accept two
      * rows ("api" and "/api") that collapse to one route here and lose one to first-wins.
      */

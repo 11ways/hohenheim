@@ -86,8 +86,8 @@ public final class WorkspaceBuilds {
      * Whether deploying this record means deploying its SOURCE: a workspace that names a
      * repository. {@link InstanceService#deploy} asks this to pick its lane.
      *
-     * <p>A workspace with no repository is NOT a source deploy and stays a plain
-     * container up, which is what an operator who wants a bare box asks for.</p>
+     * A workspace with no repository is NOT a source deploy and stays a plain
+     * container up, which is what an operator who wants a bare box asks for.
      */
     public static boolean deploysSource(@Nullable Row instance) {
 

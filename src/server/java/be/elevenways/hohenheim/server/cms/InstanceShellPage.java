@@ -23,10 +23,10 @@ import java.util.Map;
  * own non-root uid. The admin CSP (zenit's STRICT_ADMIN) carries ghostty's wasm concessions
  * panel-wide, so this tab is reached by soft navigation like every other.
  *
- * <p>The page makes NO authorization decision beyond hiding itself: {@code InstanceShell}
+ * The page makes NO authorization decision beyond hiding itself: {@code InstanceShell}
  * asks the {@code shell} capability again on its own funnel, which is what the WebSocket
  * handshake reaches. Hide AND enforce -- zenit-cms 404s an unoffered slug, so
- * {@link #visibleFor} gates the route as well as the nav.</p>
+ * {@link #visibleFor} gates the route as well as the nav.
  */
 public final class InstanceShellPage implements RecordScopedPage<Row> {
 

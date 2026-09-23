@@ -358,7 +358,7 @@ public final class ContainerHardening {
      * Build the profile a workload actually runs with from a BASE profile plus the
      * capabilities its author declared, refusing anything outside {@link #DECLARABLE}.
      *
-     * <p>AIDEV-NOTE: this is the whole per-service capability mechanism, and it lives here
+     * AIDEV-NOTE: this is the whole per-service capability mechanism, and it lives here
      * rather than in the deployer on purpose -- {@code CapAdd} is outside {@link #PERMITTED_KEYS},
      * so a caller has never been able to append one, and the only way to get a
      * capability is to come through a {@link Profile}. Making the declaration a profile

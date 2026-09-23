@@ -14,7 +14,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * one answer. Every failure returns a null gate with a reason; the CALLER decides what
  * failing closed looks like on its surface.
  *
- * @author Jelle De Loecker &lt;jelle@elevenways.be&gt;
+ * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
  */
 public final class SiteAuthGates {

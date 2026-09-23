@@ -43,10 +43,10 @@ public enum DeployTrigger {
     /**
      * Someone else's {@code git push}, relayed by a forge.
      *
-     * <p>This is the ONE trigger that may not start a stopped workload. An operator who
+     * This is the ONE trigger that may not start a stopped workload. An operator who
      * stopped a workload expressed an intention about their host's resources, and a
      * third party's push is not an argument against it -- the deploy is recorded, the
-     * decision is stated, and nothing is spent.</p>
+     * decision is stated, and nothing is spent.
      */
     WEBHOOK("webhook", false);
 

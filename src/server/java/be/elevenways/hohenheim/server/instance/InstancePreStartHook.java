@@ -9,7 +9,7 @@ import java.io.IOException;
 /**
  * Work a product tier must do BETWEEN container create and start, on every deploy.
  *
- * <p>A deploy recreates the container, which drops every non-primary network
+ * A deploy recreates the container, which drops every non-primary network
  * attachment, so the tiers that own link networks re-establish them here -- before the
  * workload runs and before any health gate probes it.
  *

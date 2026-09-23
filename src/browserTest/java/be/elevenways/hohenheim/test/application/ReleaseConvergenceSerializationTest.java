@@ -43,14 +43,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and then observes its outcome, and an application that somehow already carries two
  * serving releases is repaired rather than left running both forever.
  *
- * <p>This is the falsifiable half of the per-application convergence lock. The overlap is
+ * This is the falsifiable half of the per-application convergence lock. The overlap is
  * FORCED, not hoped for: the fake daemon holds the first converge inside the start of its
  * candidate -- so the lock is provably held -- and the second converge is only released
  * once the JVM itself reports it blocked on that exact monitor. Without the lock the two
  * read the same serving release, both build and both flip, and the application ends with
  * two rows role {@code serving} of which only the newer is ever resolved again.
  *
- * <p>WHAT THIS CANNOT PROVE: anything about a SECOND controller. The lock is an
+ * WHAT THIS CANNOT PROVE: anything about a SECOND controller. The lock is an
  * intra-process monitor, exactly like the preview lane's; two controllers are excluded by
  * the host lease and the fenced writes, and {@link ReleaseEngine#sweepDuplicateServing()}
  * -- the second journey here -- is the net under both.

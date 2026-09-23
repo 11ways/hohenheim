@@ -51,7 +51,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * hand to a different tenant's container. {@code ApplicationReleaseTest} proves the release
  * lane, which was never broken; this proves the lane that was.
  *
- * <p>WHAT THIS CANNOT PROVE: that a real Docker daemon reissues a freed ephemeral port to
+ * WHAT THIS CANNOT PROVE: that a real Docker daemon reissues a freed ephemeral port to
  * somebody else. Step 4 below stands a real {@link ServerSocket} on the freed port to make
  * the redeploy land elsewhere DETERMINISTICALLY, which is the same hazard modelled rather
  * than observed; the live lane remains the only proof of the kernel's own behaviour.

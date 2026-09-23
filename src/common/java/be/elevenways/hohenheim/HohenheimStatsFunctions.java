@@ -20,7 +20,7 @@ import java.util.Map;
  * Template bridge to the instance-stats channel (namespace {@code InstanceStats}): open a
  * live link for one instance, and fold arriving samples into a plottable series.
  *
- * <p>AIDEV-NOTE: every method is a no-op on the server -- the link belongs to the MOUNTED
+ * AIDEV-NOTE: every method is a no-op on the server -- the link belongs to the MOUNTED
  * element (the QQChatFunctions shape), never to a render expression. The previous shape
  * subscribed inside a {@code returnsReference} template function; hydration revives values
  * without re-running {@code {% let %}} calls, so after a hard load the subscription simply

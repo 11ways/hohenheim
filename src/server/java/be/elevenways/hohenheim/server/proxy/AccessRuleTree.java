@@ -28,18 +28,20 @@ import java.util.Map;
  *
  * EVALUATION is three-valued, because a credential leaf has no answer until the client is
  * asked for one:
- * <ul>
- *   <li>{@code ip_allow} PASSES when the client address is inside its network,
- *       {@code ip_deny} passes when it is OUTSIDE.</li>
- *   <li>{@code basic_auth} and {@code auth_provider} PASS when the request already carries
- *       the credential/session they name, and are otherwise PENDING -- never FAIL.</li>
- *   <li>An {@code any} group passes when a child passes, fails when every child fails, and
- *       is PENDING in between; an {@code all} group fails when a child fails, passes when
- *       every child passes, and is PENDING in between. An EMPTY group PASSES (which is what
- *       keeps a rule-less list inert).</li>
- *   <li>Disabled rules are skipped as though absent. An UNKNOWN rule type FAILS CLOSED with
- *       one log line -- never a denylist, never a skip.</li>
- * </ul>
+ *
+ * {@code ip_allow} PASSES when the client address is inside its network,
+ * {@code ip_deny} passes when it is OUTSIDE.
+ *
+ * {@code basic_auth} and {@code auth_provider} PASS when the request already carries
+ * the credential/session they name, and are otherwise PENDING -- never FAIL.
+ *
+ * An {@code any} group passes when a child passes, fails when every child fails, and
+ * is PENDING in between; an {@code all} group fails when a child fails, passes when
+ * every child passes, and is PENDING in between. An EMPTY group PASSES (which is what
+ * keeps a rule-less list inert).
+ *
+ * Disabled rules are skipped as though absent. An UNKNOWN rule type FAILS CLOSED with
+ * one log line -- never a denylist, never a skip.
  *
  * The request is allowed iff the root passes. A PENDING root is exactly the case where a
  * credential could still flip the verdict, and that is when -- and only when -- the
@@ -47,7 +49,7 @@ import java.util.Map;
  * ever asking for a password. That reproduces the flat gate's behaviour, where satisfy=all
  * with a refused IP answered 403 while satisfy=any with a refused IP asked for credentials.
  *
- * @author Jelle De Loecker &lt;jelle@elevenways.be&gt;
+ * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
  */
 public final class AccessRuleTree {

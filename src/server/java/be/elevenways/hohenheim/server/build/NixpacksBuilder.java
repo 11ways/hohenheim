@@ -27,12 +27,12 @@ import java.util.stream.Stream;
  * the path the old refusal named. One operation record, one sandbox, one log, one
  * digest pin; the only addition is the quota'd detection phase.
  *
- * <p>Why nixpacks and not Cloud Native Buildpacks: the CNB lifecycle wants to EXPORT the
+ * Why nixpacks and not Cloud Native Buildpacks: the CNB lifecycle wants to EXPORT the
  * image itself (to a daemon or a registry; OCI-layout export is experimental), which
  * would mean a second artifact path beside the kaniko tar -- its own digest pinning, its
  * own reproducibility argument, its own read-back cap. Nixpacks' detector is one STATIC
  * binary whose output is a Dockerfile, so everything downstream of detection is the
- * already-proven lane and the only thing this class owns is the detection itself.</p>
+ * already-proven lane and the only thing this class owns is the detection itself.
  *
  * AIDEV-NOTE: nixpacks' exit codes are NOT a detection signal (measured on 1.41.0:
  * {@code plan} exits 0 printing an empty-phases plan for an undetectable repo, and
@@ -70,7 +70,7 @@ public final class NixpacksBuilder implements Builders {
      * AIDEV-NOTE: /nix/var/nix/userpool is the entry that made this lane's digest
      * genuinely UNSTABLE until 2026-08-05, and it is why the digest test was a
      * coin-flip rather than a proof. Nix allocates a build-user lock file there
-     * (/nix/var/nix/userpool/&lt;uid&gt;) only when it BUILDS a derivation locally instead
+     * (/nix/var/nix/userpool/<uid>) only when it BUILDS a derivation locally instead
      * of substituting it from the binary cache -- so whether the directory exists at
      * all depends on cache weather, not on the repository. Measured by diffing two
      * builds of one context: exactly ONE layer differed (the {@code nix-env} layer)
