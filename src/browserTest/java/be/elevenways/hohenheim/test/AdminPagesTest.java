@@ -316,7 +316,7 @@ class AdminPagesTest extends HohenheimTestBase {
         navigateToApp("/admin/dashboard");
         waitForHydration();
         assertThat(page.locator(".hh-dashboard-band").count()).isGreaterThanOrEqualTo(3);
-        assertThat(page.locator("a.widget-stat-link[href='/admin/sites']").count()).isEqualTo(1);
+        assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/sites']").count()).isEqualTo(1);
         assertThat(page.locator("a.widget-record-entry[href^='/admin/activity/']").count())
             .isGreaterThanOrEqualTo(1);
         assertThat(page.locator(".widget-records dl.widget-record").count()).isZero();
@@ -831,9 +831,9 @@ class AdminPagesTest extends HohenheimTestBase {
                 .as("step 3: exactly one stat grid on the dashboard")
                 .isEqualTo(1);
             var grid = page.locator(".hh-dashboard-band .widget-columns").first();
-            assertThat(grid.locator("a.widget-stat-link[href='/admin/sites']").count())
+            assertThat(grid.locator(".widget-stat-link a.stat-link[href='/admin/sites']").count())
                 .as("step 3: the sites tile is in it").isEqualTo(1);
-            assertThat(grid.locator("a.widget-stat-link[href='/admin/bans']").count())
+            assertThat(grid.locator(".widget-stat-link a.stat-link[href='/admin/bans']").count())
                 .as("step 3: and so is the firewall tile that used to sit in its own grid")
                 .isEqualTo(1);
 

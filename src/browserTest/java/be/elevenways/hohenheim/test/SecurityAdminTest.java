@@ -106,9 +106,9 @@ class SecurityAdminTest extends HohenheimTestBase {
     void dashboardShowsTheBanStatAndNotTheBansChart() {
         navigateToApp("/admin/dashboard");
         waitForHydration();
-        assertThat(page.locator("a.widget-stat-link[href='/admin/bans']").count()).isEqualTo(1);
+        assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/bans']").count()).isEqualTo(1);
         // The deleted security-events surface is gone from the dashboard.
-        assertThat(page.locator("a.widget-stat-link[href='/admin/security-events']").count())
+        assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/security-events']").count())
             .isZero();
         // The 30-day bans chart was REMOVED from the landing dashboard on purpose: on any
         // fleet that is not under attack it is an all-zero series drawn as ~450px of flat

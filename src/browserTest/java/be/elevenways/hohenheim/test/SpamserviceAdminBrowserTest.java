@@ -40,9 +40,9 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
         assertThat(page.locator("pl-switch[name='enabled']").count()).isEqualTo(1);
         assertThat(page.locator("input[type='hidden'][name='enabled']").count()).isEqualTo(1);
         assertThat(page.locator("[name='working_directory']").count()).isZero();
-        assertThat(page.locator("pl-input[name='port'][type='number']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-number-input[name='port']").count()).isEqualTo(1);
         assertThat(page.locator("zf-relation-field").count()).isEqualTo(1);
-        assertThat(page.locator("pl-input[name='max_heap_mb'][type='number']").count()).isEqualTo(1);
+        assertThat(page.locator("pl-number-input[name='max_heap_mb']").count()).isEqualTo(1);
         assertThat(page.locator("[name='controller_key']").count()).isZero();
         assertThat(page.content()).doesNotContain("controller_key");
 
